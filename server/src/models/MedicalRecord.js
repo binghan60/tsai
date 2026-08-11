@@ -1,11 +1,70 @@
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 
+function createReportNumber() {
+  const objectId = this?._id;
+  const year = objectId?.getTimestamp?.().getFullYear() || new Date().getFullYear();
+  const suffix = objectId?.toString().slice(-8).toUpperCase() || uuidv4().slice(0, 8).toUpperCase();
+  return `HC-${year}-${suffix}`;
+}
+
+const examinationFindingSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true },
+    label: { type: String, required: true },
+    status: { type: String, enum: ['not_checked', 'normal', 'abnormal'], default: 'not_checked' },
+    note: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
+const measurementAssessmentSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true },
+    label: { type: String, required: true },
+    status: { type: String, enum: ['not_checked', 'normal', 'abnormal'], default: 'not_checked' },
+    statusSource: { type: String, enum: ['manual', 'auto'], default: 'auto' },
+    unit: { type: String, default: '' },
+    referenceMin: { type: Number, default: null },
+    referenceMax: { type: Number, default: null },
+  },
+  { _id: false }
+);
+
+const labFindingSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true },
+    label: { type: String, required: true },
+    group: { type: String, required: true },
+    status: { type: String, enum: ['not_checked', 'normal', 'abnormal'], default: 'not_checked' },
+    statusSource: { type: String, enum: ['manual', 'auto'], default: 'manual' },
+    value: { type: String, default: '' },
+    unit: { type: String, default: '' },
+    referenceMin: { type: Number, default: null },
+    referenceMax: { type: Number, default: null },
+    note: { type: String, default: '' },
+  },
+  { _id: false }
+);
+
 const medicalRecordSchema = new mongoose.Schema(
   {
     petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', required: true },
-    vet: { type: String, required: true, trim: true },
-    visitDate: { type: Date, required: true },
+    reportNumber: { type: String, default: createReportNumber, trim: true },
+    vet: { type: String, default: '', trim: true },
+    visitDate: { type: Date, default: null },
+    examType: { type: String, default: '例行健檢', trim: true },
+
+    // 基本量測
+    weightKg: { type: Number, min: 0, default: null },
+    temperatureC: { type: Number, min: 0, default: null },
+    heartRate: { type: Number, min: 0, default: null },
+    respiratoryRate: { type: Number, min: 0, default: null },
+    bodyConditionScore: { type: Number, min: 1, max: 9, default: null },
+    measurementAssessments: { type: [measurementAssessmentSchema], default: [] },
+    examinationFindings: { type: [examinationFindingSchema], default: [] },
+    labFindings: { type: [labFindingSchema], default: [] },
+    labSummary: { type: String, default: '' },
 
     // 病人陳述
     chiefComplaint: { type: String, default: '' },
@@ -18,6 +77,9 @@ const medicalRecordSchema = new mongoose.Schema(
     other: { type: String, default: '' },
 
     shareToken: { type: String, default: uuidv4, unique: true },
+    shareEnabled: { type: Boolean, default: false },
+    shareExpiresAt: { type: Date, default: null },
+    sharedAt: { type: Date, default: null },
     status: {
       type: String,
       enum: ['draft', 'generated', 'sent'],
@@ -29,5 +91,6 @@ const medicalRecordSchema = new mongoose.Schema(
 );
 
 medicalRecordSchema.index({ petId: 1 });
+medicalRecordSchema.index({ reportNumber: 1 }, { unique: true, sparse: true });
 
 export default mongoose.model('MedicalRecord', medicalRecordSchema);

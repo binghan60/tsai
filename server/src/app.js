@@ -4,6 +4,10 @@ import cors from 'cors';
 import { connectDB } from './config/db.js';
 import ownersRouter from './routes/owners.js';
 import { ownerPetsRouter, petsRouter } from './routes/pets.js';
+import { petRecordsRouter, recordsRouter, publicReportsRouter } from './routes/records.js';
+import dashboardRouter from './routes/dashboard.js';
+import searchRouter from './routes/search.js';
+import settingsRouter from './routes/settings.js';
 
 const app = express();
 
@@ -12,7 +16,13 @@ app.use(express.json());
 
 app.use('/api/owners/:ownerId/pets', ownerPetsRouter);
 app.use('/api/owners', ownersRouter);
+app.use('/api/pets/:petId/records', petRecordsRouter);
 app.use('/api/pets', petsRouter);
+app.use('/api/records', recordsRouter);
+app.use('/api/public/reports', publicReportsRouter);
+app.use('/api/dashboard', dashboardRouter);
+app.use('/api/search', searchRouter);
+app.use('/api/settings', settingsRouter);
 
 app.use((err, req, res, next) => {
   console.error(err);

@@ -58,7 +58,7 @@ router.delete('/:id', async (req, res, next) => {
   try {
     const petCount = await Pet.countDocuments({ ownerId: req.params.id });
     if (petCount > 0) {
-      return res.status(409).json({ message: '此飼主底下仍有貓咪，請先刪除或轉移貓咪' });
+      return res.status(409).json({ message: '此飼主底下仍有寵物，請先刪除或轉移寵物' });
     }
     const owner = await Owner.findByIdAndDelete(req.params.id);
     if (!owner) return res.status(404).json({ message: '找不到飼主' });
