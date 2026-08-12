@@ -181,9 +181,6 @@
   background:
     linear-gradient(104deg, transparent 0 12%, rgb(255 250 240 / 0.38) 17%, rgb(223 184 86 / 0.15) 23%, transparent 32%),
     linear-gradient(151deg, transparent 0 68%, rgb(255 241 234 / 0.22) 73%, transparent 84%);
-  mix-blend-mode: screen;
-  transform: translateZ(0);
-  will-change: opacity;
 }
 
 .dark .belle-light-shell::before {
