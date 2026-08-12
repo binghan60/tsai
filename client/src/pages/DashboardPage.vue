@@ -157,7 +157,7 @@ onMounted(fetchDashboard);
                   <span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · 更新 {{ formatDateTime(item.updatedAt) }}</span></span>
                   <span class="shrink-0 text-sm font-medium text-belle-600 dark:text-brand-400">繼續填寫</span>
                 </router-link>
-                <Button type="button" variant="destructive" size="icon" class="shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
+                <Button type="button" variant="destructive" size="icon" class="h-11 w-11 shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
                   <Trash2 class="h-4 w-4" />
                 </Button>
               </div>
@@ -178,7 +178,7 @@ onMounted(fetchDashboard);
                   <span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · {{ item.vet || '獸醫師未填' }}</span></span>
                   <Badge :class="RECORD_STATUS_META[item.status]?.class" class="shrink-0 rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[item.status]?.label }}</Badge>
                 </router-link>
-                <Button v-if="item.status === 'draft'" type="button" variant="destructive" size="icon" class="shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
+                <Button v-if="item.status === 'draft'" type="button" variant="destructive" size="icon" class="h-11 w-11 shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
                   <Trash2 class="h-4 w-4" />
                 </Button>
               </div>

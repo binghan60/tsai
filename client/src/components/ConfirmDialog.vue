@@ -20,8 +20,8 @@ const tone = computed(() =>
   props.destructive
     ? {
         icon: AlertTriangle,
-        shell: 'border-red-300/70 bg-red-500/10 text-red-600 shadow-[0_4px_16px_rgba(239,68,68,0.15)] dark:border-red-800/80 dark:bg-red-950/40 dark:text-red-400',
-        glow: 'bg-red-500/15',
+        shell: 'border-destructive/30 bg-destructive/10 text-destructive shadow-[0_4px_16px_rgba(180,35,50,0.15)] dark:border-destructive/40 dark:bg-destructive/10',
+        glow: 'bg-destructive/15',
       }
     : {
         icon: CheckCircle2,
@@ -56,7 +56,7 @@ function close() {
         <Button type="button" variant="outline" class="min-h-11 px-5 border-cream-300 hover:bg-cream-200/70 dark:border-zinc-700 dark:hover:bg-zinc-800" :disabled="loading" @click="close">
           {{ cancelLabel }}
         </Button>
-        <Button type="button" :variant="destructive ? 'destructive' : 'default'" class="min-h-11 px-5" :disabled="loading" @click="emit('confirm')">
+        <Button type="button" :variant="destructive ? 'destructive-solid' : 'default'" class="min-h-11 px-5" :disabled="loading" @click="emit('confirm')">
           {{ loading ? '處理中…' : confirmLabel }}
         </Button>
       </DialogFooter>

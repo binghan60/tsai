@@ -159,24 +159,28 @@ onMounted(async () => {
             </span>
           </router-link>
           <div class="flex shrink-0 items-center gap-2">
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
+              class="h-11 w-11"
               :disabled="deletingPetId === pet._id"
-              class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-cream-200 hover:text-belle-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-brand-400"
               :aria-label="`編輯寵物 ${pet.name}`"
               @click="openEditPet(pet)"
             >
               <Pencil class="h-4 w-4" stroke-width="1.75" />
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="destructive"
+              size="icon"
+              class="h-11 w-11"
               :disabled="deletingPetId === pet._id"
-              class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
               :aria-label="`刪除寵物 ${pet.name}`"
               @click="openRemovePet(pet)"
             >
               <Trash2 class="h-4 w-4" stroke-width="1.75" />
-            </button>
+            </Button>
           </div>
         </Card>
       </div>

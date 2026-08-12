@@ -465,7 +465,7 @@ onBeforeUnmount(() => {
         <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已完成 {{ completedCount }}/5 個區段</p>
           <div class="ml-auto flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" class="min-h-11 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/40" :disabled="saving || discarding" @click="showDiscardConfirm = true">
+            <Button type="button" variant="destructive-outline" class="min-h-11" :disabled="saving || discarding" @click="showDiscardConfirm = true">
               <Trash2 class="h-4 w-4" />捨棄草稿
             </Button>
             <Button type="button" variant="outline" class="min-h-11" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿' }}</Button>
