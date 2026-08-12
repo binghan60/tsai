@@ -135,10 +135,12 @@ onMounted(fetchDashboard);
 
     <template v-else>
       <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card v-for="stat in stats" :key="stat.label" class="border p-4 shadow-sm dark:shadow-none" :class="stat.emphasis && stat.value ? 'border-belle-300 dark:border-brand-500/50' : 'border-cream-300 dark:border-zinc-800'">
-          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><component :is="stat.icon" class="h-4.5 w-4.5" /></div>
-          <div class="mt-3 text-xl font-semibold text-ink-900 dark:text-white">{{ stat.value }}</div>
-          <div class="mt-0.5 text-xs text-ink-500 dark:text-zinc-400">{{ stat.label }}</div>
+        <Card v-for="stat in stats" :key="stat.label" class="flex-row items-center gap-3 border p-4 shadow-sm dark:shadow-none" :class="stat.emphasis && stat.value ? 'border-belle-300 dark:border-brand-500/50' : 'border-cream-300 dark:border-zinc-800'">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><component :is="stat.icon" class="h-5 w-5" /></div>
+          <div class="min-w-0">
+            <div class="text-xl font-semibold text-ink-900 dark:text-white">{{ stat.value }}</div>
+            <div class="text-xs text-ink-500 dark:text-zinc-400">{{ stat.label }}</div>
+          </div>
         </Card>
       </div>
 

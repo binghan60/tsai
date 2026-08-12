@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { Activity, AlertTriangle, Clock3, FileText, PawPrint, Save, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
@@ -160,6 +160,11 @@ async function init() {
     loadError.value = '健檢資料暫時無法載入，請稍後重試';
   } finally {
     loading.value = false;
+    // 等一個 tick，確保載入資料造成的 reactive 變更已經跑完 watcher，
+    // 避免 hydrated 設為 true 之後才補跑，誤判成使用者的變更。
+    await nextTick();
+    isDirty.value = false;
+    saveState.value = 'saved';
     hydrated.value = true;
   }
 }
