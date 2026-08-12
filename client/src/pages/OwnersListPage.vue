@@ -23,7 +23,9 @@ const showCreate = ref(false);
 const creating = ref(false);
 const createError = ref('');
 const deletingId = ref(null);
+const checkingOwnerId = ref(null);
 const ownerToRemove = ref(null);
+const ownerPetBlock = ref(null);
 const editTarget = ref(null);
 const editSaving = ref(false);
 const editError = ref('');
@@ -101,9 +103,28 @@ async function removeOwner(owner) {
   }
 }
 
-function openRemoveOwner(owner) {
-  if (deletingId.value) return;
-  ownerToRemove.value = owner;
+async function openRemoveOwner(owner) {
+  if (deletingId.value || checkingOwnerId.value) return;
+  checkingOwnerId.value = owner._id;
+  try {
+    const { data: pets } = await http.get(`/owners/${owner._id}/pets`);
+    if (pets.length > 0) {
+      ownerPetBlock.value = { owner, pets };
+    } else {
+      ownerToRemove.value = owner;
+    }
+  } catch (err) {
+    toast.error('檢查飼主名下寵物失敗，請稍後再試', '無法刪除');
+  } finally {
+    checkingOwnerId.value = null;
+  }
+}
+
+function goManagePets() {
+  if (!ownerPetBlock.value) return;
+  const id = ownerPetBlock.value.owner._id;
+  ownerPetBlock.value = null;
+  router.push(`/owners/${id}`);
 }
 
 let debounceTimer;
@@ -146,7 +167,7 @@ onMounted(() => {
               <TableCell class="px-5 py-3"><router-link :to="`/owners/${owner._id}`" class="group flex min-h-11 items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-xs font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span><span class="font-medium text-belle-600 group-hover:text-belle-700 dark:text-brand-400">{{ owner.name }}</span></router-link></TableCell>
               <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300"><span class="flex items-center gap-2"><Phone class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ owner.phone }}</span></TableCell>
               <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300">{{ owner.email || '—' }}</TableCell>
-              <TableCell class="px-5 py-3"><div class="flex justify-end gap-1"><button type="button" :disabled="deletingId === owner._id" class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-cream-200 hover:text-belle-600 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-brand-400" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></button><button type="button" :disabled="deletingId === owner._id" class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-red-50 hover:text-red-700 dark:text-zinc-400 dark:hover:bg-red-950/40 dark:hover:text-red-300" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></button></div></TableCell>
+              <TableCell class="px-5 py-3"><div class="flex justify-end gap-1"><button type="button" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-cream-200 hover:text-belle-600 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-brand-400" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></button><button type="button" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-red-50 hover:text-red-700 dark:text-zinc-400 dark:hover:bg-red-950/40 dark:hover:text-red-300" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></button></div></TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -174,6 +195,16 @@ onMounted(() => {
       :loading="Boolean(deletingId)"
       @update:open="(value) => !value && (ownerToRemove = null)"
       @confirm="removeOwner(ownerToRemove)"
+    />
+    <ConfirmDialog
+      :open="Boolean(ownerPetBlock)"
+      title="無法刪除飼主"
+      :description="`「${ownerPetBlock?.owner?.name || ''}」底下還有 ${ownerPetBlock?.pets?.length || 0} 隻寵物（${ownerPetBlock?.pets?.map((pet) => pet.name).join('、')}），請先刪除或轉移這些寵物，才能刪除飼主。`"
+      confirm-label="前往管理寵物"
+      cancel-label="關閉"
+      :destructive="false"
+      @update:open="(value) => !value && (ownerPetBlock = null)"
+      @confirm="goManagePets"
     />
   </section>
 </template>
