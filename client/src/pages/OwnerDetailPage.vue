@@ -128,7 +128,7 @@ onMounted(async () => {
         <Card
           v-for="pet in owner.pets"
           :key="pet._id"
-          class="flex-row items-center gap-3 border-cream-300 p-4 shadow-sm transition-colors hover:border-belle-300 hover:bg-belle-50/40 dark:border-zinc-800 dark:shadow-none dark:hover:border-brand-500/40 dark:hover:bg-zinc-800/40"
+          class="flex-row items-center gap-3 border-cream-300 p-4 shadow-sm hover:border-belle-300 hover:bg-belle-50/40 dark:border-zinc-800 dark:shadow-none dark:hover:border-brand-500/40 dark:hover:bg-zinc-800/40"
         >
           <router-link :to="`/pets/${pet._id}`" class="flex min-w-0 flex-1 items-center gap-3">
             <Cat class="h-6 w-6 shrink-0 text-belle-600 dark:text-brand-400" stroke-width="1.75" />
@@ -144,7 +144,7 @@ onMounted(async () => {
             <button
               type="button"
               :disabled="deletingPetId === pet._id"
-              class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 transition-colors hover:bg-cream-200 hover:text-belle-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-brand-400"
+              class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-cream-200 hover:text-belle-600 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-brand-400"
               :aria-label="`編輯寵物 ${pet.name}`"
               @click="openEditPet(pet)"
             >
@@ -153,7 +153,7 @@ onMounted(async () => {
             <button
               type="button"
               :disabled="deletingPetId === pet._id"
-              class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 transition-colors hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+              class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
               :aria-label="`刪除寵物 ${pet.name}`"
               @click="removePet(pet)"
             >

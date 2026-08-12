@@ -1,5 +1,4 @@
 @import 'tailwindcss';
-@import 'tw-animate-css';
 @import 'shadcn-vue/tailwind.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -7,40 +6,40 @@
 @theme {
   --font-sans: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
 
-  /* 深色（科技感）主色：琥珀／陶土色系 */
-  --color-brand-50: #fff7ed;
-  --color-brand-100: #ffedd5;
-  --color-brand-200: #fed7aa;
-  --color-brand-300: #fdba74;
-  --color-brand-400: #fb923c;
-  --color-brand-500: #f97316;
-  --color-brand-600: #ea580c;
-  --color-brand-700: #c2410c;
-  --color-brand-800: #9a3412;
-  --color-brand-900: #7c2d12;
+  /* Belle Epoque brass and stage-light gold */
+  --color-brand-50: #fff7df;
+  --color-brand-100: #f7e8b8;
+  --color-brand-200: #efd283;
+  --color-brand-300: #dfb856;
+  --color-brand-400: #c99a35;
+  --color-brand-500: #ad7727;
+  --color-brand-600: #8d541d;
+  --color-brand-700: #6f3919;
+  --color-brand-800: #512716;
+  --color-brand-900: #35170d;
 
-  /* 淺色（法國美好年代 Belle Époque）主色：酒紅／波爾多 */
-  --color-belle-50: #fbeef0;
-  --color-belle-100: #f5d7dc;
-  --color-belle-200: #eab7bf;
-  --color-belle-300: #d9899c;
-  --color-belle-500: #a8465c;
-  --color-belle-600: #8a3049;
-  --color-belle-700: #6e2138;
-  --color-belle-800: #551830;
+  /* Velvet rouge and candle-shadow accents */
+  --color-belle-50: #fff1ea;
+  --color-belle-100: #f8d9c8;
+  --color-belle-200: #ebb49f;
+  --color-belle-300: #d88475;
+  --color-belle-500: #a74845;
+  --color-belle-600: #81333a;
+  --color-belle-700: #5f2530;
+  --color-belle-800: #3d1824;
 
-  /* 淺色底：象牙／羊皮紙暖色調 */
-  --color-cream-50: #fffbf2;
-  --color-cream-100: #f7ecd6;
-  --color-cream-200: #efdfba;
-  --color-cream-300: #e3cd9a;
+  /* Aged Parisian paper and lamplight */
+  --color-cream-50: #fffaf0;
+  --color-cream-100: #f3e6c9;
+  --color-cream-200: #e3cf9d;
+  --color-cream-300: #ccb27a;
 
-  /* 淺色文字：暖棕黑階 */
-  --color-ink-400: #7a654b;
-  --color-ink-500: #67543e;
-  --color-ink-600: #6b5843;
-  --color-ink-700: #4a3b28;
-  --color-ink-900: #2b2015;
+  /* Ink, twilight blue, and deep theatre shadow */
+  --color-ink-400: #7f837a;
+  --color-ink-500: #62655e;
+  --color-ink-600: #414d55;
+  --color-ink-700: #263640;
+  --color-ink-900: #101923;
 
   --radius-sm: 0.5rem;
   --radius-md: 0.625rem;
@@ -50,60 +49,60 @@
 
 /* shadcn-vue 元件用的語意 token：實際色值對應上面的品牌調色盤，不用 shadcn 預設灰階 */
 :root {
-  --background: var(--color-cream-100);
+  --background: #efe2c1;
   --foreground: var(--color-ink-900);
-  --card: var(--color-cream-50);
+  --card: #fff8ea;
   --card-foreground: var(--color-ink-900);
-  --popover: var(--color-cream-50);
+  --popover: #fff8ea;
   --popover-foreground: var(--color-ink-900);
-  --primary: var(--color-belle-600);
+  --primary: var(--color-belle-700);
   --primary-foreground: var(--color-cream-50);
-  --secondary: var(--color-cream-200);
-  --secondary-foreground: var(--color-ink-700);
-  --muted: var(--color-cream-200);
-  --muted-foreground: var(--color-ink-500);
-  --accent: var(--color-belle-50);
-  --accent-foreground: var(--color-belle-600);
-  --destructive: #dc2626;
-  --border: var(--color-cream-300);
-  --input: var(--color-cream-300);
-  --ring: var(--color-belle-500);
-  --sidebar: var(--color-cream-50);
-  --sidebar-foreground: var(--color-ink-700);
-  --sidebar-primary: var(--color-belle-600);
+  --secondary: #e7d3a6;
+  --secondary-foreground: #233742;
+  --muted: #dec99b;
+  --muted-foreground: #62655e;
+  --accent: #f2d6b7;
+  --accent-foreground: var(--color-belle-700);
+  --destructive: #b42332;
+  --border: #c8af78;
+  --input: #c8af78;
+  --ring: var(--color-brand-500);
+  --sidebar: #182733;
+  --sidebar-foreground: #e8d8b3;
+  --sidebar-primary: var(--color-brand-400);
   --sidebar-primary-foreground: var(--color-cream-50);
-  --sidebar-accent: var(--color-belle-500);
-  --sidebar-accent-foreground: var(--color-belle-600);
-  --sidebar-border: var(--color-cream-300);
-  --sidebar-ring: var(--color-belle-500);
+  --sidebar-accent: #263946;
+  --sidebar-accent-foreground: var(--color-brand-100);
+  --sidebar-border: #3a4a50;
+  --sidebar-ring: var(--color-brand-400);
 }
 
 .dark {
-  --background: #09090b;
-  --foreground: #f4f4f5;
-  --card: #18181b;
-  --card-foreground: #f4f4f5;
-  --popover: #18181b;
-  --popover-foreground: #f4f4f5;
+  --background: #0b1218;
+  --foreground: #f4ead0;
+  --card: #121b22;
+  --card-foreground: #f4ead0;
+  --popover: #121b22;
+  --popover-foreground: #f4ead0;
   --primary: var(--color-brand-500);
-  --primary-foreground: #ffffff;
-  --secondary: #27272a;
-  --secondary-foreground: #e4e4e7;
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
-  --accent: color-mix(in oklab, var(--color-brand-500) 10%, transparent);
-  --accent-foreground: var(--color-brand-400);
-  --destructive: #f87171;
-  --border: #27272a;
-  --input: #3f3f46;
+  --primary-foreground: #fffaf0;
+  --secondary: #20313d;
+  --secondary-foreground: #f0dfb9;
+  --muted: #1b2a35;
+  --muted-foreground: #b9ae96;
+  --accent: #34222a;
+  --accent-foreground: #e6bf77;
+  --destructive: #ff8a80;
+  --border: #30434c;
+  --input: #3c505a;
   --ring: var(--color-brand-500);
-  --sidebar: #09090b;
-  --sidebar-foreground: #a1a1aa;
+  --sidebar: #070d12;
+  --sidebar-foreground: #d7c8a5;
   --sidebar-primary: var(--color-brand-500);
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: var(--color-brand-500);
-  --sidebar-accent-foreground: var(--color-brand-400);
-  --sidebar-border: #27272a;
+  --sidebar-primary-foreground: #fffaf0;
+  --sidebar-accent: #192936;
+  --sidebar-accent-foreground: #e6bf77;
+  --sidebar-border: #243640;
   --sidebar-ring: var(--color-brand-500);
 }
 
@@ -142,9 +141,69 @@
   }
 
   body {
-    @apply bg-cream-100 text-ink-900 dark:bg-zinc-950 dark:text-zinc-100;
+    @apply bg-background text-foreground;
     font-family: var(--font-sans);
+    background-image:
+      linear-gradient(112deg, transparent 0 18%, color-mix(in oklab, var(--color-brand-200) 42%, transparent) 28%, transparent 42%),
+      linear-gradient(128deg, transparent 0 55%, color-mix(in oklab, var(--color-brand-400) 24%, transparent) 64%, transparent 76%),
+      radial-gradient(circle at 12% 7%, color-mix(in oklab, var(--color-brand-300) 36%, transparent) 0, transparent 30rem),
+      radial-gradient(circle at 88% 16%, color-mix(in oklab, var(--color-belle-700) 18%, transparent) 0, transparent 27rem),
+      radial-gradient(circle at 52% 100%, color-mix(in oklab, var(--color-ink-700) 18%, transparent) 0, transparent 32rem);
   }
+}
+
+.belle-light-shell {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(115deg, transparent 0 16%, rgb(255 247 223 / 0.46) 24%, rgb(223 184 86 / 0.22) 31%, transparent 45%),
+    linear-gradient(137deg, transparent 0 58%, rgb(201 154 53 / 0.2) 66%, transparent 78%),
+    radial-gradient(ellipse at 30% -8%, rgb(255 250 240 / 0.72) 0, rgb(243 230 201 / 0.3) 24rem, transparent 42rem),
+    radial-gradient(ellipse at 94% 12%, rgb(95 37 48 / 0.22) 0, transparent 34rem),
+    linear-gradient(180deg, rgb(239 226 193 / 0.92), rgb(239 226 193 / 0.76));
+}
+
+.dark .belle-light-shell {
+  background:
+    linear-gradient(116deg, transparent 0 18%, rgb(201 154 53 / 0.18) 27%, rgb(173 119 39 / 0.1) 35%, transparent 48%),
+    linear-gradient(139deg, transparent 0 54%, rgb(216 132 117 / 0.12) 63%, transparent 76%),
+    radial-gradient(ellipse at 26% -10%, rgb(173 119 39 / 0.28) 0, transparent 31rem),
+    radial-gradient(ellipse at 92% 14%, rgb(95 37 48 / 0.42) 0, transparent 34rem),
+    linear-gradient(180deg, rgb(11 18 24 / 0.97), rgb(11 18 24 / 0.9));
+}
+
+.belle-light-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(104deg, transparent 0 12%, rgb(255 250 240 / 0.38) 17%, rgb(223 184 86 / 0.15) 23%, transparent 32%),
+    linear-gradient(151deg, transparent 0 68%, rgb(255 241 234 / 0.22) 73%, transparent 84%);
+  mix-blend-mode: screen;
+  transform: translateZ(0);
+  will-change: opacity;
+}
+
+.dark .belle-light-shell::before {
+  background:
+    linear-gradient(104deg, transparent 0 12%, rgb(247 232 184 / 0.18) 17%, rgb(201 154 53 / 0.12) 24%, transparent 34%),
+    linear-gradient(151deg, transparent 0 66%, rgb(216 132 117 / 0.11) 73%, transparent 84%);
+}
+
+.belle-sidebar {
+  background-image:
+    linear-gradient(162deg, rgb(201 154 53 / 0.13), transparent 34%),
+    radial-gradient(circle at 22% 0%, rgb(247 232 184 / 0.15), transparent 17rem),
+    linear-gradient(180deg, rgb(24 39 51 / 0.98), rgb(10 18 25 / 0.98));
+}
+
+.dark .belle-sidebar {
+  background-image:
+    linear-gradient(162deg, rgb(201 154 53 / 0.12), transparent 34%),
+    radial-gradient(circle at 22% 0%, rgb(247 232 184 / 0.1), transparent 17rem),
+    linear-gradient(180deg, rgb(7 13 18 / 0.99), rgb(4 8 12 / 0.99));
 }
 
 button,
@@ -155,12 +214,38 @@ select {
   -webkit-tap-highlight-color: transparent;
 }
 
+* {
+  scrollbar-color: color-mix(in oklab, var(--color-brand-500) 58%, var(--color-ink-700)) transparent;
+  scrollbar-width: thin;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--color-brand-500) 52%, var(--color-ink-700));
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--color-brand-400) 68%, var(--color-ink-700));
+  background-clip: content-box;
+}
+
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  @apply outline-2 outline-offset-2 outline-belle-600 dark:outline-brand-400;
+  @apply outline-2 outline-offset-2 outline-brand-500 dark:outline-brand-400;
 }
 
 /* 基本量測：使用元件本身的 focus 邊框，避免 input 內層外框錯位。 */
