@@ -5,6 +5,7 @@ import { Cat, LayoutDashboard, Menu, Moon, PawPrint, Search, Settings2, Sun, Use
 import { useTheme } from './composables/useTheme';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
+import ToastContainer from './components/ToastContainer.vue';
 
 const route = useRoute();
 const { isDark, toggleTheme } = useTheme();
@@ -159,5 +160,6 @@ watch(
         </main>
       </div>
     </div>
+    <ToastContainer />
   </template>
 </template>

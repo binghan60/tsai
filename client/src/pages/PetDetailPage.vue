@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { CalendarDays, ClipboardPlus, FileText, PawPrint, Pencil, Share2, User } from '@lucide/vue';
+import { CalendarDays, ClipboardPlus, FileText, PawPrint, Pencil, Share2, Trash2, User } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { http } from '../api/http';
@@ -11,7 +11,10 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 
+import { useToast } from '../composables/useToast';
+
 const route = useRoute();
+const toast = useToast();
 const pet = ref(null);
 const error = ref('');
 const downloadingId = ref(null);
@@ -22,6 +25,9 @@ const shareNotice = ref(null);
 const editOpen = ref(false);
 const editSaving = ref(false);
 const editError = ref('');
+
+const recordToRemove = ref(null);
+const deletingRecordId = ref(null);
 
 const sexLabel = computed(() => ({ male: '公', female: '母', unknown: '未記錄' })[pet.value?.sex] ?? '未記錄');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育', unknown: '未記錄' })[pet.value?.neutered] ?? '未記錄');
@@ -55,9 +61,11 @@ async function savePet(values) {
   try {
     await http.put(`/pets/${pet.value._id}`, values);
     editOpen.value = false;
+    toast.success(`已成功更新「${values.name || pet.value.name}」的資料`, '修改資料成功');
     await fetchPet();
   } catch (err) {
     editError.value = err.response?.data?.message ?? '寵物資料儲存失敗';
+    toast.error(editError.value, '修改資料失敗');
   } finally {
     editSaving.value = false;
   }
@@ -69,9 +77,11 @@ async function downloadPdf(record) {
   try {
     const response = await http.post(`/records/${record._id}/generate-pdf`, null, { responseType: 'blob' });
     downloadBlob(response.data, `${record.reportNumber || 'health-check'}.pdf`);
+    toast.success('已完成 PDF 報告下載', '下載成功');
     await fetchPet();
   } catch (err) {
     error.value = await extractErrorMessage(err, '產生 PDF 失敗');
+    toast.error(error.value, '下載失敗');
   } finally {
     downloadingId.value = null;
   }
@@ -93,9 +103,11 @@ async function shareRecord(record) {
     const { data } = await http.post(`/records/${record._id}/share`, { days: 30 });
     const copied = await copyText(data.url);
     shareNotice.value = { url: data.url, expiresAt: data.expiresAt, copied };
+    toast.success(copied ? '已產生分享連結並複製到剪貼簿' : '已成功產生分享連結', '建立分享成功');
     await fetchPet();
   } catch (err) {
     error.value = err.response?.data?.message ?? '建立分享連結失敗';
+    toast.error(error.value, '建立分享失敗');
   } finally {
     sharingId.value = null;
   }
@@ -105,6 +117,7 @@ async function copyExistingShare(record) {
   const url = `${window.location.origin}/report/${record.shareToken}`;
   const copied = await copyText(url);
   shareNotice.value = { url, expiresAt: record.shareExpiresAt, copied };
+  toast.success(copied ? '分享連結已複製到剪貼簿' : '已取得分享連結', '複製成功');
 }
 
 async function revokeShare(record) {
@@ -114,9 +127,11 @@ async function revokeShare(record) {
     await http.post(`/records/${record._id}/revoke-share`);
     shareToRevoke.value = null;
     shareNotice.value = null;
+    toast.success('已成功撤銷分享連結', '撤銷成功');
     await fetchPet();
   } catch (err) {
     error.value = err.response?.data?.message ?? '撤銷分享失敗';
+    toast.error(error.value, '撤銷失敗');
   } finally {
     revokingId.value = null;
   }
@@ -125,6 +140,29 @@ async function revokeShare(record) {
 function openRevokeShare(record) {
   if (revokingId.value) return;
   shareToRevoke.value = record;
+}
+
+function openRemoveRecord(record) {
+  if (deletingRecordId.value) return;
+  recordToRemove.value = record;
+}
+
+async function removeRecord(record) {
+  if (!record) return;
+  deletingRecordId.value = record._id;
+  error.value = '';
+  try {
+    await http.delete(`/records/${record._id}`);
+    recordToRemove.value = null;
+    toast.success(`已成功刪除「${formatDate(record.visitDate)}」的健檢紀錄`, '刪除紀錄成功');
+    await fetchPet();
+  } catch (err) {
+    const msg = err.response?.data?.message ?? '刪除健檢紀錄失敗';
+    error.value = msg;
+    toast.error(msg, '刪除失敗');
+  } finally {
+    deletingRecordId.value = null;
+  }
 }
 
 function formatDate(value) {
@@ -188,6 +226,7 @@ onMounted(fetchPet);
               <button v-if="record.status !== 'draft'" type="button" :disabled="downloadingId === record._id" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 disabled:opacity-50 dark:text-brand-400 dark:hover:bg-brand-500/10" @click="downloadPdf(record)">{{ downloadingId === record._id ? '產生中…' : '下載 PDF' }}</button>
               <button v-if="record.status !== 'draft' && !record.shareEnabled" type="button" :disabled="sharingId === record._id" class="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 disabled:opacity-50 dark:text-brand-400 dark:hover:bg-brand-500/10" @click="shareRecord(record)"><Share2 class="h-4 w-4" />{{ sharingId === record._id ? '建立中…' : '分享' }}</button>
               <template v-if="record.shareEnabled"><button class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10" @click="copyExistingShare(record)">複製連結</button><button :disabled="revokingId === record._id" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40" @click="openRevokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</button></template>
+              <button type="button" :disabled="deletingRecordId === record._id" class="inline-flex min-h-11 items-center gap-1 rounded-xl px-2.5 font-medium text-red-600 hover:bg-red-50 hover:text-red-700 disabled:opacity-50 dark:text-red-400 dark:hover:bg-red-950/40" :aria-label="`刪除健檢紀錄 ${formatDate(record.visitDate)}`" @click="openRemoveRecord(record)"><Trash2 class="h-4 w-4" />刪除</button>
             </div>
           </div>
           </Card>
@@ -205,6 +244,16 @@ onMounted(fetchPet);
       :loading="Boolean(revokingId)"
       @update:open="(value) => !value && (shareToRevoke = null)"
       @confirm="revokeShare(shareToRevoke)"
+    />
+    <ConfirmDialog
+      :open="Boolean(recordToRemove)"
+      title="刪除健檢紀錄"
+      :description="`確定要刪除「${formatDate(recordToRemove?.visitDate)}」的健檢紀錄嗎？此操作無法復原。`"
+      confirm-label="刪除紀錄"
+      :loading="Boolean(deletingRecordId)"
+      :destructive="true"
+      @update:open="(value) => !value && (recordToRemove = null)"
+      @confirm="removeRecord(recordToRemove)"
     />
   </section>
 

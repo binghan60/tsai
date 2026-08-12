@@ -159,7 +159,6 @@ recordsRouter.delete('/:id', async (req, res, next) => {
   try {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
-    if (record.status !== 'draft') return res.status(409).json({ message: '只能捨棄草稿紀錄' });
     await record.deleteOne();
     res.status(204).end();
   } catch (err) {

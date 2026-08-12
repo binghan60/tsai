@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, AlertTriangle, Clock3, FileText, PawPrint, Save, User } from '@lucide/vue';
+import { Activity, AlertTriangle, Clock3, FileText, PawPrint, Save, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { BASIC_MEASUREMENTS, LAB_GROUPS, LAB_TESTS } from '../lib/labTests';
@@ -11,14 +11,18 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import { useToast } from '../composables/useToast';
 
 const EXAM_TYPE_OPTIONS = ['例行健檢', '幼年健檢', '熟齡健檢', '術前評估', '追蹤檢查', '其他'];
 
 const route = useRoute();
 const router = useRouter();
+const toast = useToast();
 const petId = ref(route.params.petId ?? null);
 const recordId = ref(route.params.id ?? null);
 const isEdit = computed(() => Boolean(recordId.value));
+const showDiscardConfirm = ref(false);
+const discarding = ref(false);
 
 const EXAMINATION_ITEMS = [
   { key: 'auscultation', label: '聽診' },
@@ -252,6 +256,7 @@ async function saveRecord({ silent = false } = {}) {
     const hasNewChanges = JSON.stringify(buildPayload()) !== savedSnapshot;
     isDirty.value = hasNewChanges;
     saveState.value = hasNewChanges ? 'unsaved' : 'saved';
+    if (!silent) toast.success('已成功儲存病歷草稿', '儲存成功');
     if (hasNewChanges) scheduleAutosave();
     return true;
   } catch (err) {
@@ -322,6 +327,24 @@ async function confirmLeave() {
   pendingLeavePath.value = '';
   leavingAfterAction.value = true;
   await router.push(target);
+}
+
+async function confirmDiscard() {
+  discarding.value = true;
+  try {
+    if (recordId.value) {
+      await http.delete(`/records/${recordId.value}`);
+    }
+    toast.success('已成功捨棄健檢紀錄草稿', '已捨棄草稿');
+    leavingAfterAction.value = true;
+    showDiscardConfirm.value = false;
+    await router.push(petId.value ? `/pets/${petId.value}` : '/pets');
+  } catch (err) {
+    const msg = err.response?.data?.message || '捨棄草稿失敗';
+    toast.error(msg, '捨棄失敗');
+  } finally {
+    discarding.value = false;
+  }
 }
 onMounted(() => {
   init();
@@ -433,8 +456,30 @@ onBeforeUnmount(() => {
       </form>
 
       <p v-if="saveError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ saveError }}</p>
-      <div class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 lg:left-64"><div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3"><p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已完成 {{ completedCount }}/5 個區段</p><div class="ml-auto flex gap-2"><Button type="button" variant="outline" class="min-h-11" :disabled="saving" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿' }}</Button><Button type="button" class="min-h-11" :disabled="saving" @click="openPreview"><FileText class="h-4 w-4" />預覽正式報告</Button></div></div></div>
+      <div class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 lg:left-64">
+        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
+          <p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已完成 {{ completedCount }}/5 個區段</p>
+          <div class="ml-auto flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" class="min-h-11 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 dark:border-red-900/60 dark:text-red-400 dark:hover:bg-red-950/40" :disabled="saving || discarding" @click="showDiscardConfirm = true">
+              <Trash2 class="h-4 w-4" />捨棄草稿
+            </Button>
+            <Button type="button" variant="outline" class="min-h-11" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿' }}</Button>
+            <Button type="button" class="min-h-11" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽正式報告</Button>
+          </div>
+        </div>
+      </div>
     </template>
+    <ConfirmDialog
+      :open="showDiscardConfirm"
+      title="捨棄健檢草稿"
+      description="確定要捨棄此筆健檢紀錄草稿嗎？此操作將刪除此草稿且無法復原。"
+      confirm-label="捨棄草稿"
+      cancel-label="取消"
+      :loading="discarding"
+      :destructive="true"
+      @update:open="(value) => !value && (showDiscardConfirm = false)"
+      @confirm="confirmDiscard"
+    />
     <ConfirmDialog
       :open="Boolean(pendingLeavePath)"
       title="離開編輯頁"

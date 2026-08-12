@@ -10,8 +10,11 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
+import { useToast } from '../composables/useToast';
+
 const route = useRoute();
 const router = useRouter();
+const toast = useToast();
 const owners = ref([]);
 const query = ref('');
 const loading = ref(false);
@@ -49,9 +52,11 @@ async function createOwner(values) {
   try {
     const { data } = await http.post('/owners', values);
     showCreate.value = false;
+    toast.success(`已成功新增飼主「${data.name || values.name}」`, '新增飼主成功');
     await router.push(`/owners/${data._id}?addPet=1`);
   } catch (err) {
     createError.value = err.response?.data?.message ?? '新增飼主失敗';
+    toast.error(createError.value, '新增飼主失敗');
   } finally {
     creating.value = false;
   }
@@ -68,9 +73,11 @@ async function submitEdit(values) {
   try {
     await http.put(`/owners/${editTarget.value._id}`, values);
     editTarget.value = null;
+    toast.success(`已成功更新飼主「${values.name}」的資料`, '修改資料成功');
     await fetchOwners();
   } catch (err) {
     editError.value = err.response?.data?.message ?? '編輯飼主失敗';
+    toast.error(editError.value, '修改資料失敗');
   } finally {
     editSaving.value = false;
   }
@@ -78,14 +85,17 @@ async function submitEdit(values) {
 
 async function removeOwner(owner) {
   if (!owner) return;
+  const targetName = owner.name;
   deletingId.value = owner._id;
   error.value = '';
   try {
     await http.delete(`/owners/${owner._id}`);
     ownerToRemove.value = null;
+    toast.success(`已成功刪除飼主「${targetName}」`, '刪除成功');
     await fetchOwners();
   } catch (err) {
     error.value = err.response?.data?.message ?? '刪除飼主失敗';
+    toast.error(error.value, '刪除失敗');
   } finally {
     deletingId.value = null;
   }

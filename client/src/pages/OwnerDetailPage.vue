@@ -8,7 +8,10 @@ import { http } from '../api/http';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 
+import { useToast } from '../composables/useToast';
+
 const route = useRoute();
+const toast = useToast();
 const owner = ref(null);
 const error = ref('');
 
@@ -48,9 +51,11 @@ async function createPet(values) {
   try {
     await http.post(`/owners/${route.params.id}/pets`, values);
     closeCreatePet();
+    toast.success(`已成功新增寵物「${values.name}」`, '新增寵物成功');
     await fetchOwner();
   } catch (err) {
     createError.value = err.response?.data?.message ?? '新增寵物失敗';
+    toast.error(createError.value, '新增寵物失敗');
   } finally {
     creating.value = false;
   }
@@ -71,9 +76,11 @@ async function submitEditPet(values) {
   try {
     await http.put(`/pets/${editPetTarget.value._id}`, values);
     closeEditPet();
+    toast.success(`已成功更新寵物「${values.name}」的資料`, '修改資料成功');
     await fetchOwner();
   } catch (err) {
     editPetError.value = err.response?.data?.message ?? '編輯寵物失敗';
+    toast.error(editPetError.value, '修改資料失敗');
   } finally {
     editPetSaving.value = false;
   }
@@ -81,14 +88,17 @@ async function submitEditPet(values) {
 
 async function removePet(pet) {
   if (!pet) return;
+  const targetPetName = pet.name;
   deletingPetId.value = pet._id;
   error.value = '';
   try {
     await http.delete(`/pets/${pet._id}`);
     petToRemove.value = null;
+    toast.success(`已成功刪除寵物「${targetPetName}」`, '刪除成功');
     await fetchOwner();
   } catch (err) {
     error.value = err.response?.data?.message ?? '刪除寵物失敗';
+    toast.error(error.value, '刪除失敗');
   } finally {
     deletingPetId.value = null;
   }
