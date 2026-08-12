@@ -1,8 +1,9 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { Cat, ClipboardPlus, Search, User } from '@lucide/vue';
+import { Cat, ClipboardPlus, User } from '@lucide/vue';
 import { http } from '../api/http';
+import SearchPanel from '../components/SearchPanel.vue';
 
 const route = useRoute();
 const pets = ref([]);
@@ -54,20 +55,7 @@ onMounted(fetchPets);
       請搜尋並選擇寵物，接著點選「新增健檢」。
     </div>
 
-    <div class="rounded-2xl border border-cream-300 bg-cream-50 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
-      <label for="pet-search" class="mb-2 block text-xs font-medium text-ink-500 dark:text-zinc-400">搜尋寵物</label>
-      <div class="relative">
-        <Search class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400 dark:text-zinc-400" stroke-width="1.75" />
-        <input
-          id="pet-search"
-          v-model="query"
-          type="search"
-          autocomplete="off"
-          placeholder="輸入寵物名、飼主姓名、電話、病歷號或晶片號"
-          class="w-full rounded-xl border border-cream-300 bg-white py-3 pl-11 pr-4 text-sm text-ink-900 placeholder:text-ink-400 focus:border-belle-500 focus:outline-none focus:ring-2 focus:ring-belle-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:ring-brand-500/20"
-        />
-      </div>
-    </div>
+    <SearchPanel id="pet-search" v-model="query" label="搜尋寵物" placeholder="輸入寵物名、飼主姓名、電話、病歷號或晶片號" />
 
     <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
     <p v-else-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入寵物資料…</p>

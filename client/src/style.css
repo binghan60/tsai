@@ -78,3 +78,10 @@ select:focus-visible {
   appearance: none;
   -webkit-appearance: none;
 }
+
+.dark .reference-species-select {
+  border-color: #3f3f46;
+  background-color: #09090b;
+  color: #f4f4f5;
+  color-scheme: dark;
+}

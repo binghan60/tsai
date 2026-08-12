@@ -1,8 +1,9 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { ArrowRight, ClipboardPlus, FileText, PawPrint, Pencil, Phone, Search, User, Users } from '@lucide/vue';
+import { ArrowRight, ClipboardPlus, FileText, PawPrint, Pencil, Phone, User, Users } from '@lucide/vue';
 import { http } from '../api/http';
 import { RECORD_STATUS_META } from '../lib/recordStatus';
+import SearchPanel from '../components/SearchPanel.vue';
 
 const loading = ref(true);
 const error = ref('');
@@ -84,12 +85,7 @@ onMounted(fetchDashboard);
       <div class="flex flex-wrap gap-2"><router-link to="/owners?create=1" class="inline-flex min-h-11 items-center rounded-xl border border-cream-300 bg-cream-50 px-4 text-sm font-medium text-ink-700 hover:border-belle-300 hover:text-belle-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:text-brand-400">+ 新增飼主</router-link><router-link to="/pets?intent=new-record" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-belle-600 px-4 text-sm font-medium text-white hover:bg-belle-700 dark:bg-brand-500 dark:hover:bg-brand-600"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></div>
     </div>
 
-    <div class="relative rounded-2xl border border-cream-300 bg-cream-50 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none sm:p-5">
-      <label for="global-search" class="mb-2 block text-xs font-medium text-ink-500 dark:text-zinc-400">快速搜尋</label>
-      <div class="relative"><Search class="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-400 dark:text-zinc-400" /><input id="global-search" v-model="query" type="search" autocomplete="off" placeholder="搜尋寵物、飼主、電話、病歷號或晶片號" class="w-full rounded-xl border border-cream-300 bg-white py-3.5 pl-12 pr-4 text-sm text-ink-900 placeholder:text-ink-400 focus:border-belle-500 focus:outline-none focus:ring-2 focus:ring-belle-100 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:ring-brand-500/20" /></div>
-      <p v-if="searching" class="mt-2 text-xs text-ink-400 dark:text-zinc-400" role="status">搜尋中…</p>
-      <p v-else-if="searchError" class="mt-2 text-xs text-red-700 dark:text-red-300">{{ searchError }}</p>
-
+    <SearchPanel id="global-search" v-model="query" label="快速搜尋" placeholder="搜尋寵物、飼主、電話、病歷號或晶片號" :loading="searching" :error="searchError">
       <div v-if="query.trim() && !searching" class="mt-3 grid gap-3 lg:grid-cols-2">
         <div class="overflow-hidden rounded-xl border border-cream-300 dark:border-zinc-700">
           <p class="border-b border-cream-300 px-4 py-2 text-xs font-semibold text-ink-500 dark:border-zinc-700 dark:text-zinc-400">寵物</p>
@@ -102,7 +98,7 @@ onMounted(fetchDashboard);
           <p v-if="results.owners.length === 0" class="px-4 py-4 text-sm text-ink-500 dark:text-zinc-400">找不到飼主</p>
         </div>
       </div>
-    </div>
+    </SearchPanel>
 
     <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
     <p v-else-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入工作台…</p>
