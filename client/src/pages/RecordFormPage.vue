@@ -5,6 +5,13 @@ import { Activity, AlertTriangle, Clock3, FileText, PawPrint, Save, User } from 
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { BASIC_MEASUREMENTS, LAB_GROUPS, LAB_TESTS } from '../lib/labTests';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+
+const EXAM_TYPE_OPTIONS = ['例行健檢', '幼年健檢', '熟齡健檢', '術前評估', '追蹤檢查', '其他'];
 
 const route = useRoute();
 const router = useRouter();
@@ -342,15 +349,39 @@ onBeforeUnmount(() => {
       <form class="space-y-5" @submit.prevent>
         <section class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
           <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">1</span><div><h2 class="font-semibold text-ink-900 dark:text-white">健檢資訊與健康背景</h2><p class="text-xs text-ink-400 dark:text-zinc-400">記錄本次健檢基本資訊、主訴與病史</p></div></div>
-          <div class="grid gap-x-4 sm:grid-cols-3"><v-text-field v-model="vet" label="獸醫師 *" autocomplete="name" /><v-text-field v-model="visitDate" label="健檢日期 *" type="date" /><v-select v-model="record.examType" label="健檢類型" :items="['例行健檢', '幼年健檢', '熟齡健檢', '術前評估', '追蹤檢查', '其他']" /></div>
-          <div class="grid gap-x-4 lg:grid-cols-2"><v-textarea v-model="record.chiefComplaint" label="主訴" rows="3" auto-grow /><v-textarea v-model="record.history" label="病史" rows="3" auto-grow /></div>
+          <div class="grid gap-x-4 gap-y-4 sm:grid-cols-3">
+            <div class="space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">獸醫師 *</Label><Input v-model="vet" class="min-h-11" autocomplete="name" /></div>
+            <div class="space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">健檢日期 *</Label><Input v-model="visitDate" type="date" class="min-h-11" /></div>
+            <div class="space-y-1.5">
+              <Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">健檢類型</Label>
+              <Select v-model="record.examType">
+                <SelectTrigger class="min-h-11 w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="option in EXAM_TYPE_OPTIONS" :key="option" :value="option">{{ option }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div class="mt-4 grid gap-x-4 gap-y-4 lg:grid-cols-2">
+            <div class="space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">主訴</Label><Textarea v-model="record.chiefComplaint" rows="3" /></div>
+            <div class="space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">病史</Label><Textarea v-model="record.history" rows="3" /></div>
+          </div>
         </section>
 
         <section class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
           <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">2</span><div><h2 class="font-semibold text-ink-900 dark:text-white">基本量測</h2><p class="text-xs text-ink-400 dark:text-zinc-400">包含範例中的體重與體溫</p></div></div>
           <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
             <div v-for="metric in BASIC_MEASUREMENTS" :key="metric.key">
-              <v-text-field v-model="record[metric.key]" class="measurement-field" :label="metric.label" type="number" :min="metric.inputMin" :max="metric.inputMax" :step="metric.step" :suffix="metric.unit" hide-details @update:model-value="autoJudgeMeasurement(metric, $event)" />
+              <Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">{{ metric.label }}<span v-if="metric.unit" class="text-ink-400 dark:text-zinc-500"> ({{ metric.unit }})</span></Label>
+              <Input
+                v-model="record[metric.key]"
+                class="measurement-field mt-1.5 min-h-11"
+                type="number"
+                :min="metric.inputMin"
+                :max="metric.inputMax"
+                :step="metric.step"
+                @update:model-value="autoJudgeMeasurement(metric, $event)"
+              />
               <div class="mt-2 flex min-h-5 flex-wrap items-center gap-1.5 text-[11px]">
                 <span v-if="labRangeLabel(metric)" class="text-ink-500 dark:text-zinc-400">參考 {{ labRangeLabel(metric) }}</span>
                 <span v-else class="text-ink-400 dark:text-zinc-500">尚未設定標準值</span>
@@ -384,19 +415,22 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
-          <v-textarea v-model="record.labSummary" class="mt-5" label="檢驗補充摘要" rows="3" auto-grow />
+          <div class="mt-5 space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">檢驗補充摘要</Label><Textarea v-model="record.labSummary" rows="3" /></div>
         </section>
 
         <section class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
           <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">5</span><div><h2 class="font-semibold text-ink-900 dark:text-white">結論與診斷</h2><p class="text-xs text-ink-400 dark:text-zinc-400">統整檢查發現並記錄診斷與後續方向</p></div></div>
-          <v-textarea v-model="record.conclusion" label="結論" rows="8" auto-grow />
-          <v-textarea v-model="record.diagnosis" label="診斷" rows="5" auto-grow />
-          <div class="grid gap-x-4 lg:grid-cols-2"><v-textarea v-model="record.treatmentPlan" label="照護與追蹤建議" rows="3" auto-grow /><v-textarea v-model="record.other" label="其他備註" rows="3" auto-grow /></div>
+          <div class="space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">結論</Label><Textarea v-model="record.conclusion" rows="8" /></div>
+          <div class="mt-4 space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">診斷</Label><Textarea v-model="record.diagnosis" rows="5" /></div>
+          <div class="mt-4 grid gap-x-4 gap-y-4 lg:grid-cols-2">
+            <div class="space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">照護與追蹤建議</Label><Textarea v-model="record.treatmentPlan" rows="3" /></div>
+            <div class="space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">其他備註</Label><Textarea v-model="record.other" rows="3" /></div>
+          </div>
         </section>
       </form>
 
       <p v-if="saveError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ saveError }}</p>
-      <div class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 lg:left-64"><div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3"><p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已完成 {{ completedCount }}/5 個區段</p><div class="ml-auto flex gap-2"><button type="button" :disabled="saving" class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-cream-300 bg-white px-4 text-sm font-medium text-ink-700 hover:border-belle-300 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿' }}</button><button type="button" :disabled="saving" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-belle-600 px-4 text-sm font-medium text-white hover:bg-belle-700 disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-600" @click="openPreview"><FileText class="h-4 w-4" />預覽正式報告</button></div></div></div>
+      <div class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 lg:left-64"><div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3"><p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已完成 {{ completedCount }}/5 個區段</p><div class="ml-auto flex gap-2"><Button type="button" variant="outline" class="min-h-11" :disabled="saving" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿' }}</Button><Button type="button" class="min-h-11" :disabled="saving" @click="openPreview"><FileText class="h-4 w-4" />預覽正式報告</Button></div></div></div>
     </template>
   </section>
 </template>

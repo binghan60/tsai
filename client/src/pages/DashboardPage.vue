@@ -1,9 +1,11 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { ArrowRight, ClipboardPlus, FileText, PawPrint, Pencil, Phone, User, Users } from '@lucide/vue';
+import { ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Phone, User, Users } from '@lucide/vue';
 import { http } from '../api/http';
 import { RECORD_STATUS_META } from '../lib/recordStatus';
 import SearchPanel from '../components/SearchPanel.vue';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 
 const loading = ref(true);
 const error = ref('');
@@ -38,7 +40,7 @@ const statusSegments = computed(() => {
   const total = Math.max(values.draft + values.generated + values.sent, 1);
   return [
     { key: 'draft', label: '草稿', value: values.draft, width: (values.draft / total) * 100, class: 'bg-zinc-500' },
-    { key: 'generated', label: '已完成', value: values.generated, width: (values.generated / total) * 100, class: 'bg-belle-600 dark:bg-brand-500' },
+    { key: 'generated', label: '已完成', value: values.generated, width: (values.generated / total) * 100, class: 'bg-amber-800 dark:bg-brand-600' },
     { key: 'sent', label: '已寄送', value: values.sent, width: (values.sent / total) * 100, class: 'bg-emerald-600' },
   ];
 });
@@ -105,24 +107,42 @@ onMounted(fetchDashboard);
 
     <template v-else>
       <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div v-for="stat in stats" :key="stat.label" class="rounded-2xl border bg-cream-50 p-4 shadow-sm dark:bg-zinc-900 dark:shadow-none" :class="stat.emphasis && stat.value ? 'border-belle-300 dark:border-brand-500/50' : 'border-cream-300 dark:border-zinc-800'"><div class="flex h-9 w-9 items-center justify-center rounded-xl bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><component :is="stat.icon" class="h-4.5 w-4.5" /></div><div class="mt-3 text-xl font-semibold text-ink-900 dark:text-white">{{ stat.value }}</div><div class="mt-0.5 text-xs text-ink-500 dark:text-zinc-400">{{ stat.label }}</div></div>
+        <Card v-for="stat in stats" :key="stat.label" class="border p-4 shadow-sm dark:shadow-none" :class="stat.emphasis && stat.value ? 'border-belle-300 dark:border-brand-500/50' : 'border-cream-300 dark:border-zinc-800'">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><component :is="stat.icon" class="h-4.5 w-4.5" /></div>
+          <div class="mt-3 text-xl font-semibold text-ink-900 dark:text-white">{{ stat.value }}</div>
+          <div class="mt-0.5 text-xs text-ink-500 dark:text-zinc-400">{{ stat.label }}</div>
+        </Card>
       </div>
 
       <div class="grid gap-4 xl:grid-cols-2">
-        <section class="overflow-hidden rounded-2xl border border-cream-300 bg-cream-50 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div class="flex items-center justify-between border-b border-cream-300 px-5 py-4 dark:border-zinc-800"><div><h2 class="text-sm font-semibold text-ink-900 dark:text-white">繼續填寫草稿</h2><p class="mt-0.5 text-xs text-ink-400 dark:text-zinc-400">依最後更新時間排序</p></div><Pencil class="h-5 w-5 text-ink-400 dark:text-zinc-400" /></div>
-          <div v-if="dashboard.draftRecords?.length" class="divide-y divide-cream-200 dark:divide-zinc-800"><router-link v-for="item in dashboard.draftRecords" :key="item._id" :to="`/records/${item._id}/edit`" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-cream-100 dark:hover:bg-zinc-800/50"><span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · 更新 {{ formatDateTime(item.updatedAt) }}</span></span><span class="shrink-0 text-sm font-medium text-belle-600 dark:text-brand-400">繼續填寫</span></router-link></div>
-          <div v-else class="px-5 py-10 text-center"><Check class="mx-auto h-7 w-7 text-emerald-600" /><p class="mt-2 text-sm text-ink-500 dark:text-zinc-400">目前沒有待完成草稿</p></div>
-        </section>
+        <Card class="gap-0 overflow-hidden border-cream-300 py-0 shadow-sm dark:border-zinc-800">
+          <CardHeader class="flex-row items-center justify-between gap-3 border-b border-cream-300 px-5 py-4 dark:border-zinc-800">
+            <div><CardTitle class="text-sm">繼續填寫草稿</CardTitle><CardDescription class="mt-0.5 text-xs">依最後更新時間排序</CardDescription></div>
+            <Pencil class="h-5 w-5 text-ink-400 dark:text-zinc-400" />
+          </CardHeader>
+          <CardContent class="p-0">
+            <div v-if="dashboard.draftRecords?.length" class="divide-y divide-cream-200 dark:divide-zinc-800"><router-link v-for="item in dashboard.draftRecords" :key="item._id" :to="`/records/${item._id}/edit`" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-cream-100 dark:hover:bg-zinc-800/50"><span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · 更新 {{ formatDateTime(item.updatedAt) }}</span></span><span class="shrink-0 text-sm font-medium text-belle-600 dark:text-brand-400">繼續填寫</span></router-link></div>
+            <div v-else class="px-5 py-10 text-center"><Check class="mx-auto h-7 w-7 text-emerald-600" /><p class="mt-2 text-sm text-ink-500 dark:text-zinc-400">目前沒有待完成草稿</p></div>
+          </CardContent>
+        </Card>
 
-        <section class="overflow-hidden rounded-2xl border border-cream-300 bg-cream-50 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div class="flex items-center justify-between border-b border-cream-300 px-5 py-4 dark:border-zinc-800"><div><h2 class="text-sm font-semibold text-ink-900 dark:text-white">最近健檢紀錄</h2><p class="mt-0.5 text-xs text-ink-400 dark:text-zinc-400">快速回到最近處理的寵物</p></div><FileText class="h-5 w-5 text-ink-400 dark:text-zinc-400" /></div>
-          <div v-if="dashboard.recentRecords?.length" class="divide-y divide-cream-200 dark:divide-zinc-800"><router-link v-for="item in dashboard.recentRecords" :key="item._id" :to="`/records/${item._id}/preview`" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-cream-100 dark:hover:bg-zinc-800/50"><span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · {{ item.vet || '獸醫師未填' }}</span></span><span class="shrink-0 rounded-full px-3 py-1 text-xs font-medium" :class="RECORD_STATUS_META[item.status]?.class">{{ RECORD_STATUS_META[item.status]?.label }}</span></router-link></div>
-          <div v-else class="px-5 py-10 text-center"><PawPrint class="mx-auto h-7 w-7 text-ink-400 dark:text-zinc-500" /><p class="mt-2 text-sm text-ink-500 dark:text-zinc-400">目前沒有健檢紀錄</p></div>
-        </section>
+        <Card class="gap-0 overflow-hidden border-cream-300 py-0 shadow-sm dark:border-zinc-800">
+          <CardHeader class="flex-row items-center justify-between gap-3 border-b border-cream-300 px-5 py-4 dark:border-zinc-800">
+            <div><CardTitle class="text-sm">最近健檢紀錄</CardTitle><CardDescription class="mt-0.5 text-xs">快速回到最近處理的寵物</CardDescription></div>
+            <FileText class="h-5 w-5 text-ink-400 dark:text-zinc-400" />
+          </CardHeader>
+          <CardContent class="p-0">
+            <div v-if="dashboard.recentRecords?.length" class="divide-y divide-cream-200 dark:divide-zinc-800"><router-link v-for="item in dashboard.recentRecords" :key="item._id" :to="`/records/${item._id}/preview`" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-cream-100 dark:hover:bg-zinc-800/50"><span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · {{ item.vet || '獸醫師未填' }}</span></span><Badge :class="RECORD_STATUS_META[item.status]?.class" class="shrink-0 rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[item.status]?.label }}</Badge></router-link></div>
+            <div v-else class="px-5 py-10 text-center"><PawPrint class="mx-auto h-7 w-7 text-ink-400 dark:text-zinc-500" /><p class="mt-2 text-sm text-ink-500 dark:text-zinc-400">目前沒有健檢紀錄</p></div>
+          </CardContent>
+        </Card>
       </div>
 
-      <section class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"><div class="mb-3 flex items-center justify-between"><h2 class="text-sm font-semibold text-ink-900 dark:text-white">報告狀態</h2><span class="text-xs text-ink-400 dark:text-zinc-400">流程概況</span></div><div class="flex h-3 overflow-hidden rounded-full bg-cream-200 dark:bg-zinc-800"><div v-for="segment in statusSegments" :key="segment.key" :class="segment.class" :style="{ width: `${segment.width}%` }"></div></div><div class="mt-4 flex flex-wrap gap-x-6 gap-y-2"><span v-for="segment in statusSegments" :key="segment.key" class="text-sm text-ink-600 dark:text-zinc-300">{{ segment.label }} <strong>{{ segment.value }}</strong></span></div></section>
+      <Card class="border-cream-300 p-5 shadow-sm dark:border-zinc-800">
+        <div class="mb-3 flex items-center justify-between"><CardTitle class="text-sm">報告狀態</CardTitle><span class="text-xs text-ink-400 dark:text-zinc-400">流程概況</span></div>
+        <div class="flex h-3 overflow-hidden rounded-full bg-cream-200 dark:bg-zinc-800"><div v-for="segment in statusSegments" :key="segment.key" :class="segment.class" :style="{ width: `${segment.width}%` }"></div></div>
+        <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2"><span v-for="segment in statusSegments" :key="segment.key" class="text-sm text-ink-600 dark:text-zinc-300">{{ segment.label }} <strong>{{ segment.value }}</strong></span></div>
+      </Card>
     </template>
   </section>
 </template>

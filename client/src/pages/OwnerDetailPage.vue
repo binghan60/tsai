@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router';
 import { Cat, Pencil, Trash2, User } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import { http } from '../api/http';
+import { Button } from '../components/ui/button';
+import { Card } from '../components/ui/card';
 
 const route = useRoute();
 const owner = ref(null);
@@ -101,7 +103,7 @@ onMounted(async () => {
       ← 回飼主列表
     </router-link>
 
-    <div class="rounded-2xl border border-cream-300 bg-cream-50 p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+    <Card class="border-cream-300 p-6 shadow-sm dark:border-zinc-800 dark:shadow-none">
       <div class="flex items-center gap-4">
         <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
           <User class="h-7 w-7" stroke-width="1.75" />
@@ -112,27 +114,21 @@ onMounted(async () => {
           <p v-if="owner.email" class="text-sm text-ink-500 dark:text-zinc-500">Email：{{ owner.email }}</p>
         </div>
       </div>
-    </div>
+    </Card>
 
     <div class="space-y-4">
       <div class="flex items-center justify-between">
         <h2 class="text-base font-semibold text-ink-900 dark:text-white">寵物</h2>
-        <button
-          type="button"
-          class="rounded-xl bg-belle-600 px-4 py-1.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-belle-700 dark:bg-brand-500 dark:shadow-brand-500/20 dark:hover:bg-brand-600"
-          @click="openCreatePet"
-        >
-          + 新增寵物
-        </button>
+        <Button type="button" size="sm" class="min-h-9" @click="openCreatePet">+ 新增寵物</Button>
       </div>
 
       <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400">{{ error }}</p>
 
       <div v-if="owner.pets.length" class="grid gap-3 sm:grid-cols-2">
-        <div
+        <Card
           v-for="pet in owner.pets"
           :key="pet._id"
-          class="flex items-center gap-3 rounded-2xl border border-cream-300 bg-cream-50 p-4 shadow-sm transition-colors hover:border-belle-300 hover:bg-belle-50/40 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none dark:hover:border-brand-500/40 dark:hover:bg-zinc-800/40"
+          class="flex-row items-center gap-3 border-cream-300 p-4 shadow-sm transition-colors hover:border-belle-300 hover:bg-belle-50/40 dark:border-zinc-800 dark:shadow-none dark:hover:border-brand-500/40 dark:hover:bg-zinc-800/40"
         >
           <router-link :to="`/pets/${pet._id}`" class="flex min-w-0 flex-1 items-center gap-3">
             <Cat class="h-6 w-6 shrink-0 text-belle-600 dark:text-brand-400" stroke-width="1.75" />
@@ -164,7 +160,7 @@ onMounted(async () => {
               <Trash2 class="h-4 w-4" stroke-width="1.75" />
             </button>
           </div>
-        </div>
+        </Card>
       </div>
       <p v-else class="rounded-2xl border border-dashed border-cream-300 px-5 py-10 text-center text-ink-400 dark:border-zinc-800 dark:text-zinc-500">
         尚無寵物資料

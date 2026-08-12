@@ -1,6 +1,13 @@
 <script setup>
 import { useForm, useField } from 'vee-validate';
 import ModalDialog from './ModalDialog.vue';
+import { DialogHeader, DialogTitle } from './ui/dialog';
+import { Label } from './ui/label';
+import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
+import { Button } from './ui/button';
+import { Alert, AlertDescription } from './ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 const defaults = {
   name: '',
@@ -78,35 +85,87 @@ const onSubmit = handleSubmit((values) => {
 </script>
 
 <template>
-  <ModalDialog max-width="720" @close="$emit('close')">
-    <v-card-title class="px-0 pb-4">{{ title }}</v-card-title>
+  <ModalDialog content-class="sm:max-w-2xl" @close="$emit('close')">
+    <DialogHeader>
+      <DialogTitle>{{ title }}</DialogTitle>
+    </DialogHeader>
 
-    <v-form @submit.prevent="onSubmit">
-      <div class="grid gap-x-4 sm:grid-cols-2">
-        <v-text-field v-model="name" label="寵物名字 *" :error-messages="nameError ? [nameError] : []" autofocus />
-        <v-text-field v-model="species" label="物種 *" placeholder="例如：貓、狗" :error-messages="speciesError ? [speciesError] : []" />
-        <v-text-field v-model="breed" label="品種" />
-        <v-text-field v-model="birthDate" label="生日" type="date" />
-        <v-select v-model="sex" label="性別" :items="sexOptions" />
-        <v-select v-model="neutered" label="絕育狀態" :items="neuteredOptions" />
-        <v-text-field v-model="microchipNumber" label="晶片號碼" />
-        <v-text-field v-model="weightKg" label="目前體重" type="number" min="0" step="0.1" suffix="kg" />
+    <form class="space-y-5" @submit.prevent="onSubmit">
+      <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+        <div class="space-y-1.5">
+          <Label for="pet-name">寵物名字</Label>
+          <Input id="pet-name" v-model="name" class="min-h-11" autofocus />
+          <p v-if="nameError" class="text-xs text-destructive">{{ nameError }}</p>
+        </div>
+        <div class="space-y-1.5">
+          <Label for="pet-species">物種</Label>
+          <Input id="pet-species" v-model="species" class="min-h-11" placeholder="例如：貓、狗" />
+          <p v-if="speciesError" class="text-xs text-destructive">{{ speciesError }}</p>
+        </div>
+        <div class="space-y-1.5">
+          <Label for="pet-breed">品種</Label>
+          <Input id="pet-breed" v-model="breed" class="min-h-11" />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="pet-birth-date">生日</Label>
+          <Input id="pet-birth-date" v-model="birthDate" type="date" class="min-h-11" />
+        </div>
+        <div class="space-y-1.5">
+          <Label>性別</Label>
+          <Select v-model="sex">
+            <SelectTrigger class="min-h-11 w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="option in sexOptions" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div class="space-y-1.5">
+          <Label>絕育狀態</Label>
+          <Select v-model="neutered">
+            <SelectTrigger class="min-h-11 w-full"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="option in neuteredOptions" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div class="space-y-1.5">
+          <Label for="pet-microchip">晶片號碼</Label>
+          <Input id="pet-microchip" v-model="microchipNumber" class="min-h-11" />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="pet-weight">目前體重（kg）</Label>
+          <Input id="pet-weight" v-model="weightKg" type="number" min="0" step="0.1" class="min-h-11" />
+        </div>
       </div>
 
-      <div class="mt-1 border-t border-cream-300 pt-5 dark:border-zinc-700">
-        <p class="mb-4 text-sm font-semibold text-ink-900 dark:text-white">重要健康摘要</p>
-        <v-textarea v-model="allergies" label="過敏紀錄" rows="2" auto-grow />
-        <v-textarea v-model="chronicConditions" label="慢性病／重要病史" rows="2" auto-grow />
-        <v-textarea v-model="currentMedications" label="目前用藥" rows="2" auto-grow />
-        <v-textarea v-model="notes" label="其他備註" rows="2" auto-grow />
+      <div class="space-y-4 border-t border-border pt-5">
+        <p class="text-sm font-semibold text-ink-900 dark:text-white">重要健康摘要</p>
+        <div class="space-y-1.5">
+          <Label for="pet-allergies">過敏紀錄</Label>
+          <Textarea id="pet-allergies" v-model="allergies" rows="2" />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="pet-chronic">慢性病／重要病史</Label>
+          <Textarea id="pet-chronic" v-model="chronicConditions" rows="2" />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="pet-medications">目前用藥</Label>
+          <Textarea id="pet-medications" v-model="currentMedications" rows="2" />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="pet-notes">其他備註</Label>
+          <Textarea id="pet-notes" v-model="notes" rows="2" />
+        </div>
       </div>
 
-      <v-alert v-if="errorMessage" type="error" density="compact" class="mb-4">{{ errorMessage }}</v-alert>
+      <Alert v-if="errorMessage" variant="destructive">
+        <AlertDescription>{{ errorMessage }}</AlertDescription>
+      </Alert>
 
       <div class="flex justify-end gap-2">
-        <v-btn variant="text" @click="$emit('close')">取消</v-btn>
-        <v-btn type="submit" color="primary" :loading="submitting">{{ submitLabel }}</v-btn>
+        <Button type="button" variant="outline" class="min-h-11" @click="$emit('close')">取消</Button>
+        <Button type="submit" class="min-h-11" :disabled="submitting">{{ submitting ? '處理中…' : submitLabel }}</Button>
       </div>
-    </v-form>
+    </form>
   </ModalDialog>
 </template>

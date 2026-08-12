@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn-vue/tailwind.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -39,11 +41,110 @@
   --color-ink-600: #6b5843;
   --color-ink-700: #4a3b28;
   --color-ink-900: #2b2015;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
-body {
-  @apply bg-cream-100 text-ink-900 dark:bg-zinc-950 dark:text-zinc-100;
-  font-family: var(--font-sans);
+/* shadcn-vue 元件用的語意 token：實際色值對應上面的品牌調色盤，不用 shadcn 預設灰階 */
+:root {
+  --background: var(--color-cream-100);
+  --foreground: var(--color-ink-900);
+  --card: var(--color-cream-50);
+  --card-foreground: var(--color-ink-900);
+  --popover: var(--color-cream-50);
+  --popover-foreground: var(--color-ink-900);
+  --primary: var(--color-belle-600);
+  --primary-foreground: var(--color-cream-50);
+  --secondary: var(--color-cream-200);
+  --secondary-foreground: var(--color-ink-700);
+  --muted: var(--color-cream-200);
+  --muted-foreground: var(--color-ink-500);
+  --accent: var(--color-belle-50);
+  --accent-foreground: var(--color-belle-600);
+  --destructive: #dc2626;
+  --border: var(--color-cream-300);
+  --input: var(--color-cream-300);
+  --ring: var(--color-belle-500);
+  --sidebar: var(--color-cream-50);
+  --sidebar-foreground: var(--color-ink-700);
+  --sidebar-primary: var(--color-belle-600);
+  --sidebar-primary-foreground: var(--color-cream-50);
+  --sidebar-accent: var(--color-belle-500);
+  --sidebar-accent-foreground: var(--color-belle-600);
+  --sidebar-border: var(--color-cream-300);
+  --sidebar-ring: var(--color-belle-500);
+}
+
+.dark {
+  --background: #09090b;
+  --foreground: #f4f4f5;
+  --card: #18181b;
+  --card-foreground: #f4f4f5;
+  --popover: #18181b;
+  --popover-foreground: #f4f4f5;
+  --primary: var(--color-brand-500);
+  --primary-foreground: #ffffff;
+  --secondary: #27272a;
+  --secondary-foreground: #e4e4e7;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: color-mix(in oklab, var(--color-brand-500) 10%, transparent);
+  --accent-foreground: var(--color-brand-400);
+  --destructive: #f87171;
+  --border: #27272a;
+  --input: #3f3f46;
+  --ring: var(--color-brand-500);
+  --sidebar: #09090b;
+  --sidebar-foreground: #a1a1aa;
+  --sidebar-primary: var(--color-brand-500);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--color-brand-500);
+  --sidebar-accent-foreground: var(--color-brand-400);
+  --sidebar-border: #27272a;
+  --sidebar-ring: var(--color-brand-500);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-cream-100 text-ink-900 dark:bg-zinc-950 dark:text-zinc-100;
+    font-family: var(--font-sans);
+  }
 }
 
 button,
@@ -62,7 +163,7 @@ select:focus-visible {
   @apply outline-2 outline-offset-2 outline-belle-600 dark:outline-brand-400;
 }
 
-/* 基本量測：使用 Vuetify 欄位本身的 focus 邊框，避免 input 內層外框錯位。 */
+/* 基本量測：使用元件本身的 focus 邊框，避免 input 內層外框錯位。 */
 .measurement-field input:focus-visible {
   outline: none;
 }
@@ -79,9 +180,3 @@ select:focus-visible {
   -webkit-appearance: none;
 }
 
-.dark .reference-species-select {
-  border-color: #3f3f46;
-  background-color: #09090b;
-  color: #f4f4f5;
-  color-scheme: dark;
-}

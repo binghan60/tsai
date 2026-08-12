@@ -4,6 +4,8 @@ import { useRoute } from 'vue-router';
 import { Cat, ClipboardPlus, User } from '@lucide/vue';
 import { http } from '../api/http';
 import SearchPanel from '../components/SearchPanel.vue';
+import { Card } from '../components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 const route = useRoute();
 const pets = ref([]);
@@ -63,19 +65,19 @@ onMounted(fetchPets);
     <template v-else>
       <p class="text-xs text-ink-400 dark:text-zinc-400">共 {{ pets.length }} 隻寵物</p>
 
-      <div v-if="pets.length" class="hidden overflow-hidden rounded-2xl border border-cream-300 bg-cream-50 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none md:block">
-        <table class="w-full text-left text-sm">
-          <thead>
-            <tr class="border-b border-cream-300 text-ink-500 dark:border-zinc-800 dark:text-zinc-400">
-              <th class="px-5 py-3 font-medium">寵物</th>
-              <th class="px-5 py-3 font-medium">辨識資料</th>
-              <th class="px-5 py-3 font-medium">飼主</th>
-              <th class="px-5 py-3 text-right font-medium">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="pet in pets" :key="pet._id" class="border-b border-cream-200 transition-colors last:border-0 hover:bg-cream-100 dark:border-zinc-800 dark:hover:bg-zinc-800/40">
-              <td class="px-5 py-3">
+      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden border-cream-300 py-0 shadow-sm dark:border-zinc-800 dark:shadow-none md:block">
+        <Table>
+          <TableHeader>
+            <TableRow class="border-cream-300 text-ink-500 dark:border-zinc-800 dark:text-zinc-400">
+              <TableHead class="px-5 py-3 font-medium">寵物</TableHead>
+              <TableHead class="px-5 py-3 font-medium">辨識資料</TableHead>
+              <TableHead class="px-5 py-3 font-medium">飼主</TableHead>
+              <TableHead class="px-5 py-3 text-right font-medium">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="pet in pets" :key="pet._id" class="border-cream-200 dark:border-zinc-800 dark:hover:bg-zinc-800/40">
+              <TableCell class="px-5 py-3">
                 <router-link :to="`/pets/${pet._id}`" class="group flex items-center gap-3">
                   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
                     <Cat class="h-4.5 w-4.5" stroke-width="1.75" />
@@ -85,29 +87,29 @@ onMounted(fetchPets);
                     <span class="text-xs text-ink-400 dark:text-zinc-400">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template></span>
                   </span>
                 </router-link>
-              </td>
-              <td class="px-5 py-3 text-ink-600 dark:text-zinc-300">
+              </TableCell>
+              <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300">
                 <span class="block font-medium">{{ pet.medicalRecordNumber || '病歷號未建立' }}</span>
                 <span class="block text-xs text-ink-400 dark:text-zinc-400">{{ sexLabel(pet.sex) }}<template v-if="pet.microchipNumber"> · 晶片 {{ pet.microchipNumber }}</template></span>
-              </td>
-              <td class="px-5 py-3">
+              </TableCell>
+              <TableCell class="px-5 py-3">
                 <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="inline-flex min-h-11 items-center gap-2 text-ink-600 hover:text-belle-600 dark:text-zinc-300 dark:hover:text-brand-400">
                   <User class="h-4 w-4 shrink-0 text-ink-400 dark:text-zinc-400" stroke-width="1.75" />
                   <span><span class="block">{{ pet.ownerId.name }}</span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ pet.ownerId.phone }}</span></span>
                 </router-link>
-              </td>
-              <td class="px-5 py-3 text-right">
+              </TableCell>
+              <TableCell class="px-5 py-3 text-right">
                 <router-link :to="`/pets/${pet._id}/records/new`" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-belle-600 px-3 py-2 text-sm font-medium text-white hover:bg-belle-700 dark:bg-brand-500 dark:hover:bg-brand-600">
                   <ClipboardPlus class="h-4 w-4" />新增健檢
                 </router-link>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </Card>
 
       <div v-if="pets.length" class="space-y-3 md:hidden">
-        <article v-for="pet in pets" :key="pet._id" class="rounded-2xl border border-cream-300 bg-cream-50 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+        <Card v-for="pet in pets" :key="pet._id" class="border-cream-300 p-4 shadow-sm dark:border-zinc-800 dark:shadow-none">
           <router-link :to="`/pets/${pet._id}`" class="flex items-start gap-3">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><Cat class="h-5 w-5" /></span>
             <span class="min-w-0 flex-1">
@@ -122,7 +124,7 @@ onMounted(fetchPets);
               <ClipboardPlus class="h-4 w-4" />新增健檢
             </router-link>
           </div>
-        </article>
+        </Card>
       </div>
 
       <div v-if="pets.length === 0" class="rounded-2xl border border-dashed border-cream-300 px-5 py-14 text-center dark:border-zinc-800">

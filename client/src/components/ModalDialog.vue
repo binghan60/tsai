@@ -1,16 +1,16 @@
 <script setup>
+import { Dialog, DialogContent } from './ui/dialog';
+
 defineProps({
-  maxWidth: { type: [String, Number], default: 480 },
+  contentClass: { type: String, default: 'sm:max-w-md' },
 });
-defineEmits(['close']);
+const emit = defineEmits(['close']);
 </script>
 
 <template>
-  <v-dialog :model-value="true" :max-width="maxWidth" scrollable @update:model-value="$emit('close')">
-    <v-card>
-      <v-card-text>
-        <slot />
-      </v-card-text>
-    </v-card>
-  </v-dialog>
+  <Dialog :open="true" @update:open="(value) => !value && emit('close')">
+    <DialogContent :class="['max-h-[85vh] overflow-y-auto', contentClass]">
+      <slot />
+    </DialogContent>
+  </Dialog>
 </template>

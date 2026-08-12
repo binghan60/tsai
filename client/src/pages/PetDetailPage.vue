@@ -6,6 +6,9 @@ import PetFormDialog from '../components/PetFormDialog.vue';
 import { http } from '../api/http';
 import { downloadBlob, extractErrorMessage } from '../lib/downloadFile';
 import { RECORD_STATUS_META } from '../lib/recordStatus';
+import { Button } from '../components/ui/button';
+import { Card } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 
 const route = useRoute();
 const pet = ref(null);
@@ -131,7 +134,7 @@ onMounted(fetchPet);
   <section v-if="pet" class="mx-auto max-w-7xl space-y-5">
     <router-link :to="`/owners/${pet.ownerId?._id}`" class="inline-flex min-h-11 items-center text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400 dark:hover:text-brand-300">← 回飼主資料</router-link>
 
-    <div class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none sm:p-6">
+    <Card class="border-cream-300 p-5 shadow-sm dark:border-zinc-800 dark:shadow-none sm:p-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="flex min-w-0 items-start gap-4">
           <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><PawPrint class="h-7 w-7" stroke-width="1.75" /></div>
@@ -141,7 +144,7 @@ onMounted(fetchPet);
             <p class="mt-1 flex items-center gap-1.5 text-sm text-ink-500 dark:text-zinc-400"><User class="h-4 w-4" />飼主：{{ pet.ownerId?.name || '—' }}<template v-if="pet.ownerId?.phone"> · {{ pet.ownerId.phone }}</template></p>
           </div>
         </div>
-        <button class="inline-flex min-h-11 items-center gap-2 rounded-xl border border-cream-300 px-4 py-2 text-sm font-medium text-ink-700 hover:border-belle-300 hover:text-belle-600 dark:border-zinc-700 dark:text-zinc-200 dark:hover:border-brand-500/50 dark:hover:text-brand-400" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</button>
+        <Button variant="outline" class="min-h-11" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
       </div>
 
       <dl class="mt-5 grid gap-3 border-t border-cream-300 pt-5 text-sm dark:border-zinc-800 sm:grid-cols-2 lg:grid-cols-4">
@@ -150,15 +153,15 @@ onMounted(fetchPet);
         <div><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">過敏紀錄</dt><dd class="mt-1 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ pet.allergies || '無紀錄' }}</dd></div>
         <div><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">慢性病／目前用藥</dt><dd class="mt-1 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ [pet.chronicConditions, pet.currentMedications].filter(Boolean).join('；') || '無紀錄' }}</dd></div>
       </dl>
-    </div>
+    </Card>
 
     <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
 
-    <div v-if="shareNotice" class="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+    <Card v-if="shareNotice" class="border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 shadow-none dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
       <p class="font-medium">{{ shareNotice.copied ? '分享連結已複製' : '分享連結已建立' }}</p>
       <p class="mt-1 break-all">{{ shareNotice.url }}</p>
       <p class="mt-1 text-xs opacity-80">有效期限：{{ formatDateTime(shareNotice.expiresAt) }}</p>
-    </div>
+    </Card>
 
     <div class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
@@ -167,9 +170,10 @@ onMounted(fetchPet);
       </div>
 
       <ul v-if="pet.medicalRecords.length" class="space-y-3">
-        <li v-for="record in pet.medicalRecords" :key="record._id" class="rounded-2xl border border-cream-300 bg-cream-50 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
+        <li v-for="record in pet.medicalRecords" :key="record._id">
+          <Card class="border-cream-300 p-4 shadow-sm dark:border-zinc-800 dark:shadow-none">
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-ink-400 dark:text-zinc-400" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-ink-900 dark:text-white">{{ formatDate(record.visitDate) }}</span><span class="rounded-full px-3 py-1 text-xs font-medium" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</span><span v-if="record.shareEnabled" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">分享中</span></div><p class="mt-1 text-xs text-ink-400 dark:text-zinc-400">{{ record.reportNumber || '尚未建立報告編號' }}<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}</p></div></div>
+            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-ink-400 dark:text-zinc-400" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-ink-900 dark:text-white">{{ formatDate(record.visitDate) }}</span><Badge :class="RECORD_STATUS_META[record.status]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="record.shareEnabled" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">分享中</Badge></div><p class="mt-1 text-xs text-ink-400 dark:text-zinc-400">{{ record.reportNumber || '尚未建立報告編號' }}<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}</p></div></div>
             <div class="flex flex-wrap items-center gap-1 text-sm">
               <router-link :to="`/records/${record._id}/edit`" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 dark:text-brand-400 dark:hover:bg-brand-500/10">編輯</router-link>
               <router-link :to="`/records/${record._id}/preview`" class="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 dark:text-brand-400 dark:hover:bg-brand-500/10"><FileText class="h-4 w-4" />預覽</router-link>
@@ -178,6 +182,7 @@ onMounted(fetchPet);
               <template v-if="record.shareEnabled"><button class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10" @click="copyExistingShare(record)">複製連結</button><button :disabled="revokingId === record._id" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40" @click="revokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</button></template>
             </div>
           </div>
+          </Card>
         </li>
       </ul>
       <div v-else class="rounded-2xl border border-dashed border-cream-300 px-5 py-10 text-center dark:border-zinc-800"><PawPrint class="mx-auto mb-2 h-8 w-8 text-ink-400 dark:text-zinc-500" /><p class="text-sm text-ink-500 dark:text-zinc-400">尚無健檢紀錄</p></div>

@@ -1,8 +1,13 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue';
-import { AlertTriangle, ChevronDown, Save, SlidersHorizontal } from '@lucide/vue';
+import { AlertTriangle, Save, SlidersHorizontal } from '@lucide/vue';
 import { http } from '../api/http';
 import { REFERENCE_GROUPS } from '../lib/labTests';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Switch } from '../components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 const species = ref('cat');
 const ranges = ref([]);
@@ -61,14 +66,19 @@ onMounted(fetchRanges);
   <section class="mx-auto max-w-7xl space-y-5">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div><h1 class="text-xl font-semibold text-ink-900 dark:text-white">標準值設定</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">依物種設定基本量測與檢驗範圍，供健檢表自動判斷正常或異常。</p></div>
-      <button type="button" :disabled="saving || loading" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-belle-600 px-5 text-sm font-medium text-white shadow-sm hover:bg-belle-700 disabled:opacity-50 dark:bg-brand-500 dark:hover:bg-brand-600" @click="saveRanges"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存標準值' }}</button>
+      <Button type="button" class="min-h-11" :disabled="saving || loading" @click="saveRanges"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存標準值' }}</Button>
     </div>
 
     <div class="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200"><AlertTriangle class="mt-0.5 h-5 w-5 shrink-0" /><p>參考區間會因檢驗設備、單位、物種與實驗室而異，請由診所確認後設定。未填上下限的項目不會自動判斷。</p></div>
 
     <div class="rounded-2xl border border-cream-300 bg-cream-50 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none">
-      <label for="reference-species" class="sr-only">套用物種</label>
-      <div class="relative sm:max-w-72"><select id="reference-species" v-model="species" :disabled="loading || saving" class="reference-species-select min-h-11 w-full appearance-none rounded-xl border border-cream-300 bg-white px-3 pr-10 text-sm text-ink-900 focus:border-belle-500 focus:outline-none focus:ring-2 focus:ring-belle-100 disabled:opacity-60 dark:focus:border-brand-500 dark:focus:ring-brand-500/20"><option v-for="option in speciesOptions" :key="option.value" :value="option.value">套用物種：{{ option.title }}</option></select><ChevronDown class="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-400 dark:text-zinc-400" aria-hidden="true" /></div>
+      <Label class="sr-only">套用物種</Label>
+      <Select v-model="species" :disabled="loading || saving">
+        <SelectTrigger class="min-h-11 w-full sm:max-w-72"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem v-for="option in speciesOptions" :key="option.value" :value="option.value">套用物種：{{ option.title }}</SelectItem>
+        </SelectContent>
+      </Select>
     </div>
 
     <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
@@ -81,7 +91,17 @@ onMounted(fetchRanges);
         <div class="divide-y divide-cream-300 dark:divide-zinc-800">
           <div v-for="item in ranges.filter((range) => range.group === group)" :key="item.key" class="grid gap-3 px-4 py-4 sm:px-5 md:grid-cols-[minmax(140px,1fr)_minmax(0,540px)_100px] md:items-center">
             <div><p class="text-sm font-medium text-ink-800 dark:text-zinc-200">{{ item.label }}</p><p v-if="item.numeric === false" class="mt-0.5 text-xs text-ink-400 dark:text-zinc-400">非數值項目，請在健檢表手動判斷</p></div>
-            <template v-if="item.numeric !== false"><div class="grid gap-3 sm:grid-cols-3"><v-text-field v-model="item.min" label="下限" type="number" density="compact" hide-details /><v-text-field v-model="item.max" label="上限" type="number" density="compact" hide-details /><v-text-field v-model="item.unit" label="單位" density="compact" hide-details /></div><div class="flex items-center gap-1.5 whitespace-nowrap md:justify-end"><v-switch v-model="item.enabled" class="flex-none" color="primary" density="compact" hide-details :aria-label="`${item.label}自動判斷`" /><span class="text-xs text-ink-600 dark:text-zinc-300">啟用</span></div></template>
+            <template v-if="item.numeric !== false">
+              <div class="grid gap-3 sm:grid-cols-3">
+                <div class="space-y-1"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">下限</Label><Input v-model="item.min" type="number" class="min-h-11" /></div>
+                <div class="space-y-1"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">上限</Label><Input v-model="item.max" type="number" class="min-h-11" /></div>
+                <div class="space-y-1"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">單位</Label><Input v-model="item.unit" class="min-h-11" /></div>
+              </div>
+              <div class="flex items-center gap-1.5 whitespace-nowrap md:justify-end">
+                <Switch v-model="item.enabled" :aria-label="`${item.label}自動判斷`" />
+                <span class="text-xs text-ink-600 dark:text-zinc-300">啟用</span>
+              </div>
+            </template>
             <span v-else class="text-xs text-ink-400 dark:text-zinc-400 md:col-span-2">此項目不套用自動數值判斷</span>
           </div>
         </div>
