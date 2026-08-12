@@ -43,7 +43,7 @@ const EXAMINATION_ITEMS = [
 const pet = ref(null);
 const labRanges = ref({});
 const labRangesLoading = ref(false);
-const vet = ref(localStorage.getItem('lastVetName') || '');
+const vet = ref('');
 const visitDate = ref(new Date().toISOString().slice(0, 10));
 const record = reactive({
   examType: '例行健檢',
@@ -152,10 +152,6 @@ async function init() {
     }
     if (!pet.value) await loadPetContext(petId.value);
     await loadLabRanges();
-    if (!recordId.value && pet.value?.weightKg != null) {
-      record.weightKg = pet.value.weightKg;
-      autoJudgeMeasurement(BASIC_MEASUREMENTS[0], record.weightKg);
-    }
   } catch (err) {
     loadError.value = '健檢資料暫時無法載入，請稍後重試';
   } finally {
@@ -254,9 +250,11 @@ async function saveRecord({ silent = false } = {}) {
     } else {
       ({ data: saved } = await http.post(`/pets/${petId.value}/records`, payload));
       recordId.value = saved._id;
+      const wasLeavingAfterAction = leavingAfterAction.value;
+      leavingAfterAction.value = true;
       await router.replace(`/records/${saved._id}/edit`);
+      leavingAfterAction.value = wasLeavingAfterAction;
     }
-    if (vet.value.trim()) localStorage.setItem('lastVetName', vet.value.trim());
     lastSavedAt.value = new Date();
     const hasNewChanges = JSON.stringify(buildPayload()) !== savedSnapshot;
     isDirty.value = hasNewChanges;
