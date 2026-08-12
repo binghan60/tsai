@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { Cat, Pencil, Trash2, User } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
@@ -11,6 +11,7 @@ import { Card } from '../components/ui/card';
 import { useToast } from '../composables/useToast';
 
 const route = useRoute();
+const router = useRouter();
 const toast = useToast();
 const owner = ref(null);
 const error = ref('');
@@ -20,7 +21,9 @@ const creating = ref(false);
 const createError = ref('');
 
 const deletingPetId = ref(null);
+const checkingPetId = ref(null);
 const petToRemove = ref(null);
+const petRecordBlock = ref(null);
 
 const editPetTarget = ref(null);
 const editPetSaving = ref(false);
@@ -104,9 +107,28 @@ async function removePet(pet) {
   }
 }
 
-function openRemovePet(pet) {
-  if (deletingPetId.value) return;
-  petToRemove.value = pet;
+async function openRemovePet(pet) {
+  if (deletingPetId.value || checkingPetId.value) return;
+  checkingPetId.value = pet._id;
+  try {
+    const { data: records } = await http.get(`/pets/${pet._id}/records`);
+    if (records.length > 0) {
+      petRecordBlock.value = { pet, records };
+    } else {
+      petToRemove.value = pet;
+    }
+  } catch (err) {
+    toast.error('檢查寵物健檢紀錄失敗，請稍後再試', '無法刪除');
+  } finally {
+    checkingPetId.value = null;
+  }
+}
+
+function goManageRecords() {
+  if (!petRecordBlock.value) return;
+  const id = petRecordBlock.value.pet._id;
+  petRecordBlock.value = null;
+  router.push(`/pets/${id}`);
 }
 
 onMounted(async () => {
@@ -164,7 +186,7 @@ onMounted(async () => {
               variant="ghost"
               size="icon"
               class="h-11 w-11"
-              :disabled="deletingPetId === pet._id"
+              :disabled="deletingPetId === pet._id || checkingPetId === pet._id"
               :aria-label="`編輯寵物 ${pet.name}`"
               @click="openEditPet(pet)"
             >
@@ -175,7 +197,7 @@ onMounted(async () => {
               variant="destructive"
               size="icon"
               class="h-11 w-11"
-              :disabled="deletingPetId === pet._id"
+              :disabled="deletingPetId === pet._id || checkingPetId === pet._id"
               :aria-label="`刪除寵物 ${pet.name}`"
               @click="openRemovePet(pet)"
             >
@@ -230,6 +252,16 @@ onMounted(async () => {
       :loading="Boolean(deletingPetId)"
       @update:open="(value) => !value && (petToRemove = null)"
       @confirm="removePet(petToRemove)"
+    />
+    <ConfirmDialog
+      :open="Boolean(petRecordBlock)"
+      title="無法刪除寵物"
+      :description="`「${petRecordBlock?.pet?.name || ''}」底下還有 ${petRecordBlock?.records?.length || 0} 筆健檢紀錄，請先刪除這些紀錄，才能刪除寵物。`"
+      confirm-label="前往管理健檢紀錄"
+      cancel-label="關閉"
+      :destructive="false"
+      @update:open="(value) => !value && (petRecordBlock = null)"
+      @confirm="goManageRecords"
     />
   </section>
   <p v-else-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400">{{ error }}</p>

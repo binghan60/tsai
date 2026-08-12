@@ -27,7 +27,7 @@ const typeConfig = {
 </script>
 
 <template>
-  <div class="pointer-events-none fixed bottom-5 right-5 z-50 flex w-full max-w-sm flex-col gap-3 px-4 sm:px-0" aria-live="polite">
+  <div class="pointer-events-none fixed bottom-5 right-5 z-60 flex w-full max-w-sm flex-col gap-3 px-4 sm:px-0" aria-live="polite">
     <TransitionGroup
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="translate-y-4 opacity-0 scale-95"
