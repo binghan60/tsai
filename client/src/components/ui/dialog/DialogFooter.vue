@@ -18,14 +18,14 @@ const props = defineProps({
     data-slot="dialog-footer"
     :class="
       cn(
-        'bg-muted/50 -mx-4 -mb-4 rounded-b-xl border-t p-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
+        'flex flex-col-reverse gap-2.5 border-t border-cream-300/80 bg-cream-100/70 p-5 px-6 dark:border-zinc-800 dark:bg-zinc-950/60 sm:flex-row sm:justify-end sm:gap-3',
         props.class,
       )
     "
   >
     <slot />
     <DialogClose v-if="showCloseButton" as-child>
-      <Button variant="outline"> Close </Button>
+      <Button variant="outline"> 關閉 </Button>
     </DialogClose>
   </div>
 </template>

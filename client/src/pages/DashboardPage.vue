@@ -1,11 +1,13 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Phone, User, Users } from '@lucide/vue';
+import { ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Phone, Trash2, User, Users } from '@lucide/vue';
 import { http } from '../api/http';
 import { RECORD_STATUS_META } from '../lib/recordStatus';
 import SearchPanel from '../components/SearchPanel.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
+import { Button } from '../components/ui/button';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 const loading = ref(true);
 const error = ref('');
@@ -14,6 +16,8 @@ const query = ref('');
 const searching = ref(false);
 const searchError = ref('');
 const results = ref({ owners: [], pets: [] });
+const deletingDraftId = ref('');
+const draftToDiscard = ref(null);
 
 async function fetchDashboard() {
   loading.value = true;
@@ -63,6 +67,26 @@ async function searchAll() {
   }
 }
 
+async function discardDraft(item) {
+  if (deletingDraftId.value) return;
+  deletingDraftId.value = item._id;
+  error.value = '';
+  try {
+    await http.delete(`/records/${item._id}`);
+    draftToDiscard.value = null;
+    await fetchDashboard();
+  } catch (err) {
+    error.value = '捨棄草稿失敗，請稍後再試';
+  } finally {
+    deletingDraftId.value = '';
+  }
+}
+
+function openDiscardDraft(item) {
+  if (deletingDraftId.value) return;
+  draftToDiscard.value = item;
+}
+
 let searchTimer;
 watch(query, () => {
   clearTimeout(searchTimer);
@@ -75,6 +99,10 @@ function formatDate(value) {
 
 function formatDateTime(value) {
   return value ? new Date(value).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+}
+
+function recordLink(item) {
+  return item.status === 'draft' ? `/records/${item._id}/edit` : `/records/${item._id}/preview`;
 }
 
 onMounted(fetchDashboard);
@@ -121,7 +149,17 @@ onMounted(fetchDashboard);
             <Pencil class="h-5 w-5 text-ink-400 dark:text-zinc-400" />
           </CardHeader>
           <CardContent class="p-0">
-            <div v-if="dashboard.draftRecords?.length" class="divide-y divide-cream-200 dark:divide-zinc-800"><router-link v-for="item in dashboard.draftRecords" :key="item._id" :to="`/records/${item._id}/edit`" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-cream-100 dark:hover:bg-zinc-800/50"><span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · 更新 {{ formatDateTime(item.updatedAt) }}</span></span><span class="shrink-0 text-sm font-medium text-belle-600 dark:text-brand-400">繼續填寫</span></router-link></div>
+            <div v-if="dashboard.draftRecords?.length" class="divide-y divide-cream-200 dark:divide-zinc-800">
+              <div v-for="item in dashboard.draftRecords" :key="item._id" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-cream-100 dark:hover:bg-zinc-800/50">
+                <router-link :to="`/records/${item._id}/edit`" class="flex min-w-0 flex-1 items-center justify-between gap-3">
+                  <span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · 更新 {{ formatDateTime(item.updatedAt) }}</span></span>
+                  <span class="shrink-0 text-sm font-medium text-belle-600 dark:text-brand-400">繼續填寫</span>
+                </router-link>
+                <Button type="button" variant="destructive" size="icon" class="shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
+                  <Trash2 class="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
             <div v-else class="px-5 py-10 text-center"><Check class="mx-auto h-7 w-7 text-emerald-600" /><p class="mt-2 text-sm text-ink-500 dark:text-zinc-400">目前沒有待完成草稿</p></div>
           </CardContent>
         </Card>
@@ -132,7 +170,17 @@ onMounted(fetchDashboard);
             <FileText class="h-5 w-5 text-ink-400 dark:text-zinc-400" />
           </CardHeader>
           <CardContent class="p-0">
-            <div v-if="dashboard.recentRecords?.length" class="divide-y divide-cream-200 dark:divide-zinc-800"><router-link v-for="item in dashboard.recentRecords" :key="item._id" :to="`/records/${item._id}/preview`" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-cream-100 dark:hover:bg-zinc-800/50"><span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · {{ item.vet || '獸醫師未填' }}</span></span><Badge :class="RECORD_STATUS_META[item.status]?.class" class="shrink-0 rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[item.status]?.label }}</Badge></router-link></div>
+            <div v-if="dashboard.recentRecords?.length" class="divide-y divide-cream-200 dark:divide-zinc-800">
+              <div v-for="item in dashboard.recentRecords" :key="item._id" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-cream-100 dark:hover:bg-zinc-800/50">
+                <router-link :to="recordLink(item)" class="flex min-w-0 flex-1 items-center justify-between gap-3">
+                  <span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · {{ item.vet || '獸醫師未填' }}</span></span>
+                  <Badge :class="RECORD_STATUS_META[item.status]?.class" class="shrink-0 rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[item.status]?.label }}</Badge>
+                </router-link>
+                <Button v-if="item.status === 'draft'" type="button" variant="destructive" size="icon" class="shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
+                  <Trash2 class="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
             <div v-else class="px-5 py-10 text-center"><PawPrint class="mx-auto h-7 w-7 text-ink-400 dark:text-zinc-500" /><p class="mt-2 text-sm text-ink-500 dark:text-zinc-400">目前沒有健檢紀錄</p></div>
           </CardContent>
         </Card>
@@ -143,6 +191,16 @@ onMounted(fetchDashboard);
         <div class="flex h-3 overflow-hidden rounded-full bg-cream-200 dark:bg-zinc-800"><div v-for="segment in statusSegments" :key="segment.key" :class="segment.class" :style="{ width: `${segment.width}%` }"></div></div>
         <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2"><span v-for="segment in statusSegments" :key="segment.key" class="text-sm text-ink-600 dark:text-zinc-300">{{ segment.label }} <strong>{{ segment.value }}</strong></span></div>
       </Card>
+
+      <ConfirmDialog
+        :open="Boolean(draftToDiscard)"
+        title="捨棄草稿"
+        :description="`確定要捨棄 ${draftToDiscard?.petId?.name || '這份'} 的草稿嗎？此操作無法復原。`"
+        confirm-label="捨棄草稿"
+        :loading="Boolean(deletingDraftId)"
+        @update:open="(value) => !value && (draftToDiscard = null)"
+        @confirm="discardDraft(draftToDiscard)"
+      />
     </template>
   </section>
 </template>

@@ -3,6 +3,7 @@ import { onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Mail, Pencil, Phone, Trash2, Users } from '@lucide/vue';
 import OwnerFormDialog from '../components/OwnerFormDialog.vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import SearchPanel from '../components/SearchPanel.vue';
 import { http } from '../api/http';
 import { Button } from '../components/ui/button';
@@ -19,6 +20,7 @@ const showCreate = ref(false);
 const creating = ref(false);
 const createError = ref('');
 const deletingId = ref(null);
+const ownerToRemove = ref(null);
 const editTarget = ref(null);
 const editSaving = ref(false);
 const editError = ref('');
@@ -75,17 +77,23 @@ async function submitEdit(values) {
 }
 
 async function removeOwner(owner) {
-  if (!window.confirm(`確定要刪除飼主「${owner.name}」嗎？此操作無法復原。`)) return;
+  if (!owner) return;
   deletingId.value = owner._id;
   error.value = '';
   try {
     await http.delete(`/owners/${owner._id}`);
+    ownerToRemove.value = null;
     await fetchOwners();
   } catch (err) {
     error.value = err.response?.data?.message ?? '刪除飼主失敗';
   } finally {
     deletingId.value = null;
   }
+}
+
+function openRemoveOwner(owner) {
+  if (deletingId.value) return;
+  ownerToRemove.value = owner;
 }
 
 let debounceTimer;
@@ -128,7 +136,7 @@ onMounted(() => {
               <TableCell class="px-5 py-3"><router-link :to="`/owners/${owner._id}`" class="group flex min-h-11 items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-xs font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span><span class="font-medium text-belle-600 group-hover:text-belle-700 dark:text-brand-400">{{ owner.name }}</span></router-link></TableCell>
               <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300"><span class="flex items-center gap-2"><Phone class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ owner.phone }}</span></TableCell>
               <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300">{{ owner.email || '—' }}</TableCell>
-              <TableCell class="px-5 py-3"><div class="flex justify-end gap-1"><button type="button" :disabled="deletingId === owner._id" class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-cream-200 hover:text-belle-600 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-brand-400" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></button><button type="button" :disabled="deletingId === owner._id" class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-red-50 hover:text-red-700 dark:text-zinc-400 dark:hover:bg-red-950/40 dark:hover:text-red-300" :aria-label="`刪除飼主 ${owner.name}`" @click="removeOwner(owner)"><Trash2 class="h-4 w-4" /></button></div></TableCell>
+              <TableCell class="px-5 py-3"><div class="flex justify-end gap-1"><button type="button" :disabled="deletingId === owner._id" class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-cream-200 hover:text-belle-600 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-brand-400" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></button><button type="button" :disabled="deletingId === owner._id" class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-red-50 hover:text-red-700 dark:text-zinc-400 dark:hover:bg-red-950/40 dark:hover:text-red-300" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></button></div></TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -138,7 +146,7 @@ onMounted(() => {
         <Card v-for="owner in owners" :key="owner._id" class="border-cream-300 p-4 dark:border-zinc-800">
           <div class="flex items-start gap-3">
             <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span><span class="min-w-0"><span class="block font-semibold text-ink-900 dark:text-white">{{ owner.name }}</span><span class="mt-0.5 flex items-center gap-1.5 text-sm text-ink-500 dark:text-zinc-400"><Phone class="h-3.5 w-3.5" />{{ owner.phone }}</span><span v-if="owner.email" class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink-400 dark:text-zinc-400"><Mail class="h-3.5 w-3.5" />{{ owner.email }}</span></span></router-link>
-            <div class="flex shrink-0"><button class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 dark:text-zinc-400" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></button><button class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 dark:text-zinc-400" :aria-label="`刪除飼主 ${owner.name}`" @click="removeOwner(owner)"><Trash2 class="h-4 w-4" /></button></div>
+            <div class="flex shrink-0"><button class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 dark:text-zinc-400" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></button><button class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 dark:text-zinc-400" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></button></div>
           </div>
         </Card>
       </div>
@@ -148,5 +156,14 @@ onMounted(() => {
 
     <OwnerFormDialog v-if="editTarget" title="編輯飼主資料" submit-label="儲存" :initial-value="{ name: editTarget.name, phone: editTarget.phone, email: editTarget.email ?? '' }" :submitting="editSaving" :error-message="editError" @submit="submitEdit" @close="editTarget = null" />
     <OwnerFormDialog v-if="showCreate" title="新增飼主資料" submit-label="下一步：新增寵物" :submitting="creating" :error-message="createError" @submit="createOwner" @close="showCreate = false" />
+    <ConfirmDialog
+      :open="Boolean(ownerToRemove)"
+      title="刪除飼主"
+      :description="`確定要刪除飼主「${ownerToRemove?.name || ''}」嗎？此操作無法復原。`"
+      confirm-label="刪除"
+      :loading="Boolean(deletingId)"
+      @update:open="(value) => !value && (ownerToRemove = null)"
+      @confirm="removeOwner(ownerToRemove)"
+    />
   </section>
 </template>

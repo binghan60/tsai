@@ -23,7 +23,7 @@ const forwardedProps = useForwardProps(delegatedProps);
     data-slot="dialog-title"
     v-bind="forwardedProps"
     :class="
-      cn('text-base leading-none font-medium cn-font-heading', props.class)
+      cn('text-lg font-semibold tracking-tight text-ink-900 sm:text-xl dark:text-white', props.class)
     "
   >
     <slot />

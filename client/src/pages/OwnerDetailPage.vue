@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { Cat, Pencil, Trash2, User } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { http } from '../api/http';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -16,6 +17,7 @@ const creating = ref(false);
 const createError = ref('');
 
 const deletingPetId = ref(null);
+const petToRemove = ref(null);
 
 const editPetTarget = ref(null);
 const editPetSaving = ref(false);
@@ -78,17 +80,23 @@ async function submitEditPet(values) {
 }
 
 async function removePet(pet) {
-  if (!window.confirm(`確定要刪除「${pet.name}」嗎？`)) return;
+  if (!pet) return;
   deletingPetId.value = pet._id;
   error.value = '';
   try {
     await http.delete(`/pets/${pet._id}`);
+    petToRemove.value = null;
     await fetchOwner();
   } catch (err) {
     error.value = err.response?.data?.message ?? '刪除寵物失敗';
   } finally {
     deletingPetId.value = null;
   }
+}
+
+function openRemovePet(pet) {
+  if (deletingPetId.value) return;
+  petToRemove.value = pet;
 }
 
 onMounted(async () => {
@@ -155,7 +163,7 @@ onMounted(async () => {
               :disabled="deletingPetId === pet._id"
               class="flex h-11 w-11 items-center justify-center rounded-xl text-ink-500 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-red-950/40 dark:hover:text-red-300"
               :aria-label="`刪除寵物 ${pet.name}`"
-              @click="removePet(pet)"
+              @click="openRemovePet(pet)"
             >
               <Trash2 class="h-4 w-4" stroke-width="1.75" />
             </button>
@@ -199,6 +207,15 @@ onMounted(async () => {
       :error-message="createError"
       @submit="createPet"
       @close="closeCreatePet"
+    />
+    <ConfirmDialog
+      :open="Boolean(petToRemove)"
+      title="刪除寵物"
+      :description="`確定要刪除「${petToRemove?.name || ''}」嗎？此操作無法復原。`"
+      confirm-label="刪除"
+      :loading="Boolean(deletingPetId)"
+      @update:open="(value) => !value && (petToRemove = null)"
+      @confirm="removePet(petToRemove)"
     />
   </section>
   <p v-else-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400">{{ error }}</p>

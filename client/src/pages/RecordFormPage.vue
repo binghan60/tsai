@@ -10,6 +10,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 const EXAM_TYPE_OPTIONS = ['例行健檢', '幼年健檢', '熟齡健檢', '術前評估', '追蹤檢查', '其他'];
 
@@ -69,6 +70,7 @@ const validationErrors = ref([]);
 const hydrated = ref(false);
 const isDirty = ref(false);
 const leavingAfterAction = ref(false);
+const pendingLeavePath = ref('');
 let autosaveTimer;
 
 const completionSections = computed(() => [
@@ -297,12 +299,6 @@ async function openPreview() {
   }
 }
 
-function beforeUnload(event) {
-  if (!isDirty.value) return;
-  event.preventDefault();
-  event.returnValue = '';
-}
-
 watch(
   () => JSON.stringify({ vet: vet.value, visitDate: visitDate.value, record }),
   () => {
@@ -314,17 +310,24 @@ watch(
   }
 );
 
-onBeforeRouteLeave(() => {
+onBeforeRouteLeave((to) => {
   if (leavingAfterAction.value || !isDirty.value) return true;
-  return window.confirm('尚有變更未儲存，確定要離開嗎？');
+  pendingLeavePath.value = to.fullPath;
+  return false;
 });
+
+async function confirmLeave() {
+  if (!pendingLeavePath.value) return;
+  const target = pendingLeavePath.value;
+  pendingLeavePath.value = '';
+  leavingAfterAction.value = true;
+  await router.push(target);
+}
 onMounted(() => {
-  window.addEventListener('beforeunload', beforeUnload);
   init();
 });
 onBeforeUnmount(() => {
   clearTimeout(autosaveTimer);
-  window.removeEventListener('beforeunload', beforeUnload);
 });
 </script>
 
@@ -432,5 +435,15 @@ onBeforeUnmount(() => {
       <p v-if="saveError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ saveError }}</p>
       <div class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 lg:left-64"><div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3"><p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已完成 {{ completedCount }}/5 個區段</p><div class="ml-auto flex gap-2"><Button type="button" variant="outline" class="min-h-11" :disabled="saving" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿' }}</Button><Button type="button" class="min-h-11" :disabled="saving" @click="openPreview"><FileText class="h-4 w-4" />預覽正式報告</Button></div></div></div>
     </template>
+    <ConfirmDialog
+      :open="Boolean(pendingLeavePath)"
+      title="離開編輯頁"
+      description="尚有變更未儲存，確定要離開嗎？"
+      confirm-label="離開"
+      cancel-label="繼續編輯"
+      :destructive="false"
+      @update:open="(value) => !value && (pendingLeavePath = '')"
+      @confirm="confirmLeave"
+    />
   </section>
 </template>

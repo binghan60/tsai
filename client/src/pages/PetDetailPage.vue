@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { CalendarDays, ClipboardPlus, FileText, PawPrint, Pencil, Share2, User } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { http } from '../api/http';
 import { downloadBlob, extractErrorMessage } from '../lib/downloadFile';
 import { RECORD_STATUS_META } from '../lib/recordStatus';
@@ -16,6 +17,7 @@ const error = ref('');
 const downloadingId = ref(null);
 const sharingId = ref(null);
 const revokingId = ref(null);
+const shareToRevoke = ref(null);
 const shareNotice = ref(null);
 const editOpen = ref(false);
 const editSaving = ref(false);
@@ -106,10 +108,11 @@ async function copyExistingShare(record) {
 }
 
 async function revokeShare(record) {
-  if (!window.confirm('確定要撤銷這份報告的分享連結嗎？已取得連結的人將無法再開啟。')) return;
+  if (!record) return;
   revokingId.value = record._id;
   try {
     await http.post(`/records/${record._id}/revoke-share`);
+    shareToRevoke.value = null;
     shareNotice.value = null;
     await fetchPet();
   } catch (err) {
@@ -117,6 +120,11 @@ async function revokeShare(record) {
   } finally {
     revokingId.value = null;
   }
+}
+
+function openRevokeShare(record) {
+  if (revokingId.value) return;
+  shareToRevoke.value = record;
 }
 
 function formatDate(value) {
@@ -179,7 +187,7 @@ onMounted(fetchPet);
               <router-link :to="`/records/${record._id}/preview`" class="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 dark:text-brand-400 dark:hover:bg-brand-500/10"><FileText class="h-4 w-4" />預覽</router-link>
               <button v-if="record.status !== 'draft'" type="button" :disabled="downloadingId === record._id" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 disabled:opacity-50 dark:text-brand-400 dark:hover:bg-brand-500/10" @click="downloadPdf(record)">{{ downloadingId === record._id ? '產生中…' : '下載 PDF' }}</button>
               <button v-if="record.status !== 'draft' && !record.shareEnabled" type="button" :disabled="sharingId === record._id" class="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 disabled:opacity-50 dark:text-brand-400 dark:hover:bg-brand-500/10" @click="shareRecord(record)"><Share2 class="h-4 w-4" />{{ sharingId === record._id ? '建立中…' : '分享' }}</button>
-              <template v-if="record.shareEnabled"><button class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10" @click="copyExistingShare(record)">複製連結</button><button :disabled="revokingId === record._id" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40" @click="revokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</button></template>
+              <template v-if="record.shareEnabled"><button class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10" @click="copyExistingShare(record)">複製連結</button><button :disabled="revokingId === record._id" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40" @click="openRevokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</button></template>
             </div>
           </div>
           </Card>
@@ -189,6 +197,15 @@ onMounted(fetchPet);
     </div>
 
     <PetFormDialog v-if="editOpen" title="編輯寵物資料" submit-label="儲存" :initial-value="{ ...pet, birthDate: pet.birthDate?.slice(0, 10) }" :submitting="editSaving" :error-message="editError" @submit="savePet" @close="editOpen = false" />
+    <ConfirmDialog
+      :open="Boolean(shareToRevoke)"
+      title="撤銷分享連結"
+      description="確定要撤銷這份報告的分享連結嗎？已取得連結的人將無法再開啟。"
+      confirm-label="撤銷"
+      :loading="Boolean(revokingId)"
+      @update:open="(value) => !value && (shareToRevoke = null)"
+      @confirm="revokeShare(shareToRevoke)"
+    />
   </section>
 
   <p v-else-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>

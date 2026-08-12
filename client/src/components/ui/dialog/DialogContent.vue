@@ -49,18 +49,27 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
       v-bind="{ ...$attrs, ...forwarded }"
       :class="
         cn(
-          'bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 ring-foreground/10 grid max-w-[calc(100%-2rem)] gap-4 rounded-xl p-4 text-sm ring-1 duration-100 sm:max-w-sm fixed top-1/2 left-1/2 z-50 w-full -translate-x-1/2 -translate-y-1/2 outline-none',
+          'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-2xl border border-cream-300/90 bg-cream-50/95 text-ink-900 shadow-2xl shadow-ink-900/20 ring-1 ring-white/60 backdrop-blur-xl duration-200 dark:border-zinc-700/80 dark:bg-zinc-900/95 dark:text-zinc-100 dark:shadow-black/70 dark:ring-white/10 data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 outline-none sm:max-w-md',
           props.class,
         )
       "
     >
+      <!-- Top Filigree Accent Bar -->
+      <div class="absolute inset-x-0 top-0 z-10 h-1 bg-gradient-to-r from-brand-300 via-belle-500 to-brand-500 dark:from-brand-500 dark:via-belle-400 dark:to-amber-300"></div>
+
+      <!-- Ambient Soft Corner Glow -->
+      <div class="pointer-events-none absolute -right-20 -top-20 z-0 h-44 w-44 rounded-full bg-brand-500/10 blur-3xl dark:bg-brand-500/15"></div>
+
       <slot />
 
       <DialogClose v-if="showCloseButton" data-slot="dialog-close" as-child>
-        <Button variant="ghost" class="absolute top-2 right-2" size="icon-sm">
-          <XIcon />
+        <button
+          type="button"
+          class="absolute top-3.5 right-3.5 z-20 flex h-9 w-9 items-center justify-center rounded-full text-ink-400 transition-all duration-150 hover:bg-cream-200/80 hover:text-ink-900 active:scale-95 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+        >
+          <XIcon class="h-4 w-4" stroke-width="2" />
           <span class="sr-only">Close</span>
-        </Button>
+        </button>
       </DialogClose>
     </DialogContent>
   </DialogPortal>
