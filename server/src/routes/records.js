@@ -217,16 +217,37 @@ recordsRouter.post('/:id/share', async (req, res, next) => {
     if (!record) return res.status(404).json({ message: '找不到報告' });
     if (record.status === 'draft') return res.status(409).json({ message: '請先產出正式報告，再建立分享連結' });
 
-    const days = Math.min(Math.max(Number(req.body?.days) || 30, 1), 90);
+    const neverExpires = req.body?.neverExpires === true;
+    const days = neverExpires ? null : Math.min(Math.max(Number(req.body?.days) || 30, 1), 90);
     record.shareEnabled = true;
     record.sharedAt = new Date();
-    record.shareExpiresAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    record.shareExpiresAt = neverExpires ? null : new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     await record.save();
 
     res.json({
       url: `${process.env.CLIENT_ORIGIN}/report/${record.shareToken}`,
       expiresAt: record.shareExpiresAt,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+recordsRouter.post('/:id/mark-sent', async (req, res, next) => {
+  try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: '找不到報告' });
+    if (record.status === 'draft') {
+      return res.status(409).json({ message: '請先結案產出正式報告，再標記為已寄送' });
+    }
+
+    if (record.status !== 'sent') {
+      record.status = 'sent';
+      record.sentAt = new Date();
+      await record.save();
+    }
+
+    res.json({ status: record.status, sentAt: record.sentAt });
   } catch (err) {
     next(err);
   }

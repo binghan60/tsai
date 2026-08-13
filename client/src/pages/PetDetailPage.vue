@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { CalendarDays, ClipboardPlus, FileText, PawPrint, Pencil, Share2, Trash2, User } from '@lucide/vue';
+import { CalendarDays, CheckCircle2, ClipboardPlus, FileText, PawPrint, Pencil, Share2, Trash2, User } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { http } from '../api/http';
@@ -22,6 +22,8 @@ const sharingId = ref(null);
 const revokingId = ref(null);
 const shareToRevoke = ref(null);
 const shareNotice = ref(null);
+const recordToMarkSent = ref(null);
+const markingSentId = ref(null);
 const editOpen = ref(false);
 const editSaving = ref(false);
 const editError = ref('');
@@ -44,6 +46,20 @@ const ageLabel = computed(() => {
   }
   return years > 0 ? `${years} 歲 ${months} 個月` : `${Math.max(months, 0)} 個月`;
 });
+
+function isShareActive(record) {
+  if (!record?.shareEnabled) return false;
+  if (!record.shareExpiresAt) return true;
+  return new Date(record.shareExpiresAt).getTime() > Date.now();
+}
+
+function isShareExpired(record) {
+  return Boolean(record?.shareEnabled && record.shareExpiresAt && !isShareActive(record));
+}
+
+function hasShareExpiry(record) {
+  return Boolean(record?.shareEnabled && record.shareExpiresAt);
+}
 
 async function fetchPet() {
   error.value = '';
@@ -97,13 +113,22 @@ async function copyText(value) {
 }
 
 async function shareRecord(record) {
+  const reopening = isShareExpired(record);
+  const converting = isShareActive(record) && hasShareExpiry(record);
   sharingId.value = record._id;
   error.value = '';
   try {
-    const { data } = await http.post(`/records/${record._id}/share`, { days: 30 });
+    const { data } = await http.post(`/records/${record._id}/share`, { neverExpires: true });
     const copied = await copyText(data.url);
     shareNotice.value = { url: data.url, expiresAt: data.expiresAt, copied };
-    toast.success(copied ? '已產生分享連結並複製到剪貼簿' : '已成功產生分享連結', '建立分享成功');
+    toast.success(
+      converting
+        ? copied ? '分享連結已改為無期限並複製到剪貼簿' : '分享連結已改為無期限'
+        : copied
+          ? `${reopening ? '已重新開啟' : '已產生'}分享連結並複製到剪貼簿`
+          : `已成功${reopening ? '重新開啟' : '產生'}分享連結`,
+      converting ? '已改為無期限' : reopening ? '重新開啟分享成功' : '建立分享成功'
+    );
     await fetchPet();
   } catch (err) {
     error.value = err.response?.data?.message ?? '建立分享連結失敗';
@@ -114,6 +139,10 @@ async function shareRecord(record) {
 }
 
 async function copyExistingShare(record) {
+  if (!isShareActive(record)) {
+    toast.error('這個分享連結已到期，請先重新開啟分享', '連結已失效');
+    return;
+  }
   const url = `${window.location.origin}/report/${record.shareToken}`;
   const copied = await copyText(url);
   shareNotice.value = { url, expiresAt: record.shareExpiresAt, copied };
@@ -140,6 +169,28 @@ async function revokeShare(record) {
 function openRevokeShare(record) {
   if (revokingId.value) return;
   shareToRevoke.value = record;
+}
+
+function openMarkSent(record) {
+  if (markingSentId.value) return;
+  recordToMarkSent.value = record;
+}
+
+async function markAsSent(record) {
+  if (!record) return;
+  markingSentId.value = record._id;
+  error.value = '';
+  try {
+    await http.post(`/records/${record._id}/mark-sent`);
+    recordToMarkSent.value = null;
+    toast.success('這份報告已標記為已寄送', '寄送狀態已更新');
+    await fetchPet();
+  } catch (err) {
+    error.value = err.response?.data?.message ?? '更新寄送狀態失敗';
+    toast.error(error.value, '更新狀態失敗');
+  } finally {
+    markingSentId.value = null;
+  }
 }
 
 function openRemoveRecord(record) {
@@ -206,7 +257,7 @@ onMounted(fetchPet);
     <Card v-if="shareNotice" class="border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 shadow-none dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
       <p class="font-medium">{{ shareNotice.copied ? '分享連結已複製' : '分享連結已建立' }}</p>
       <p class="mt-1 break-all">{{ shareNotice.url }}</p>
-      <p class="mt-1 text-xs opacity-80">有效期限：{{ formatDateTime(shareNotice.expiresAt) }}</p>
+      <p class="mt-1 text-xs opacity-80">{{ shareNotice.expiresAt ? `有效期限：${formatDateTime(shareNotice.expiresAt)}` : '無使用期限，手動撤銷前皆可開啟' }}</p>
     </Card>
 
     <div class="space-y-4">
@@ -219,13 +270,14 @@ onMounted(fetchPet);
         <li v-for="record in pet.medicalRecords" :key="record._id">
           <Card class="border-cream-300 p-4 shadow-sm dark:border-zinc-800 dark:shadow-none">
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-ink-400 dark:text-zinc-400" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-ink-900 dark:text-white">{{ formatDate(record.visitDate) }}</span><Badge :class="RECORD_STATUS_META[record.status]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="record.shareEnabled" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">分享中</Badge></div><p class="mt-1 text-xs text-ink-400 dark:text-zinc-400">{{ record.reportNumber || '尚未建立報告編號' }}<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}</p></div></div>
+            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-ink-400 dark:text-zinc-400" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-ink-900 dark:text-white">{{ formatDate(record.visitDate) }}</span><Badge :class="RECORD_STATUS_META[record.status]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">{{ hasShareExpiry(record) ? '分享中（有期限）' : '無期限分享' }}</Badge><Badge v-else-if="isShareExpired(record)" class="rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700 dark:bg-red-500/10 dark:text-red-300">連結已到期</Badge></div><p class="mt-1 text-xs text-ink-400 dark:text-zinc-400">{{ record.reportNumber || '尚未建立報告編號' }}<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="hasShareExpiry(record)"> · 分享期限 {{ formatDateTime(record.shareExpiresAt) }}</template></p></div></div>
             <div class="flex flex-wrap items-center gap-1 text-sm">
               <router-link v-if="record.status === 'draft'" :to="`/records/${record._id}/edit`" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 dark:text-brand-400 dark:hover:bg-brand-500/10">繼續填寫</router-link>
               <router-link v-else :to="`/records/${record._id}/preview`" class="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 dark:text-brand-400 dark:hover:bg-brand-500/10"><FileText class="h-4 w-4" />查看報告</router-link>
               <button v-if="record.status !== 'draft'" type="button" :disabled="downloadingId === record._id" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 disabled:opacity-50 dark:text-brand-400 dark:hover:bg-brand-500/10" @click="downloadPdf(record)">{{ downloadingId === record._id ? '產生中…' : '下載 PDF' }}</button>
-              <button v-if="record.status !== 'draft' && !record.shareEnabled" type="button" :disabled="sharingId === record._id" class="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 disabled:opacity-50 dark:text-brand-400 dark:hover:bg-brand-500/10" @click="shareRecord(record)"><Share2 class="h-4 w-4" />{{ sharingId === record._id ? '建立中…' : '分享' }}</button>
-              <template v-if="record.shareEnabled"><button class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10" @click="copyExistingShare(record)">複製連結</button><button :disabled="revokingId === record._id" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-destructive hover:bg-destructive/10" @click="openRevokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</button></template>
+              <button v-if="record.status !== 'draft' && (!isShareActive(record) || hasShareExpiry(record))" type="button" :disabled="sharingId === record._id" class="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 font-medium text-belle-600 hover:bg-belle-50 disabled:opacity-50 dark:text-brand-400 dark:hover:bg-brand-500/10" @click="shareRecord(record)"><Share2 class="h-4 w-4" />{{ sharingId === record._id ? '處理中…' : isShareExpired(record) ? '重新開啟分享' : hasShareExpiry(record) ? '改為無期限' : '分享' }}</button>
+              <template v-if="isShareActive(record)"><button class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10" @click="copyExistingShare(record)">複製連結</button><button :disabled="revokingId === record._id" class="inline-flex min-h-11 items-center rounded-xl px-3 font-medium text-destructive hover:bg-destructive/10" @click="openRevokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</button></template>
+              <button v-if="record.status === 'generated'" type="button" :disabled="markingSentId === record._id" class="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-500/10" @click="openMarkSent(record)"><CheckCircle2 class="h-4 w-4" />{{ markingSentId === record._id ? '更新中…' : '標記已寄送' }}</button>
               <button v-if="record.status === 'draft'" type="button" :disabled="deletingRecordId === record._id" class="inline-flex min-h-11 items-center gap-1 rounded-xl px-2.5 font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50" :aria-label="`刪除健檢紀錄 ${formatDate(record.visitDate)}`" @click="openRemoveRecord(record)"><Trash2 class="h-4 w-4" />刪除</button>
             </div>
           </div>
@@ -244,6 +296,17 @@ onMounted(fetchPet);
       :loading="Boolean(revokingId)"
       @update:open="(value) => !value && (shareToRevoke = null)"
       @confirm="revokeShare(shareToRevoke)"
+    />
+    <ConfirmDialog
+      :open="Boolean(recordToMarkSent)"
+      title="確認已寄送"
+      description="請確認已透過 Email、LINE 或其他方式，將報告或分享連結實際交付給飼主。此動作只更新系統狀態，不會自動寄信。"
+      confirm-label="確認已寄送"
+      cancel-label="尚未寄送"
+      :loading="Boolean(markingSentId)"
+      :destructive="false"
+      @update:open="(value) => !value && (recordToMarkSent = null)"
+      @confirm="markAsSent(recordToMarkSent)"
     />
     <ConfirmDialog
       :open="Boolean(recordToRemove)"

@@ -13,17 +13,37 @@ const error = ref('');
 const generating = ref(false);
 const generated = ref(false);
 const sharing = ref(false);
+const markingSent = ref(false);
 const shareNotice = ref(null);
 const showFinalizeConfirm = ref(false);
+const showSentConfirm = ref(false);
 const isPreview = computed(() => route.name === 'record-preview');
 const isDraft = computed(() => record.value?.status === 'draft');
+const isSent = computed(() => record.value?.status === 'sent');
+const shareIsActive = computed(() => {
+  if (!record.value?.shareEnabled) return false;
+  if (!record.value.shareExpiresAt) return true;
+  return new Date(record.value.shareExpiresAt).getTime() > Date.now();
+});
+const shareIsExpired = computed(() => Boolean(record.value?.shareEnabled && record.value?.shareExpiresAt && !shareIsActive.value));
+const shareHasExpiry = computed(() => Boolean(record.value?.shareEnabled && record.value?.shareExpiresAt));
+const shareActionLabel = computed(() => {
+  if (sharing.value) return '處理中…';
+  if (shareIsActive.value && shareHasExpiry.value) return '改為無期限分享';
+  if (shareIsActive.value) return '取得飼主分享連結';
+  if (shareIsExpired.value) return '重新開啟分享';
+  return '建立飼主分享連結';
+});
 const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
 const emailHref = computed(() => {
   if (!ownerEmail.value || !shareNotice.value?.url) return '';
   const petName = record.value?.pet?.name || '您的寵物';
   const ownerName = record.value?.owner?.name;
   const subject = `${petName}的健檢報告`;
-  const body = `${ownerName ? `${ownerName} 您好：\n\n` : ''}${petName}的健檢報告已完成，請透過以下連結查看：\n${shareNotice.value.url}\n\n此連結將於 ${formatDateTime(shareNotice.value.expiresAt)} 到期。`;
+  const expiryText = shareNotice.value.expiresAt
+    ? `此連結將於 ${formatDateTime(shareNotice.value.expiresAt)} 到期。`
+    : '此連結沒有使用期限；若需停止分享，醫院可隨時撤銷。';
+  const body = `${ownerName ? `${ownerName} 您好：\n\n` : ''}${petName}的健檢報告已完成，請透過以下連結查看：\n${shareNotice.value.url}\n\n${expiryText}`;
   return `mailto:${ownerEmail.value}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 });
 
@@ -148,22 +168,24 @@ async function copyText(value) {
 
 async function createShareLink() {
   if (!record.value || isDraft.value) return;
+  const reopening = shareIsExpired.value;
+  const converting = shareIsActive.value && shareHasExpiry.value;
   sharing.value = true;
   error.value = '';
   try {
     let url;
     let expiresAt;
-    if (record.value.shareEnabled && record.value.shareToken) {
+    if (shareIsActive.value && !shareHasExpiry.value && record.value.shareToken) {
       url = `${window.location.origin}/report/${record.value.shareToken}`;
       expiresAt = record.value.shareExpiresAt;
     } else {
-      const { data } = await http.post(`/records/${route.params.id}/share`, { days: 30 });
+      const { data } = await http.post(`/records/${route.params.id}/share`, { neverExpires: true });
       ({ url, expiresAt } = data);
       record.value.shareEnabled = true;
       record.value.shareExpiresAt = expiresAt;
     }
     const copied = await copyText(url);
-    shareNotice.value = { url, expiresAt, copied };
+    shareNotice.value = { url, expiresAt, copied, reopening, converting };
   } catch (err) {
     error.value = err.response?.data?.message ?? '建立分享連結失敗';
   } finally {
@@ -174,6 +196,22 @@ async function createShareLink() {
 async function copyShareLink() {
   if (!shareNotice.value?.url) return;
   shareNotice.value.copied = await copyText(shareNotice.value.url);
+}
+
+async function markAsSent() {
+  if (!record.value || isDraft.value) return;
+  markingSent.value = true;
+  error.value = '';
+  try {
+    const { data } = await http.post(`/records/${route.params.id}/mark-sent`);
+    record.value.status = data.status;
+    record.value.sentAt = data.sentAt;
+    showSentConfirm.value = false;
+  } catch (err) {
+    error.value = err.response?.data?.message ?? '更新寄送狀態失敗';
+  } finally {
+    markingSent.value = false;
+  }
 }
 
 function printReport() {
@@ -196,20 +234,29 @@ onMounted(fetchReport);
       </div>
 
       <div v-if="isDraft" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿，請確認內容後再結案。結案後此版本將鎖定，無法直接修改。</p></div>
-      <div v-if="generated" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 print:hidden">
-        <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />正式報告已結案並完成 PDF 下載，接下來可建立連結交付給飼主。</span>
+      <div v-if="isPreview && !isDraft && !isSent" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden">
+        <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />{{ generated ? '正式報告已結案並完成 PDF 下載。' : '正式報告已結案。' }}目前尚未標記寄送。</span>
         <div class="flex flex-wrap items-center gap-2">
-          <button type="button" :disabled="sharing" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 font-medium text-white hover:bg-emerald-800 disabled:opacity-50" @click="createShareLink"><Share2 class="h-4 w-4" />{{ sharing ? '建立中…' : '建立飼主分享連結' }}</button>
+          <button type="button" :disabled="sharing" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand-600 px-3 font-medium text-white hover:bg-brand-700 disabled:opacity-50" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</button>
+          <button type="button" class="inline-flex min-h-10 items-center rounded-lg border border-amber-400 px-3 font-medium hover:bg-amber-100" @click="showSentConfirm = true">已用其他方式寄送</button>
           <router-link :to="`/pets/${record.pet?._id}`" class="inline-flex min-h-10 items-center px-2 font-medium underline">稍後處理</router-link>
         </div>
       </div>
+      <div v-if="isPreview && isSent" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 print:hidden">
+        <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />報告已標記為「已寄送」<template v-if="record.sentAt">，時間：{{ formatDateTime(record.sentAt) }}</template></span>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" :disabled="sharing" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-emerald-300 px-3 font-medium hover:bg-emerald-100 disabled:opacity-50" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</button>
+          <router-link :to="`/pets/${record.pet?._id}`" class="inline-flex min-h-10 items-center px-2 font-medium underline">回寵物資料</router-link>
+        </div>
+      </div>
       <div v-if="shareNotice" class="rounded-xl border border-emerald-200 bg-white px-4 py-4 text-sm text-stone-700 print:hidden">
-        <p class="font-semibold text-emerald-800">{{ shareNotice.copied ? '分享連結已建立並複製' : '分享連結已建立' }}</p>
+        <p class="font-semibold text-emerald-800">{{ shareNotice.converting ? '分享連結已改為無期限' : shareNotice.reopening ? '分享連結已重新開啟' : shareNotice.copied ? '分享連結已建立並複製' : '分享連結已建立' }}</p>
         <p class="mt-2 break-all rounded-lg bg-stone-100 px-3 py-2 font-mono text-xs">{{ shareNotice.url }}</p>
-        <p class="mt-2 text-xs text-stone-500">連結有效至 {{ formatDateTime(shareNotice.expiresAt) }}</p>
+        <p class="mt-2 text-xs text-stone-500">{{ shareNotice.expiresAt ? `連結有效至 ${formatDateTime(shareNotice.expiresAt)}` : '連結無使用期限，手動撤銷前皆可開啟' }}</p>
         <div class="mt-3 flex flex-wrap gap-2">
           <button type="button" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 px-3 font-medium hover:bg-stone-50" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</button>
           <a v-if="ownerEmail" :href="emailHref" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand-600 px-3 font-medium text-white hover:bg-brand-700"><Mail class="h-4 w-4" />開啟 Email 寄給 {{ ownerEmail }}</a>
+          <button v-if="!isSent" type="button" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 font-medium text-white hover:bg-emerald-800" @click="showSentConfirm = true"><CheckCircle2 class="h-4 w-4" />我已完成寄送</button>
         </div>
         <p v-if="!ownerEmail" class="mt-3 text-xs text-amber-700">這位飼主尚未填寫 Email，請先複製連結，再透過其他方式傳送。</p>
       </div>
@@ -290,6 +337,17 @@ onMounted(fetchReport);
       :destructive="false"
       @update:open="showFinalizeConfirm = $event"
       @confirm="confirmFinalize"
+    />
+    <ConfirmDialog
+      :open="showSentConfirm"
+      title="確認已寄送"
+      description="請確認已透過 Email、LINE 或其他方式，將報告或分享連結實際交付給飼主。此動作只更新系統狀態，不會自動寄信。"
+      confirm-label="確認已寄送"
+      cancel-label="尚未寄送"
+      :loading="markingSent"
+      :destructive="false"
+      @update:open="showSentConfirm = $event"
+      @confirm="markAsSent"
     />
   </div>
 </template>
