@@ -39,7 +39,7 @@ router.get('/', async (req, res, next) => {
       return { weekEnd, count };
     });
 
-    const statusBreakdown = { draft: 0, generated: 0, sent: 0 };
+    const statusBreakdown = { draft: 0, sent: 0 };
     statusCounts.forEach((s) => {
       statusBreakdown[s._id] = s.count;
     });

@@ -242,7 +242,6 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
     record.sharedAt = record.sharedAt || new Date();
     record.status = 'sent';
     record.sentAt = new Date();
-    record.deliveryMethod = 'email';
     record.sentTo = recipient;
     record.emailMessageId = info.messageId;
     await record.save();
@@ -258,7 +257,6 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       status: record.status,
       sentAt: record.sentAt,
       sentTo: record.sentTo,
-      deliveryMethod: record.deliveryMethod,
       messageId: record.emailMessageId,
       shareUrl: reportUrl,
     });

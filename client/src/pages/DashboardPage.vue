@@ -40,11 +40,10 @@ const stats = computed(() => [
 ]);
 
 const statusSegments = computed(() => {
-  const values = dashboard.value?.statusBreakdown ?? { draft: 0, generated: 0, sent: 0 };
-  const total = Math.max(values.draft + values.generated + values.sent, 1);
+  const values = dashboard.value?.statusBreakdown ?? { draft: 0, sent: 0 };
+  const total = Math.max(values.draft + values.sent, 1);
   return [
     { key: 'draft', label: '草稿', value: values.draft, width: (values.draft / total) * 100, class: 'bg-zinc-500' },
-    { key: 'generated', label: '已結案／待寄送', value: values.generated, width: (values.generated / total) * 100, class: 'bg-amber-800 dark:bg-brand-600' },
     { key: 'sent', label: '已寄送', value: values.sent, width: (values.sent / total) * 100, class: 'bg-emerald-600' },
   ];
 });

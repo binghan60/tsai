@@ -79,14 +79,12 @@ const medicalRecordSchema = new mongoose.Schema(
     shareToken: { type: String, default: uuidv4, unique: true },
     shareEnabled: { type: Boolean, default: false },
     sharedAt: { type: Date, default: null },
-    // generated 與 manual 僅供舊資料相容；目前只會建立 draft，並在 Email 成功後改為 sent。
     status: {
       type: String,
-      enum: ['draft', 'generated', 'sent'],
+      enum: ['draft', 'sent'],
       default: 'draft',
     },
     sentAt: { type: Date },
-    deliveryMethod: { type: String, enum: ['email', 'manual'], default: undefined },
     sentTo: { type: String, trim: true, default: undefined },
     emailMessageId: { type: String, trim: true, default: undefined },
   },

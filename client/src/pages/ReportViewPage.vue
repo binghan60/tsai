@@ -165,7 +165,6 @@ async function sendEmail() {
     record.value.status = data.status;
     record.value.sentAt = data.sentAt;
     record.value.sentTo = data.sentTo;
-    record.value.deliveryMethod = data.deliveryMethod;
     record.value.emailMessageId = data.messageId;
     record.value.shareEnabled = true;
     shareNotice.value = {
@@ -198,22 +197,14 @@ onMounted(fetchReport);
         <button v-if="isPreview" type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-stone-700 hover:bg-white" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</button>
         <div v-else></div>
         <div class="flex gap-2">
-          <button v-if="isPreview" type="button" :disabled="emailing || !ownerEmail" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50" @click="isDraft ? (showFinalizeConfirm = true) : (showEmailConfirm = true)"><Mail class="h-4 w-4" />{{ emailing ? '寄送中…' : isDraft ? '確認結案並寄送 PDF' : isSent ? '重新寄送 Email' : '寄送 PDF' }}</button>
+          <button v-if="isPreview" type="button" :disabled="emailing || !ownerEmail" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50" @click="isDraft ? (showFinalizeConfirm = true) : (showEmailConfirm = true)"><Mail class="h-4 w-4" />{{ emailing ? '寄送中…' : isDraft ? '確認結案並寄送 PDF' : '重新寄送 Email' }}</button>
           <button v-else type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700" @click="printReport"><Printer class="h-4 w-4" />列印／下載 PDF</button>
         </div>
       </div>
 
       <div v-if="isDraft" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿。確認結案後，系統會直接將 PDF 寄給飼主；Gmail接受後此版本才會鎖定，不會下載到本機。</p><p v-if="!ownerEmail" class="mt-2 font-medium text-red-700">飼主尚未填寫 Email，暫時無法結案寄送。<router-link v-if="record.owner?._id" :to="`/owners/${record.owner._id}`" class="underline">前往飼主資料補填</router-link></p></div>
-      <div v-if="isPreview && !isDraft && !isSent" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden">
-        <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />這是舊版尚未寄送的正式報告，請寄送 Email 完成流程。</span>
-        <div class="flex flex-wrap items-center gap-2">
-          <button v-if="ownerEmail" type="button" :disabled="emailing" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 font-medium text-white hover:bg-emerald-800 disabled:opacity-50" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing ? '寄送中…' : '直接寄送 PDF' }}</button>
-          <router-link :to="`/pets/${record.pet?._id}`" class="inline-flex min-h-10 items-center px-2 font-medium underline">稍後處理</router-link>
-        </div>
-        <p v-if="!ownerEmail" class="w-full text-xs text-amber-800">飼主尚未填寫 Email；請回飼主資料補填後再寄送。</p>
-      </div>
       <div v-if="isPreview && isSent" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 print:hidden">
-        <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />{{ record.deliveryMethod === 'email' ? '報告已透過 Email 寄送' : '舊版報告狀態：已寄送' }}<template v-if="record.sentAt">，時間：{{ formatDateTime(record.sentAt) }}</template></span>
+        <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />報告已透過 Email 寄送<template v-if="record.sentAt">，時間：{{ formatDateTime(record.sentAt) }}</template></span>
         <div class="flex flex-wrap items-center gap-2">
           <button v-if="ownerEmail" type="button" :disabled="emailing" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-emerald-300 px-3 font-medium hover:bg-emerald-100 disabled:opacity-50" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing ? '寄送中…' : '重新寄送 Email' }}</button>
           <button type="button" :disabled="sharing" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-emerald-300 px-3 font-medium hover:bg-emerald-100 disabled:opacity-50" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</button>
