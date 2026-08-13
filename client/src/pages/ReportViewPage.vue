@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ArrowLeft, CheckCircle2, Download, PawPrint, Printer } from '@lucide/vue';
 import { http } from '../api/http';
 import { downloadBlob, extractErrorMessage } from '../lib/downloadFile';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -11,7 +12,9 @@ const record = ref(null);
 const error = ref('');
 const generating = ref(false);
 const generated = ref(false);
+const showFinalizeConfirm = ref(false);
 const isPreview = computed(() => route.name === 'record-preview');
+const isDraft = computed(() => record.value?.status === 'draft');
 
 function normalizePreview(data) {
   const pet = data.petId && typeof data.petId === 'object' ? data.petId : null;
@@ -105,13 +108,18 @@ async function generatePdf() {
   try {
     const response = await http.post(`/records/${route.params.id}/generate-pdf`, null, { responseType: 'blob' });
     downloadBlob(response.data, `${record.value.reportNumber || 'health-check'}.pdf`);
-    record.value.status = 'generated';
+    if (record.value.status === 'draft') record.value.status = 'generated';
     generated.value = true;
   } catch (err) {
     error.value = await extractErrorMessage(err, '產生 PDF 失敗');
   } finally {
     generating.value = false;
   }
+}
+
+async function confirmFinalize() {
+  showFinalizeConfirm.value = false;
+  await generatePdf();
 }
 
 function printReport() {
@@ -123,20 +131,21 @@ onMounted(fetchReport);
 
 <template>
   <div class="min-h-screen bg-stone-100 px-4 py-6 print:bg-white print:p-0 sm:px-6 sm:py-10">
-    <section v-if="record" class="mx-auto max-w-4xl space-y-4 print:max-w-none print:space-y-0">
+    <section v-if="record" class="mx-auto max-w-[210mm] space-y-4 print:max-w-none print:space-y-0">
       <div class="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <button v-if="isPreview" type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-stone-700 hover:bg-white" @click="router.push(`/records/${route.params.id}/edit`)"><ArrowLeft class="h-4 w-4" />返回編輯</button>
+        <button v-if="isPreview" type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-stone-700 hover:bg-white" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</button>
         <div v-else></div>
         <div class="flex gap-2">
-          <button v-if="isPreview" type="button" :disabled="generating" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50" @click="generatePdf"><Download class="h-4 w-4" />{{ generating ? '產生中…' : '完成並下載 PDF' }}</button>
+          <button v-if="isPreview" type="button" :disabled="generating" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50" @click="isDraft ? (showFinalizeConfirm = true) : generatePdf()"><Download class="h-4 w-4" />{{ generating ? '產生中…' : isDraft ? '確認結案並下載 PDF' : '重新下載 PDF' }}</button>
           <button v-else type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700" @click="printReport"><Printer class="h-4 w-4" />列印／下載 PDF</button>
         </div>
       </div>
 
-      <div v-if="generated" class="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 print:hidden"><span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5" />正式報告已產出。</span><router-link :to="`/pets/${record.pet?._id}`" class="font-medium underline">回寵物資料</router-link></div>
+      <div v-if="isDraft" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿，請確認內容後再結案。結案後此版本將鎖定，無法直接修改。</p></div>
+      <div v-if="generated" class="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 print:hidden"><span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5" />正式報告已結案並完成 PDF 下載。</span><router-link :to="`/pets/${record.pet?._id}`" class="font-medium underline">回寵物資料</router-link></div>
       <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 print:hidden">{{ error }}</p>
 
-      <article class="rounded-2xl border border-stone-200 bg-white p-6 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none sm:p-10">
+      <article class="report-sheet rounded-2xl border border-stone-200 bg-white p-6 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none sm:p-[12mm]">
         <header class="flex flex-col gap-5 border-b border-brand-100 pb-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div class="flex items-center gap-2 text-xl font-semibold text-brand-700"><PawPrint class="h-6 w-6" stroke-width="1.75" aria-hidden="true" />寵物健康檢查報告</div>
@@ -151,7 +160,7 @@ onMounted(fetchReport);
 
         <section class="mt-6 rounded-xl bg-stone-50 p-5">
           <div class="flex flex-wrap items-baseline justify-between gap-2"><h1 class="text-2xl font-semibold text-stone-900">{{ record.pet?.name || '寵物姓名未記錄' }}</h1><span class="font-mono text-xs text-stone-500">病歷號：{{ record.pet?.medicalRecordNumber || '—' }}</span></div>
-          <dl class="mt-4 grid gap-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <div><dt class="text-xs font-medium text-stone-500">飼主</dt><dd class="mt-1 text-stone-800">{{ record.owner?.name || '—' }}</dd></div>
             <div><dt class="text-xs font-medium text-stone-500">物種／品種</dt><dd class="mt-1 text-stone-800">{{ record.pet?.species || '—' }}<template v-if="record.pet?.breed">／{{ record.pet.breed }}</template></dd></div>
             <div><dt class="text-xs font-medium text-stone-500">性別／年齡</dt><dd class="mt-1 text-stone-800">{{ sexLabel(record.pet?.sex) }}／{{ ageLabel(record.pet?.birthDate) }}</dd></div>
@@ -200,5 +209,17 @@ onMounted(fetchReport);
 
     <p v-else-if="error" class="mx-auto max-w-3xl rounded-xl border border-red-200 bg-red-50 px-6 py-4 text-center text-sm text-red-700">{{ error }}</p>
     <p v-else class="mx-auto max-w-3xl px-6 text-center text-sm text-stone-500" role="status">載入健檢報告…</p>
+
+    <ConfirmDialog
+      :open="showFinalizeConfirm"
+      title="確認結案"
+      description="結案後這份報告將成為正式版本並鎖定，無法直接修改。確定要結案並下載 PDF 嗎？"
+      confirm-label="確認結案"
+      cancel-label="取消結案"
+      :loading="generating"
+      :destructive="false"
+      @update:open="showFinalizeConfirm = $event"
+      @confirm="confirmFinalize"
+    />
   </div>
 </template>

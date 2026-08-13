@@ -256,6 +256,27 @@ select:focus-visible {
   outline: none;
 }
 
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  html,
+  body,
+  #app {
+    width: auto;
+    min-height: auto;
+    background: #ffffff !important;
+    background-image: none !important;
+  }
+
+  .report-sheet {
+    width: auto;
+    min-height: auto;
+  }
+}
+
 .measurement-field input[type='number'] {
   appearance: textfield;
   -moz-appearance: textfield;
@@ -267,4 +288,3 @@ select:focus-visible {
   appearance: none;
   -webkit-appearance: none;
 }
-

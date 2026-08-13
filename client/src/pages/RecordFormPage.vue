@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, AlertTriangle, Clock3, FileText, PawPrint, Save, Trash2, User } from '@lucide/vue';
+import { Activity, AlertTriangle, Clock3, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { BASIC_MEASUREMENTS, LAB_GROUPS, LAB_TESTS } from '../lib/labTests';
@@ -21,6 +21,8 @@ const toast = useToast();
 const petId = ref(route.params.petId ?? null);
 const recordId = ref(route.params.id ?? null);
 const isEdit = computed(() => Boolean(recordId.value));
+const recordStatus = ref('draft');
+const isLocked = computed(() => recordStatus.value !== 'draft');
 const showDiscardConfirm = ref(false);
 const discarding = ref(false);
 
@@ -107,6 +109,7 @@ function mergeFindings(definitions, savedItems, extraFields, defaults = {}) {
 }
 
 function applyRecord(data) {
+  recordStatus.value = data.status ?? 'draft';
   vet.value = data.vet ?? '';
   visitDate.value = data.visitDate ? data.visitDate.slice(0, 10) : '';
   for (const key of ['examType', 'weightKg', 'temperatureC', 'heartRate', 'respiratoryRate', 'bodyConditionScore', 'chiefComplaint', 'history', 'conclusion', 'diagnosis', 'labSummary', 'treatmentPlan', 'other']) {
@@ -236,7 +239,7 @@ function buildPayload() {
 }
 
 async function saveRecord({ silent = false } = {}) {
-  if (saving.value || !petId.value) return false;
+  if (saving.value || !petId.value || isLocked.value) return false;
   saving.value = true;
   saveState.value = 'saving';
   if (!silent) saveError.value = '';
@@ -360,22 +363,36 @@ onBeforeUnmount(() => {
 <template>
   <section class="mx-auto max-w-6xl space-y-5 pb-28">
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><router-link v-if="petId" :to="`/pets/${petId}`" class="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← 回寵物資料</router-link><h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。</p></div>
-      <div class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-ink-500 dark:text-zinc-400'"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
+      <div><router-link v-if="petId" :to="`/pets/${petId}`" class="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← 回寵物資料</router-link><h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ isLocked ? '已結案健檢紀錄' : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p></div>
+      <div v-if="!isLocked" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-ink-500 dark:text-zinc-400'"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
     </div>
 
     <p v-if="loadError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ loadError }}</p>
     <p v-else-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入健檢資料…</p>
 
     <template v-else>
-      <div class="sticky top-20 z-20 rounded-2xl border border-cream-300 bg-cream-50 px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 lg:top-4">
+      <div v-if="isLocked" class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-sm dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-200">
+        <div class="flex items-start gap-3">
+          <LockKeyhole class="mt-0.5 h-5 w-5 shrink-0" />
+          <div class="min-w-0 flex-1">
+            <h2 class="text-base font-semibold">正式報告已鎖定</h2>
+            <p class="mt-1 text-sm">為避免已結案的內容與 PDF 不一致，此版本不再開放直接編輯。</p>
+            <div class="mt-4 flex flex-wrap gap-2">
+              <router-link :to="`/records/${recordId}/preview`" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-belle-600 px-4 text-sm font-medium text-white hover:bg-belle-700 dark:bg-brand-500 dark:hover:bg-brand-600"><FileText class="h-4 w-4" />查看正式報告</router-link>
+              <router-link :to="`/pets/${petId}`" class="inline-flex min-h-11 items-center rounded-xl border border-amber-300 px-4 text-sm font-medium hover:bg-amber-100 dark:border-brand-500/40 dark:hover:bg-brand-500/10">回寵物資料</router-link>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="!isLocked" class="sticky top-20 z-20 rounded-2xl border border-cream-300 bg-cream-50 px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 lg:top-4">
         <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="font-semibold text-ink-900 dark:text-white">{{ pet?.name ?? '—' }}</span><span class="font-mono text-xs text-ink-400 dark:text-zinc-400">{{ pet?.medicalRecordNumber || (pet?._id ? `PET-${pet._id.slice(-8).toUpperCase()}` : '') }}</span></div><div class="flex items-center gap-2 text-sm text-ink-600 dark:text-zinc-300"><User class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ pet?.ownerId?.name ?? '—' }}</div></div><div class="w-full sm:w-52"><div class="mb-1 flex justify-between text-xs text-ink-500 dark:text-zinc-400"><span>完成區段</span><span>{{ completedCount }}/5</span></div><div class="h-2 overflow-hidden rounded-full bg-cream-200 dark:bg-zinc-800"><div class="h-full rounded-full bg-belle-600 dark:bg-brand-500" :style="{ width: `${completionPercent}%` }"></div></div></div></div>
         <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
       </div>
 
-      <div id="form-errors" v-if="validationErrors.length" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200" role="alert"><p class="font-semibold">正式報告尚缺少以下內容：</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="message in validationErrors" :key="message">{{ message }}</li></ul></div>
+      <div id="form-errors" v-if="!isLocked && validationErrors.length" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200" role="alert"><p class="font-semibold">正式報告尚缺少以下內容：</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="message in validationErrors" :key="message">{{ message }}</li></ul></div>
 
-      <form class="space-y-5" @submit.prevent>
+      <form v-if="!isLocked" class="space-y-5" @submit.prevent>
         <section class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
           <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">1</span><div><h2 class="font-semibold text-ink-900 dark:text-white">健檢資訊與健康背景</h2><p class="text-xs text-ink-400 dark:text-zinc-400">記錄本次健檢基本資訊、主訴與病史</p></div></div>
           <div class="grid gap-x-4 gap-y-4 sm:grid-cols-3">
@@ -458,16 +475,16 @@ onBeforeUnmount(() => {
         </section>
       </form>
 
-      <p v-if="saveError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ saveError }}</p>
-      <div class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 lg:left-64">
+      <p v-if="!isLocked && saveError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ saveError }}</p>
+      <div v-if="!isLocked" class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 lg:left-64">
         <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已完成 {{ completedCount }}/5 個區段</p>
           <div class="ml-auto flex flex-wrap items-center gap-2">
             <Button type="button" variant="destructive-outline" class="min-h-11" :disabled="saving || discarding" @click="showDiscardConfirm = true">
               <Trash2 class="h-4 w-4" />捨棄草稿
             </Button>
-            <Button type="button" variant="outline" class="min-h-11" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿' }}</Button>
-            <Button type="button" class="min-h-11" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽正式報告</Button>
+            <Button type="button" variant="outline" class="min-h-11" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存並離開' }}</Button>
+            <Button type="button" class="min-h-11" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />結案前預覽</Button>
           </div>
         </div>
       </div>

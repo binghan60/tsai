@@ -142,12 +142,10 @@ recordsRouter.put('/:id', async (req, res, next) => {
   try {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
-    Object.assign(record, pickRecordFields(req.body));
     if (record.status !== 'draft') {
-      record.status = 'draft';
-      record.shareEnabled = false;
-      record.shareExpiresAt = null;
+      return res.status(409).json({ message: '這份報告已結案，無法直接修改，請建立修訂草稿' });
     }
+    Object.assign(record, pickRecordFields(req.body));
     await record.save();
     res.json(record);
   } catch (err) {
@@ -159,6 +157,9 @@ recordsRouter.delete('/:id', async (req, res, next) => {
   try {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
+    if (record.status !== 'draft') {
+      return res.status(409).json({ message: '已結案的報告不能刪除' });
+    }
     await record.deleteOne();
     res.status(204).end();
   } catch (err) {
@@ -177,7 +178,8 @@ recordsRouter.post('/:id/generate-pdf', async (req, res, next) => {
     }
 
     const pdfBuffer = await renderReportPdf(record.shareToken);
-    record.status = 'generated';
+    // 重新下載已寄送的報告時，不可將狀態退回「已結案」。
+    if (record.status === 'draft') record.status = 'generated';
     await record.save();
     if (record.weightKg != null) {
       await Pet.findByIdAndUpdate(record.petId, { weightKg: record.weightKg });
