@@ -3,6 +3,7 @@ import MedicalRecord from '../models/MedicalRecord.js';
 import Pet from '../models/Pet.js';
 import { renderReportPdf } from '../lib/pdf.js';
 import { pdfAccessSecret } from '../config/pdfAccess.js';
+import { LAB_TEST_MAP } from '../config/labTests.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const RECORD_FIELDS = [
@@ -38,6 +39,7 @@ function hasClinicalContent(record) {
   return Boolean(
     record.diagnosis?.trim() ||
       record.conclusion?.trim() ||
+      record.treatmentPlan?.trim() ||
       [record.weightKg, record.temperatureC, record.heartRate, record.respiratoryRate, record.bodyConditionScore].some((value) => value != null) ||
       record.examinationFindings?.some((finding) => finding.status !== 'not_checked') ||
       record.labFindings?.some((finding) => finding.status !== 'not_checked')
@@ -49,6 +51,22 @@ function validateFinalRecord(record) {
   if (!record.vet?.trim()) missing.push('獸醫師');
   if (!record.visitDate) missing.push('健檢日期');
   if (!hasClinicalContent(record)) missing.push('基本量測、結論、診斷、理學檢查或檢驗結果');
+  if (!record.conclusion?.trim() && !record.treatmentPlan?.trim()) missing.push('結論或照護與追蹤建議');
+
+  const examinationWithoutNote = (record.examinationFindings ?? [])
+    .filter((finding) => finding.status === 'abnormal' && !finding.note?.trim())
+    .map((finding) => finding.label);
+  if (examinationWithoutNote.length) missing.push(`理學檢查異常說明（${examinationWithoutNote.join('、')}）`);
+
+  const labsWithoutNote = (record.labFindings ?? [])
+    .filter((finding) => finding.status === 'abnormal' && !finding.note?.trim())
+    .map((finding) => finding.label);
+  if (labsWithoutNote.length) missing.push(`檢驗異常說明（${labsWithoutNote.join('、')}）`);
+
+  const invalidLabValues = (record.labFindings ?? [])
+    .filter((finding) => LAB_TEST_MAP.get(finding.key)?.numeric !== false && String(finding.value ?? '').trim() && !Number.isFinite(Number(finding.value)))
+    .map((finding) => finding.label);
+  if (invalidLabValues.length) missing.push(`檢驗數值格式（${invalidLabValues.join('、')}）`);
   return missing;
 }
 
@@ -172,7 +190,7 @@ recordsRouter.post('/:id/generate-pdf', async (req, res, next) => {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
 
-    const missing = validateFinalRecord(record);
+    const missing = record.status === 'draft' ? validateFinalRecord(record) : [];
     if (missing.length) {
       return res.status(422).json({ message: `請先完成：${missing.join('、')}` });
     }

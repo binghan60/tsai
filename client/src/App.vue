@@ -79,7 +79,7 @@ watch(
       </aside>
 
       <div class="min-w-0 flex-1 lg:@container/content">
-        <header class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-4 sm:px-6 lg:px-8">
+        <header id="app-header" class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-4 sm:px-6 lg:px-8">
           <Button
             type="button"
             variant="outline"

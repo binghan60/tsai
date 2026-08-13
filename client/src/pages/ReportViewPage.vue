@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeft, CheckCircle2, Download, PawPrint, Printer } from '@lucide/vue';
+import { ArrowLeft, CheckCircle2, Copy, Download, Mail, PawPrint, Printer, Share2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { downloadBlob, extractErrorMessage } from '../lib/downloadFile';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
@@ -12,9 +12,20 @@ const record = ref(null);
 const error = ref('');
 const generating = ref(false);
 const generated = ref(false);
+const sharing = ref(false);
+const shareNotice = ref(null);
 const showFinalizeConfirm = ref(false);
 const isPreview = computed(() => route.name === 'record-preview');
 const isDraft = computed(() => record.value?.status === 'draft');
+const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
+const emailHref = computed(() => {
+  if (!ownerEmail.value || !shareNotice.value?.url) return '';
+  const petName = record.value?.pet?.name || '您的寵物';
+  const ownerName = record.value?.owner?.name;
+  const subject = `${petName}的健檢報告`;
+  const body = `${ownerName ? `${ownerName} 您好：\n\n` : ''}${petName}的健檢報告已完成，請透過以下連結查看：\n${shareNotice.value.url}\n\n此連結將於 ${formatDateTime(shareNotice.value.expiresAt)} 到期。`;
+  return `mailto:${ownerEmail.value}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+});
 
 function normalizePreview(data) {
   const pet = data.petId && typeof data.petId === 'object' ? data.petId : null;
@@ -44,6 +55,10 @@ async function fetchReport() {
 
 function formatDate(date) {
   return date ? new Date(date).toLocaleDateString('zh-TW') : '—';
+}
+
+function formatDateTime(date) {
+  return date ? new Date(date).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 }
 
 function sexLabel(sex) {
@@ -122,6 +137,45 @@ async function confirmFinalize() {
   await generatePdf();
 }
 
+async function copyText(value) {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function createShareLink() {
+  if (!record.value || isDraft.value) return;
+  sharing.value = true;
+  error.value = '';
+  try {
+    let url;
+    let expiresAt;
+    if (record.value.shareEnabled && record.value.shareToken) {
+      url = `${window.location.origin}/report/${record.value.shareToken}`;
+      expiresAt = record.value.shareExpiresAt;
+    } else {
+      const { data } = await http.post(`/records/${route.params.id}/share`, { days: 30 });
+      ({ url, expiresAt } = data);
+      record.value.shareEnabled = true;
+      record.value.shareExpiresAt = expiresAt;
+    }
+    const copied = await copyText(url);
+    shareNotice.value = { url, expiresAt, copied };
+  } catch (err) {
+    error.value = err.response?.data?.message ?? '建立分享連結失敗';
+  } finally {
+    sharing.value = false;
+  }
+}
+
+async function copyShareLink() {
+  if (!shareNotice.value?.url) return;
+  shareNotice.value.copied = await copyText(shareNotice.value.url);
+}
+
 function printReport() {
   window.print();
 }
@@ -142,7 +196,23 @@ onMounted(fetchReport);
       </div>
 
       <div v-if="isDraft" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿，請確認內容後再結案。結案後此版本將鎖定，無法直接修改。</p></div>
-      <div v-if="generated" class="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 print:hidden"><span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5" />正式報告已結案並完成 PDF 下載。</span><router-link :to="`/pets/${record.pet?._id}`" class="font-medium underline">回寵物資料</router-link></div>
+      <div v-if="generated" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 print:hidden">
+        <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />正式報告已結案並完成 PDF 下載，接下來可建立連結交付給飼主。</span>
+        <div class="flex flex-wrap items-center gap-2">
+          <button type="button" :disabled="sharing" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 font-medium text-white hover:bg-emerald-800 disabled:opacity-50" @click="createShareLink"><Share2 class="h-4 w-4" />{{ sharing ? '建立中…' : '建立飼主分享連結' }}</button>
+          <router-link :to="`/pets/${record.pet?._id}`" class="inline-flex min-h-10 items-center px-2 font-medium underline">稍後處理</router-link>
+        </div>
+      </div>
+      <div v-if="shareNotice" class="rounded-xl border border-emerald-200 bg-white px-4 py-4 text-sm text-stone-700 print:hidden">
+        <p class="font-semibold text-emerald-800">{{ shareNotice.copied ? '分享連結已建立並複製' : '分享連結已建立' }}</p>
+        <p class="mt-2 break-all rounded-lg bg-stone-100 px-3 py-2 font-mono text-xs">{{ shareNotice.url }}</p>
+        <p class="mt-2 text-xs text-stone-500">連結有效至 {{ formatDateTime(shareNotice.expiresAt) }}</p>
+        <div class="mt-3 flex flex-wrap gap-2">
+          <button type="button" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 px-3 font-medium hover:bg-stone-50" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</button>
+          <a v-if="ownerEmail" :href="emailHref" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand-600 px-3 font-medium text-white hover:bg-brand-700"><Mail class="h-4 w-4" />開啟 Email 寄給 {{ ownerEmail }}</a>
+        </div>
+        <p v-if="!ownerEmail" class="mt-3 text-xs text-amber-700">這位飼主尚未填寫 Email，請先複製連結，再透過其他方式傳送。</p>
+      </div>
       <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 print:hidden">{{ error }}</p>
 
       <article class="report-sheet rounded-2xl border border-stone-200 bg-white p-6 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none sm:p-[12mm]">
