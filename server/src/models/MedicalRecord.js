@@ -86,6 +86,9 @@ const medicalRecordSchema = new mongoose.Schema(
       default: 'draft',
     },
     sentAt: { type: Date },
+    deliveryMethod: { type: String, enum: ['email', 'manual'], default: undefined },
+    sentTo: { type: String, trim: true, default: undefined },
+    emailMessageId: { type: String, trim: true, default: undefined },
   },
   { timestamps: true }
 );

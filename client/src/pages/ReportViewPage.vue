@@ -1,22 +1,21 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeft, CheckCircle2, Copy, Download, Mail, PawPrint, Printer, Share2 } from '@lucide/vue';
+import { ArrowLeft, CheckCircle2, Copy, Mail, PawPrint, Printer, Share2 } from '@lucide/vue';
 import { http } from '../api/http';
-import { downloadBlob, extractErrorMessage } from '../lib/downloadFile';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
 const record = ref(null);
 const error = ref('');
-const generating = ref(false);
-const generated = ref(false);
 const sharing = ref(false);
 const markingSent = ref(false);
+const emailing = ref(false);
 const shareNotice = ref(null);
 const showFinalizeConfirm = ref(false);
 const showSentConfirm = ref(false);
+const showEmailConfirm = ref(false);
 const isPreview = computed(() => route.name === 'record-preview');
 const isDraft = computed(() => record.value?.status === 'draft');
 const isSent = computed(() => record.value?.status === 'sent');
@@ -137,24 +136,8 @@ const vitals = computed(() => {
   ].filter((item) => item.value).map((item) => ({ ...item, assessment: assessments.get(item.key) }));
 });
 
-async function generatePdf() {
-  generating.value = true;
-  error.value = '';
-  try {
-    const response = await http.post(`/records/${route.params.id}/generate-pdf`, null, { responseType: 'blob' });
-    downloadBlob(response.data, `${record.value.reportNumber || 'health-check'}.pdf`);
-    if (record.value.status === 'draft') record.value.status = 'generated';
-    generated.value = true;
-  } catch (err) {
-    error.value = await extractErrorMessage(err, '產生 PDF 失敗');
-  } finally {
-    generating.value = false;
-  }
-}
-
 async function confirmFinalize() {
-  showFinalizeConfirm.value = false;
-  await generatePdf();
+  await sendEmail();
 }
 
 async function copyText(value) {
@@ -214,6 +197,37 @@ async function markAsSent() {
   }
 }
 
+async function sendEmail() {
+  if (!record.value || !ownerEmail.value) return;
+  const wasDraft = isDraft.value;
+  emailing.value = true;
+  error.value = '';
+  try {
+    const { data } = await http.post(`/records/${route.params.id}/send-email`);
+    record.value.status = data.status;
+    record.value.sentAt = data.sentAt;
+    record.value.sentTo = data.sentTo;
+    record.value.deliveryMethod = data.deliveryMethod;
+    record.value.emailMessageId = data.messageId;
+    record.value.shareEnabled = true;
+    record.value.shareExpiresAt = null;
+    shareNotice.value = {
+      url: data.shareUrl,
+      expiresAt: null,
+      copied: false,
+      emailed: true,
+    };
+    showFinalizeConfirm.value = false;
+    showEmailConfirm.value = false;
+  } catch (err) {
+    error.value = err.response?.data?.message ?? `寄送 Email 失敗，報告仍維持${wasDraft ? '草稿' : '原本'}狀態`;
+    showFinalizeConfirm.value = false;
+    showEmailConfirm.value = false;
+  } finally {
+    emailing.value = false;
+  }
+}
+
 function printReport() {
   window.print();
 }
@@ -228,34 +242,38 @@ onMounted(fetchReport);
         <button v-if="isPreview" type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-stone-700 hover:bg-white" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</button>
         <div v-else></div>
         <div class="flex gap-2">
-          <button v-if="isPreview" type="button" :disabled="generating" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50" @click="isDraft ? (showFinalizeConfirm = true) : generatePdf()"><Download class="h-4 w-4" />{{ generating ? '產生中…' : isDraft ? '確認結案並下載 PDF' : '重新下載 PDF' }}</button>
+          <button v-if="isPreview" type="button" :disabled="emailing || !ownerEmail" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50" @click="isDraft ? (showFinalizeConfirm = true) : (showEmailConfirm = true)"><Mail class="h-4 w-4" />{{ emailing ? '寄送中…' : isDraft ? '確認結案並寄送 PDF' : '重新寄送 Email' }}</button>
           <button v-else type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700" @click="printReport"><Printer class="h-4 w-4" />列印／下載 PDF</button>
         </div>
       </div>
 
-      <div v-if="isDraft" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿，請確認內容後再結案。結案後此版本將鎖定，無法直接修改。</p></div>
+      <div v-if="isDraft" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿。確認結案後，系統會直接將 PDF 寄給飼主；Gmail接受後此版本才會鎖定，不會下載到本機。</p><p v-if="!ownerEmail" class="mt-2 font-medium text-red-700">飼主尚未填寫 Email，暫時無法結案寄送。<router-link v-if="record.owner?._id" :to="`/owners/${record.owner._id}`" class="underline">前往飼主資料補填</router-link></p></div>
       <div v-if="isPreview && !isDraft && !isSent" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden">
-        <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />{{ generated ? '正式報告已結案並完成 PDF 下載。' : '正式報告已結案。' }}目前尚未標記寄送。</span>
+        <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />正式報告已結案，目前尚未標記寄送。</span>
         <div class="flex flex-wrap items-center gap-2">
+          <button v-if="ownerEmail" type="button" :disabled="emailing" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 font-medium text-white hover:bg-emerald-800 disabled:opacity-50" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing ? '寄送中…' : '直接寄送 PDF' }}</button>
           <button type="button" :disabled="sharing" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand-600 px-3 font-medium text-white hover:bg-brand-700 disabled:opacity-50" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</button>
           <button type="button" class="inline-flex min-h-10 items-center rounded-lg border border-amber-400 px-3 font-medium hover:bg-amber-100" @click="showSentConfirm = true">已用其他方式寄送</button>
           <router-link :to="`/pets/${record.pet?._id}`" class="inline-flex min-h-10 items-center px-2 font-medium underline">稍後處理</router-link>
         </div>
+        <p v-if="!ownerEmail" class="w-full text-xs text-amber-800">飼主尚未填寫 Email；請回飼主資料補填，或使用其他方式交付後手動標記。</p>
       </div>
       <div v-if="isPreview && isSent" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 print:hidden">
         <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />報告已標記為「已寄送」<template v-if="record.sentAt">，時間：{{ formatDateTime(record.sentAt) }}</template></span>
         <div class="flex flex-wrap items-center gap-2">
+          <button v-if="ownerEmail" type="button" :disabled="emailing" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-emerald-300 px-3 font-medium hover:bg-emerald-100 disabled:opacity-50" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing ? '寄送中…' : '重新寄送 Email' }}</button>
           <button type="button" :disabled="sharing" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-emerald-300 px-3 font-medium hover:bg-emerald-100 disabled:opacity-50" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</button>
           <router-link :to="`/pets/${record.pet?._id}`" class="inline-flex min-h-10 items-center px-2 font-medium underline">回寵物資料</router-link>
         </div>
       </div>
       <div v-if="shareNotice" class="rounded-xl border border-emerald-200 bg-white px-4 py-4 text-sm text-stone-700 print:hidden">
-        <p class="font-semibold text-emerald-800">{{ shareNotice.converting ? '分享連結已改為無期限' : shareNotice.reopening ? '分享連結已重新開啟' : shareNotice.copied ? '分享連結已建立並複製' : '分享連結已建立' }}</p>
+        <p class="font-semibold text-emerald-800">{{ shareNotice.emailed ? `郵件伺服器已接受寄送至 ${record.sentTo}` : shareNotice.converting ? '分享連結已改為無期限' : shareNotice.reopening ? '分享連結已重新開啟' : shareNotice.copied ? '分享連結已建立並複製' : '分享連結已建立' }}</p>
         <p class="mt-2 break-all rounded-lg bg-stone-100 px-3 py-2 font-mono text-xs">{{ shareNotice.url }}</p>
         <p class="mt-2 text-xs text-stone-500">{{ shareNotice.expiresAt ? `連結有效至 ${formatDateTime(shareNotice.expiresAt)}` : '連結無使用期限，手動撤銷前皆可開啟' }}</p>
         <div class="mt-3 flex flex-wrap gap-2">
           <button type="button" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 px-3 font-medium hover:bg-stone-50" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</button>
-          <a v-if="ownerEmail" :href="emailHref" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand-600 px-3 font-medium text-white hover:bg-brand-700"><Mail class="h-4 w-4" />開啟 Email 寄給 {{ ownerEmail }}</a>
+          <button v-if="ownerEmail && !isSent" type="button" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 font-medium text-white hover:bg-emerald-800" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />系統直接寄送 PDF</button>
+          <a v-if="ownerEmail" :href="emailHref" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 px-3 font-medium hover:bg-stone-50"><Mail class="h-4 w-4" />使用本機 Email</a>
           <button v-if="!isSent" type="button" class="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-700 px-3 font-medium text-white hover:bg-emerald-800" @click="showSentConfirm = true"><CheckCircle2 class="h-4 w-4" />我已完成寄送</button>
         </div>
         <p v-if="!ownerEmail" class="mt-3 text-xs text-amber-700">這位飼主尚未填寫 Email，請先複製連結，再透過其他方式傳送。</p>
@@ -329,11 +347,11 @@ onMounted(fetchReport);
 
     <ConfirmDialog
       :open="showFinalizeConfirm"
-      title="確認結案"
-      description="結案後這份報告將成為正式版本並鎖定，無法直接修改。確定要結案並下載 PDF 嗎？"
-      confirm-label="確認結案"
+      title="確認結案並寄送"
+      :description="`系統會將正式 PDF 附件及無期限查看連結寄到 ${ownerEmail}。Gmail接受郵件後，報告將立即鎖定且無法直接修改；本機不會下載檔案。`"
+      confirm-label="結案並寄送 PDF"
       cancel-label="取消結案"
-      :loading="generating"
+      :loading="emailing"
       :destructive="false"
       @update:open="showFinalizeConfirm = $event"
       @confirm="confirmFinalize"
@@ -348,6 +366,17 @@ onMounted(fetchReport);
       :destructive="false"
       @update:open="showSentConfirm = $event"
       @confirm="markAsSent"
+    />
+    <ConfirmDialog
+      :open="showEmailConfirm"
+      :title="isSent ? '重新寄送健檢報告' : '寄送健檢報告'"
+      :description="`系統會將 PDF 附件及無期限查看連結寄到 ${ownerEmail}。只有郵件伺服器接受後，報告才會標記為已寄送。`"
+      :confirm-label="isSent ? '重新寄送' : '確認寄送'"
+      cancel-label="取消"
+      :loading="emailing"
+      :destructive="false"
+      @update:open="showEmailConfirm = $event"
+      @confirm="sendEmail"
     />
   </div>
 </template>

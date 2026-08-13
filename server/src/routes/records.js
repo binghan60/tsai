@@ -2,6 +2,7 @@ import { Router } from 'express';
 import MedicalRecord from '../models/MedicalRecord.js';
 import Pet from '../models/Pet.js';
 import { renderReportPdf } from '../lib/pdf.js';
+import { assertMailConfigured, sendHealthReportEmail } from '../lib/mailer.js';
 import { pdfAccessSecret } from '../config/pdfAccess.js';
 import { LAB_TEST_MAP } from '../config/labTests.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -244,11 +245,88 @@ recordsRouter.post('/:id/mark-sent', async (req, res, next) => {
     if (record.status !== 'sent') {
       record.status = 'sent';
       record.sentAt = new Date();
+      record.deliveryMethod = 'manual';
       await record.save();
     }
 
     res.json({ status: record.status, sentAt: record.sentAt });
   } catch (err) {
+    next(err);
+  }
+});
+
+recordsRouter.post('/:id/send-email', async (req, res, next) => {
+  try {
+    const record = await MedicalRecord.findById(req.params.id).populate({
+      path: 'petId',
+      populate: { path: 'ownerId', select: 'name email' },
+    });
+    if (!record) return res.status(404).json({ message: '找不到報告' });
+    if (record.status === 'draft') {
+      const missing = validateFinalRecord(record);
+      if (missing.length) {
+        return res.status(422).json({ message: `請先補齊：${missing.join('、')}` });
+      }
+    }
+
+    const pet = record.petId;
+    const owner = pet?.ownerId;
+    const recipient = owner?.email?.trim();
+    if (!recipient) return res.status(422).json({ message: '這位飼主尚未填寫 Email，請先補齊飼主資料' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+      return res.status(422).json({ message: '飼主 Email 格式不正確，請先修正飼主資料' });
+    }
+
+    assertMailConfigured();
+    const pdfBuffer = await renderReportPdf(record.shareToken);
+    const reportUrl = `${process.env.CLIENT_ORIGIN}/report/${record.shareToken}`;
+    const info = await sendHealthReportEmail({
+      to: recipient,
+      ownerName: owner.name,
+      petName: pet.name,
+      reportNumber: record.reportNumber,
+      reportUrl,
+      pdfBuffer,
+    });
+
+    // SMTP 接受郵件後才結案、開啟分享並記錄寄送結果。
+    record.shareEnabled = true;
+    record.shareExpiresAt = null;
+    record.sharedAt = record.sharedAt || new Date();
+    record.status = 'sent';
+    record.sentAt = new Date();
+    record.deliveryMethod = 'email';
+    record.sentTo = recipient;
+    record.emailMessageId = info.messageId;
+    await record.save();
+
+    res.json({
+      status: record.status,
+      sentAt: record.sentAt,
+      sentTo: record.sentTo,
+      deliveryMethod: record.deliveryMethod,
+      messageId: record.emailMessageId,
+      shareUrl: reportUrl,
+    });
+  } catch (err) {
+    if (err.code === 'MAIL_NOT_CONFIGURED') {
+      return res.status(503).json({ message: err.message });
+    }
+    if (err.code === 'MAIL_RECIPIENT_REJECTED') {
+      return res.status(422).json({ message: err.message });
+    }
+    if (err.code === 'EAUTH') {
+      return res.status(502).json({ message: 'Gmail 驗證失敗：請確認 SMTP_EMAIL 與產生應用程式密碼的 Google 帳號相同，並重新產生應用程式密碼；報告仍維持草稿' });
+    }
+    if (err.code === 'ETIMEDOUT') {
+      return res.status(504).json({ message: '連線 Gmail 逾時，請確認網路後再試；報告仍維持草稿' });
+    }
+    if (err.code === 'ECONNECTION') {
+      return res.status(502).json({ message: '無法連線 Gmail SMTP，請確認網路或防火牆設定；報告仍維持草稿' });
+    }
+    if (['EENVELOPE', 'EMESSAGE', 'EPROTOCOL'].includes(err.code)) {
+      return res.status(502).json({ message: 'Gmail 未接受這封郵件，請稍後再試；報告仍維持草稿' });
+    }
     next(err);
   }
 });
