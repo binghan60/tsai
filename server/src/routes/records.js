@@ -98,7 +98,6 @@ function reportPayload(record) {
     updatedAt: record.updatedAt,
     status: record.status,
     shareEnabled: record.shareEnabled,
-    shareExpiresAt: record.shareExpiresAt,
     pet: pet
       ? {
           name: pet.name,
@@ -186,70 +185,19 @@ recordsRouter.delete('/:id', async (req, res, next) => {
   }
 });
 
-recordsRouter.post('/:id/generate-pdf', async (req, res, next) => {
-  try {
-    const record = await MedicalRecord.findById(req.params.id);
-    if (!record) return res.status(404).json({ message: '找不到報告' });
-
-    const missing = record.status === 'draft' ? validateFinalRecord(record) : [];
-    if (missing.length) {
-      return res.status(422).json({ message: `請先完成：${missing.join('、')}` });
-    }
-
-    const pdfBuffer = await renderReportPdf(record.shareToken);
-    // 重新下載已寄送的報告時，不可將狀態退回「已結案」。
-    if (record.status === 'draft') record.status = 'generated';
-    await record.save();
-    if (record.weightKg != null) {
-      await Pet.findByIdAndUpdate(record.petId, { weightKg: record.weightKg });
-    }
-
-    res.set('Content-Type', 'application/pdf');
-    res.set('Content-Disposition', `attachment; filename="report-${record._id}.pdf"`);
-    res.send(pdfBuffer);
-  } catch (err) {
-    next(err);
-  }
-});
-
 recordsRouter.post('/:id/share', async (req, res, next) => {
   try {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
-    if (record.status === 'draft') return res.status(409).json({ message: '請先產出正式報告，再建立分享連結' });
+    if (record.status !== 'sent') return res.status(409).json({ message: '請先完成 Email 寄送，再建立分享連結' });
 
-    const neverExpires = req.body?.neverExpires === true;
-    const days = neverExpires ? null : Math.min(Math.max(Number(req.body?.days) || 30, 1), 90);
     record.shareEnabled = true;
     record.sharedAt = new Date();
-    record.shareExpiresAt = neverExpires ? null : new Date(Date.now() + days * 24 * 60 * 60 * 1000);
     await record.save();
 
     res.json({
       url: `${process.env.CLIENT_ORIGIN}/report/${record.shareToken}`,
-      expiresAt: record.shareExpiresAt,
     });
-  } catch (err) {
-    next(err);
-  }
-});
-
-recordsRouter.post('/:id/mark-sent', async (req, res, next) => {
-  try {
-    const record = await MedicalRecord.findById(req.params.id);
-    if (!record) return res.status(404).json({ message: '找不到報告' });
-    if (record.status === 'draft') {
-      return res.status(409).json({ message: '請先結案產出正式報告，再標記為已寄送' });
-    }
-
-    if (record.status !== 'sent') {
-      record.status = 'sent';
-      record.sentAt = new Date();
-      record.deliveryMethod = 'manual';
-      await record.save();
-    }
-
-    res.json({ status: record.status, sentAt: record.sentAt });
   } catch (err) {
     next(err);
   }
@@ -291,7 +239,6 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
 
     // SMTP 接受郵件後才結案、開啟分享並記錄寄送結果。
     record.shareEnabled = true;
-    record.shareExpiresAt = null;
     record.sharedAt = record.sharedAt || new Date();
     record.status = 'sent';
     record.sentAt = new Date();
@@ -299,6 +246,13 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
     record.sentTo = recipient;
     record.emailMessageId = info.messageId;
     await record.save();
+    if (record.weightKg != null) {
+      try {
+        await Pet.findByIdAndUpdate(pet._id, { weightKg: record.weightKg });
+      } catch (petUpdateError) {
+        console.error('寄送成功，但更新寵物最近體重失敗', petUpdateError);
+      }
+    }
 
     res.json({
       status: record.status,
@@ -316,16 +270,16 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       return res.status(422).json({ message: err.message });
     }
     if (err.code === 'EAUTH') {
-      return res.status(502).json({ message: 'Gmail 驗證失敗：請確認 SMTP_EMAIL 與產生應用程式密碼的 Google 帳號相同，並重新產生應用程式密碼；報告仍維持草稿' });
+      return res.status(502).json({ message: 'Gmail 驗證失敗：請確認 SMTP_EMAIL 與產生應用程式密碼的 Google 帳號相同，並重新產生應用程式密碼；報告狀態未變更' });
     }
     if (err.code === 'ETIMEDOUT') {
-      return res.status(504).json({ message: '連線 Gmail 逾時，請確認網路後再試；報告仍維持草稿' });
+      return res.status(504).json({ message: '連線 Gmail 逾時，請確認網路後再試；報告狀態未變更' });
     }
     if (err.code === 'ECONNECTION') {
-      return res.status(502).json({ message: '無法連線 Gmail SMTP，請確認網路或防火牆設定；報告仍維持草稿' });
+      return res.status(502).json({ message: '無法連線 Gmail SMTP，請確認網路或防火牆設定；報告狀態未變更' });
     }
     if (['EENVELOPE', 'EMESSAGE', 'EPROTOCOL'].includes(err.code)) {
-      return res.status(502).json({ message: 'Gmail 未接受這封郵件，請稍後再試；報告仍維持草稿' });
+      return res.status(502).json({ message: 'Gmail 未接受這封郵件，請稍後再試；報告狀態未變更' });
     }
     next(err);
   }
@@ -336,7 +290,6 @@ recordsRouter.post('/:id/revoke-share', async (req, res, next) => {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
     record.shareEnabled = false;
-    record.shareExpiresAt = null;
     record.shareToken = uuidv4();
     await record.save();
     res.json({ message: '分享連結已撤銷' });
@@ -357,8 +310,7 @@ publicReportsRouter.get('/:token', async (req, res, next) => {
     if (!record) return res.status(404).json({ message: '找不到這份報告，連結可能已失效' });
 
     const isInternalRender = req.query.renderKey && req.query.renderKey === pdfAccessSecret;
-    const isExpired = record.shareExpiresAt && record.shareExpiresAt.getTime() < Date.now();
-    if (!isInternalRender && (!record.shareEnabled || isExpired)) {
+    if (!isInternalRender && (!record.shareEnabled || record.status !== 'sent')) {
       return res.status(410).json({ message: '這份報告的分享連結已失效' });
     }
 
