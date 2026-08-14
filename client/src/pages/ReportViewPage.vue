@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { ArrowLeft, CheckCircle2, Copy, Download, FilePenLine, Mail, Printer, Share2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
+import { ageLabel, formatDate, formatDateTime } from '../lib/datetime';
 import { getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import RevisionDialog from '../components/RevisionDialog.vue';
@@ -37,7 +38,6 @@ const shareActionLabel = computed(() => {
   return '建立飼主分享連結';
 });
 const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
-const REPORT_TIME_ZONE = 'Asia/Taipei';
 
 function normalizePreview(data) {
   const pet = data.petId && typeof data.petId === 'object' ? data.petId : null;
@@ -67,34 +67,8 @@ async function fetchReport() {
   }
 }
 
-function formatDate(date) {
-  return date ? new Date(date).toLocaleDateString('zh-TW', { timeZone: REPORT_TIME_ZONE }) : '—';
-}
-
-function formatDateTime(date) {
-  return date ? new Date(date).toLocaleString('zh-TW', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: REPORT_TIME_ZONE,
-  }) : '—';
-}
-
 function sexLabel(sex) {
   return { male: '公', female: '母', unknown: '未記錄' }[sex] ?? '未記錄';
-}
-
-function ageLabel(date, referenceDate = new Date()) {
-  if (!date) return '未記錄';
-  const birth = new Date(date);
-  const today = referenceDate ? new Date(referenceDate) : new Date();
-  let years = today.getFullYear() - birth.getFullYear();
-  let months = today.getMonth() - birth.getMonth();
-  if (today.getDate() < birth.getDate()) months -= 1;
-  if (months < 0) {
-    years -= 1;
-    months += 12;
-  }
-  return years > 0 ? `${years} 歲 ${months} 個月` : `${Math.max(months, 0)} 個月`;
 }
 
 const checkedFindings = computed(() => record.value?.examinationFindings?.filter((item) => item.status !== 'not_checked') ?? []);

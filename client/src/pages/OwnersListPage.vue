@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Mail, Pencil, Phone, Trash2, Users } from '@lucide/vue';
 import OwnerFormDialog from '../components/OwnerFormDialog.vue';
@@ -30,16 +30,19 @@ const editTarget = ref(null);
 const editSaving = ref(false);
 const editError = ref('');
 
+let requestSequence = 0;
+
 async function fetchOwners() {
+  const currentRequest = ++requestSequence;
   loading.value = true;
   error.value = '';
   try {
     const { data } = await http.get('/owners', { params: query.value ? { q: query.value } : {} });
-    owners.value = data;
+    if (currentRequest === requestSequence) owners.value = data;
   } catch (err) {
-    error.value = '飼主資料暫時無法載入，請稍後重試';
+    if (currentRequest === requestSequence) error.value = '飼主資料暫時無法載入，請稍後重試';
   } finally {
-    loading.value = false;
+    if (currentRequest === requestSequence) loading.value = false;
   }
 }
 
@@ -132,6 +135,7 @@ watch(query, () => {
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(fetchOwners, 300);
 });
+onBeforeUnmount(() => clearTimeout(debounceTimer));
 
 onMounted(() => {
   fetchOwners();

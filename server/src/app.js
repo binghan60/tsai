@@ -15,7 +15,13 @@ const app = express();
 const clientDistPath = fileURLToPath(new URL('../../client/dist/', import.meta.url));
 
 app.set('trust proxy', 1);
-app.use(cors({ origin: process.env.CLIENT_ORIGIN }));
+// cors 套件在 origin 為 falsy 時會回 `Access-Control-Allow-Origin: *`，
+// 所以未設定 CLIENT_ORIGIN 時直接不掛載，只接受同源請求。
+if (process.env.CLIENT_ORIGIN) {
+  app.use(cors({ origin: process.env.CLIENT_ORIGIN }));
+} else {
+  console.warn('[cors] 未設定 CLIENT_ORIGIN，僅允許同源請求');
+}
 app.use(express.json());
 
 app.get('/api/health', (req, res) => {
@@ -45,6 +51,12 @@ if (process.env.NODE_ENV === 'production') {
 
 app.use((err, req, res, next) => {
   console.error(err);
+  if (err.name === 'CastError') {
+    return res.status(400).json({ message: '參數格式不正確' });
+  }
+  if (err.name === 'ValidationError') {
+    return res.status(422).json({ message: err.message });
+  }
   res.status(500).json({ message: '伺服器發生錯誤' });
 });
 

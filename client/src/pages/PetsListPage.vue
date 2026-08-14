@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { Cat, ClipboardPlus, User } from '@lucide/vue';
 import { http } from '../api/http';
@@ -38,6 +38,7 @@ watch(query, () => {
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(fetchPets, 300);
 });
+onBeforeUnmount(() => clearTimeout(debounceTimer));
 
 onMounted(fetchPets);
 </script>

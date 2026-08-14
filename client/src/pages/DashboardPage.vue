@@ -1,9 +1,11 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Phone, Trash2, User, Users } from '@lucide/vue';
 import { http } from '../api/http';
+import { formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
+import { useTheme } from '../composables/useTheme';
 import SearchPanel from '../components/SearchPanel.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -12,6 +14,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 const loading = ref(true);
 const route = useRoute();
+const { isDark } = useTheme();
 const error = ref('');
 const dashboard = ref(null);
 const query = ref('');
@@ -42,33 +45,56 @@ const stats = computed(() => [
   { label: '待寄送報告', value: dashboard.value?.finalizedPendingCount ?? '—', icon: FileText, emphasis: true },
 ]);
 
+// 圖表分類色依主題切換：深色卡片（zinc-900 底）要比一般品牌色再深一階才有足夠對比，
+// 淺色（Belle Époque）則用古董金等較深的色階。draft／sent 兩色深淺共用。
+const statusColors = computed(() => (isDark.value
+  ? {
+      draft: 'bg-zinc-500',
+      finalized: 'bg-brand-600',
+      sending: 'bg-sky-600',
+      sent: 'bg-emerald-600',
+      failed: 'bg-red-600',
+    }
+  : {
+      draft: 'bg-zinc-500',
+      finalized: 'bg-amber-800',
+      sending: 'bg-sky-700',
+      sent: 'bg-emerald-600',
+      failed: 'bg-red-700',
+    }));
+
 const statusSegments = computed(() => {
   const values = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0, ...(dashboard.value?.statusBreakdown ?? {}) };
   const total = Math.max(values.draft + values.finalized + values.sending + values.sent + values.failed, 1);
+  const colors = statusColors.value;
   return [
-    { key: 'draft', label: '草稿', value: values.draft, width: (values.draft / total) * 100, class: 'bg-zinc-500' },
-    { key: 'finalized', label: '已結案待寄送', value: values.finalized, width: (values.finalized / total) * 100, class: 'bg-brand-500' },
-    { key: 'sending', label: '寄送中', value: values.sending, width: (values.sending / total) * 100, class: 'bg-sky-500' },
-    { key: 'sent', label: '已寄送', value: values.sent, width: (values.sent / total) * 100, class: 'bg-emerald-600' },
-    { key: 'failed', label: '寄送失敗', value: values.failed, width: (values.failed / total) * 100, class: 'bg-red-600' },
+    { key: 'draft', label: '草稿', value: values.draft, width: (values.draft / total) * 100, class: colors.draft },
+    { key: 'finalized', label: '已結案待寄送', value: values.finalized, width: (values.finalized / total) * 100, class: colors.finalized },
+    { key: 'sending', label: '寄送中', value: values.sending, width: (values.sending / total) * 100, class: colors.sending },
+    { key: 'sent', label: '已寄送', value: values.sent, width: (values.sent / total) * 100, class: colors.sent },
+    { key: 'failed', label: '寄送失敗', value: values.failed, width: (values.failed / total) * 100, class: colors.failed },
   ];
 });
+
+let searchSequence = 0;
 
 async function searchAll() {
   const value = query.value.trim();
   if (!value) {
+    searchSequence += 1;
     results.value = { owners: [], pets: [] };
     return;
   }
+  const currentRequest = ++searchSequence;
   searching.value = true;
   searchError.value = '';
   try {
     const { data } = await http.get('/search', { params: { q: value } });
-    results.value = data;
+    if (currentRequest === searchSequence) results.value = data;
   } catch (err) {
-    searchError.value = '搜尋暫時無法使用';
+    if (currentRequest === searchSequence) searchError.value = '搜尋暫時無法使用';
   } finally {
-    searching.value = false;
+    if (currentRequest === searchSequence) searching.value = false;
   }
 }
 
@@ -97,13 +123,14 @@ watch(query, () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(searchAll, 250);
 });
+onBeforeUnmount(() => clearTimeout(searchTimer));
 
 function formatDate(value) {
-  return value ? new Date(value).toLocaleDateString('zh-TW') : '日期未填';
+  return formatClinicDate(value, '日期未填');
 }
 
 function formatDateTime(value) {
-  return value ? new Date(value).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
+  return formatClinicDateTime(value, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function recordLink(item) {

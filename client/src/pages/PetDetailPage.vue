@@ -5,6 +5,7 @@ import { CalendarDays, ClipboardPlus, FileText, PawPrint, Pencil, Share2, Trash2
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { http } from '../api/http';
+import { ageLabel as calcAgeLabel, formatDate as formatClinicDate, formatDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -29,19 +30,11 @@ const deletingRecordId = ref(null);
 
 const sexLabel = computed(() => ({ male: '公', female: '母', unknown: '未記錄' })[pet.value?.sex] ?? '未記錄');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育', unknown: '未記錄' })[pet.value?.neutered] ?? '未記錄');
-const ageLabel = computed(() => {
-  if (!pet.value?.birthDate) return '年齡未記錄';
-  const birth = new Date(pet.value.birthDate);
-  const today = new Date();
-  let years = today.getFullYear() - birth.getFullYear();
-  let months = today.getMonth() - birth.getMonth();
-  if (today.getDate() < birth.getDate()) months -= 1;
-  if (months < 0) {
-    years -= 1;
-    months += 12;
-  }
-  return years > 0 ? `${years} 歲 ${months} 個月` : `${Math.max(months, 0)} 個月`;
-});
+const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), '年齡未記錄'));
+
+function formatDate(value) {
+  return formatClinicDate(value, '日期未填');
+}
 
 function isShareActive(record) {
   return Boolean(record?.shareEnabled);
@@ -156,14 +149,6 @@ async function removeRecord(record) {
   } finally {
     deletingRecordId.value = null;
   }
-}
-
-function formatDate(value) {
-  return value ? new Date(value).toLocaleDateString('zh-TW') : '日期未填';
-}
-
-function formatDateTime(value) {
-  return value ? new Date(value).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
 }
 
 onMounted(fetchPet);

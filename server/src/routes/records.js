@@ -134,11 +134,10 @@ function reportPayload(record) {
     reportVersion: record.reportVersion || 1,
     revisionReason: record.revisionReason,
     hasNewerVersion: Boolean(record.supersededBy),
+    // 這份 payload 只給公開分享連結使用，寄送作業的內部欄位
+    //（deliveryError／lastDeliveryAttemptAt／sentTo）不對飼主外露。
     deliveryStatus: effectiveDeliveryStatus(record),
-    deliveryError: record.deliveryError,
-    lastDeliveryAttemptAt: record.lastDeliveryAttemptAt,
     sentAt: record.sentAt,
-    sentTo: record.sentTo,
     shareEnabled: record.shareEnabled,
     pet: pet
       ? {
@@ -255,7 +254,11 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
     record.pdfGeneratedAt = new Date();
     await record.save();
     if (record.revisionOf) {
-      await MedicalRecord.findByIdAndUpdate(record.revisionOf, { supersededBy: record._id });
+      try {
+        await MedicalRecord.findByIdAndUpdate(record.revisionOf, { supersededBy: record._id });
+      } catch (supersedeError) {
+        console.error('報告已結案，但標記前一版為已被取代失敗', supersedeError);
+      }
     }
     if (record.weightKg != null) {
       try {

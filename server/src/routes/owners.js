@@ -4,6 +4,10 @@ import Pet from '../models/Pet.js';
 
 const router = Router();
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function validateOwnerInput({ name, phone, email }) {
   if (!String(name || '').trim()) return '請填寫飼主姓名';
   if (!String(phone || '').trim()) return '請填寫聯絡電話';
@@ -15,8 +19,9 @@ function validateOwnerInput({ name, phone, email }) {
 router.get('/', async (req, res, next) => {
   try {
     const { q } = req.query;
-    const filter = q
-      ? { $or: [{ name: new RegExp(q, 'i') }, { phone: new RegExp(q, 'i') }] }
+    const keyword = q ? new RegExp(escapeRegExp(String(q)), 'i') : null;
+    const filter = keyword
+      ? { $or: [{ name: keyword }, { phone: keyword }] }
       : {};
     const owners = await Owner.find(filter).sort({ createdAt: -1 });
     res.json(owners);
