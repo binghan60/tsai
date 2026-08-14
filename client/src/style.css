@@ -6,7 +6,7 @@
 @theme {
   --font-sans: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
 
-  /* Belle Epoque brass and stage-light gold */
+  /* Brand accent: brass and stage-light gold. Use for highlights, not primary actions. */
   --color-brand-50: #fff7df;
   --color-brand-100: #f7e8b8;
   --color-brand-200: #efd283;
@@ -18,7 +18,7 @@
   --color-brand-800: #512716;
   --color-brand-900: #35170d;
 
-  /* Velvet rouge and candle-shadow accents */
+  /* Primary action: velvet rouge. */
   --color-belle-50: #fff1ea;
   --color-belle-100: #f8d9c8;
   --color-belle-200: #ebb49f;
@@ -28,13 +28,13 @@
   --color-belle-700: #5f2530;
   --color-belle-800: #3d1824;
 
-  /* Aged Parisian paper and lamplight */
+  /* Surfaces: aged paper and lamplight. */
   --color-cream-50: #fffaf0;
   --color-cream-100: #f3e6c9;
   --color-cream-200: #e3cf9d;
   --color-cream-300: #ccb27a;
 
-  /* Ink, twilight blue, and deep theatre shadow */
+  /* Text and navigation: ink and deep theatre shadow. */
   --color-ink-400: #62655e;
   --color-ink-500: #50554f;
   --color-ink-600: #414d55;
@@ -47,7 +47,7 @@
   --radius-xl: 1rem;
 }
 
-/* shadcn-vue 元件用的語意 token：實際色值對應上面的品牌調色盤，不用 shadcn 預設灰階 */
+/* Semantic component tokens: the source of truth for shared UI components. */
 :root {
   --background: #efe2c1;
   --foreground: var(--color-ink-900);
@@ -55,7 +55,7 @@
   --card-foreground: var(--color-ink-900);
   --popover: #fff8ea;
   --popover-foreground: var(--color-ink-900);
-  --primary: var(--color-belle-700);
+  --primary: var(--color-belle-600);
   --primary-foreground: var(--color-cream-50);
   --secondary: #e7d3a6;
   --secondary-foreground: #233742;
@@ -86,7 +86,7 @@
   --card-foreground: #f4ead0;
   --popover: #121b22;
   --popover-foreground: #f4ead0;
-  --primary: var(--color-brand-500);
+  --primary: var(--color-brand-600);
   --primary-foreground: #fffaf0;
   --secondary: #20313d;
   --secondary-foreground: #f0dfb9;

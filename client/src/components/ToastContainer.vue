@@ -60,7 +60,7 @@ const typeConfig = {
         <!-- Close button -->
         <button
           type="button"
-          class="absolute top-3 right-3 flex h-7 w-7 items-center justify-center rounded-full text-ink-400 transition-colors hover:bg-cream-200/80 hover:text-ink-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          class="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full border border-cream-300 bg-cream-100 text-ink-600 shadow-sm transition-colors hover:bg-cream-200 hover:text-ink-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-white"
           aria-label="關閉通知"
           @click="removeToast(toast.id)"
         >

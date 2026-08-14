@@ -5,6 +5,7 @@ import { Cat, ClipboardPlus, User } from '@lucide/vue';
 import { http } from '../api/http';
 import SearchPanel from '../components/SearchPanel.vue';
 import { Card } from '../components/ui/card';
+import { Button } from '../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 const route = useRoute();
@@ -48,9 +49,7 @@ onMounted(fetchPets);
         <h1 class="text-xl font-semibold text-ink-900 dark:text-white">寵物資料</h1>
         <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">先確認寵物與飼主身分，再建立健檢紀錄。</p>
       </div>
-      <router-link to="/owners?create=1" class="rounded-xl border border-cream-300 bg-cream-50 px-4 py-2.5 text-sm font-medium text-ink-700 hover:border-belle-300 hover:text-belle-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-brand-500/50 dark:hover:text-brand-400">
-        + 新增飼主與寵物
-      </router-link>
+      <Button as-child variant="outline"><router-link to="/owners?create=1">+ 新增飼主與寵物</router-link></Button>
     </div>
 
     <div v-if="route.query.intent === 'new-record'" class="rounded-xl border border-belle-200 bg-belle-50 px-4 py-3 text-sm text-belle-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
@@ -99,9 +98,9 @@ onMounted(fetchPets);
                 </router-link>
               </TableCell>
               <TableCell class="px-5 py-3 text-right">
-                <router-link :to="`/pets/${pet._id}/records/new`" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-belle-600 px-3 py-2 text-sm font-medium text-white hover:bg-belle-700 dark:bg-brand-500 dark:hover:bg-brand-600">
+                <Button as-child size="sm" class="min-h-11"><router-link :to="`/pets/${pet._id}/records/new`">
                   <ClipboardPlus class="h-4 w-4" />新增健檢
-                </router-link>
+                </router-link></Button>
               </TableCell>
             </TableRow>
           </TableBody>
@@ -120,9 +119,9 @@ onMounted(fetchPets);
           </router-link>
           <div class="mt-4 flex items-center justify-between gap-3 border-t border-cream-300 pt-3 dark:border-zinc-800">
             <span class="min-w-0 text-sm text-ink-600 dark:text-zinc-300">飼主：{{ pet.ownerId?.name || '—' }}</span>
-            <router-link :to="`/pets/${pet._id}/records/new`" class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-belle-600 px-3 py-2 text-sm font-medium text-white dark:bg-brand-500">
+            <Button as-child size="sm" class="min-h-11 shrink-0"><router-link :to="`/pets/${pet._id}/records/new`">
               <ClipboardPlus class="h-4 w-4" />新增健檢
-            </router-link>
+            </router-link></Button>
           </div>
         </Card>
       </div>

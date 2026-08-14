@@ -7,6 +7,7 @@ import { extractErrorMessage } from '../lib/downloadFile';
 import { getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import RevisionDialog from '../components/RevisionDialog.vue';
+import { Button } from '../components/ui/button';
 
 const route = useRoute();
 const router = useRouter();
@@ -280,12 +281,12 @@ onMounted(fetchReport);
   <div class="min-h-screen bg-stone-100 px-4 py-6 print:bg-white print:p-0 sm:px-6 sm:py-10">
     <section v-if="record" class="mx-auto max-w-[210mm] space-y-4 print:max-w-none print:space-y-0">
       <div class="flex flex-wrap items-center justify-between gap-3 print:hidden">
-        <button v-if="isPreview" type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-stone-700 hover:bg-white" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</button>
+        <Button v-if="isPreview" type="button" variant="outline" class="border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
         <div v-else></div>
         <div class="flex flex-wrap justify-end gap-2">
-          <button v-if="isPreview && isDraft" type="button" :disabled="finalizing" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50" @click="showFinalizeConfirm = true"><CheckCircle2 class="h-4 w-4" />{{ finalizing ? '結案中…' : '確認結案' }}</button>
-          <button v-else-if="isPreview" type="button" :disabled="downloading" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50" @click="downloadPdf"><Download class="h-4 w-4" />{{ downloading ? '產生中…' : '下載正式 PDF' }}</button>
-          <button v-else type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700" @click="printReport"><Printer class="h-4 w-4" />列印／下載 PDF</button>
+          <Button v-if="isPreview && isDraft" type="button" :disabled="finalizing" @click="showFinalizeConfirm = true"><CheckCircle2 class="h-4 w-4" />{{ finalizing ? '結案中…' : '確認結案' }}</Button>
+          <Button v-else-if="isPreview" type="button" :disabled="downloading" @click="downloadPdf"><Download class="h-4 w-4" />{{ downloading ? '產生中…' : '下載正式 PDF' }}</Button>
+          <Button v-else type="button" @click="printReport"><Printer class="h-4 w-4" />列印／下載 PDF</Button>
         </div>
       </div>
 
@@ -299,10 +300,10 @@ onMounted(fetchReport);
       >
         <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案 · 第 {{ record.reportVersion || 1 }} 版</strong><span class="block">{{ isSent ? `已寄送至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="flex flex-wrap items-center gap-2">
-          <button v-if="ownerEmail" type="button" :disabled="emailing || deliverySending" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-current/30 px-3 font-medium hover:bg-white/60 disabled:opacity-50" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</button>
-          <router-link v-else-if="record.owner?._id" :to="`/owners/${record.owner._id}?edit=1`" class="inline-flex min-h-10 items-center px-3 font-medium underline">補填 Email</router-link>
-          <button type="button" :disabled="sharing" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-current/30 px-3 font-medium hover:bg-white/60 disabled:opacity-50" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</button>
-          <button v-if="!record.supersededBy" type="button" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-current/30 px-3 font-medium hover:bg-white/60" @click="showRevisionDialog = true"><FilePenLine class="h-4 w-4" />建立修訂版</button>
+          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" :disabled="emailing || deliverySending" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</Button>
+          <Button v-else-if="record.owner?._id" as-child variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white"><router-link :to="`/owners/${record.owner._id}?edit=1`">補填 Email</router-link></Button>
+          <Button type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</Button>
+          <Button v-if="!record.supersededBy" type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" @click="showRevisionDialog = true"><FilePenLine class="h-4 w-4" />建立修訂版</Button>
         </div>
       </div>
       <div v-if="shareNotice" class="rounded-xl border border-emerald-200 bg-white px-4 py-4 text-sm text-stone-700 print:hidden">
@@ -310,7 +311,7 @@ onMounted(fetchReport);
         <p class="mt-2 break-all rounded-lg bg-stone-100 px-3 py-2 font-mono text-xs">{{ shareNotice.url }}</p>
         <p class="mt-2 text-xs text-stone-500">連結無使用期限，手動撤銷前皆可開啟</p>
         <div class="mt-3 flex flex-wrap gap-2">
-          <button type="button" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-stone-300 px-3 font-medium hover:bg-stone-50" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</button>
+          <Button type="button" variant="outline" size="sm" class="border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</Button>
         </div>
         <p v-if="!ownerEmail" class="mt-3 text-xs text-amber-700">這位飼主尚未填寫 Email，請先複製連結，再透過其他方式傳送。</p>
       </div>

@@ -65,10 +65,10 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
       <DialogClose v-if="showCloseButton" data-slot="dialog-close" as-child>
         <button
           type="button"
-          class="absolute top-3.5 right-3.5 z-20 flex h-9 w-9 items-center justify-center rounded-full text-ink-400 transition-all duration-150 hover:bg-cream-200/80 hover:text-ink-900 active:scale-95 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          class="absolute top-3.5 right-3.5 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-cream-300 bg-cream-100 text-ink-600 shadow-sm transition-all duration-150 hover:bg-cream-200 hover:text-ink-900 active:scale-95 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-white"
         >
           <XIcon class="h-4 w-4" stroke-width="2" />
-          <span class="sr-only">Close</span>
+          <span class="sr-only">關閉</span>
         </button>
       </DialogClose>
     </DialogContent>

@@ -123,7 +123,7 @@ onMounted(async () => {
   <section class="mx-auto max-w-7xl space-y-6">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div><h1 class="text-xl font-semibold text-ink-900 dark:text-white">健檢工作台</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">快速找到寵物、繼續草稿或建立新的健檢紀錄。</p></div>
-      <div class="flex flex-wrap gap-2"><router-link to="/owners?create=1" class="inline-flex min-h-11 items-center rounded-xl border border-cream-300 bg-cream-50 px-4 text-sm font-medium text-ink-700 hover:border-belle-300 hover:text-belle-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:text-brand-400">+ 新增飼主</router-link><router-link to="/pets?intent=new-record" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-belle-600 px-4 text-sm font-medium text-white hover:bg-belle-700 dark:bg-brand-500 dark:hover:bg-brand-600"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></div>
+      <div class="flex flex-wrap gap-2"><Button as-child variant="outline"><router-link to="/owners?create=1">+ 新增飼主</router-link></Button><Button as-child><router-link to="/pets?intent=new-record"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button></div>
     </div>
 
     <SearchPanel id="global-search" v-model="query" label="快速搜尋" placeholder="搜尋寵物、飼主、電話、病歷號或晶片號" :loading="searching" :error="searchError">

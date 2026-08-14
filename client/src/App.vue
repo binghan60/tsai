@@ -62,9 +62,9 @@ watch(
               v-for="item in navItems"
               :key="item.to"
               :to="item.to"
-              class="flex min-h-10 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              :active-class="item.exact ? '' : 'bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]'"
-              :exact-active-class="item.exact ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]' : ''"
+              class="mb-1 flex min-h-10 items-center gap-3 rounded-lg border border-transparent bg-sidebar-accent/30 px-2.5 text-sm font-medium text-sidebar-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              :active-class="item.exact ? '' : 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]'"
+              :exact-active-class="item.exact ? 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]' : ''"
             >
               <component :is="item.icon" class="h-4 w-4" stroke-width="1.9" />
               <span>{{ item.label }}</span>
@@ -75,7 +75,7 @@ watch(
         <div class="border-t border-sidebar-border p-3">
           <button
             type="button"
-            class="flex min-h-10 w-full items-center gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             @click="toggleTheme"
           >
             <Sun v-if="isDark" class="h-4 w-4" stroke-width="1.9" />
@@ -140,9 +140,9 @@ watch(
                 v-for="item in navItems"
                 :key="item.to"
                 :to="item.to"
-                class="flex min-h-11 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                :active-class="item.exact ? '' : 'bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]'"
-                :exact-active-class="item.exact ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]' : ''"
+                class="flex min-h-11 items-center gap-3 rounded-lg border border-transparent bg-sidebar-accent/30 px-2.5 text-sm font-medium text-sidebar-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                :active-class="item.exact ? '' : 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]'"
+                :exact-active-class="item.exact ? 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]' : ''"
               >
                 <component :is="item.icon" class="h-4 w-4" stroke-width="1.9" />
                 {{ item.label }}
@@ -151,7 +151,7 @@ watch(
             <div class="border-t border-sidebar-border p-3">
               <button
                 type="button"
-                class="flex min-h-11 w-full items-center gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                class="flex min-h-11 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                 @click="toggleTheme"
               >
                 <Sun v-if="isDark" class="h-4 w-4" stroke-width="1.9" />
