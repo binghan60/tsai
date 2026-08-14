@@ -1,8 +1,9 @@
 FROM node:22-bookworm-slim AS client-builder
 
+ENV NODE_ENV=development
 WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
-RUN npm ci
+RUN npm ci --include=dev
 COPY client/ ./
 
 ARG VITE_API_BASE_URL=/api
