@@ -27,7 +27,7 @@ const router = createRouter({
 });
 
 router.afterEach((to) => {
-  document.title = `${to.meta.title || '寵物健康管理'}｜寵物健康管理`;
+  document.title = `${to.meta.title || '工作台'}｜謙華動物醫院`;
 });
 
 export default router;

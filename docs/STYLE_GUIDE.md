@@ -1,4 +1,4 @@
-# 寵物健康管理系統 UI Style Guide
+# 謙華動物醫院健檢與報告系統 UI Style Guide
 
 這份文件是介面視覺與互動的共同規範。實際色票以 `client/src/style.css` 為準，按鈕樣式以 `client/src/components/ui/button/index.js` 為準。
 

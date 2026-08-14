@@ -28,7 +28,7 @@ SMTP_PASSWORD=<Google 應用程式密碼>
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=465
 SMTP_SECURE=true
-MAIL_FROM_NAME=寵物健康管理系統
+MAIL_FROM_NAME=謙華動物醫院
 MAIL_FROM=
 MAIL_REPLY_TO=
 ```

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeft, CheckCircle2, Copy, Download, FilePenLine, Mail, PawPrint, Printer, Share2 } from '@lucide/vue';
+import { ArrowLeft, CheckCircle2, Copy, Download, FilePenLine, Mail, Printer, Share2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
@@ -321,7 +321,13 @@ onMounted(fetchReport);
         <div v-if="record.supersededBy || record.hasNewerVersion" class="mb-5 hidden border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 print:block">此版本已有後續修訂報告，請以最新版為準。</div>
         <header class="flex flex-col gap-5 border-b border-brand-100 pb-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <div class="flex items-center gap-2 text-xl font-semibold text-brand-700"><PawPrint class="h-6 w-6" stroke-width="1.75" aria-hidden="true" />寵物健康檢查報告</div>
+            <div class="flex items-center gap-3">
+              <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-12 w-14 object-contain" />
+              <div>
+                <div class="text-xl font-semibold text-brand-700">謙華動物醫院</div>
+                <div class="mt-0.5 text-sm font-medium text-stone-600">寵物健康檢查報告</div>
+              </div>
+            </div>
             <p class="mt-2 font-mono text-xs text-stone-500">報告編號：{{ record.reportNumber }} · 第 {{ record.reportVersion || 1 }} 版</p>
           </div>
           <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-stone-600 sm:text-right">
@@ -382,7 +388,7 @@ onMounted(fetchReport);
           <div v-if="record.other"><h3 class="text-xs font-semibold text-stone-500">其他備註</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ record.other }}</p></div>
         </section>
 
-        <footer class="mt-10 border-t border-brand-100 pt-4 text-center text-xs text-stone-500">本報告由寵物健康管理系統產生 · 第 {{ record.reportVersion || 1 }} 版 · {{ isDraft ? '草稿更新時間' : 'PDF 產生時間' }} {{ formatDateTime(isDraft ? (record.updatedAt || record.createdAt) : (record.pdfGeneratedAt || record.finalizedAt || record.updatedAt || record.createdAt)) }}</footer>
+        <footer class="mt-10 border-t border-brand-100 pt-4 text-center text-xs text-stone-500">本報告由謙華動物醫院製作 · 第 {{ record.reportVersion || 1 }} 版 · {{ isDraft ? '草稿更新時間' : 'PDF 產生時間' }} {{ formatDateTime(isDraft ? (record.updatedAt || record.createdAt) : (record.pdfGeneratedAt || record.finalizedAt || record.updatedAt || record.createdAt)) }}</footer>
       </article>
     </section>
 

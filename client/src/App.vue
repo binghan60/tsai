@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Cat, LayoutDashboard, Menu, Moon, PawPrint, Search, Settings2, Sun, Users } from '@lucide/vue';
+import { Cat, LayoutDashboard, Menu, Moon, Search, Settings2, Sun, Users } from '@lucide/vue';
 import { useTheme } from './composables/useTheme';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
@@ -44,12 +44,12 @@ watch(
     <div class="belle-light-shell min-h-screen text-foreground lg:flex">
       <aside class="belle-sidebar hidden min-h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-screen">
         <div class="border-b border-sidebar-border p-3">
-          <router-link to="/" class="flex min-h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-sm font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-            <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-500 text-cream-50 shadow-[0_0_18px_-4px_rgba(173,119,39,0.72)] dark:bg-brand-500 dark:shadow-[0_0_18px_-3px_rgba(201,154,53,0.55)]">
-              <PawPrint class="h-4 w-4" stroke-width="1.8" />
+          <router-link to="/" class="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 text-left text-sm font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+            <span class="flex h-12 w-12 shrink-0 items-center justify-center">
+              <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-full w-full object-contain" />
             </span>
             <span class="min-w-0 flex-1">
-              <span class="block truncate font-semibold">寵物健康管理</span>
+              <span class="block truncate font-semibold">謙華動物醫院</span>
               <span class="block truncate text-xs text-muted-foreground">健檢與報告</span>
             </span>
           </router-link>
@@ -123,17 +123,17 @@ watch(
         <Sheet v-model:open="mobileOpen">
           <SheetContent side="left" class="flex w-[min(84vw,320px)] flex-col gap-0 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground">
             <SheetTitle class="sr-only">導覽選單</SheetTitle>
-            <SheetDescription class="sr-only">寵物健康管理系統的主要導覽選單</SheetDescription>
+            <SheetDescription class="sr-only">謙華動物醫院健檢與報告系統的主要導覽選單</SheetDescription>
             <div class="border-b border-sidebar-border p-3">
-              <span class="flex min-h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-sm font-medium">
-                <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-500 text-cream-50 shadow-[0_0_18px_-4px_rgba(173,119,39,0.72)] dark:bg-brand-500 dark:shadow-[0_0_18px_-3px_rgba(201,154,53,0.55)]">
-                  <PawPrint class="h-4 w-4" stroke-width="1.8" />
+              <router-link to="/" class="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 text-left text-sm font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
+                <span class="flex h-12 w-12 shrink-0 items-center justify-center">
+                  <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-full w-full object-contain" />
                 </span>
                 <span class="min-w-0 flex-1">
-                  <span class="block truncate font-semibold">寵物健康管理</span>
+                  <span class="block truncate font-semibold">謙華動物醫院</span>
                   <span class="block truncate text-xs text-muted-foreground">健檢與報告</span>
                 </span>
-              </span>
+              </router-link>
             </div>
             <nav class="flex-1 space-y-1 px-3 py-4" aria-label="行動版主要導覽">
               <router-link
