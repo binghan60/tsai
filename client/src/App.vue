@@ -1,6 +1,6 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, nextTick, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { Cat, LayoutDashboard, Menu, Moon, PawPrint, Search, Settings2, Sun, Users } from '@lucide/vue';
 import { useTheme } from './composables/useTheme';
 import { Button } from './components/ui/button';
@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/
 import ToastContainer from './components/ToastContainer.vue';
 
 const route = useRoute();
+const router = useRouter();
 const { isDark, toggleTheme } = useTheme();
 const mobileOpen = ref(false);
 
@@ -18,7 +19,13 @@ const navItems = [
   { to: '/settings', label: '標準值', exact: false, icon: Settings2 },
 ];
 
-const activeTitle = computed(() => navItems.find((item) => (item.exact ? route.path === item.to : route.path.startsWith(item.to)))?.label ?? '工作台');
+const activeTitle = computed(() => route.meta.title ?? navItems.find((item) => (item.exact ? route.path === item.to : route.path.startsWith(item.to)))?.label ?? '工作台');
+
+async function openGlobalSearch() {
+  if (route.path !== '/') await router.push({ path: '/', query: { focus: 'search' } });
+  await nextTick();
+  window.requestAnimationFrame(() => document.getElementById('global-search')?.focus());
+}
 
 watch(
   () => route.fullPath,
@@ -95,10 +102,10 @@ watch(
             <p class="truncate text-sm font-medium text-foreground">{{ activeTitle }}</p>
           </div>
 
-          <router-link to="/" class="hidden min-w-72 items-center rounded-md border border-input bg-card/70 px-3 text-sm text-muted-foreground shadow-sm hover:border-brand-400 hover:text-primary dark:bg-card/70 dark:hover:border-brand-500/70 dark:hover:text-brand-300 md:flex">
+          <button type="button" aria-label="搜尋飼主、寵物或病歷" class="hidden min-h-11 min-w-72 items-center rounded-md border border-input bg-card/70 px-3 text-sm text-muted-foreground shadow-sm hover:border-brand-400 hover:text-primary dark:bg-card/70 dark:hover:border-brand-500/70 dark:hover:text-brand-300 md:flex" @click="openGlobalSearch">
             <Search class="mr-2 h-4 w-4" stroke-width="1.75" />
             <span class="py-2">搜尋飼主、寵物或病歷</span>
-          </router-link>
+          </button>
 
           <Button
             type="button"

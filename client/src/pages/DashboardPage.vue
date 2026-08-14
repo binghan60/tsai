@@ -1,8 +1,9 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Phone, Trash2, User, Users } from '@lucide/vue';
 import { http } from '../api/http';
-import { RECORD_STATUS_META } from '../lib/recordStatus';
+import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
 import SearchPanel from '../components/SearchPanel.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
@@ -10,6 +11,7 @@ import { Button } from '../components/ui/button';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 const loading = ref(true);
+const route = useRoute();
 const error = ref('');
 const dashboard = ref(null);
 const query = ref('');
@@ -37,14 +39,18 @@ const stats = computed(() => [
   { label: '寵物', value: dashboard.value?.petCount ?? '—', icon: PawPrint },
   { label: '本月健檢', value: dashboard.value?.monthlyReportCount ?? '—', icon: FileText },
   { label: '待完成草稿', value: dashboard.value?.draftCount ?? '—', icon: Pencil, emphasis: true },
+  { label: '待寄送報告', value: dashboard.value?.finalizedPendingCount ?? '—', icon: FileText, emphasis: true },
 ]);
 
 const statusSegments = computed(() => {
-  const values = dashboard.value?.statusBreakdown ?? { draft: 0, sent: 0 };
-  const total = Math.max(values.draft + values.sent, 1);
+  const values = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0, ...(dashboard.value?.statusBreakdown ?? {}) };
+  const total = Math.max(values.draft + values.finalized + values.sending + values.sent + values.failed, 1);
   return [
     { key: 'draft', label: '草稿', value: values.draft, width: (values.draft / total) * 100, class: 'bg-zinc-500' },
+    { key: 'finalized', label: '已結案待寄送', value: values.finalized, width: (values.finalized / total) * 100, class: 'bg-brand-500' },
+    { key: 'sending', label: '寄送中', value: values.sending, width: (values.sending / total) * 100, class: 'bg-sky-500' },
     { key: 'sent', label: '已寄送', value: values.sent, width: (values.sent / total) * 100, class: 'bg-emerald-600' },
+    { key: 'failed', label: '寄送失敗', value: values.failed, width: (values.failed / total) * 100, class: 'bg-red-600' },
   ];
 });
 
@@ -104,7 +110,13 @@ function recordLink(item) {
   return item.status === 'draft' ? `/records/${item._id}/edit` : `/records/${item._id}/preview`;
 }
 
-onMounted(fetchDashboard);
+onMounted(async () => {
+  await fetchDashboard();
+  if (route.query.focus === 'search') {
+    await nextTick();
+    document.getElementById('global-search')?.focus();
+  }
+});
 </script>
 
 <template>
@@ -133,7 +145,7 @@ onMounted(fetchDashboard);
     <p v-else-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入工作台…</p>
 
     <template v-else>
-      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Card v-for="stat in stats" :key="stat.label" class="flex-row items-center gap-3 border p-4 shadow-sm dark:shadow-none" :class="stat.emphasis && stat.value ? 'border-belle-300 dark:border-brand-500/50' : 'border-cream-300 dark:border-zinc-800'">
           <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><component :is="stat.icon" class="h-5 w-5" /></div>
           <div class="min-w-0">
@@ -175,7 +187,7 @@ onMounted(fetchDashboard);
               <div v-for="item in dashboard.recentRecords" :key="item._id" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-cream-100 dark:hover:bg-zinc-800/50">
                 <router-link :to="recordLink(item)" class="flex min-w-0 flex-1 items-center justify-between gap-3">
                   <span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-ink-500 dark:text-zinc-400">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ formatDate(item.visitDate) }} · {{ item.vet || '獸醫師未填' }}</span></span>
-                  <Badge :class="RECORD_STATUS_META[item.status]?.class" class="shrink-0 rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[item.status]?.label }}</Badge>
+                  <span class="flex shrink-0 flex-wrap justify-end gap-1.5"><Badge :class="RECORD_STATUS_META[item.status]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[item.status]?.label }}</Badge><Badge v-if="item.status !== 'draft'" :class="DELIVERY_STATUS_META[getDeliveryStatus(item)]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ DELIVERY_STATUS_META[getDeliveryStatus(item)]?.label }}</Badge></span>
                 </router-link>
                 <Button v-if="item.status === 'draft'" type="button" variant="destructive" size="icon" class="h-11 w-11 shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
                   <Trash2 class="h-4 w-4" />

@@ -84,7 +84,7 @@ petsRouter.get('/:id', async (req, res, next) => {
   try {
     const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone email');
     if (!pet) return res.status(404).json({ message: '找不到寵物' });
-    const medicalRecords = await MedicalRecord.find({ petId: pet._id }).sort({ visitDate: -1 });
+    const medicalRecords = await MedicalRecord.find({ petId: pet._id }).sort({ visitDate: -1, reportVersion: -1, updatedAt: -1 });
     res.json({ ...pet.toObject(), medicalRecords });
   } catch (err) {
     next(err);

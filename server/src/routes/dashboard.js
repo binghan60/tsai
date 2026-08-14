@@ -21,7 +21,9 @@ router.get('/', async (req, res, next) => {
         Pet.countDocuments(),
         MedicalRecord.countDocuments({ createdAt: { $gte: startOfMonth } }),
         MedicalRecord.countDocuments({ status: 'draft' }),
-        MedicalRecord.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+        MedicalRecord.aggregate([
+          { $group: { _id: { status: '$status', deliveryStatus: '$deliveryStatus' }, count: { $sum: 1 } } },
+        ]),
         MedicalRecord.find({ createdAt: { $gte: trendStart } }, 'createdAt'),
         MedicalRecord.find()
           .sort({ updatedAt: -1 })
@@ -39,9 +41,19 @@ router.get('/', async (req, res, next) => {
       return { weekEnd, count };
     });
 
-    const statusBreakdown = { draft: 0, sent: 0 };
-    statusCounts.forEach((s) => {
-      statusBreakdown[s._id] = s.count;
+    const statusBreakdown = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0 };
+    statusCounts.forEach(({ _id, count }) => {
+      if (_id.status === 'draft') {
+        statusBreakdown.draft += count;
+        return;
+      }
+      const deliveryStatus = _id.status === 'sent' && (!_id.deliveryStatus || _id.deliveryStatus === 'not_sent')
+        ? 'sent'
+        : (_id.deliveryStatus || 'not_sent');
+      if (deliveryStatus === 'sent') statusBreakdown.sent += count;
+      else if (deliveryStatus === 'failed') statusBreakdown.failed += count;
+      else if (deliveryStatus === 'sending') statusBreakdown.sending += count;
+      else statusBreakdown.finalized += count;
     });
 
     res.json({
@@ -49,6 +61,7 @@ router.get('/', async (req, res, next) => {
       petCount,
       monthlyReportCount,
       draftCount,
+      finalizedPendingCount: statusBreakdown.finalized + statusBreakdown.sending + statusBreakdown.failed,
       statusBreakdown,
       weeklyTrend,
       recentRecords,

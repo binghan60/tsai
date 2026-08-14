@@ -1,9 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeft, CheckCircle2, Copy, Mail, PawPrint, Printer, Share2 } from '@lucide/vue';
+import { ArrowLeft, CheckCircle2, Copy, Download, FilePenLine, Mail, PawPrint, Printer, Share2 } from '@lucide/vue';
 import { http } from '../api/http';
+import { extractErrorMessage } from '../lib/downloadFile';
+import { getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import RevisionDialog from '../components/RevisionDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -11,12 +14,21 @@ const record = ref(null);
 const error = ref('');
 const sharing = ref(false);
 const emailing = ref(false);
+const finalizing = ref(false);
+const downloading = ref(false);
+const revising = ref(false);
+const revisionError = ref('');
 const shareNotice = ref(null);
 const showFinalizeConfirm = ref(false);
 const showEmailConfirm = ref(false);
+const showRevisionDialog = ref(false);
 const isPreview = computed(() => route.name === 'record-preview');
 const isDraft = computed(() => record.value?.status === 'draft');
-const isSent = computed(() => record.value?.status === 'sent');
+const isFinalized = computed(() => isFinalizedRecord(record.value));
+const deliveryStatus = computed(() => getDeliveryStatus(record.value));
+const isSent = computed(() => deliveryStatus.value === 'sent');
+const deliveryFailed = computed(() => deliveryStatus.value === 'failed');
+const deliverySending = computed(() => deliveryStatus.value === 'sending');
 const shareIsActive = computed(() => Boolean(record.value?.shareEnabled));
 const shareActionLabel = computed(() => {
   if (sharing.value) return '處理中…';
@@ -30,6 +42,8 @@ function normalizePreview(data) {
   return {
     ...data,
     reportNumber: data.reportNumber || `HC-${data._id?.slice(-8).toUpperCase()}`,
+    status: data.status === 'sent' ? 'finalized' : data.status,
+    deliveryStatus: getDeliveryStatus(data),
     pet,
     owner: pet?.ownerId ?? null,
   };
@@ -63,10 +77,10 @@ function sexLabel(sex) {
   return { male: '公', female: '母', unknown: '未記錄' }[sex] ?? '未記錄';
 }
 
-function ageLabel(date) {
+function ageLabel(date, referenceDate = new Date()) {
   if (!date) return '未記錄';
   const birth = new Date(date);
-  const today = new Date();
+  const today = referenceDate ? new Date(referenceDate) : new Date();
   let years = today.getFullYear() - birth.getFullYear();
   let months = today.getMonth() - birth.getMonth();
   if (today.getDate() < birth.getDate()) months -= 1;
@@ -78,6 +92,10 @@ function ageLabel(date) {
 }
 
 const checkedFindings = computed(() => record.value?.examinationFindings?.filter((item) => item.status !== 'not_checked') ?? []);
+const abnormalFindings = computed(() => [
+  ...checkedFindings.value.filter((item) => item.status === 'abnormal'),
+  ...(record.value?.labFindings ?? []).filter((item) => item.status === 'abnormal'),
+]);
 const checkedLabGroups = computed(() => {
   const groups = new Map();
   for (const item of record.value?.labFindings ?? []) {
@@ -115,8 +133,24 @@ const vitals = computed(() => {
   ].filter((item) => item.value).map((item) => ({ ...item, assessment: assessments.get(item.key) }));
 });
 
-async function confirmFinalize() {
-  await sendEmail();
+async function finalizeReport() {
+  if (!record.value || !isDraft.value) return;
+  finalizing.value = true;
+  error.value = '';
+  try {
+    const { data } = await http.post(`/records/${route.params.id}/finalize`);
+    record.value.status = 'finalized';
+    record.value.finalizedAt = data.finalizedAt;
+    record.value.pdfGeneratedAt = data.pdfGeneratedAt;
+    record.value.reportVersion = data.reportVersion;
+    record.value.deliveryStatus = data.deliveryStatus || 'not_sent';
+    showFinalizeConfirm.value = false;
+  } catch (err) {
+    error.value = err.response?.data?.message ?? '結案失敗，報告仍維持草稿';
+    showFinalizeConfirm.value = false;
+  } finally {
+    finalizing.value = false;
+  }
 }
 
 async function copyText(value) {
@@ -150,6 +184,53 @@ async function createShareLink() {
   }
 }
 
+async function downloadPdf() {
+  if (!record.value || !isFinalized.value) return;
+  downloading.value = true;
+  error.value = '';
+  try {
+    const response = await http.get(`/records/${route.params.id}/pdf`, { responseType: 'blob' });
+    const url = URL.createObjectURL(response.data);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${record.value.reportNumber || 'health-report'}.pdf`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    record.value.pdfGeneratedAt = new Date().toISOString();
+  } catch (err) {
+    error.value = await extractErrorMessage(err, 'PDF 下載失敗，請稍後再試');
+  } finally {
+    downloading.value = false;
+  }
+}
+
+async function createRevision(reason) {
+  if (!record.value || !isFinalized.value) return;
+  revising.value = true;
+  revisionError.value = '';
+  try {
+    const { data } = await http.post(`/records/${route.params.id}/revisions`, { reason });
+    showRevisionDialog.value = false;
+    await router.push(`/records/${data._id}/edit`);
+  } catch (err) {
+    if (err.response?.data?.newerRecordId) {
+      showRevisionDialog.value = false;
+      await router.push(`/records/${err.response.data.newerRecordId}/preview`);
+      return;
+    }
+    if (err.response?.data?.revisionId) {
+      showRevisionDialog.value = false;
+      await router.push(`/records/${err.response.data.revisionId}/edit`);
+      return;
+    }
+    revisionError.value = err.response?.data?.message ?? '建立修訂草稿失敗';
+  } finally {
+    revising.value = false;
+  }
+}
+
 async function copyShareLink() {
   if (!shareNotice.value?.url) return;
   shareNotice.value.copied = await copyText(shareNotice.value.url);
@@ -162,7 +243,9 @@ async function sendEmail() {
   error.value = '';
   try {
     const { data } = await http.post(`/records/${route.params.id}/send-email`);
-    record.value.status = data.status;
+    record.value.status = 'finalized';
+    record.value.deliveryStatus = data.deliveryStatus || 'sent';
+    record.value.deliveryError = '';
     record.value.sentAt = data.sentAt;
     record.value.sentTo = data.sentTo;
     record.value.emailMessageId = data.messageId;
@@ -175,7 +258,10 @@ async function sendEmail() {
     showFinalizeConfirm.value = false;
     showEmailConfirm.value = false;
   } catch (err) {
-    error.value = err.response?.data?.message ?? `寄送 Email 失敗，報告仍維持${wasDraft ? '草稿' : '原本'}狀態`;
+    record.value.deliveryStatus = 'failed';
+    const message = err.response?.data?.message ?? `寄送 Email 失敗，${wasDraft ? '請先確認報告已結案' : '已結案報告不受影響，可稍後重試'}`;
+    record.value.deliveryError = message;
+    error.value = message;
     showFinalizeConfirm.value = false;
     showEmailConfirm.value = false;
   } finally {
@@ -196,19 +282,27 @@ onMounted(fetchReport);
       <div class="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <button v-if="isPreview" type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-medium text-stone-700 hover:bg-white" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</button>
         <div v-else></div>
-        <div class="flex gap-2">
-          <button v-if="isPreview" type="button" :disabled="emailing || !ownerEmail" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50" @click="isDraft ? (showFinalizeConfirm = true) : (showEmailConfirm = true)"><Mail class="h-4 w-4" />{{ emailing ? '寄送中…' : isDraft ? '確認結案並寄送 PDF' : '重新寄送 Email' }}</button>
+        <div class="flex flex-wrap justify-end gap-2">
+          <button v-if="isPreview && isDraft" type="button" :disabled="finalizing" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50" @click="showFinalizeConfirm = true"><CheckCircle2 class="h-4 w-4" />{{ finalizing ? '結案中…' : '確認結案' }}</button>
+          <button v-else-if="isPreview" type="button" :disabled="downloading" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700 disabled:opacity-50" @click="downloadPdf"><Download class="h-4 w-4" />{{ downloading ? '產生中…' : '下載正式 PDF' }}</button>
           <button v-else type="button" class="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-medium text-white shadow-sm hover:bg-brand-700" @click="printReport"><Printer class="h-4 w-4" />列印／下載 PDF</button>
         </div>
       </div>
 
-      <div v-if="isDraft" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿。確認結案後，系統會直接將 PDF 寄給飼主；Gmail接受後此版本才會鎖定，不會下載到本機。</p><p v-if="!ownerEmail" class="mt-2 font-medium text-red-700">飼主尚未填寫 Email，暫時無法結案寄送。<router-link v-if="record.owner?._id" :to="`/owners/${record.owner._id}`" class="underline">前往飼主資料補填</router-link></p></div>
-      <div v-if="isPreview && isSent" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 print:hidden">
-        <span class="flex items-center gap-2"><CheckCircle2 class="h-5 w-5 shrink-0" />報告已透過 Email 寄送<template v-if="record.sentAt">，時間：{{ formatDateTime(record.sentAt) }}</template></span>
+      <div v-if="isDraft" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿。確認結案後會產生正式 PDF 並鎖定此版本；Email 可在結案後另外寄送。</p><p v-if="!ownerEmail" class="mt-2">飼主尚未填寫 Email，但不影響結案。<router-link v-if="record.owner?._id" :to="`/owners/${record.owner._id}?edit=1`" class="font-medium underline">前往補填飼主資料</router-link></p></div>
+      <div v-if="isPreview && record.supersededBy" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><span><strong>此報告已有後續修訂版本</strong><span class="block">這份舊版仍完整保留，請以後續版本為準。</span></span><router-link :to="`/records/${record.supersededBy}/preview`" class="inline-flex min-h-10 items-center font-medium underline">查看下一版</router-link></div>
+      <div v-else-if="!isPreview && record.hasNewerVersion" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><strong>此報告已有更新版本</strong><span class="mt-1 block">請聯絡院方取得最新版健檢報告。</span></div>
+      <div
+        v-if="isPreview && isFinalized"
+        class="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm print:hidden"
+        :class="deliveryFailed ? 'border-red-200 bg-red-50 text-red-800' : isSent ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : deliverySending ? 'border-sky-200 bg-sky-50 text-sky-800' : 'border-brand-200 bg-brand-50 text-brand-800'"
+      >
+        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案 · 第 {{ record.reportVersion || 1 }} 版</strong><span class="block">{{ isSent ? `已寄送至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="flex flex-wrap items-center gap-2">
-          <button v-if="ownerEmail" type="button" :disabled="emailing" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-emerald-300 px-3 font-medium hover:bg-emerald-100 disabled:opacity-50" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing ? '寄送中…' : '重新寄送 Email' }}</button>
-          <button type="button" :disabled="sharing" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-emerald-300 px-3 font-medium hover:bg-emerald-100 disabled:opacity-50" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</button>
-          <router-link :to="`/pets/${record.pet?._id}`" class="inline-flex min-h-10 items-center px-2 font-medium underline">回寵物資料</router-link>
+          <button v-if="ownerEmail" type="button" :disabled="emailing || deliverySending" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-current/30 px-3 font-medium hover:bg-white/60 disabled:opacity-50" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</button>
+          <router-link v-else-if="record.owner?._id" :to="`/owners/${record.owner._id}?edit=1`" class="inline-flex min-h-10 items-center px-3 font-medium underline">補填 Email</router-link>
+          <button type="button" :disabled="sharing" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-current/30 px-3 font-medium hover:bg-white/60 disabled:opacity-50" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</button>
+          <button v-if="!record.supersededBy" type="button" class="inline-flex min-h-10 items-center gap-2 rounded-lg border border-current/30 px-3 font-medium hover:bg-white/60" @click="showRevisionDialog = true"><FilePenLine class="h-4 w-4" />建立修訂版</button>
         </div>
       </div>
       <div v-if="shareNotice" class="rounded-xl border border-emerald-200 bg-white px-4 py-4 text-sm text-stone-700 print:hidden">
@@ -223,10 +317,11 @@ onMounted(fetchReport);
       <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 print:hidden">{{ error }}</p>
 
       <article class="report-sheet rounded-2xl border border-stone-200 bg-white p-6 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none sm:p-[12mm]">
+        <div v-if="record.supersededBy || record.hasNewerVersion" class="mb-5 hidden border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 print:block">此版本已有後續修訂報告，請以最新版為準。</div>
         <header class="flex flex-col gap-5 border-b border-brand-100 pb-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div class="flex items-center gap-2 text-xl font-semibold text-brand-700"><PawPrint class="h-6 w-6" stroke-width="1.75" aria-hidden="true" />寵物健康檢查報告</div>
-            <p class="mt-2 font-mono text-xs text-stone-500">報告編號：{{ record.reportNumber }}</p>
+            <p class="mt-2 font-mono text-xs text-stone-500">報告編號：{{ record.reportNumber }} · 第 {{ record.reportVersion || 1 }} 版</p>
           </div>
           <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-stone-600 sm:text-right">
             <dt class="font-medium">獸醫師</dt><dd>{{ record.vet || '—' }}</dd>
@@ -240,7 +335,7 @@ onMounted(fetchReport);
           <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <div><dt class="text-xs font-medium text-stone-500">飼主</dt><dd class="mt-1 text-stone-800">{{ record.owner?.name || '—' }}</dd></div>
             <div><dt class="text-xs font-medium text-stone-500">物種／品種</dt><dd class="mt-1 text-stone-800">{{ record.pet?.species || '—' }}<template v-if="record.pet?.breed">／{{ record.pet.breed }}</template></dd></div>
-            <div><dt class="text-xs font-medium text-stone-500">性別／年齡</dt><dd class="mt-1 text-stone-800">{{ sexLabel(record.pet?.sex) }}／{{ ageLabel(record.pet?.birthDate) }}</dd></div>
+            <div><dt class="text-xs font-medium text-stone-500">性別／健檢時年齡</dt><dd class="mt-1 text-stone-800">{{ sexLabel(record.pet?.sex) }}／{{ ageLabel(record.pet?.birthDate, record.visitDate) }}</dd></div>
             <div><dt class="text-xs font-medium text-stone-500">晶片號碼</dt><dd class="mt-1 text-stone-800">{{ record.pet?.microchipNumber || '未記錄' }}</dd></div>
           </dl>
         </section>
@@ -249,6 +344,12 @@ onMounted(fetchReport);
           <p v-if="record.pet.allergies"><strong>過敏：</strong>{{ record.pet.allergies }}</p>
           <p v-if="record.pet.chronicConditions"><strong>慢性病／重要病史：</strong>{{ record.pet.chronicConditions }}</p>
           <p v-if="record.pet.currentMedications"><strong>目前用藥：</strong>{{ record.pet.currentMedications }}</p>
+        </section>
+
+        <section v-if="record.conclusion || record.treatmentPlan || abnormalFindings.length" class="mt-6 rounded-xl border border-brand-100 bg-brand-50/60 p-5 break-inside-avoid">
+          <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-sm font-semibold text-brand-700">本次重點與下一步</h2><span v-if="abnormalFindings.length" class="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">{{ abnormalFindings.length }} 項異常</span></div>
+          <p v-if="record.conclusion" class="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-stone-800">{{ record.conclusion }}</p>
+          <div v-if="record.treatmentPlan" class="mt-3"><h3 class="text-xs font-semibold text-stone-500">照護與追蹤建議</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-800">{{ record.treatmentPlan }}</p></div>
         </section>
 
         <section v-if="record.chiefComplaint || record.history" class="mt-8 break-inside-avoid">
@@ -261,9 +362,9 @@ onMounted(fetchReport);
           <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-200 sm:grid-cols-5"><div v-for="item in vitals" :key="item.label" class="bg-white p-3 text-center"><dt class="text-xs text-stone-500">{{ item.label }}</dt><dd class="mt-1 text-sm font-semibold text-stone-900">{{ item.value }}</dd><dd v-if="item.assessment && item.assessment.status !== 'not_checked'" class="mt-1 text-[11px] font-medium" :class="item.assessment.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'">{{ item.assessment.status === 'abnormal' ? '異常' : '正常' }}・自動</dd><dd v-if="labReferenceLabel(item.assessment || {})" class="mt-0.5 text-[10px] text-stone-500">參考 {{ labReferenceLabel(item.assessment) }}</dd></div></dl>
         </section>
 
-        <section v-if="checkedFindings.length" class="mt-8 break-inside-avoid">
+        <section v-if="checkedFindings.length" class="mt-8">
           <h2 class="mb-3 text-sm font-semibold text-brand-700">理學檢查</h2>
-          <div class="overflow-hidden rounded-xl border border-stone-200"><div v-for="finding in checkedFindings" :key="finding.key" class="grid grid-cols-[1fr_auto] gap-3 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[190px_90px_1fr]"><span class="font-medium text-stone-800">{{ finding.label }}</span><span :class="finding.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'">{{ finding.status === 'abnormal' ? '異常' : '正常' }}</span><span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '—' }}</span></div></div>
+          <div class="overflow-hidden rounded-xl border border-stone-200"><div v-for="finding in checkedFindings" :key="finding.key" class="grid break-inside-avoid grid-cols-[1fr_auto] gap-3 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[190px_90px_1fr]"><span class="font-medium text-stone-800">{{ finding.label }}</span><span :class="finding.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'">{{ finding.status === 'abnormal' ? '異常' : '正常' }}</span><span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '—' }}</span></div></div>
         </section>
 
         <section v-if="checkedLabGroups.length || record.labSummary" class="mt-8 space-y-5">
@@ -280,7 +381,7 @@ onMounted(fetchReport);
           <div v-if="record.other"><h3 class="text-xs font-semibold text-stone-500">其他備註</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ record.other }}</p></div>
         </section>
 
-        <footer class="mt-10 border-t border-brand-100 pt-4 text-center text-xs text-stone-500">本報告由寵物健康管理系統產生 · 產出時間 {{ formatDate(record.updatedAt || record.createdAt) }}</footer>
+        <footer class="mt-10 border-t border-brand-100 pt-4 text-center text-xs text-stone-500">本報告由寵物健康管理系統產生 · 第 {{ record.reportVersion || 1 }} 版 · {{ isDraft ? '草稿更新時間' : 'PDF 產生時間' }} {{ formatDateTime(isDraft ? (record.updatedAt || record.createdAt) : (record.pdfGeneratedAt || record.finalizedAt || record.updatedAt || record.createdAt)) }}</footer>
       </article>
     </section>
 
@@ -289,25 +390,32 @@ onMounted(fetchReport);
 
     <ConfirmDialog
       :open="showFinalizeConfirm"
-      title="確認結案並寄送"
-      :description="`系統會將正式 PDF 附件及無期限查看連結寄到 ${ownerEmail}。Gmail接受郵件後，報告將立即鎖定且無法直接修改；本機不會下載檔案。`"
-      confirm-label="結案並寄送 PDF"
+      title="確認結案"
+      description="系統會驗證內容、產生正式 PDF 並鎖定此版本。結案後若需修改，請建立修訂版；Email 可稍後另外寄送。"
+      confirm-label="確認結案並產生 PDF"
       cancel-label="取消結案"
-      :loading="emailing"
+      :loading="finalizing"
       :destructive="false"
       @update:open="showFinalizeConfirm = $event"
-      @confirm="confirmFinalize"
+      @confirm="finalizeReport"
     />
     <ConfirmDialog
       :open="showEmailConfirm"
       :title="isSent ? '重新寄送健檢報告' : '寄送健檢報告'"
-      :description="`系統會將 PDF 附件及無期限查看連結寄到 ${ownerEmail}。只有郵件伺服器接受後，報告才會標記為已寄送。`"
+      :description="`系統會將 PDF 附件及無期限查看連結寄到 ${ownerEmail}。若寄送失敗，已結案的正式報告不會受到影響。`"
       :confirm-label="isSent ? '重新寄送' : '確認寄送'"
       cancel-label="取消"
       :loading="emailing"
       :destructive="false"
       @update:open="showEmailConfirm = $event"
       @confirm="sendEmail"
+    />
+    <RevisionDialog
+      v-if="showRevisionDialog"
+      :submitting="revising"
+      :error-message="revisionError"
+      @close="showRevisionDialog = false"
+      @submit="createRevision"
     />
   </div>
 </template>

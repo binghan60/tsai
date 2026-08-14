@@ -18,11 +18,12 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'close']);
 
 const requiredRule = (v) => (v && String(v).trim() !== '') || '必填';
+const emailRule = (value) => !String(value || '').trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim()) || 'Email 格式不正確';
 
 const { handleSubmit } = useForm({ initialValues: props.initialValue });
 const { value: name, errorMessage: nameError } = useField('name', requiredRule);
 const { value: phone, errorMessage: phoneError } = useField('phone', requiredRule);
-const { value: email, errorMessage: emailError } = useField('email');
+const { value: email, errorMessage: emailError } = useField('email', emailRule);
 
 const onSubmit = handleSubmit((values) => emit('submit', values));
 </script>

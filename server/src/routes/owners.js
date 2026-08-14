@@ -4,6 +4,13 @@ import Pet from '../models/Pet.js';
 
 const router = Router();
 
+function validateOwnerInput({ name, phone, email }) {
+  if (!String(name || '').trim()) return '請填寫飼主姓名';
+  if (!String(phone || '').trim()) return '請填寫聯絡電話';
+  if (String(email || '').trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return 'Email 格式不正確';
+  return '';
+}
+
 // GET /api/owners?q=關鍵字
 router.get('/', async (req, res, next) => {
   try {
@@ -21,6 +28,8 @@ router.get('/', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const { name, phone, email } = req.body;
+    const validationError = validateOwnerInput({ name, phone, email });
+    if (validationError) return res.status(422).json({ message: validationError });
     const owner = await Owner.create({ name, phone, email });
     res.status(201).json(owner);
   } catch (err) {
@@ -42,6 +51,8 @@ router.get('/:id', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     const { name, phone, email } = req.body;
+    const validationError = validateOwnerInput({ name, phone, email });
+    if (validationError) return res.status(422).json({ message: validationError });
     const owner = await Owner.findByIdAndUpdate(
       req.params.id,
       { name, phone, email },

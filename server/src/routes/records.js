@@ -36,6 +36,27 @@ function pickRecordFields(body) {
   return data;
 }
 
+function isFinalizedRecord(record) {
+  return Boolean(record && record.status !== 'draft');
+}
+
+function effectiveDeliveryStatus(record) {
+  if (record?.deliveryStatus && !(record.status === 'sent' && record.deliveryStatus === 'not_sent')) {
+    return record.deliveryStatus;
+  }
+  return record?.status === 'sent' ? 'sent' : 'not_sent';
+}
+
+function recordSnapshot(record) {
+  return Object.fromEntries(RECORD_FIELDS.map((field) => [field, record[field]]));
+}
+
+function safePdfFilename(record) {
+  const reportNumber = String(record.reportNumber || `HC-${record._id.toString().slice(-8).toUpperCase()}`)
+    .replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `${reportNumber}.pdf`;
+}
+
 function hasClinicalContent(record) {
   return Boolean(
     record.diagnosis?.trim() ||
@@ -97,6 +118,16 @@ function reportPayload(record) {
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     status: record.status,
+    finalizedAt: record.finalizedAt,
+    pdfGeneratedAt: record.pdfGeneratedAt,
+    reportVersion: record.reportVersion || 1,
+    revisionReason: record.revisionReason,
+    hasNewerVersion: Boolean(record.supersededBy),
+    deliveryStatus: effectiveDeliveryStatus(record),
+    deliveryError: record.deliveryError,
+    lastDeliveryAttemptAt: record.lastDeliveryAttemptAt,
+    sentAt: record.sentAt,
+    sentTo: record.sentTo,
     shareEnabled: record.shareEnabled,
     pet: pet
       ? {
@@ -122,7 +153,7 @@ export const petRecordsRouter = Router({ mergeParams: true });
 
 petRecordsRouter.get('/', async (req, res, next) => {
   try {
-    const records = await MedicalRecord.find({ petId: req.params.petId }).sort({ visitDate: -1 });
+    const records = await MedicalRecord.find({ petId: req.params.petId }).sort({ visitDate: -1, reportVersion: -1, updatedAt: -1 });
     res.json(records);
   } catch (err) {
     next(err);
@@ -150,7 +181,7 @@ recordsRouter.get('/:id', async (req, res, next) => {
       populate: { path: 'ownerId', select: 'name phone email' },
     });
     if (!record) return res.status(404).json({ message: '找不到報告' });
-    res.json(record);
+    res.json({ ...record.toObject(), deliveryStatus: effectiveDeliveryStatus(record) });
   } catch (err) {
     next(err);
   }
@@ -166,6 +197,144 @@ recordsRouter.put('/:id', async (req, res, next) => {
     Object.assign(record, pickRecordFields(req.body));
     await record.save();
     res.json(record);
+  } catch (err) {
+    next(err);
+  }
+});
+
+recordsRouter.post('/:id/finalize', async (req, res, next) => {
+  let record;
+  try {
+    record = await MedicalRecord.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: '找不到報告' });
+    if (isFinalizedRecord(record)) {
+      return res.json({
+        status: 'finalized',
+        finalizedAt: record.finalizedAt,
+        pdfGeneratedAt: record.pdfGeneratedAt,
+        reportVersion: record.reportVersion || 1,
+        deliveryStatus: effectiveDeliveryStatus(record),
+      });
+    }
+
+    const missing = validateFinalRecord(record);
+    if (missing.length) {
+      return res.status(422).json({ message: `請先補齊：${missing.join('、')}` });
+    }
+
+    const previousFinalizedAt = record.finalizedAt;
+    const previousPdfGeneratedAt = record.pdfGeneratedAt;
+    record.status = 'finalized';
+    record.finalizedAt = new Date();
+    record.deliveryStatus = 'not_sent';
+    record.deliveryError = '';
+    await record.save();
+
+    try {
+      await renderReportPdf(record.shareToken);
+    } catch (pdfError) {
+      record.status = 'draft';
+      record.finalizedAt = previousFinalizedAt;
+      record.pdfGeneratedAt = previousPdfGeneratedAt;
+      await record.save();
+      pdfError.isFinalizePdfError = true;
+      throw pdfError;
+    }
+
+    record.pdfGeneratedAt = new Date();
+    await record.save();
+    if (record.revisionOf) {
+      await MedicalRecord.findByIdAndUpdate(record.revisionOf, { supersededBy: record._id });
+    }
+    if (record.weightKg != null) {
+      try {
+        await Pet.findByIdAndUpdate(record.petId, { weightKg: record.weightKg });
+      } catch (petUpdateError) {
+        console.error('報告已結案，但更新寵物最近體重失敗', petUpdateError);
+      }
+    }
+
+    res.json({
+      status: 'finalized',
+      finalizedAt: record.finalizedAt,
+      pdfGeneratedAt: record.pdfGeneratedAt,
+      reportVersion: record.reportVersion || 1,
+      deliveryStatus: effectiveDeliveryStatus(record),
+    });
+  } catch (err) {
+    if (err.isFinalizePdfError) {
+      return res.status(502).json({ message: 'PDF 產生失敗，報告仍維持草稿，請稍後再試' });
+    }
+    next(err);
+  }
+});
+
+recordsRouter.get('/:id/pdf', async (req, res, next) => {
+  try {
+    const record = await MedicalRecord.findById(req.params.id);
+    if (!record) return res.status(404).json({ message: '找不到報告' });
+    if (!isFinalizedRecord(record)) {
+      return res.status(409).json({ message: '請先結案，再下載正式 PDF' });
+    }
+    const pdfBuffer = await renderReportPdf(record.shareToken);
+    record.pdfGeneratedAt = new Date();
+    await record.save();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${safePdfFilename(record)}"`);
+    res.send(pdfBuffer);
+  } catch (err) {
+    next(err);
+  }
+});
+
+recordsRouter.post('/:id/revisions', async (req, res, next) => {
+  try {
+    const source = await MedicalRecord.findById(req.params.id);
+    if (!source) return res.status(404).json({ message: '找不到報告' });
+    if (!isFinalizedRecord(source)) {
+      return res.status(409).json({ message: '草稿可直接編輯，不需要建立修訂版' });
+    }
+    if (source.supersededBy) {
+      return res.status(409).json({
+        message: '這份報告已有後續修訂版本',
+        newerRecordId: source.supersededBy,
+      });
+    }
+
+    const existingDraft = await MedicalRecord.findOne({ revisionOf: source._id, status: 'draft' });
+    if (existingDraft) {
+      return res.status(409).json({
+        message: '這份報告已有待完成的修訂草稿',
+        revisionId: existingDraft._id,
+      });
+    }
+
+    const rootId = source.revisionRootId || source._id;
+    const latestVersion = await MedicalRecord.findOne({
+      $or: [{ _id: rootId }, { revisionRootId: rootId }],
+    }).sort({ reportVersion: -1 }).select('reportVersion');
+    const reportVersion = Math.max(latestVersion?.reportVersion || 1, source.reportVersion || 1) + 1;
+    const revision = await MedicalRecord.create({
+      petId: source.petId,
+      ...recordSnapshot(source),
+      status: 'draft',
+      reportVersion,
+      revisionOf: source._id,
+      revisionRootId: rootId,
+      revisionReason: String(req.body.reason || '').trim(),
+      finalizedAt: null,
+      pdfGeneratedAt: null,
+      deliveryStatus: 'not_sent',
+      deliveryError: '',
+      lastDeliveryAttemptAt: null,
+      shareEnabled: false,
+      sharedAt: null,
+      sentAt: undefined,
+      sentTo: undefined,
+      emailMessageId: undefined,
+    });
+
+    res.status(201).json(revision);
   } catch (err) {
     next(err);
   }
@@ -189,7 +358,7 @@ recordsRouter.post('/:id/share', async (req, res, next) => {
   try {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
-    if (record.status !== 'sent') return res.status(409).json({ message: '請先完成 Email 寄送，再建立分享連結' });
+    if (!isFinalizedRecord(record)) return res.status(409).json({ message: '請先結案，再建立分享連結' });
 
     record.shareEnabled = true;
     record.sharedAt = new Date();
@@ -204,17 +373,21 @@ recordsRouter.post('/:id/share', async (req, res, next) => {
 });
 
 recordsRouter.post('/:id/send-email', async (req, res, next) => {
+  let record;
   try {
-    const record = await MedicalRecord.findById(req.params.id).populate({
+    record = await MedicalRecord.findById(req.params.id).populate({
       path: 'petId',
       populate: { path: 'ownerId', select: 'name email' },
     });
     if (!record) return res.status(404).json({ message: '找不到報告' });
-    if (record.status === 'draft') {
-      const missing = validateFinalRecord(record);
-      if (missing.length) {
-        return res.status(422).json({ message: `請先補齊：${missing.join('、')}` });
-      }
+    if (!isFinalizedRecord(record)) {
+      return res.status(409).json({ message: '請先完成結案，再寄送正式報告' });
+    }
+    const sendingRecently = effectiveDeliveryStatus(record) === 'sending'
+      && record.lastDeliveryAttemptAt
+      && Date.now() - new Date(record.lastDeliveryAttemptAt).getTime() < 10 * 60 * 1000;
+    if (sendingRecently) {
+      return res.status(409).json({ message: '報告正在寄送中，請勿重複操作' });
     }
 
     const pet = record.petId;
@@ -224,6 +397,12 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
       return res.status(422).json({ message: '飼主 Email 格式不正確，請先修正飼主資料' });
     }
+
+    record.status = 'finalized';
+    record.deliveryStatus = 'sending';
+    record.deliveryError = '';
+    record.lastDeliveryAttemptAt = new Date();
+    await record.save();
 
     assertMailConfigured();
     const pdfBuffer = await renderReportPdf(record.shareToken);
@@ -237,48 +416,45 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       pdfBuffer,
     });
 
-    // SMTP 接受郵件後才結案、開啟分享並記錄寄送結果。
+    // SMTP 接受郵件後只更新寄送狀態；報告的結案狀態不依賴 Email。
     record.shareEnabled = true;
     record.sharedAt = record.sharedAt || new Date();
-    record.status = 'sent';
+    record.status = 'finalized';
+    record.deliveryStatus = 'sent';
+    record.deliveryError = '';
+    record.pdfGeneratedAt = new Date();
     record.sentAt = new Date();
     record.sentTo = recipient;
     record.emailMessageId = info.messageId;
     await record.save();
-    if (record.weightKg != null) {
-      try {
-        await Pet.findByIdAndUpdate(pet._id, { weightKg: record.weightKg });
-      } catch (petUpdateError) {
-        console.error('寄送成功，但更新寵物最近體重失敗', petUpdateError);
-      }
-    }
 
     res.json({
-      status: record.status,
+      status: 'finalized',
+      deliveryStatus: record.deliveryStatus,
       sentAt: record.sentAt,
       sentTo: record.sentTo,
       messageId: record.emailMessageId,
       shareUrl: reportUrl,
     });
   } catch (err) {
-    if (err.code === 'MAIL_NOT_CONFIGURED') {
-      return res.status(503).json({ message: err.message });
+    let response;
+    if (err.code === 'MAIL_NOT_CONFIGURED') response = { status: 503, message: err.message };
+    else if (err.code === 'MAIL_RECIPIENT_REJECTED') response = { status: 422, message: err.message };
+    else if (err.code === 'EAUTH') response = { status: 502, message: 'Gmail 驗證失敗，請確認寄信設定後再試；報告已結案，不受影響' };
+    else if (err.code === 'ETIMEDOUT') response = { status: 504, message: '連線 Gmail 逾時，請確認網路後再試；報告已結案，不受影響' };
+    else if (err.code === 'ECONNECTION') response = { status: 502, message: '無法連線 Gmail SMTP，請確認網路或防火牆設定；報告已結案，不受影響' };
+    else if (['EENVELOPE', 'EMESSAGE', 'EPROTOCOL'].includes(err.code)) response = { status: 502, message: 'Gmail 未接受這封郵件，請稍後再試；報告已結案，不受影響' };
+
+    if (record && isFinalizedRecord(record) && record.deliveryStatus === 'sending') {
+      record.deliveryStatus = 'failed';
+      record.deliveryError = response?.message || '寄送失敗，請稍後重試';
+      try {
+        await record.save();
+      } catch (saveError) {
+        console.error('記錄寄送失敗狀態時發生錯誤', saveError);
+      }
     }
-    if (err.code === 'MAIL_RECIPIENT_REJECTED') {
-      return res.status(422).json({ message: err.message });
-    }
-    if (err.code === 'EAUTH') {
-      return res.status(502).json({ message: 'Gmail 驗證失敗：請確認 SMTP_EMAIL 與產生應用程式密碼的 Google 帳號相同，並重新產生應用程式密碼；報告狀態未變更' });
-    }
-    if (err.code === 'ETIMEDOUT') {
-      return res.status(504).json({ message: '連線 Gmail 逾時，請確認網路後再試；報告狀態未變更' });
-    }
-    if (err.code === 'ECONNECTION') {
-      return res.status(502).json({ message: '無法連線 Gmail SMTP，請確認網路或防火牆設定；報告狀態未變更' });
-    }
-    if (['EENVELOPE', 'EMESSAGE', 'EPROTOCOL'].includes(err.code)) {
-      return res.status(502).json({ message: 'Gmail 未接受這封郵件，請稍後再試；報告狀態未變更' });
-    }
+    if (response) return res.status(response.status).json({ message: response.message });
     next(err);
   }
 });
@@ -308,7 +484,7 @@ publicReportsRouter.get('/:token', async (req, res, next) => {
     if (!record) return res.status(404).json({ message: '找不到這份報告，連結可能已失效' });
 
     const isInternalRender = req.query.renderKey && req.query.renderKey === pdfAccessSecret;
-    if (!isInternalRender && (!record.shareEnabled || record.status !== 'sent')) {
+    if (!isInternalRender && (!record.shareEnabled || !isFinalizedRecord(record))) {
       return res.status(410).json({ message: '這份報告的分享連結已失效' });
     }
 

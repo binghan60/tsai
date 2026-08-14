@@ -121,18 +121,18 @@ const onSubmit = handleSubmit((values) => {
               <Input id="pet-birth-date" v-model="birthDate" type="date" class="min-h-11 border-cream-300/90 dark:border-zinc-700 dark:bg-zinc-950/40" />
             </div>
             <div class="space-y-1.5">
-              <Label class="text-xs font-medium text-ink-700 dark:text-zinc-300">性別</Label>
+              <Label for="pet-sex" class="text-xs font-medium text-ink-700 dark:text-zinc-300">性別</Label>
               <Select v-model="sex">
-                <SelectTrigger class="min-h-11 w-full border-cream-300/90 dark:border-zinc-700 dark:bg-zinc-950/40"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="pet-sex" class="min-h-11 w-full border-cream-300/90 dark:border-zinc-700 dark:bg-zinc-950/40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="option in sexOptions" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div class="space-y-1.5">
-              <Label class="text-xs font-medium text-ink-700 dark:text-zinc-300">絕育狀態</Label>
+              <Label for="pet-neutered" class="text-xs font-medium text-ink-700 dark:text-zinc-300">絕育狀態</Label>
               <Select v-model="neutered">
-                <SelectTrigger class="min-h-11 w-full border-cream-300/90 dark:border-zinc-700 dark:bg-zinc-950/40"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="pet-neutered" class="min-h-11 w-full border-cream-300/90 dark:border-zinc-700 dark:bg-zinc-950/40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="option in neuteredOptions" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
                 </SelectContent>

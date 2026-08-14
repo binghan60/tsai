@@ -14,6 +14,15 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { useToast } from '../composables/useToast';
 
 const EXAM_TYPE_OPTIONS = ['例行健檢', '幼年健檢', '熟齡健檢', '術前評估', '追蹤檢查', '其他'];
+const FORM_SECTIONS = [
+  { id: 'record-section-info', label: '基本資料' },
+  { id: 'record-section-measurements', label: '量測' },
+  { id: 'record-section-examination', label: '理學檢查' },
+  { id: 'record-section-labs', label: '檢驗' },
+  { id: 'record-section-conclusion', label: '結論' },
+];
+const activeSectionId = ref(FORM_SECTIONS[0].id);
+const activeSectionIndex = computed(() => FORM_SECTIONS.findIndex((section) => section.id === activeSectionId.value));
 
 const route = useRoute();
 const router = useRouter();
@@ -22,6 +31,8 @@ const petId = ref(route.params.petId ?? null);
 const recordId = ref(route.params.id ?? null);
 const isEdit = computed(() => Boolean(recordId.value));
 const recordStatus = ref('draft');
+const reportVersion = ref(1);
+const revisionReason = ref('');
 const isLocked = computed(() => recordStatus.value !== 'draft');
 const showDiscardConfirm = ref(false);
 const discarding = ref(false);
@@ -110,6 +121,8 @@ function mergeFindings(definitions, savedItems, extraFields, defaults = {}) {
 
 function applyRecord(data) {
   recordStatus.value = data.status ?? 'draft';
+  reportVersion.value = data.reportVersion ?? 1;
+  revisionReason.value = data.revisionReason ?? '';
   vet.value = data.vet ?? '';
   visitDate.value = data.visitDate ? data.visitDate.slice(0, 10) : '';
   for (const key of ['examType', 'weightKg', 'temperatureC', 'heartRate', 'respiratoryRate', 'bodyConditionScore', 'chiefComplaint', 'history', 'conclusion', 'diagnosis', 'labSummary', 'treatmentPlan', 'other']) {
@@ -118,6 +131,41 @@ function applyRecord(data) {
   record.examinationFindings = mergeFindings(EXAMINATION_ITEMS, data.examinationFindings, ['note']);
   record.measurementAssessments = mergeFindings(BASIC_MEASUREMENTS, data.measurementAssessments, ['statusSource', 'unit', 'referenceMin', 'referenceMax'], { statusSource: 'auto' });
   record.labFindings = mergeFindings(LAB_TESTS, data.labFindings, ['statusSource', 'value', 'unit', 'referenceMin', 'referenceMax', 'note']);
+  lastSavedAt.value = data.updatedAt ? new Date(data.updatedAt) : null;
+}
+
+async function scrollToSection(id) {
+  activeSectionId.value = id;
+  await nextTick();
+  document.querySelector(`[data-form-section="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function adjacentSection(offset) {
+  const target = FORM_SECTIONS[activeSectionIndex.value + offset];
+  if (target) scrollToSection(target.id);
+}
+
+function sectionIdForTarget(targetId) {
+  if (targetId.startsWith('record-exam-')) return 'record-section-examination';
+  if (targetId.startsWith('record-lab-')) return 'record-section-labs';
+  if (targetId === 'record-section-conclusion' || ['record-conclusion', 'record-treatment-plan'].includes(targetId)) return 'record-section-conclusion';
+  if (targetId === 'record-section-measurements' || targetId.startsWith('record-bodyConditionScore')) return 'record-section-measurements';
+  return 'record-section-info';
+}
+
+function markUncheckedExaminationsNormal() {
+  for (const finding of record.examinationFindings) {
+    if (finding.status === 'not_checked') finding.status = 'normal';
+  }
+}
+
+function markEmptyLabGroupNormal(group) {
+  for (const finding of record.labFindings.filter((item) => item.group === group)) {
+    if (finding.status !== 'not_checked' || finding.value.trim() || finding.note.trim()) continue;
+    finding.status = 'normal';
+    finding.statusSource = 'manual';
+  }
 }
 
 async function loadPetContext(id) {
@@ -259,6 +307,7 @@ async function saveRecord({ silent = false } = {}) {
       leavingAfterAction.value = wasLeavingAfterAction;
     }
     lastSavedAt.value = new Date();
+    saveError.value = '';
     const hasNewChanges = JSON.stringify(buildPayload()) !== savedSnapshot;
     isDirty.value = hasNewChanges;
     saveState.value = hasNewChanges ? 'unsaved' : 'saved';
@@ -267,7 +316,7 @@ async function saveRecord({ silent = false } = {}) {
     return true;
   } catch (err) {
     saveState.value = 'error';
-    if (!silent) saveError.value = await extractErrorMessage(err, '儲存草稿失敗');
+    saveError.value = await extractErrorMessage(err, silent ? '自動儲存失敗，請檢查網路後手動儲存' : '儲存草稿失敗');
     return false;
   } finally {
     saving.value = false;
@@ -302,6 +351,7 @@ function validateForPreview() {
 }
 
 async function goToValidationIssue(issue) {
+  activeSectionId.value = sectionIdForTarget(issue.targetId);
   // 驗證區塊剛顯示時先等 Vue 與瀏覽器完成排版，避免第一次點擊取得舊座標。
   await nextTick();
   await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
@@ -372,6 +422,8 @@ onBeforeRouteLeave((to) => {
 async function confirmLeave() {
   if (!pendingLeavePath.value) return;
   const target = pendingLeavePath.value;
+  const saved = await saveRecord();
+  if (!saved) return;
   pendingLeavePath.value = '';
   leavingAfterAction.value = true;
   await router.push(target);
@@ -396,16 +448,24 @@ async function confirmDiscard() {
 }
 onMounted(() => {
   init();
+  window.addEventListener('beforeunload', handleBeforeUnload);
 });
 onBeforeUnmount(() => {
   clearTimeout(autosaveTimer);
+  window.removeEventListener('beforeunload', handleBeforeUnload);
 });
+
+function handleBeforeUnload(event) {
+  if (!isDirty.value) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
 </script>
 
 <template>
   <section class="mx-auto max-w-6xl space-y-5 pb-28">
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><router-link v-if="petId" :to="`/pets/${petId}`" class="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← 回寵物資料</router-link><h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ isLocked ? '已結案健檢紀錄' : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p></div>
+      <div><router-link v-if="petId" :to="`/pets/${petId}`" class="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← 回寵物資料</router-link><h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-ink-500 dark:text-zinc-400">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-ink-500 dark:text-zinc-400'"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
     </div>
 
@@ -428,22 +488,26 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="!isLocked" id="record-context-bar" class="rounded-2xl border border-cream-300 bg-cream-50 px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="font-semibold text-ink-900 dark:text-white">{{ pet?.name ?? '—' }}</span><span class="font-mono text-xs text-ink-400 dark:text-zinc-400">{{ pet?.medicalRecordNumber || (pet?._id ? `PET-${pet._id.slice(-8).toUpperCase()}` : '') }}</span></div><div class="flex items-center gap-2 text-sm text-ink-600 dark:text-zinc-300"><User class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ pet?.ownerId?.name ?? '—' }}</div></div><div class="w-full sm:w-52"><div class="mb-1 flex justify-between text-xs text-ink-500 dark:text-zinc-400"><span>完成區段</span><span>{{ completedCount }}/5</span></div><div class="h-2 overflow-hidden rounded-full bg-cream-200 dark:bg-zinc-800"><div class="h-full rounded-full bg-belle-600 dark:bg-brand-500" :style="{ width: `${completionPercent}%` }"></div></div></div></div>
+        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="font-semibold text-ink-900 dark:text-white">{{ pet?.name ?? '—' }}</span><span class="font-mono text-xs text-ink-400 dark:text-zinc-400">{{ pet?.medicalRecordNumber || (pet?._id ? `PET-${pet._id.slice(-8).toUpperCase()}` : '') }}</span></div><div class="flex items-center gap-2 text-sm text-ink-600 dark:text-zinc-300"><User class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ pet?.ownerId?.name ?? '—' }}</div></div><div class="w-full sm:w-52"><div class="mb-1 flex justify-between text-xs text-ink-500 dark:text-zinc-400"><span>已有內容區段</span><span>{{ completedCount }}/5</span></div><div class="h-2 overflow-hidden rounded-full bg-cream-200 dark:bg-zinc-800"><div class="h-full rounded-full bg-belle-600 dark:bg-brand-500" :style="{ width: `${completionPercent}%` }"></div></div></div></div>
         <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
       </div>
+
+      <nav v-if="!isLocked" aria-label="健檢表單區段" class="sticky top-16 z-20 flex gap-1 overflow-x-auto rounded-xl border border-cream-300 bg-cream-50/95 p-1.5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
+        <button v-for="(section, index) in FORM_SECTIONS" :key="section.id" type="button" :data-form-section="section.id" class="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-medium" :class="activeSectionId === section.id ? 'bg-belle-50 text-belle-700 shadow-sm dark:bg-brand-500/15 dark:text-brand-300' : 'text-ink-600 hover:bg-cream-200 dark:text-zinc-300 dark:hover:bg-zinc-800'" :aria-current="activeSectionId === section.id ? 'step' : undefined" @click="scrollToSection(section.id)"><span class="flex h-5 w-5 items-center justify-center rounded-full bg-white/80 text-belle-600 dark:bg-zinc-900/70 dark:text-brand-300">{{ index + 1 }}</span>{{ section.label }}</button>
+      </nav>
 
       <div id="form-errors" v-if="!isLocked && validationErrors.length" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200" role="alert"><p class="font-semibold">正式報告尚缺少以下內容：</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="issue in validationErrors" :key="`${issue.targetId}-${issue.message}`"><button type="button" class="text-left font-medium underline decoration-red-300 underline-offset-2 hover:text-red-950 dark:hover:text-white" @click="goToValidationIssue(issue)">{{ issue.message }}</button></li></ul><p class="mt-3 text-xs">點擊任一項可前往對應欄位。</p></div>
 
       <form v-if="!isLocked" class="space-y-5" @submit.prevent>
-        <section id="record-section-info" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+        <section v-show="activeSectionId === 'record-section-info'" id="record-section-info" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
           <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">1</span><div><h2 class="font-semibold text-ink-900 dark:text-white">健檢資訊與健康背景</h2><p class="text-xs text-ink-400 dark:text-zinc-400">記錄本次健檢基本資訊、主訴與病史</p></div></div>
           <div class="grid gap-x-4 gap-y-4 sm:grid-cols-3">
             <div class="space-y-1.5"><Label for="record-vet" class="text-xs font-medium text-ink-500 dark:text-zinc-400">獸醫師 <span class="text-red-600 dark:text-red-400" aria-hidden="true">*</span><span class="sr-only">必填</span></Label><Input id="record-vet" v-model="vet" class="min-h-11" autocomplete="name" required /></div>
             <div class="space-y-1.5"><Label for="record-visit-date" class="text-xs font-medium text-ink-500 dark:text-zinc-400">健檢日期 <span class="text-red-600 dark:text-red-400" aria-hidden="true">*</span><span class="sr-only">必填</span></Label><Input id="record-visit-date" v-model="visitDate" type="date" class="min-h-11" required /></div>
             <div class="space-y-1.5">
-              <Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">健檢類型</Label>
+              <Label for="record-exam-type" class="text-xs font-medium text-ink-500 dark:text-zinc-400">健檢類型</Label>
               <Select v-model="record.examType">
-                <SelectTrigger class="min-h-11 w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="record-exam-type" class="min-h-11 w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="option in EXAM_TYPE_OPTIONS" :key="option" :value="option">{{ option }}</SelectItem>
                 </SelectContent>
@@ -451,16 +515,16 @@ onBeforeUnmount(() => {
             </div>
           </div>
           <div class="mt-4 grid gap-x-4 gap-y-4 lg:grid-cols-2">
-            <div class="space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">主訴</Label><Textarea v-model="record.chiefComplaint" rows="3" /></div>
-            <div class="space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">病史</Label><Textarea v-model="record.history" rows="3" /></div>
+            <div class="space-y-1.5"><Label for="record-chief-complaint" class="text-xs font-medium text-ink-500 dark:text-zinc-400">主訴</Label><Textarea id="record-chief-complaint" v-model="record.chiefComplaint" rows="3" /></div>
+            <div class="space-y-1.5"><Label for="record-history" class="text-xs font-medium text-ink-500 dark:text-zinc-400">病史</Label><Textarea id="record-history" v-model="record.history" rows="3" /></div>
           </div>
         </section>
 
-        <section id="record-section-measurements" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+        <section v-show="activeSectionId === 'record-section-measurements'" id="record-section-measurements" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
           <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">2</span><div><h2 class="font-semibold text-ink-900 dark:text-white">基本量測</h2><p class="text-xs text-ink-400 dark:text-zinc-400">包含範例中的體重與體溫</p></div></div>
           <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
             <div v-for="metric in BASIC_MEASUREMENTS" :key="metric.key">
-              <Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">{{ metric.label }}<span v-if="metric.unit" class="text-ink-400 dark:text-zinc-500"> ({{ metric.unit }})</span></Label>
+              <Label :for="`record-${metric.key}`" class="text-xs font-medium text-ink-500 dark:text-zinc-400">{{ metric.label }}<span v-if="metric.unit" class="text-ink-400 dark:text-zinc-500"> ({{ metric.unit }})</span></Label>
               <Input
                 v-model="record[metric.key]"
                 :id="`record-${metric.key}`"
@@ -480,8 +544,8 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section id="record-section-examination" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-          <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">3</span><div><h2 class="font-semibold text-ink-900 dark:text-white">理學檢查</h2><p class="text-xs text-ink-400 dark:text-zinc-400">整合聽診、觸診、口腔牙齦與各身體系統</p></div></div>
+        <section v-show="activeSectionId === 'record-section-examination'" id="record-section-examination" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+          <div class="mb-5 flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">3</span><div><h2 class="font-semibold text-ink-900 dark:text-white">理學檢查</h2><p class="text-xs text-ink-400 dark:text-zinc-400">整合聽診、觸診、口腔牙齦與各身體系統</p></div></div><Button type="button" variant="outline" size="sm" class="min-h-10" @click="markUncheckedExaminationsNormal">未標示項目全部正常</Button></div>
           <div class="divide-y divide-cream-300 dark:divide-zinc-800">
             <div v-for="finding in record.examinationFindings" :id="`record-exam-row-${finding.key}`" :key="finding.key" class="scroll-mt-40 grid gap-3 py-4 first:pt-0 last:pb-0 lg:grid-cols-[190px_280px_1fr] lg:items-center">
               <p class="text-sm font-medium text-ink-800 dark:text-zinc-200">{{ finding.label }}</p>
@@ -494,10 +558,10 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section id="record-section-labs" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-          <div class="mb-5 flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">4</span><div><h2 class="font-semibold text-ink-900 dark:text-white">血液與尿液檢查</h2><p class="text-xs text-ink-400 dark:text-zinc-400">輸入數值後，已設定範圍的項目會自動判斷</p></div></div><router-link to="/settings" class="text-xs font-medium text-belle-600 hover:underline dark:text-brand-400">管理標準值</router-link></div>
+        <section v-show="activeSectionId === 'record-section-labs'" id="record-section-labs" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+          <div class="mb-5 flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">4</span><div><h2 class="font-semibold text-ink-900 dark:text-white">血液與尿液檢查</h2><p class="text-xs text-ink-400 dark:text-zinc-400">輸入數值後，已設定範圍的項目會自動判斷</p></div></div><router-link to="/settings" class="inline-flex min-h-10 items-center px-2 text-xs font-medium text-belle-600 hover:underline dark:text-brand-400">管理標準值</router-link></div>
           <div v-for="group in LAB_GROUPS" :key="group" class="mb-7 last:mb-0">
-            <h3 class="mb-3 text-sm font-semibold text-belle-600 dark:text-brand-400">{{ group }}</h3>
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 class="text-sm font-semibold text-belle-600 dark:text-brand-400">{{ group }}</h3><Button type="button" variant="ghost" size="sm" class="min-h-10 text-xs" @click="markEmptyLabGroupNormal(group)">空白項目全部正常</Button></div>
             <div class="divide-y divide-cream-300 rounded-xl border border-cream-300 dark:divide-zinc-800 dark:border-zinc-800">
               <div v-for="finding in record.labFindings.filter((item) => item.group === group)" :id="`record-lab-row-${finding.key}`" :key="finding.key" class="scroll-mt-40 grid gap-3 p-4 lg:grid-cols-[220px_260px_170px_1fr] lg:items-center">
                 <div><p class="text-sm font-medium text-ink-800 dark:text-zinc-200">{{ finding.label }}</p><p v-if="labRangeLabel(finding)" class="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">參考 {{ labRangeLabel(finding) }}</p><p v-else-if="finding.numeric !== false" class="mt-0.5 text-xs text-ink-400 dark:text-zinc-500">{{ labRangesLoading ? '載入標準值…' : '尚未設定標準值' }}</p></div>
@@ -513,30 +577,36 @@ onBeforeUnmount(() => {
               </div>
             </div>
           </div>
-          <div class="mt-5 space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">檢驗補充摘要</Label><Textarea v-model="record.labSummary" rows="3" /></div>
+          <div class="mt-5 space-y-1.5"><Label for="record-lab-summary" class="text-xs font-medium text-ink-500 dark:text-zinc-400">檢驗補充摘要</Label><Textarea id="record-lab-summary" v-model="record.labSummary" rows="3" /></div>
         </section>
 
-        <section id="record-section-conclusion" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+        <section v-show="activeSectionId === 'record-section-conclusion'" id="record-section-conclusion" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
           <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">5</span><div><h2 class="font-semibold text-ink-900 dark:text-white">結論與診斷</h2><p class="text-xs text-ink-400 dark:text-zinc-400">統整檢查發現並記錄診斷與後續方向</p></div></div>
           <div class="space-y-1.5"><Label for="record-conclusion" class="text-xs font-medium text-ink-500 dark:text-zinc-400">結論 <span v-if="!record.conclusion.trim() && !record.treatmentPlan.trim()" class="text-red-600 dark:text-red-400">*（與照護建議擇一必填）</span></Label><Textarea id="record-conclusion" v-model="record.conclusion" rows="8" :required="!record.treatmentPlan.trim()" /></div>
-          <div class="mt-4 space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">診斷</Label><Textarea v-model="record.diagnosis" rows="5" /></div>
+          <div class="mt-4 space-y-1.5"><Label for="record-diagnosis" class="text-xs font-medium text-ink-500 dark:text-zinc-400">診斷</Label><Textarea id="record-diagnosis" v-model="record.diagnosis" rows="5" /></div>
           <div class="mt-4 grid gap-x-4 gap-y-4 lg:grid-cols-2">
             <div class="space-y-1.5"><Label for="record-treatment-plan" class="text-xs font-medium text-ink-500 dark:text-zinc-400">照護與追蹤建議 <span v-if="!record.conclusion.trim() && !record.treatmentPlan.trim()" class="text-red-600 dark:text-red-400">*（與結論擇一必填）</span></Label><Textarea id="record-treatment-plan" v-model="record.treatmentPlan" rows="3" :required="!record.conclusion.trim()" /></div>
-            <div class="space-y-1.5"><Label class="text-xs font-medium text-ink-500 dark:text-zinc-400">其他備註</Label><Textarea v-model="record.other" rows="3" /></div>
+            <div class="space-y-1.5"><Label for="record-other" class="text-xs font-medium text-ink-500 dark:text-zinc-400">其他備註</Label><Textarea id="record-other" v-model="record.other" rows="3" /></div>
           </div>
         </section>
+
+        <div class="flex items-center justify-between gap-3">
+          <Button type="button" variant="outline" class="min-h-11" :disabled="activeSectionIndex === 0" @click="adjacentSection(-1)">← 上一區</Button>
+          <span class="text-xs text-ink-500 dark:text-zinc-400">{{ activeSectionIndex + 1 }} / {{ FORM_SECTIONS.length }}</span>
+          <Button type="button" variant="outline" class="min-h-11" :disabled="activeSectionIndex === FORM_SECTIONS.length - 1" @click="adjacentSection(1)">下一區 →</Button>
+        </div>
       </form>
 
+      <div v-if="!isLocked" class="flex justify-end">
+        <Button type="button" variant="ghost" class="min-h-11 text-destructive hover:bg-destructive/10 hover:text-destructive" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄這份草稿</Button>
+      </div>
       <p v-if="!isLocked && saveError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ saveError }}</p>
       <div v-if="!isLocked" id="record-action-bar" class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 lg:left-64">
         <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已完成 {{ completedCount }}/5 個區段</p>
+          <p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/5 個區段</p>
           <div class="ml-auto flex flex-wrap items-center gap-2">
-            <Button type="button" variant="destructive-outline" class="min-h-11" :disabled="saving || discarding" @click="showDiscardConfirm = true">
-              <Trash2 class="h-4 w-4" />捨棄草稿
-            </Button>
-            <Button type="button" variant="outline" class="min-h-11" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存並離開' }}</Button>
-            <Button type="button" class="min-h-11" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />結案前預覽</Button>
+            <Button type="button" variant="outline" class="min-h-11" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
+            <Button type="button" class="min-h-11" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
           </div>
         </div>
       </div>
@@ -554,10 +624,11 @@ onBeforeUnmount(() => {
     />
     <ConfirmDialog
       :open="Boolean(pendingLeavePath)"
-      title="離開編輯頁"
-      description="尚有變更未儲存，確定要離開嗎？"
-      confirm-label="離開"
+      title="儲存草稿後離開"
+      description="尚有變更未儲存。系統會先儲存草稿，再前往下一頁。"
+      confirm-label="儲存並離開"
       cancel-label="繼續編輯"
+      :loading="saving"
       :destructive="false"
       @update:open="(value) => !value && (pendingLeavePath = '')"
       @confirm="confirmLeave"

@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Cat, Pencil, Trash2, User } from '@lucide/vue';
+import OwnerFormDialog from '../components/OwnerFormDialog.vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { http } from '../api/http';
@@ -15,6 +16,9 @@ const router = useRouter();
 const toast = useToast();
 const owner = ref(null);
 const error = ref('');
+const editOwnerOpen = ref(false);
+const editOwnerSaving = ref(false);
+const editOwnerError = ref('');
 
 const showCreatePet = ref(false);
 const creating = ref(false);
@@ -36,6 +40,22 @@ async function fetchOwner() {
     owner.value = data;
   } catch (err) {
     error.value = '飼主資料載入失敗';
+  }
+}
+
+async function saveOwner(values) {
+  editOwnerSaving.value = true;
+  editOwnerError.value = '';
+  try {
+    await http.put(`/owners/${route.params.id}`, values);
+    editOwnerOpen.value = false;
+    toast.success(`已成功更新飼主「${values.name}」的資料`, '修改資料成功');
+    await fetchOwner();
+  } catch (err) {
+    editOwnerError.value = err.response?.data?.message ?? '飼主資料儲存失敗';
+    toast.error(editOwnerError.value, '修改資料失敗');
+  } finally {
+    editOwnerSaving.value = false;
   }
 }
 
@@ -133,7 +153,14 @@ function goManageRecords() {
 
 onMounted(async () => {
   await fetchOwner();
+  if (route.query.edit === '1') editOwnerOpen.value = true;
   if (route.query.addPet === '1') openCreatePet();
+  if (route.query.edit === '1' || route.query.addPet === '1') {
+    const query = { ...route.query };
+    delete query.edit;
+    delete query.addPet;
+    await router.replace({ query });
+  }
 });
 </script>
 
@@ -144,15 +171,18 @@ onMounted(async () => {
     </router-link>
 
     <Card class="border-cream-300 p-6 shadow-sm dark:border-zinc-800 dark:shadow-none">
-      <div class="flex items-center gap-4">
-        <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
-          <User class="h-7 w-7" stroke-width="1.75" />
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="flex items-center gap-4">
+          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
+            <User class="h-7 w-7" stroke-width="1.75" />
+          </div>
+          <div>
+            <h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ owner.name }}</h1>
+            <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">電話：{{ owner.phone }}</p>
+            <p class="text-sm text-ink-500 dark:text-zinc-400">Email：{{ owner.email || '未填寫' }}</p>
+          </div>
         </div>
-        <div>
-          <h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ owner.name }}</h1>
-          <p class="mt-1 text-sm text-ink-500 dark:text-zinc-500">電話：{{ owner.phone }}</p>
-          <p v-if="owner.email" class="text-sm text-ink-500 dark:text-zinc-500">Email：{{ owner.email }}</p>
-        </div>
+        <Button type="button" variant="outline" class="min-h-11" @click="editOwnerOpen = true"><Pencil class="h-4 w-4" />編輯飼主資料</Button>
       </div>
     </Card>
 
@@ -210,6 +240,17 @@ onMounted(async () => {
         尚無寵物資料
       </p>
     </div>
+
+    <OwnerFormDialog
+      v-if="editOwnerOpen"
+      title="編輯飼主資料"
+      submit-label="儲存"
+      :initial-value="{ name: owner.name, phone: owner.phone, email: owner.email ?? '' }"
+      :submitting="editOwnerSaving"
+      :error-message="editOwnerError"
+      @submit="saveOwner"
+      @close="editOwnerOpen = false"
+    />
 
     <PetFormDialog
       v-if="editPetTarget"
