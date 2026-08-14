@@ -3,10 +3,15 @@ import { pdfAccessSecret } from '../config/pdfAccess.js';
 
 // 見 CLAUDE.md「PDF 產生方式」：不維護獨立版型，直接截圖公開的報告檢視頁
 export async function renderReportPdf(shareToken) {
-  const browser = await puppeteer.launch();
+  const port = process.env.PORT || 3000;
+  const renderBaseUrl = (process.env.PDF_RENDER_BASE_URL || `http://127.0.0.1:${port}`).replace(/\/$/, '');
+  const browser = await puppeteer.launch({
+    executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+    args: process.env.PUPPETEER_NO_SANDBOX === 'true' ? ['--no-sandbox', '--disable-setuid-sandbox'] : undefined,
+  });
   try {
     const page = await browser.newPage();
-    const url = `${process.env.CLIENT_ORIGIN}/report/${shareToken}?renderKey=${encodeURIComponent(pdfAccessSecret)}`;
+    const url = `${renderBaseUrl}/report/${shareToken}?renderKey=${encodeURIComponent(pdfAccessSecret)}`;
     const response = await page.goto(url, { waitUntil: 'networkidle0' });
     if (!response?.ok()) {
       throw new Error(`報告頁面載入失敗（HTTP ${response?.status() ?? 'unknown'}）`);

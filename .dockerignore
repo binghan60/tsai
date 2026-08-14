@@ -1,0 +1,13 @@
+.git
+.gitignore
+.claude
+.tmp
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+!**/.env.example
+*.log
+*.png
+*.pdf
+start-dev.bat

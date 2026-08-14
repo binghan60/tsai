@@ -57,6 +57,17 @@ function safePdfFilename(record) {
   return `${reportNumber}.pdf`;
 }
 
+function publicAppOrigin(req) {
+  const configuredOrigin = process.env.PUBLIC_APP_URL || process.env.CLIENT_ORIGIN || process.env.ZEABUR_WEB_URL;
+  if (configuredOrigin) return configuredOrigin.replace(/\/$/, '');
+
+  const forwardedProtocol = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const forwardedHost = req.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const protocol = forwardedProtocol || req.protocol;
+  const host = forwardedHost || req.get('host');
+  return `${protocol}://${host}`;
+}
+
 function hasClinicalContent(record) {
   return Boolean(
     record.diagnosis?.trim() ||
@@ -365,7 +376,7 @@ recordsRouter.post('/:id/share', async (req, res, next) => {
     await record.save();
 
     res.json({
-      url: `${process.env.CLIENT_ORIGIN}/report/${record.shareToken}`,
+      url: `${publicAppOrigin(req)}/report/${record.shareToken}`,
     });
   } catch (err) {
     next(err);
@@ -406,7 +417,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
 
     assertMailConfigured();
     const pdfBuffer = await renderReportPdf(record.shareToken);
-    const reportUrl = `${process.env.CLIENT_ORIGIN}/report/${record.shareToken}`;
+    const reportUrl = `${publicAppOrigin(req)}/report/${record.shareToken}`;
     const info = await sendHealthReportEmail({
       to: recipient,
       ownerName: owner.name,
