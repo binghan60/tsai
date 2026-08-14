@@ -11,6 +11,7 @@ export async function renderReportPdf(shareToken) {
   });
   try {
     const page = await browser.newPage();
+    await page.emulateTimezone('Asia/Taipei');
     const url = `${renderBaseUrl}/report/${shareToken}?renderKey=${encodeURIComponent(pdfAccessSecret)}`;
     const response = await page.goto(url, { waitUntil: 'networkidle0' });
     if (!response?.ok()) {

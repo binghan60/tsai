@@ -37,6 +37,7 @@ const shareActionLabel = computed(() => {
   return '建立飼主分享連結';
 });
 const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
+const REPORT_TIME_ZONE = 'Asia/Taipei';
 
 function normalizePreview(data) {
   const pet = data.petId && typeof data.petId === 'object' ? data.petId : null;
@@ -67,11 +68,15 @@ async function fetchReport() {
 }
 
 function formatDate(date) {
-  return date ? new Date(date).toLocaleDateString('zh-TW') : '—';
+  return date ? new Date(date).toLocaleDateString('zh-TW', { timeZone: REPORT_TIME_ZONE }) : '—';
 }
 
 function formatDateTime(date) {
-  return date ? new Date(date).toLocaleString('zh-TW', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  return date ? new Date(date).toLocaleString('zh-TW', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: REPORT_TIME_ZONE,
+  }) : '—';
 }
 
 function sexLabel(sex) {
