@@ -83,9 +83,12 @@ export function useQuickPhrases() {
   }
 
   // 射後不理：次數只影響排序，失敗了不值得打斷填表，也不值得跳錯誤訊息。
+  //
+  // 這裡刻意不更新本地的 usageCount —— 排序就是看這個欄位，當場加一會讓剛按下的
+  // 那顆按鈕往前跳、整排重新洗牌，連按兩句時第二下很容易點錯。
+  // 次數照樣累積，排序留到下次開表單才生效，一次填寫過程中位置完全穩定。
   function markUsed(phrase) {
     if (!phrase?._id) return;
-    phrase.usageCount = (phrase.usageCount ?? 0) + 1;
     http.post(`/quick-phrases/${phrase._id}/use`).catch(() => {});
   }
 

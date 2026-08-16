@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Cat, LayoutDashboard, Menu, Moon, Search, Settings2, Sun, Users } from '@lucide/vue';
+import { Cat, ClipboardList, LayoutDashboard, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
 import { useTheme } from './composables/useTheme';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
@@ -16,8 +16,8 @@ const navItems = [
   { to: '/', label: '工作台', exact: true, icon: LayoutDashboard },
   { to: '/owners', label: '飼主', exact: false, icon: Users },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
-  // 健檢表單與標準值合併在「設定」底下，用分頁切換。
-  { to: '/settings', label: '設定', exact: false, icon: Settings2 },
+  // 目前底下只有健檢表單一項，導覽直接叫它本名；日後真的多出別種設定再改回上層分類。
+  { to: '/settings', label: '健檢表單管理', exact: false, icon: ClipboardList },
 ];
 
 const activeTitle = computed(() => route.meta.title ?? navItems.find((item) => (item.exact ? route.path === item.to : route.path.startsWith(item.to)))?.label ?? '工作台');

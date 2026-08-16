@@ -29,7 +29,9 @@ router.post('/', async (req, res, next) => {
     const existing = await QuickPhrase.findOne({ itemKey, text });
     if (existing) return res.json(existing);
 
-    const phrase = await QuickPhrase.create({ text, itemKey });
+    // 起算 1 次而不是 0：這句話是使用者剛打完才存起來的，本來就已經用過一次。
+    // 從 0 起算的話，新存的常用語會排在所有用過的後面，一存好就看不到了。
+    const phrase = await QuickPhrase.create({ text, itemKey, usageCount: 1 });
     res.status(201).json(phrase);
   } catch (err) {
     // 同一句話同時存兩次會撞唯一索引，這不是錯誤，把既有那筆回給前端即可。

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Plus } from '@lucide/vue';
 import { useQuickPhrases } from '../../composables/useQuickPhrases';
 import { useRecordForm } from './context';
@@ -28,14 +28,32 @@ const toast = useToast();
 // 直接排在欄位下的數量。再多就擠成一堆讀不出字的省略號，剩下的交給「全部」視窗。
 const INLINE_LIMIT = 3;
 
+// 「存成常用語」要等使用者停手才浮現。還沒有常用語的欄位整列是不佔位的，
+// 一打字就冒出來會把底下的內容整個往下推 —— 理學檢查十幾列都這樣，打字時版面一直跳。
+const SAVE_HINT_DELAY = 900;
+
 const saving = ref(false);
 const list = computed(() => phrasesFor(props.itemKey));
 const inline = computed(() => list.value.slice(0, INLINE_LIMIT));
 const hasMore = computed(() => list.value.length > INLINE_LIMIT);
 const current = computed(() => String(props.modelValue ?? '').trim());
-const canSave = computed(() => Boolean(current.value) && !list.value.some((entry) => entry.text === current.value));
+
+// current 的延後版本，只用來決定「存成常用語」要不要出現。
+const settled = ref('');
+let settleTimer = null;
+watch(current, (value, previous) => {
+  clearTimeout(settleTimer);
+  // 清空欄位時立刻收起來 —— 需要延後的只有「出現」，消失越快越好。
+  if (!value) { settled.value = ''; return; }
+  // 第一次（載入既有草稿）直接顯示，那時候版面本來就還在組。
+  if (previous === undefined) { settled.value = value; return; }
+  settleTimer = setTimeout(() => { settled.value = value; }, SAVE_HINT_DELAY);
+}, { immediate: true });
+onBeforeUnmount(() => clearTimeout(settleTimer));
+
+const canSave = computed(() => Boolean(settled.value) && !list.value.some((entry) => entry.text === settled.value));
 // 沒有常用語、也沒有可存的內容時整個不佔位 —— 剛裝好的空表單不該多出幾十條空列。
-const visible = computed(() => Boolean(list.value.length) || Boolean(current.value));
+const visible = computed(() => Boolean(list.value.length) || Boolean(settled.value));
 
 // 接在現有文字後面。已經有結尾標點就不再補一個 —— 但半形標點後面要空一格，
 // 直接黏起來會變成「Mild tartar.recheck in 3m」。
@@ -57,6 +75,8 @@ function openAll() {
   openPicker({ itemKey: props.itemKey, label: props.label, onPick: insert });
 }
 
+// 存的是欄位當下的內容，不是延後過的 settled —— 按鈕浮現後又補了幾個字，
+// 使用者想存的是補完的那一版。
 async function save() {
   if (!current.value || saving.value) return;
   saving.value = true;
