@@ -7,7 +7,8 @@ const PetsListPage = () => import('../pages/PetsListPage.vue');
 const PetDetailPage = () => import('../pages/PetDetailPage.vue');
 const RecordFormPage = () => import('../pages/RecordFormPage.vue');
 const ReportViewPage = () => import('../pages/ReportViewPage.vue');
-const SettingsPage = () => import('../pages/SettingsPage.vue');
+const FormTemplateListPage = () => import('../pages/FormTemplateListPage.vue');
+const FormTemplateEditPage = () => import('../pages/FormTemplateEditPage.vue');
 
 const router = createRouter({
   history: createWebHistory(),
@@ -17,7 +18,10 @@ const router = createRouter({
     { path: '/owners/:id', component: OwnerDetailPage, meta: { title: '飼主資料' } },
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },
     { path: '/pets/:id', component: PetDetailPage, meta: { title: '寵物資料' } },
-    { path: '/settings', component: SettingsPage, meta: { title: '標準值' } },
+    // 設定底下兩個分頁：表單決定「有哪些項目」，標準值決定「什麼算正常」。
+    { path: '/settings', redirect: '/settings/forms' },
+    { path: '/settings/forms', component: FormTemplateListPage, meta: { title: '健檢表單' } },
+    { path: '/settings/forms/:id', component: FormTemplateEditPage, meta: { title: '表單設計' } },
     { path: '/pets/:petId/records/new', component: RecordFormPage, meta: { title: '新增健檢' } },
     { path: '/records/:id/edit', component: RecordFormPage, meta: { title: '編輯健檢' } },
     { path: '/records/:id/preview', name: 'record-preview', component: ReportViewPage, meta: { bare: true, title: '報告預覽' } },

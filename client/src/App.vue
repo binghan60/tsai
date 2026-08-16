@@ -16,7 +16,8 @@ const navItems = [
   { to: '/', label: '工作台', exact: true, icon: LayoutDashboard },
   { to: '/owners', label: '飼主', exact: false, icon: Users },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
-  { to: '/settings', label: '標準值', exact: false, icon: Settings2 },
+  // 健檢表單與標準值合併在「設定」底下，用分頁切換。
+  { to: '/settings', label: '設定', exact: false, icon: Settings2 },
 ];
 
 const activeTitle = computed(() => route.meta.title ?? navItems.find((item) => (item.exact ? route.path === item.to : route.path.startsWith(item.to)))?.label ?? '工作台');
@@ -55,6 +56,18 @@ watch(
           </router-link>
         </div>
 
+        <div class="border-b border-sidebar-border p-3">
+          <button
+            type="button"
+            class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            aria-label="搜尋飼主、寵物或病歷"
+            @click="openGlobalSearch"
+          >
+            <Search class="h-4 w-4 shrink-0" stroke-width="1.9" />
+            <span class="truncate">搜尋飼主、寵物或病歷</span>
+          </button>
+        </div>
+
         <nav class="flex-1 space-y-6 px-3 py-4" aria-label="主要導覽">
           <div>
             <p class="px-2 pb-2 text-xs font-medium text-muted-foreground">平台</p>
@@ -86,7 +99,7 @@ watch(
       </aside>
 
       <div class="min-w-0 flex-1 lg:@container/content">
-        <header id="app-header" class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-4 sm:px-6 lg:px-8">
+        <header id="app-header" class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-4 sm:px-6 lg:hidden">
           <Button
             type="button"
             variant="outline"

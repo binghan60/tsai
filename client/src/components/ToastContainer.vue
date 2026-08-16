@@ -9,19 +9,19 @@ const typeConfig = {
     icon: CheckCircle2,
     badge: 'bg-emerald-500/10 text-emerald-600 border-emerald-200/80 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-500/40',
     topBar: 'bg-gradient-to-r from-emerald-500 via-brand-400 to-emerald-600 dark:from-brand-500 dark:via-belle-400 dark:to-amber-300',
-    glow: 'bg-emerald-500/10 dark:bg-brand-500/10',
+    glow: '[--glow-color:color-mix(in_oklab,var(--color-emerald-500)_16%,transparent)] dark:[--glow-color:color-mix(in_oklab,var(--color-brand-500)_16%,transparent)]',
   },
   error: {
     icon: XCircle,
     badge: 'bg-red-500/10 text-red-600 border-red-200/80 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/60',
     topBar: 'bg-gradient-to-r from-red-500 via-belle-500 to-red-600 dark:from-red-600 dark:via-red-400 dark:to-amber-500',
-    glow: 'bg-red-500/10',
+    glow: '[--glow-color:color-mix(in_oklab,var(--color-red-500)_16%,transparent)]',
   },
   info: {
     icon: Info,
     badge: 'bg-sky-500/10 text-sky-600 border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-900/60',
     topBar: 'bg-gradient-to-r from-sky-500 via-ink-500 to-sky-600 dark:from-sky-600 dark:via-sky-400 dark:to-brand-400',
-    glow: 'bg-sky-500/10',
+    glow: '[--glow-color:color-mix(in_oklab,var(--color-sky-500)_16%,transparent)]',
   },
 };
 </script>
@@ -39,12 +39,12 @@ const typeConfig = {
       <div
         v-for="toast in toasts"
         :key="toast.id"
-        class="pointer-events-auto relative flex items-start gap-3.5 overflow-hidden rounded-2xl border border-cream-300/90 bg-cream-50/95 p-4 shadow-xl shadow-ink-900/10 ring-1 ring-white/50 backdrop-blur-xl dark:border-zinc-700/80 dark:bg-zinc-900/95 dark:shadow-black/60 dark:ring-white/10"
+        class="pointer-events-auto relative flex items-start gap-3.5 overflow-hidden rounded-2xl border border-cream-300 bg-cream-50 p-4 shadow-lg shadow-ink-900/15 dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/60"
       >
         <!-- Top accent line -->
         <div class="absolute inset-x-0 top-0 h-1" :class="typeConfig[toast.type]?.topBar || typeConfig.success.topBar"></div>
         <!-- Ambient corner glow -->
-        <div class="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full blur-2xl" :class="typeConfig[toast.type]?.glow || typeConfig.success.glow"></div>
+        <div class="ambient-glow pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full" :class="typeConfig[toast.type]?.glow || typeConfig.success.glow"></div>
 
         <!-- Icon Badge -->
         <div class="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border shadow-xs" :class="typeConfig[toast.type]?.badge || typeConfig.success.badge">

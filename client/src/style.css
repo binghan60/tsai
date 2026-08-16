@@ -23,6 +23,7 @@
   --color-belle-100: #f8d9c8;
   --color-belle-200: #ebb49f;
   --color-belle-300: #d88475;
+  --color-belle-400: #bf665d;
   --color-belle-500: #a74845;
   --color-belle-600: #81333a;
   --color-belle-700: #5f2530;
@@ -39,6 +40,7 @@
   --color-ink-500: #50554f;
   --color-ink-600: #414d55;
   --color-ink-700: #263640;
+  --color-ink-800: #1b2731;
   --color-ink-900: #101923;
 
   --radius-sm: 0.5rem;
@@ -287,4 +289,29 @@ select:focus-visible {
   margin: 0;
   appearance: none;
   -webkit-appearance: none;
+}
+
+/* 裝飾用的角落光暈。原本是 blur-3xl／blur-2xl 的實心圓，但 filter: blur() 在
+   對話框進場（zoom + fade）期間每一幀都要重算一次，是開場卡頓的來源之一。
+   radial-gradient 由合成器直接畫出來，成本接近零，視覺結果幾乎相同。
+   顏色由使用端用 [--glow-color:…] 指定。 */
+.ambient-glow {
+  background-image: radial-gradient(circle closest-side, var(--glow-color, transparent), transparent);
+}
+
+/* 系統層級開了「減少動態效果」就不要再放大／滑入，只保留淡入淡出。
+   完全拿掉動畫會讓對話框瞬間出現、失去「它從哪裡來」的線索，反而更難理解。 */
+@media (prefers-reduced-motion: reduce) {
+  [data-slot='dialog-content'],
+  [data-slot='dialog-overlay'] {
+    animation-duration: 0.01ms !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

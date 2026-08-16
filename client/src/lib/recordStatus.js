@@ -1,8 +1,6 @@
 export const RECORD_STATUS_META = {
   draft: { label: '草稿', class: 'bg-cream-200 text-ink-600 dark:bg-zinc-800 dark:text-zinc-400' },
   finalized: { label: '已結案', class: 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300' },
-  // 舊資料相容：sent 在生命週期上視為已結案，寄送狀態另外顯示。
-  sent: { label: '已結案', class: 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300' },
 };
 
 export const DELIVERY_STATUS_META = {
@@ -17,7 +15,5 @@ export function isFinalizedRecord(record) {
 }
 
 export function getDeliveryStatus(record) {
-  if (!record) return 'not_sent';
-  if (record.status === 'sent' && (!record.deliveryStatus || record.deliveryStatus === 'not_sent')) return 'sent';
-  return record.deliveryStatus || 'not_sent';
+  return record?.deliveryStatus || 'not_sent';
 }

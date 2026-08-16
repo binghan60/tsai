@@ -1,28 +1,94 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, AlertTriangle, Clock3, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
+import { Activity, AlertTriangle, Check, Clock3, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
-import { BASIC_MEASUREMENTS, LAB_GROUPS, LAB_TESTS } from '../lib/labTests';
+import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomId, sectionKeyForItem } from '../lib/formTemplate';
+import { useFormTemplate } from '../composables/useFormTemplate';
+import { useQuickPhrases } from '../composables/useQuickPhrases';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import FormSection from '../components/formfields/FormSection.vue';
+import QuickPhraseDeleteDialog from '../components/formfields/QuickPhraseDeleteDialog.vue';
+import QuickPhrasePickerDialog from '../components/formfields/QuickPhrasePickerDialog.vue';
+import { provideRecordForm } from '../components/formfields/context';
 import { useToast } from '../composables/useToast';
 
-const EXAM_TYPE_OPTIONS = ['例行健檢', '幼年健檢', '熟齡健檢', '術前評估', '追蹤檢查', '其他'];
-const FORM_SECTIONS = [
-  { id: 'record-section-info', label: '基本資料' },
-  { id: 'record-section-measurements', label: '量測' },
-  { id: 'record-section-examination', label: '理學檢查' },
-  { id: 'record-section-labs', label: '檢驗' },
-  { id: 'record-section-conclusion', label: '結論' },
+const { template, loadTemplate, listTemplates } = useFormTemplate();
+const { loadPhrases } = useQuickPhrases();
+
+// 區塊與項目定義全部來自範本，不再寫死在頁面裡。
+const TEMPLATE_SECTIONS = computed(() =>
+  (template.value?.sections ?? []).map((section) => ({
+    ...section,
+    id: sectionDomId(section.key),
+    label: section.title,
+  }))
+);
+
+// 範本已刪除、但草稿仍留著作答的「孤兒項目」。後端 appendOrphans() 把它們補在最後一個
+// 同型別區塊，都沒有就另開「其他紀錄」；表單這邊必須一致 —— 不一致的話同一筆紀錄在
+// 表單與報告上會落在不同區塊，而完全渲染不出來時更糟：結案驗證仍會要求補異常說明，
+// 使用者卻在畫面上找不到那個欄位可以補，報告就此結不了案。
+// 兩種型別各自收容 —— 理學檢查與檢驗表格版式只畫得出自己的型別，混在同一個區塊
+// 會有一半渲染不出來。報告頁的容器沒有這個限制，不必跟著拆成兩個。
+const ORPHAN_SECTIONS = [
+  { type: 'finding', key: 'orphan_findings', title: '其他紀錄（理學檢查）', presentation: 'findings' },
+  { type: 'lab', key: 'orphan_labs', title: '其他紀錄（檢驗）', presentation: 'table' },
 ];
-const activeSectionId = ref(FORM_SECTIONS[0].id);
-const activeSectionIndex = computed(() => FORM_SECTIONS.findIndex((section) => section.id === activeSectionId.value));
+const ORPHAN_DESCRIPTION = '目前表單範本已不包含這些項目，仍保留原始紀錄以便補充或修正。';
+
+const entriesOfType = (type) => (type === 'finding' ? record.examinationFindings : record.labFindings) ?? [];
+
+function templateKeysOf(type) {
+  return new Set(
+    TEMPLATE_SECTIONS.value.flatMap((section) => (section.items ?? []).filter((item) => item.type === type).map((item) => item.key))
+  );
+}
+
+function orphansOfType(type) {
+  const known = templateKeysOf(type);
+  return entriesOfType(type).filter((entry) => !known.has(entry.key));
+}
+
+// 孤兒的落腳區塊：最後一個同型別的範本區塊，都沒有才用收容區塊。
+function orphanHostKey(type) {
+  const host = [...TEMPLATE_SECTIONS.value].reverse().find((section) => (section.items ?? []).some((item) => item.type === type));
+  return host?.key ?? ORPHAN_SECTIONS.find((spec) => spec.type === type).key;
+}
+
+const FORM_SECTIONS = computed(() => {
+  const collectors = ORPHAN_SECTIONS
+    .filter((spec) => orphanHostKey(spec.type) === spec.key)
+    .map((spec) => ({ spec, orphans: orphansOfType(spec.type) }))
+    .filter(({ orphans }) => orphans.length)
+    .map(({ spec, orphans }, index) => ({
+      key: spec.key,
+      id: sectionDomId(spec.key),
+      title: spec.title,
+      label: spec.title,
+      description: ORPHAN_DESCRIPTION,
+      presentation: spec.presentation,
+      order: TEMPLATE_SECTIONS.value.length + index,
+      items: orphans.map((entry) => ({ key: entry.key, label: entry.label, type: spec.type, span: 'auto' })),
+    }));
+  return [...TEMPLATE_SECTIONS.value, ...collectors];
+});
+const BASIC_MEASUREMENTS = computed(() => measurementDefs(template.value));
+const EXAMINATION_ITEMS = computed(() => examinationDefs(template.value));
+const LAB_TESTS = computed(() => labDefs(template.value));
+
+const activeSectionId = ref('');
+const activeSectionIndex = computed(() => FORM_SECTIONS.value.findIndex((section) => section.id === activeSectionId.value));
+// 超過這個數量就只顯示目前所在區塊的文字，其餘收成編號圓圈，
+// 否則導覽列會長到必須大幅橫捲才找得到自己在哪。
+const COMPACT_STEP_THRESHOLD = 6;
+const compactSteps = computed(() => FORM_SECTIONS.value.length > COMPACT_STEP_THRESHOLD);
 
 const route = useRoute();
 const router = useRouter();
@@ -37,37 +103,36 @@ const isLocked = computed(() => recordStatus.value !== 'draft');
 const showDiscardConfirm = ref(false);
 const discarding = ref(false);
 
-const EXAMINATION_ITEMS = [
-  { key: 'auscultation', label: '聽診' },
-  { key: 'palpation', label: '觸診' },
-  { key: 'general', label: '整體外觀與精神' },
-  { key: 'oral', label: '口腔與牙齦' },
-  { key: 'skin_coat', label: '皮膚與被毛' },
-  { key: 'eyes', label: '眼睛' },
-  { key: 'ears', label: '耳朵' },
-  { key: 'cardiovascular', label: '心血管' },
-  { key: 'respiratory', label: '呼吸系統' },
-  { key: 'digestive', label: '腹部與消化系統' },
-  { key: 'musculoskeletal', label: '肌肉骨骼' },
-  { key: 'neurological', label: '神經與行為' },
-  { key: 'urogenital', label: '泌尿生殖系統' },
-];
+// 健檢類型 = 用哪一份範本，只在建立報告時決定；建立後不可更改，
+// 否則已填的作答會對不上表單結構。
+const examTypes = ref([]);
+const SPECIES_LABELS = { cat: '貓', dog: '犬', all: '不限物種' };
+const chosenTemplateId = ref('');
+const examTypeName = ref('');
+// 建立報告一律先選類型 —— 類型決定整份表單且建立後不可更改，
+// 所以做成「選擇 → 確認」兩步，避免誤點就定案。
+const pendingTemplateId = ref('');
+const needsTypeChoice = computed(() => !recordId.value && !chosenTemplateId.value);
+const confirmingExamType = ref(false);
+const typeChoiceError = ref('');
 
 const pet = ref(null);
-const labRanges = ref({});
-const labRangesLoading = ref(false);
+// 參考範圍就存在範本項目上，不必另外請求。
+const labRanges = computed(() => referenceRanges(template.value));
 const vet = ref('');
 const visitDate = ref(new Date().toISOString().slice(0, 10));
+// 三個 findings 陣列在範本載入後才建立（見 applyTemplateDefaults）。
 const record = reactive({
-  examType: '例行健檢',
   weightKg: null,
   temperatureC: null,
   heartRate: null,
   respiratoryRate: null,
   bodyConditionScore: null,
-  measurementAssessments: BASIC_MEASUREMENTS.map((item) => ({ ...item, status: 'not_checked', statusSource: 'auto', referenceMin: null, referenceMax: null })),
-  examinationFindings: EXAMINATION_ITEMS.map((item) => ({ ...item, status: 'not_checked', note: '' })),
-  labFindings: LAB_TESTS.map((item) => ({ ...item, status: 'not_checked', statusSource: 'manual', value: '', unit: '', referenceMin: null, referenceMax: null, note: '' })),
+  measurementAssessments: [],
+  examinationFindings: [],
+  labFindings: [],
+  // 使用者自訂項目的作答；內建項目仍存在上面的具名欄位。
+  customValues: {},
   chiefComplaint: '',
   history: '',
   conclusion: '',
@@ -76,6 +141,60 @@ const record = reactive({
   treatmentPlan: '',
   other: '',
 });
+
+// 以範本定義建立空白的作答結構；建立新報告與載入既有草稿前都會先跑這一段。
+function applyTemplateDefaults() {
+  record.measurementAssessments = BASIC_MEASUREMENTS.value.map((item) => ({ ...item, status: 'not_checked', statusSource: 'auto', referenceMin: null, referenceMax: null }));
+  record.examinationFindings = EXAMINATION_ITEMS.value.map((item) => ({ ...item, status: 'not_checked', note: '' }));
+  record.labFindings = LAB_TESTS.value.map((item) => ({ ...item, status: 'not_checked', statusSource: 'manual', value: '', unit: '', referenceMin: null, referenceMax: null, note: '' }));
+  if (!activeSectionId.value) activeSectionId.value = FORM_SECTIONS.value[0]?.id ?? '';
+}
+
+// 將選定的健檢類型載入成真正的表單結構。
+// 範本被刪除時退回報告自己的 sections 快照，已結案報告仍可正常查看。
+async function applyTemplate(templateId, fallback = {}) {
+  const normalizedId = typeof templateId === 'object' ? templateId?._id : templateId;
+  let loadedTemplate;
+
+  const snapshot = Array.isArray(fallback.sections) && fallback.sections.length ? fallback.sections : null;
+
+  if (normalizedId) {
+    try {
+      loadedTemplate = await loadTemplate(String(normalizedId));
+    } catch (err) {
+      // 範本被刪除時仍要能開啟報告 —— 已結案的報告有自己的結構快照。
+      if (!snapshot) throw err;
+      loadedTemplate = { _id: null, name: fallback.name || '已刪除的健檢表單', species: 'all', sections: snapshot };
+      template.value = loadedTemplate;
+    }
+  } else {
+    throw new Error('找不到這份報告使用的健檢表單');
+  }
+
+  chosenTemplateId.value = loadedTemplate._id ? String(loadedTemplate._id) : '';
+  examTypeName.value = loadedTemplate.name || fallback.name || '';
+  activeSectionId.value = '';
+  applyTemplateDefaults();
+  return loadedTemplate;
+}
+
+async function confirmExamType() {
+  if (!pendingTemplateId.value || confirmingExamType.value) return;
+  confirmingExamType.value = true;
+  typeChoiceError.value = '';
+  hydrated.value = false;
+  try {
+    await applyTemplate(pendingTemplateId.value);
+    await nextTick();
+    isDirty.value = false;
+    saveState.value = 'saved';
+  } catch (err) {
+    typeChoiceError.value = err.response?.data?.message || '健檢表單載入失敗，請稍後再試';
+  } finally {
+    hydrated.value = true;
+    confirmingExamType.value = false;
+  }
+}
 
 const loading = ref(true);
 const loadError = ref('');
@@ -90,15 +209,32 @@ const leavingAfterAction = ref(false);
 const pendingLeavePath = ref('');
 let autosaveTimer;
 
-const completionSections = computed(() => [
-  Boolean(record.chiefComplaint.trim() || record.history.trim()),
-  [record.weightKg, record.temperatureC, record.heartRate, record.respiratoryRate, record.bodyConditionScore].some((value) => value !== null && value !== ''),
-  record.examinationFindings.some((item) => item.status !== 'not_checked'),
-  record.labFindings.some((item) => item.status !== 'not_checked' || item.value.trim() || item.note.trim()),
-  Boolean(record.conclusion.trim() || record.diagnosis.trim()),
-]);
+// 這兩個角色的欄位有預設值（日期帶今天、類型帶第一個選項），
+// 不能拿來當「使用者已填寫此區塊」的訊號。
+const PREFILLED_ROLES = new Set(['visitDate']);
+
+function itemHasContent(item) {
+  if (PREFILLED_ROLES.has(item.role)) return false;
+  if (item.type === 'finding') {
+    return record.examinationFindings.some((finding) => finding.key === item.key && finding.status !== 'not_checked');
+  }
+  if (item.type === 'lab') {
+    return record.labFindings.some(
+      (finding) => finding.key === item.key
+        && (finding.status !== 'not_checked' || finding.value?.trim() || finding.note?.trim())
+    );
+  }
+  // 一律走 valueFor：自訂項目存在 customValues，直接讀 record[key] 會永遠是空的。
+  const value = valueFor(item);
+  if (item.type === 'measurement' || item.type === 'number') return value !== null && value !== undefined && value !== '';
+  return Boolean(String(value ?? '').trim());
+}
+
+// 導覽列圓圈是照 FORM_SECTIONS 排的，這裡要用同一份清單，否則收容區塊會對不上索引。
+const completionSections = computed(() =>
+  FORM_SECTIONS.value.map((section) => (section.items ?? []).some(itemHasContent))
+);
 const completedCount = computed(() => completionSections.value.filter(Boolean).length);
-const completionPercent = computed(() => completedCount.value * 20);
 const saveLabel = computed(() => {
   if (saveState.value === 'saving') return '自動儲存中…';
   if (saveState.value === 'error') return '自動儲存失敗';
@@ -125,43 +261,112 @@ function applyRecord(data) {
   revisionReason.value = data.revisionReason ?? '';
   vet.value = data.vet ?? '';
   visitDate.value = data.visitDate ? data.visitDate.slice(0, 10) : '';
-  for (const key of ['examType', 'weightKg', 'temperatureC', 'heartRate', 'respiratoryRate', 'bodyConditionScore', 'chiefComplaint', 'history', 'conclusion', 'diagnosis', 'labSummary', 'treatmentPlan', 'other']) {
+  for (const key of ['weightKg', 'temperatureC', 'heartRate', 'respiratoryRate', 'bodyConditionScore', 'chiefComplaint', 'history', 'conclusion', 'diagnosis', 'labSummary', 'treatmentPlan', 'other']) {
     if (data[key] !== undefined && data[key] !== null) record[key] = data[key];
   }
-  record.examinationFindings = mergeFindings(EXAMINATION_ITEMS, data.examinationFindings, ['note']);
-  record.measurementAssessments = mergeFindings(BASIC_MEASUREMENTS, data.measurementAssessments, ['statusSource', 'unit', 'referenceMin', 'referenceMax'], { statusSource: 'auto' });
-  record.labFindings = mergeFindings(LAB_TESTS, data.labFindings, ['statusSource', 'value', 'unit', 'referenceMin', 'referenceMax', 'note']);
+  record.customValues = { ...(data.customValues ?? {}) };
+  record.examinationFindings = mergeFindings(EXAMINATION_ITEMS.value, data.examinationFindings, ['note']);
+  record.measurementAssessments = mergeFindings(BASIC_MEASUREMENTS.value, data.measurementAssessments, ['statusSource', 'unit', 'referenceMin', 'referenceMax'], { statusSource: 'auto' });
+  record.labFindings = mergeFindings(LAB_TESTS.value, data.labFindings, ['statusSource', 'value', 'unit', 'referenceMin', 'referenceMax', 'note']);
   lastSavedAt.value = data.updatedAt ? new Date(data.updatedAt) : null;
 }
 
 async function scrollToSection(id) {
   activeSectionId.value = id;
   await nextTick();
-  document.querySelector(`[data-form-section="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// 區塊可以由使用者自訂數量，導覽列會橫向捲動。不論從哪條路徑切換
+//（點導覽、上下一區、點驗證錯誤跳轉），都要把目前這一步帶進視野。
+watch(activeSectionId, async (id) => {
+  if (!id) return;
+  await nextTick();
+  document.querySelector(`[data-form-section="${id}"]`)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+});
+
 function adjacentSection(offset) {
-  const target = FORM_SECTIONS[activeSectionIndex.value + offset];
+  const target = FORM_SECTIONS.value[activeSectionIndex.value + offset];
   if (target) scrollToSection(target.id);
 }
 
+// 驗證錯誤的錨點 id 反查所屬區塊；區塊由範本決定，不再硬對應。
 function sectionIdForTarget(targetId) {
-  if (targetId.startsWith('record-exam-')) return 'record-section-examination';
-  if (targetId.startsWith('record-lab-')) return 'record-section-labs';
-  if (targetId === 'record-section-conclusion' || ['record-conclusion', 'record-treatment-plan'].includes(targetId)) return 'record-section-conclusion';
-  if (targetId === 'record-section-measurements' || targetId.startsWith('record-bodyConditionScore')) return 'record-section-measurements';
-  return 'record-section-info';
+  const known = FORM_SECTIONS.value.find((section) => section.id === targetId);
+  if (known) return known.id;
+
+  // 依項目 key 反查所屬區塊，例如 record-exam-row-oral / record-lab-value-bun。
+  const itemKey = targetId.replace(/^record-(exam|lab)-(row|note|value)-/, '').replace(/^record-/, '');
+  const sectionKey = sectionKeyForItem(template.value, itemKey);
+  if (sectionKey) return sectionDomId(sectionKey);
+
+  // 孤兒項目不在範本裡，要問它現在掛在哪個區塊，否則點驗證錯誤只會跳回第一區。
+  const orphanType = targetId.startsWith('record-lab-') ? 'lab' : targetId.startsWith('record-exam-') ? 'finding' : null;
+  if (orphanType && orphansOfType(orphanType).some((entry) => entry.key === itemKey)) {
+    return sectionDomId(orphanHostKey(orphanType));
+  }
+  return FORM_SECTIONS.value[0]?.id ?? '';
 }
 
-function markUncheckedExaminationsNormal() {
-  for (const finding of record.examinationFindings) {
+// ── 提供給版式元件的作答存取 ──
+// vet／visitDate 存在獨立的 ref，自訂項目存在 customValues，其餘存在 record 具名欄位。
+function valueFor(item) {
+  // storage 要先判斷：這兩個欄位一旦被改成別的型別就會改存 customValues，
+  // 再走專用 ref 會把值寫進型別對不上的具名欄位。
+  if (item.storage === 'custom') return record.customValues[item.key] ?? '';
+  if (item.role === 'vet') return vet.value;
+  if (item.role === 'visitDate') return visitDate.value;
+  return record[item.key] ?? '';
+}
+
+function setValue(item, next) {
+  if (item.storage === 'custom') record.customValues[item.key] = next;
+  else if (item.role === 'vet') vet.value = next ?? '';
+  else if (item.role === 'visitDate') visitDate.value = next ?? '';
+  else record[item.key] = next;
+}
+
+// 依區塊挑出對應的作答列；孤兒項目跟著 orphanHostKey() 走，與後端落點一致。
+function entriesFor(section, entries, type) {
+  const keys = new Set((section.items ?? []).filter((item) => item.type === type).map((item) => item.key));
+  const known = templateKeysOf(type);
+  const isHost = orphanHostKey(type) === section.key;
+  return entries.filter((entry) => keys.has(entry.key) || (isHost && !known.has(entry.key)));
+}
+
+const findingsFor = (section) => entriesFor(section, record.examinationFindings, 'finding');
+const labsFor = (section) => entriesFor(section, record.labFindings, 'lab');
+
+function itemByRoleInTemplate(role) {
+  return FORM_SECTIONS.value.flatMap((section) => section.items ?? []).find((item) => item.role === role) ?? null;
+}
+
+// 結論與照護建議「擇一必填」：兩邊都空時要顯示提醒。
+function eitherOrPending() {
+  const conclusion = itemByRoleInTemplate('conclusion');
+  const treatmentPlan = itemByRoleInTemplate('treatmentPlan');
+  if (!conclusion && !treatmentPlan) return false;
+  return !String(valueFor(conclusion ?? {}) ?? '').trim() && !String(valueFor(treatmentPlan ?? {}) ?? '').trim();
+}
+
+// 分段導覽的圓圈有三種狀態：目前所在、已有內容、尚未填寫。
+function stepBadgeClass(index, sectionId) {
+  if (activeSectionId.value === sectionId) return 'bg-primary text-primary-foreground';
+  if (completionSections.value[index]) return 'bg-primary/15 text-primary dark:bg-brand-500/20 dark:text-brand-300';
+  return 'border border-cream-300 bg-white text-ink-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-500';
+}
+
+function markUncheckedFindingsNormal(section) {
+  for (const finding of findingsFor(section)) {
     if (finding.status === 'not_checked') finding.status = 'normal';
   }
 }
 
-function markEmptyLabGroupNormal(group) {
-  for (const finding of record.labFindings.filter((item) => item.group === group)) {
+// 只處理按鈕所在區塊的項目 —— 兩個區塊用同一個分組名（或都沒填分組）時，
+// 掃整份 labFindings 會把別的區塊與孤兒項目一起標成正常，並印進飼主看到的報告。
+function markEmptyLabGroupNormal(section, group) {
+  for (const finding of labsFor(section).filter((item) => (item.group ?? '') === group)) {
     if (finding.status !== 'not_checked' || finding.value.trim() || finding.note.trim()) continue;
     finding.status = 'normal';
     finding.statusSource = 'manual';
@@ -173,36 +378,36 @@ async function loadPetContext(id) {
   pet.value = data;
 }
 
-async function loadLabRanges() {
-  labRangesLoading.value = true;
-  try {
-    const { data } = await http.get('/settings/lab-ranges', {
-      params: { species: pet.value?.species || 'all', effective: 1 },
-    });
-    labRanges.value = Object.fromEntries(data.ranges.filter((item) => item.configured && item.enabled).map((item) => [item.key, item]));
-  } catch (err) {
-    labRanges.value = {};
-  } finally {
-    labRangesLoading.value = false;
-  }
-}
-
 async function init() {
   loading.value = true;
   loadError.value = '';
   try {
     if (recordId.value) {
+      // 編輯既有報告：一定要用它自己的健檢類型，不能用目前的預設類型。
       const { data } = await http.get(`/records/${recordId.value}`);
-      applyRecord(data);
       if (typeof data.petId === 'object') {
         pet.value = data.petId;
         petId.value = data.petId._id;
       } else {
         petId.value = data.petId;
       }
+      await applyTemplate(data.templateId, { sections: data.sections, name: data.examType });
+      examTypeName.value = data.examType || examTypeName.value;
+      applyRecord(data);
+    } else {
+      // 新報告：先知道是哪隻寵物，才能只列出適用該物種的表單。
+      // 這個階段「不」載入任何表單結構，等使用者確認類型後才載入。
+      await loadPetContext(petId.value);
+      examTypes.value = await listTemplates({ species: pet.value?.species });
+      if (!examTypes.value.length) {
+        loadError.value = `目前沒有適用於「${pet.value?.species || '這個物種'}」的健檢表單，請先到設定新增。`;
+        return;
+      }
+      // 只有一種可選時先幫忙選起來，仍需按下確認。
+      if (examTypes.value.length === 1) pendingTemplateId.value = examTypes.value[0]._id;
+      return;
     }
     if (!pet.value) await loadPetContext(petId.value);
-    await loadLabRanges();
   } catch (err) {
     loadError.value = '健檢資料暫時無法載入，請稍後重試';
   } finally {
@@ -267,6 +472,21 @@ function measurementAssessment(metric) {
   return record.measurementAssessments.find((item) => item.key === metric.key);
 }
 
+provideRecordForm({
+  valueFor,
+  setValue,
+  findingsFor,
+  labsFor,
+  eitherOrPending,
+  labRanges,
+  labRangeLabel,
+  measurementAssessment,
+  autoJudgeMeasurement,
+  autoJudgeLab,
+  setLabStatus,
+  markEmptyLabGroupNormal,
+});
+
 function optionalNumber(value) {
   if (value === '' || value === null || value === undefined) return null;
   const numeric = Number(value);
@@ -299,7 +519,7 @@ async function saveRecord({ silent = false } = {}) {
     if (recordId.value) {
       ({ data: saved } = await http.put(`/records/${recordId.value}`, payload));
     } else {
-      ({ data: saved } = await http.post(`/pets/${petId.value}/records`, payload));
+      ({ data: saved } = await http.post(`/pets/${petId.value}/records`, { ...payload, templateId: chosenTemplateId.value }));
       recordId.value = saved._id;
       const wasLeavingAfterAction = leavingAfterAction.value;
       leavingAfterAction.value = true;
@@ -328,24 +548,68 @@ function scheduleAutosave() {
   autosaveTimer = setTimeout(() => saveRecord({ silent: true }), 1500);
 }
 
+// 這裡的規則要跟後端 validateFinalRecord 對齊，否則會出現
+// 「前端說不行、後端說可以」或反過來的矛盾。欄位一律從範本取，不寫死名稱。
 function validateForPreview() {
   const errors = [];
   const addError = (message, targetId, focusId = targetId) => errors.push({ message, targetId, focusId });
-  if (!vet.value.trim()) addError('請填寫獸醫師', 'record-vet');
-  if (!visitDate.value) addError('請填寫健檢日期', 'record-visit-date');
-  const hasClinicalContent = record.conclusion.trim() || record.diagnosis.trim() || record.treatmentPlan.trim() || BASIC_MEASUREMENTS.some((item) => record[item.key] !== null && record[item.key] !== '') || record.examinationFindings.some((item) => item.status !== 'not_checked') || record.labFindings.some((item) => item.status !== 'not_checked');
-  if (!hasClinicalContent) addError('請至少填寫基本量測、結論、診斷、理學檢查或檢驗結果', 'record-section-measurements');
-  if (!record.conclusion.trim() && !record.treatmentPlan.trim()) addError('請填寫結論或照護與追蹤建議', 'record-section-conclusion');
-  if (record.bodyConditionScore != null && record.bodyConditionScore !== '' && (Number(record.bodyConditionScore) < 1 || Number(record.bodyConditionScore) > 9)) addError('體態評分須介於 1 到 9', 'record-bodyConditionScore');
+  const items = FORM_SECTIONS.value.flatMap((section) => section.items ?? []);
+  const byRole = (role) => items.find((item) => item.role === role) ?? null;
 
-  const examinationWithoutNote = record.examinationFindings.filter((item) => item.status === 'abnormal' && !item.note.trim());
-  for (const item of examinationWithoutNote) addError(`請補充理學檢查異常說明：${item.label}`, `record-exam-row-${item.key}`, `record-exam-note-${item.key}`);
+  // 錨點要用實際渲染出來的 DOM id，不同型別的版式元件命名規則不同。
+  const anchorFor = (item) => {
+    if (!item) return FORM_SECTIONS.value[0]?.id ?? '';
+    if (item.type === 'finding') return `record-exam-row-${item.key}`;
+    if (item.type === 'lab') return `record-lab-row-${item.key}`;
+    return `record-${item.key}`;
+  };
+  const filled = (item) => {
+    if (!item) return false;
+    if (item.type === 'finding') return record.examinationFindings.some((f) => f.key === item.key && f.status !== 'not_checked');
+    if (item.type === 'lab') return record.labFindings.some((f) => f.key === item.key && (f.status !== 'not_checked' || f.value?.trim()));
+    return Boolean(String(valueFor(item) ?? '').trim());
+  };
 
-  const labsWithoutNote = record.labFindings.filter((item) => item.status === 'abnormal' && !item.note.trim());
-  for (const item of labsWithoutNote) addError(`請補充檢驗異常說明：${item.label}`, `record-lab-row-${item.key}`, `record-lab-note-${item.key}`);
+  for (const item of items.filter((entry) => entry.required)) {
+    if (!filled(item)) addError(`請填寫${item.label}`, anchorFor(item));
+  }
 
-  const invalidLabValues = record.labFindings.filter((item) => item.numeric !== false && item.value.trim() && !Number.isFinite(Number(item.value)));
-  for (const item of invalidLabValues) addError(`檢驗數值必須是數字：${item.label}`, `record-lab-row-${item.key}`, `record-lab-value-${item.key}`);
+  // 與後端相同：visitDate 有預設值、vet 是行政欄位，都不算臨床內容。
+  const ADMIN_ROLES = new Set(['visitDate', 'vet']);
+  if (!items.some((item) => !ADMIN_ROLES.has(item.role) && filled(item))) {
+    addError('請至少填寫一個區塊的檢查內容', FORM_SECTIONS.value[0]?.id ?? '');
+  }
+
+  const conclusion = byRole('conclusion');
+  const treatmentPlan = byRole('treatmentPlan');
+  if ((conclusion || treatmentPlan) && !filled(conclusion) && !filled(treatmentPlan)) {
+    const label = [conclusion?.label, treatmentPlan?.label].filter(Boolean).join('或');
+    addError(`請填寫${label}`, anchorFor(conclusion ?? treatmentPlan));
+  }
+
+  // 數值範圍取自範本項目，不再寫死「體態評分 1–9」。
+  for (const item of items.filter((entry) => entry.type === 'measurement' || entry.type === 'number')) {
+    const raw = valueFor(item);
+    if (raw === null || raw === undefined || String(raw).trim() === '') continue;
+    const numeric = Number(raw);
+    if (!Number.isFinite(numeric)) {
+      addError(`${item.label}必須是數字`, anchorFor(item));
+      continue;
+    }
+    if (item.min != null && numeric < item.min) addError(`${item.label}不可小於 ${item.min}`, anchorFor(item));
+    if (item.max != null && numeric > item.max) addError(`${item.label}不可大於 ${item.max}`, anchorFor(item));
+  }
+
+  for (const finding of record.examinationFindings.filter((f) => f.status === 'abnormal' && !f.note?.trim())) {
+    addError(`請補充理學檢查異常說明：${finding.label}`, `record-exam-row-${finding.key}`, `record-exam-note-${finding.key}`);
+  }
+  for (const finding of record.labFindings.filter((f) => f.status === 'abnormal' && !f.note?.trim())) {
+    addError(`請補充檢驗異常說明：${finding.label}`, `record-lab-row-${finding.key}`, `record-lab-note-${finding.key}`);
+  }
+  for (const finding of record.labFindings.filter((f) => f.numeric !== false && f.value?.trim() && !Number.isFinite(Number(f.value)))) {
+    addError(`檢驗數值必須是數字：${finding.label}`, `record-lab-row-${finding.key}`, `record-lab-value-${finding.key}`);
+  }
+
   validationErrors.value = errors;
   return errors.length === 0;
 }
@@ -448,6 +712,9 @@ async function confirmDiscard() {
 }
 onMounted(() => {
   init();
+  // 常用語清單只在模組層級抓一次，之後各欄位都從記憶體篩；
+  // 失敗不影響填表，composable 內部已經吞掉錯誤。
+  loadPhrases();
   window.addEventListener('beforeunload', handleBeforeUnload);
 });
 onBeforeUnmount(() => {
@@ -465,12 +732,49 @@ function handleBeforeUnload(event) {
 <template>
   <section class="mx-auto max-w-6xl space-y-5 pb-28">
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><router-link v-if="petId" :to="`/pets/${petId}`" class="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← 回寵物資料</router-link><h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-ink-500 dark:text-zinc-400">修訂原因：{{ revisionReason }}</p></div>
+      <div><router-link v-if="petId" :to="`/pets/${petId}`" class="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← 回寵物資料</router-link><h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-belle-50 px-2.5 py-0.5 text-xs font-medium text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-ink-500 dark:text-zinc-400">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-ink-500 dark:text-zinc-400'"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
     </div>
 
     <p v-if="loadError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ loadError }}</p>
     <p v-else-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入健檢資料…</p>
+
+    <!-- 建立報告的第一步：選健檢類型，決定要套用哪一份表單 -->
+    <div v-else-if="needsTypeChoice" class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
+      <h2 class="text-base font-semibold text-ink-900 dark:text-white">選擇健檢類型</h2>
+      <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">
+        每種類型有各自的健檢表單。<strong class="font-medium text-ink-700 dark:text-zinc-200">建立後就不能更改</strong>，請確認後再開始填寫。
+      </p>
+      <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <button
+          v-for="type in examTypes"
+          :key="type._id"
+          type="button"
+          class="rounded-xl border p-4 text-left transition-colors"
+          :class="pendingTemplateId === type._id
+            ? 'border-primary bg-belle-50 ring-1 ring-primary dark:bg-brand-500/10'
+            : 'border-cream-300 bg-white hover:border-belle-500 hover:bg-belle-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
+          :aria-pressed="pendingTemplateId === type._id"
+          @click="pendingTemplateId = type._id"
+        >
+          <span class="flex flex-wrap items-center gap-2">
+            <span class="text-sm font-medium text-ink-900 dark:text-white">{{ type.name }}</span>
+            <span v-if="type.species !== 'all'" class="rounded-full bg-cream-200 px-2 py-0.5 text-xs font-medium text-ink-600 dark:bg-zinc-800 dark:text-zinc-300">{{ SPECIES_LABELS[type.species] }}用</span>
+            <Check v-if="pendingTemplateId === type._id" class="h-4 w-4 text-primary" stroke-width="1.75" />
+          </span>
+          <span class="mt-1 block text-xs text-ink-400 dark:text-zinc-500">{{ type.description || `${type.sectionCount} 個區塊・${type.itemCount} 個項目` }}</span>
+        </button>
+      </div>
+      <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-cream-300 pt-4 dark:border-zinc-800">
+        <p v-if="typeChoiceError" class="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ typeChoiceError }}</p>
+        <Button type="button" class="min-h-11" :disabled="!pendingTemplateId || confirmingExamType" @click="confirmExamType">
+          {{ confirmingExamType ? '載入表單中…' : `開始填寫${pendingTemplateId ? `「${examTypes.find((type) => type._id === pendingTemplateId)?.name}」` : ''}` }}
+        </Button>
+        <Button v-if="petId" as-child variant="outline" class="min-h-11">
+          <router-link :to="`/pets/${petId}`">取消</router-link>
+        </Button>
+      </div>
+    </div>
 
     <template v-else>
       <div v-if="isLocked" class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-sm dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-200">
@@ -488,106 +792,77 @@ function handleBeforeUnload(event) {
       </div>
 
       <div v-if="!isLocked" id="record-context-bar" class="rounded-2xl border border-cream-300 bg-cream-50 px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="font-semibold text-ink-900 dark:text-white">{{ pet?.name ?? '—' }}</span><span class="font-mono text-xs text-ink-400 dark:text-zinc-400">{{ pet?.medicalRecordNumber || (pet?._id ? `PET-${pet._id.slice(-8).toUpperCase()}` : '') }}</span></div><div class="flex items-center gap-2 text-sm text-ink-600 dark:text-zinc-300"><User class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ pet?.ownerId?.name ?? '—' }}</div></div><div class="w-full sm:w-52"><div class="mb-1 flex justify-between text-xs text-ink-500 dark:text-zinc-400"><span>已有內容區段</span><span>{{ completedCount }}/5</span></div><div class="h-2 overflow-hidden rounded-full bg-cream-200 dark:bg-zinc-800"><div class="h-full rounded-full bg-primary" :style="{ width: `${completionPercent}%` }"></div></div></div></div>
+        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="font-semibold text-ink-900 dark:text-white">{{ pet?.name ?? '—' }}</span><span class="font-mono text-xs text-ink-400 dark:text-zinc-400">{{ pet?.medicalRecordNumber || (pet?._id ? `PET-${pet._id.slice(-8).toUpperCase()}` : '') }}</span></div><div class="flex items-center gap-2 text-sm text-ink-600 dark:text-zinc-300"><User class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ pet?.ownerId?.name ?? '—' }}</div></div></div>
         <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
       </div>
 
-      <nav v-if="!isLocked" aria-label="健檢表單區段" class="sticky top-16 z-20 flex gap-1 overflow-x-auto rounded-xl border border-cream-300 bg-cream-50/95 p-1.5 shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
-        <button v-for="(section, index) in FORM_SECTIONS" :key="section.id" type="button" :data-form-section="section.id" class="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold shadow-sm transition-colors" :class="activeSectionId === section.id ? 'border-primary bg-primary text-primary-foreground' : 'border-cream-300 bg-cream-100 text-ink-700 hover:border-primary/30 hover:bg-cream-200 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:border-brand-600/50 dark:hover:bg-zinc-700'" :aria-current="activeSectionId === section.id ? 'step' : undefined" @click="scrollToSection(section.id)"><span class="flex h-5 w-5 items-center justify-center rounded-full" :class="activeSectionId === section.id ? 'bg-white/20 text-white' : 'bg-white text-primary dark:bg-zinc-900 dark:text-brand-300'">{{ index + 1 }}</span>{{ section.label }}</button>
+      <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序 -->
+      <nav
+        v-if="!isLocked"
+        aria-label="健檢表單區段"
+        class="sticky top-16 z-20 overflow-x-auto lg:top-0 rounded-2xl border border-cream-300 bg-cream-50 px-2 py-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+      >
+        <ol class="flex min-w-max items-center">
+          <li v-for="(section, index) in FORM_SECTIONS" :key="section.id" class="flex items-center">
+            <button
+              type="button"
+              :data-form-section="section.id"
+              :title="section.label"
+              class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              :class="[
+                compactSteps && activeSectionId !== section.id ? 'px-1' : 'px-2.5',
+                activeSectionId === section.id
+                  ? 'font-semibold text-ink-900 dark:text-white'
+                  : 'font-medium text-ink-500 hover:text-ink-800 dark:text-zinc-400 dark:hover:text-zinc-100',
+              ]"
+              :aria-current="activeSectionId === section.id ? 'step' : undefined"
+              @click="scrollToSection(section.id)"
+            >
+              <span
+                class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors"
+                :class="stepBadgeClass(index, section.id)"
+              >
+                <Check v-if="completionSections[index] && activeSectionId !== section.id" class="h-3.5 w-3.5" stroke-width="2.5" />
+                <template v-else>{{ index + 1 }}</template>
+              </span>
+              <span v-if="!compactSteps || activeSectionId === section.id" class="whitespace-nowrap">{{ section.label }}</span>
+              <span class="sr-only">{{ section.label }}{{ completionSections[index] ? '（已有內容）' : '（尚未填寫）' }}</span>
+            </button>
+            <span
+              v-if="index < FORM_SECTIONS.length - 1"
+              aria-hidden="true"
+              class="mx-0.5 h-px w-4 shrink-0 rounded-full transition-colors"
+              :class="completionSections[index] ? 'bg-primary/40' : 'bg-cream-300 dark:bg-zinc-700'"
+            />
+          </li>
+        </ol>
       </nav>
 
       <div id="form-errors" v-if="!isLocked && validationErrors.length" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200" role="alert"><p class="font-semibold">正式報告尚缺少以下內容：</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="issue in validationErrors" :key="`${issue.targetId}-${issue.message}`"><button type="button" class="text-left font-medium underline decoration-red-300 underline-offset-2 hover:text-red-950 dark:hover:text-white" @click="goToValidationIssue(issue)">{{ issue.message }}</button></li></ul><p class="mt-3 text-xs">點擊任一項可前往對應欄位。</p></div>
 
       <form v-if="!isLocked" class="space-y-5" @submit.prevent>
-        <section v-show="activeSectionId === 'record-section-info'" id="record-section-info" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-          <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">1</span><div><h2 class="font-semibold text-ink-900 dark:text-white">健檢資訊與健康背景</h2><p class="text-xs text-ink-400 dark:text-zinc-400">記錄本次健檢基本資訊、主訴與病史</p></div></div>
-          <div class="grid gap-x-4 gap-y-4 sm:grid-cols-3">
-            <div class="space-y-1.5"><Label for="record-vet" class="text-xs font-medium text-ink-500 dark:text-zinc-400">獸醫師 <span class="text-red-600 dark:text-red-400" aria-hidden="true">*</span><span class="sr-only">必填</span></Label><Input id="record-vet" v-model="vet" class="min-h-11" autocomplete="name" required /></div>
-            <div class="space-y-1.5"><Label for="record-visit-date" class="text-xs font-medium text-ink-500 dark:text-zinc-400">健檢日期 <span class="text-red-600 dark:text-red-400" aria-hidden="true">*</span><span class="sr-only">必填</span></Label><Input id="record-visit-date" v-model="visitDate" type="date" class="min-h-11" required /></div>
-            <div class="space-y-1.5">
-              <Label for="record-exam-type" class="text-xs font-medium text-ink-500 dark:text-zinc-400">健檢類型</Label>
-              <Select v-model="record.examType">
-                <SelectTrigger id="record-exam-type" class="min-h-11 w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="option in EXAM_TYPE_OPTIONS" :key="option" :value="option">{{ option }}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <div class="mt-4 grid gap-x-4 gap-y-4 lg:grid-cols-2">
-            <div class="space-y-1.5"><Label for="record-chief-complaint" class="text-xs font-medium text-ink-500 dark:text-zinc-400">主訴</Label><Textarea id="record-chief-complaint" v-model="record.chiefComplaint" rows="3" /></div>
-            <div class="space-y-1.5"><Label for="record-history" class="text-xs font-medium text-ink-500 dark:text-zinc-400">病史</Label><Textarea id="record-history" v-model="record.history" rows="3" /></div>
-          </div>
-        </section>
-
-        <section v-show="activeSectionId === 'record-section-measurements'" id="record-section-measurements" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-          <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">2</span><div><h2 class="font-semibold text-ink-900 dark:text-white">基本量測</h2><p class="text-xs text-ink-400 dark:text-zinc-400">包含範例中的體重與體溫</p></div></div>
-          <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
-            <div v-for="metric in BASIC_MEASUREMENTS" :key="metric.key">
-              <Label :for="`record-${metric.key}`" class="text-xs font-medium text-ink-500 dark:text-zinc-400">{{ metric.label }}<span v-if="metric.unit" class="text-ink-400 dark:text-zinc-500"> ({{ metric.unit }})</span></Label>
-              <Input
-                v-model="record[metric.key]"
-                :id="`record-${metric.key}`"
-                class="measurement-field mt-1.5 min-h-11"
-                type="number"
-                :min="metric.inputMin"
-                :max="metric.inputMax"
-                :step="metric.step"
-                @update:model-value="autoJudgeMeasurement(metric, $event)"
-              />
-              <div class="mt-2 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">
-                <span v-if="labRangeLabel(metric)" class="text-ink-500 dark:text-zinc-400">參考 {{ labRangeLabel(metric) }}</span>
-                <span v-else class="text-ink-400 dark:text-zinc-500">尚未設定標準值</span>
-                <span v-if="measurementAssessment(metric)?.status !== 'not_checked'" class="rounded-full px-2 py-0.5 font-medium" :class="measurementAssessment(metric)?.status === 'abnormal' ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'">{{ measurementAssessment(metric)?.status === 'abnormal' ? '異常' : '正常' }}・自動</span>
+        <section
+          v-for="(section, index) in FORM_SECTIONS"
+          v-show="activeSectionId === section.id"
+          :id="section.id"
+          :key="section.key"
+          class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"
+        >
+          <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ index + 1 }}</span>
+              <div>
+                <h2 class="text-base font-semibold text-ink-900 dark:text-white">{{ section.label }}</h2>
+                <p v-if="section.description" class="text-xs text-ink-400 dark:text-zinc-400">{{ section.description }}</p>
               </div>
             </div>
+            <Button v-if="section.presentation === 'findings'" type="button" variant="outline" size="sm" class="min-h-10" @click="markUncheckedFindingsNormal(section)">未標示項目全部正常</Button>
+            <!-- 參考範圍現在存在表單項目上，直接連到這份報告所用的表單 -->
+            <Button v-else-if="section.presentation === 'table' && template?._id" as-child variant="secondary" size="sm">
+              <router-link :to="`/settings/forms/${template._id}`">設定參考範圍</router-link>
+            </Button>
           </div>
-        </section>
-
-        <section v-show="activeSectionId === 'record-section-examination'" id="record-section-examination" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-          <div class="mb-5 flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">3</span><div><h2 class="font-semibold text-ink-900 dark:text-white">理學檢查</h2><p class="text-xs text-ink-400 dark:text-zinc-400">整合聽診、觸診、口腔牙齦與各身體系統</p></div></div><Button type="button" variant="outline" size="sm" class="min-h-10" @click="markUncheckedExaminationsNormal">未標示項目全部正常</Button></div>
-          <div class="divide-y divide-cream-300 dark:divide-zinc-800">
-            <div v-for="finding in record.examinationFindings" :id="`record-exam-row-${finding.key}`" :key="finding.key" class="scroll-mt-40 grid gap-3 py-4 first:pt-0 last:pb-0 lg:grid-cols-[190px_280px_1fr] lg:items-center">
-              <p class="text-sm font-medium text-ink-800 dark:text-zinc-200">{{ finding.label }}</p>
-              <div class="grid grid-cols-3 gap-1 rounded-xl bg-cream-100 p-1 dark:bg-zinc-950" role="group" :aria-label="`${finding.label}檢查結果`"><button v-for="option in [{ value: 'not_checked', label: '未檢查' }, { value: 'normal', label: '正常' }, { value: 'abnormal', label: '異常' }]" :key="option.value" type="button" class="min-h-10 rounded-lg px-2 text-xs font-medium" :class="finding.status === option.value ? (option.value === 'abnormal' ? 'bg-red-800 text-white' : option.value === 'normal' ? 'bg-emerald-700 text-white' : 'bg-white text-ink-700 shadow-sm dark:bg-zinc-800 dark:text-zinc-200') : 'text-ink-500 hover:bg-white/70 dark:text-zinc-400 dark:hover:bg-zinc-800/70'" @click="finding.status = option.value">{{ option.label }}</button></div>
-              <div class="space-y-1.5">
-                <Label :for="`record-exam-note-${finding.key}`" class="text-xs font-medium text-ink-500 dark:text-zinc-400">備註<span v-if="finding.status === 'abnormal'" class="text-red-600 dark:text-red-400"> 異常說明 *</span></Label>
-                <input :id="`record-exam-note-${finding.key}`" v-model="finding.note" type="text" :aria-label="`${finding.label}備註`" :aria-invalid="finding.status === 'abnormal' && !finding.note.trim()" :required="finding.status === 'abnormal'" :placeholder="finding.status === 'abnormal' ? '請描述異常，例如：輕微牙齦紅' : '選填'" class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-belle-500 focus:outline-none focus:ring-2 focus:ring-belle-100 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:ring-brand-500/20" :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-cream-300 dark:border-zinc-700'" />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section v-show="activeSectionId === 'record-section-labs'" id="record-section-labs" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-          <div class="mb-5 flex flex-wrap items-center justify-between gap-3"><div class="flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">4</span><div><h2 class="font-semibold text-ink-900 dark:text-white">血液與尿液檢查</h2><p class="text-xs text-ink-400 dark:text-zinc-400">輸入數值後，已設定範圍的項目會自動判斷</p></div></div><Button as-child variant="secondary" size="sm"><router-link to="/settings">管理標準值</router-link></Button></div>
-          <div v-for="group in LAB_GROUPS" :key="group" class="mb-7 last:mb-0">
-            <div class="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 class="text-sm font-semibold text-belle-600 dark:text-brand-400">{{ group }}</h3><Button type="button" variant="ghost" size="sm" class="min-h-10 text-xs" @click="markEmptyLabGroupNormal(group)">空白項目全部正常</Button></div>
-            <div class="divide-y divide-cream-300 rounded-xl border border-cream-300 dark:divide-zinc-800 dark:border-zinc-800">
-              <div v-for="finding in record.labFindings.filter((item) => item.group === group)" :id="`record-lab-row-${finding.key}`" :key="finding.key" class="scroll-mt-40 grid gap-3 p-4 lg:grid-cols-[220px_260px_170px_1fr] lg:items-center">
-                <div><p class="text-sm font-medium text-ink-800 dark:text-zinc-200">{{ finding.label }}</p><p v-if="labRangeLabel(finding)" class="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">參考 {{ labRangeLabel(finding) }}</p><p v-else-if="finding.numeric !== false" class="mt-0.5 text-xs text-ink-400 dark:text-zinc-500">{{ labRangesLoading ? '載入標準值…' : '尚未設定標準值' }}</p></div>
-                <div class="grid grid-cols-3 gap-1 rounded-xl bg-cream-100 p-1 dark:bg-zinc-950" role="group" :aria-label="`${finding.label}檢驗結果`"><button v-for="option in [{ value: 'not_checked', label: '未檢查' }, { value: 'normal', label: '正常' }, { value: 'abnormal', label: '異常' }]" :key="option.value" type="button" class="relative min-h-10 rounded-lg px-2 text-xs font-medium" :class="finding.status === option.value ? (option.value === 'abnormal' ? 'bg-red-800 text-white' : option.value === 'normal' ? 'bg-emerald-700 text-white' : 'bg-white text-ink-700 shadow-sm dark:bg-zinc-800 dark:text-zinc-200') : 'text-ink-500 hover:bg-white/70 dark:text-zinc-400 dark:hover:bg-zinc-800/70'" @click="setLabStatus(finding, option.value)">{{ option.label }}<span v-if="finding.status === option.value && finding.statusSource === 'auto'" class="ml-1 text-xs opacity-80">自動</span></button></div>
-                <div class="space-y-1.5">
-                  <Label :for="`record-lab-value-${finding.key}`" class="text-xs font-medium text-ink-500 dark:text-zinc-400">{{ finding.numeric === false ? '結果描述' : '檢驗數值' }}</Label>
-                  <input :id="`record-lab-value-${finding.key}`" v-model="finding.value" type="text" inputmode="decimal" :aria-label="`${finding.label}數值`" :placeholder="finding.numeric === false ? '選填' : labRanges[finding.key]?.unit ? `輸入數值（${labRanges[finding.key].unit}）` : '選填'" class="min-h-11 w-full scroll-mt-40 rounded-xl border border-cream-300 bg-white px-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-belle-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500" @input="finding.numeric !== false && autoJudgeLab(finding, $event.target.value)" />
-                </div>
-                <div class="space-y-1.5">
-                  <Label :for="`record-lab-note-${finding.key}`" class="text-xs font-medium text-ink-500 dark:text-zinc-400">備註<span v-if="finding.status === 'abnormal'" class="text-red-600 dark:text-red-400"> 異常說明 *</span></Label>
-                  <input :id="`record-lab-note-${finding.key}`" v-model="finding.note" type="text" :aria-label="`${finding.label}備註`" :aria-invalid="finding.status === 'abnormal' && !finding.note.trim()" :required="finding.status === 'abnormal'" :placeholder="finding.status === 'abnormal' ? '請描述異常' : '選填'" class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-belle-500 focus:outline-none dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500" :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-cream-300 dark:border-zinc-700'" />
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="mt-5 space-y-1.5"><Label for="record-lab-summary" class="text-xs font-medium text-ink-500 dark:text-zinc-400">檢驗補充摘要</Label><Textarea id="record-lab-summary" v-model="record.labSummary" rows="3" /></div>
-        </section>
-
-        <section v-show="activeSectionId === 'record-section-conclusion'" id="record-section-conclusion" class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-          <div class="mb-5 flex items-center gap-3"><span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">5</span><div><h2 class="font-semibold text-ink-900 dark:text-white">結論與診斷</h2><p class="text-xs text-ink-400 dark:text-zinc-400">統整檢查發現並記錄診斷與後續方向</p></div></div>
-          <div class="space-y-1.5"><Label for="record-conclusion" class="text-xs font-medium text-ink-500 dark:text-zinc-400">結論 <span v-if="!record.conclusion.trim() && !record.treatmentPlan.trim()" class="text-red-600 dark:text-red-400">*（與照護建議擇一必填）</span></Label><Textarea id="record-conclusion" v-model="record.conclusion" rows="8" :required="!record.treatmentPlan.trim()" /></div>
-          <div class="mt-4 space-y-1.5"><Label for="record-diagnosis" class="text-xs font-medium text-ink-500 dark:text-zinc-400">診斷</Label><Textarea id="record-diagnosis" v-model="record.diagnosis" rows="5" /></div>
-          <div class="mt-4 grid gap-x-4 gap-y-4 lg:grid-cols-2">
-            <div class="space-y-1.5"><Label for="record-treatment-plan" class="text-xs font-medium text-ink-500 dark:text-zinc-400">照護與追蹤建議 <span v-if="!record.conclusion.trim() && !record.treatmentPlan.trim()" class="text-red-600 dark:text-red-400">*（與結論擇一必填）</span></Label><Textarea id="record-treatment-plan" v-model="record.treatmentPlan" rows="3" :required="!record.conclusion.trim()" /></div>
-            <div class="space-y-1.5"><Label for="record-other" class="text-xs font-medium text-ink-500 dark:text-zinc-400">其他備註</Label><Textarea id="record-other" v-model="record.other" rows="3" /></div>
-          </div>
+          <FormSection :section="section" />
         </section>
 
         <div class="flex items-center justify-between gap-3">
@@ -601,9 +876,9 @@ function handleBeforeUnload(event) {
         <Button type="button" variant="destructive-outline" class="min-h-11" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄這份草稿</Button>
       </div>
       <p v-if="!isLocked && saveError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ saveError }}</p>
-      <div v-if="!isLocked" id="record-action-bar" class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50/95 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 lg:left-64">
+      <div v-if="!isLocked" id="record-action-bar" class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] dark:border-zinc-800 dark:bg-zinc-950 lg:left-64">
         <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/5 個區段</p>
+          <p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
           <div class="ml-auto flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" class="min-h-11" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
             <Button type="button" class="min-h-11" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
@@ -633,5 +908,7 @@ function handleBeforeUnload(event) {
       @update:open="(value) => !value && (pendingLeavePath = '')"
       @confirm="confirmLeave"
     />
+    <QuickPhraseDeleteDialog />
+    <QuickPhrasePickerDialog />
   </section>
 </template>

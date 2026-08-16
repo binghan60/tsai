@@ -8,6 +8,7 @@ import { ageLabel, formatDate, formatDateTime } from '../lib/datetime';
 import { getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import RevisionDialog from '../components/RevisionDialog.vue';
+import ReportSection from '../components/report/ReportSection.vue';
 import { Button } from '../components/ui/button';
 
 const route = useRoute();
@@ -44,7 +45,7 @@ function normalizePreview(data) {
   return {
     ...data,
     reportNumber: data.reportNumber || `HC-${data._id?.slice(-8).toUpperCase()}`,
-    status: data.status === 'sent' ? 'finalized' : data.status,
+    status: data.status,
     deliveryStatus: getDeliveryStatus(data),
     pet,
     owner: pet?.ownerId ?? null,
@@ -71,47 +72,23 @@ function sexLabel(sex) {
   return { male: '公', female: '母', unknown: '未記錄' }[sex] ?? '未記錄';
 }
 
-const checkedFindings = computed(() => record.value?.examinationFindings?.filter((item) => item.status !== 'not_checked') ?? []);
-const abnormalFindings = computed(() => [
-  ...checkedFindings.value.filter((item) => item.status === 'abnormal'),
-  ...(record.value?.labFindings ?? []).filter((item) => item.status === 'abnormal'),
-]);
-const checkedLabGroups = computed(() => {
-  const groups = new Map();
-  for (const item of record.value?.labFindings ?? []) {
-    if (item.status === 'not_checked' && !item.value && !item.note) continue;
-    if (!groups.has(item.group)) groups.set(item.group, []);
-    groups.get(item.group).push(item);
-  }
-  return [...groups.entries()].map(([label, items]) => ({ label, items }));
-});
+// 報告內文由區塊快照決定；頁首與摘要則靠 role 取值，
+// 使用者改欄位名稱或搬動位置都不會讓固定版型失效。
+// 健檢類型不是表單欄位，而是「這份報告用哪一份範本」，直接從報告本身取。
+const HEADER_ROLES = ['vet', 'visitDate'];
+const sections = computed(() => record.value?.sections ?? []);
+const allSectionItems = computed(() => sections.value.flatMap((section) => section.items ?? []));
 
-function labValueLabel(finding) {
-  if (!finding.value) return '—';
-  return `${finding.value}${finding.unit ? ` ${finding.unit}` : ''}`;
+function itemByRole(role) {
+  return allSectionItems.value.find((item) => item.role === role) ?? null;
+}
+function valueByRole(role) {
+  const value = itemByRole(role)?.value;
+  return value === null || value === undefined || String(value).trim() === '' ? '' : value;
 }
 
-function labReferenceLabel(finding) {
-  const hasMin = finding.referenceMin != null;
-  const hasMax = finding.referenceMax != null;
-  if (!hasMin && !hasMax) return '';
-  const bounds = hasMin && hasMax
-    ? `${finding.referenceMin}–${finding.referenceMax}`
-    : hasMin
-      ? `≥ ${finding.referenceMin}`
-      : `≤ ${finding.referenceMax}`;
-  return `${bounds}${finding.unit ? ` ${finding.unit}` : ''}`;
-}
-const vitals = computed(() => {
-  const assessments = new Map((record.value?.measurementAssessments ?? []).map((item) => [item.key, item]));
-  return [
-    { key: 'weightKg', label: '體重', value: record.value?.weightKg != null ? `${record.value.weightKg} kg` : null },
-    { key: 'temperatureC', label: '體溫', value: record.value?.temperatureC != null ? `${record.value.temperatureC} °C` : null },
-    { key: 'heartRate', label: '心率', value: record.value?.heartRate != null ? `${record.value.heartRate} 次/分` : null },
-    { key: 'respiratoryRate', label: '呼吸率', value: record.value?.respiratoryRate != null ? `${record.value.respiratoryRate} 次/分` : null },
-    { key: 'bodyConditionScore', label: '體態評分', value: record.value?.bodyConditionScore != null ? `${record.value.bodyConditionScore} / 9` : null },
-  ].filter((item) => item.value).map((item) => ({ ...item, assessment: assessments.get(item.key) }));
-});
+const abnormalFindings = computed(() => allSectionItems.value.filter((item) => item.status === 'abnormal'));
+
 
 async function finalizeReport() {
   if (!record.value || !isDraft.value) return;
@@ -310,9 +287,13 @@ onMounted(fetchReport);
             <p class="mt-2 font-mono text-xs text-stone-500">報告編號：{{ record.reportNumber }} · 第 {{ record.reportVersion || 1 }} 版</p>
           </div>
           <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-stone-600 sm:text-right">
-            <dt class="font-medium">獸醫師</dt><dd>{{ record.vet || '—' }}</dd>
-            <dt class="font-medium">健檢日期</dt><dd>{{ formatDate(record.visitDate) }}</dd>
-            <dt class="font-medium">健檢類型</dt><dd>{{ record.examType || '例行健檢' }}</dd>
+            <template v-for="role in HEADER_ROLES" :key="role">
+              <template v-if="itemByRole(role)">
+                <dt class="font-medium">{{ itemByRole(role).label }}</dt>
+                <dd>{{ role === 'visitDate' ? formatDate(valueByRole(role)) : (valueByRole(role) || '—') }}</dd>
+              </template>
+            </template>
+            <dt class="font-medium">健檢類型</dt><dd>{{ record.examType || '—' }}</dd>
           </dl>
         </header>
 
@@ -321,7 +302,7 @@ onMounted(fetchReport);
           <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
             <div><dt class="text-xs font-medium text-stone-500">飼主</dt><dd class="mt-1 text-stone-800">{{ record.owner?.name || '—' }}</dd></div>
             <div><dt class="text-xs font-medium text-stone-500">物種／品種</dt><dd class="mt-1 text-stone-800">{{ record.pet?.species || '—' }}<template v-if="record.pet?.breed">／{{ record.pet.breed }}</template></dd></div>
-            <div><dt class="text-xs font-medium text-stone-500">性別／健檢時年齡</dt><dd class="mt-1 text-stone-800">{{ sexLabel(record.pet?.sex) }}／{{ ageLabel(record.pet?.birthDate, record.visitDate) }}</dd></div>
+            <div><dt class="text-xs font-medium text-stone-500">性別／健檢時年齡</dt><dd class="mt-1 text-stone-800">{{ sexLabel(record.pet?.sex) }}／{{ ageLabel(record.pet?.birthDate, valueByRole('visitDate') || record.visitDate) }}</dd></div>
             <div><dt class="text-xs font-medium text-stone-500">晶片號碼</dt><dd class="mt-1 text-stone-800">{{ record.pet?.microchipNumber || '未記錄' }}</dd></div>
           </dl>
         </section>
@@ -332,40 +313,18 @@ onMounted(fetchReport);
           <p v-if="record.pet.currentMedications"><strong>目前用藥：</strong>{{ record.pet.currentMedications }}</p>
         </section>
 
-        <section v-if="record.conclusion || record.treatmentPlan || abnormalFindings.length" class="mt-6 rounded-xl border border-brand-100 bg-brand-50/60 p-5 break-inside-avoid">
+        <section v-if="valueByRole('conclusion') || valueByRole('treatmentPlan') || abnormalFindings.length" class="mt-6 rounded-xl border border-brand-100 bg-brand-50/60 p-5 break-inside-avoid">
           <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-sm font-semibold text-brand-700">本次重點與下一步</h2><span v-if="abnormalFindings.length" class="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">{{ abnormalFindings.length }} 項異常</span></div>
-          <p v-if="record.conclusion" class="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-stone-800">{{ record.conclusion }}</p>
-          <div v-if="record.treatmentPlan" class="mt-3"><h3 class="text-xs font-semibold text-stone-500">照護與追蹤建議</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-800">{{ record.treatmentPlan }}</p></div>
+          <p v-if="valueByRole('conclusion')" class="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-stone-800">{{ valueByRole('conclusion') }}</p>
+          <div v-if="valueByRole('treatmentPlan')" class="mt-3"><h3 class="text-xs font-semibold text-stone-500">{{ itemByRole('treatmentPlan').label }}</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-800">{{ valueByRole('treatmentPlan') }}</p></div>
         </section>
 
-        <section v-if="record.chiefComplaint || record.history" class="mt-8 break-inside-avoid">
-          <h2 class="mb-3 text-sm font-semibold text-brand-700">主訴與病史</h2>
-          <div class="grid gap-5 rounded-xl border border-stone-200 p-4 sm:grid-cols-2"><div><h3 class="text-xs font-semibold text-stone-500">主訴</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ record.chiefComplaint || '—' }}</p></div><div><h3 class="text-xs font-semibold text-stone-500">病史</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ record.history || '—' }}</p></div></div>
-        </section>
-
-        <section v-if="vitals.length" class="mt-8 break-inside-avoid">
-          <h2 class="mb-3 text-sm font-semibold text-brand-700">基本量測</h2>
-          <dl class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-200 sm:grid-cols-5"><div v-for="item in vitals" :key="item.label" class="bg-white p-3 text-center"><dt class="text-xs text-stone-500">{{ item.label }}</dt><dd class="mt-1 text-sm font-semibold text-stone-900">{{ item.value }}</dd><dd v-if="item.assessment && item.assessment.status !== 'not_checked'" class="mt-1 text-[11px] font-medium" :class="item.assessment.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'">{{ item.assessment.status === 'abnormal' ? '異常' : '正常' }}・自動</dd><dd v-if="labReferenceLabel(item.assessment || {})" class="mt-0.5 text-[10px] text-stone-500">參考 {{ labReferenceLabel(item.assessment) }}</dd></div></dl>
-        </section>
-
-        <section v-if="checkedFindings.length" class="mt-8">
-          <h2 class="mb-3 text-sm font-semibold text-brand-700">理學檢查</h2>
-          <div class="overflow-hidden rounded-xl border border-stone-200"><div v-for="finding in checkedFindings" :key="finding.key" class="grid break-inside-avoid grid-cols-[1fr_auto] gap-3 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[190px_90px_1fr]"><span class="font-medium text-stone-800">{{ finding.label }}</span><span :class="finding.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'">{{ finding.status === 'abnormal' ? '異常' : '正常' }}</span><span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '—' }}</span></div></div>
-        </section>
-
-        <section v-if="checkedLabGroups.length || record.labSummary" class="mt-8 space-y-5">
-          <h2 class="text-sm font-semibold text-brand-700">血液與尿液檢查</h2>
-          <div v-for="group in checkedLabGroups" :key="group.label" class="break-inside-avoid"><h3 class="mb-2 text-xs font-semibold text-stone-500">{{ group.label }}</h3><div class="overflow-hidden rounded-xl border border-stone-200"><div v-for="finding in group.items" :key="finding.key" class="grid grid-cols-[1fr_auto] gap-2 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[220px_95px_170px_1fr]"><span class="font-medium text-stone-800">{{ finding.label }}</span><span :class="finding.status === 'abnormal' ? 'text-red-700' : finding.status === 'normal' ? 'text-emerald-700' : 'text-stone-500'">{{ finding.status === 'abnormal' ? '異常' : finding.status === 'normal' ? '正常' : '未標示' }}<small v-if="finding.statusSource === 'auto'" class="ml-1 text-[10px] text-stone-500">自動</small></span><span class="text-stone-700"><strong class="font-medium">{{ labValueLabel(finding) }}</strong><small v-if="labReferenceLabel(finding)" class="mt-0.5 block text-[11px] text-stone-500">參考 {{ labReferenceLabel(finding) }}</small></span><span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '—' }}</span></div></div></div>
-          <div v-if="record.labSummary"><h3 class="text-xs font-semibold text-stone-500">檢驗補充摘要</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ record.labSummary }}</p></div>
-        </section>
-
-        <section class="mt-8 space-y-5 break-inside-avoid">
-          <h2 class="text-sm font-semibold text-brand-700">結論與診斷</h2>
-          <div v-if="record.conclusion"><h3 class="text-xs font-semibold text-stone-500">結論</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ record.conclusion }}</p></div>
-          <div v-if="record.diagnosis"><h3 class="text-xs font-semibold text-stone-500">診斷</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ record.diagnosis }}</p></div>
-          <div v-if="record.treatmentPlan"><h3 class="text-xs font-semibold text-stone-500">照護與追蹤建議</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ record.treatmentPlan }}</p></div>
-          <div v-if="record.other"><h3 class="text-xs font-semibold text-stone-500">其他備註</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ record.other }}</p></div>
-        </section>
+        <ReportSection
+          v-for="section in sections"
+          :key="section.key"
+          :section="section"
+          :skip-roles="HEADER_ROLES"
+        />
 
         <footer class="mt-10 border-t border-brand-100 pt-4 text-center text-xs text-stone-500">本報告由謙華動物醫院製作 · 第 {{ record.reportVersion || 1 }} 版 · {{ isDraft ? '草稿更新時間' : 'PDF 產生時間' }} {{ formatDateTime(isDraft ? (record.updatedAt || record.createdAt) : (record.pdfGeneratedAt || record.finalizedAt || record.updatedAt || record.createdAt)) }}</footer>
       </article>

@@ -47,9 +47,7 @@ router.get('/', async (req, res, next) => {
         statusBreakdown.draft += count;
         return;
       }
-      const deliveryStatus = _id.status === 'sent' && (!_id.deliveryStatus || _id.deliveryStatus === 'not_sent')
-        ? 'sent'
-        : (_id.deliveryStatus || 'not_sent');
+      const deliveryStatus = _id.deliveryStatus || 'not_sent';
       if (deliveryStatus === 'sent') statusBreakdown.sent += count;
       else if (deliveryStatus === 'failed') statusBreakdown.failed += count;
       else if (deliveryStatus === 'sending') statusBreakdown.sending += count;

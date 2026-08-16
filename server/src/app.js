@@ -10,6 +10,7 @@ import { petRecordsRouter, recordsRouter, publicReportsRouter } from './routes/r
 import dashboardRouter from './routes/dashboard.js';
 import searchRouter from './routes/search.js';
 import settingsRouter from './routes/settings.js';
+import quickPhrasesRouter from './routes/quickPhrases.js';
 
 const app = express();
 const clientDistPath = fileURLToPath(new URL('../../client/dist/', import.meta.url));
@@ -37,6 +38,7 @@ app.use('/api/public/reports', publicReportsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/settings', settingsRouter);
+app.use('/api/quick-phrases', quickPhrasesRouter);
 
 app.use('/api', (req, res) => {
   res.status(404).json({ message: '找不到 API 路由' });

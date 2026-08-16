@@ -1,16 +1,20 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
+import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import Pet from '../models/Pet.js';
 import { renderReportPdf } from '../lib/pdf.js';
 import { assertMailConfigured, sendHealthReportEmail } from '../lib/mailer.js';
 import { pdfAccessSecret } from '../config/pdfAccess.js';
-import { LAB_TEST_MAP } from '../config/labTests.js';
+import { templateForRecord } from '../lib/formTemplate.js';
+import { composeReportSections } from '../lib/reportSections.js';
 import { v4 as uuidv4 } from 'uuid';
 
+// examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
+// 之後不能透過一般更新改動，否則已填的作答會對不上表單結構。
 const RECORD_FIELDS = [
   'vet',
   'visitDate',
-  'examType',
   'weightKg',
   'temperatureC',
   'heartRate',
@@ -26,6 +30,8 @@ const RECORD_FIELDS = [
   'treatmentPlan',
   'conclusion',
   'other',
+  // 使用者自訂項目的作答
+  'customValues',
 ];
 
 function pickRecordFields(body) {
@@ -41,10 +47,7 @@ function isFinalizedRecord(record) {
 }
 
 function effectiveDeliveryStatus(record) {
-  if (record?.deliveryStatus && !(record.status === 'sent' && record.deliveryStatus === 'not_sent')) {
-    return record.deliveryStatus;
-  }
-  return record?.status === 'sent' ? 'sent' : 'not_sent';
+  return record?.deliveryStatus ?? 'not_sent';
 }
 
 function recordSnapshot(record) {
@@ -68,64 +71,68 @@ function publicAppOrigin(req) {
   return `${protocol}://${host}`;
 }
 
-function hasClinicalContent(record) {
-  return Boolean(
-    record.diagnosis?.trim() ||
-      record.conclusion?.trim() ||
-      record.treatmentPlan?.trim() ||
-      [record.weightKg, record.temperatureC, record.heartRate, record.respiratoryRate, record.bodyConditionScore].some((value) => value != null) ||
-      record.examinationFindings?.some((finding) => finding.status !== 'not_checked') ||
-      record.labFindings?.some((finding) => finding.status !== 'not_checked')
+// 「這份報告有沒有臨床內容」改由範本決定：只要任何一個非固定預設的項目有填就算。
+// visitDate 有預設值、vet 是行政欄位，都不能當作「有臨床內容」的訊號。
+const PREFILLED_ROLES = new Set(['visitDate', 'vet']);
+
+// 「這個項目有沒有作答」的唯一判準，臨床內容檢查與必填檢查共用同一份 ——
+// 兩邊各寫一份遲早會分岔成「前端放行、後端 422」。與前端 validateForPreview() 對齊：
+// finding 看有沒有標記過檢查結果（它沒有 value，看 value 會永遠不滿足）；
+// lab 是標記過或填了數值都算，「按了正常但沒填數值」也是有作答。
+function itemHasAnswer(item) {
+  if (item.type === 'finding') return item.status !== 'not_checked';
+  if (item.type === 'lab') return item.status !== 'not_checked' || String(item.value ?? '').trim() !== '';
+  return item.value !== null && item.value !== undefined && String(item.value).trim() !== '';
+}
+
+function hasClinicalContent(sections) {
+  return sections.some((section) =>
+    (section.items ?? []).some((item) => !PREFILLED_ROLES.has(item.role) && itemHasAnswer(item))
   );
 }
 
-function validateFinalRecord(record) {
+// 結案前的完整性檢查全部改看範本組出來的 sections，
+// 使用者改欄位名稱、搬動位置或新增自訂項目都會自動納入。
+function validateFinalRecord(sections) {
   const missing = [];
-  if (!record.vet?.trim()) missing.push('獸醫師');
-  if (!record.visitDate) missing.push('健檢日期');
-  if (!hasClinicalContent(record)) missing.push('基本量測、結論、診斷、理學檢查或檢驗結果');
-  if (!record.conclusion?.trim() && !record.treatmentPlan?.trim()) missing.push('結論或照護與追蹤建議');
+  const items = sections.flatMap((section) => section.items ?? []);
+  const byRole = (role) => items.find((item) => item.role === role);
+  const filled = (item) => item && String(item.value ?? '').trim();
 
-  const examinationWithoutNote = (record.examinationFindings ?? [])
-    .filter((finding) => finding.status === 'abnormal' && !finding.note?.trim())
-    .map((finding) => finding.label);
-  if (examinationWithoutNote.length) missing.push(`理學檢查異常說明（${examinationWithoutNote.join('、')}）`);
+  for (const item of items.filter((entry) => entry.required)) {
+    if (!itemHasAnswer(item)) missing.push(item.label);
+  }
 
-  const labsWithoutNote = (record.labFindings ?? [])
-    .filter((finding) => finding.status === 'abnormal' && !finding.note?.trim())
-    .map((finding) => finding.label);
-  if (labsWithoutNote.length) missing.push(`檢驗異常說明（${labsWithoutNote.join('、')}）`);
+  if (!hasClinicalContent(sections)) missing.push('基本量測、結論、診斷、理學檢查或檢驗結果');
 
-  const invalidLabValues = (record.labFindings ?? [])
-    .filter((finding) => LAB_TEST_MAP.get(finding.key)?.numeric !== false && String(finding.value ?? '').trim() && !Number.isFinite(Number(finding.value)))
-    .map((finding) => finding.label);
+  // 結論與照護建議至少要有一項；兩個欄位都被停用時就不檢查。
+  const conclusion = byRole('conclusion');
+  const treatmentPlan = byRole('treatmentPlan');
+  if ((conclusion || treatmentPlan) && !filled(conclusion) && !filled(treatmentPlan)) {
+    missing.push([conclusion?.label, treatmentPlan?.label].filter(Boolean).join('或'));
+  }
+
+  const abnormalWithoutNote = items
+    .filter((item) => (item.type === 'finding' || item.type === 'lab') && item.status === 'abnormal' && !item.note?.trim())
+    .map((item) => item.label);
+  if (abnormalWithoutNote.length) missing.push(`異常說明（${abnormalWithoutNote.join('、')}）`);
+
+  const invalidLabValues = items
+    .filter((item) => item.type === 'lab' && item.numeric !== false && String(item.value ?? '').trim() && !Number.isFinite(Number(item.value)))
+    .map((item) => item.label);
   if (invalidLabValues.length) missing.push(`檢驗數值格式（${invalidLabValues.join('、')}）`);
   return missing;
 }
 
-function reportPayload(record) {
+function reportPayload(record, sections) {
   const pet = record.petId;
   const owner = pet?.ownerId;
   return {
+    // 臨床內容一律走這份區塊快照；報告頁不再讀 MedicalRecord 的具名欄位。
+    sections,
     reportNumber: record.reportNumber || `HC-${record._id.toString().slice(-8).toUpperCase()}`,
-    vet: record.vet,
-    visitDate: record.visitDate,
     examType: record.examType,
-    weightKg: record.weightKg,
-    temperatureC: record.temperatureC,
-    heartRate: record.heartRate,
-    respiratoryRate: record.respiratoryRate,
-    bodyConditionScore: record.bodyConditionScore,
-    measurementAssessments: record.measurementAssessments,
-    examinationFindings: record.examinationFindings,
-    labFindings: record.labFindings,
-    labSummary: record.labSummary,
-    chiefComplaint: record.chiefComplaint,
-    history: record.history,
-    diagnosis: record.diagnosis,
-    treatmentPlan: record.treatmentPlan,
-    conclusion: record.conclusion,
-    other: record.other,
+    visitDate: record.visitDate,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     status: record.status,
@@ -174,7 +181,27 @@ petRecordsRouter.post('/', async (req, res, next) => {
   try {
     const pet = await Pet.findById(req.params.petId);
     if (!pet) return res.status(404).json({ message: '找不到寵物' });
-    const record = await MedicalRecord.create({ petId: req.params.petId, ...pickRecordFields(req.body) });
+
+    // 健檢類型就是「用哪一份範本」，只在建立時決定；
+    // 中途換範本會讓已填的作答對不上結構，所以之後不允許更改。
+    // 沒有預設類型，一律要求明確指定。
+    if (!req.body.templateId) return res.status(422).json({ message: '請先選擇健檢類型' });
+    // 嚴格比對：id 不存在就要明確報錯，不能悄悄退到別份範本，
+    // 否則使用者選了 A 卻建出 B 類型的報告。
+    if (!mongoose.isValidObjectId(req.body.templateId)) {
+      return res.status(422).json({ message: '健檢類型格式不正確' });
+    }
+    const template = await FormTemplate.findById(req.body.templateId);
+    if (!template) return res.status(422).json({ message: '找不到指定的健檢類型' });
+    if (template.enabled === false) return res.status(422).json({ message: `「${template.name}」已停用，無法用來建立報告` });
+
+    const record = await MedicalRecord.create({
+      petId: req.params.petId,
+      ...pickRecordFields(req.body),
+      templateId: template._id,
+      templateVersion: template.version,
+      examType: template.name,
+    });
     res.status(201).json(record);
   } catch (err) {
     next(err);
@@ -191,7 +218,11 @@ recordsRouter.get('/:id', async (req, res, next) => {
       populate: { path: 'ownerId', select: 'name phone email' },
     });
     if (!record) return res.status(404).json({ message: '找不到報告' });
-    res.json({ ...record.toObject(), deliveryStatus: effectiveDeliveryStatus(record) });
+    // 預覽模式與報告頁共用同一套渲染，草稿也要能拿到區塊結構。
+    const sections = record.sections?.length ? record.sections : composeReportSections(record, await templateForRecord(record));
+    // 一定要用 toJSON()：toObject() 預設不 flatten Map，展開後 customValues 會變成 {}，
+    // 自訂項目的作答一開啟編輯頁就空白，接著自動儲存把 {} 寫回資料庫。
+    res.json({ ...record.toJSON(), sections, deliveryStatus: effectiveDeliveryStatus(record) });
   } catch (err) {
     next(err);
   }
@@ -227,17 +258,29 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       });
     }
 
-    const missing = validateFinalRecord(record);
+    const template = await templateForRecord(record);
+    // templateForRecord() 找不到會回 null，下面凍結快照時要讀 template._id／version。
+    if (!template) {
+      return res.status(409).json({ message: '這份報告的健檢類型已不存在，無法結案' });
+    }
+    const composedSections = composeReportSections(record, template);
+
+    const missing = validateFinalRecord(composedSections);
     if (missing.length) {
       return res.status(422).json({ message: `請先補齊：${missing.join('、')}` });
     }
 
     const previousFinalizedAt = record.finalizedAt;
     const previousPdfGeneratedAt = record.pdfGeneratedAt;
+    const previousTemplateVersion = record.templateVersion;
     record.status = 'finalized';
     record.finalizedAt = new Date();
     record.deliveryStatus = 'not_sent';
     record.deliveryError = '';
+    // 結案時凍結表單結構與作答，日後改範本不會影響這份已結案報告。
+    record.templateId = template._id;
+    record.templateVersion = template.version;
+    record.sections = composedSections;
     await record.save();
 
     try {
@@ -246,6 +289,10 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       record.status = 'draft';
       record.finalizedAt = previousFinalizedAt;
       record.pdfGeneratedAt = previousPdfGeneratedAt;
+      // 只回滾「結案時才產生」的東西。templateId 是建立報告時就綁定的，
+      // 清掉它會讓這份草稿失去自己的健檢類型，之後連編輯頁都打不開。
+      record.templateVersion = previousTemplateVersion;
+      record.sections = [];
       await record.save();
       pdfError.isFinalizePdfError = true;
       throw pdfError;
@@ -260,9 +307,14 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
         console.error('報告已結案，但標記前一版為已被取代失敗', supersedeError);
       }
     }
-    if (record.weightKg != null) {
+    // 靠 role 找體重，不寫死欄位名稱；使用者若停用或刪除該欄位就不同步。
+    const weightItem = composedSections.flatMap((section) => section.items ?? []).find((item) => item.role === 'weight');
+    // Number(null) 與 Number('') 都是 0 —— 沒填體重時不能把寵物的體重蓋成 0。
+    const weightText = String(weightItem?.value ?? '').trim();
+    const weightValue = Number(weightText);
+    if (weightText && Number.isFinite(weightValue)) {
       try {
-        await Pet.findByIdAndUpdate(record.petId, { weightKg: record.weightKg });
+        await Pet.findByIdAndUpdate(record.petId, { weightKg: weightValue });
       } catch (petUpdateError) {
         console.error('報告已結案，但更新寵物最近體重失敗', petUpdateError);
       }
@@ -331,6 +383,11 @@ recordsRouter.post('/:id/revisions', async (req, res, next) => {
     const revision = await MedicalRecord.create({
       petId: source.petId,
       ...recordSnapshot(source),
+      // 修訂版沿用原報告的健檢類型，才會看到同一份表單結構。
+      templateId: source.templateId,
+      templateVersion: source.templateVersion,
+      examType: source.examType,
+      sections: [],
       status: 'draft',
       reportVersion,
       revisionOf: source._id,
@@ -502,7 +559,9 @@ publicReportsRouter.get('/:token', async (req, res, next) => {
       return res.status(410).json({ message: '這份報告的分享連結已失效' });
     }
 
-    res.json(reportPayload(record));
+    // 已結案報告用自己的快照；草稿還沒凍結結構，即時用目前範本組合。
+    const sections = record.sections?.length ? record.sections : composeReportSections(record, await templateForRecord(record));
+    res.json(reportPayload(record, sections));
   } catch (err) {
     next(err);
   }

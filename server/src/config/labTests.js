@@ -1,3 +1,5 @@
+// 這份清單只是「預設表單範本」的種子資料（見 formTemplateSeed.js）。
+// 系統實際使用的項目定義存在資料庫的 FormTemplate，不要再從這裡讀。
 export const BASIC_MEASUREMENT_DEFINITIONS = [
   { key: 'weightKg', label: '體重', group: '基本量測', unit: 'kg' },
   { key: 'temperatureC', label: '體溫', group: '基本量測', unit: '°C' },
@@ -28,10 +30,6 @@ export const LAB_TEST_DEFINITIONS = [
   { key: 'urine_specific_gravity', label: '尿比重', group: '尿液檢查' },
   { key: 'urine_sediment', label: '尿渣', group: '尿液檢查', numeric: false },
 ];
-
-export const LAB_TEST_MAP = new Map(LAB_TEST_DEFINITIONS.map((item) => [item.key, item]));
-export const REFERENCE_METRIC_DEFINITIONS = [...BASIC_MEASUREMENT_DEFINITIONS, ...LAB_TEST_DEFINITIONS];
-export const REFERENCE_METRIC_MAP = new Map(REFERENCE_METRIC_DEFINITIONS.map((item) => [item.key, item]));
 
 export function normalizeSpecies(value) {
   const text = String(value ?? '').trim().toLowerCase();
