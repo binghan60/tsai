@@ -18,8 +18,8 @@ const showNav = computed(() => SETTINGS_ITEMS.length > 1);
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <h1 class="text-xl font-semibold text-ink-900 dark:text-white">健檢表單管理</h1>
-
+    <!-- 標題只有一層：頁面名稱就是 h1，跟其他頁一致。
+         區段名稱由左側子導覽負責，不再另外壓一層標題上去。 -->
     <div class="grid gap-5 lg:items-start" :class="showNav ? 'lg:grid-cols-[220px_1fr]' : ''">
       <!-- 桌機：左側直式子導覽；手機：可橫向捲動的膠囊列（與健檢表單的區段導覽一致） -->
       <nav
@@ -49,7 +49,7 @@ const showNav = computed(() => SETTINGS_ITEMS.length > 1);
       <div class="min-w-0 space-y-5">
         <div class="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 class="text-base font-semibold text-ink-900 dark:text-white">{{ title }}</h2>
+            <h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ title }}</h1>
             <p v-if="description" class="mt-1 text-sm text-ink-500 dark:text-zinc-400">{{ description }}</p>
           </div>
           <slot name="actions" />
