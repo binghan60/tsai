@@ -4,7 +4,14 @@ import { pdfAccessSecret } from '../config/pdfAccess.js';
 // 見 CLAUDE.md「PDF 產生方式」：不維護獨立版型，直接截圖公開的報告檢視頁
 export async function renderReportPdf(shareToken) {
   const port = process.env.PORT || 3000;
-  const renderBaseUrl = (process.env.PDF_RENDER_BASE_URL || `http://127.0.0.1:${port}`).replace(/\/$/, '');
+  // 正式環境是單一容器：Express 同時提供 API 與前端靜態檔，從容器內部連自己最快。
+  // 開發時 Express 不掛前端（見 app.js 的 NODE_ENV 判斷），/report 只有 Vite dev server 有，
+  // 連自己只會截到 Express 的 404 頁，所以退到 CLIENT_ORIGIN。
+  const localOrigin = `http://127.0.0.1:${port}`;
+  const defaultOrigin = process.env.NODE_ENV === 'production'
+    ? localOrigin
+    : process.env.CLIENT_ORIGIN || localOrigin;
+  const renderBaseUrl = (process.env.PDF_RENDER_BASE_URL || defaultOrigin).replace(/\/$/, '');
   const browser = await puppeteer.launch({
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
     args: process.env.PUPPETEER_NO_SANDBOX === 'true' ? ['--no-sandbox', '--disable-setuid-sandbox'] : undefined,

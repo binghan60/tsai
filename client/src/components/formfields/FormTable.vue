@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import SelectableItem from './SelectableItem.vue';
 import QuickPhrases from './QuickPhrases.vue';
+import PreviousValue from './PreviousValue.vue';
 import { useRecordForm } from './context';
 import { sectionRuns } from '../../lib/sectionRuns';
 import { spanClass } from '../../lib/fieldSpan';
@@ -49,14 +50,18 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
             <SelectableItem v-for="finding in labsOfGroup(run, group)" :key="finding.key" :item-key="finding.key">
               <div
                 :id="`record-lab-row-${finding.key}`"
-                class="scroll-mt-40 grid gap-3 p-4 @5xl:grid-cols-[220px_260px_170px_1fr] @5xl:items-center"
+                class="scroll-mt-40 grid gap-3 p-4 @5xl:grid-cols-[220px_260px_170px_1fr] @5xl:items-start"
               >
-                <div>
+                <div class="min-w-0">
                   <p class="text-sm font-medium text-ink-800 dark:text-zinc-200">{{ finding.label }}</p>
                   <p v-if="labRangeLabel(finding)" class="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">參考 {{ labRangeLabel(finding) }}</p>
-                  <p v-else-if="finding.numeric !== false" class="mt-0.5 text-xs text-ink-400 dark:text-zinc-500">尚未設定參考範圍</p>
+                  <PreviousValue :item="finding" type="lab" class="mt-0.5" />
                 </div>
-                <StatusToggle :finding="finding" :aria-label="`${finding.label}檢驗結果`" show-auto-badge @select="setLabStatus(finding, $event)" />
+                <!-- 三個控制項都有標題列，橫向才對得齊；沒有標題的欄位會比隔壁高出一截。 -->
+                <div class="space-y-1.5">
+                  <p class="text-xs font-medium text-ink-500 dark:text-zinc-400">檢驗結果</p>
+                  <StatusToggle :finding="finding" :aria-label="`${finding.label}檢驗結果`" show-auto-badge @select="setLabStatus(finding, $event)" />
+                </div>
                 <div class="space-y-1.5">
                   <Label :for="`record-lab-value-${finding.key}`" class="text-xs font-medium text-ink-500 dark:text-zinc-400">{{ finding.numeric === false ? '結果描述' : '檢驗數值' }}</Label>
                   <input

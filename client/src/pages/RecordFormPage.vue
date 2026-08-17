@@ -394,10 +394,12 @@ async function init() {
       await applyTemplate(data.templateId, { sections: data.sections, name: data.examType });
       examTypeName.value = data.examType || examTypeName.value;
       applyRecord(data);
+      await loadPreviousValues();
     } else {
       // 新報告：先知道是哪隻寵物，才能只列出適用該物種的表單。
       // 這個階段「不」載入任何表單結構，等使用者確認類型後才載入。
       await loadPetContext(petId.value);
+      await loadPreviousValues();
       examTypes.value = await listTemplates({ species: pet.value?.species });
       if (!examTypes.value.length) {
         loadError.value = `目前沒有適用於「${pet.value?.species || '這個物種'}」的健檢表單，請先到設定新增。`;
@@ -472,9 +474,36 @@ function measurementAssessment(metric) {
   return record.measurementAssessments.find((item) => item.key === metric.key);
 }
 
+// 上次數值：這隻寵物過去每個項目最近一次的紀錄，填表時拿來對照。
+// 純輔助資訊 —— 載入失敗就當作沒有歷史紀錄，不擋填表。
+const previousValues = ref({ byKey: {}, byLabel: {} });
+
+async function loadPreviousValues() {
+  if (!petId.value) return;
+  try {
+    const { data } = await http.get(`/pets/${petId.value}/records/previous-values`, {
+      params: recordId.value ? { excludeRecordId: recordId.value } : {},
+    });
+    previousValues.value = data;
+  } catch (err) {
+    previousValues.value = { byKey: {}, byLabel: {} };
+  }
+}
+
+// key 對得上就用 key；自訂項目的 key 是各表單各自產生的，跨健檢類型對不起來，
+// 所以再退一步用「型別＋名稱」比對，換一種健檢也看得到上次的值。
+function previousFor(item, type = item?.type) {
+  if (!item?.key) return null;
+  const label = String(item.label ?? '').trim();
+  return previousValues.value.byKey?.[item.key]
+    ?? (label ? previousValues.value.byLabel?.[`${type}:${label}`] : null)
+    ?? null;
+}
+
 provideRecordForm({
   valueFor,
   setValue,
+  previousFor,
   findingsFor,
   labsFor,
   eitherOrPending,

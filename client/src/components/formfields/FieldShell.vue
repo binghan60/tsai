@@ -1,5 +1,6 @@
 <script setup>
 import { Label } from '../ui/label';
+import PreviousValue from './PreviousValue.vue';
 
 defineProps({
   item: { type: Object, required: true },
@@ -17,5 +18,7 @@ defineProps({
       </template>
     </Label>
     <slot />
+    <!-- 上次的紀錄跟在控制項之後，沒有歷史紀錄時整行不出現。 -->
+    <PreviousValue :item="item" />
   </div>
 </template>

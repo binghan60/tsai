@@ -107,7 +107,6 @@ const referenceText = computed(() => labRangeLabel(props.item));
     />
     <div class="mt-1.5 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">
       <span v-if="referenceText" class="text-ink-500 dark:text-zinc-400">參考 {{ referenceText }}</span>
-      <span v-else class="text-ink-400 dark:text-zinc-500">尚未設定標準值</span>
       <span
         v-if="assessment?.status && assessment.status !== 'not_checked'"
         class="rounded-full px-2 py-0.5 font-medium"

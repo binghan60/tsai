@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import FieldControl from './FieldControl.vue';
+import PreviousValue from './PreviousValue.vue';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
 import SelectableItem from './SelectableItem.vue';
@@ -37,13 +38,13 @@ const runs = computed(() => sectionRuns(props.section.items, (item) => item.type
             />
             <div class="mt-2 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">
               <span v-if="labRangeLabel(metric)" class="text-ink-500 dark:text-zinc-400">參考 {{ labRangeLabel(metric) }}</span>
-              <span v-else class="text-ink-400 dark:text-zinc-500">尚未設定標準值</span>
               <span
                 v-if="measurementAssessment(metric)?.status !== 'not_checked'"
                 class="rounded-full px-2 py-0.5 font-medium"
                 :class="measurementAssessment(metric)?.status === 'abnormal' ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'"
               >{{ measurementAssessment(metric)?.status === 'abnormal' ? '異常' : '正常' }}・自動</span>
             </div>
+            <PreviousValue :item="metric" class="mt-1" />
           </div>
           </SelectableItem>
         </div>
