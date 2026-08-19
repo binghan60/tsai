@@ -1,38 +1,46 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, ref, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { Cat, ClipboardList, LayoutDashboard, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
 import { useTheme } from './composables/useTheme';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
 import ToastContainer from './components/ToastContainer.vue';
+import GlobalSearchDialog from './components/GlobalSearchDialog.vue';
 
 const route = useRoute();
-const router = useRouter();
 const { isDark, toggleTheme } = useTheme();
 const mobileOpen = ref(false);
+const searchOpen = ref(false);
 
+// match：除了自己的網址前綴，還有哪些路徑也該算在這一項底下。
+// 健檢紀錄有自己的一組頂層網址（/records/:id/edit），但在使用者心裡它是掛在寵物下面的；
+// 不列進來的話，一進編輯頁側邊欄四項全暗，等於在系統裡失去座標。
 const navItems = [
   { to: '/', label: '工作台', exact: true, icon: LayoutDashboard },
   { to: '/owners', label: '飼主', exact: false, icon: Users },
-  { to: '/pets', label: '寵物', exact: false, icon: Cat },
+  { to: '/pets', label: '寵物', exact: false, icon: Cat, match: ['/records'] },
   { to: '/settings', label: '健檢表單管理', exact: false, icon: ClipboardList },
 ];
 
-const activeTitle = computed(() => route.meta.title ?? navItems.find((item) => (item.exact ? route.path === item.to : route.path.startsWith(item.to)))?.label ?? '工作台');
+const activeTitle = computed(() => route.meta.title ?? navItems.find(isNavActive)?.label ?? '工作台');
 
 // router-link 內建的 active-class 是靠比對路由「記錄」（route.matched），不是比對網址字串——
 // /settings、/settings/forms、/settings/forms/:id 各自是獨立註冊的路由，不是巢狀父子關係，
 // 內建判斷永遠抓不到「現在在設定底下的某一頁」。用網址前綴自己判斷才會準。
+function matchesPrefix(path, prefix) {
+  return path === prefix || path.startsWith(`${prefix}/`);
+}
+
 function isNavActive(item) {
-  return item.exact ? route.path === item.to : route.path === item.to || route.path.startsWith(`${item.to}/`);
+  if (item.exact) return route.path === item.to || (item.match ?? []).some((prefix) => matchesPrefix(route.path, prefix));
+  return matchesPrefix(route.path, item.to) || (item.match ?? []).some((prefix) => matchesPrefix(route.path, prefix));
 }
 const navActiveClass = 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]';
 
-async function openGlobalSearch() {
-  if (route.path !== '/') await router.push({ path: '/', query: { focus: 'search' } });
-  await nextTick();
-  window.requestAnimationFrame(() => document.getElementById('global-search')?.focus());
+// 搜尋開的是蓋在當前頁面上的面板，不換路由——詳見 GlobalSearchDialog.vue。
+function openGlobalSearch() {
+  searchOpen.value = true;
 }
 
 watch(
@@ -72,6 +80,7 @@ watch(
           >
             <Search class="h-4 w-4 shrink-0" stroke-width="1.9" />
             <span class="truncate">搜尋飼主、寵物或病歷</span>
+            <kbd class="ml-auto shrink-0 rounded border border-sidebar-border px-1.5 py-0.5 text-xs text-muted-foreground">Ctrl K</kbd>
           </button>
         </div>
 
@@ -185,6 +194,7 @@ watch(
         </main>
       </div>
     </div>
+    <GlobalSearchDialog v-model:open="searchOpen" />
     <ToastContainer />
   </template>
 </template>

@@ -10,6 +10,7 @@ import { ageLabel as calcAgeLabel, formatDate as formatClinicDate, formatDateTim
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
+import { useBackTarget } from '../composables/useBackTarget';
 import { Badge } from '../components/ui/badge';
 
 import { useToast } from '../composables/useToast';
@@ -17,6 +18,7 @@ import { useToast } from '../composables/useToast';
 const route = useRoute();
 const toast = useToast();
 const pet = ref(null);
+const { to: backTo, label: backLabel } = useBackTarget(() => (pet.value?.ownerId?._id ? `/owners/${pet.value.ownerId._id}` : '/owners'), '回飼主資料');
 const error = ref('');
 const sharingId = ref(null);
 const revokingId = ref(null);
@@ -165,7 +167,7 @@ onMounted(fetchPet);
 
 <template>
   <section v-if="pet" class="mx-auto max-w-7xl space-y-5">
-    <router-link :to="`/owners/${pet.ownerId?._id}`" class="inline-flex min-h-11 items-center text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400 dark:hover:text-brand-300">← 回飼主資料</router-link>
+    <router-link :to="backTo" class="inline-flex min-h-11 items-center text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400 dark:hover:text-brand-300">← {{ backLabel }}</router-link>
 
     <Card class="border-cream-300 p-5 shadow-sm dark:border-zinc-800 dark:shadow-none sm:p-6">
       <div class="flex flex-wrap items-start justify-between gap-4">

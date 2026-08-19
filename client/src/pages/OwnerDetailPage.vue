@@ -10,11 +10,13 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 
 import { useToast } from '../composables/useToast';
+import { useBackTarget } from '../composables/useBackTarget';
 
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 const owner = ref(null);
+const { to: backTo, label: backLabel } = useBackTarget('/owners', '回飼主列表');
 const error = ref('');
 const editOwnerOpen = ref(false);
 const editOwnerSaving = ref(false);
@@ -166,8 +168,8 @@ onMounted(async () => {
 
 <template>
   <section v-if="owner" class="space-y-6">
-    <router-link to="/owners" class="text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400 dark:hover:text-brand-300">
-      ← 回飼主列表
+    <router-link :to="backTo" class="text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400 dark:hover:text-brand-300">
+      ← {{ backLabel }}
     </router-link>
 
     <Card class="border-cream-300 p-6 shadow-sm dark:border-zinc-800 dark:shadow-none">

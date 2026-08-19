@@ -1,6 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Phone, Trash2, User, Users } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime';
@@ -13,7 +12,6 @@ import { Button } from '../components/ui/button';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 
 const loading = ref(true);
-const route = useRoute();
 const { isDark } = useTheme();
 const error = ref('');
 const dashboard = ref(null);
@@ -137,13 +135,7 @@ function recordLink(item) {
   return item.status === 'draft' ? `/records/${item._id}/edit` : `/records/${item._id}/preview`;
 }
 
-onMounted(async () => {
-  await fetchDashboard();
-  if (route.query.focus === 'search') {
-    await nextTick();
-    document.getElementById('global-search')?.focus();
-  }
-});
+onMounted(fetchDashboard);
 </script>
 
 <template>

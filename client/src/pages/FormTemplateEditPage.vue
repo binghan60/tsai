@@ -24,6 +24,7 @@ import {
   X,
 } from '@lucide/vue';
 import { onBeforeRouteLeave, useRoute } from 'vue-router';
+import { useBackTarget } from '../composables/useBackTarget';
 import { http } from '../api/http';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useToast } from '../composables/useToast';
@@ -37,6 +38,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FormSectionPreview from '../components/formfields/FormSectionPreview.vue';
 
 const route = useRoute();
+const { to: backTo, label: backLabel } = useBackTarget('/settings/forms', '回健檢表單');
 const toast = useToast();
 const { clearTemplateCache } = useFormTemplate();
 
@@ -460,8 +462,8 @@ function resolveLeave(confirmed) {
     <header class="sticky top-16 z-10 lg:top-0 -mx-4 border-b border-cream-300 bg-cream-100 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950 sm:-mx-6 sm:px-6">
       <div class="mx-auto flex max-w-350 flex-wrap items-center justify-between gap-3">
         <div class="flex min-w-0 items-center gap-3">
-          <router-link to="/settings/forms" class="inline-flex min-h-9 shrink-0 items-center text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400">
-            ← 健檢表單
+          <router-link :to="backTo" class="inline-flex min-h-9 shrink-0 items-center text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400">
+            ← {{ backLabel }}
           </router-link>
           <span class="h-4 w-px shrink-0 bg-cream-300 dark:bg-zinc-700" />
           <h1 class="truncate text-xl font-semibold text-ink-900 dark:text-white">{{ currentName || '健檢表單' }}</h1>

@@ -7,10 +7,11 @@ import SearchPanel from '../components/SearchPanel.vue';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 
 const route = useRoute();
 const pets = ref([]);
-const query = ref('');
+const query = useSearchQueryParam();
 const loading = ref(false);
 const error = ref('');
 let requestSequence = 0;

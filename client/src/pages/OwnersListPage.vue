@@ -11,12 +11,13 @@ import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 import { useToast } from '../composables/useToast';
+import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 const owners = ref([]);
-const query = ref('');
+const query = useSearchQueryParam();
 const loading = ref(false);
 const error = ref('');
 const showCreate = ref(false);

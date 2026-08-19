@@ -7,6 +7,7 @@ import { extractErrorMessage } from '../lib/downloadFile';
 import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomId, sectionKeyForItem } from '../lib/formTemplate';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useQuickPhrases } from '../composables/useQuickPhrases';
+import { useBackTarget } from '../composables/useBackTarget';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -117,6 +118,7 @@ const confirmingExamType = ref(false);
 const typeChoiceError = ref('');
 
 const pet = ref(null);
+const { to: backTo, label: backLabel } = useBackTarget(() => (petId.value ? `/pets/${petId.value}` : '/pets'), '回寵物資料');
 // 參考範圍就存在範本項目上，不必另外請求。
 const labRanges = computed(() => referenceRanges(template.value));
 const vet = ref('');
@@ -761,7 +763,7 @@ function handleBeforeUnload(event) {
 <template>
   <section class="mx-auto max-w-6xl space-y-5 pb-28">
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><router-link v-if="petId" :to="`/pets/${petId}`" class="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← 回寵物資料</router-link><h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-belle-50 px-2.5 py-0.5 text-xs font-medium text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-ink-500 dark:text-zinc-400">修訂原因：{{ revisionReason }}</p></div>
+      <div><router-link :to="backTo" class="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← {{ backLabel }}</router-link><h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-belle-50 px-2.5 py-0.5 text-xs font-medium text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-ink-500 dark:text-zinc-400">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-ink-500 dark:text-zinc-400'"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
     </div>
 
@@ -799,8 +801,8 @@ function handleBeforeUnload(event) {
         <Button type="button" class="min-h-11" :disabled="!pendingTemplateId || confirmingExamType" @click="confirmExamType">
           {{ confirmingExamType ? '載入表單中…' : `開始填寫${pendingTemplateId ? `「${examTypes.find((type) => type._id === pendingTemplateId)?.name}」` : ''}` }}
         </Button>
-        <Button v-if="petId" as-child variant="outline" class="min-h-11">
-          <router-link :to="`/pets/${petId}`">取消</router-link>
+        <Button as-child variant="outline" class="min-h-11">
+          <router-link :to="backTo">取消</router-link>
         </Button>
       </div>
     </div>
