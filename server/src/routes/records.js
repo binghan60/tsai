@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import DeletedMedicalRecord from '../models/DeletedMedicalRecord.js';
+import DeliveryLog from '../models/DeliveryLog.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import { renderReportPdf } from '../lib/pdf.js';
@@ -647,6 +648,27 @@ recordsRouter.post('/:id/share', async (req, res, next) => {
   }
 });
 
+// 每次寄送嘗試都往流水帳補一筆。寵物與飼主姓名在這裡就抄進去，不留 ref——
+// 這筆紀錄的價值正是在報告被刪除之後還查得到，那時 populate 只會拿到 null。
+async function logDelivery(record, event, extra = {}) {
+  if (!record?._id) return;
+  try {
+    const pet = record.petId;
+    const owner = pet?.ownerId;
+    await DeliveryLog.create({
+      recordId: record._id,
+      reportNumber: record.reportNumber || '',
+      petName: pet?.name || '',
+      ownerName: owner?.name || '',
+      event,
+      ...extra,
+    });
+  } catch (err) {
+    // 流水帳寫不進去不該讓寄送本身失敗——信有沒有送到飼主手上才是主線。
+    console.error('寫入寄送紀錄失敗', err);
+  }
+}
+
 recordsRouter.post('/:id/send-email', async (req, res, next) => {
   let record;
   try {
@@ -678,6 +700,8 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
     record.deliveryError = '';
     record.lastDeliveryAttemptAt = new Date();
     await record.save();
+    // 先記 queued：後面產 PDF 或 SMTP 卡住而程序被中斷時，至少留得下「曾經嘗試寄送」。
+    await logDelivery(record, 'queued', { recipient });
 
     assertMailConfigured();
     const pdfBuffer = await renderReportPdf(record.shareToken);
@@ -702,6 +726,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
     record.sentTo = recipient;
     record.emailMessageId = info.messageId;
     await record.save();
+    await logDelivery(record, 'sent', { recipient, messageId: info.messageId });
 
     res.json({
       status: 'finalized',
@@ -728,6 +753,11 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       } catch (saveError) {
         console.error('記錄寄送失敗狀態時發生錯誤', saveError);
       }
+      // record.deliveryError 只留得住最後一次失敗，流水帳這筆才是完整的失敗歷程。
+      await logDelivery(record, 'failed', {
+        recipient: record.petId?.ownerId?.email?.trim() || '',
+        error: record.deliveryError,
+      });
     }
     if (response) return res.status(response.status).json({ message: response.message });
     next(err);

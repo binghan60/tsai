@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeft, CheckCircle2, Copy, Download, FilePenLine, Mail, Printer, Share2 } from '@lucide/vue';
+import { AlertTriangle, ArrowLeft, CheckCircle2, Copy, Download, FilePenLine, Mail, Printer, Share2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { ageLabel, formatDate, formatDateTime } from '../lib/datetime';
@@ -39,6 +39,32 @@ const shareActionLabel = computed(() => {
   return '建立飼主分享連結';
 });
 const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
+
+// ── 寄送歷程 ──
+// record.sentTo／sentAt 只留得住最後一次，重寄一次就覆蓋。飼主改過 Email 之後重寄，
+// 「寄給舊信箱」那次就從報告上消失了，所以歷程一律從流水帳讀。
+//
+// 這頁同時是飼主看的公開報告（/report/:token），收件信箱與失敗原因都是內部資訊，
+// 只在後台預覽（isPreview）載入與顯示，而且 print:hidden 讓它不會被截進 PDF。
+const deliveryLogs = ref([]);
+
+// 這頁固定淺色、不套 dark: variant（見 CLAUDE.md），所以不共用 DELIVERY_EVENT_META。
+const EVENT_STYLE = {
+  queued: { label: '開始寄送', class: 'bg-sky-50 text-sky-700' },
+  sent: { label: '寄送成功', class: 'bg-emerald-50 text-emerald-700' },
+  failed: { label: '寄送失敗', class: 'bg-red-50 text-red-700' },
+};
+
+async function fetchDeliveryLogs() {
+  if (!isPreview.value) return;
+  try {
+    const { data } = await http.get('/delivery-logs', { params: { recordId: route.params.id, limit: 50 } });
+    deliveryLogs.value = data.items ?? [];
+  } catch (err) {
+    // 歷程載不出來不影響看報告本身，靜默略過即可。
+    deliveryLogs.value = [];
+  }
+}
 
 function normalizePreview(data) {
   const pet = data.petId && typeof data.petId === 'object' ? data.petId : null;
@@ -223,6 +249,7 @@ async function sendEmail() {
     showEmailConfirm.value = false;
   } finally {
     emailing.value = false;
+    await fetchDeliveryLogs();
   }
 }
 
@@ -230,7 +257,10 @@ function printReport() {
   window.print();
 }
 
-onMounted(fetchReport);
+onMounted(async () => {
+  await fetchReport();
+  await fetchDeliveryLogs();
+});
 </script>
 
 <template>
@@ -262,6 +292,29 @@ onMounted(fetchReport);
           <Button v-if="!record.supersededBy" type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" @click="showRevisionDialog = true"><FilePenLine class="h-4 w-4" />建立修訂版</Button>
         </div>
       </div>
+      <!-- 寄送歷程。只在後台預覽出現：收件信箱與失敗原因是內部資訊，
+           飼主端的 /report/:token 不該看到，print:hidden 也讓它不進 PDF。 -->
+      <details v-if="isPreview && deliveryLogs.length" class="rounded-xl border border-stone-300 bg-white px-4 py-3 text-sm text-stone-700 print:hidden">
+        <summary class="flex min-h-9 cursor-pointer list-none items-center gap-2 font-semibold text-stone-800">
+          <Mail class="h-4 w-4 shrink-0 text-stone-500" stroke-width="1.75" />
+          寄送歷程（{{ deliveryLogs.length }} 筆）
+        </summary>
+        <ul class="mt-3 space-y-2 border-t border-stone-200 pt-3">
+          <li v-for="log in deliveryLogs" :key="log._id" class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium" :class="EVENT_STYLE[log.event]?.class">{{ EVENT_STYLE[log.event]?.label || log.event }}</span>
+            <span class="shrink-0 text-xs tabular-nums text-stone-500">{{ formatDateTime(log.createdAt) }}</span>
+            <span v-if="log.recipient" class="min-w-0 text-xs text-stone-600">寄至 {{ log.recipient }}</span>
+            <span v-if="log.error" class="flex w-full items-start gap-1 text-xs text-red-700">
+              <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" /><span class="min-w-0">{{ log.error }}</span>
+            </span>
+          </li>
+        </ul>
+        <p class="mt-3 border-t border-stone-200 pt-2 text-xs text-stone-500">
+          完整寄送紀錄（含已刪除報告）請見
+          <router-link to="/records/deliveries" class="font-medium underline">寄送紀錄</router-link>。
+        </p>
+      </details>
+
       <div v-if="shareNotice" class="rounded-xl border border-emerald-200 bg-white px-4 py-4 text-sm text-stone-700 print:hidden">
         <p class="font-semibold text-emerald-800">{{ shareNotice.emailed ? `郵件伺服器已接受寄送至 ${record.sentTo}` : shareNotice.copied ? '分享連結已建立並複製' : '分享連結已建立' }}</p>
         <p class="mt-2 break-all rounded-lg bg-stone-100 px-3 py-2 font-mono text-xs">{{ shareNotice.url }}</p>

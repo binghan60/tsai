@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import { AlertTriangle, ClipboardPlus, FileText, PawPrint, Pencil, User } from '@lucide/vue';
+import { AlertTriangle, ClipboardPlus, FileText, MailCheck, PawPrint, Pencil, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
@@ -113,9 +113,15 @@ function actionLabel(record) {
         <h1 class="text-xl font-semibold text-ink-900 dark:text-white">健檢紀錄</h1>
         <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">依處理狀態分組，先看還沒送到飼主手上的。</p>
       </div>
-      <Button as-child>
-        <router-link to="/pets?intent=new-record"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</router-link>
-      </Button>
+      <div class="flex flex-wrap gap-2">
+        <!-- 寄送紀錄是另一種問法：這頁問「還有什麼沒寄」，那頁問「當初寄了什麼給誰」。 -->
+        <Button as-child variant="outline">
+          <router-link to="/records/deliveries"><MailCheck class="h-4 w-4" stroke-width="1.75" />寄送紀錄</router-link>
+        </Button>
+        <Button as-child>
+          <router-link to="/pets?intent=new-record"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</router-link>
+        </Button>
+      </div>
     </div>
 
     <!-- 佇列切換。數字不隨關鍵字篩選變動，它回答的是「總共還有多少事沒做完」。 -->

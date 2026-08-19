@@ -8,6 +8,7 @@ const PetsListPage = () => import('../pages/PetsListPage.vue');
 const PetDetailPage = () => import('../pages/PetDetailPage.vue');
 const RecordFormPage = () => import('../pages/RecordFormPage.vue');
 const RecordsListPage = () => import('../pages/RecordsListPage.vue');
+const DeliveryLogsPage = () => import('../pages/DeliveryLogsPage.vue');
 const ReportViewPage = () => import('../pages/ReportViewPage.vue');
 const FormTemplateListPage = () => import('../pages/FormTemplateListPage.vue');
 const FormTemplateEditPage = () => import('../pages/FormTemplateEditPage.vue');
@@ -30,6 +31,9 @@ const router = createRouter({
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },
     { path: '/pets/:id', component: PetDetailPage, meta: { title: '寵物資料' } },
     { path: '/records', component: RecordsListPage, meta: { title: '健檢紀錄' } },
+    // 寄送流水帳。掛在 /records 底下是因為它講的是報告的事，但它不依附任何一份報告——
+    // 報告被刪除後，這裡仍然查得到當初寄給了誰。
+    { path: '/records/deliveries', component: DeliveryLogsPage, meta: { title: '寄送紀錄', nav: '/records' } },
     // 表單管理：清單決定「有哪幾份表單」，設計頁決定「每份表單有哪些項目」。
     { path: '/settings', redirect: '/settings/forms' },
     { path: '/settings/forms', component: FormTemplateListPage, meta: { title: '健檢表單' } },
