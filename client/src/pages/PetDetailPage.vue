@@ -31,6 +31,11 @@ const deletingRecordId = ref(null);
 const sexLabel = computed(() => ({ male: '公', female: '母', unknown: '未記錄' })[pet.value?.sex] ?? '未記錄');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育', unknown: '未記錄' })[pet.value?.neutered] ?? '未記錄');
 const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), '年齡未記錄'));
+const hasWeight = computed(() => pet.value?.weightKg != null);
+const hasAllergies = computed(() => Boolean(pet.value?.allergies));
+const chronicAndMeds = computed(() => [pet.value?.chronicConditions, pet.value?.currentMedications].filter(Boolean).join('；'));
+const hasChronicOrMeds = computed(() => Boolean(chronicAndMeds.value));
+const hasPetInfo = computed(() => hasWeight.value || hasAllergies.value || hasChronicOrMeds.value);
 
 function formatDate(value) {
   return formatClinicDate(value, '日期未填');
@@ -171,10 +176,10 @@ onMounted(fetchPet);
         <Button variant="outline" class="min-h-11" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
       </div>
 
-      <dl class="mt-5 grid gap-3 border-t border-cream-300 pt-5 text-sm dark:border-zinc-800 sm:grid-cols-2 lg:grid-cols-3">
-        <div><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">最近體重</dt><dd class="mt-1 text-ink-700 dark:text-zinc-200">{{ pet.weightKg != null ? `${pet.weightKg} kg` : '未記錄' }}</dd></div>
-        <div><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">過敏紀錄</dt><dd class="mt-1 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ pet.allergies || '無紀錄' }}</dd></div>
-        <div><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">慢性病／目前用藥</dt><dd class="mt-1 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ [pet.chronicConditions, pet.currentMedications].filter(Boolean).join('；') || '無紀錄' }}</dd></div>
+      <dl v-if="hasPetInfo" class="mt-5 grid gap-3 border-t border-cream-300 pt-5 text-sm dark:border-zinc-800 sm:grid-cols-2 lg:grid-cols-3">
+        <div v-if="hasWeight"><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">最近體重</dt><dd class="mt-1 text-ink-700 dark:text-zinc-200">{{ pet.weightKg }} kg</dd></div>
+        <div v-if="hasAllergies"><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">過敏紀錄</dt><dd class="mt-1 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ pet.allergies }}</dd></div>
+        <div v-if="hasChronicOrMeds"><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">慢性病／目前用藥</dt><dd class="mt-1 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ chronicAndMeds }}</dd></div>
       </dl>
     </Card>
 
