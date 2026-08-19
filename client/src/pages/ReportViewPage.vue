@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Copy, Download, FilePenLine, Mail, Printer, Share2 } from '@lucide/vue';
-import { http } from '../api/http';
+import { PDF_TIMEOUT_MS, http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { ageLabel, formatDate, formatDateTime } from '../lib/datetime';
 import { getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
@@ -121,7 +121,7 @@ async function finalizeReport() {
   finalizing.value = true;
   error.value = '';
   try {
-    const { data } = await http.post(`/records/${route.params.id}/finalize`);
+    const { data } = await http.post(`/records/${route.params.id}/finalize`, null, { timeout: PDF_TIMEOUT_MS });
     record.value.status = 'finalized';
     record.value.finalizedAt = data.finalizedAt;
     record.value.pdfGeneratedAt = data.pdfGeneratedAt;
@@ -172,7 +172,7 @@ async function downloadPdf() {
   downloading.value = true;
   error.value = '';
   try {
-    const response = await http.get(`/records/${route.params.id}/pdf`, { responseType: 'blob' });
+    const response = await http.get(`/records/${route.params.id}/pdf`, { responseType: 'blob', timeout: PDF_TIMEOUT_MS });
     const url = URL.createObjectURL(response.data);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -225,7 +225,7 @@ async function sendEmail() {
   emailing.value = true;
   error.value = '';
   try {
-    const { data } = await http.post(`/records/${route.params.id}/send-email`);
+    const { data } = await http.post(`/records/${route.params.id}/send-email`, null, { timeout: PDF_TIMEOUT_MS });
     record.value.status = 'finalized';
     record.value.deliveryStatus = data.deliveryStatus || 'sent';
     record.value.deliveryError = '';
