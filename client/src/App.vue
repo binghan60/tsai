@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { Cat, ClipboardList, LayoutDashboard, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
+import { Cat, ClipboardList, FileText, LayoutDashboard, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
 import { useTheme } from './composables/useTheme';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
@@ -13,13 +13,14 @@ const { isDark, toggleTheme } = useTheme();
 const mobileOpen = ref(false);
 const searchOpen = ref(false);
 
-// match：除了自己的網址前綴，還有哪些路徑也該算在這一項底下。
-// 健檢紀錄有自己的一組頂層網址（/records/:id/edit），但在使用者心裡它是掛在寵物下面的；
-// 不列進來的話，一進編輯頁側邊欄四項全暗，等於在系統裡失去座標。
+// match：除了自己的網址前綴，還有哪些路徑也該算在這一項底下。目前用不到，
+// 但 /records 這種「有自己的頂層網址、心理上卻屬於別項」的路由隨時會再出現，
+// 沒有這層的話一進那些頁面側邊欄會全暗，等於在系統裡失去座標。
 const navItems = [
   { to: '/', label: '工作台', exact: true, icon: LayoutDashboard },
   { to: '/owners', label: '飼主', exact: false, icon: Users },
-  { to: '/pets', label: '寵物', exact: false, icon: Cat, match: ['/records'] },
+  { to: '/pets', label: '寵物', exact: false, icon: Cat },
+  { to: '/records', label: '健檢紀錄', exact: false, icon: FileText },
   { to: '/settings', label: '健檢表單管理', exact: false, icon: ClipboardList },
 ];
 
@@ -33,6 +34,9 @@ function matchesPrefix(path, prefix) {
 }
 
 function isNavActive(item) {
+  // 路由自己指定了歸屬就聽它的——網址前綴猜錯的情況（/pets/:petId/records/new
+  // 其實屬於健檢紀錄）只有路由自己知道。
+  if (route.meta.nav) return route.meta.nav === item.to;
   if (item.exact) return route.path === item.to || (item.match ?? []).some((prefix) => matchesPrefix(route.path, prefix));
   return matchesPrefix(route.path, item.to) || (item.match ?? []).some((prefix) => matchesPrefix(route.path, prefix));
 }

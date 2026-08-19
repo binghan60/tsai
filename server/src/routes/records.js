@@ -4,11 +4,13 @@ import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import DeletedMedicalRecord from '../models/DeletedMedicalRecord.js';
 import Pet from '../models/Pet.js';
+import Owner from '../models/Owner.js';
 import { renderReportPdf } from '../lib/pdf.js';
 import { assertMailConfigured, sendHealthReportEmail } from '../lib/mailer.js';
 import { pdfAccessSecret } from '../config/pdfAccess.js';
 import { templateForRecord } from '../lib/formTemplate.js';
 import { composeReportSections } from '../lib/reportSections.js';
+import { escapeRegExp } from '../lib/regex.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -281,6 +283,117 @@ petRecordsRouter.post('/', async (req, res, next) => {
 
 // 掛載於 /api/records
 export const recordsRouter = Router();
+
+// 跨寵物的健檢紀錄清單。存在的理由是「分發」這一端需要一個集散地：
+// 儀錶板只給得出數字與最近幾筆，其餘報告過去只能一隻一隻寵物翻進去找，
+// 寄送失敗的報告尤其容易就這樣消失在系統裡。
+//
+// view 是預設的工作佇列，status／delivery 則是細部篩選，兩者可以疊加。
+const RECORD_VIEW_FILTERS = {
+  // 待辦＝還沒送到飼主手上的：草稿，以及已結案但未寄送／寄送中／寄送失敗的。
+  todo: { $or: [{ status: 'draft' }, { deliveryStatus: { $ne: 'sent' } }] },
+  drafts: { status: 'draft' },
+  pending: { status: 'finalized', deliveryStatus: { $in: ['not_sent', 'sending'] } },
+  failed: { deliveryStatus: 'failed' },
+  sent: { deliveryStatus: 'sent' },
+  all: {},
+};
+
+const RECORD_LIST_FIELDS =
+  'petId reportNumber vet visitDate examType status deliveryStatus deliveryError reportVersion sentAt finalizedAt updatedAt createdAt';
+const RECORD_LIST_POPULATE = {
+  path: 'petId',
+  select: 'name species medicalRecordNumber ownerId',
+  populate: { path: 'ownerId', select: 'name phone email' },
+};
+
+// 關鍵字可能指向寵物或飼主，那是另外兩個 collection——先解析成 petId 清單，
+// 再併進報告自己的欄位（報告編號、獸醫師）一起比對。
+async function petIdsMatching(pattern) {
+  const owners = await Owner.find({ $or: [{ name: pattern }, { phone: pattern }, { email: pattern }] }).select('_id');
+  const ownerIds = owners.map((owner) => owner._id);
+  const pets = await Pet.find({
+    $or: [
+      { name: pattern },
+      { medicalRecordNumber: pattern },
+      ...(ownerIds.length ? [{ ownerId: { $in: ownerIds } }] : []),
+    ],
+  }).select('_id');
+  return pets.map((pet) => pet._id);
+}
+
+async function buildRecordListFilter(query) {
+  const filter = {};
+  const and = [];
+
+  const view = RECORD_VIEW_FILTERS[query.view] ? query.view : 'todo';
+  if (Object.keys(RECORD_VIEW_FILTERS[view]).length) and.push(RECORD_VIEW_FILTERS[view]);
+
+  if (['draft', 'finalized'].includes(query.status)) filter.status = query.status;
+  if (['not_sent', 'sending', 'sent', 'failed'].includes(query.delivery)) filter.deliveryStatus = query.delivery;
+  if (String(query.vet ?? '').trim()) filter.vet = new RegExp(escapeRegExp(String(query.vet).trim()), 'i');
+
+  // 被修訂版取代的舊版預設不列出：同一次健檢在清單上只該出現最後定稿的那份，
+  // 否則改過三次的報告會佔掉三行。要看修訂歷程請開個別報告。
+  if (query.includeSuperseded !== '1') filter.supersededBy = null;
+
+  const visitDate = {};
+  const from = query.from ? new Date(query.from) : null;
+  const to = query.to ? new Date(query.to) : null;
+  if (from && !Number.isNaN(from.getTime())) visitDate.$gte = from;
+  if (to && !Number.isNaN(to.getTime())) {
+    // to 是使用者選的「那一天」，要包含整天，所以比到當天結束。
+    to.setHours(23, 59, 59, 999);
+    visitDate.$lte = to;
+  }
+  if (Object.keys(visitDate).length) filter.visitDate = visitDate;
+
+  const keyword = String(query.q ?? '').trim();
+  if (keyword) {
+    const pattern = new RegExp(escapeRegExp(keyword), 'i');
+    const petIds = await petIdsMatching(pattern);
+    and.push({
+      $or: [
+        { reportNumber: pattern },
+        { vet: pattern },
+        ...(petIds.length ? [{ petId: { $in: petIds } }] : []),
+      ],
+    });
+  }
+
+  if (and.length) filter.$and = and;
+  return { filter, view };
+}
+
+recordsRouter.get('/', async (req, res, next) => {
+  try {
+    const { filter, view } = await buildRecordListFilter(req.query);
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 25, 1), 100);
+
+    // 佇列上的數字不套用關鍵字與日期篩選——它們回答的是「還有多少事沒做完」，
+    // 會隨著使用者打字忽上忽下的話就失去參考價值了。
+    const [items, total, counts] = await Promise.all([
+      MedicalRecord.find(filter)
+        .sort({ updatedAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .select(RECORD_LIST_FIELDS)
+        .populate(RECORD_LIST_POPULATE),
+      MedicalRecord.countDocuments(filter),
+      Promise.all(
+        Object.entries(RECORD_VIEW_FILTERS).map(async ([key, viewFilter]) => [
+          key,
+          await MedicalRecord.countDocuments({ supersededBy: null, ...viewFilter }),
+        ])
+      ).then(Object.fromEntries),
+    ]);
+
+    res.json({ items, total, page, limit, view, counts });
+  } catch (err) {
+    next(err);
+  }
+});
 
 recordsRouter.get('/:id', async (req, res, next) => {
   try {

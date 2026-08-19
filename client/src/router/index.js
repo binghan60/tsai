@@ -7,6 +7,7 @@ const OwnerDetailPage = () => import('../pages/OwnerDetailPage.vue');
 const PetsListPage = () => import('../pages/PetsListPage.vue');
 const PetDetailPage = () => import('../pages/PetDetailPage.vue');
 const RecordFormPage = () => import('../pages/RecordFormPage.vue');
+const RecordsListPage = () => import('../pages/RecordsListPage.vue');
 const ReportViewPage = () => import('../pages/ReportViewPage.vue');
 const FormTemplateListPage = () => import('../pages/FormTemplateListPage.vue');
 const FormTemplateEditPage = () => import('../pages/FormTemplateEditPage.vue');
@@ -28,13 +29,15 @@ const router = createRouter({
     { path: '/owners/:id', component: OwnerDetailPage, meta: { title: '飼主資料' } },
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },
     { path: '/pets/:id', component: PetDetailPage, meta: { title: '寵物資料' } },
+    { path: '/records', component: RecordsListPage, meta: { title: '健檢紀錄' } },
     // 健檢表單管理：清單決定「有哪幾份表單」，設計頁決定「每份表單有哪些項目」。
     { path: '/settings', redirect: '/settings/forms' },
     { path: '/settings/forms', component: FormTemplateListPage, meta: { title: '健檢表單' } },
     { path: '/settings/forms/:id', component: FormTemplateEditPage, meta: { title: '表單設計' } },
     // transient：不列入「使用者從哪來」的紀錄。存檔後這頁會 replace 成 /records/:id/edit，
     // 之後再回到這個 new 網址只會又開一份新草稿。
-    { path: '/pets/:petId/records/new', component: RecordFormPage, meta: { title: '新增健檢', transient: true } },
+    // nav：這頁的網址掛在 /pets 底下，但它做的是健檢紀錄，側邊欄該亮的是那一項。
+    { path: '/pets/:petId/records/new', component: RecordFormPage, meta: { title: '新增健檢', transient: true, nav: '/records' } },
     { path: '/records/:id/edit', component: RecordFormPage, meta: { title: '編輯健檢' } },
     { path: '/records/:id/preview', name: 'record-preview', component: ReportViewPage, meta: { bare: true, title: '報告預覽' } },
     // 公開頁面：無後台導覽列，飼主查看用 + Puppeteer PDF 截圖來源

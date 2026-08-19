@@ -1,12 +1,9 @@
 import { Router } from 'express';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
+import { escapeRegExp } from '../lib/regex.js';
 
 const router = Router();
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 router.get('/', async (req, res, next) => {
   try {

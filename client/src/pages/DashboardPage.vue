@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Phone, Trash2, User, Users } from '@lucide/vue';
+import { RouterLink } from 'vue-router';
+import { AlertTriangle, ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Phone, Trash2, User, Users } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
@@ -36,11 +37,12 @@ async function fetchDashboard() {
 }
 
 const stats = computed(() => [
-  { label: '飼主', value: dashboard.value?.ownerCount ?? '—', icon: Users },
-  { label: '寵物', value: dashboard.value?.petCount ?? '—', icon: PawPrint },
+  { label: '飼主', value: dashboard.value?.ownerCount ?? '—', icon: Users, to: '/owners' },
+  { label: '寵物', value: dashboard.value?.petCount ?? '—', icon: PawPrint, to: '/pets' },
+  // 本月健檢沒有 to：清單頁還沒有日期區間篩選，連過去只會看到跟卡片對不上的筆數。
   { label: '本月健檢', value: dashboard.value?.monthlyReportCount ?? '—', icon: FileText },
-  { label: '待完成草稿', value: dashboard.value?.draftCount ?? '—', icon: Pencil, emphasis: true },
-  { label: '待寄送報告', value: dashboard.value?.finalizedPendingCount ?? '—', icon: FileText, emphasis: true },
+  { label: '待完成草稿', value: dashboard.value?.draftCount ?? '—', icon: Pencil, emphasis: true, to: '/records?view=drafts' },
+  { label: '待寄送報告', value: dashboard.value?.finalizedPendingCount ?? '—', icon: FileText, emphasis: true, to: '/records?view=pending' },
 ]);
 
 // 圖表分類色依主題切換：深色卡片（zinc-900 底）要比一般品牌色再深一階才有足夠對比，
@@ -165,14 +167,33 @@ onMounted(fetchDashboard);
 
     <template v-else>
       <div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Card v-for="stat in stats" :key="stat.label" class="flex-row items-center gap-3 border p-4 shadow-sm dark:shadow-none" :class="stat.emphasis && stat.value ? 'border-belle-300 dark:border-brand-500/50' : 'border-cream-300 dark:border-zinc-800'">
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><component :is="stat.icon" class="h-5 w-5" /></div>
-          <div class="min-w-0">
-            <div class="text-xl font-semibold text-ink-900 dark:text-white">{{ stat.value }}</div>
-            <div class="text-xs text-ink-500 dark:text-zinc-400">{{ stat.label }}</div>
-          </div>
+        <Card v-for="stat in stats" :key="stat.label" class="border p-0 shadow-sm dark:shadow-none" :class="stat.emphasis && stat.value ? 'border-belle-300 dark:border-brand-500/50' : 'border-cream-300 dark:border-zinc-800'">
+          <component
+            :is="stat.to ? RouterLink : 'div'"
+            :to="stat.to"
+            class="flex flex-row items-center gap-3 rounded-xl p-4"
+            :class="stat.to ? 'transition-colors hover:bg-cream-100 dark:hover:bg-zinc-800/60' : ''"
+          >
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><component :is="stat.icon" class="h-5 w-5" /></div>
+            <div class="min-w-0">
+              <div class="text-xl font-semibold text-ink-900 dark:text-white">{{ stat.value }}</div>
+              <div class="text-xs text-ink-500 dark:text-zinc-400">{{ stat.label }}</div>
+            </div>
+          </component>
         </Card>
       </div>
+
+      <!-- 寄送失敗不佔一張統計卡（版面只放得下五張），但它是唯一「已經出過錯」的狀態，
+           不主動浮出來就會沉在清單裡沒人發現。只有真的有失敗時才出現。 -->
+      <RouterLink
+        v-if="dashboard.failedCount"
+        to="/records?view=failed"
+        class="flex min-h-14 items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 transition-colors hover:border-red-300 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/60"
+      >
+        <AlertTriangle class="h-5 w-5 shrink-0" stroke-width="1.75" />
+        <span class="min-w-0 flex-1">有 {{ dashboard.failedCount }} 份報告寄送失敗，需要重新寄送。</span>
+        <ArrowRight class="h-4 w-4 shrink-0" stroke-width="1.75" />
+      </RouterLink>
 
       <div class="grid gap-4 xl:grid-cols-2">
         <Card class="gap-0 overflow-hidden border-cream-300 py-0 shadow-sm dark:border-zinc-800">
