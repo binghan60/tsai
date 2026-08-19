@@ -30,7 +30,7 @@ const router = createRouter({
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },
     { path: '/pets/:id', component: PetDetailPage, meta: { title: '寵物資料' } },
     { path: '/records', component: RecordsListPage, meta: { title: '健檢紀錄' } },
-    // 健檢表單管理：清單決定「有哪幾份表單」，設計頁決定「每份表單有哪些項目」。
+    // 表單管理：清單決定「有哪幾份表單」，設計頁決定「每份表單有哪些項目」。
     { path: '/settings', redirect: '/settings/forms' },
     { path: '/settings/forms', component: FormTemplateListPage, meta: { title: '健檢表單' } },
     { path: '/settings/forms/:id', component: FormTemplateEditPage, meta: { title: '表單設計' } },

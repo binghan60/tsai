@@ -21,7 +21,7 @@ const navItems = [
   { to: '/owners', label: '飼主', exact: false, icon: Users },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
   { to: '/records', label: '健檢紀錄', exact: false, icon: FileText },
-  { to: '/settings', label: '健檢表單管理', exact: false, icon: ClipboardList },
+  { to: '/settings', label: '表單管理', exact: false, icon: ClipboardList },
 ];
 
 const activeTitle = computed(() => route.meta.title ?? navItems.find(isNavActive)?.label ?? '工作台');

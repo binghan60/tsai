@@ -194,7 +194,7 @@ onMounted(load);
 </script>
 
 <template>
-  <SettingsLayout title="健檢表單管理" description="醫師建立健檢時可選用的表單。每份表單都能設定適用物種與檢查內容。">
+  <SettingsLayout title="表單管理" description="醫師建立健檢時可選用的表單。每份表單都能設定適用物種與檢查內容。">
     <template #actions>
       <Button type="button" class="min-h-11" @click="openCreate"><Plus class="h-4 w-4" stroke-width="1.75" />新增健檢表單</Button>
     </template>
