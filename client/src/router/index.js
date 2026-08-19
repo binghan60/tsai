@@ -9,6 +9,7 @@ const RecordFormPage = () => import('../pages/RecordFormPage.vue');
 const ReportViewPage = () => import('../pages/ReportViewPage.vue');
 const FormTemplateListPage = () => import('../pages/FormTemplateListPage.vue');
 const FormTemplateEditPage = () => import('../pages/FormTemplateEditPage.vue');
+const TrashPage = () => import('../pages/TrashPage.vue');
 
 const router = createRouter({
   history: createWebHistory(),
@@ -22,6 +23,7 @@ const router = createRouter({
     { path: '/settings', redirect: '/settings/forms' },
     { path: '/settings/forms', component: FormTemplateListPage, meta: { title: '健檢表單' } },
     { path: '/settings/forms/:id', component: FormTemplateEditPage, meta: { title: '表單設計' } },
+    { path: '/settings/trash', component: TrashPage, meta: { title: '回收桶' } },
     { path: '/pets/:petId/records/new', component: RecordFormPage, meta: { title: '新增健檢' } },
     { path: '/records/:id/edit', component: RecordFormPage, meta: { title: '編輯健檢' } },
     { path: '/records/:id/preview', name: 'record-preview', component: ReportViewPage, meta: { bare: true, title: '報告預覽' } },

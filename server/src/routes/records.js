@@ -2,6 +2,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import DeletedMedicalRecord from '../models/DeletedMedicalRecord.js';
 import Pet from '../models/Pet.js';
 import { renderReportPdf } from '../lib/pdf.js';
 import { assertMailConfigured, sendHealthReportEmail } from '../lib/mailer.js';
@@ -487,9 +488,27 @@ recordsRouter.delete('/:id', async (req, res, next) => {
   try {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
-    if (record.status !== 'draft') {
-      return res.status(409).json({ message: '已結案的報告不能刪除' });
+    // 草稿與已結案但還沒寄送的報告都可以刪；已經寄出的不給刪（飼主手上已經有連結／附件，
+    // 刪除本地紀錄也追不回去），寄送中的也不給刪（避免刪除跟寄送流程互相打架）。
+    if (record.deliveryStatus === 'sent' || record.deliveryStatus === 'sending') {
+      const message = record.deliveryStatus === 'sending' ? '報告寄送中，請稍後再刪除' : '已寄送的報告不能刪除';
+      return res.status(409).json({ message });
     }
+    // 仿 GitHub 刪除 repository 的確認方式：要求前端把報告編號原封不動打進來才放行，
+    // 防止「手滑點到刪除又手滑點到確認」這種連續誤觸。
+    const confirmText = String(req.body?.confirmText ?? '').trim();
+    if (!record.reportNumber || confirmText !== record.reportNumber) {
+      return res.status(422).json({ message: '確認文字不符，請輸入完整的報告編號' });
+    }
+    // 刪除前先存一份快照，供之後回溯查詢或還原用。
+    await DeletedMedicalRecord.create({
+      originalId: record._id,
+      petId: record.petId,
+      reportNumber: record.reportNumber,
+      status: record.status,
+      deliveryStatus: record.deliveryStatus,
+      snapshot: record.toObject(),
+    });
     await record.deleteOne();
     res.status(204).end();
   } catch (err) {

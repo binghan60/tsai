@@ -16,11 +16,18 @@ const navItems = [
   { to: '/', label: '工作台', exact: true, icon: LayoutDashboard },
   { to: '/owners', label: '飼主', exact: false, icon: Users },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
-  // 目前底下只有健檢表單一項，導覽直接叫它本名；日後真的多出別種設定再改回上層分類。
   { to: '/settings', label: '健檢表單管理', exact: false, icon: ClipboardList },
 ];
 
 const activeTitle = computed(() => route.meta.title ?? navItems.find((item) => (item.exact ? route.path === item.to : route.path.startsWith(item.to)))?.label ?? '工作台');
+
+// router-link 內建的 active-class 是靠比對路由「記錄」（route.matched），不是比對網址字串——
+// /settings、/settings/forms、/settings/trash 各自是獨立註冊的路由，不是巢狀父子關係，
+// 內建判斷永遠抓不到「現在在設定底下的某一頁」。用網址前綴自己判斷才會準。
+function isNavActive(item) {
+  return item.exact ? route.path === item.to : route.path === item.to || route.path.startsWith(`${item.to}/`);
+}
+const navActiveClass = 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]';
 
 async function openGlobalSearch() {
   if (route.path !== '/') await router.push({ path: '/', query: { focus: 'search' } });
@@ -76,8 +83,7 @@ watch(
               :key="item.to"
               :to="item.to"
               class="mb-1 flex min-h-10 items-center gap-3 rounded-lg border border-transparent bg-sidebar-accent/30 px-2.5 text-sm font-medium text-sidebar-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              :active-class="item.exact ? '' : 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]'"
-              :exact-active-class="item.exact ? 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]' : ''"
+              :class="isNavActive(item) ? navActiveClass : ''"
             >
               <component :is="item.icon" class="h-4 w-4" stroke-width="1.9" />
               <span>{{ item.label }}</span>
@@ -154,8 +160,7 @@ watch(
                 :key="item.to"
                 :to="item.to"
                 class="flex min-h-11 items-center gap-3 rounded-lg border border-transparent bg-sidebar-accent/30 px-2.5 text-sm font-medium text-sidebar-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                :active-class="item.exact ? '' : 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]'"
-                :exact-active-class="item.exact ? 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]' : ''"
+                :class="isNavActive(item) ? navActiveClass : ''"
               >
                 <component :is="item.icon" class="h-4 w-4" stroke-width="1.9" />
                 {{ item.label }}

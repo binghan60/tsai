@@ -24,7 +24,7 @@ const showNav = computed(() => SETTINGS_ITEMS.length > 1);
       <!-- 桌機：左側直式子導覽；手機：可橫向捲動的膠囊列（與健檢表單的區段導覽一致） -->
       <nav
         v-if="showNav"
-        aria-label="健檢表單管理項目"
+        aria-label="設定項目"
         class="flex gap-1 overflow-x-auto rounded-xl border border-cream-300 bg-cream-50 p-1.5 shadow-sm lg:sticky lg:top-16 lg:flex-col lg:gap-0.5 lg:overflow-visible dark:border-zinc-800 dark:bg-zinc-900"
       >
         <template v-for="entry in SETTINGS_GROUPS" :key="entry.group">

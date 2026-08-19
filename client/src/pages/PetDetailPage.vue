@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router';
 import { CalendarDays, ClipboardPlus, FileText, PawPrint, Pencil, Share2, Trash2, User } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import { http } from '../api/http';
 import { ageLabel as calcAgeLabel, formatDate as formatClinicDate, formatDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
@@ -27,6 +28,7 @@ const editError = ref('');
 
 const recordToRemove = ref(null);
 const deletingRecordId = ref(null);
+const removeError = ref('');
 
 const sexLabel = computed(() => ({ male: '公', female: '母', unknown: '未記錄' })[pet.value?.sex] ?? '未記錄');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育', unknown: '未記錄' })[pet.value?.neutered] ?? '未記錄');
@@ -135,21 +137,23 @@ function openRevokeShare(record) {
 
 function openRemoveRecord(record) {
   if (deletingRecordId.value) return;
+  removeError.value = '';
   recordToRemove.value = record;
 }
 
-async function removeRecord(record) {
+async function removeRecord(confirmText) {
+  const record = recordToRemove.value;
   if (!record) return;
   deletingRecordId.value = record._id;
-  error.value = '';
+  removeError.value = '';
   try {
-    await http.delete(`/records/${record._id}`);
+    await http.delete(`/records/${record._id}`, { data: { confirmText } });
     recordToRemove.value = null;
     toast.success(`已成功刪除「${formatDate(record.visitDate)}」的健檢紀錄`, '刪除紀錄成功');
     await fetchPet();
   } catch (err) {
     const msg = err.response?.data?.message ?? '刪除健檢紀錄失敗';
-    error.value = msg;
+    removeError.value = msg;
     toast.error(msg, '刪除失敗');
   } finally {
     deletingRecordId.value = null;
@@ -207,7 +211,7 @@ onMounted(fetchPet);
               <Button v-else as-child variant="outline" size="sm" class="min-h-11"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
               <Button v-if="isFinalizedRecord(record) && !isShareActive(record)" type="button" variant="secondary" size="sm" class="min-h-11" :disabled="sharingId === record._id" @click="shareRecord(record)"><Share2 class="h-4 w-4" />{{ sharingId === record._id ? '處理中…' : '分享' }}</Button>
               <template v-if="isShareActive(record)"><Button type="button" variant="secondary" size="sm" class="min-h-11" @click="copyExistingShare(record)">複製連結</Button><Button type="button" variant="destructive-outline" size="sm" class="min-h-11" :disabled="revokingId === record._id" @click="openRevokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</Button></template>
-              <Button v-if="record.status === 'draft'" type="button" variant="destructive" size="sm" class="min-h-11" :disabled="deletingRecordId === record._id" :aria-label="`刪除健檢紀錄 ${formatDate(record.visitDate)}`" @click="openRemoveRecord(record)"><Trash2 class="h-4 w-4" />刪除</Button>
+              <Button v-if="!['sent', 'sending'].includes(getDeliveryStatus(record))" type="button" variant="destructive" size="sm" class="min-h-11" :disabled="deletingRecordId === record._id" :aria-label="`刪除健檢紀錄 ${formatDate(record.visitDate)}`" @click="openRemoveRecord(record)"><Trash2 class="h-4 w-4" />刪除</Button>
             </div>
           </div>
           </Card>
@@ -226,15 +230,13 @@ onMounted(fetchPet);
       @update:open="(value) => !value && (shareToRevoke = null)"
       @confirm="revokeShare(shareToRevoke)"
     />
-    <ConfirmDialog
-      :open="Boolean(recordToRemove)"
-      title="刪除健檢紀錄"
-      :description="`確定要刪除「${formatDate(recordToRemove?.visitDate)}」的健檢紀錄嗎？此操作無法復原。`"
-      confirm-label="刪除紀錄"
-      :loading="Boolean(deletingRecordId)"
-      :destructive="true"
-      @update:open="(value) => !value && (recordToRemove = null)"
-      @confirm="removeRecord(recordToRemove)"
+    <DeleteRecordDialog
+      v-if="recordToRemove"
+      :record="recordToRemove"
+      :submitting="Boolean(deletingRecordId)"
+      :error-message="removeError"
+      @close="recordToRemove = null"
+      @submit="removeRecord"
     />
   </section>
 
