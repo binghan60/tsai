@@ -22,7 +22,7 @@ const navItems = [
 const activeTitle = computed(() => route.meta.title ?? navItems.find((item) => (item.exact ? route.path === item.to : route.path.startsWith(item.to)))?.label ?? '工作台');
 
 // router-link 內建的 active-class 是靠比對路由「記錄」（route.matched），不是比對網址字串——
-// /settings、/settings/forms、/settings/trash 各自是獨立註冊的路由，不是巢狀父子關係，
+// /settings、/settings/forms、/settings/forms/:id 各自是獨立註冊的路由，不是巢狀父子關係，
 // 內建判斷永遠抓不到「現在在設定底下的某一頁」。用網址前綴自己判斷才會準。
 function isNavActive(item) {
   return item.exact ? route.path === item.to : route.path === item.to || route.path.startsWith(`${item.to}/`);
