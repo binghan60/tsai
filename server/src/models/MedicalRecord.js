@@ -155,4 +155,16 @@ const medicalRecordSchema = new mongoose.Schema(
 medicalRecordSchema.index({ petId: 1 });
 medicalRecordSchema.index({ reportNumber: 1 }, { unique: true, sparse: true });
 
+// 以下兩個是給跨寵物的健檢紀錄清單（GET /api/records）用的。
+//
+// 沒有它們的話那支查詢是 COLLSCAN + 記憶體排序：不只是慢，MongoDB 的記憶體排序
+// 有 32MB 硬上限，超過會直接丟 Sort exceeded memory limit，整個清單頁打不開。
+// 報告帶著 sections 快照，單筆不小，累積起來撞得到這條線。
+//
+// 欄位順序照 ESR：等值比對的 supersededBy 在前，排序用的 updatedAt 在後——
+// 這樣 MongoDB 直接照索引順序讀，連排序這個步驟都不需要。
+medicalRecordSchema.index({ supersededBy: 1, updatedAt: -1 });
+// 佇列篩選（草稿／待寄送／寄送失敗）。
+medicalRecordSchema.index({ status: 1, deliveryStatus: 1 });
+
 export default mongoose.model('MedicalRecord', medicalRecordSchema);
