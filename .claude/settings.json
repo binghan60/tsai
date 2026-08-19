@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/check-claude-md.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

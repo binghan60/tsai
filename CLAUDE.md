@@ -1,145 +1,251 @@
-# 寵物診所報告系統 — 專案規劃
+# 寵物診所報告系統 — 專案指南
 
-> **回答一律使用繁體中文**(不用簡體字、不用英文),無論使用者用中文或英文提問都一樣。程式碼、變數名稱、commit message 等技術內容維持原樣即可,不必刻意翻譯。
+> **回答一律使用繁體中文**（不用簡體字、不用英文），無論使用者用中文或英文提問都一樣。程式碼、變數名稱、commit message 等技術內容維持原樣即可，不必刻意翻譯。
+
+> **這份文件要跟著程式碼一起改。** 動到資料模型、API 路由、頁面路由、狀態機或技術選型時，同一次改動就更新這裡對應的段落——這份文件每個 session 開場會自動載入，寫錯的描述比沒有描述更糟，會讓後續判斷建立在錯的前提上。維護方式見最後一節。
 
 ## 一、專案定位
 
-單人使用的報告產生 + 分發系統(不是看診紀錄/排班系統)。核心流程:
+單人使用的健檢報告產生 + 分發系統（不是看診紀錄／排班系統）。核心流程：
 
 ```
-填寫報告 → 產出 PDF → 產生分享連結 → Email 通知飼主
+選健檢表單 → 填寫報告 → 結案（產生 PDF 快照並鎖定）→ 寄送 Email／分享連結給飼主
+                              ↓
+                        需要更正時建立修訂版
 ```
+
+兩個關鍵性質：
+
+- **報告結案後鎖定不可改。** 要更正得建立修訂版（新的一份，舊版保留並標記 `supersededBy`）。病歷必須永遠呈現當時的樣子。
+- **表單結構是使用者自訂的。** 有哪些區塊、每個區塊有哪些項目，都由 FormTemplate 決定，不是寫死的。報告結案時把當下的表單結構與作答一起存成 `sections` 快照，之後改範本不會回頭改動已結案的報告。
 
 ## 二、資料模型（MongoDB collections）
 
-**飼主 owners**
-- 姓名、電話、Email
-- 一位飼主可養多隻貓（pets 用 `ownerId` 參照回 owner）
+### owners 飼主
+`name`、`phone`、`email`。一位飼主可養多隻寵物。
 
-**貓咪 pets**
-- 名字
-- `ownerId`（參照 owners，`ObjectId`）
-- 一隻貓可有多筆報告（medicalRecords 用 `petId` 參照回 pet）
+### pets 寵物
+`name`、`ownerId`、`medicalRecordNumber`（自動產生 `PET-XXXXXXXX`）、`species`、`breed`、`sex`、`neutered`、`birthDate`、`weightKg`、`allergies`、`chronicConditions`、`currentMedications`、`notes`。
 
-**報告 medicalRecords**
-- `petId`（參照 pets，`ObjectId`）、看診醫生、看診日期
-- 主訴、病史、診斷、結論、治療計畫、其他
-- `shareToken`:分享用的唯一識別碼(uuid),組成 `/report/:token` 連結
-- `status`:草稿 / 已產出 PDF / 已寄送
-- `sentAt`:寄送時間
+### medicalRecords 健檢報告
+欄位分成幾組：
+
+| 組別 | 欄位 |
+|---|---|
+| 基本 | `petId`、`reportNumber`（`HC-YYYY-XXXXXXXX`）、`vet`、`visitDate`、`examType` |
+| **範本快照** | `templateId`、`templateVersion`、`sections`（結案時凍結的完整表單結構＋作答） |
+| 具名臨床欄位 | `weightKg`、`temperatureC`、`heartRate`、`chiefComplaint`、`diagnosis`、`conclusion`、`other`、`customValues` 等 |
+| 分享 | `shareToken`（uuid，unique）、`shareEnabled`、`sharedAt` |
+| 生命週期 | `status`：`draft` / `finalized`、`finalizedAt`、`pdfGeneratedAt` |
+| 修訂 | `reportVersion`、`revisionOf`、`revisionRootId`、`revisionReason`、`supersededBy` |
+| 寄送 | `deliveryStatus`：`not_sent` / `sending` / `sent` / `failed`、`deliveryError`、`lastDeliveryAttemptAt`、`sentAt`、`sentTo`、`emailMessageId` |
+
+**`status` 與 `deliveryStatus` 是兩個獨立的維度**，不要混成一個。報告結案與否是臨床流程，寄不寄得出去是通訊結果——寄送失敗不該讓報告退回草稿。
+
+已結案報告的內容一律讀 `sections` 快照，報告檢視頁不再讀具名欄位。
+
+索引：`petId`、`reportNumber`(unique)、`shareToken`(unique)、`{supersededBy, updatedAt}`、`{status, deliveryStatus}`。後兩個是給跨寵物清單查詢用的——沒有它們那支查詢是全表掃描加記憶體排序，而記憶體排序有 32MB 硬上限，超過會直接失敗。**新增查詢模式時要一併確認索引接得上。**
+
+### formTemplates 健檢表單範本
+`name`、`description`、`species`、`enabled`、`order`、`version`，底下是 `sections[]`，每個 section 有 `items[]`。使用者可自由增刪區塊與項目。詳見 [docs/FORM_BUILDER.md](docs/FORM_BUILDER.md)。
+
+### quickPhrases 常用語
+`text`、`itemKey`、`usageCount`。填表時各欄位可挑選的常用句子。
+
+### deliveryLogs 寄送流水帳
+append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
+
+**刻意不設 `ref`、改冗餘存報告編號與姓名**——報告可以被刪除，而這筆紀錄的價值正是在報告消失後還查得到寄給了誰。同理它是獨立 collection 而不是內嵌陣列。medicalRecords 上的 `sentTo`/`sentAt` 只留得住最後一次，重寄就覆蓋。
+
+### deletedMedicalRecords 刪除稽核快照
+報告刪除時存一份完整快照。**目前只寫不讀**，沒有查詢介面，需要回溯時直接查這張表。
 
 ## 三、技術棧
 
-| 層級 | 選擇 | 理由 |
+| 層級 | 選擇 | 備註 |
 |---|---|---|
-| 前端 | Vue 3 + Vite | |
-| 後端 | Node.js + Express | 專案規模小、單人使用,不需要 Nest.js 的架構開銷 |
-| 資料庫 | MongoDB | |
-| ODM | Mongoose | 定義 schema、關聯用 `.populate()` 處理,體驗接近傳統 ORM |
-| PDF | Puppeteer | 見下方「PDF 產生方式」 |
-| Email | Nodemailer | SMTP 寄信(Gmail 應用程式密碼 / Resend 皆可) |
+| 前端 | Vue 3 + Vite | Composition API、`<script setup>` |
+| UI 元件 | reka-ui + shadcn-vue 風格 | 元件在 `client/src/components/ui/`，可直接改 |
+| CSS | Tailwind CSS v4 | `@tailwindcss/vite`，設定寫在 `client/src/style.css` 的 `@theme`（CSS-first，無 `tailwind.config.js`） |
+| 圖示 | `@lucide/vue` | **不是** `lucide-vue-next`（已棄用） |
+| 表單驗證 | vee-validate | |
+| 後端 | Node.js + Express | 單人使用，不需要 Nest.js 的架構開銷 |
+| 資料庫 | MongoDB + Mongoose | |
+| PDF | Puppeteer | 見下節 |
+| Email | Nodemailer | SMTP（Gmail 應用程式密碼） |
+| 測試 | Node 內建 `node --test` | 不裝額外框架 |
 
-## 四、PDF 產生方式(關鍵架構決策)
+## 四、PDF 產生方式（關鍵架構決策）
 
-**不在後端另外維護一份 PDF 版型。** 做法是:
+**不在後端另外維護一份 PDF 版型。** 做法是：
 
-1. 前端做一個「報告檢視頁」`/report/:token`,資料存 DB、前端 fetch API 後自己切版渲染
-2. 這個頁面同時扮演兩個角色:
-   - **給飼主看**:飼主直接打開這個連結,不需要登入
-   - **PDF 來源**:後端用 Puppeteer 開無頭瀏覽器連到這個公開頁面,把渲染結果截成 PDF
-3. 前端另外寫一份 `@media print` CSS,隱藏操作型 UI(導覽列、按鈕),只留報告內容
+1. 前端的報告檢視頁 `/report/:token` 同時扮演兩個角色：給飼主直接看（不需登入），以及當 PDF 的來源
+2. 後端用 Puppeteer 開無頭瀏覽器連到這個頁面，把渲染結果截成 PDF
+3. 前端寫 `@media print` CSS 隱藏操作型 UI
 
-好處:排版只寫一次,前端改樣式,PDF 自動跟著變,不會有兩邊排版不一致的問題。
+好處：排版只寫一次，前端改樣式 PDF 自動跟著變。
+
+`server/src/lib/pdf.js` 的兩個要點：
+
+- **Chromium 實例重用。** 每次重開瀏覽器光啟動就要一到三秒，而結案／下載／寄送三支端點都是同步等它跑完。實例留著重用、閒置五分鐘才關；快取的是 launch 的 promise 而不是實例，同時進來的請求才會共用同一次啟動。
+- **渲染排隊，一次只跑一個。** 並行渲染會讓多個分頁搶著載入報告頁，`networkidle0` 永遠不滿足而全部逾時。另外 page 要 `setCacheEnabled(false)`——共用實例也共用 HTTP 快取，第二次載入同一份報告會拿到 304，而 `response.ok()` 只認 200–299。
 
 ## 五、API 設計
 
 ```
 飼主
-GET    /api/owners                     列表（可搜尋姓名/電話）
-POST   /api/owners                     新增
-GET    /api/owners/:id                 詳情（含旗下貓咪）
-PUT    /api/owners/:id                 編輯
-DELETE /api/owners/:id                 刪除
+GET    /api/owners                      列表（?q= 搜尋姓名/電話）
+POST   /api/owners
+GET    /api/owners/:id                  詳情（含旗下寵物）
+PUT    /api/owners/:id
+DELETE /api/owners/:id
 
-貓咪
-GET    /api/owners/:ownerId/pets       該飼主的貓咪列表
-POST   /api/owners/:ownerId/pets       新增貓咪
-GET    /api/pets/:id                   詳情（含病歷列表）
+寵物
+GET    /api/owners/:ownerId/pets        該飼主的寵物
+POST   /api/owners/:ownerId/pets
+GET    /api/pets                        列表（?q= 搜尋）
+GET    /api/pets/:id                    詳情（含報告列表）
 PUT    /api/pets/:id
 DELETE /api/pets/:id
 
 報告
-GET    /api/pets/:petId/records        該貓咪報告列表
-POST   /api/pets/:petId/records        新增報告
-GET    /api/records/:id                單筆詳情
-PUT    /api/records/:id                編輯
-DELETE /api/records/:id
-POST   /api/records/:id/generate-pdf   產生 PDF（回傳檔案）
-POST   /api/records/:id/send-email     產生 PDF + 寄送給飼主
+GET    /api/pets/:petId/records         該寵物的報告
+GET    /api/pets/:petId/records/previous-values   填表時的「上次數值」對照
+POST   /api/pets/:petId/records         新增
+GET    /api/records                     跨寵物清單（?view= 工作佇列 / ?q= / 分頁）
+GET    /api/records/:id
+PUT    /api/records/:id
+POST   /api/records/:id/finalize        結案：驗證 → 凍結 sections → 產 PDF → 鎖定
+GET    /api/records/:id/pdf             下載 PDF
+POST   /api/records/:id/revisions       建立修訂版
+DELETE /api/records/:id                 刪除（需帶 confirmText＝報告編號）
+POST   /api/records/:id/share           建立分享連結
+POST   /api/records/:id/revoke-share    撤銷分享
+POST   /api/records/:id/send-email      寄送 PDF + 連結給飼主
 
-公開路由（無需登入）
-GET    /api/public/reports/:token      飼主用連結查看報告，只回傳報告需要的欄位
+寄送紀錄
+GET    /api/delivery-logs               流水帳（?recordId= / ?event= / 分頁）
 
-儀錶板
-GET    /api/dashboard                  彙總數字 + 最近報告
+健檢表單設定
+GET    /api/settings/form-templates
+POST   /api/settings/form-templates
+GET    /api/settings/form-templates/:id
+PUT    /api/settings/form-templates/:id
+DELETE /api/settings/form-templates/:id
+
+常用語
+GET    /api/quick-phrases
+POST   /api/quick-phrases
+POST   /api/quick-phrases/:id/use       累計使用次數
+DELETE /api/quick-phrases/:id
+
+其他
+GET    /api/search                      全站搜尋（飼主 + 寵物）
+GET    /api/dashboard                   彙總數字 + 最近報告
+GET    /api/public/reports/:token        公開，飼主查看報告用
+GET    /api/health
 ```
+
+`GET /api/records` 的 `view` 是預設工作佇列：`todo`（預設）/ `drafts` / `pending` / `failed` / `sent` / `all`。回傳帶 `counts` 給前端佇列徽章。**儀錶板卡片的數字必須跟對應佇列的筆數對得起來**——卡片可以點進清單，兩邊算法不同會直接讓人困惑。
+
+刪除限制：`deliveryStatus` 為 `sent` 或 `sending` 的報告不給刪。
 
 ## 六、頁面規劃
 
-- **儀錶板**(給老闆/醫生看全局)
-  - 關鍵數字卡片:累計飼主數、累計貓咪數、本月報告數、待處理(草稿)數
-  - 最近報告列表(狀態:草稿 / 已產出 PDF / 已寄送)
-  - 快速新增報告按鈕
-- **飼主列表**:搜尋(姓名/電話)+ 新增
-- **飼主詳情**:基本資料 + 旗下貓咪列表 + 新增貓咪
-- **貓咪詳情**:基本資料 + 歷次報告列表 + 各報告的「編輯 / 下載 PDF / 寄送給飼主」操作
-- **報告填寫表單**:
-  - 頂部常駐貓咪 + 飼主資訊(唯讀 context bar)
-  - 欄位分兩組:「病人陳述」(主訴、病史)/「醫生判斷」(診斷、治療計畫、結論、其他),用分隔線區隔
-  - 主訴/病史/結論/其他用較小 textarea,診斷/治療計畫給較大空間
-- **報告檢視頁**(`/report/:token`,公開,無登入、無後台導覽列):飼主查看用,也是 PDF 截圖來源
+| 路由 | 頁面 | 說明 |
+|---|---|---|
+| `/` | 工作台 | 統計卡片（可點進對應佇列）、草稿與最近報告、報告狀態圖表、寄送失敗橫幅 |
+| `/owners`、`/owners/:id` | 飼主列表／詳情 | |
+| `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含歷次報告 |
+| `/records` | 健檢紀錄清單 | 跨寵物，佇列切換 |
+| `/records/deliveries` | 寄送紀錄 | 流水帳，含已刪除報告的紀錄 |
+| `/pets/:petId/records/new`、`/records/:id/edit` | 報告填寫表單 | 自動存草稿、離開前攔截未儲存變更 |
+| `/records/:id/preview` | 報告預覽 | `meta.bare`，後台用，有結案／寄送／分享操作 |
+| `/report/:token` | 報告檢視頁 | `meta.bare`，**公開**，飼主查看用 + PDF 截圖來源 |
+| `/settings/forms`、`/settings/forms/:id` | 健檢表單管理／設計 | |
+
+導覽與返回的幾個約定（`client/src/App.vue`、`router/index.js`）：
+
+- 側邊欄 active 判斷用網址前綴，不用 `router-link` 內建的（那個比對路由記錄，抓不到獨立註冊的深層路由）。路由可以用 `meta.nav` 自己指定歸屬，網址前綴猜錯時以它為準。
+- 各頁的返回連結走 `useBackTarget`，回到使用者真正的出發點（router 在 `afterEach` 記進 `history.state`），不是寫死的上層網址。標了 `meta.transient` 的路由不列入來源。
+- 列表頁的搜尋／佇列／頁碼用 `useSearchQueryParam` 同步進網址，配合 router 的 `scrollBehavior` 讓返回時狀態與捲動位置都還在。
+- 全站搜尋是蓋在當前頁面上的命令面板（`Ctrl/Cmd+K`），**不換路由**。
 
 ## 七、UI／視覺設計規範
 
-- **CSS 框架**:Tailwind CSS v4,用 `@tailwindcss/vite` 掛進 `vite.config.js`,設定寫在 `client/src/style.css` 的 `@theme`(CSS-first config,不用 `tailwind.config.js`)。
-- **明暗主題**:後台管理頁面(儀錶板／飼主／貓咪／報告表單)支援明暗切換,側邊欄最下方有切換鈕,狀態存 `localStorage`、預設跟隨系統。共用邏輯在 `client/src/composables/useTheme.js`,深淺色用 Tailwind 的 `dark:` variant(`@custom-variant dark` 定義在 `style.css`,對應 `<html class="dark">`)。
-  - **淺色 = 法國美好年代(Belle Époque)風格**:酒紅主色 `belle`(50–800)、象牙／羊皮紙底色 `cream`(50–300)、暖棕黑文字 `ink`(400–900),定義在 `style.css`。
-  - **深色 = 科技感風格**:近黑底色維持 Tailwind `zinc`(950 頁面底 / 900 卡片 / 800 邊框),主色是琥珀橘 `brand`(50–900),重點元素(logo、主要按鈕)加微光陰影(`shadow-[0_0_...]`)。
-  - `/report/:token` 報告檢視頁**固定淺色,不受主題切換影響**──它同時是 Puppeteer 截圖產 PDF 的來源,深色底 + 淺色文字直接列印容易變成看不見字,獨立用 `stone`/`brand` 配色,不套用 `dark:` variant。
-- **報告狀態色彩語意**(`medicalRecords.status`,徽章與圖表都要遵循同一套對應,不要各用各的顏色):
-  - `draft` 草稿 → 中性灰(zinc-500 `#71717a`,深淺主題共用)
-  - `generated` 已產出 PDF → 深色用品牌橘(brand-600 `#ea580c`)、淺色用古董金(amber-800 `#92400e`)
-  - `sent` 已寄送 → 綠(emerald-600 `#059669`,深淺主題共用)
-- **圖示**:統一用 `@lucide/vue`(非 `lucide-vue-next`,已棄用),**不要用 emoji**。線條粗細統一 `stroke-width="1.75"`,顏色預設跟隨 `currentColor`。
-- **圖表**:儀錶板上的圖表照 `dataviz` skill 的方法做──先選圖表形式(part-to-whole 用堆疊長條,不用圓餅圖)、色彩最後決定且要跑 `scripts/validate_palette.js` 驗證對比與色盲安全性,不要憑感覺挑色。深色卡片(`zinc-900` 底)上的分類色要比一般品牌色再深一階才過驗證(例如 `brand-500` 太亮,要用 `brand-600`)。折線圖等會隨主題變色的圖表,色碼要放進 `computed()`(依 `isDark` 切換),不要寫死。
-- **字體層級**(後台管理介面,Tailwind 字級 class):
+- **明暗主題**：後台管理頁面支援明暗切換，側邊欄最下方有切換鈕，狀態存 `localStorage`、預設跟隨系統。共用邏輯在 `client/src/composables/useTheme.js`，深淺色用 Tailwind 的 `dark:` variant（`@custom-variant dark` 定義在 `style.css`，對應 `<html class="dark">`）。
+  - **淺色 = 法國美好年代（Belle Époque）風格**：酒紅主色 `belle`(50–800)、象牙／羊皮紙底色 `cream`(50–300)、暖棕黑文字 `ink`(400–900)，定義在 `style.css`。
+  - **深色 = 科技感風格**：近黑底色維持 Tailwind `zinc`(950 頁面底 / 900 卡片 / 800 邊框)，主色是琥珀橘 `brand`(50–900)，重點元素加微光陰影。
+  - `/report/:token` 與 `/records/:id/preview` 報告頁**固定淺色，不受主題切換影響**──它同時是 Puppeteer 截圖產 PDF 的來源，深色底 + 淺色文字直接列印容易變成看不見字，獨立用 `stone`/`brand` 配色，**不套用 `dark:` variant**。在那兩頁加東西時不要共用後台的樣式常數（例如 `DELIVERY_EVENT_META`），要另外定義純淺色版本。
+- **報告狀態色彩語意**（徽章與圖表都要遵循同一套對應）：
+  - `draft` 草稿 → 中性灰（zinc-500）
+  - `finalized` 已結案 → 深色用品牌橘（brand-600）、淺色用古董金（amber-800）
+  - `sent` 已寄送 → 綠（emerald-600）；`failed` 寄送失敗 → 紅；`sending` 寄送中 → 天藍
+- **圖示**：統一用 `@lucide/vue`，**不要用 emoji**。線條粗細統一 `stroke-width="1.75"`，顏色預設跟隨 `currentColor`。
+- **圖表**：照 `dataviz` skill 的方法做──先選圖表形式（part-to-whole 用堆疊長條，不用圓餅圖）、色彩最後決定且要跑該 skill 附的 `validate_palette.js` 驗證對比與色盲安全性，不要憑感覺挑色。深色卡片（`zinc-900` 底）上的分類色要比一般品牌色再深一階才過驗證。會隨主題變色的圖表，色碼要放進 `computed()`（依 `isDark` 切換），不要寫死。
+- **字體層級**（後台管理介面）：
 
   | 層級 | Class | 字重 | 用途 |
   |---|---|---|---|
-  | H1 頁面標題 | `text-xl` | `font-semibold` | 每頁最上方唯一標題(例:「飼主列表」「診所報告總覽」) |
-  | H2 區塊標題 | `text-base` | `font-semibold` | 頁面內的區塊/群組標題(例:「貓咪」「歷次報告」「病人陳述」) |
-  | H3 卡片標題 | `text-sm` | `font-semibold` | 密集網格內卡片自己的標題(例:儀錶板圖表卡片、「最近報告」面板) |
-  | Body 內文 | `text-sm` | 預設(不加粗) | 一般文字、表格內容、清單項目 |
+  | H1 頁面標題 | `text-xl` | `font-semibold` | 每頁最上方唯一標題 |
+  | H2 區塊標題 | `text-base` | `font-semibold` | 頁面內的區塊／群組標題 |
+  | H3 卡片標題 | `text-sm` | `font-semibold` | 密集網格內卡片自己的標題 |
+  | Body 內文 | `text-sm` | 預設 | 一般文字、表格內容、清單項目 |
   | Control 控制項 | `text-sm` | `font-medium` | 按鈕、連結、輸入框文字 |
   | Label 表單標籤 | `text-xs` | `font-medium` | 表單欄位標籤 |
-  | Caption 註記 | `text-xs` | 預設,搭配 muted 色(`text-ink-400/500` 或 `dark:text-zinc-500/600`) | 次要說明、時間戳記、狀態徽章文字 |
+  | Caption 註記 | `text-xs` | 預設，搭配 muted 色 | 次要說明、時間戳記、狀態徽章文字 |
 
-  不要用任意值字級(如 `text-[11px]`),一律對應到上表其中一層,維持全站字級一致。`/report/:token` 報告檢視頁是獨立的列印文件排版,不套用這份後台字級表(它的標題/內文尺寸見該頁面元件本身)。
+  不要用任意值字級（如 `text-[11px]`），一律對應到上表其中一層。報告檢視頁是獨立的列印文件排版，不套用這份後台字級表。
 
-## 八、開發順序建議
+更完整的視覺規範見 [docs/STYLE_GUIDE.md](docs/STYLE_GUIDE.md)。
 
-1. 資料庫 schema 定義(owners / pets / medicalRecords 三個 collection,用 Mongoose schema)
-2. 後端 CRUD API(先飼主、貓咪,再報告)
-3. 前端頁面:飼主列表 → 貓咪列表 → 報告填寫表單
-4. 報告檢視頁(`/report/:token`)+ `@media print` 樣式
-5. Puppeteer PDF 產生串接
-6. Nodemailer 寄信串接
-7. 儀錶板彙總 API + 頁面
+## 八、開發與驗證
 
-## 九、尚待決定/確認的事項
+```bash
+# 前端（client/）
+npm run build          # 驗證改動用這個
+npm run dev            # 使用者自己開，不要主動啟動（會搶 port）
 
-- SMTP 寄信服務選擇(Gmail 應用程式密碼 / Resend 等)
-- 正式部署的網域/主機(Puppeteer 需要連到已部署的前端網址才能截圖)
-- MongoDB 主機選擇(本機 / MongoDB Atlas 免費層)
-- 開發階段用 localStorage 兜的飼主/貓咪 CRUD 頁面,之後要換成打真正的 API;報告分享連結、PDF、Email 這條線建議一開始就接真的後端，不用 localStorage 過渡
-- 是否需要登入/權限機制(目前規劃是單人使用,先跳過)
+# 後端（server/）
+npm test               # node --test
+npm run lint           # eslint
+npm run dev            # 使用者自己開
+```
+
+改完後的驗證順序：後端 `npm run lint` + `npm test`，前端 `npm run build`。dev server 通常已經在跑（3000 / 5173），可以直接 curl API 驗證。
+
+幾件要注意的：
+
+- **寄送 Email 會真的發信給飼主**，是不可逆的對外行為，不要為了驗證而擅自觸發。要驗證寄送路徑請先問過。
+- 產 PDF（`GET /api/records/:id/pdf`）不對外，可以放心呼叫。
+- 開發連的 MongoDB 是測試環境，寫入測試資料不必主動清除。
+- 純邏輯要能被測到就別留在路由檔裡——測試若 import `routes/records.js` 會連帶載入 puppeteer 與 nodemailer。結案驗證已抽到 `server/src/lib/recordValidation.js`。
+
+## 九、現況與待辦
+
+已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋。
+
+待處理（依急迫性）：
+
+1. **認證機制** — 目前 `/api/*` 完全沒有保護。部署後任何人都能讀寫全部資料，並用 `POST /api/records/:id/send-email` 借你的 Gmail 發信（被濫用時 Google 封的是帳號本身）。單人使用不需要 JWT，一組環境變數密碼 + signed cookie 即可，但要放行 `/api/public/reports/:token` 與 PDF 存取。同時值得替寄信單獨加頻率限制。
+2. **前端 `validateForPreview()` 沒有測試** — `RecordFormPage.vue` 裡與後端 `validateFinalRecord` 對應的那份判準是各寫一份的，後端已經釘住，前端改動會單方面漂移。
+3. **`deletedMedicalRecords` 沒有查詢介面** — 只寫不讀。
+4. **寄送失敗（`failed`）的報告仍可刪除** — 只擋了 `sent` 與 `sending`。
+5. `/owners`、`/pets` 列表沒有分頁；搜尋是全表 regex 掃描，走不到索引。目前資料量還撐得住。
+
+部署見 [docs/ZEABUR_DEPLOY.md](docs/ZEABUR_DEPLOY.md)。
+
+## 十、維護這份文件
+
+改動落地後，對照下表看有沒有需要同步的段落：
+
+| 改了什麼 | 要更新 |
+|---|---|
+| Mongoose schema 欄位、索引 | 第二節 |
+| 新增／改名／刪除 API 路由 | 第五節 |
+| 新增前端頁面或路由 | 第六節 |
+| 換套件、加開發指令 | 第三節、第八節 |
+| 狀態機（`status`／`deliveryStatus`／`event`）語意 | 第二節、第七節色彩語意 |
+| 做完待辦、發現新問題 | 第九節 |
+
+只改實作細節（重構、修 bug、調樣式）而沒有動到上面這些面向時，不需要動這份文件。
