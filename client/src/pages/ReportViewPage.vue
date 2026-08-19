@@ -290,20 +290,19 @@ onMounted(fetchReport);
             <template v-for="role in HEADER_ROLES" :key="role">
               <template v-if="itemByRole(role)">
                 <dt class="font-medium">{{ itemByRole(role).label }}</dt>
-                <dd>{{ role === 'visitDate' ? formatDate(valueByRole(role)) : (valueByRole(role) || '—') }}</dd>
+                <dd>{{ role === 'visitDate' ? formatDate(valueByRole(role), '') : valueByRole(role) }}</dd>
               </template>
             </template>
-            <dt class="font-medium">健檢類型</dt><dd>{{ record.examType || '—' }}</dd>
+            <dt class="font-medium">健檢類型</dt><dd>{{ record.examType || '' }}</dd>
           </dl>
         </header>
 
         <section class="mt-6 rounded-xl bg-stone-50 p-5">
-          <div class="flex flex-wrap items-baseline justify-between gap-2"><h1 class="text-2xl font-semibold text-stone-900">{{ record.pet?.name || '寵物姓名未記錄' }}</h1><span class="font-mono text-xs text-stone-500">病歷號：{{ record.pet?.medicalRecordNumber || '—' }}</span></div>
-          <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-            <div><dt class="text-xs font-medium text-stone-500">飼主</dt><dd class="mt-1 text-stone-800">{{ record.owner?.name || '—' }}</dd></div>
-            <div><dt class="text-xs font-medium text-stone-500">物種／品種</dt><dd class="mt-1 text-stone-800">{{ record.pet?.species || '—' }}<template v-if="record.pet?.breed">／{{ record.pet.breed }}</template></dd></div>
+          <div class="flex flex-wrap items-baseline justify-between gap-2"><h1 class="text-2xl font-semibold text-stone-900">{{ record.pet?.name || '寵物姓名未記錄' }}</h1><span class="font-mono text-xs text-stone-500">病歷號：{{ record.pet?.medicalRecordNumber || '' }}</span></div>
+          <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+            <div><dt class="text-xs font-medium text-stone-500">飼主</dt><dd class="mt-1 text-stone-800">{{ record.owner?.name || '' }}</dd></div>
+            <div><dt class="text-xs font-medium text-stone-500">物種／品種</dt><dd class="mt-1 text-stone-800">{{ record.pet?.species || '' }}<template v-if="record.pet?.breed">／{{ record.pet.breed }}</template></dd></div>
             <div><dt class="text-xs font-medium text-stone-500">性別／健檢時年齡</dt><dd class="mt-1 text-stone-800">{{ sexLabel(record.pet?.sex) }}／{{ ageLabel(record.pet?.birthDate, valueByRole('visitDate') || record.visitDate) }}</dd></div>
-            <div><dt class="text-xs font-medium text-stone-500">晶片號碼</dt><dd class="mt-1 text-stone-800">{{ record.pet?.microchipNumber || '未記錄' }}</dd></div>
           </dl>
         </section>
 

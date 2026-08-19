@@ -155,7 +155,6 @@ function reportPayload(record, sections) {
           sex: pet.sex,
           neutered: pet.neutered,
           birthDate: pet.birthDate,
-          microchipNumber: pet.microchipNumber,
           allergies: pet.allergies,
           chronicConditions: pet.chronicConditions,
           currentMedications: pet.currentMedications,

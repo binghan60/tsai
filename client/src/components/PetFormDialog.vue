@@ -17,7 +17,6 @@ const defaults = {
   sex: 'unknown',
   neutered: 'unknown',
   birthDate: '',
-  microchipNumber: '',
   weightKg: null,
   allergies: '',
   chronicConditions: '',
@@ -36,7 +35,6 @@ const props = defineProps({
       sex: 'unknown',
       neutered: 'unknown',
       birthDate: '',
-      microchipNumber: '',
       weightKg: null,
       allergies: '',
       chronicConditions: '',
@@ -58,7 +56,6 @@ const { value: breed } = useField('breed');
 const { value: sex } = useField('sex');
 const { value: neutered } = useField('neutered');
 const { value: birthDate } = useField('birthDate');
-const { value: microchipNumber } = useField('microchipNumber');
 const { value: weightKg } = useField('weightKg');
 const { value: allergies } = useField('allergies');
 const { value: chronicConditions } = useField('chronicConditions');
@@ -137,10 +134,6 @@ const onSubmit = handleSubmit((values) => {
                   <SelectItem v-for="option in neuteredOptions" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <div class="space-y-1.5">
-              <Label for="pet-microchip" class="text-xs font-medium text-ink-700 dark:text-zinc-300">晶片號碼</Label>
-              <Input id="pet-microchip" v-model="microchipNumber" class="min-h-11 border-cream-300/90 dark:border-zinc-700 dark:bg-zinc-950/40" placeholder="例如：900000000000000" />
             </div>
             <div class="space-y-1.5">
               <Label for="pet-weight" class="text-xs font-medium text-ink-700 dark:text-zinc-300">目前體重（kg）</Label>

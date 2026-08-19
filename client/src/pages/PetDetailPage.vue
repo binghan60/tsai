@@ -171,8 +171,7 @@ onMounted(fetchPet);
         <Button variant="outline" class="min-h-11" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
       </div>
 
-      <dl class="mt-5 grid gap-3 border-t border-cream-300 pt-5 text-sm dark:border-zinc-800 sm:grid-cols-2 lg:grid-cols-4">
-        <div><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">晶片號碼</dt><dd class="mt-1 text-ink-700 dark:text-zinc-200">{{ pet.microchipNumber || '未記錄' }}</dd></div>
+      <dl class="mt-5 grid gap-3 border-t border-cream-300 pt-5 text-sm dark:border-zinc-800 sm:grid-cols-2 lg:grid-cols-3">
         <div><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">最近體重</dt><dd class="mt-1 text-ink-700 dark:text-zinc-200">{{ pet.weightKg != null ? `${pet.weightKg} kg` : '未記錄' }}</dd></div>
         <div><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">過敏紀錄</dt><dd class="mt-1 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ pet.allergies || '無紀錄' }}</dd></div>
         <div><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">慢性病／目前用藥</dt><dd class="mt-1 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ [pet.chronicConditions, pet.currentMedications].filter(Boolean).join('；') || '無紀錄' }}</dd></div>

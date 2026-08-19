@@ -22,7 +22,7 @@ const others = computed(() => (props.section.items ?? []).filter((item) => famil
 <template>
   <section v-if="measured.length || others.length" class="mt-8 break-inside-avoid">
     <h2 class="mb-3 text-sm font-semibold text-brand-700">{{ section.title }}</h2>
-    <dl v-if="measured.length" class="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-200 sm:grid-cols-5">
+    <dl v-if="measured.length" class="grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-px overflow-hidden rounded-xl border border-stone-200 bg-stone-200">
       <div v-for="item in measured" :key="item.key" class="bg-white p-3 text-center" :class="spanClass(item, 'report')">
         <dt class="text-xs text-stone-500">{{ item.label }}</dt>
         <dd class="mt-1 text-sm font-semibold text-stone-900">{{ item.display }}</dd>

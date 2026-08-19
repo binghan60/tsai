@@ -26,7 +26,6 @@ router.get('/', async (req, res, next) => {
       $or: [
         { name: pattern },
         { medicalRecordNumber: pattern },
-        { microchipNumber: pattern },
         ...(matchingOwnerIds.length ? [{ ownerId: { $in: matchingOwnerIds } }] : []),
         ...(derivedRecordNumber
           ? [{ $expr: { $regexMatch: { input: { $toString: '$_id' }, regex: `${derivedRecordNumber[1]}$`, options: 'i' } } }]

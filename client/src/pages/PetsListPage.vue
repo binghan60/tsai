@@ -57,7 +57,7 @@ onMounted(fetchPets);
       請搜尋並選擇寵物，接著點選「新增健檢」。
     </div>
 
-    <SearchPanel id="pet-search" v-model="query" label="搜尋寵物" placeholder="輸入寵物名、飼主姓名、電話、病歷號或晶片號" />
+    <SearchPanel id="pet-search" v-model="query" label="搜尋寵物" placeholder="輸入寵物名、飼主姓名、電話或病歷號" />
 
     <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
     <p v-else-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入寵物資料…</p>
@@ -90,7 +90,7 @@ onMounted(fetchPets);
               </TableCell>
               <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300">
                 <span class="block font-medium">{{ pet.medicalRecordNumber || '病歷號未建立' }}</span>
-                <span class="block text-xs text-ink-400 dark:text-zinc-400">{{ sexLabel(pet.sex) }}<template v-if="pet.microchipNumber"> · 晶片 {{ pet.microchipNumber }}</template></span>
+                <span class="block text-xs text-ink-400 dark:text-zinc-400">{{ sexLabel(pet.sex) }}</span>
               </TableCell>
               <TableCell class="px-5 py-3">
                 <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="inline-flex min-h-11 items-center gap-2 text-ink-600 hover:text-belle-600 dark:text-zinc-300 dark:hover:text-brand-400">

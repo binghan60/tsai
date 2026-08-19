@@ -46,7 +46,7 @@ function groupsOf(run) {
                 <strong class="font-medium">{{ labValueLabel(finding) }}</strong>
                 <small v-if="referenceLabel(finding)" class="mt-0.5 block text-[11px] text-stone-500">參考 {{ referenceLabel(finding) }}</small>
               </span>
-              <span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '—' }}</span>
+              <span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '' }}</span>
             </div>
           </div>
         </div>

@@ -15,7 +15,6 @@ const petSchema = new mongoose.Schema(
     sex: { type: String, enum: ['unknown', 'male', 'female'], default: 'unknown' },
     neutered: { type: String, enum: ['unknown', 'yes', 'no'], default: 'unknown' },
     birthDate: { type: Date, default: null },
-    microchipNumber: { type: String, default: '', trim: true },
     weightKg: { type: Number, min: 0, default: null },
     allergies: { type: String, default: '', trim: true },
     chronicConditions: { type: String, default: '', trim: true },
@@ -27,6 +26,5 @@ const petSchema = new mongoose.Schema(
 
 petSchema.index({ ownerId: 1 });
 petSchema.index({ medicalRecordNumber: 1 }, { unique: true, sparse: true });
-petSchema.index({ microchipNumber: 1 }, { sparse: true });
 
 export default mongoose.model('Pet', petSchema);

@@ -153,7 +153,7 @@ onMounted(async () => {
       <div class="flex flex-wrap gap-2"><Button as-child variant="outline"><router-link to="/owners?create=1">+ 新增飼主</router-link></Button><Button as-child><router-link to="/pets?intent=new-record"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button></div>
     </div>
 
-    <SearchPanel id="global-search" v-model="query" label="快速搜尋" placeholder="搜尋寵物、飼主、電話、病歷號或晶片號" :loading="searching" :error="searchError">
+    <SearchPanel id="global-search" v-model="query" label="快速搜尋" placeholder="搜尋寵物、飼主、電話或病歷號" :loading="searching" :error="searchError">
       <div v-if="query.trim() && !searching" class="mt-3 grid gap-3 lg:grid-cols-2">
         <div class="overflow-hidden rounded-xl border border-cream-300 dark:border-zinc-700">
           <p class="border-b border-cream-300 px-4 py-2 text-xs font-semibold text-ink-500 dark:border-zinc-700 dark:text-zinc-400">寵物</p>

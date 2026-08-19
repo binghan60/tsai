@@ -25,7 +25,7 @@ const runs = computed(() => sectionRuns(visible.value, (item) => item.type === '
         >
           <span class="font-medium text-stone-800">{{ finding.label }}</span>
           <span :class="finding.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'">{{ finding.status === 'abnormal' ? '異常' : '正常' }}</span>
-          <span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '—' }}</span>
+          <span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '' }}</span>
         </div>
       </div>
       <div v-else class="space-y-4">

@@ -14,9 +14,9 @@ const text = computed(() => {
   if (family.value === 'finding') return statusText(item.status);
   if (family.value === 'lab') {
     const value = labValueLabel(item);
-    return value === '—' ? statusText(item.status) : `${statusText(item.status)}・${value}`;
+    return value === '' ? statusText(item.status) : `${statusText(item.status)}・${value}`;
   }
-  if (family.value === 'measurement') return measurementLabel(item) ?? '—';
+  if (family.value === 'measurement') return measurementLabel(item) ?? '';
   return valueText(item);
 });
 

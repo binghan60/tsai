@@ -32,7 +32,7 @@ export function measurementLabel(item) {
 }
 
 export function labValueLabel(item) {
-  if (!hasValue(item)) return '—';
+  if (!hasValue(item)) return '';
   return `${item.value}${item.unit ? ` ${item.unit}` : ''}`;
 }
 

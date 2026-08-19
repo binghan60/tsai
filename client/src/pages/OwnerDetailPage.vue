@@ -263,7 +263,6 @@ onMounted(async () => {
         sex: editPetTarget.sex,
         neutered: editPetTarget.neutered,
         birthDate: editPetTarget.birthDate?.slice(0, 10),
-        microchipNumber: editPetTarget.microchipNumber,
         weightKg: editPetTarget.weightKg,
         allergies: editPetTarget.allergies,
         chronicConditions: editPetTarget.chronicConditions,

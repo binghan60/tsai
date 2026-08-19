@@ -10,7 +10,6 @@ const PET_FIELDS = [
   'sex',
   'neutered',
   'birthDate',
-  'microchipNumber',
   'weightKg',
   'allergies',
   'chronicConditions',
@@ -65,7 +64,6 @@ petsRouter.get('/', async (req, res, next) => {
         $or: [
           { name: pattern },
           { medicalRecordNumber: pattern },
-          { microchipNumber: pattern },
           { ownerId: { $in: owners.map((owner) => owner._id) } },
           ...(derivedRecordNumber
             ? [{ $expr: { $regexMatch: { input: { $toString: '$_id' }, regex: `${derivedRecordNumber[1]}$`, options: 'i' } } }]
