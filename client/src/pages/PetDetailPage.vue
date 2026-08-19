@@ -35,11 +35,15 @@ const removeError = ref('');
 const sexLabel = computed(() => ({ male: '公', female: '母', unknown: '未記錄' })[pet.value?.sex] ?? '未記錄');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育', unknown: '未記錄' })[pet.value?.neutered] ?? '未記錄');
 const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), '年齡未記錄'));
-const hasWeight = computed(() => pet.value?.weightKg != null);
-const hasAllergies = computed(() => Boolean(pet.value?.allergies));
-const chronicAndMeds = computed(() => [pet.value?.chronicConditions, pet.value?.currentMedications].filter(Boolean).join('；'));
-const hasChronicOrMeds = computed(() => Boolean(chronicAndMeds.value));
-const hasPetInfo = computed(() => hasWeight.value || hasAllergies.value || hasChronicOrMeds.value);
+// 詳情頁的欄位跟編輯表單一對一。沒填的維持空白，不放「未記錄」這類佔位詞——
+// 一整排「未記錄」只是把版面塞滿，讀的人還是得逐格確認哪些真的有東西。
+const petInfoFields = computed(() => [
+  { label: '最近體重', value: pet.value?.weightKg != null ? `${pet.value.weightKg} kg` : '' },
+  { label: '過敏紀錄', value: pet.value?.allergies ?? '' },
+  { label: '慢性病／重要病史', value: pet.value?.chronicConditions ?? '' },
+  { label: '目前用藥', value: pet.value?.currentMedications ?? '' },
+  { label: '其他備註', value: pet.value?.notes ?? '' },
+]);
 
 function formatDate(value) {
   return formatClinicDate(value, '日期未填');
@@ -182,10 +186,12 @@ onMounted(fetchPet);
         <Button variant="outline" class="min-h-11" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
       </div>
 
-      <dl v-if="hasPetInfo" class="mt-5 grid gap-3 border-t border-cream-300 pt-5 text-sm dark:border-zinc-800 sm:grid-cols-2 lg:grid-cols-3">
-        <div v-if="hasWeight"><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">最近體重</dt><dd class="mt-1 text-ink-700 dark:text-zinc-200">{{ pet.weightKg }} kg</dd></div>
-        <div v-if="hasAllergies"><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">過敏紀錄</dt><dd class="mt-1 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ pet.allergies }}</dd></div>
-        <div v-if="hasChronicOrMeds"><dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">慢性病／目前用藥</dt><dd class="mt-1 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ chronicAndMeds }}</dd></div>
+      <dl class="mt-5 grid gap-3 border-t border-cream-300 pt-5 text-sm dark:border-zinc-800 sm:grid-cols-2 lg:grid-cols-3">
+        <div v-for="field in petInfoFields" :key="field.label">
+          <dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">{{ field.label }}</dt>
+          <!-- min-h 讓沒填的欄位仍佔住一行的高度，各格才不會因為有沒有值而高低不齊。 -->
+          <dd class="mt-1 min-h-5 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ field.value }}</dd>
+        </div>
       </dl>
     </Card>
 
