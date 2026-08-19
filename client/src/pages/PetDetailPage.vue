@@ -174,7 +174,7 @@ onMounted(fetchPet);
         <div class="flex min-w-0 items-start gap-4">
           <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><PawPrint class="h-7 w-7" stroke-width="1.75" /></div>
           <div class="min-w-0">
-            <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1"><h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ pet.name }}</h1><span class="font-mono text-xs text-ink-500 dark:text-zinc-400">{{ pet.medicalRecordNumber || `PET-${pet._id.slice(-8).toUpperCase()}` }}</span></div>
+            <h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ pet.name }}</h1>
             <p class="mt-1 text-sm text-ink-600 dark:text-zinc-300">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel }} · {{ neuteredLabel }} · {{ ageLabel }}</p>
             <p class="mt-1 flex items-center gap-1.5 text-sm text-ink-500 dark:text-zinc-400"><User class="h-4 w-4" />飼主：{{ pet.ownerId?.name || '—' }}<template v-if="pet.ownerId?.phone"> · {{ pet.ownerId.phone }}</template></p>
           </div>
@@ -207,7 +207,7 @@ onMounted(fetchPet);
         <li v-for="record in pet.medicalRecords" :key="record._id">
           <Card class="border-cream-300 p-4 shadow-sm dark:border-zinc-800 dark:shadow-none">
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-ink-400 dark:text-zinc-400" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-ink-900 dark:text-white">{{ formatDate(record.visitDate) }}</span><Badge :class="RECORD_STATUS_META[record.status]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">無期限分享</Badge></div><p class="mt-1 text-xs text-ink-400 dark:text-zinc-400">{{ record.reportNumber || '尚未建立報告編號' }} · 第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
+            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-ink-400 dark:text-zinc-400" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-ink-900 dark:text-white">{{ formatDate(record.visitDate) }}</span><Badge :class="RECORD_STATUS_META[record.status]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">無期限分享</Badge></div><p class="mt-1 text-xs text-ink-400 dark:text-zinc-400">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
             <div class="flex flex-wrap items-center gap-1 text-sm">
               <Button v-if="record.status === 'draft'" as-child variant="outline" size="sm" class="min-h-11"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
               <Button v-else as-child variant="outline" size="sm" class="min-h-11"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
@@ -235,6 +235,7 @@ onMounted(fetchPet);
     <DeleteRecordDialog
       v-if="recordToRemove"
       :record="recordToRemove"
+      :confirm-word="pet?.name ?? ''"
       :submitting="Boolean(deletingRecordId)"
       :error-message="removeError"
       @close="recordToRemove = null"

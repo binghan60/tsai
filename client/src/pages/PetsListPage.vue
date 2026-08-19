@@ -58,7 +58,7 @@ onMounted(fetchPets);
       請搜尋並選擇寵物，接著點選「新增健檢」。
     </div>
 
-    <SearchPanel id="pet-search" v-model="query" label="搜尋寵物" placeholder="輸入寵物名、飼主姓名、電話或病歷號" />
+    <SearchPanel id="pet-search" v-model="query" label="搜尋寵物" placeholder="輸入寵物名、飼主姓名或電話" />
 
     <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
     <p v-else-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入寵物資料…</p>
@@ -71,7 +71,6 @@ onMounted(fetchPets);
           <TableHeader>
             <TableRow class="border-cream-300 text-ink-500 dark:border-zinc-800 dark:text-zinc-400">
               <TableHead class="px-5 py-3 font-medium">寵物</TableHead>
-              <TableHead class="px-5 py-3 font-medium">辨識資料</TableHead>
               <TableHead class="px-5 py-3 font-medium">飼主</TableHead>
               <TableHead class="px-5 py-3 text-right font-medium">操作</TableHead>
             </TableRow>
@@ -85,13 +84,9 @@ onMounted(fetchPets);
                   </span>
                   <span>
                     <span class="block font-medium text-belle-600 group-hover:text-belle-700 dark:text-brand-400 dark:group-hover:text-brand-300">{{ pet.name }}</span>
-                    <span class="text-xs text-ink-400 dark:text-zinc-400">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template></span>
+                    <span class="text-xs text-ink-400 dark:text-zinc-400">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
                   </span>
                 </router-link>
-              </TableCell>
-              <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300">
-                <span class="block font-medium">{{ pet.medicalRecordNumber || '病歷號未建立' }}</span>
-                <span class="block text-xs text-ink-400 dark:text-zinc-400">{{ sexLabel(pet.sex) }}</span>
               </TableCell>
               <TableCell class="px-5 py-3">
                 <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="inline-flex min-h-11 items-center gap-2 text-ink-600 hover:text-belle-600 dark:text-zinc-300 dark:hover:text-brand-400">
@@ -116,7 +111,6 @@ onMounted(fetchPets);
             <span class="min-w-0 flex-1">
               <span class="block text-base font-semibold text-ink-900 dark:text-white">{{ pet.name }}</span>
               <span class="block text-sm text-ink-500 dark:text-zinc-400">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
-              <span class="mt-1 block text-xs text-ink-400 dark:text-zinc-400">{{ pet.medicalRecordNumber || '病歷號未建立' }}</span>
             </span>
           </router-link>
           <div class="mt-4 flex items-center justify-between gap-3 border-t border-cream-300 pt-3 dark:border-zinc-800">

@@ -129,7 +129,7 @@ onBeforeUnmount(() => {
           v-model="query"
           type="text"
           autocomplete="off"
-          placeholder="搜尋寵物、飼主、電話或病歷號"
+          placeholder="搜尋寵物、飼主或電話"
           class="min-h-14 min-w-0 flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none dark:text-zinc-100 dark:placeholder:text-zinc-500"
           @keydown="onKeydown"
         />
@@ -164,7 +164,7 @@ onBeforeUnmount(() => {
                 <span class="min-w-0">
                   <span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.data.name }}</span>
                   <span v-if="item.kind === 'pet'" class="block truncate text-xs text-ink-400 dark:text-zinc-400">
-                    {{ item.data.medicalRecordNumber || '病歷號未建立' }} · 飼主 {{ item.data.ownerId?.name || '—' }}
+                    飼主 {{ item.data.ownerId?.name || '—' }}
                   </span>
                   <span v-else class="flex items-center gap-1 text-xs text-ink-400 dark:text-zinc-400">
                     <Phone class="h-3 w-3" stroke-width="1.75" />{{ item.data.phone }}

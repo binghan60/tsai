@@ -147,11 +147,11 @@ onMounted(fetchDashboard);
       <div class="flex flex-wrap gap-2"><Button as-child variant="outline"><router-link to="/owners?create=1">+ 新增飼主</router-link></Button><Button as-child><router-link to="/pets?intent=new-record"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button></div>
     </div>
 
-    <SearchPanel id="global-search" v-model="query" label="快速搜尋" placeholder="搜尋寵物、飼主、電話或病歷號" :loading="searching" :error="searchError">
+    <SearchPanel id="global-search" v-model="query" label="快速搜尋" placeholder="搜尋寵物、飼主或電話" :loading="searching" :error="searchError">
       <div v-if="query.trim() && !searching" class="mt-3 grid gap-3 lg:grid-cols-2">
         <div class="overflow-hidden rounded-xl border border-cream-300 dark:border-zinc-700">
           <p class="border-b border-cream-300 px-4 py-2 text-xs font-semibold text-ink-500 dark:border-zinc-700 dark:text-zinc-400">寵物</p>
-          <router-link v-for="pet in results.pets" :key="pet._id" :to="`/pets/${pet._id}`" class="flex min-h-14 items-center justify-between gap-3 border-b border-cream-200 px-4 py-2 last:border-0 hover:bg-cream-100 dark:border-zinc-800 dark:hover:bg-zinc-800"><span class="flex min-w-0 items-center gap-3"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ pet.name }}</span><span class="block truncate text-xs text-ink-400 dark:text-zinc-400">{{ pet.medicalRecordNumber || '病歷號未建立' }} · 飼主 {{ pet.ownerId?.name || '—' }}</span></span></span><ArrowRight class="h-4 w-4 shrink-0 text-ink-400 dark:text-zinc-500" /></router-link>
+          <router-link v-for="pet in results.pets" :key="pet._id" :to="`/pets/${pet._id}`" class="flex min-h-14 items-center justify-between gap-3 border-b border-cream-200 px-4 py-2 last:border-0 hover:bg-cream-100 dark:border-zinc-800 dark:hover:bg-zinc-800"><span class="flex min-w-0 items-center gap-3"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="min-w-0"><span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ pet.name }}</span><span class="block truncate text-xs text-ink-400 dark:text-zinc-400">飼主 {{ pet.ownerId?.name || '—' }}</span></span></span><ArrowRight class="h-4 w-4 shrink-0 text-ink-400 dark:text-zinc-500" /></router-link>
           <p v-if="results.pets.length === 0" class="px-4 py-4 text-sm text-ink-500 dark:text-zinc-400">找不到寵物</p>
         </div>
         <div class="overflow-hidden rounded-xl border border-cream-300 dark:border-zinc-700">

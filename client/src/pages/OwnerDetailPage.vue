@@ -208,7 +208,6 @@ onMounted(async () => {
               <span class="block truncate font-medium text-ink-700 dark:text-zinc-200">{{ pet.name }}</span>
               <span class="block truncate text-xs text-ink-400 dark:text-zinc-400">
                 {{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template>
-                <template v-if="pet.medicalRecordNumber"> · {{ pet.medicalRecordNumber }}</template>
               </span>
             </span>
           </router-link>

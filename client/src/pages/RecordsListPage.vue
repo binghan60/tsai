@@ -146,7 +146,7 @@ function actionLabel(record) {
       </button>
     </nav>
 
-    <SearchPanel id="record-search" v-model="query" label="搜尋健檢紀錄" placeholder="輸入寵物名、飼主姓名、電話、病歷號、報告編號或獸醫師" :loading="loading" :error="error" />
+    <SearchPanel id="record-search" v-model="query" label="搜尋健檢紀錄" placeholder="輸入寵物名、飼主姓名、電話、報告編號或獸醫師" :loading="loading" :error="error" />
 
     <p v-if="!loading && !error && !records.length" class="rounded-xl border border-cream-300 bg-cream-50 px-4 py-10 text-center text-sm text-ink-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
       {{ query.trim() ? '找不到符合的健檢紀錄。' : '這個佇列目前是空的。' }}
@@ -175,7 +175,7 @@ function actionLabel(record) {
                   </span>
                   <span class="min-w-0">
                     <span class="block truncate text-sm font-medium text-ink-900 group-hover:text-belle-600 dark:text-white dark:group-hover:text-brand-400">{{ record.petId?.name || '寵物未找到' }}</span>
-                    <span class="block truncate text-xs text-ink-400 dark:text-zinc-500">{{ record.petId?.medicalRecordNumber || '病歷號未建立' }} · {{ record.petId?.ownerId?.name || '飼主未知' }}</span>
+                    <span class="block truncate text-xs text-ink-400 dark:text-zinc-500">{{ record.petId?.ownerId?.name || '飼主未知' }}</span>
                   </span>
                 </router-link>
               </TableCell>

@@ -823,7 +823,7 @@ function handleBeforeUnload(event) {
       </div>
 
       <div v-if="!isLocked" id="record-context-bar" class="rounded-2xl border border-cream-300 bg-cream-50 px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="font-semibold text-ink-900 dark:text-white">{{ pet?.name ?? '—' }}</span><span class="font-mono text-xs text-ink-400 dark:text-zinc-400">{{ pet?.medicalRecordNumber || (pet?._id ? `PET-${pet._id.slice(-8).toUpperCase()}` : '') }}</span></div><div class="flex items-center gap-2 text-sm text-ink-600 dark:text-zinc-300"><User class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ pet?.ownerId?.name ?? '—' }}</div></div></div>
+        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="font-semibold text-ink-900 dark:text-white">{{ pet?.name ?? '—' }}</span></div><div class="flex items-center gap-2 text-sm text-ink-600 dark:text-zinc-300"><User class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ pet?.ownerId?.name ?? '—' }}</div></div></div>
         <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
       </div>
 
