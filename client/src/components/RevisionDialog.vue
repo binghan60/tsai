@@ -36,7 +36,7 @@ function submit() {
     <form class="flex flex-col" @submit.prevent="submit">
       <div class="space-y-4 p-6 pt-3 sm:p-7 sm:pt-3">
         <div class="space-y-1.5">
-          <Label for="revision-reason" class="text-xs font-medium text-ink-700 dark:text-zinc-300">修訂原因（選填）</Label>
+          <Label for="revision-reason" class="text-xs font-medium text-foreground">修訂原因（選填）</Label>
           <Textarea id="revision-reason" v-model="reason" rows="4" placeholder="例：更正檢驗數值或補充照護建議" />
         </div>
         <Alert v-if="errorMessage" variant="destructive">
@@ -45,8 +45,8 @@ function submit() {
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" class="min-h-11" :disabled="submitting" @click="emit('close')">取消</Button>
-        <Button type="submit" class="min-h-11" :disabled="submitting">{{ submitting ? '建立中…' : '建立修訂草稿' }}</Button>
+        <Button type="button" variant="outline" :disabled="submitting" @click="emit('close')">取消</Button>
+        <Button type="submit" :disabled="submitting">{{ submitting ? '建立中…' : '建立修訂草稿' }}</Button>
       </DialogFooter>
     </form>
   </ModalDialog>

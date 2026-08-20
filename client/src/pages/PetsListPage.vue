@@ -7,6 +7,9 @@ import SearchPanel from '../components/SearchPanel.vue';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import EmptyState from '../components/EmptyState.vue';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import ListSkeleton from '../components/ListSkeleton.vue';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 
 const route = useRoute();
@@ -48,8 +51,8 @@ onMounted(fetchPets);
   <section class="mx-auto max-w-7xl space-y-5">
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 class="text-xl font-semibold text-ink-900 dark:text-white">寵物資料</h1>
-        <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">先確認寵物與飼主身分，再建立健檢紀錄。</p>
+        <h1 class="text-xl font-semibold text-foreground">寵物資料</h1>
+        <p class="mt-1 text-sm text-muted-foreground">先確認寵物與飼主身分，再建立健檢紀錄。</p>
       </div>
       <Button as-child variant="outline"><router-link to="/owners?create=1">+ 新增飼主與寵物</router-link></Button>
     </div>
@@ -60,42 +63,42 @@ onMounted(fetchPets);
 
     <SearchPanel id="pet-search" v-model="query" label="搜尋寵物" placeholder="輸入寵物名、飼主姓名或電話" />
 
-    <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
-    <p v-else-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入寵物資料…</p>
+    <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+    <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <p class="text-xs text-ink-400 dark:text-zinc-400">共 {{ pets.length }} 隻寵物</p>
+      <p class="text-xs tabular-nums text-muted-foreground">共 {{ pets.length }} 隻寵物</p>
 
-      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden border-cream-300 py-0 shadow-sm dark:border-zinc-800 dark:shadow-none md:block">
+      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none xl:block">
         <Table>
           <TableHeader>
-            <TableRow class="border-cream-300 text-ink-500 dark:border-zinc-800 dark:text-zinc-400">
-              <TableHead class="px-5 py-3 font-medium">寵物</TableHead>
-              <TableHead class="px-5 py-3 font-medium">飼主</TableHead>
-              <TableHead class="px-5 py-3 text-right font-medium">操作</TableHead>
+            <TableRow class="border-border text-muted-foreground">
+              <TableHead class="font-medium">寵物</TableHead>
+              <TableHead class="font-medium">飼主</TableHead>
+              <TableHead class="text-right font-medium">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-for="pet in pets" :key="pet._id" class="border-cream-200 dark:border-zinc-800 dark:hover:bg-zinc-800/40">
-              <TableCell class="px-5 py-3">
+            <TableRow v-for="pet in pets" :key="pet._id" class="border-border">
+              <TableCell >
                 <router-link :to="`/pets/${pet._id}`" class="group flex items-center gap-3">
                   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
                     <Cat class="h-4.5 w-4.5" stroke-width="1.75" />
                   </span>
                   <span>
                     <span class="block font-medium text-belle-600 group-hover:text-belle-700 dark:text-brand-400 dark:group-hover:text-brand-300">{{ pet.name }}</span>
-                    <span class="text-xs text-ink-400 dark:text-zinc-400">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
+                    <span class="text-xs text-muted-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
                   </span>
                 </router-link>
               </TableCell>
-              <TableCell class="px-5 py-3">
-                <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="inline-flex min-h-11 items-center gap-2 text-ink-600 hover:text-belle-600 dark:text-zinc-300 dark:hover:text-brand-400">
-                  <User class="h-4 w-4 shrink-0 text-ink-400 dark:text-zinc-400" stroke-width="1.75" />
-                  <span><span class="block">{{ pet.ownerId.name }}</span><span class="block text-xs text-ink-400 dark:text-zinc-400">{{ pet.ownerId.phone }}</span></span>
+              <TableCell >
+                <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="inline-flex items-center gap-2 text-foreground hover:text-belle-600 dark:hover:text-brand-400">
+                  <User class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.75" />
+                  <span><span class="block">{{ pet.ownerId.name }}</span><span class="block text-xs text-muted-foreground">{{ pet.ownerId.phone }}</span></span>
                 </router-link>
               </TableCell>
-              <TableCell class="px-5 py-3 text-right">
-                <Button as-child size="sm" class="min-h-11"><router-link :to="`/pets/${pet._id}/records/new`">
+              <TableCell class="text-right">
+                <Button as-child size="sm"><router-link :to="`/pets/${pet._id}/records/new`">
                   <ClipboardPlus class="h-4 w-4" />新增健檢
                 </router-link></Button>
               </TableCell>
@@ -104,28 +107,25 @@ onMounted(fetchPets);
         </Table>
       </Card>
 
-      <div v-if="pets.length" class="space-y-3 md:hidden">
-        <Card v-for="pet in pets" :key="pet._id" class="border-cream-300 p-4 shadow-sm dark:border-zinc-800 dark:shadow-none">
+      <div v-if="pets.length" class="space-y-3 xl:hidden">
+        <Card v-for="pet in pets" :key="pet._id" class="p-4 shadow-sm dark:shadow-none">
           <router-link :to="`/pets/${pet._id}`" class="flex items-start gap-3">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><Cat class="h-5 w-5" /></span>
             <span class="min-w-0 flex-1">
-              <span class="block text-base font-semibold text-ink-900 dark:text-white">{{ pet.name }}</span>
-              <span class="block text-sm text-ink-500 dark:text-zinc-400">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
+              <span class="block text-base font-semibold text-foreground">{{ pet.name }}</span>
+              <span class="block text-sm text-muted-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
             </span>
           </router-link>
-          <div class="mt-4 flex items-center justify-between gap-3 border-t border-cream-300 pt-3 dark:border-zinc-800">
-            <span class="min-w-0 text-sm text-ink-600 dark:text-zinc-300">飼主：{{ pet.ownerId?.name || '—' }}</span>
-            <Button as-child size="sm" class="min-h-11 shrink-0"><router-link :to="`/pets/${pet._id}/records/new`">
+          <div class="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
+            <span class="min-w-0 text-sm text-foreground">飼主：{{ pet.ownerId?.name || '—' }}</span>
+            <Button as-child size="sm" class="shrink-0"><router-link :to="`/pets/${pet._id}/records/new`">
               <ClipboardPlus class="h-4 w-4" />新增健檢
             </router-link></Button>
           </div>
         </Card>
       </div>
 
-      <div v-if="pets.length === 0" class="rounded-2xl border border-dashed border-cream-300 px-5 py-14 text-center dark:border-zinc-800">
-        <Cat class="mx-auto mb-2 h-8 w-8 text-ink-400 dark:text-zinc-500" stroke-width="1.5" />
-        <p class="text-sm text-ink-500 dark:text-zinc-400">找不到符合條件的寵物</p>
-      </div>
+      <EmptyState v-if="pets.length === 0" :icon="Cat" title="找不到符合條件的寵物" />
     </template>
   </section>
 </template>

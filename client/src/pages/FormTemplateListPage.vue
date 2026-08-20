@@ -18,6 +18,9 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ModalDialog from '../components/ModalDialog.vue';
 import SearchPanel from '../components/SearchPanel.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
+import EmptyState from '../components/EmptyState.vue';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import ListSkeleton from '../components/ListSkeleton.vue';
 
 const router = useRouter();
 const toast = useToast();
@@ -196,17 +199,17 @@ onMounted(load);
 <template>
   <SettingsLayout title="表單管理" description="醫師建立健檢時可選用的表單。每份表單都能設定適用物種與檢查內容。">
     <template #actions>
-      <Button type="button" class="min-h-11" @click="openCreate"><Plus class="h-4 w-4" stroke-width="1.75" />新增健檢表單</Button>
+      <Button type="button" @click="openCreate"><Plus class="h-4 w-4" stroke-width="1.75" />新增健檢表單</Button>
     </template>
 
-    <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
-    <p v-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入健檢表單…</p>
+    <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+    <ListSkeleton v-if="loading" :rows="4" />
 
     <template v-else-if="templates.length">
       <SearchPanel id="template-search" v-model="query" label="搜尋健檢表單" placeholder="輸入表單名稱或說明">
         <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-3 px-1">
           <div class="flex flex-wrap items-center gap-2">
-            <span id="filter-species-label" class="text-xs font-medium text-ink-500 dark:text-zinc-400">適用物種</span>
+            <span id="filter-species-label" class="text-xs font-medium text-muted-foreground">適用物種</span>
             <div class="flex flex-wrap gap-1" role="group" aria-labelledby="filter-species-label">
               <button
                 v-for="option in SPECIES_FILTERS"
@@ -215,7 +218,7 @@ onMounted(load);
                 class="inline-flex min-h-9 items-center rounded-lg border px-3 text-sm font-medium transition-colors"
                 :class="speciesFilter === option.value
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-cream-300 text-ink-600 hover:bg-cream-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'"
+                  : 'border-border text-foreground hover:bg-muted/40   '"
                 :aria-pressed="speciesFilter === option.value"
                 @click="speciesFilter = option.value"
               >{{ option.label }}</button>
@@ -223,7 +226,7 @@ onMounted(load);
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <span id="filter-status-label" class="text-xs font-medium text-ink-500 dark:text-zinc-400">狀態</span>
+            <span id="filter-status-label" class="text-xs font-medium text-muted-foreground">狀態</span>
             <div class="flex flex-wrap gap-1" role="group" aria-labelledby="filter-status-label">
               <button
                 v-for="option in STATUS_FILTERS"
@@ -232,7 +235,7 @@ onMounted(load);
                 class="inline-flex min-h-9 items-center rounded-lg border px-3 text-sm font-medium transition-colors"
                 :class="statusFilter === option.value
                   ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-cream-300 text-ink-600 hover:bg-cream-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800'"
+                  : 'border-border text-foreground hover:bg-muted/40   '"
                 :aria-pressed="statusFilter === option.value"
                 @click="statusFilter = option.value"
               >{{ option.label }}</button>
@@ -244,45 +247,47 @@ onMounted(load);
       </SearchPanel>
 
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="text-sm text-ink-500 dark:text-zinc-400">
+        <p class="text-sm text-muted-foreground">
           <template v-if="hasFilters">符合條件 {{ visibleTemplates.length }} 份，共 {{ templates.length }} 份表單</template>
           <template v-else>目前共有 {{ templates.length }} 份表單</template>
         </p>
-        <p class="text-xs text-ink-400 dark:text-zinc-500">停用後不影響已建立的草稿與報告</p>
+        <p class="text-xs text-muted-foreground">停用後不影響已建立的草稿與報告</p>
       </div>
 
-      <div v-if="!visibleTemplates.length" class="rounded-2xl border border-dashed border-cream-300 px-5 py-14 text-center dark:border-zinc-800">
-        <SearchX class="mx-auto mb-3 h-8 w-8 text-ink-400 dark:text-zinc-500" stroke-width="1.75" />
-        <p class="font-medium text-ink-700 dark:text-zinc-200">找不到符合條件的表單</p>
-        <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">換個關鍵字，或清除目前的篩選條件。</p>
-        <Button type="button" variant="outline" class="mt-4 min-h-11" @click="clearFilters">清除篩選</Button>
-      </div>
+      <EmptyState
+        v-if="!visibleTemplates.length"
+        :icon="SearchX"
+        title="找不到符合條件的表單"
+        description="換個關鍵字，或清除目前的篩選條件。"
+      >
+        <Button type="button" variant="outline" class="mt-4" @click="clearFilters">清除篩選</Button>
+      </EmptyState>
 
       <!-- 桌機：一列一份表單，與飼主／寵物列表同一套表格版式 -->
-      <Card v-if="visibleTemplates.length" class="hidden gap-0 overflow-hidden border-cream-300 py-0 shadow-sm dark:border-zinc-800 md:block">
+      <Card v-if="visibleTemplates.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm xl:block">
         <Table>
           <TableHeader>
-            <TableRow class="border-cream-300 text-ink-500 dark:border-zinc-800 dark:text-zinc-400">
-              <TableHead class="px-5 py-3 font-medium">表單名稱</TableHead>
-              <TableHead class="px-5 py-3 font-medium">適用物種</TableHead>
-              <TableHead class="px-5 py-3 font-medium">內容</TableHead>
-              <TableHead class="px-5 py-3 font-medium">啟用</TableHead>
-              <TableHead class="px-5 py-3 text-right font-medium">操作</TableHead>
+            <TableRow class="border-border text-muted-foreground">
+              <TableHead class="font-medium">表單名稱</TableHead>
+              <TableHead class="font-medium">適用物種</TableHead>
+              <TableHead class="font-medium">內容</TableHead>
+              <TableHead class="font-medium">啟用</TableHead>
+              <TableHead class="text-right font-medium">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-for="template in visibleTemplates" :key="template._id" class="border-cream-200 dark:border-zinc-800 dark:hover:bg-zinc-800/40">
-              <TableCell class="px-5 py-3">
-                <router-link :to="`/settings/forms/${template._id}`" class="group flex min-h-11 flex-col justify-center">
+            <TableRow v-for="template in visibleTemplates" :key="template._id" class="border-border">
+              <TableCell >
+                <router-link :to="`/settings/forms/${template._id}`" class="group flex flex-col justify-center">
                   <span class="font-medium text-belle-600 group-hover:text-belle-700 dark:text-brand-400">{{ template.name }}</span>
-                  <span class="text-xs" :class="template.description ? 'text-ink-500 dark:text-zinc-400' : 'text-ink-400 dark:text-zinc-500'">
+                  <span class="text-xs" :class="template.description ? 'text-muted-foreground ' : 'text-muted-foreground '">
                     {{ template.description || '尚未填寫表單說明' }}
                   </span>
                 </router-link>
               </TableCell>
-              <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</TableCell>
-              <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300">{{ template.sectionCount }} 個區塊・{{ template.itemCount }} 個項目</TableCell>
-              <TableCell class="px-5 py-3">
+              <TableCell class="text-foreground">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</TableCell>
+              <TableCell class="text-foreground">{{ template.sectionCount }} 個區塊・{{ template.itemCount }} 個項目</TableCell>
+              <TableCell >
                 <div class="flex items-center gap-2">
                   <Switch
                     :id="`enabled-${template._id}`"
@@ -290,12 +295,12 @@ onMounted(load);
                     :disabled="busyId === template._id"
                     @update:model-value="toggleEnabled(template, $event)"
                   />
-                  <Label :for="`enabled-${template._id}`" class="text-xs" :class="template.enabled ? 'text-emerald-700 dark:text-emerald-300' : 'text-ink-400 dark:text-zinc-500'">
+                  <Label :for="`enabled-${template._id}`" class="text-xs" :class="template.enabled ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground '">
                     {{ template.enabled ? '使用中' : '已停用' }}
                   </Label>
                 </div>
               </TableCell>
-              <TableCell class="px-5 py-3">
+              <TableCell >
                 <div class="flex justify-end gap-1">
                   <Button type="button" variant="ghost" size="icon" class="h-11 w-11" :aria-label="`編輯表單 ${template.name}`" @click="router.push(`/settings/forms/${template._id}`)">
                     <Pencil class="h-4 w-4" stroke-width="1.75" />
@@ -323,12 +328,12 @@ onMounted(load);
       </Card>
 
       <!-- 手機：表格擠不下，改回一份一張卡 -->
-      <div v-if="visibleTemplates.length" class="space-y-3 md:hidden">
-        <Card v-for="template in visibleTemplates" :key="template._id" class="gap-3 border-cream-300 p-4 shadow-sm dark:border-zinc-800">
+      <div v-if="visibleTemplates.length" class="space-y-3 xl:hidden">
+        <Card v-for="template in visibleTemplates" :key="template._id" class="gap-3 p-4 shadow-sm">
           <div class="flex items-start justify-between gap-3">
             <router-link :to="`/settings/forms/${template._id}`" class="min-w-0">
-              <span class="block font-semibold text-ink-900 dark:text-white">{{ template.name }}</span>
-              <span class="mt-0.5 block text-xs" :class="template.description ? 'text-ink-500 dark:text-zinc-400' : 'text-ink-400 dark:text-zinc-500'">
+              <span class="block font-semibold text-foreground">{{ template.name }}</span>
+              <span class="mt-0.5 block text-xs" :class="template.description ? 'text-muted-foreground ' : 'text-muted-foreground '">
                 {{ template.description || '尚未填寫表單說明' }}
               </span>
             </router-link>
@@ -345,10 +350,10 @@ onMounted(load);
 
           <div class="flex flex-wrap items-center gap-2">
             <Badge variant="outline" class="rounded-full">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</Badge>
-            <Badge :class="template.enabled ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'" class="rounded-full">
+            <Badge :class="template.enabled ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-muted text-muted-foreground '" class="rounded-full">
               {{ template.enabled ? '使用中' : '已停用' }}
             </Badge>
-            <span class="text-xs text-ink-400 dark:text-zinc-500">{{ template.sectionCount }} 個區塊・{{ template.itemCount }} 個項目</span>
+            <span class="text-xs text-muted-foreground">{{ template.sectionCount }} 個區塊・{{ template.itemCount }} 個項目</span>
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
@@ -374,14 +379,16 @@ onMounted(load);
       </div>
     </template>
 
-    <div v-else-if="!loading" class="rounded-2xl border border-dashed border-cream-300 px-5 py-14 text-center dark:border-zinc-800">
-      <LayoutList class="mx-auto mb-3 h-8 w-8 text-ink-400 dark:text-zinc-500" stroke-width="1.75" />
-      <p class="font-medium text-ink-700 dark:text-zinc-200">還沒有健檢表單</p>
-      <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">先從標準結構建立第一份表單。</p>
-      <Button type="button" class="mt-4 min-h-11" @click="openCreate"><Plus class="h-4 w-4" />新增健檢表單</Button>
-    </div>
+    <EmptyState
+      v-else-if="!loading"
+      :icon="LayoutList"
+      title="還沒有健檢表單"
+      description="先從標準結構建立第一份表單。"
+    >
+      <Button type="button" class="mt-4" @click="openCreate"><Plus class="h-4 w-4" />新增健檢表單</Button>
+    </EmptyState>
 
-    <ModalDialog v-if="showCreate" content-class="sm:max-w-2xl" @close="closeCreate">
+    <ModalDialog v-if="showCreate" size="lg" @close="closeCreate">
       <div class="p-6 pb-3 sm:p-7 sm:pb-3">
         <DialogTitle>新增健檢表單</DialogTitle>
         <DialogDescription class="mt-1">先決定基本資料與起始內容，建立後再調整個別項目。</DialogDescription>
@@ -391,18 +398,18 @@ onMounted(load);
         <div class="space-y-6 p-6 pt-2 sm:p-7 sm:pt-2">
           <section class="space-y-3">
             <div>
-              <h3 class="text-sm font-semibold text-ink-900 dark:text-white">1. 基本資料</h3>
-              <p class="mt-0.5 text-xs text-ink-400 dark:text-zinc-500">這個名稱會出現在醫師新增健檢時的選單。</p>
+              <h3 class="text-sm font-semibold text-foreground">1. 基本資料</h3>
+              <p class="mt-0.5 text-xs text-muted-foreground">這個名稱會出現在醫師新增健檢時的選單。</p>
             </div>
             <div class="grid gap-4 sm:grid-cols-[1fr_180px]">
               <div class="space-y-1.5">
                 <Label for="new-template-name">表單名稱</Label>
-                <Input id="new-template-name" v-model="newName" class="min-h-11" placeholder="例如：熟齡犬年度健檢" autofocus />
+                <Input id="new-template-name" v-model="newName" placeholder="例如：熟齡犬年度健檢" autofocus />
               </div>
               <div class="space-y-1.5">
                 <Label for="new-template-species">適用物種</Label>
                 <Select v-model="newSpecies">
-                  <SelectTrigger id="new-template-species" class="min-h-11 w-full"><SelectValue /></SelectTrigger>
+                  <SelectTrigger id="new-template-species" class="w-full"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">不限物種</SelectItem>
                     <SelectItem value="cat">貓</SelectItem>
@@ -415,8 +422,8 @@ onMounted(load);
 
           <section class="space-y-3">
             <div>
-              <h3 class="text-sm font-semibold text-ink-900 dark:text-white">2. 起始內容</h3>
-              <p class="mt-0.5 text-xs text-ink-400 dark:text-zinc-500">可以從標準結構開始、留空自己建，或沿用一份現有表單。</p>
+              <h3 class="text-sm font-semibold text-foreground">2. 起始內容</h3>
+              <p class="mt-0.5 text-xs text-muted-foreground">可以從標準結構開始、留空自己建，或沿用一份現有表單。</p>
             </div>
             <div class="grid gap-3 sm:grid-cols-3">
               <button
@@ -424,32 +431,32 @@ onMounted(load);
                 :key="mode.value"
                 type="button"
                 class="rounded-xl border p-4 text-left transition-colors"
-                :class="startMode === mode.value ? 'border-primary bg-belle-50 ring-2 ring-primary/15 dark:bg-brand-500/10' : 'border-cream-300 bg-white hover:border-belle-300 dark:border-zinc-700 dark:bg-zinc-900'"
+                :class="startMode === mode.value ? 'border-primary bg-belle-50 ring-2 ring-primary/15 dark:bg-brand-500/10' : 'border-border bg-white hover:border-belle-300 '"
                 :aria-pressed="startMode === mode.value"
                 @click="startMode = mode.value"
               >
-                <span class="block text-sm font-semibold text-ink-900 dark:text-white">{{ mode.title }}</span>
-                <span class="mt-1 block text-xs leading-relaxed text-ink-500 dark:text-zinc-400">{{ mode.hint }}</span>
+                <span class="block text-sm font-semibold text-foreground">{{ mode.title }}</span>
+                <span class="mt-1 block text-xs leading-relaxed text-muted-foreground">{{ mode.hint }}</span>
               </button>
             </div>
             <div v-if="startMode === 'copy'" class="space-y-1.5">
               <Label for="copy-source">選擇來源表單</Label>
               <Select v-model="copyFromId">
-                <SelectTrigger id="copy-source" class="min-h-11 w-full"><SelectValue placeholder="請選擇一份表單" /></SelectTrigger>
+                <SelectTrigger id="copy-source" class="w-full"><SelectValue placeholder="請選擇一份表單" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="template in templates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
                 </SelectContent>
               </Select>
-              <p v-if="selectedSource" class="text-xs text-ink-400 dark:text-zinc-500">將複製 {{ selectedSource.sectionCount }} 個區塊、{{ selectedSource.itemCount }} 個項目；原表單不會被修改。</p>
+              <p v-if="selectedSource" class="text-xs text-muted-foreground">將複製 {{ selectedSource.sectionCount }} 個區塊、{{ selectedSource.itemCount }} 個項目；原表單不會被修改。</p>
             </div>
           </section>
 
-          <p v-if="createError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ createError }}</p>
+          <Alert v-if="createError" variant="destructive"><AlertDescription>{{ createError }}</AlertDescription></Alert>
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" class="min-h-11" :disabled="creating" @click="closeCreate">取消</Button>
-          <Button type="submit" class="min-h-11" :disabled="creating || !newName.trim() || (startMode === 'copy' && !copyFromId)">
+          <Button type="button" variant="outline" :disabled="creating" @click="closeCreate">取消</Button>
+          <Button type="submit" :disabled="creating || !newName.trim() || (startMode === 'copy' && !copyFromId)">
             {{ creating ? '建立中…' : '建立並編輯' }}
           </Button>
         </DialogFooter>

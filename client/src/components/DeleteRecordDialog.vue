@@ -65,15 +65,15 @@ function submit() {
 
     <form class="flex flex-col" @submit.prevent="submit">
       <div class="space-y-4 p-6 pt-3 sm:p-7 sm:pt-3">
-        <p class="text-sm leading-relaxed text-ink-600 dark:text-zinc-300">
-          即將刪除 <strong class="text-ink-900 dark:text-white">{{ expected }}</strong> 的健檢報告<template v-if="recordLabel">（{{ recordLabel }}）</template>。
+        <p class="text-sm leading-relaxed text-foreground">
+          即將刪除 <strong class="text-foreground">{{ expected }}</strong> 的健檢報告<template v-if="recordLabel">（{{ recordLabel }}）</template>。
         </p>
         <div class="space-y-1.5">
-          <Label for="delete-record-confirm" class="text-xs font-medium text-ink-700 dark:text-zinc-300">請輸入寵物名稱以確認刪除</Label>
+          <Label for="delete-record-confirm" class="text-xs font-medium text-foreground">請輸入寵物名稱以確認刪除</Label>
           <Input id="delete-record-confirm" ref="inputEl" v-model="input" autofocus autocomplete="off" placeholder="在此輸入寵物名稱" />
           <button
             type="button"
-            class="inline-flex min-h-9 items-center gap-1.5 text-xs text-ink-500 transition-colors hover:text-belle-700 dark:text-zinc-400 dark:hover:text-brand-300"
+            class="inline-flex min-h-9 items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-belle-700 dark:hover:text-brand-300"
             @click="fillConfirmWord"
           >
             <CornerDownLeft class="h-3.5 w-3.5 shrink-0 -scale-x-100" stroke-width="1.75" />
@@ -86,8 +86,8 @@ function submit() {
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" class="min-h-11" :disabled="submitting" @click="emit('close')">取消</Button>
-        <Button type="submit" variant="destructive-solid" class="min-h-11" :disabled="!canSubmit || submitting">{{ submitting ? '刪除中…' : '刪除報告' }}</Button>
+        <Button type="button" variant="outline" :disabled="submitting" @click="emit('close')">取消</Button>
+        <Button type="submit" variant="destructive-solid" :disabled="!canSubmit || submitting">{{ submitting ? '刪除中…' : '刪除報告' }}</Button>
       </DialogFooter>
     </form>
   </ModalDialog>

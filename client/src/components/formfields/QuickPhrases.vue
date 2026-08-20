@@ -90,7 +90,7 @@ async function save() {
   }
 }
 
-const actionClass = 'inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium text-ink-400 transition-colors hover:bg-cream-100 hover:text-belle-600 disabled:opacity-50 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-brand-400';
+const actionClass = 'inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-belle-600 disabled:opacity-50   dark:hover:text-brand-400';
 </script>
 
 <template>
@@ -111,7 +111,7 @@ const actionClass = 'inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2
       v-for="phrase in inline"
       :key="phrase._id"
       type="button"
-      class="h-8 min-w-0 truncate rounded-full border border-cream-300 bg-white px-2.5 text-xs text-ink-700 transition-colors hover:border-belle-400 hover:text-belle-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-brand-500 dark:hover:text-brand-300"
+      class="h-8 min-w-0 truncate rounded-full border border-border bg-white px-2.5 text-xs text-foreground transition-colors hover:border-belle-400 hover:text-belle-700 dark:hover:border-brand-500 dark:hover:text-brand-300"
       :title="phrase.text"
       @click="insert(phrase)"
     >{{ phrase.text }}</button>

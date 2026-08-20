@@ -25,10 +25,10 @@ const showNav = computed(() => SETTINGS_ITEMS.length > 1);
       <nav
         v-if="showNav"
         aria-label="設定項目"
-        class="flex gap-1 overflow-x-auto rounded-xl border border-cream-300 bg-cream-50 p-1.5 shadow-sm lg:sticky lg:top-16 lg:flex-col lg:gap-0.5 lg:overflow-visible dark:border-zinc-800 dark:bg-zinc-900"
+        class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-sm lg:sticky lg:top-16 lg:flex-col lg:gap-0.5 lg:overflow-visible"
       >
         <template v-for="entry in SETTINGS_GROUPS" :key="entry.group">
-          <p v-if="showGroupTitles" class="hidden px-2 pt-2 pb-1 text-xs font-medium text-ink-400 lg:block dark:text-zinc-500">{{ entry.group }}</p>
+          <p v-if="showGroupTitles" class="hidden px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground lg:block">{{ entry.group }}</p>
           <router-link
             v-for="item in entry.items"
             :key="item.to"
@@ -36,7 +36,7 @@ const showNav = computed(() => SETTINGS_ITEMS.length > 1);
             class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors lg:w-full"
             :class="isActive(item.to)
               ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-transparent text-ink-600 hover:bg-cream-100 dark:text-zinc-300 dark:hover:bg-zinc-800'"
+              : 'border-transparent text-foreground hover:bg-muted/40  '"
             :aria-current="isActive(item.to) ? 'page' : undefined"
           >
             <component :is="item.icon" class="h-4 w-4 shrink-0" stroke-width="1.75" />
@@ -49,8 +49,8 @@ const showNav = computed(() => SETTINGS_ITEMS.length > 1);
       <div class="min-w-0 space-y-5">
         <div class="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ title }}</h1>
-            <p v-if="description" class="mt-1 text-sm text-ink-500 dark:text-zinc-400">{{ description }}</p>
+            <h1 class="text-xl font-semibold text-foreground">{{ title }}</h1>
+            <p v-if="description" class="mt-1 text-sm text-muted-foreground">{{ description }}</p>
           </div>
           <slot name="actions" />
         </div>

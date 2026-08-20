@@ -30,7 +30,7 @@ const abnormal = computed(() => props.item.status === 'abnormal');
       class="mt-1 whitespace-pre-wrap text-sm leading-relaxed"
       :class="abnormal ? 'text-red-700' : 'text-stone-700'"
     >{{ text }}</p>
-    <p v-if="referenceLabel(item)" class="mt-0.5 text-[11px] text-stone-500">參考 {{ referenceLabel(item) }}</p>
+    <p v-if="referenceLabel(item)" class="mt-0.5 text-xs text-stone-500">參考 {{ referenceLabel(item) }}</p>
     <p v-if="item.note" class="mt-0.5 whitespace-pre-wrap text-xs text-stone-600">{{ item.note }}</p>
   </div>
 </template>

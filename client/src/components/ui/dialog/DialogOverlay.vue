@@ -20,7 +20,7 @@ const delegatedProps = reactiveOmit(props, "class");
 // 整個畫面重新模糊一次，是開關對話框最貴的一筆；純色只要合成一次，
 // 之後的淡入淡出純粹是 opacity 動畫，完全交給 GPU。
 // 少了模糊帶來的景深，改用更深的底色維持前後層次。
-const OVERLAY_CLASS = 'fixed inset-0 z-50 bg-ink-900/75 dark:bg-black/85 data-open:animate-in data-open:fade-in-0 data-open:duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:duration-100';
+const OVERLAY_CLASS = 'fixed inset-0 z-50 bg-ink-900/60 dark:bg-black/70 data-open:animate-in data-open:fade-in-0 data-open:duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:duration-100';
 </script>
 
 <template>

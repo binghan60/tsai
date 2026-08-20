@@ -12,6 +12,8 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { useBackTarget } from '../composables/useBackTarget';
 import { Badge } from '../components/ui/badge';
+import EmptyState from '../components/EmptyState.vue';
+import { Alert, AlertDescription } from '../components/ui/alert';
 
 import { useToast } from '../composables/useToast';
 
@@ -171,31 +173,31 @@ onMounted(fetchPet);
 
 <template>
   <section v-if="pet" class="mx-auto max-w-7xl space-y-5">
-    <router-link :to="backTo" class="inline-flex min-h-11 items-center text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400 dark:hover:text-brand-300">← {{ backLabel }}</router-link>
+    <router-link :to="backTo" class="inline-flex items-center text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400 dark:hover:text-brand-300">← {{ backLabel }}</router-link>
 
-    <Card class="border-cream-300 p-5 shadow-sm dark:border-zinc-800 dark:shadow-none sm:p-6">
+    <Card class="p-5 shadow-sm dark:shadow-none sm:p-6">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="flex min-w-0 items-start gap-4">
           <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><PawPrint class="h-7 w-7" stroke-width="1.75" /></div>
           <div class="min-w-0">
-            <h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ pet.name }}</h1>
-            <p class="mt-1 text-sm text-ink-600 dark:text-zinc-300">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel }} · {{ neuteredLabel }} · {{ ageLabel }}</p>
-            <p class="mt-1 flex items-center gap-1.5 text-sm text-ink-500 dark:text-zinc-400"><User class="h-4 w-4" />飼主：{{ pet.ownerId?.name || '—' }}<template v-if="pet.ownerId?.phone"> · {{ pet.ownerId.phone }}</template></p>
+            <h1 class="text-xl font-semibold text-foreground">{{ pet.name }}</h1>
+            <p class="mt-1 text-sm text-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel }} · {{ neuteredLabel }} · {{ ageLabel }}</p>
+            <p class="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground"><User class="h-4 w-4" />飼主：{{ pet.ownerId?.name || '—' }}<template v-if="pet.ownerId?.phone"> · {{ pet.ownerId.phone }}</template></p>
           </div>
         </div>
-        <Button variant="outline" class="min-h-11" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
+        <Button variant="outline" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
       </div>
 
-      <dl class="mt-5 grid gap-3 border-t border-cream-300 pt-5 text-sm dark:border-zinc-800 sm:grid-cols-2 lg:grid-cols-3">
+      <dl class="mt-5 grid gap-3 border-t border-border pt-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
         <div v-for="field in petInfoFields" :key="field.label">
-          <dt class="text-xs font-medium text-ink-400 dark:text-zinc-400">{{ field.label }}</dt>
+          <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
           <!-- min-h 讓沒填的欄位仍佔住一行的高度，各格才不會因為有沒有值而高低不齊。 -->
-          <dd class="mt-1 min-h-5 whitespace-pre-wrap text-ink-700 dark:text-zinc-200">{{ field.value }}</dd>
+          <dd class="mt-1 min-h-5 whitespace-pre-wrap text-foreground">{{ field.value }}</dd>
         </div>
       </dl>
     </Card>
 
-    <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
+    <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
     <Card v-if="shareNotice" class="border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 shadow-none dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
       <p class="font-medium">{{ shareNotice.copied ? '分享連結已複製' : '分享連結已建立' }}</p>
@@ -205,27 +207,27 @@ onMounted(fetchPet);
 
     <div class="space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 class="text-base font-semibold text-ink-900 dark:text-white">歷次健檢</h2><p class="mt-1 text-xs text-ink-400 dark:text-zinc-400">依健檢日期排序，草稿可繼續編輯。</p></div>
+        <div><h2 class="text-base font-semibold text-foreground">歷次健檢</h2><p class="mt-1 text-xs text-muted-foreground">依健檢日期排序，草稿可繼續編輯。</p></div>
         <Button as-child><router-link :to="`/pets/${pet._id}/records/new`"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button>
       </div>
 
       <ul v-if="pet.medicalRecords.length" class="space-y-3">
         <li v-for="record in pet.medicalRecords" :key="record._id">
-          <Card class="border-cream-300 p-4 shadow-sm dark:border-zinc-800 dark:shadow-none">
+          <Card class="p-4 shadow-sm dark:shadow-none">
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-ink-400 dark:text-zinc-400" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-ink-900 dark:text-white">{{ formatDate(record.visitDate) }}</span><Badge :class="RECORD_STATUS_META[record.status]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">無期限分享</Badge></div><p class="mt-1 text-xs text-ink-400 dark:text-zinc-400">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
+            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">無期限分享</Badge></div><p class="mt-1 text-xs text-muted-foreground">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
             <div class="flex flex-wrap items-center gap-1 text-sm">
-              <Button v-if="record.status === 'draft'" as-child variant="outline" size="sm" class="min-h-11"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
-              <Button v-else as-child variant="outline" size="sm" class="min-h-11"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
-              <Button v-if="isFinalizedRecord(record) && !isShareActive(record)" type="button" variant="secondary" size="sm" class="min-h-11" :disabled="sharingId === record._id" @click="shareRecord(record)"><Share2 class="h-4 w-4" />{{ sharingId === record._id ? '處理中…' : '分享' }}</Button>
-              <template v-if="isShareActive(record)"><Button type="button" variant="secondary" size="sm" class="min-h-11" @click="copyExistingShare(record)">複製連結</Button><Button type="button" variant="destructive-outline" size="sm" class="min-h-11" :disabled="revokingId === record._id" @click="openRevokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</Button></template>
-              <Button v-if="!['sent', 'sending'].includes(getDeliveryStatus(record))" type="button" variant="destructive" size="sm" class="min-h-11" :disabled="deletingRecordId === record._id" :aria-label="`刪除健檢紀錄 ${formatDate(record.visitDate)}`" @click="openRemoveRecord(record)"><Trash2 class="h-4 w-4" />刪除</Button>
+              <Button v-if="record.status === 'draft'" as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
+              <Button v-else as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
+              <Button v-if="isFinalizedRecord(record) && !isShareActive(record)" type="button" variant="secondary" size="sm" :disabled="sharingId === record._id" @click="shareRecord(record)"><Share2 class="h-4 w-4" />{{ sharingId === record._id ? '處理中…' : '分享' }}</Button>
+              <template v-if="isShareActive(record)"><Button type="button" variant="secondary" size="sm" @click="copyExistingShare(record)">複製連結</Button><Button type="button" variant="destructive-outline" size="sm" :disabled="revokingId === record._id" @click="openRevokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</Button></template>
+              <Button v-if="!['sent', 'sending'].includes(getDeliveryStatus(record))" type="button" variant="destructive" size="sm" :disabled="deletingRecordId === record._id" :aria-label="`刪除健檢紀錄 ${formatDate(record.visitDate)}`" @click="openRemoveRecord(record)"><Trash2 class="h-4 w-4" />刪除</Button>
             </div>
           </div>
           </Card>
         </li>
       </ul>
-      <div v-else class="rounded-2xl border border-dashed border-cream-300 px-5 py-10 text-center dark:border-zinc-800"><PawPrint class="mx-auto mb-2 h-8 w-8 text-ink-400 dark:text-zinc-500" /><p class="text-sm text-ink-500 dark:text-zinc-400">尚無健檢紀錄</p></div>
+      <EmptyState v-else :icon="PawPrint" title="尚無健檢紀錄" />
     </div>
 
     <PetFormDialog v-if="editOpen" title="編輯寵物資料" submit-label="儲存" :initial-value="{ ...pet, birthDate: pet.birthDate?.slice(0, 10) }" :submitting="editSaving" :error-message="editError" @submit="savePet" @close="editOpen = false" />
@@ -249,6 +251,6 @@ onMounted(fetchPet);
     />
   </section>
 
-  <p v-else-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
-  <p v-else class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入寵物資料…</p>
+  <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+  <p v-else class="text-sm text-muted-foreground" role="status">載入寵物資料…</p>
 </template>

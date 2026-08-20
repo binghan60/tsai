@@ -18,6 +18,7 @@ import FormSection from '../components/formfields/FormSection.vue';
 import QuickPhraseDeleteDialog from '../components/formfields/QuickPhraseDeleteDialog.vue';
 import QuickPhrasePickerDialog from '../components/formfields/QuickPhrasePickerDialog.vue';
 import { provideRecordForm } from '../components/formfields/context';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import { useToast } from '../composables/useToast';
 
 const { template, loadTemplate, listTemplates } = useFormTemplate();
@@ -356,7 +357,7 @@ function eitherOrPending() {
 function stepBadgeClass(index, sectionId) {
   if (activeSectionId.value === sectionId) return 'bg-primary text-primary-foreground';
   if (completionSections.value[index]) return 'bg-primary/15 text-primary dark:bg-brand-500/20 dark:text-brand-300';
-  return 'border border-cream-300 bg-white text-ink-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-500';
+  return 'border border-border bg-white text-muted-foreground   ';
 }
 
 function markUncheckedFindingsNormal(section) {
@@ -763,18 +764,18 @@ function handleBeforeUnload(event) {
 <template>
   <section class="mx-auto max-w-6xl space-y-5 pb-28">
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><router-link :to="backTo" class="mb-2 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← {{ backLabel }}</router-link><h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-ink-500 dark:text-zinc-400"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-belle-50 px-2.5 py-0.5 text-xs font-medium text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-ink-500 dark:text-zinc-400">修訂原因：{{ revisionReason }}</p></div>
-      <div v-if="!isLocked" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-ink-500 dark:text-zinc-400'"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
+      <div><router-link :to="backTo" class="mb-2 inline-flex items-center text-sm font-medium text-belle-600 dark:text-brand-400">← {{ backLabel }}</router-link><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-belle-50 px-2.5 py-0.5 text-xs font-medium text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
+      <div v-if="!isLocked" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
     </div>
 
-    <p v-if="loadError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ loadError }}</p>
-    <p v-else-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入健檢資料…</p>
+    <Alert v-if="loadError" variant="destructive"><AlertDescription>{{ loadError }}</AlertDescription></Alert>
+    <p v-else-if="loading" class="text-sm text-muted-foreground" role="status">載入健檢資料…</p>
 
     <!-- 建立報告的第一步：選健檢類型，決定要套用哪一份表單 -->
-    <div v-else-if="needsTypeChoice" class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6">
-      <h2 class="text-base font-semibold text-ink-900 dark:text-white">選擇健檢類型</h2>
-      <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">
-        每種類型有各自的健檢表單。<strong class="font-medium text-ink-700 dark:text-zinc-200">建立後就不能更改</strong>，請確認後再開始填寫。
+    <div v-else-if="needsTypeChoice" class="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
+      <h2 class="text-base font-semibold text-foreground">選擇健檢類型</h2>
+      <p class="mt-1 text-sm text-muted-foreground">
+        每種類型有各自的健檢表單。<strong class="font-medium text-foreground">建立後就不能更改</strong>，請確認後再開始填寫。
       </p>
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <button
@@ -784,24 +785,24 @@ function handleBeforeUnload(event) {
           class="rounded-xl border p-4 text-left transition-colors"
           :class="pendingTemplateId === type._id
             ? 'border-primary bg-belle-50 ring-1 ring-primary dark:bg-brand-500/10'
-            : 'border-cream-300 bg-white hover:border-belle-500 hover:bg-belle-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
+            : 'border-border bg-white hover:border-belle-500 hover:bg-belle-50   dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
           :aria-pressed="pendingTemplateId === type._id"
           @click="pendingTemplateId = type._id"
         >
           <span class="flex flex-wrap items-center gap-2">
-            <span class="text-sm font-medium text-ink-900 dark:text-white">{{ type.name }}</span>
-            <span v-if="type.species !== 'all'" class="rounded-full bg-cream-200 px-2 py-0.5 text-xs font-medium text-ink-600 dark:bg-zinc-800 dark:text-zinc-300">{{ SPECIES_LABELS[type.species] }}用</span>
+            <span class="text-sm font-medium text-foreground">{{ type.name }}</span>
+            <span v-if="type.species !== 'all'" class="rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-foreground">{{ SPECIES_LABELS[type.species] }}用</span>
             <Check v-if="pendingTemplateId === type._id" class="h-4 w-4 text-primary" stroke-width="1.75" />
           </span>
-          <span class="mt-1 block text-xs text-ink-400 dark:text-zinc-500">{{ type.description || `${type.sectionCount} 個區塊・${type.itemCount} 個項目` }}</span>
+          <span class="mt-1 block text-xs text-muted-foreground">{{ type.description || `${type.sectionCount} 個區塊・${type.itemCount} 個項目` }}</span>
         </button>
       </div>
-      <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-cream-300 pt-4 dark:border-zinc-800">
-        <p v-if="typeChoiceError" class="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ typeChoiceError }}</p>
-        <Button type="button" class="min-h-11" :disabled="!pendingTemplateId || confirmingExamType" @click="confirmExamType">
+      <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-border pt-4">
+        <Alert v-if="typeChoiceError" variant="destructive"><AlertDescription>{{ typeChoiceError }}</AlertDescription></Alert>
+        <Button type="button" :disabled="!pendingTemplateId || confirmingExamType" @click="confirmExamType">
           {{ confirmingExamType ? '載入表單中…' : `開始填寫${pendingTemplateId ? `「${examTypes.find((type) => type._id === pendingTemplateId)?.name}」` : ''}` }}
         </Button>
-        <Button as-child variant="outline" class="min-h-11">
+        <Button as-child variant="outline">
           <router-link :to="backTo">取消</router-link>
         </Button>
       </div>
@@ -822,8 +823,8 @@ function handleBeforeUnload(event) {
         </div>
       </div>
 
-      <div v-if="!isLocked" id="record-context-bar" class="rounded-2xl border border-cream-300 bg-cream-50 px-4 py-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="font-semibold text-ink-900 dark:text-white">{{ pet?.name ?? '—' }}</span></div><div class="flex items-center gap-2 text-sm text-ink-600 dark:text-zinc-300"><User class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ pet?.ownerId?.name ?? '—' }}</div></div></div>
+      <div v-if="!isLocked" id="record-context-bar" class="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="font-semibold text-foreground">{{ pet?.name ?? '—' }}</span></div><div class="flex items-center gap-2 text-sm text-foreground"><User class="h-4 w-4 text-muted-foreground" />{{ pet?.ownerId?.name ?? '—' }}</div></div></div>
         <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
       </div>
 
@@ -831,7 +832,7 @@ function handleBeforeUnload(event) {
       <nav
         v-if="!isLocked"
         aria-label="健檢表單區段"
-        class="sticky top-16 z-20 overflow-x-auto lg:top-0 rounded-2xl border border-cream-300 bg-cream-50 px-2 py-2 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+        class="sticky top-16 z-20 overflow-x-auto lg:top-0 rounded-2xl border border-border bg-card px-2 py-2 shadow-sm"
       >
         <ol class="flex min-w-max items-center">
           <li v-for="(section, index) in FORM_SECTIONS" :key="section.id" class="flex items-center">
@@ -843,8 +844,8 @@ function handleBeforeUnload(event) {
               :class="[
                 compactSteps && activeSectionId !== section.id ? 'px-1' : 'px-2.5',
                 activeSectionId === section.id
-                  ? 'font-semibold text-ink-900 dark:text-white'
-                  : 'font-medium text-ink-500 hover:text-ink-800 dark:text-zinc-400 dark:hover:text-zinc-100',
+                  ? 'font-semibold text-foreground '
+                  : 'font-medium text-muted-foreground hover:text-foreground  ',
               ]"
               :aria-current="activeSectionId === section.id ? 'step' : undefined"
               @click="scrollToSection(section.id)"
@@ -863,7 +864,7 @@ function handleBeforeUnload(event) {
               v-if="index < FORM_SECTIONS.length - 1"
               aria-hidden="true"
               class="mx-0.5 h-px w-4 shrink-0 rounded-full transition-colors"
-              :class="completionSections[index] ? 'bg-primary/40' : 'bg-cream-300 dark:bg-zinc-700'"
+              :class="completionSections[index] ? 'bg-primary/40' : 'bg-muted '"
             />
           </li>
         </ol>
@@ -877,14 +878,14 @@ function handleBeforeUnload(event) {
           v-show="activeSectionId === section.id"
           :id="section.id"
           :key="section.key"
-          class="scroll-mt-40 rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:p-6"
+          class="scroll-mt-40 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"
         >
           <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-3">
               <span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ index + 1 }}</span>
               <div>
-                <h2 class="text-base font-semibold text-ink-900 dark:text-white">{{ section.label }}</h2>
-                <p v-if="section.description" class="text-xs text-ink-400 dark:text-zinc-400">{{ section.description }}</p>
+                <h2 class="text-base font-semibold text-foreground">{{ section.label }}</h2>
+                <p v-if="section.description" class="text-xs text-muted-foreground">{{ section.description }}</p>
               </div>
             </div>
             <Button v-if="section.presentation === 'findings'" type="button" variant="outline" size="sm" class="min-h-10" @click="markUncheckedFindingsNormal(section)">未標示項目全部正常</Button>
@@ -897,22 +898,22 @@ function handleBeforeUnload(event) {
         </section>
 
         <div class="flex items-center justify-between gap-3">
-          <Button type="button" variant="outline" class="min-h-11" :disabled="activeSectionIndex === 0" @click="adjacentSection(-1)">← 上一區</Button>
-          <span class="text-xs text-ink-500 dark:text-zinc-400">{{ activeSectionIndex + 1 }} / {{ FORM_SECTIONS.length }}</span>
-          <Button type="button" variant="outline" class="min-h-11" :disabled="activeSectionIndex === FORM_SECTIONS.length - 1" @click="adjacentSection(1)">下一區 →</Button>
+          <Button type="button" variant="outline" :disabled="activeSectionIndex === 0" @click="adjacentSection(-1)">← 上一區</Button>
+          <span class="text-xs text-muted-foreground">{{ activeSectionIndex + 1 }} / {{ FORM_SECTIONS.length }}</span>
+          <Button type="button" variant="outline" :disabled="activeSectionIndex === FORM_SECTIONS.length - 1" @click="adjacentSection(1)">下一區 →</Button>
         </div>
       </form>
 
       <div v-if="!isLocked" class="flex justify-end">
-        <Button type="button" variant="destructive-outline" class="min-h-11" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄這份草稿</Button>
+        <Button type="button" variant="destructive-outline" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄這份草稿</Button>
       </div>
-      <p v-if="!isLocked && saveError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ saveError }}</p>
-      <div v-if="!isLocked" id="record-action-bar" class="fixed inset-x-0 bottom-0 z-30 border-t border-cream-300 bg-cream-50 px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] dark:border-zinc-800 dark:bg-zinc-950 lg:left-64">
+      <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
+      <div v-if="!isLocked" id="record-action-bar" class="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] lg:left-64">
         <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <p class="hidden items-center gap-2 text-xs text-ink-500 dark:text-zinc-400 sm:flex"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
+          <p class="hidden items-center gap-2 text-xs text-muted-foreground sm:flex"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
           <div class="ml-auto flex flex-wrap items-center gap-2">
-            <Button type="button" variant="outline" class="min-h-11" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
-            <Button type="button" class="min-h-11" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
+            <Button type="button" variant="outline" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
+            <Button type="button" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
           </div>
         </div>
       </div>

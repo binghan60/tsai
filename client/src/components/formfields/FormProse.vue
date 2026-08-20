@@ -32,7 +32,7 @@ function eitherOrHint(item) {
       <div v-if="run.kind === 'primary'" class="space-y-4">
         <SelectableItem v-for="item in run.items" :key="item.key" :item-key="item.key">
           <div class="space-y-1.5">
-            <Label :for="`record-${item.key}`" class="text-xs font-medium text-ink-500 dark:text-zinc-400">
+            <Label :for="`record-${item.key}`" class="text-xs font-medium text-muted-foreground">
               {{ item.label }}
               <span v-if="item.required" class="text-red-600 dark:text-red-400" aria-hidden="true">*</span>
               <span v-else-if="eitherOrHint(item)" class="text-red-600 dark:text-red-400"> {{ eitherOrHint(item) }}</span>

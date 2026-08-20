@@ -46,24 +46,24 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
             <span v-else />
             <Button type="button" variant="ghost" size="sm" class="min-h-10 text-xs" @click="markEmptyLabGroupNormal(section, group)">空白項目全部正常</Button>
           </div>
-          <div class="divide-y divide-cream-300 rounded-xl border border-cream-300 dark:divide-zinc-800 dark:border-zinc-800">
+          <div class="divide-y divide-border rounded-xl border border-border">
             <SelectableItem v-for="finding in labsOfGroup(run, group)" :key="finding.key" :item-key="finding.key">
               <div
                 :id="`record-lab-row-${finding.key}`"
                 class="scroll-mt-40 grid gap-3 p-4 @5xl:grid-cols-[220px_260px_170px_1fr] @5xl:items-start"
               >
                 <div class="min-w-0">
-                  <p class="text-sm font-medium text-ink-800 dark:text-zinc-200">{{ finding.label }}</p>
+                  <p class="text-sm font-medium text-foreground">{{ finding.label }}</p>
                   <p v-if="labRangeLabel(finding)" class="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">參考 {{ labRangeLabel(finding) }}</p>
                   <PreviousValue :item="finding" type="lab" class="mt-0.5" />
                 </div>
                 <!-- 三個控制項都有標題列，橫向才對得齊；沒有標題的欄位會比隔壁高出一截。 -->
                 <div class="space-y-1.5">
-                  <p class="text-xs font-medium text-ink-500 dark:text-zinc-400">檢驗結果</p>
+                  <p class="text-xs font-medium text-muted-foreground">檢驗結果</p>
                   <StatusToggle :finding="finding" :aria-label="`${finding.label}檢驗結果`" show-auto-badge @select="setLabStatus(finding, $event)" />
                 </div>
                 <div class="space-y-1.5">
-                  <Label :for="`record-lab-value-${finding.key}`" class="text-xs font-medium text-ink-500 dark:text-zinc-400">{{ finding.numeric === false ? '結果描述' : '檢驗數值' }}</Label>
+                  <Label :for="`record-lab-value-${finding.key}`" class="text-xs font-medium text-muted-foreground">{{ finding.numeric === false ? '結果描述' : '檢驗數值' }}</Label>
                   <input
                     :id="`record-lab-value-${finding.key}`"
                     v-model="finding.value"
@@ -71,7 +71,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                     inputmode="decimal"
                     :aria-label="`${finding.label}數值`"
                     :placeholder="finding.numeric === false ? '選填' : labRanges[finding.key]?.unit ? `輸入數值（${labRanges[finding.key].unit}）` : '選填'"
-                    class="min-h-11 w-full scroll-mt-40 rounded-xl border border-cream-300 bg-white px-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-belle-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+                    class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
                     @input="finding.numeric !== false && autoJudgeLab(finding, $event.target.value)"
                   />
                   <!-- 數值型欄位打的是數字，沒有常用語可言；只有文字結果才掛。
@@ -84,7 +84,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                   />
                 </div>
                 <div class="space-y-1.5">
-                  <Label :for="`record-lab-note-${finding.key}`" class="text-xs font-medium text-ink-500 dark:text-zinc-400">
+                  <Label :for="`record-lab-note-${finding.key}`" class="text-xs font-medium text-muted-foreground">
                     備註<span v-if="finding.status === 'abnormal'" class="text-red-600 dark:text-red-400"> 異常說明 *</span>
                   </Label>
                   <input
@@ -95,8 +95,8 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                     :aria-invalid="finding.status === 'abnormal' && !finding.note.trim()"
                     :required="finding.status === 'abnormal'"
                     :placeholder="finding.status === 'abnormal' ? '請描述異常' : '選填'"
-                    class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-belle-500 focus:outline-none dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-                    :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-cream-300 dark:border-zinc-700'"
+                    class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+                    :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
                   />
                   <QuickPhrases v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" />
                 </div>

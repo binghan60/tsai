@@ -15,15 +15,15 @@ const emit = defineEmits(['select']);
 </script>
 
 <template>
-  <div class="grid grid-cols-3 gap-1 rounded-xl bg-cream-100 p-1 dark:bg-zinc-950" role="group" :aria-label="ariaLabel">
+  <div class="grid grid-cols-3 gap-1 rounded-xl bg-muted/40 p-1" role="group" :aria-label="ariaLabel">
     <button
       v-for="option in OPTIONS"
       :key="option.value"
       type="button"
       class="relative min-h-10 rounded-lg px-2 text-xs font-medium"
       :class="finding.status === option.value
-        ? (option.value === 'abnormal' ? 'bg-red-800 text-white' : option.value === 'normal' ? 'bg-emerald-700 text-white' : 'bg-white text-ink-700 shadow-sm dark:bg-zinc-800 dark:text-zinc-200')
-        : 'text-ink-500 hover:bg-white/70 dark:text-zinc-400 dark:hover:bg-zinc-800/70'"
+        ? (option.value === 'abnormal' ? 'bg-red-800 text-white' : option.value === 'normal' ? 'bg-emerald-700 text-white' : 'bg-white text-foreground shadow-sm  ')
+        : 'text-muted-foreground hover:bg-white/70  '"
       @click="emit('select', option.value)"
     >
       {{ option.label }}

@@ -87,13 +87,13 @@ provideRecordForm({
 
 <template>
   <div
-    class="rounded-xl border border-dashed border-cream-300 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-950 sm:p-5"
+    class="rounded-xl border border-dashed border-border bg-white p-4 sm:p-5"
     :class="selectable
       ? '[&_input]:pointer-events-none [&_textarea]:pointer-events-none [&_button:not([data-canvas-action])]:pointer-events-none'
       : 'pointer-events-none select-none'"
     :aria-hidden="selectable ? undefined : 'true'"
   >
-    <p v-if="!visibleSection.items.length" class="py-6 text-center text-sm text-ink-400 dark:text-zinc-500">
+    <p v-if="!visibleSection.items.length" class="py-6 text-center text-sm text-muted-foreground">
       這個區塊還沒有啟用中的項目，不會出現在表單與報告上。
     </p>
     <FormSection v-else :section="visibleSection" />

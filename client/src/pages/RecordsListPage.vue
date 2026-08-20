@@ -110,8 +110,8 @@ function actionLabel(record) {
   <section class="mx-auto max-w-7xl space-y-5">
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 class="text-xl font-semibold text-ink-900 dark:text-white">健檢紀錄</h1>
-        <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">依處理狀態分組，先看還沒送到飼主手上的。</p>
+        <h1 class="text-xl font-semibold text-foreground">健檢紀錄</h1>
+        <p class="mt-1 text-sm text-muted-foreground">依處理狀態分組，先看還沒送到飼主手上的。</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <!-- 寄送紀錄是另一種問法：這頁問「還有什麼沒寄」，那頁問「當初寄了什麼給誰」。 -->
@@ -125,7 +125,7 @@ function actionLabel(record) {
     </div>
 
     <!-- 佇列切換。數字不隨關鍵字篩選變動，它回答的是「總共還有多少事沒做完」。 -->
-    <nav class="flex gap-1 overflow-x-auto rounded-xl border border-cream-300 bg-cream-50 p-1.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900" aria-label="健檢紀錄佇列">
+    <nav class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-sm" aria-label="健檢紀錄佇列">
       <button
         v-for="item in VIEWS"
         :key="item.key"
@@ -133,7 +133,7 @@ function actionLabel(record) {
         class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors"
         :class="(view || 'todo') === item.key
           ? 'border-primary bg-primary text-primary-foreground'
-          : 'border-transparent text-ink-600 hover:bg-cream-100 dark:text-zinc-300 dark:hover:bg-zinc-800'"
+          : 'border-transparent text-foreground hover:bg-muted/40  '"
         :aria-current="(view || 'todo') === item.key ? 'page' : undefined"
         @click="selectView(item.key)"
       >
@@ -141,54 +141,54 @@ function actionLabel(record) {
         <span
           v-if="counts[item.key] !== undefined"
           class="rounded-full px-1.5 py-0.5 text-xs tabular-nums"
-          :class="(view || 'todo') === item.key ? 'bg-white/20' : 'bg-cream-200 text-ink-500 dark:bg-zinc-800 dark:text-zinc-400'"
+          :class="(view || 'todo') === item.key ? 'bg-white/20' : 'bg-muted/60 text-muted-foreground '"
         >{{ counts[item.key] }}</span>
       </button>
     </nav>
 
     <SearchPanel id="record-search" v-model="query" label="搜尋健檢紀錄" placeholder="輸入寵物名、飼主姓名、電話、報告編號或獸醫師" :loading="loading" :error="error" />
 
-    <p v-if="!loading && !error && !records.length" class="rounded-xl border border-cream-300 bg-cream-50 px-4 py-10 text-center text-sm text-ink-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+    <p v-if="!loading && !error && !records.length" class="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
       {{ query.trim() ? '找不到符合的健檢紀錄。' : '這個佇列目前是空的。' }}
     </p>
 
     <template v-else-if="records.length">
       <!-- 桌機：表格 -->
-      <Card class="hidden overflow-hidden border-cream-300 p-0 shadow-sm lg:block dark:border-zinc-800 dark:shadow-none">
+      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead class="px-5 py-3">寵物</TableHead>
-              <TableHead class="px-5 py-3">健檢類型</TableHead>
-              <TableHead class="px-5 py-3">看診日</TableHead>
-              <TableHead class="px-5 py-3">獸醫師</TableHead>
-              <TableHead class="px-5 py-3">狀態</TableHead>
-              <TableHead class="px-5 py-3 text-right">操作</TableHead>
+              <TableHead >寵物</TableHead>
+              <TableHead >健檢類型</TableHead>
+              <TableHead >看診日</TableHead>
+              <TableHead >獸醫師</TableHead>
+              <TableHead >狀態</TableHead>
+              <TableHead class="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow v-for="record in records" :key="record._id">
-              <TableCell class="px-5 py-3">
-                <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="group flex min-h-11 items-center gap-3">
+              <TableCell >
+                <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="group flex items-center gap-3">
                   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
                     <PawPrint class="h-5 w-5" stroke-width="1.75" />
                   </span>
                   <span class="min-w-0">
-                    <span class="block truncate text-sm font-medium text-ink-900 group-hover:text-belle-600 dark:text-white dark:group-hover:text-brand-400">{{ record.petId?.name || '寵物未找到' }}</span>
-                    <span class="block truncate text-xs text-ink-400 dark:text-zinc-500">{{ record.petId?.ownerId?.name || '飼主未知' }}</span>
+                    <span class="block truncate text-sm font-medium text-foreground group-hover:text-belle-600 dark:group-hover:text-brand-400">{{ record.petId?.name || '寵物未找到' }}</span>
+                    <span class="block truncate text-xs text-muted-foreground">{{ record.petId?.ownerId?.name || '飼主未知' }}</span>
                   </span>
                 </router-link>
               </TableCell>
-              <TableCell class="px-5 py-3">
-                <span class="text-sm text-ink-700 dark:text-zinc-300">{{ record.examType || '—' }}</span>
-                <span v-if="record.reportVersion > 1" class="ml-2 text-xs text-ink-400 dark:text-zinc-500">第 {{ record.reportVersion }} 版</span>
+              <TableCell >
+                <span class="text-sm text-foreground">{{ record.examType || '—' }}</span>
+                <span v-if="record.reportVersion > 1" class="ml-2 text-xs text-muted-foreground">第 {{ record.reportVersion }} 版</span>
               </TableCell>
-              <TableCell class="px-5 py-3 text-sm tabular-nums text-ink-700 dark:text-zinc-300">{{ formatDate(record.visitDate) }}</TableCell>
-              <TableCell class="px-5 py-3 text-sm text-ink-700 dark:text-zinc-300">{{ record.vet || '未填' }}</TableCell>
-              <TableCell class="px-5 py-3">
+              <TableCell class="text-sm tabular-nums text-foreground">{{ formatDate(record.visitDate) }}</TableCell>
+              <TableCell class="text-sm text-foreground">{{ record.vet || '未填' }}</TableCell>
+              <TableCell >
                 <span class="flex flex-wrap gap-1.5">
-                  <Badge :class="RECORD_STATUS_META[record.status]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
-                  <Badge v-if="record.status !== 'draft'" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
+                  <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
+                  <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
                 </span>
                 <!-- 寄送失敗最需要知道的是原因，不然只能一份份點進去查。 -->
                 <span v-if="record.deliveryError" class="mt-1 flex items-start gap-1 text-xs text-red-700 dark:text-red-300">
@@ -196,8 +196,8 @@ function actionLabel(record) {
                   <span class="min-w-0">{{ record.deliveryError }}</span>
                 </span>
               </TableCell>
-              <TableCell class="px-5 py-3 text-right">
-                <Button as-child variant="outline" size="sm" class="min-h-11">
+              <TableCell class="text-right">
+                <Button as-child variant="outline" size="sm">
                   <router-link :to="recordLink(record)">
                     <component :is="record.status === 'draft' ? Pencil : FileText" class="h-4 w-4" stroke-width="1.75" />
                     {{ actionLabel(record) }}
@@ -210,26 +210,26 @@ function actionLabel(record) {
       </Card>
 
       <!-- 手機：卡片 -->
-      <div class="space-y-3 lg:hidden">
-        <Card v-for="record in records" :key="record._id" class="gap-3 border-cream-300 p-4 shadow-sm dark:border-zinc-800 dark:shadow-none">
+      <div class="space-y-3 xl:hidden">
+        <Card v-for="record in records" :key="record._id" class="gap-3 p-4 shadow-sm dark:shadow-none">
           <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="flex items-start gap-3">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
               <PawPrint class="h-5 w-5" stroke-width="1.75" />
             </span>
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ record.petId?.name || '寵物未找到' }}</span>
-              <span class="flex items-center gap-1 truncate text-xs text-ink-400 dark:text-zinc-500">
+              <span class="block truncate text-sm font-medium text-foreground">{{ record.petId?.name || '寵物未找到' }}</span>
+              <span class="flex items-center gap-1 truncate text-xs text-muted-foreground">
                 <User class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ record.petId?.ownerId?.name || '飼主未知' }}
               </span>
             </span>
           </router-link>
 
           <div class="flex flex-wrap gap-1.5">
-            <Badge :class="RECORD_STATUS_META[record.status]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
-            <Badge v-if="record.status !== 'draft'" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" class="rounded-full px-3 py-1 text-xs font-medium">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
+            <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
+            <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
           </div>
 
-          <p class="text-xs text-ink-400 dark:text-zinc-500">
+          <p class="text-xs text-muted-foreground">
             {{ record.examType || '健檢' }} · {{ formatDate(record.visitDate) }} · {{ record.vet || '獸醫師未填' }}
           </p>
           <p v-if="record.deliveryError" class="flex items-start gap-1 text-xs text-red-700 dark:text-red-300">
@@ -237,7 +237,7 @@ function actionLabel(record) {
             <span class="min-w-0">{{ record.deliveryError }}</span>
           </p>
 
-          <Button as-child variant="outline" size="sm" class="min-h-11 w-full">
+          <Button as-child variant="outline" size="sm" class="w-full">
             <router-link :to="recordLink(record)">
               <component :is="record.status === 'draft' ? Pencil : FileText" class="h-4 w-4" stroke-width="1.75" />
               {{ actionLabel(record) }}
@@ -247,10 +247,10 @@ function actionLabel(record) {
       </div>
 
       <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
-        <p class="text-xs text-ink-400 dark:text-zinc-500">共 {{ total }} 筆・第 {{ currentPage }} / {{ totalPages }} 頁</p>
+        <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 筆・第 {{ currentPage }} / {{ totalPages }} 頁</p>
         <div class="flex gap-2">
-          <Button type="button" variant="outline" size="sm" class="min-h-11" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
-          <Button type="button" variant="outline" size="sm" class="min-h-11" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
+          <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
+          <Button type="button" variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
         </div>
       </div>
     </template>

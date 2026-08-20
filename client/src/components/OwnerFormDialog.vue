@@ -43,20 +43,20 @@ const onSubmit = handleSubmit((values) => emit('submit', values));
     <form class="flex flex-col" @submit.prevent="onSubmit">
       <div class="space-y-4 p-6 pt-3 sm:p-7 sm:pt-3">
         <div class="space-y-1.5">
-          <Label for="owner-name" class="text-xs font-medium text-ink-700 dark:text-zinc-300">姓名 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
-          <Input id="owner-name" v-model="name" class="min-h-11 border-cream-300/90 focus:border-brand-500 dark:border-zinc-700 dark:bg-zinc-950/40" placeholder="例：王小明" autofocus />
+          <Label for="owner-name" class="text-xs font-medium text-foreground">姓名 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
+          <Input id="owner-name" v-model="name" class="border-border focus:border-brand-500" placeholder="例：王小明" autofocus />
           <p v-if="nameError" class="text-xs font-medium text-destructive">{{ nameError }}</p>
         </div>
 
         <div class="space-y-1.5">
-          <Label for="owner-phone" class="text-xs font-medium text-ink-700 dark:text-zinc-300">電話 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
-          <Input id="owner-phone" v-model="phone" class="min-h-11 border-cream-300/90 focus:border-brand-500 dark:border-zinc-700 dark:bg-zinc-950/40" placeholder="例：0912-345-678" />
+          <Label for="owner-phone" class="text-xs font-medium text-foreground">電話 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
+          <Input id="owner-phone" v-model="phone" class="border-border focus:border-brand-500" placeholder="例：0912-345-678" />
           <p v-if="phoneError" class="text-xs font-medium text-destructive">{{ phoneError }}</p>
         </div>
 
         <div class="space-y-1.5">
-          <Label for="owner-email" class="text-xs font-medium text-ink-700 dark:text-zinc-300">Email（選填）</Label>
-          <Input id="owner-email" v-model="email" type="email" class="min-h-11 border-cream-300/90 focus:border-brand-500 dark:border-zinc-700 dark:bg-zinc-950/40" placeholder="例：owner@example.com" />
+          <Label for="owner-email" class="text-xs font-medium text-foreground">Email（選填）</Label>
+          <Input id="owner-email" v-model="email" type="email" class="border-border focus:border-brand-500" placeholder="例：owner@example.com" />
           <p v-if="emailError" class="text-xs font-medium text-destructive">{{ emailError }}</p>
         </div>
 
@@ -66,8 +66,8 @@ const onSubmit = handleSubmit((values) => emit('submit', values));
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" class="min-h-11 px-5 border-cream-300 hover:bg-cream-200/70 dark:border-zinc-700 dark:hover:bg-zinc-800" @click="$emit('close')">取消</Button>
-        <Button type="submit" class="min-h-11 px-5" :disabled="submitting">{{ submitting ? '處理中…' : submitLabel }}</Button>
+        <Button type="button" variant="outline" class="px-5 border-border hover:bg-muted/60" @click="$emit('close')">取消</Button>
+        <Button type="submit" class="px-5" :disabled="submitting">{{ submitting ? '處理中…' : submitLabel }}</Button>
       </DialogFooter>
     </form>
   </ModalDialog>

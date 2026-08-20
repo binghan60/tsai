@@ -8,6 +8,8 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { http } from '../api/http';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
+import EmptyState from '../components/EmptyState.vue';
+import { Alert, AlertDescription } from '../components/ui/alert';
 
 import { useToast } from '../composables/useToast';
 import { useBackTarget } from '../composables/useBackTarget';
@@ -172,41 +174,41 @@ onMounted(async () => {
       ← {{ backLabel }}
     </router-link>
 
-    <Card class="border-cream-300 p-6 shadow-sm dark:border-zinc-800 dark:shadow-none">
+    <Card class="p-6 shadow-sm dark:shadow-none">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="flex items-center gap-4">
           <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
             <User class="h-7 w-7" stroke-width="1.75" />
           </div>
           <div>
-            <h1 class="text-xl font-semibold text-ink-900 dark:text-white">{{ owner.name }}</h1>
-            <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">電話：{{ owner.phone }}</p>
-            <p class="text-sm text-ink-500 dark:text-zinc-400">Email：{{ owner.email || '未填寫' }}</p>
+            <h1 class="text-xl font-semibold text-foreground">{{ owner.name }}</h1>
+            <p class="mt-1 text-sm text-muted-foreground"><span class="tabular-nums">電話：{{ owner.phone }}</span></p>
+            <p class="text-sm text-muted-foreground">Email：{{ owner.email || '未填寫' }}</p>
           </div>
         </div>
-        <Button type="button" variant="outline" class="min-h-11" @click="editOwnerOpen = true"><Pencil class="h-4 w-4" />編輯飼主資料</Button>
+        <Button type="button" variant="outline" @click="editOwnerOpen = true"><Pencil class="h-4 w-4" />編輯飼主資料</Button>
       </div>
     </Card>
 
     <div class="space-y-4">
       <div class="flex items-center justify-between">
-        <h2 class="text-base font-semibold text-ink-900 dark:text-white">寵物</h2>
+        <h2 class="text-base font-semibold text-foreground">寵物</h2>
         <Button type="button" size="sm" class="min-h-9" @click="openCreatePet">+ 新增寵物</Button>
       </div>
 
-      <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400">{{ error }}</p>
+      <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
       <div v-if="owner.pets.length" class="grid gap-3 sm:grid-cols-2">
         <Card
           v-for="pet in owner.pets"
           :key="pet._id"
-          class="flex-row items-center gap-3 border-cream-300 p-4 shadow-sm hover:border-belle-300 hover:bg-belle-50/40 dark:border-zinc-800 dark:shadow-none dark:hover:border-brand-500/40 dark:hover:bg-zinc-800/40"
+          class="flex-row items-center gap-3 border-border p-4 shadow-sm hover:border-belle-300 hover:bg-belle-50/40 dark:shadow-none dark:hover:border-brand-500/40"
         >
           <router-link :to="`/pets/${pet._id}`" class="flex min-w-0 flex-1 items-center gap-3">
             <Cat class="h-6 w-6 shrink-0 text-belle-600 dark:text-brand-400" stroke-width="1.75" />
             <span class="min-w-0">
-              <span class="block truncate font-medium text-ink-700 dark:text-zinc-200">{{ pet.name }}</span>
-              <span class="block truncate text-xs text-ink-400 dark:text-zinc-400">
+              <span class="block truncate font-medium text-foreground">{{ pet.name }}</span>
+              <span class="block truncate text-xs text-muted-foreground">
                 {{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template>
               </span>
             </span>
@@ -237,9 +239,7 @@ onMounted(async () => {
           </div>
         </Card>
       </div>
-      <p v-else class="rounded-2xl border border-dashed border-cream-300 px-5 py-10 text-center text-ink-400 dark:border-zinc-800 dark:text-zinc-500">
-        尚無寵物資料
-      </p>
+      <EmptyState v-else title="尚無寵物資料" />
     </div>
 
     <OwnerFormDialog
@@ -305,6 +305,6 @@ onMounted(async () => {
       @confirm="goManageRecords"
     />
   </section>
-  <p v-else-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-400">{{ error }}</p>
-  <p v-else class="text-sm text-ink-400 dark:text-zinc-500">載入中…</p>
+  <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+  <p v-else class="text-sm text-muted-foreground">載入中…</p>
 </template>

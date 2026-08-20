@@ -122,36 +122,36 @@ onBeforeUnmount(() => {
       <DialogTitle class="sr-only">搜尋飼主、寵物或病歷</DialogTitle>
       <DialogDescription class="sr-only">輸入關鍵字即時搜尋，用上下鍵選擇、Enter 前往。</DialogDescription>
 
-      <div class="relative flex items-center gap-3 border-b border-cream-300 px-4 dark:border-zinc-800">
-        <Search class="h-5 w-5 shrink-0 text-ink-400 dark:text-zinc-500" stroke-width="1.75" aria-hidden="true" />
+      <div class="relative flex items-center gap-3 border-b border-border px-4">
+        <Search class="h-5 w-5 shrink-0 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
         <input
           ref="inputEl"
           v-model="query"
           type="text"
           autocomplete="off"
           placeholder="搜尋寵物、飼主或電話"
-          class="min-h-14 min-w-0 flex-1 bg-transparent text-sm text-ink-900 placeholder:text-ink-400 focus:outline-none dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          class="min-h-14 min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           @keydown="onKeydown"
         />
-        <kbd class="hidden shrink-0 rounded border border-cream-300 px-1.5 py-0.5 text-xs text-ink-400 sm:block dark:border-zinc-700 dark:text-zinc-500">Esc</kbd>
+        <kbd class="hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground sm:block">Esc</kbd>
       </div>
 
       <div class="max-h-[min(60vh,26rem)] overflow-y-auto">
-        <p v-if="searching" class="px-4 py-6 text-sm text-ink-400 dark:text-zinc-500" role="status">搜尋中…</p>
+        <p v-if="searching" class="px-4 py-6 text-sm text-muted-foreground" role="status">搜尋中…</p>
         <p v-else-if="searchError" class="px-4 py-6 text-sm text-red-700 dark:text-red-300">{{ searchError }}</p>
-        <p v-else-if="!hasQuery" class="px-4 py-6 text-sm text-ink-400 dark:text-zinc-500">輸入寵物名、飼主姓名、電話或病歷號開始搜尋。</p>
-        <p v-else-if="!flatResults.length" class="px-4 py-6 text-sm text-ink-500 dark:text-zinc-400">找不到符合的寵物或飼主。</p>
+        <p v-else-if="!hasQuery" class="px-4 py-6 text-sm text-muted-foreground">輸入寵物名、飼主姓名、電話或病歷號開始搜尋。</p>
+        <p v-else-if="!flatResults.length" class="px-4 py-6 text-sm text-muted-foreground">找不到符合的寵物或飼主。</p>
 
         <template v-else>
           <template v-for="(item, index) in flatResults" :key="`${item.kind}-${item.id}`">
             <p
               v-if="index === 0 || flatResults[index - 1].kind !== item.kind"
-              class="px-4 pt-3 pb-1 text-xs font-medium text-ink-400 dark:text-zinc-500"
+              class="px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground"
             >{{ item.kind === 'pet' ? '寵物' : '飼主' }}</p>
             <button
               type="button"
               class="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left"
-              :class="index === activeIndex ? 'bg-cream-100 dark:bg-zinc-800' : 'hover:bg-cream-100/70 dark:hover:bg-zinc-800/60'"
+              :class="index === activeIndex ? 'bg-muted/40 ' : 'hover:bg-muted/40 '"
               @mousemove="activeIndex = index"
               @click="go(item)"
             >
@@ -162,24 +162,24 @@ onBeforeUnmount(() => {
                   stroke-width="1.75"
                 />
                 <span class="min-w-0">
-                  <span class="block truncate text-sm font-medium text-ink-900 dark:text-white">{{ item.data.name }}</span>
-                  <span v-if="item.kind === 'pet'" class="block truncate text-xs text-ink-400 dark:text-zinc-400">
+                  <span class="block truncate text-sm font-medium text-foreground">{{ item.data.name }}</span>
+                  <span v-if="item.kind === 'pet'" class="block truncate text-xs text-muted-foreground">
                     飼主 {{ item.data.ownerId?.name || '—' }}
                   </span>
-                  <span v-else class="flex items-center gap-1 text-xs text-ink-400 dark:text-zinc-400">
+                  <span v-else class="flex items-center gap-1 text-xs text-muted-foreground">
                     <Phone class="h-3 w-3" stroke-width="1.75" />{{ item.data.phone }}
                   </span>
                 </span>
               </span>
-              <ArrowRight class="h-4 w-4 shrink-0 text-ink-400 dark:text-zinc-500" stroke-width="1.75" />
+              <ArrowRight class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.75" />
             </button>
           </template>
         </template>
       </div>
 
-      <div class="hidden items-center gap-3 border-t border-cream-300 px-4 py-2 text-xs text-ink-400 sm:flex dark:border-zinc-800 dark:text-zinc-500">
-        <span><kbd class="rounded border border-cream-300 px-1 dark:border-zinc-700">↑</kbd> <kbd class="rounded border border-cream-300 px-1 dark:border-zinc-700">↓</kbd> 選擇</span>
-        <span><kbd class="rounded border border-cream-300 px-1 dark:border-zinc-700">Enter</kbd> 前往</span>
+      <div class="hidden items-center gap-3 border-t border-border px-4 py-2 text-xs text-muted-foreground sm:flex">
+        <span><kbd class="rounded border border-border px-1">↑</kbd> <kbd class="rounded border border-border px-1">↓</kbd> 選擇</span>
+        <span><kbd class="rounded border border-border px-1">Enter</kbd> 前往</span>
       </div>
     </DialogContent>
   </Dialog>

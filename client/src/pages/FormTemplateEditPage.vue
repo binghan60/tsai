@@ -36,6 +36,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from '../components/ui/switch';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FormSectionPreview from '../components/formfields/FormSectionPreview.vue';
+import { Alert, AlertDescription } from '../components/ui/alert';
 
 const route = useRoute();
 const { to: backTo, label: backLabel } = useBackTarget('/settings/forms', '回健檢表單');
@@ -459,24 +460,24 @@ function resolveLeave(confirmed) {
 <template>
   <section class="mx-auto max-w-350 space-y-5 pb-24">
     <!-- 不透明底色，不用 backdrop-blur：捲動時每一幀重算模糊是長表單最主要的掉幀來源。 -->
-    <header class="sticky top-16 z-10 lg:top-0 -mx-4 border-b border-cream-300 bg-cream-100 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950 sm:-mx-6 sm:px-6">
+    <header class="sticky top-16 z-10 lg:top-0 -mx-4 border-b border-border bg-muted/40 px-4 py-3 sm:-mx-6 sm:px-6">
       <div class="mx-auto flex max-w-350 flex-wrap items-center justify-between gap-3">
         <div class="flex min-w-0 items-center gap-3">
           <router-link :to="backTo" class="inline-flex min-h-9 shrink-0 items-center text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400">
             ← {{ backLabel }}
           </router-link>
-          <span class="h-4 w-px shrink-0 bg-cream-300 dark:bg-zinc-700" />
-          <h1 class="truncate text-xl font-semibold text-ink-900 dark:text-white">{{ currentName || '健檢表單' }}</h1>
-          <Badge v-if="!loading" :variant="isDirty ? 'secondary' : 'outline'" :class="isDirty ? 'shrink-0 text-amber-800 dark:text-amber-200' : 'shrink-0 text-ink-500 dark:text-zinc-400'">
+          <span class="h-4 w-px shrink-0 bg-muted" />
+          <h1 class="truncate text-xl font-semibold text-foreground">{{ currentName || '健檢表單' }}</h1>
+          <Badge v-if="!loading" :variant="isDirty ? 'secondary' : 'outline'" :class="isDirty ? 'shrink-0 text-amber-800 dark:text-amber-200' : 'shrink-0 text-muted-foreground '">
             {{ isDirty ? '尚未儲存' : '已儲存' }}
           </Badge>
         </div>
         <div class="flex items-center gap-2">
-          <nav class="inline-flex rounded-xl border border-cream-300 bg-cream-50 p-1 dark:border-zinc-800 dark:bg-zinc-900" aria-label="編輯模式">
+          <nav class="inline-flex rounded-xl border border-border bg-card p-1" aria-label="編輯模式">
             <button
               type="button"
               class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
-              :class="activeView === 'design' ? 'bg-white text-belle-700 shadow-sm dark:bg-zinc-800 dark:text-brand-300' : 'text-ink-500 hover:text-ink-900 dark:text-zinc-400 dark:hover:text-white'"
+              :class="activeView === 'design' ? 'bg-white text-belle-700 shadow-sm dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'"
               @click="activeView = 'design'"
             >
               <LayoutList class="h-4 w-4" stroke-width="1.75" />設計
@@ -484,13 +485,13 @@ function resolveLeave(confirmed) {
             <button
               type="button"
               class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
-              :class="activeView === 'preview' ? 'bg-white text-belle-700 shadow-sm dark:bg-zinc-800 dark:text-brand-300' : 'text-ink-500 hover:text-ink-900 dark:text-zinc-400 dark:hover:text-white'"
+              :class="activeView === 'preview' ? 'bg-white text-belle-700 shadow-sm dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'"
               @click="activeView = 'preview'"
             >
               <Eye class="h-4 w-4" stroke-width="1.75" />預覽
             </button>
           </nav>
-          <Button type="button" class="min-h-11" :disabled="saving || loading || !isDirty" @click="save()">
+          <Button type="button" :disabled="saving || loading || !isDirty" @click="save()">
             <Save class="h-4 w-4" stroke-width="1.75" />
             {{ saving ? '儲存中…' : '儲存變更' }}
           </Button>
@@ -498,27 +499,27 @@ function resolveLeave(confirmed) {
       </div>
     </header>
 
-    <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">
-      {{ error }}
-    </p>
-    <p v-if="loading" class="py-12 text-center text-sm text-ink-500 dark:text-zinc-400" role="status">
+    <Alert v-if="error" variant="destructive">
+      <AlertDescription>{{ error }}</AlertDescription>
+    </Alert>
+    <p v-if="loading" class="py-12 text-center text-sm text-muted-foreground" role="status">
       載入表單中…
     </p>
 
     <template v-else>
       <div v-if="activeView === 'design'" class="space-y-5">
-        <div class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <h2 class="text-base font-semibold text-ink-900 dark:text-white">基本資料</h2>
-          <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">這些資訊會顯示在建立健檢報告時的類型選單。</p>
+        <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <h2 class="text-base font-semibold text-foreground">基本資料</h2>
+          <p class="mt-1 text-sm text-muted-foreground">這些資訊會顯示在建立健檢報告時的類型選單。</p>
           <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(220px,1fr)_180px_2fr]">
             <div class="space-y-1.5">
               <Label for="template-name" class="text-xs font-medium">健檢類型名稱</Label>
-              <Input id="template-name" v-model="currentName" class="min-h-11" />
+              <Input id="template-name" v-model="currentName" />
             </div>
             <div class="space-y-1.5">
               <Label for="template-species" class="text-xs font-medium">適用物種</Label>
               <Select v-model="currentSpecies">
-                <SelectTrigger id="template-species" class="min-h-11 w-full"><SelectValue /></SelectTrigger>
+                <SelectTrigger id="template-species" class="w-full"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">不限物種</SelectItem>
                   <SelectItem value="cat">貓</SelectItem>
@@ -528,7 +529,7 @@ function resolveLeave(confirmed) {
             </div>
             <div class="space-y-1.5">
               <Label for="template-description" class="text-xs font-medium">簡短說明</Label>
-              <Input id="template-description" v-model="currentDescription" class="min-h-11" placeholder="選填，例如：適合年度例行健康檢查" />
+              <Input id="template-description" v-model="currentDescription" placeholder="選填，例如：適合年度例行健康檢查" />
             </div>
           </div>
         </div>
@@ -536,9 +537,9 @@ function resolveLeave(confirmed) {
         <div class="grid items-start gap-5 xl:grid-cols-[236px_minmax(0,1fr)_320px]">
           <!-- 左：區塊清單 + 工具箱 -->
           <aside class="space-y-4 xl:sticky xl:top-20">
-            <div class="rounded-2xl border border-cream-300 bg-cream-50 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="rounded-2xl border border-border bg-card p-3 shadow-sm">
               <div class="mb-2 flex items-center justify-between px-1">
-                <h2 class="text-base font-semibold text-ink-900 dark:text-white">區塊</h2>
+                <h2 class="text-base font-semibold text-foreground">區塊</h2>
                 <Badge variant="outline">{{ sections.length }}</Badge>
               </div>
               <div
@@ -547,20 +548,20 @@ function resolveLeave(confirmed) {
                 class="flex items-center gap-0.5 rounded-xl border p-1 transition-colors"
                 :class="activeKey === section.key
                   ? 'border-belle-300 bg-belle-100 dark:border-brand-500/40 dark:bg-brand-500/15'
-                  : 'border-transparent hover:bg-cream-100 dark:hover:bg-zinc-800'"
+                  : 'border-transparent hover:bg-muted/40 '"
               >
                 <button type="button" class="min-h-10 min-w-0 flex-1 rounded-lg px-2 text-left" @click="focusSection(section.key)">
-                  <span class="block truncate text-sm font-medium" :class="section.enabled === false ? 'text-ink-400 dark:text-zinc-500' : 'text-ink-900 dark:text-white'">
+                  <span class="block truncate text-sm font-medium" :class="section.enabled === false ? 'text-muted-foreground ' : 'text-foreground '">
                     {{ section.title || '未命名區塊' }}
                   </span>
-                  <span class="block text-xs text-ink-400 dark:text-zinc-500">
+                  <span class="block text-xs text-muted-foreground">
                     {{ presentationMeta(section.presentation).title }} · {{ (section.items ?? []).length }} 項<span v-if="section.enabled === false"> · 已停用</span>
                   </span>
                 </button>
-                <button type="button" class="flex h-8 w-6 items-center justify-center rounded text-ink-400 hover:text-ink-900 disabled:opacity-25 dark:text-zinc-500 dark:hover:text-white" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
+                <button type="button" class="flex h-8 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
                   <ChevronUp class="h-4 w-4" stroke-width="1.75" />
                 </button>
-                <button type="button" class="flex h-8 w-6 items-center justify-center rounded text-ink-400 hover:text-ink-900 disabled:opacity-25 dark:text-zinc-500 dark:hover:text-white" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
+                <button type="button" class="flex h-8 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
                   <ChevronDown class="h-4 w-4" stroke-width="1.75" />
                 </button>
               </div>
@@ -569,30 +570,30 @@ function resolveLeave(confirmed) {
               </Button>
             </div>
 
-            <div class="rounded-2xl border border-cream-300 bg-cream-50 p-3 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-              <h2 class="px-1 text-base font-semibold text-ink-900 dark:text-white">工具箱</h2>
-              <p class="mb-2 px-1 text-xs text-ink-400 dark:text-zinc-500">
+            <div class="rounded-2xl border border-border bg-card p-3 shadow-sm">
+              <h2 class="px-1 text-base font-semibold text-foreground">工具箱</h2>
+              <p class="mb-2 px-1 text-xs text-muted-foreground">
                 <template v-if="activeSection">點一下加進「{{ activeSection.title || '未命名區塊' }}」</template>
                 <template v-else>請先選一個區塊</template>
               </p>
               <div class="space-y-1">
                 <template v-for="group in TOOLBOX_GROUPS" :key="group.title">
-                  <p class="px-1 pt-2 text-xs text-ink-400 dark:text-zinc-500">{{ group.title }}</p>
+                  <p class="px-1 pt-2 text-xs text-muted-foreground">{{ group.title }}</p>
                   <button
                     v-for="type in group.types"
                     :key="type"
                     type="button"
                     class="flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                     :class="type === featuredType
-                      ? 'border-belle-200 bg-white hover:border-belle-400 dark:border-brand-500/30 dark:bg-zinc-950 dark:hover:border-brand-500'
-                      : 'border-transparent hover:bg-cream-100 dark:hover:bg-zinc-800'"
+                      ? 'border-belle-200 bg-white hover:border-belle-400 dark:border-brand-500/30  dark:hover:border-brand-500'
+                      : 'border-transparent hover:bg-muted/40 '"
                     :disabled="!activeSection"
                     @click="addItem(type)"
                   >
                     <component :is="typeMeta(type).icon" class="h-4 w-4 shrink-0 text-belle-600 dark:text-brand-400" stroke-width="1.75" />
                     <span class="min-w-0">
-                      <span class="block text-sm font-medium text-ink-900 dark:text-white">{{ typeMeta(type).title }}</span>
-                      <span class="block truncate text-xs text-ink-400 dark:text-zinc-500">{{ typeMeta(type).hint }}</span>
+                      <span class="block text-sm font-medium text-foreground">{{ typeMeta(type).title }}</span>
+                      <span class="block truncate text-xs text-muted-foreground">{{ typeMeta(type).hint }}</span>
                     </span>
                   </button>
                 </template>
@@ -607,18 +608,18 @@ function resolveLeave(confirmed) {
               :key="section.key"
               class="rounded-2xl border p-4 transition-all sm:p-5"
               :class="activeKey === section.key
-                ? 'border-belle-500 bg-white shadow-md ring-2 ring-belle-500/20 dark:border-brand-500 dark:bg-zinc-900 dark:shadow-[0_0_24px_-8px_var(--color-brand-500)] dark:ring-brand-500/25'
-                : 'cursor-pointer border-cream-300 bg-cream-50 shadow-sm hover:border-belle-300 dark:border-zinc-800 dark:bg-zinc-900/60 dark:hover:border-zinc-700'"
+                ? 'border-belle-500 bg-white shadow-md ring-2 ring-belle-500/20 dark:border-brand-500  dark:shadow-[0_0_24px_-8px_var(--color-brand-500)] dark:ring-brand-500/25'
+                : 'cursor-pointer border-border bg-card shadow-sm hover:border-belle-300   '"
               @click="focusSection(section.key)"
             >
               <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
                 <div class="min-w-0">
-                  <p v-if="activeKey === section.key" class="inline-flex items-center rounded-full bg-belle-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-brand-500 dark:text-zinc-950">
+                  <p v-if="activeKey === section.key" class="inline-flex items-center rounded-full bg-belle-600 px-2 py-0.5 text-xs font-medium text-white dark:bg-brand-500">
                     區塊 {{ index + 1 }} · 編輯中
                   </p>
-                  <p v-else class="text-xs font-medium text-ink-400 dark:text-zinc-500">區塊 {{ index + 1 }}</p>
-                  <h2 class="mt-0.5 truncate text-base font-semibold text-ink-900 dark:text-white">{{ section.title || '未命名區塊' }}</h2>
-                  <p v-if="section.description" class="mt-0.5 text-xs text-ink-400 dark:text-zinc-500">{{ section.description }}</p>
+                  <p v-else class="text-xs font-medium text-muted-foreground">區塊 {{ index + 1 }}</p>
+                  <h2 class="mt-0.5 truncate text-base font-semibold text-foreground">{{ section.title || '未命名區塊' }}</h2>
+                  <p v-if="section.description" class="mt-0.5 text-xs text-muted-foreground">{{ section.description }}</p>
                 </div>
                 <div class="flex shrink-0 items-center gap-1.5">
                   <Badge variant="outline">{{ presentationMeta(section.presentation).title }}</Badge>
@@ -633,7 +634,7 @@ function resolveLeave(confirmed) {
                 @update:selected-key="(key) => selectItem(section, key)"
                 @remove="(key) => removeItemByKey(section, key)"
               />
-              <p v-if="!(section.items ?? []).length" class="mt-2 text-center text-xs text-ink-400 dark:text-zinc-500">
+              <p v-if="!(section.items ?? []).length" class="mt-2 text-center text-xs text-muted-foreground">
                 從左邊的工具箱挑一種欄位加進來。
               </p>
             </article>
@@ -644,30 +645,30 @@ function resolveLeave(confirmed) {
             </div>
           </div>
 
-          <div v-else class="rounded-2xl border border-dashed border-cream-300 px-5 py-14 text-center dark:border-zinc-700">
-            <LayoutList class="mx-auto h-8 w-8 text-ink-400 dark:text-zinc-500" stroke-width="1.5" />
-            <p class="mt-3 text-sm font-semibold text-ink-700 dark:text-zinc-200">尚未建立表單區塊</p>
-            <p class="mt-1 text-xs text-ink-400 dark:text-zinc-500">先建立一個區塊，再從工具箱加入欄位。</p>
-            <Button type="button" class="mt-4 min-h-11" @click="addSection">
+          <div v-else class="rounded-2xl border border-dashed border-border px-5 py-14 text-center">
+            <LayoutList class="mx-auto h-8 w-8 text-muted-foreground" stroke-width="1.5" />
+            <p class="mt-3 text-sm font-semibold text-foreground">尚未建立表單區塊</p>
+            <p class="mt-1 text-xs text-muted-foreground">先建立一個區塊，再從工具箱加入欄位。</p>
+            <Button type="button" class="mt-4" @click="addSection">
               <Plus class="h-4 w-4" stroke-width="1.75" />新增第一個區塊
             </Button>
           </div>
 
           <!-- 右：設定面板，選什麼就設定什麼 -->
           <aside class="xl:sticky xl:top-20">
-            <div class="rounded-2xl border border-cream-300 bg-cream-50 p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <!-- 項目設定 -->
               <template v-if="selectedItem">
-                <div class="mb-4 flex items-center justify-between gap-2 border-b border-cream-300 pb-3 dark:border-zinc-800">
+                <div class="mb-4 flex items-center justify-between gap-2 border-b border-border pb-3">
                   <div class="flex min-w-0 items-center gap-2">
                     <component :is="typeMeta(selectedItem.type).icon" class="h-4 w-4 shrink-0 text-belle-600 dark:text-brand-400" stroke-width="1.75" />
-                    <h2 class="truncate text-base font-semibold text-ink-900 dark:text-white">{{ selectedItem.label || '未命名項目' }}</h2>
+                    <h2 class="truncate text-base font-semibold text-foreground">{{ selectedItem.label || '未命名項目' }}</h2>
                   </div>
                   <div class="flex shrink-0 items-center gap-0.5">
-                    <button type="button" class="flex h-8 w-7 items-center justify-center rounded text-ink-400 hover:text-ink-900 disabled:opacity-25 dark:text-zinc-500 dark:hover:text-white" :disabled="selectedIndex <= 0" aria-label="上移項目" @click="move(activeSection.items, selectedIndex, -1)">
+                    <button type="button" class="flex h-8 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="selectedIndex <= 0" aria-label="上移項目" @click="move(activeSection.items, selectedIndex, -1)">
                       <ChevronUp class="h-4 w-4" stroke-width="1.75" />
                     </button>
-                    <button type="button" class="flex h-8 w-7 items-center justify-center rounded text-ink-400 hover:text-ink-900 disabled:opacity-25 dark:text-zinc-500 dark:hover:text-white" :disabled="selectedIndex < 0 || selectedIndex === activeSection.items.length - 1" aria-label="下移項目" @click="move(activeSection.items, selectedIndex, 1)">
+                    <button type="button" class="flex h-8 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="selectedIndex < 0 || selectedIndex === activeSection.items.length - 1" aria-label="下移項目" @click="move(activeSection.items, selectedIndex, 1)">
                       <ChevronDown class="h-4 w-4" stroke-width="1.75" />
                     </button>
                   </div>
@@ -676,7 +677,7 @@ function resolveLeave(confirmed) {
                 <div class="space-y-4">
                   <div class="space-y-1.5">
                     <Label for="item-label" class="text-xs font-medium">項目名稱</Label>
-                    <Input id="item-label" v-model="selectedItem.label" class="min-h-11" />
+                    <Input id="item-label" v-model="selectedItem.label" />
                   </div>
 
                   <div class="space-y-1.5">
@@ -689,26 +690,26 @@ function resolveLeave(confirmed) {
                         class="flex min-h-10 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                         :class="selectedItem.type === type
                           ? 'border-belle-500 bg-belle-50 text-belle-700 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-300'
-                          : 'border-cream-300 text-ink-600 hover:border-belle-300 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-brand-500/50'"
+                          : 'border-border text-foreground hover:border-belle-300   dark:hover:border-brand-500/50'"
                         @click="selectedItem.type = type"
                       >
                         <component :is="typeMeta(type).icon" class="h-4 w-4 shrink-0" stroke-width="1.75" />
                         <span class="truncate">{{ typeMeta(type).title }}</span>
                       </button>
                     </div>
-                    <p v-if="ROLE_HINTS[selectedItem.role]" class="flex items-start gap-1.5 text-xs text-ink-500 dark:text-zinc-400">
+                    <p v-if="ROLE_HINTS[selectedItem.role]" class="flex items-start gap-1.5 text-xs text-muted-foreground">
                       <Info class="mt-0.5 h-3.5 w-3.5 shrink-0" stroke-width="1.75" />
                       {{ ROLE_HINTS[selectedItem.role] }}
                     </p>
                   </div>
 
                   <div class="grid grid-cols-2 gap-2">
-                    <div class="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-cream-300 px-3 dark:border-zinc-700">
-                      <span class="text-sm font-medium text-ink-700 dark:text-zinc-200">顯示</span>
+                    <div class="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-border px-3">
+                      <span class="text-sm font-medium text-foreground">顯示</span>
                       <Switch :model-value="selectedItem.enabled !== false" aria-label="在表單上顯示這個項目" @update:model-value="selectedItem.enabled = $event" />
                     </div>
-                    <div class="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-cream-300 px-3 dark:border-zinc-700">
-                      <span class="text-sm font-medium text-ink-700 dark:text-zinc-200">必填</span>
+                    <div class="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-border px-3">
+                      <span class="text-sm font-medium text-foreground">必填</span>
                       <Switch :model-value="selectedItem.required === true" aria-label="結案前必須完成" @update:model-value="selectedItem.required = $event" />
                     </div>
                   </div>
@@ -723,32 +724,32 @@ function resolveLeave(confirmed) {
                         class="flex min-h-10 items-center justify-center rounded-lg border px-2 text-sm font-medium transition-colors"
                         :class="(selectedItem.span ?? 'auto') === option.value
                           ? 'border-belle-500 bg-belle-50 text-belle-700 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-300'
-                          : 'border-cream-300 text-ink-600 hover:border-belle-300 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-brand-500/50'"
+                          : 'border-border text-foreground hover:border-belle-300   dark:hover:border-brand-500/50'"
                         :title="option.hint"
                         @click="selectedItem.span = option.value"
                       >{{ option.title }}</button>
                     </div>
-                    <p class="text-xs text-ink-400 dark:text-zinc-500">畫布較窄時欄數會自動收合，屆時「加寬」等同整排。</p>
+                    <p class="text-xs text-muted-foreground">畫布較窄時欄數會自動收合，屆時「加寬」等同整排。</p>
                   </div>
 
                   <div v-if="['number', 'measurement', 'lab'].includes(selectedItem.type)" class="space-y-1.5">
                     <Label for="item-unit" class="text-xs font-medium">單位</Label>
-                    <Input id="item-unit" v-model="selectedItem.unit" class="min-h-11" placeholder="例如：kg、°C、mg/dL" />
+                    <Input id="item-unit" v-model="selectedItem.unit" placeholder="例如：kg、°C、mg/dL" />
                   </div>
 
                   <template v-if="selectedItem.type === 'lab'">
                     <div class="space-y-1.5">
                       <Label for="item-group" class="text-xs font-medium">檢驗分組</Label>
-                      <Input id="item-group" v-model="selectedItem.group" class="min-h-11" list="lab-group-options" placeholder="留空即為未分組" />
+                      <Input id="item-group" v-model="selectedItem.group" list="lab-group-options" placeholder="留空即為未分組" />
                       <datalist id="lab-group-options">
                         <option v-for="group in labGroupOptions" :key="group" :value="group" />
                       </datalist>
-                      <p class="text-xs text-ink-400 dark:text-zinc-500">同一組的檢驗項目會在表單與報告上排在一起。</p>
+                      <p class="text-xs text-muted-foreground">同一組的檢驗項目會在表單與報告上排在一起。</p>
                     </div>
-                    <div class="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-cream-300 px-3 dark:border-zinc-700">
+                    <div class="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-border px-3">
                       <span class="min-w-0">
-                        <span class="block text-sm font-medium text-ink-700 dark:text-zinc-200">數值型項目</span>
-                        <span class="block text-xs text-ink-400 dark:text-zinc-500">可設參考範圍自動判讀</span>
+                        <span class="block text-sm font-medium text-foreground">數值型項目</span>
+                        <span class="block text-xs text-muted-foreground">可設參考範圍自動判讀</span>
                       </span>
                       <Switch :model-value="selectedItem.numeric !== false" aria-label="數值型項目" @update:model-value="selectedItem.numeric = $event" />
                     </div>
@@ -757,11 +758,11 @@ function resolveLeave(confirmed) {
                   <div v-if="['measurement', 'lab'].includes(selectedItem.type) && selectedItem.numeric !== false" class="space-y-1.5">
                     <Label class="text-xs font-medium">參考範圍</Label>
                     <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-                      <Input v-model="selectedItem.referenceMin" type="number" class="min-h-11" placeholder="下限" aria-label="參考範圍下限" />
-                      <span class="text-sm text-ink-400 dark:text-zinc-500">至</span>
-                      <Input v-model="selectedItem.referenceMax" type="number" class="min-h-11" placeholder="上限" aria-label="參考範圍上限" />
+                      <Input v-model="selectedItem.referenceMin" type="number" placeholder="下限" aria-label="參考範圍下限" />
+                      <span class="text-sm text-muted-foreground">至</span>
+                      <Input v-model="selectedItem.referenceMax" type="number" placeholder="上限" aria-label="參考範圍上限" />
                     </div>
-                    <p class="text-xs text-ink-400 dark:text-zinc-500">留空即不自動判讀正常或異常。</p>
+                    <p class="text-xs text-muted-foreground">留空即不自動判讀正常或異常。</p>
                   </div>
 
                   <div v-if="OPTION_TYPES.has(selectedItem.type)" class="space-y-1.5">
@@ -771,7 +772,6 @@ function resolveLeave(confirmed) {
                         <Input
                           :id="'item-option-' + index"
                           :model-value="option"
-                          class="min-h-11"
                           :placeholder="'選項 ' + (index + 1)"
                           :aria-label="'選項 ' + (index + 1)"
                           @update:model-value="setOption(index, $event)"
@@ -779,7 +779,7 @@ function resolveLeave(confirmed) {
                         />
                         <button
                           type="button"
-                          class="flex h-11 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-cream-100 hover:text-red-700 dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-red-300"
+                          class="flex h-11 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-red-700 dark:hover:text-red-300"
                           :aria-label="'刪除選項 ' + (index + 1)"
                           @click="removeOption(index)"
                         >
@@ -787,19 +787,19 @@ function resolveLeave(confirmed) {
                         </button>
                       </div>
                     </div>
-                    <p v-else class="text-xs text-ink-400 dark:text-zinc-500">還沒有選項，這個欄位在表單上會是空的。</p>
+                    <p v-else class="text-xs text-muted-foreground">還沒有選項，這個欄位在表單上會是空的。</p>
                     <Button type="button" variant="outline" size="sm" class="min-h-10 w-full" @click="addOption()">
                       <Plus class="h-4 w-4" stroke-width="1.75" />新增選項
                     </Button>
-                    <p class="text-xs text-ink-400 dark:text-zinc-500">按 Enter 可以直接接著加下一個；留空的選項會在儲存時移除。</p>
+                    <p class="text-xs text-muted-foreground">按 Enter 可以直接接著加下一個；留空的選項會在儲存時移除。</p>
                   </div>
 
                   <div v-if="['text', 'textarea', 'number', 'date'].includes(selectedItem.type)" class="space-y-1.5">
                     <Label for="item-placeholder" class="text-xs font-medium">輸入提示</Label>
-                    <Input id="item-placeholder" v-model="selectedItem.placeholder" class="min-h-11" placeholder="選填，顯示在空白欄位裡" />
+                    <Input id="item-placeholder" v-model="selectedItem.placeholder" placeholder="選填，顯示在空白欄位裡" />
                   </div>
 
-                  <div class="border-t border-cream-300 pt-3 dark:border-zinc-800">
+                  <div class="border-t border-border pt-3">
                     <Button
                       type="button"
                       variant="outline"
@@ -815,38 +815,38 @@ function resolveLeave(confirmed) {
 
               <!-- 區塊設定 -->
               <template v-else-if="activeSection">
-                <div class="mb-4 flex items-center justify-between gap-2 border-b border-cream-300 pb-3 dark:border-zinc-800">
-                  <h2 class="truncate text-base font-semibold text-ink-900 dark:text-white">區塊設定</h2>
+                <div class="mb-4 flex items-center justify-between gap-2 border-b border-border pb-3">
+                  <h2 class="truncate text-base font-semibold text-foreground">區塊設定</h2>
                   <Switch :model-value="activeSection.enabled !== false" aria-label="啟用這個區塊" @update:model-value="activeSection.enabled = $event" />
                 </div>
 
                 <div class="space-y-4">
                   <div class="space-y-1.5">
                     <Label for="section-title" class="text-xs font-medium">區塊名稱</Label>
-                    <Input id="section-title" v-model="activeSection.title" class="min-h-11" />
+                    <Input id="section-title" v-model="activeSection.title" />
                   </div>
                   <div class="space-y-1.5">
                     <Label for="section-presentation" class="text-xs font-medium">呈現方式</Label>
                     <Select v-model="activeSection.presentation">
-                      <SelectTrigger id="section-presentation" class="min-h-11 w-full"><SelectValue /></SelectTrigger>
+                      <SelectTrigger id="section-presentation" class="w-full"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem v-for="option in PRESENTATION_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p class="text-xs leading-relaxed text-ink-400 dark:text-zinc-500">
+                    <p class="text-xs leading-relaxed text-muted-foreground">
                       {{ presentationMeta(activeSection.presentation).hint }}它決定工具箱提供哪些欄位；既有項目會保留原本的種類。
                     </p>
                   </div>
                   <div class="space-y-1.5">
                     <Label for="section-description" class="text-xs font-medium">提示說明</Label>
-                    <Input id="section-description" v-model="activeSection.description" class="min-h-11" placeholder="選填，顯示在區塊標題下方" />
+                    <Input id="section-description" v-model="activeSection.description" placeholder="選填，顯示在區塊標題下方" />
                   </div>
                   <div class="space-y-1.5">
                     <Label for="section-report-title" class="text-xs font-medium">PDF 報告標題</Label>
-                    <Input id="section-report-title" v-model="activeSection.reportTitle" class="min-h-11" placeholder="留空即沿用區塊名稱" />
+                    <Input id="section-report-title" v-model="activeSection.reportTitle" placeholder="留空即沿用區塊名稱" />
                   </div>
 
-                  <div class="border-t border-cream-300 pt-3 dark:border-zinc-800">
+                  <div class="border-t border-border pt-3">
                     <Button
                       type="button"
                       variant="outline"
@@ -861,8 +861,8 @@ function resolveLeave(confirmed) {
               </template>
 
               <div v-else class="py-10 text-center">
-                <MousePointerClick class="mx-auto h-7 w-7 text-ink-400 dark:text-zinc-500" stroke-width="1.5" />
-                <p class="mt-3 text-sm font-medium text-ink-700 dark:text-zinc-200">選一個區塊開始編輯</p>
+                <MousePointerClick class="mx-auto h-7 w-7 text-muted-foreground" stroke-width="1.5" />
+                <p class="mt-3 text-sm font-medium text-foreground">選一個區塊開始編輯</p>
               </div>
             </div>
           </aside>
@@ -870,29 +870,29 @@ function resolveLeave(confirmed) {
       </div>
 
       <div v-else class="space-y-5">
-        <div class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+        <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 class="text-base font-semibold text-ink-900 dark:text-white">醫師填寫畫面預覽</h2>
-              <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">僅供預覽，這裡輸入的內容不會被儲存。</p>
+              <h2 class="text-base font-semibold text-foreground">醫師填寫畫面預覽</h2>
+              <p class="mt-1 text-sm text-muted-foreground">僅供預覽，這裡輸入的內容不會被儲存。</p>
             </div>
             <Badge variant="outline">{{ visibleSections.length }} 個啟用區塊</Badge>
           </div>
         </div>
 
         <div v-if="visibleSections.length" class="space-y-5">
-          <div v-for="(section, index) in visibleSections" :key="section.key" class="rounded-2xl border border-cream-300 bg-cream-50 p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+          <div v-for="(section, index) in visibleSections" :key="section.key" class="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div class="mb-4 flex items-start gap-3">
               <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">{{ index + 1 }}</span>
               <div>
-                <h3 class="text-sm font-semibold text-ink-900 dark:text-white">{{ section.title || '未命名區塊' }}</h3>
-                <p v-if="section.description" class="mt-0.5 text-xs text-ink-500 dark:text-zinc-400">{{ section.description }}</p>
+                <h3 class="text-sm font-semibold text-foreground">{{ section.title || '未命名區塊' }}</h3>
+                <p v-if="section.description" class="mt-0.5 text-xs text-muted-foreground">{{ section.description }}</p>
               </div>
             </div>
             <FormSectionPreview :section="section" />
           </div>
         </div>
-        <p v-else class="rounded-2xl border border-dashed border-cream-300 px-5 py-14 text-center text-sm text-ink-400 dark:border-zinc-700 dark:text-zinc-500">
+        <p v-else class="rounded-2xl border border-dashed border-border px-5 py-14 text-center text-sm text-muted-foreground">
           目前沒有可預覽的啟用區塊。
         </p>
       </div>

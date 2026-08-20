@@ -30,28 +30,28 @@ function remove(phrase) {
     <DialogContent class="sm:max-w-lg">
       <div class="space-y-1.5 p-6 pb-4">
         <DialogTitle>{{ title }}</DialogTitle>
-        <DialogDescription class="text-sm text-ink-500 dark:text-zinc-400">
+        <DialogDescription class="text-sm text-muted-foreground">
           點一句就接到欄位現有內容的後面。用得多的排在前面。
         </DialogDescription>
       </div>
 
       <div class="max-h-96 space-y-1.5 overflow-y-auto px-6 pb-2">
-        <p v-if="!list.length" class="py-6 text-center text-sm text-ink-400 dark:text-zinc-500">
+        <p v-if="!list.length" class="py-6 text-center text-sm text-muted-foreground">
           這個欄位還沒有常用語。
         </p>
         <div
           v-for="phrase in list"
           :key="phrase._id"
-          class="flex items-start gap-2 rounded-xl border border-cream-300 bg-white transition-colors hover:border-belle-400 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-brand-500"
+          class="flex items-start gap-2 rounded-xl border border-border bg-white transition-colors hover:border-belle-400 dark:hover:border-brand-500"
         >
           <button
             type="button"
-            class="min-w-0 flex-1 whitespace-pre-wrap px-3 py-2.5 text-left text-sm text-ink-800 dark:text-zinc-200"
+            class="min-w-0 flex-1 whitespace-pre-wrap px-3 py-2.5 text-left text-sm text-foreground"
             @click="pick(phrase)"
           >{{ phrase.text }}</button>
           <button
             type="button"
-            class="mr-1 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:text-zinc-500 dark:hover:bg-red-950/50 dark:hover:text-red-400"
+            class="mr-1 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/50 dark:hover:text-red-400"
             :aria-label="`刪除常用語：${phrase.text}`"
             @click="remove(phrase)"
           >
@@ -61,7 +61,7 @@ function remove(phrase) {
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" class="min-h-11 px-5" @click="closePicker">關閉</Button>
+        <Button type="button" variant="outline" class="px-5" @click="closePicker">關閉</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>

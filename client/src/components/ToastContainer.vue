@@ -39,7 +39,7 @@ const typeConfig = {
       <div
         v-for="toast in toasts"
         :key="toast.id"
-        class="pointer-events-auto relative flex items-start gap-3.5 overflow-hidden rounded-2xl border border-cream-300 bg-cream-50 p-4 shadow-lg shadow-ink-900/15 dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-black/60"
+        class="pointer-events-auto relative flex items-start gap-3.5 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-lg shadow-ink-900/15 dark:shadow-black/60"
       >
         <!-- Top accent line -->
         <div class="absolute inset-x-0 top-0 h-1" :class="typeConfig[toast.type]?.topBar || typeConfig.success.topBar"></div>
@@ -53,14 +53,14 @@ const typeConfig = {
 
         <!-- Text Content -->
         <div class="min-w-0 flex-1 space-y-0.5 pr-2">
-          <p class="text-sm font-semibold text-ink-900 dark:text-white">{{ toast.title }}</p>
-          <p v-if="toast.message" class="text-xs leading-relaxed text-ink-500 dark:text-zinc-400">{{ toast.message }}</p>
+          <p class="text-sm font-semibold text-foreground">{{ toast.title }}</p>
+          <p v-if="toast.message" class="text-xs leading-relaxed text-muted-foreground">{{ toast.message }}</p>
         </div>
 
         <!-- Close button -->
         <button
           type="button"
-          class="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full border border-cream-300 bg-cream-100 text-ink-600 shadow-sm transition-colors hover:bg-cream-200 hover:text-ink-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700 dark:hover:text-white"
+          class="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted/40 text-foreground shadow-sm transition-colors hover:bg-muted/60 hover:text-foreground dark:hover:text-white"
           aria-label="關閉通知"
           @click="removeToast(toast.id)"
         >

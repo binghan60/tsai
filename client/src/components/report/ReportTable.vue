@@ -40,11 +40,11 @@ function groupsOf(run) {
               <span class="font-medium text-stone-800">{{ finding.label }}</span>
               <span :class="finding.status === 'abnormal' ? 'text-red-700' : finding.status === 'normal' ? 'text-emerald-700' : 'text-stone-500'">
                 {{ statusText(finding.status) }}
-                <small v-if="finding.statusSource === 'auto'" class="ml-1 text-[10px] text-stone-500">自動</small>
+                <small v-if="finding.statusSource === 'auto'" class="ml-1 text-xs text-stone-500">自動</small>
               </span>
               <span class="text-stone-700">
                 <strong class="font-medium">{{ labValueLabel(finding) }}</strong>
-                <small v-if="referenceLabel(finding)" class="mt-0.5 block text-[11px] text-stone-500">參考 {{ referenceLabel(finding) }}</small>
+                <small v-if="referenceLabel(finding)" class="mt-0.5 block text-xs text-stone-500">參考 {{ referenceLabel(finding) }}</small>
               </span>
               <span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '' }}</span>
             </div>

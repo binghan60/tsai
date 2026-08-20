@@ -28,10 +28,10 @@ const others = computed(() => (props.section.items ?? []).filter((item) => famil
         <dd class="mt-1 text-sm font-semibold text-stone-900">{{ item.display }}</dd>
         <dd
           v-if="item.status && item.status !== 'not_checked'"
-          class="mt-1 text-[11px] font-medium"
+          class="mt-1 text-xs font-medium"
           :class="item.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'"
         >{{ item.status === 'abnormal' ? '異常' : '正常' }}・自動</dd>
-        <dd v-if="referenceLabel(item)" class="mt-0.5 text-[10px] text-stone-500">參考 {{ referenceLabel(item) }}</dd>
+        <dd v-if="referenceLabel(item)" class="mt-0.5 text-xs text-stone-500">參考 {{ referenceLabel(item) }}</dd>
       </div>
     </dl>
     <div v-if="others.length" class="mt-4 grid gap-4 sm:grid-cols-2">

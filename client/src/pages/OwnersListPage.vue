@@ -9,6 +9,9 @@ import { http } from '../api/http';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import EmptyState from '../components/EmptyState.vue';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import ListSkeleton from '../components/ListSkeleton.vue';
 
 import { useToast } from '../composables/useToast';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
@@ -148,46 +151,46 @@ onMounted(() => {
   <section class="mx-auto max-w-7xl space-y-5">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 class="text-xl font-semibold text-ink-900 dark:text-white">飼主資料</h1>
-        <p class="mt-1 text-sm text-ink-500 dark:text-zinc-400">管理聯絡資訊與名下寵物。</p>
+        <h1 class="text-xl font-semibold text-foreground">飼主資料</h1>
+        <p class="mt-1 text-sm text-muted-foreground">管理聯絡資訊與名下寵物。</p>
       </div>
-      <Button type="button" class="min-h-11" @click="openCreate">+ 新增飼主</Button>
+      <Button type="button" @click="openCreate">+ 新增飼主</Button>
     </div>
 
     <SearchPanel id="owner-search" v-model="query" label="搜尋飼主" placeholder="輸入姓名或電話" />
 
-    <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300">{{ error }}</p>
-    <p v-else-if="loading" class="text-sm text-ink-500 dark:text-zinc-400" role="status">載入飼主資料…</p>
+    <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+    <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <p class="text-xs text-ink-400 dark:text-zinc-400">共 {{ owners.length }} 位飼主</p>
+      <p class="text-xs tabular-nums text-muted-foreground">共 {{ owners.length }} 位飼主</p>
 
-      <Card v-if="owners.length" class="hidden gap-0 overflow-hidden border-cream-300 py-0 shadow-sm dark:border-zinc-800 md:block">
+      <Card v-if="owners.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm xl:block">
         <Table>
           <TableHeader>
-            <TableRow class="border-cream-300 text-ink-500 dark:border-zinc-800 dark:text-zinc-400"><TableHead class="px-5 py-3 font-medium">姓名</TableHead><TableHead class="px-5 py-3 font-medium">電話</TableHead><TableHead class="px-5 py-3 font-medium">Email</TableHead><TableHead class="px-5 py-3 text-right font-medium">操作</TableHead></TableRow>
+            <TableRow class="border-border text-muted-foreground"><TableHead class="font-medium">姓名</TableHead><TableHead class="font-medium">電話</TableHead><TableHead class="font-medium">Email</TableHead><TableHead class="text-right font-medium">操作</TableHead></TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-for="owner in owners" :key="owner._id" class="border-cream-200 dark:border-zinc-800 dark:hover:bg-zinc-800/40">
-              <TableCell class="px-5 py-3"><router-link :to="`/owners/${owner._id}`" class="group flex min-h-11 items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-xs font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span><span class="font-medium text-belle-600 group-hover:text-belle-700 dark:text-brand-400">{{ owner.name }}</span></router-link></TableCell>
-              <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300"><span class="flex items-center gap-2"><Phone class="h-4 w-4 text-ink-400 dark:text-zinc-400" />{{ owner.phone }}</span></TableCell>
-              <TableCell class="px-5 py-3 text-ink-600 dark:text-zinc-300">{{ owner.email || '—' }}</TableCell>
-              <TableCell class="px-5 py-3"><div class="flex justify-end gap-1"><Button type="button" variant="ghost" size="icon" class="h-11 w-11" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" class="h-11 w-11" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div></TableCell>
+            <TableRow v-for="owner in owners" :key="owner._id" class="border-border">
+              <TableCell ><router-link :to="`/owners/${owner._id}`" class="group flex items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-xs font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span><span class="font-medium text-belle-600 group-hover:text-belle-700 dark:text-brand-400">{{ owner.name }}</span></router-link></TableCell>
+              <TableCell class="tabular-nums text-foreground"><span class="flex items-center gap-2"><Phone class="h-4 w-4 text-muted-foreground" />{{ owner.phone }}</span></TableCell>
+              <TableCell class="text-foreground">{{ owner.email || '—' }}</TableCell>
+              <TableCell ><div class="flex justify-end gap-1"><Button type="button" variant="ghost" size="icon" class="h-11 w-11" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" class="h-11 w-11" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div></TableCell>
             </TableRow>
           </TableBody>
         </Table>
       </Card>
 
-      <div v-if="owners.length" class="space-y-3 md:hidden">
-        <Card v-for="owner in owners" :key="owner._id" class="border-cream-300 p-4 dark:border-zinc-800">
+      <div v-if="owners.length" class="space-y-3 xl:hidden">
+        <Card v-for="owner in owners" :key="owner._id" class="p-4">
           <div class="flex items-start gap-3">
-            <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span><span class="min-w-0"><span class="block font-semibold text-ink-900 dark:text-white">{{ owner.name }}</span><span class="mt-0.5 flex items-center gap-1.5 text-sm text-ink-500 dark:text-zinc-400"><Phone class="h-3.5 w-3.5" />{{ owner.phone }}</span><span v-if="owner.email" class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-ink-400 dark:text-zinc-400"><Mail class="h-3.5 w-3.5" />{{ owner.email }}</span></span></router-link>
+            <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span><span class="min-w-0"><span class="block font-semibold text-foreground">{{ owner.name }}</span><span class="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground"><Phone class="h-3.5 w-3.5" />{{ owner.phone }}</span><span v-if="owner.email" class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground"><Mail class="h-3.5 w-3.5" />{{ owner.email }}</span></span></router-link>
             <div class="flex shrink-0"><Button type="button" variant="ghost" size="icon" class="h-11 w-11" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" class="h-11 w-11" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div>
           </div>
         </Card>
       </div>
 
-      <div v-if="owners.length === 0" class="rounded-2xl border border-dashed border-cream-300 px-5 py-14 text-center dark:border-zinc-800"><Users class="mx-auto mb-2 h-8 w-8 text-ink-400 dark:text-zinc-500" /><p class="text-sm text-ink-500 dark:text-zinc-400">找不到符合條件的飼主</p></div>
+      <EmptyState v-if="owners.length === 0" :icon="Users" title="找不到符合條件的飼主" />
     </template>
 
     <OwnerFormDialog v-if="editTarget" title="編輯飼主資料" submit-label="儲存" :initial-value="{ name: editTarget.name, phone: editTarget.phone, email: editTarget.email ?? '' }" :submitting="editSaving" :error-message="editError" @submit="submitEdit" @close="editTarget = null" />

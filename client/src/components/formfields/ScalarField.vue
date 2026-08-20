@@ -57,7 +57,7 @@ function toggle(option, checked) {
       :placeholder="item.placeholder"
     />
     <Select v-else-if="item.type === 'select'" v-model="value">
-      <SelectTrigger :id="inputId" class="min-h-11 w-full"><SelectValue /></SelectTrigger>
+      <SelectTrigger :id="inputId" class="w-full"><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem v-for="(option, index) in options" :key="index" :value="option">{{ option }}</SelectItem>
       </SelectContent>
@@ -68,11 +68,11 @@ function toggle(option, checked) {
       role="group"
       :aria-labelledby="`${inputId}-label`"
     >
-      <p v-if="!options.length" class="min-h-11 py-3 text-sm text-ink-400 dark:text-zinc-500">尚未設定選項</p>
+      <p v-if="!options.length" class="min-h-11 py-3 text-sm text-muted-foreground">尚未設定選項</p>
       <label
         v-for="(option, index) in options"
         :key="index"
-        class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-ink-800 dark:text-zinc-200"
+        class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-foreground"
       >
         <input
           :id="index === 0 ? inputId : undefined"
@@ -90,7 +90,6 @@ function toggle(option, checked) {
       v-else
       :id="inputId"
       v-model="value"
-      class="min-h-11"
       :type="inputType"
       :min="item.min ?? undefined"
       :max="item.max ?? undefined"

@@ -4,7 +4,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
+  /* Variable 版本是刻意的：微軟正黑體等系統中文字體只有 Regular/Bold 兩級，
+     font-medium(500) 會退回 400、font-semibold(600) 會跳成 700 或被合成，
+     介面靠字重建立的階層在中文上等於不存在。變數字體才有真正的 100–900。 */
+  --font-sans: 'Noto Sans TC Variable', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
 
   /* Brand accent: brass and stage-light gold. Use for highlights, not primary actions. */
   --color-brand-50: #fff7df;
@@ -47,6 +50,30 @@
   --radius-md: 0.625rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+
+  /* 後台介面字級：Body 16px、Caption 下限 14px。
+     原本的 12px 之所以難讀，主因是那時 Noto Sans TC 根本沒載進來，實際渲染的是
+     微軟正黑體——12px 加上沒有 hinting，中文筆畫會黏在一起。字體修好之後，
+     真正需要往上抬的是 Body（14→16），Caption 停在 14 就夠。
+
+     一度把 xs 也拉到 16px，但那會讓 Caption 與 Body 同尺寸，「這是次要資訊」
+     就只剩顏色一個訊號能表達，時間戳記和主要內容看起來一樣重。留 14px 這一階，
+     階層才有尺寸＋顏色兩個訊號。這也是中文後台的慣例尺度（Ant Design 同樣是
+     12/14/16，body 14）——這裡把 body 抬到 16，比慣例再寬鬆一階。
+
+     行高一律自己指定，不吃 Tailwind 預設——那組值是為拉丁字母調的
+     （text-sm 是 1.43 倍），中文方塊字需要 1.6 以上才不會擠成一片。 */
+     /* 最小字14px，如果要改成16px用1rem */
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.6;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.75;
+  --text-base: 1.125rem;
+  --text-base--line-height: 1.6;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.4;
 }
 
 /* Semantic component tokens: the source of truth for shared UI components. */
@@ -151,50 +178,30 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
+    /* 原本疊了五層漸層，加上 .belle-light-shell 的五層與一個 ::before，
+       背景一直在動；而卡片(#fff8ea)對底色(#efe2c1)的明度差本來就小，
+       卡片浮不起來。留兩層定調，其餘對比讓給內容。 */
     background-image:
-      linear-gradient(112deg, transparent 0 18%, color-mix(in oklab, var(--color-brand-200) 42%, transparent) 28%, transparent 42%),
-      linear-gradient(128deg, transparent 0 55%, color-mix(in oklab, var(--color-brand-400) 24%, transparent) 64%, transparent 76%),
-      radial-gradient(circle at 12% 7%, color-mix(in oklab, var(--color-brand-300) 36%, transparent) 0, transparent 30rem),
-      radial-gradient(circle at 88% 16%, color-mix(in oklab, var(--color-belle-700) 18%, transparent) 0, transparent 27rem),
-      radial-gradient(circle at 52% 100%, color-mix(in oklab, var(--color-ink-700) 18%, transparent) 0, transparent 32rem);
+      radial-gradient(circle at 12% 7%, color-mix(in oklab, var(--color-brand-300) 22%, transparent) 0, transparent 32rem),
+      radial-gradient(circle at 88% 16%, color-mix(in oklab, var(--color-belle-700) 10%, transparent) 0, transparent 30rem);
   }
 }
 
+/* 同樣從五層收到兩層：一層頂部的光、一層整體的底。
+   ::before 那層額外的斜向反光整個拿掉了——它疊在上面幾乎看不出來，
+   但每次捲動都要重新合成。 */
 .belle-light-shell {
   position: relative;
   isolation: isolate;
   background:
-    linear-gradient(115deg, transparent 0 16%, rgb(255 247 223 / 0.46) 24%, rgb(223 184 86 / 0.22) 31%, transparent 45%),
-    linear-gradient(137deg, transparent 0 58%, rgb(201 154 53 / 0.2) 66%, transparent 78%),
-    radial-gradient(ellipse at 30% -8%, rgb(255 250 240 / 0.72) 0, rgb(243 230 201 / 0.3) 24rem, transparent 42rem),
-    radial-gradient(ellipse at 94% 12%, rgb(95 37 48 / 0.22) 0, transparent 34rem),
+    radial-gradient(ellipse at 30% -8%, rgb(255 250 240 / 0.6) 0, rgb(243 230 201 / 0.22) 24rem, transparent 42rem),
     linear-gradient(180deg, rgb(239 226 193 / 0.92), rgb(239 226 193 / 0.76));
 }
 
 .dark .belle-light-shell {
   background:
-    linear-gradient(116deg, transparent 0 18%, rgb(201 154 53 / 0.18) 27%, rgb(173 119 39 / 0.1) 35%, transparent 48%),
-    linear-gradient(139deg, transparent 0 54%, rgb(216 132 117 / 0.12) 63%, transparent 76%),
-    radial-gradient(ellipse at 26% -10%, rgb(173 119 39 / 0.28) 0, transparent 31rem),
-    radial-gradient(ellipse at 92% 14%, rgb(95 37 48 / 0.42) 0, transparent 34rem),
+    radial-gradient(ellipse at 26% -10%, rgb(173 119 39 / 0.22) 0, transparent 31rem),
     linear-gradient(180deg, rgb(11 18 24 / 0.97), rgb(11 18 24 / 0.9));
-}
-
-.belle-light-shell::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    linear-gradient(104deg, transparent 0 12%, rgb(255 250 240 / 0.38) 17%, rgb(223 184 86 / 0.15) 23%, transparent 32%),
-    linear-gradient(151deg, transparent 0 68%, rgb(255 241 234 / 0.22) 73%, transparent 84%);
-}
-
-.dark .belle-light-shell::before {
-  background:
-    linear-gradient(104deg, transparent 0 12%, rgb(247 232 184 / 0.18) 17%, rgb(201 154 53 / 0.12) 24%, transparent 34%),
-    linear-gradient(151deg, transparent 0 66%, rgb(216 132 117 / 0.11) 73%, transparent 84%);
 }
 
 .belle-sidebar {
@@ -256,6 +263,21 @@ select:focus-visible {
 /* 基本量測：使用元件本身的 focus 邊框，避免 input 內層外框錯位。 */
 .measurement-field input:focus-visible {
   outline: none;
+}
+
+/* 報告紙面走自己的字級尺度，不跟著後台的 16px 下限走。
+   兩個理由：一、它是 A4 列印文件不是螢幕介面，放大會直接改變分頁位置，
+   而 PDF 是要寄給飼主的正式文件；二、report/* 那組元件與後台共用
+   text-xs/text-sm，沒有這層作用域，改 @theme 就會連紙面一起放大。
+   紙面外的操作列與 print:hidden 橫幅不在這個作用域內，會跟著後台放大——
+   那些是給操作者看的，本來就該大。 */
+.report-sheet {
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.6;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
 }
 
 @page {

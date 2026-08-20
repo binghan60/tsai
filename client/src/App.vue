@@ -70,7 +70,7 @@ watch(
             </span>
             <span class="min-w-0 flex-1">
               <span class="block truncate font-semibold">謙華動物醫院</span>
-              <span class="block truncate text-xs text-muted-foreground">健檢與報告</span>
+              <span class="block truncate text-xs text-sidebar-foreground/70">健檢與報告</span>
             </span>
           </router-link>
         </div>
@@ -78,19 +78,19 @@ watch(
         <div class="border-b border-sidebar-border p-3">
           <button
             type="button"
-            class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             aria-label="搜尋飼主、寵物或病歷"
             @click="openGlobalSearch"
           >
             <Search class="h-4 w-4 shrink-0" stroke-width="1.9" />
             <span class="truncate">搜尋飼主、寵物或病歷</span>
-            <kbd class="ml-auto shrink-0 rounded border border-sidebar-border px-1.5 py-0.5 text-xs text-muted-foreground">Ctrl K</kbd>
+            <kbd class="ml-auto shrink-0 rounded border border-sidebar-border px-1.5 py-0.5 text-xs text-sidebar-foreground/70">Ctrl K</kbd>
           </button>
         </div>
 
         <nav class="flex-1 space-y-6 px-3 py-4" aria-label="主要導覽">
           <div>
-            <p class="px-2 pb-2 text-xs font-medium text-muted-foreground">平台</p>
+            <p class="px-2 pb-2 text-xs font-medium text-sidebar-foreground/70">平台</p>
             <router-link
               v-for="item in navItems"
               :key="item.to"
@@ -123,7 +123,7 @@ watch(
             type="button"
             variant="outline"
             size="icon"
-            class="min-h-11 min-w-11 lg:hidden"
+            class="min-w-11 lg:hidden"
             aria-label="開啟導覽選單"
             @click="mobileOpen = true"
           >
@@ -134,7 +134,7 @@ watch(
             <p class="truncate text-sm font-medium text-foreground">{{ activeTitle }}</p>
           </div>
 
-          <button type="button" aria-label="搜尋飼主、寵物或病歷" class="hidden min-h-11 min-w-72 items-center rounded-md border border-input bg-card/70 px-3 text-sm text-muted-foreground shadow-sm hover:border-brand-400 hover:text-primary dark:bg-card/70 dark:hover:border-brand-500/70 dark:hover:text-brand-300 md:flex" @click="openGlobalSearch">
+          <button type="button" aria-label="搜尋飼主、寵物或病歷" class="hidden min-h-11 min-w-72 items-center rounded-lg border border-input bg-card/70 px-3 text-sm text-muted-foreground shadow-sm hover:border-brand-400 hover:text-primary dark:bg-card/70 dark:hover:border-brand-500/70 dark:hover:text-brand-300 md:flex" @click="openGlobalSearch">
             <Search class="mr-2 h-4 w-4" stroke-width="1.75" />
             <span class="py-2">搜尋飼主、寵物或病歷</span>
           </button>
@@ -143,7 +143,7 @@ watch(
             type="button"
             variant="outline"
             size="icon"
-            class="min-h-11 min-w-11 lg:hidden"
+            class="min-w-11 lg:hidden"
             :aria-label="isDark ? '切換淺色模式' : '切換深色模式'"
             @click="toggleTheme"
           >
@@ -163,7 +163,7 @@ watch(
                 </span>
                 <span class="min-w-0 flex-1">
                   <span class="block truncate font-semibold">謙華動物醫院</span>
-                  <span class="block truncate text-xs text-muted-foreground">健檢與報告</span>
+                  <span class="block truncate text-xs text-sidebar-foreground/70">健檢與報告</span>
                 </span>
               </router-link>
             </div>

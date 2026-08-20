@@ -48,8 +48,8 @@ const referenceText = computed(() => labRangeLabel(props.item));
           :aria-label="`${item.label}備註`"
           :required="entry.status === 'abnormal'"
           :placeholder="entry.status === 'abnormal' ? '請描述異常' : '備註（選填）'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-belle-500 focus:outline-none dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-          :class="entry.status === 'abnormal' && !entry.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-cream-300 dark:border-zinc-700'"
+          class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+          :class="entry.status === 'abnormal' && !entry.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
         />
         <QuickPhrases v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" />
       </div>
@@ -68,7 +68,7 @@ const referenceText = computed(() => labRangeLabel(props.item));
           inputmode="decimal"
           :aria-label="`${item.label}數值`"
           :placeholder="entry.numeric === false ? '結果描述（選填）' : '檢驗數值'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border border-cream-300 bg-white px-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-belle-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+          class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
           @input="entry.numeric !== false && autoJudgeLab(entry, $event.target.value)"
         />
         <QuickPhrases
@@ -84,8 +84,8 @@ const referenceText = computed(() => labRangeLabel(props.item));
           :aria-label="`${item.label}備註`"
           :required="entry.status === 'abnormal'"
           :placeholder="entry.status === 'abnormal' ? '請描述異常' : '備註（選填）'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-ink-900 placeholder:text-ink-400 focus:border-belle-500 focus:outline-none dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500"
-          :class="entry.status === 'abnormal' && !entry.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-cream-300 dark:border-zinc-700'"
+          class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+          :class="entry.status === 'abnormal' && !entry.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
         />
         <QuickPhrases v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" />
         <p v-if="referenceText" class="text-xs text-emerald-700 dark:text-emerald-300">參考 {{ referenceText }}</p>
@@ -98,7 +98,7 @@ const referenceText = computed(() => labRangeLabel(props.item));
     <Input
       :id="inputId"
       :model-value="valueFor(item)"
-      class="measurement-field min-h-11"
+      class="measurement-field"
       type="number"
       :min="item.min ?? undefined"
       :max="item.max ?? undefined"
@@ -106,7 +106,7 @@ const referenceText = computed(() => labRangeLabel(props.item));
       @update:model-value="setValue(item, $event); autoJudgeMeasurement(item, $event)"
     />
     <div class="mt-1.5 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">
-      <span v-if="referenceText" class="text-ink-500 dark:text-zinc-400">參考 {{ referenceText }}</span>
+      <span v-if="referenceText" class="text-muted-foreground">參考 {{ referenceText }}</span>
       <span
         v-if="assessment?.status && assessment.status !== 'not_checked'"
         class="rounded-full px-2 py-0.5 font-medium"

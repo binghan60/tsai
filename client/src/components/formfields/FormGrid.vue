@@ -23,13 +23,13 @@ const runs = computed(() => sectionRuns(props.section.items, (item) => item.type
         <div v-for="metric in run.items" :key="metric.key" :class="spanClass(metric, 'sm')">
           <SelectableItem :item-key="metric.key">
           <div>
-            <Label :for="`record-${metric.key}`" class="text-xs font-medium text-ink-500 dark:text-zinc-400">
-              {{ metric.label }}<span v-if="metric.unit" class="text-ink-400 dark:text-zinc-500"> ({{ metric.unit }})</span>
+            <Label :for="`record-${metric.key}`" class="text-xs font-medium text-muted-foreground">
+              {{ metric.label }}<span v-if="metric.unit" class="text-muted-foreground"> ({{ metric.unit }})</span>
             </Label>
             <Input
               :id="`record-${metric.key}`"
               :model-value="valueFor(metric)"
-              class="measurement-field mt-1.5 min-h-11"
+              class="measurement-field mt-1.5"
               type="number"
               :min="metric.min ?? undefined"
               :max="metric.max ?? undefined"
@@ -37,7 +37,7 @@ const runs = computed(() => sectionRuns(props.section.items, (item) => item.type
               @update:model-value="setValue(metric, $event); autoJudgeMeasurement(metric, $event)"
             />
             <div class="mt-2 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">
-              <span v-if="labRangeLabel(metric)" class="text-ink-500 dark:text-zinc-400">參考 {{ labRangeLabel(metric) }}</span>
+              <span v-if="labRangeLabel(metric)" class="text-muted-foreground">參考 {{ labRangeLabel(metric) }}</span>
               <span
                 v-if="measurementAssessment(metric)?.status !== 'not_checked'"
                 class="rounded-full px-2 py-0.5 font-medium"

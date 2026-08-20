@@ -68,6 +68,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 | UI 元件 | reka-ui + shadcn-vue 風格 | 元件在 `client/src/components/ui/`，可直接改 |
 | CSS | Tailwind CSS v4 | `@tailwindcss/vite`，設定寫在 `client/src/style.css` 的 `@theme`（CSS-first，無 `tailwind.config.js`） |
 | 圖示 | `@lucide/vue` | **不是** `lucide-vue-next`（已棄用） |
+| 字體 | `@fontsource-variable/noto-sans-tc` | 自架不走 CDN，理由見第七節 |
 | 表單驗證 | vee-validate | |
 | 後端 | Node.js + Express | 單人使用，不需要 Nest.js 的架構開銷 |
 | 資料庫 | MongoDB + Mongoose | |
@@ -175,27 +176,52 @@ GET    /api/health
 
 - **明暗主題**：後台管理頁面支援明暗切換，側邊欄最下方有切換鈕，狀態存 `localStorage`、預設跟隨系統。共用邏輯在 `client/src/composables/useTheme.js`，深淺色用 Tailwind 的 `dark:` variant（`@custom-variant dark` 定義在 `style.css`，對應 `<html class="dark">`）。
   - **淺色 = 法國美好年代（Belle Époque）風格**：酒紅主色 `belle`(50–800)、象牙／羊皮紙底色 `cream`(50–300)、暖棕黑文字 `ink`(400–900)，定義在 `style.css`。
-  - **深色 = 科技感風格**：近黑底色維持 Tailwind `zinc`(950 頁面底 / 900 卡片 / 800 邊框)，主色是琥珀橘 `brand`(50–900)，重點元素加微光陰影。
+  - **深色 = 科技感風格**：近黑底色是帶藍的 ink 系（`#0b1218` 頁面底 / `#121b22` 卡片 / `#30434c` 邊框，定義在 `style.css` 的 `.dark`），主色是琥珀橘 `brand`(50–900)。
+- **一律用語意 token，不要在頁面手寫色票。** `bg-card`／`text-foreground`／`text-muted-foreground`／`border-border`／`bg-muted`／`bg-accent` 這組已經自己處理明暗兩態，寫 `text-ink-900 dark:text-white` 這種雙寫只會製造出第二套色彩系統——兩套並行正是「配色沒問題但細節很髒」的來源。需要新的語意角色時，加 token 到 `style.css`，不要在使用端硬寫。
+  - 例外只有兩個：報告頁（固定淺色，見下）與側邊欄（兩個主題都是深底，用 `sidebar-*` 那組 token，**不要用 `text-muted-foreground`**——淺色主題下那是深灰字，會糊在深色側邊欄上）。
   - `/report/:token` 與 `/records/:id/preview` 報告頁**固定淺色，不受主題切換影響**──它同時是 Puppeteer 截圖產 PDF 的來源，深色底 + 淺色文字直接列印容易變成看不見字，獨立用 `stone`/`brand` 配色，**不套用 `dark:` variant**。在那兩頁加東西時不要共用後台的樣式常數（例如 `DELIVERY_EVENT_META`），要另外定義純淺色版本。
 - **報告狀態色彩語意**（徽章與圖表都要遵循同一套對應）：
-  - `draft` 草稿 → 中性灰（zinc-500）
-  - `finalized` 已結案 → 深色用品牌橘（brand-600）、淺色用古董金（amber-800）
+  - `draft` 草稿 → 中性（徽章用 `bg-muted/60 text-foreground`；圖表用 zinc-500）
+  - `finalized` 已結案 → 品牌色階 `brand`（淺色 `brand-50/700`、深色 `brand-500/10` + `brand-300`）
   - `sent` 已寄送 → 綠（emerald-600）；`failed` 寄送失敗 → 紅；`sending` 寄送中 → 天藍
+  - 徽章一律用 `<Badge variant="status" :class="META[...].class">`，形狀與留白由 variant 決定、顏色由 `lib/recordStatus.js` 的 meta 提供，不要在使用端再覆寫 padding 或圓角。
 - **圖示**：統一用 `@lucide/vue`，**不要用 emoji**。線條粗細統一 `stroke-width="1.75"`，顏色預設跟隨 `currentColor`。
-- **圖表**：照 `dataviz` skill 的方法做──先選圖表形式（part-to-whole 用堆疊長條，不用圓餅圖）、色彩最後決定且要跑該 skill 附的 `validate_palette.js` 驗證對比與色盲安全性，不要憑感覺挑色。深色卡片（`zinc-900` 底）上的分類色要比一般品牌色再深一階才過驗證。會隨主題變色的圖表，色碼要放進 `computed()`（依 `isDark` 切換），不要寫死。
+- **圖表**：照 `dataviz` skill 的方法做──先選圖表形式（part-to-whole 用堆疊長條，不用圓餅圖）、色彩最後決定且要跑該 skill 附的 `validate_palette.js` 驗證對比與色盲安全性，不要憑感覺挑色。深色卡片（`#121b22` 底）上的分類色要比一般品牌色再深一階才過驗證。會隨主題變色的圖表，色碼要放進 `computed()`（依 `isDark` 切換），不要寫死。
+- **字體**：`Noto Sans TC Variable`，自架（`@fontsource-variable/noto-sans-tc`，在 `main.js` 匯入）。**不要改成 CDN**——`/report/:token` 是 Puppeteer 產 PDF 的來源，字體連外會讓正式報告的排版取決於當下網路。用 Variable 版也是刻意的：系統中文字體只有 Regular/Bold 兩級，`font-medium`(500)／`font-semibold`(600) 在中文上會失效，介面靠字重建立的階層就整個不存在。
 - **字體層級**（後台管理介面）：
 
-  | 層級 | Class | 字重 | 用途 |
-  |---|---|---|---|
-  | H1 頁面標題 | `text-xl` | `font-semibold` | 每頁最上方唯一標題 |
-  | H2 區塊標題 | `text-base` | `font-semibold` | 頁面內的區塊／群組標題 |
-  | H3 卡片標題 | `text-sm` | `font-semibold` | 密集網格內卡片自己的標題 |
-  | Body 內文 | `text-sm` | 預設 | 一般文字、表格內容、清單項目 |
-  | Control 控制項 | `text-sm` | `font-medium` | 按鈕、連結、輸入框文字 |
-  | Label 表單標籤 | `text-xs` | `font-medium` | 表單欄位標籤 |
-  | Caption 註記 | `text-xs` | 預設，搭配 muted 色 | 次要說明、時間戳記、狀態徽章文字 |
+  | 層級 | Class | 尺寸 | 字重 | 用途 |
+  |---|---|---|---|---|
+  | H1 頁面標題 | `text-xl` | 24px | `font-semibold` | 每頁最上方唯一標題 |
+  | H2 區塊標題 | `text-base` | 18px | `font-semibold` | 頁面內的區塊／群組標題 |
+  | H3 卡片標題 | `text-sm` | 16px | `font-semibold` | 密集網格內卡片自己的標題 |
+  | Body 內文 | `text-sm` | 16px | 預設 | 一般文字、表格內容、清單項目 |
+  | Control 控制項 | `text-sm` | 16px | `font-medium` | 按鈕、連結、輸入框文字 |
+  | Label 表單標籤 | `text-xs` | 14px | `font-medium` | 表單欄位標籤 |
+  | Caption 註記 | `text-xs` | 14px | 預設，搭配 muted 色 | 次要說明、時間戳記、狀態徽章文字 |
 
-  不要用任意值字級（如 `text-[11px]`），一律對應到上表其中一層。報告檢視頁是獨立的列印文件排版，不套用這份後台字級表。
+  尺寸與行高定義在 `style.css` 的 `@theme`（`--text-*`），**改字級改那裡就好，不必動使用端的 class**。行高刻意不吃 Tailwind 預設（那是為拉丁字母調的），中文設在 1.6–1.75。單行控制項（Button／Badge）要自己加 `leading-none`，否則會被全域行高撐爆。
+
+  不要用任意值字級（如 `text-[11px]`），一律對應到上表其中一層。
+
+  **報告頁走自己的尺度**：`.report-sheet` 在 `style.css` 裡把 `--text-*` 覆寫回 12/14/16px。它是 A4 列印文件，字級放大會直接改變分頁位置。動到 `@theme` 字級後，一定要開 `/records/:id/preview` 確認紙面分頁沒變。
+
+- **元件慣例**（重複的東西一律走共用元件，不要在頁面各寫一份）：
+
+  | 需求 | 用什麼 | 不要做的事 |
+  |---|---|---|
+  | 卡片 | `<Card>` | 不要再加 `border-*`／`bg-card`——Card 自己有 `border border-border bg-card` |
+  | 空狀態 | `<EmptyState :icon :title :description>`，卡片內部加 `inset` | 不要手寫虛線框 |
+  | 清單載入中 | `<ListSkeleton :rows>` | 不要用「載入中…」一行字（版面會塌陷再彈開） |
+  | 錯誤訊息 | `<Alert variant="destructive"><AlertDescription>` | 不要手寫紅框 |
+  | 對話框 | `<DialogContent size="sm|md|lg">` | 不要用 `class="sm:max-w-*"` 覆寫寬度 |
+  | 狀態徽章 | `<Badge variant="status">` | 不要覆寫 padding／圓角 |
+
+  按鈕高度由 `size` 決定（`xs` 36 / `sm` 40 / `default` 44 / `lg` 48），**不要用 `min-h-11` 覆寫**——那會讓高度與 padding 對不上。`ghost` 與 `destructive` 平時是透明的，hover 才上色：列表裡每列常駐一顆實心紅按鈕，等於把最危險又最少用的操作放到最顯眼的位置。
+
+  表格的 padding、表頭底色、sticky、hover 都在 `ui/table/*` 裡，頁面只放內容。桌機表格與手機卡片的切換斷點統一是 `xl`(1280px)，跟 `max-w-7xl` 對齊。
+
+  圓角三檔：控制項 `rounded-lg`、卡片 `rounded-xl`、對話框 `rounded-2xl`。
 
 更完整的視覺規範見 [docs/STYLE_GUIDE.md](docs/STYLE_GUIDE.md)。
 
