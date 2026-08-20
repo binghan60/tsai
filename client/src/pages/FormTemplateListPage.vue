@@ -46,11 +46,11 @@ const statusFilter = ref('');
 
 const SPECIES_LABELS = { cat: '貓', dog: '犬', all: '不限物種' };
 
-// 篩選的「全部」不能沿用 species 的 'all' —— 那個值本身就代表「不限物種」，
-// 兩者混用會讓「不限物種」跟「不篩選」變成同一個選項。空字串才是「不篩選」。
+// 用詞跟表單自己的「適用物種」對齊，整頁只有一套講法。
+// 「不限物種」是不篩選，選「貓」時連不限物種的表單一起列出 ——
+// 跟後端 listTemplates 的 $in: [species, 'all'] 同一套語意，看到的就是這隻能用的表單。
 const SPECIES_FILTERS = [
-  { value: '', label: '全部' },
-  { value: 'all', label: '不限物種' },
+  { value: '', label: '不限物種' },
   { value: 'cat', label: '貓' },
   { value: 'dog', label: '犬' },
 ];
@@ -71,7 +71,8 @@ const hasFilters = computed(() => Boolean(query.value.trim() || speciesFilter.va
 const visibleTemplates = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   return templates.value.filter((template) => {
-    if (speciesFilter.value && (template.species ?? 'all') !== speciesFilter.value) return false;
+    const species = template.species ?? 'all';
+    if (speciesFilter.value && species !== 'all' && species !== speciesFilter.value) return false;
     if (statusFilter.value && (statusFilter.value === 'enabled') !== Boolean(template.enabled)) return false;
     if (!keyword) return true;
     return `${template.name} ${template.description ?? ''}`.toLowerCase().includes(keyword);
