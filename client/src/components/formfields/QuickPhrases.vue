@@ -111,7 +111,7 @@ const actionClass = 'inline-flex h-8 shrink-0 items-center gap-1 rounded-lg px-2
       v-for="phrase in inline"
       :key="phrase._id"
       type="button"
-      class="h-8 min-w-0 truncate rounded-full border border-border bg-white px-2.5 text-xs text-foreground transition-colors hover:border-belle-400 hover:text-belle-700 dark:hover:border-brand-500 dark:hover:text-brand-300"
+      class="h-8 min-w-0 truncate rounded-full border border-border bg-field px-2.5 text-xs text-foreground transition-colors hover:border-belle-400 hover:text-belle-700 dark:hover:border-brand-500 dark:hover:text-brand-300"
       :title="phrase.text"
       @click="insert(phrase)"
     >{{ phrase.text }}</button>

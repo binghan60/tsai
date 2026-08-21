@@ -119,7 +119,7 @@ PUT    /api/records/:id
 POST   /api/records/:id/finalize        結案：驗證 → 凍結 sections → 產 PDF → 鎖定
 GET    /api/records/:id/pdf             下載 PDF
 POST   /api/records/:id/revisions       建立修訂版
-DELETE /api/records/:id                 刪除（需帶 confirmText＝報告編號）
+DELETE /api/records/:id                 刪除（已結案報告需帶 confirmText＝寵物名稱；草稿不需要）
 POST   /api/records/:id/share           建立分享連結
 POST   /api/records/:id/revoke-share    撤銷分享
 POST   /api/records/:id/send-email      寄送 PDF + 連結給飼主
@@ -151,6 +151,8 @@ GET    /api/health
 
 刪除限制：`deliveryStatus` 為 `sent` 或 `sending` 的報告不給刪。
 
+刪除確認：**只有已結案報告要打字確認**（`confirmText` 必須等於寵物名稱），草稿直接刪。打字確認防的是誤刪正式報告——它產過 PDF、可能已經給過飼主連結；草稿是工作中狀態，多一道抄名字只會訓練使用者無視確認。前端也照這個判準分流：草稿走 `ConfirmDialog`，已結案走 `DeleteRecordDialog`。
+
 ## 六、頁面規劃
 
 | 路由 | 頁面 | 說明 |
@@ -177,7 +179,8 @@ GET    /api/health
 - **明暗主題**：後台管理頁面支援明暗切換，側邊欄最下方有切換鈕，狀態存 `localStorage`、預設跟隨系統。共用邏輯在 `client/src/composables/useTheme.js`，深淺色用 Tailwind 的 `dark:` variant（`@custom-variant dark` 定義在 `style.css`，對應 `<html class="dark">`）。
   - **淺色 = 法國美好年代（Belle Époque）風格**：酒紅主色 `belle`(50–800)、象牙／羊皮紙底色 `cream`(50–300)、暖棕黑文字 `ink`(400–900)，定義在 `style.css`。
   - **深色 = 科技感風格**：近黑底色是帶藍的 ink 系（`#0b1218` 頁面底 / `#121b22` 卡片 / `#30434c` 邊框，定義在 `style.css` 的 `.dark`），主色是琥珀橘 `brand`(50–900)。
-- **一律用語意 token，不要在頁面手寫色票。** `bg-card`／`text-foreground`／`text-muted-foreground`／`border-border`／`bg-muted`／`bg-accent` 這組已經自己處理明暗兩態，寫 `text-ink-900 dark:text-white` 這種雙寫只會製造出第二套色彩系統——兩套並行正是「配色沒問題但細節很髒」的來源。需要新的語意角色時，加 token 到 `style.css`，不要在使用端硬寫。
+- **一律用語意 token，不要在頁面手寫色票。** `bg-card`／`bg-field`／`text-foreground`／`text-muted-foreground`／`border-border`／`bg-muted`／`bg-accent` 這組已經自己處理明暗兩態，寫 `text-ink-900 dark:text-white` 這種雙寫只會製造出第二套色彩系統——兩套並行正是「配色沒問題但細節很髒」的來源。需要新的語意角色時，加 token 到 `style.css`，不要在使用端硬寫。
+  - `bg-field` 是「浮在卡片上的可點表面」：輸入框、狀態切換鈕、常用語籤、選取中的卡片。淺色是純白（比象牙白的卡片再亮一階），深色是比卡片略淺的凹陷面。**不要為了這類表面寫 `bg-white`**——那在深色主題是白底配米白字，等於看不見。
   - 例外只有兩個：報告頁（固定淺色，見下）與側邊欄（兩個主題都是深底，用 `sidebar-*` 那組 token，**不要用 `text-muted-foreground`**——淺色主題下那是深灰字，會糊在深色側邊欄上）。
   - `/report/:token` 與 `/records/:id/preview` 報告頁**固定淺色，不受主題切換影響**──它同時是 Puppeteer 截圖產 PDF 的來源，深色底 + 淺色文字直接列印容易變成看不見字，獨立用 `stone`/`brand` 配色，**不套用 `dark:` variant**。在那兩頁加東西時不要共用後台的樣式常數（例如 `DELIVERY_EVENT_META`），要另外定義純淺色版本。
 - **報告狀態色彩語意**（徽章與圖表都要遵循同一套對應）：

@@ -477,7 +477,7 @@ function resolveLeave(confirmed) {
             <button
               type="button"
               class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
-              :class="activeView === 'design' ? 'bg-white text-belle-700 shadow-sm dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'"
+              :class="activeView === 'design' ? 'bg-field text-belle-700 shadow-sm dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'"
               @click="activeView = 'design'"
             >
               <LayoutList class="h-4 w-4" stroke-width="1.75" />設計
@@ -485,7 +485,7 @@ function resolveLeave(confirmed) {
             <button
               type="button"
               class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
-              :class="activeView === 'preview' ? 'bg-white text-belle-700 shadow-sm dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'"
+              :class="activeView === 'preview' ? 'bg-field text-belle-700 shadow-sm dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'"
               @click="activeView = 'preview'"
             >
               <Eye class="h-4 w-4" stroke-width="1.75" />預覽
@@ -585,7 +585,7 @@ function resolveLeave(confirmed) {
                     type="button"
                     class="flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                     :class="type === featuredType
-                      ? 'border-belle-200 bg-white hover:border-belle-400 dark:border-brand-500/30  dark:hover:border-brand-500'
+                      ? 'border-belle-200 bg-field hover:border-belle-400 dark:border-brand-500/30  dark:hover:border-brand-500'
                       : 'border-transparent hover:bg-muted/40 '"
                     :disabled="!activeSection"
                     @click="addItem(type)"
@@ -608,7 +608,7 @@ function resolveLeave(confirmed) {
               :key="section.key"
               class="rounded-2xl border p-4 transition-all sm:p-5"
               :class="activeKey === section.key
-                ? 'border-belle-500 bg-white shadow-md ring-2 ring-belle-500/20 dark:border-brand-500  dark:shadow-[0_0_24px_-8px_var(--color-brand-500)] dark:ring-brand-500/25'
+                ? 'border-belle-500 bg-field shadow-md ring-2 ring-belle-500/20 dark:border-brand-500  dark:shadow-[0_0_24px_-8px_var(--color-brand-500)] dark:ring-brand-500/25'
                 : 'cursor-pointer border-border bg-card shadow-sm hover:border-belle-300   '"
               @click="focusSection(section.key)"
             >

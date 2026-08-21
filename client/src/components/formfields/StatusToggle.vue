@@ -22,8 +22,8 @@ const emit = defineEmits(['select']);
       type="button"
       class="relative min-h-10 rounded-lg px-2 text-xs font-medium"
       :class="finding.status === option.value
-        ? (option.value === 'abnormal' ? 'bg-red-800 text-white' : option.value === 'normal' ? 'bg-emerald-700 text-white' : 'bg-white text-foreground shadow-sm  ')
-        : 'text-muted-foreground hover:bg-white/70  '"
+        ? (option.value === 'abnormal' ? 'bg-red-800 text-white' : option.value === 'normal' ? 'bg-emerald-700 text-white' : 'bg-field text-foreground shadow-sm  ')
+        : 'text-muted-foreground hover:bg-field/70  '"
       @click="emit('select', option.value)"
     >
       {{ option.label }}

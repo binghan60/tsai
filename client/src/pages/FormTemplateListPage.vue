@@ -432,7 +432,7 @@ onMounted(load);
                 :key="mode.value"
                 type="button"
                 class="rounded-xl border p-4 text-left transition-colors"
-                :class="startMode === mode.value ? 'border-primary bg-belle-50 ring-2 ring-primary/15 dark:bg-brand-500/10' : 'border-border bg-white hover:border-belle-300 '"
+                :class="startMode === mode.value ? 'border-primary bg-belle-50 ring-2 ring-primary/15 dark:bg-brand-500/10' : 'border-border bg-field hover:border-belle-300 '"
                 :aria-pressed="startMode === mode.value"
                 @click="startMode = mode.value"
               >

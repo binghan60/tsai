@@ -50,7 +50,7 @@ const tooltip = computed(() => {
     class="group mt-2 block min-w-0 rounded-xl border px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
     :class="isAbnormal
       ? 'border-red-200 bg-red-50/70 hover:border-red-300 hover:bg-red-50 dark:border-red-900/60 dark:bg-red-950/25 dark:hover:border-red-800 dark:hover:bg-red-950/40'
-      : 'border-border bg-white/70 hover:border-belle-500 hover:bg-belle-50   dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
+      : 'border-border bg-field/70 hover:border-belle-500 hover:bg-belle-50   dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
   >
     <!-- 先交代這是哪一次健檢，再給數值：不知道是什麼時候量的，數字本身沒有意義。 -->
     <span class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">

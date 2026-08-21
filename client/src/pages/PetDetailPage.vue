@@ -240,8 +240,19 @@ onMounted(fetchPet);
       @update:open="(value) => !value && (shareToRevoke = null)"
       @confirm="revokeShare(shareToRevoke)"
     />
+    <!-- 草稿只要一般確認，已結案報告才要打字。判準與後端刪除端點一致：
+         打字確認防的是誤刪正式報告，草稿是工作中狀態，多一道抄名字只會讓人學會無視確認。 -->
+    <ConfirmDialog
+      :open="Boolean(recordToRemove) && !isFinalizedRecord(recordToRemove)"
+      title="捨棄健檢草稿"
+      :description="`確定要捨棄「${formatDate(recordToRemove?.visitDate)}」這筆草稿嗎？此操作無法復原。`"
+      confirm-label="捨棄草稿"
+      :loading="Boolean(deletingRecordId)"
+      @update:open="(value) => !value && (recordToRemove = null)"
+      @confirm="removeRecord()"
+    />
     <DeleteRecordDialog
-      v-if="recordToRemove"
+      v-if="recordToRemove && isFinalizedRecord(recordToRemove)"
       :record="recordToRemove"
       :confirm-word="pet?.name ?? ''"
       :submitting="Boolean(deletingRecordId)"

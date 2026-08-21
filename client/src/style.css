@@ -97,6 +97,11 @@
   --destructive-solid-foreground: var(--color-cream-50);
   --border: #c8af78;
   --input: #c8af78;
+  /* 輸入框與「浮在卡片上」的可點表面（狀態切換鈕、常用語籤、選取中的卡片）。
+     卡片底色是象牙白 #fff8ea，這層要比它再亮一階才看得出是可以動的東西，
+     所以淺色是純白而不是 --card。深色沒有「更亮」可言，改用比卡片略淺的凹陷面。
+     不設這個 token 的話使用端只能寫 bg-white，那在深色主題是白底配米白字。 */
+  --field: #ffffff;
   --ring: var(--color-brand-500);
   --sidebar: #182733;
   --sidebar-foreground: #e8d8b3;
@@ -128,6 +133,8 @@
   --destructive-solid-foreground: #fff8ea;
   --border: #30434c;
   --input: #3c505a;
+  /* input/30 疊在卡片 #121b22 上的實際結果，與共用的 Input 元件看起來一致。 */
+  --field: #1f2b33;
   --ring: var(--color-brand-500);
   --sidebar: #070d12;
   --sidebar-foreground: #d7c8a5;
@@ -159,6 +166,7 @@
   --color-destructive-solid-foreground: var(--destructive-solid-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
+  --color-field: var(--field);
   --color-ring: var(--ring);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);

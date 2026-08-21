@@ -556,16 +556,22 @@ recordsRouter.delete('/:id', async (req, res, next) => {
       const message = record.deliveryStatus === 'sending' ? '報告寄送中，請稍後再刪除' : '已寄送的報告不能刪除';
       return res.status(409).json({ message });
     }
-    // 仿 GitHub 刪除 repository 的確認方式：要求前端把一段文字原封不動打進來才放行，
-    // 防止「手滑點到刪除又手滑點到確認」這種連續誤觸。
+    // 只有已結案的報告要打字確認。它已經產生過正式 PDF、可能也已經給過飼主連結，
+    // 是真的刪掉就回不去的東西；草稿則是隨手開、隨手丟的工作中狀態，
+    // 「捨棄剛剛開錯的草稿」要求先抄一次寵物名，只會讓人開始無視這個確認。
+    //
+    // 確認方式仿 GitHub 刪除 repository：要求把一段文字原封不動打進來，
+    // 防的是「手滑點到刪除又手滑點到確認」這種連續誤觸。
     // 比對的是寵物名而不是報告編號——編號是一串記不住的亂碼，只能照抄，
     // 抄的過程不會讓人意識到自己在刪什麼；打出寵物名則會。
-    // 另外查一次而不是 populate：record 後面要整份存進稽核快照，不希望它被塞進 pet 文件。
-    const pet = await Pet.findById(record.petId).select('name');
-    const expected = String(pet?.name ?? '').trim();
-    const confirmText = String(req.body?.confirmText ?? '').trim();
-    if (!expected || confirmText !== expected) {
-      return res.status(422).json({ message: '確認文字不符，請輸入完整的寵物名稱' });
+    if (isFinalizedRecord(record)) {
+      // 另外查一次而不是 populate：record 後面要整份存進稽核快照，不希望它被塞進 pet 文件。
+      const pet = await Pet.findById(record.petId).select('name');
+      const expected = String(pet?.name ?? '').trim();
+      const confirmText = String(req.body?.confirmText ?? '').trim();
+      if (!expected || confirmText !== expected) {
+        return res.status(422).json({ message: '確認文字不符，請輸入完整的寵物名稱' });
+      }
     }
     // 刪除前先存一份快照，供之後回溯查詢或還原用。
     await DeletedMedicalRecord.create({

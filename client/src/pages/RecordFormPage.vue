@@ -357,7 +357,7 @@ function eitherOrPending() {
 function stepBadgeClass(index, sectionId) {
   if (activeSectionId.value === sectionId) return 'bg-primary text-primary-foreground';
   if (completionSections.value[index]) return 'bg-primary/15 text-primary dark:bg-brand-500/20 dark:text-brand-300';
-  return 'border border-border bg-white text-muted-foreground   ';
+  return 'border border-border bg-field text-muted-foreground   ';
 }
 
 function markUncheckedFindingsNormal(section) {
@@ -785,7 +785,7 @@ function handleBeforeUnload(event) {
           class="rounded-xl border p-4 text-left transition-colors"
           :class="pendingTemplateId === type._id
             ? 'border-primary bg-belle-50 ring-1 ring-primary dark:bg-brand-500/10'
-            : 'border-border bg-white hover:border-belle-500 hover:bg-belle-50   dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
+            : 'border-border bg-field hover:border-belle-500 hover:bg-belle-50   dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
           :aria-pressed="pendingTemplateId === type._id"
           @click="pendingTemplateId = type._id"
         >

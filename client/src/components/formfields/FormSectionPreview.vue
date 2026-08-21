@@ -87,7 +87,7 @@ provideRecordForm({
 
 <template>
   <div
-    class="rounded-xl border border-dashed border-border bg-white p-4 sm:p-5"
+    class="rounded-xl border border-dashed border-border bg-field p-4 sm:p-5"
     :class="selectable
       ? '[&_input]:pointer-events-none [&_textarea]:pointer-events-none [&_button:not([data-canvas-action])]:pointer-events-none'
       : 'pointer-events-none select-none'"

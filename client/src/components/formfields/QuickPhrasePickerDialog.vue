@@ -42,7 +42,7 @@ function remove(phrase) {
         <div
           v-for="phrase in list"
           :key="phrase._id"
-          class="flex items-start gap-2 rounded-xl border border-border bg-white transition-colors hover:border-belle-400 dark:hover:border-brand-500"
+          class="flex items-start gap-2 rounded-xl border border-border bg-field transition-colors hover:border-belle-400 dark:hover:border-brand-500"
         >
           <button
             type="button"

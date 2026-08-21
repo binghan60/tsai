@@ -48,7 +48,7 @@ const referenceText = computed(() => labRangeLabel(props.item));
           :aria-label="`${item.label}備註`"
           :required="entry.status === 'abnormal'"
           :placeholder="entry.status === 'abnormal' ? '請描述異常' : '備註（選填）'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+          class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
           :class="entry.status === 'abnormal' && !entry.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
         />
         <QuickPhrases v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" />
@@ -68,7 +68,7 @@ const referenceText = computed(() => labRangeLabel(props.item));
           inputmode="decimal"
           :aria-label="`${item.label}數值`"
           :placeholder="entry.numeric === false ? '結果描述（選填）' : '檢驗數值'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+          class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
           @input="entry.numeric !== false && autoJudgeLab(entry, $event.target.value)"
         />
         <QuickPhrases
@@ -84,7 +84,7 @@ const referenceText = computed(() => labRangeLabel(props.item));
           :aria-label="`${item.label}備註`"
           :required="entry.status === 'abnormal'"
           :placeholder="entry.status === 'abnormal' ? '請描述異常' : '備註（選填）'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+          class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
           :class="entry.status === 'abnormal' && !entry.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
         />
         <QuickPhrases v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" />

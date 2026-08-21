@@ -71,7 +71,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                     inputmode="decimal"
                     :aria-label="`${finding.label}數值`"
                     :placeholder="finding.numeric === false ? '選填' : labRanges[finding.key]?.unit ? `輸入數值（${labRanges[finding.key].unit}）` : '選填'"
-                    class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+                    class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
                     @input="finding.numeric !== false && autoJudgeLab(finding, $event.target.value)"
                   />
                   <!-- 數值型欄位打的是數字，沒有常用語可言；只有文字結果才掛。
@@ -95,7 +95,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                     :aria-invalid="finding.status === 'abnormal' && !finding.note.trim()"
                     :required="finding.status === 'abnormal'"
                     :placeholder="finding.status === 'abnormal' ? '請描述異常' : '選填'"
-                    class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+                    class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
                     :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
                   />
                   <QuickPhrases v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" />

@@ -51,7 +51,7 @@ const findingsOf = (run) => run.items.map((item) => entryByKey.value.get(item.ke
                 :aria-invalid="finding.status === 'abnormal' && !finding.note.trim()"
                 :required="finding.status === 'abnormal'"
                 :placeholder="finding.status === 'abnormal' ? '請描述異常，例如：輕微牙齦紅' : '選填'"
-                class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-white px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none focus:ring-2 focus:ring-belle-100 dark:focus:ring-brand-500/20"
+                class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none focus:ring-2 focus:ring-belle-100 dark:focus:ring-brand-500/20"
                 :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
               />
               <QuickPhrases v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" />
