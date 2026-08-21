@@ -38,6 +38,7 @@ MAIL_REPLY_TO=
 - 不要把本機 `server/.env` 上傳到 Git 或貼進 Dockerfile；Zeabur Variables 才是正式環境的祕密來源。
 - 若使用既有 MongoDB Atlas，將正式連線字串填入 `MONGODB_URI`。
 - 若在 Zeabur 加入 MongoDB Template，應使用 MongoDB Connections 頁面的 Internal／Private URI，速度較快且不耗用公開流量。
+- `PUBLIC_APP_URL` **在正式環境是必填**：沒設定（且 `CLIENT_ORIGIN`、`ZEABUR_WEB_URL` 也都空著）時容器會直接啟動失敗，log 印出 `[config] 正式環境必須設定 PUBLIC_APP_URL`。這是刻意的——退而用請求的 `Host` 推斷，等於讓呼叫端決定寄給飼主的信裡出現哪個網域。
 - `PUBLIC_APP_URL` 用於永久分享連結與 Email；分享連結仍維持無到期日，只有院方手動撤銷才失效。
 - PDF 預設從容器內部的 `127.0.0.1` 讀取報告，不必公開 `PDF_RENDER_BASE_URL`。
 

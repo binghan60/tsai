@@ -257,6 +257,7 @@ npm run dev            # 使用者自己開
 待處理（依急迫性）：
 
 1. **認證機制** — 目前 `/api/*` 完全沒有保護。部署後任何人都能讀寫全部資料，並用 `POST /api/records/:id/send-email` 借你的 Gmail 發信（被濫用時 Google 封的是帳號本身）。單人使用不需要 JWT，一組環境變數密碼 + signed cookie 即可，但要放行 `/api/public/reports/:token` 與 PDF 存取。同時值得替寄信單獨加頻率限制。
+   （已處理一半：對外連結的網域改由 `config/publicUrl.js` 決定，正式環境必須設定 `PUBLIC_APP_URL`，否則啟動失敗。濫用寄信至少不會再寄出指向他人網域的連結，但寄信本身仍然沒有任何門檻。）
 2. **前端 `validateForPreview()` 沒有測試** — `RecordFormPage.vue` 裡與後端 `validateFinalRecord` 對應的那份判準是各寫一份的，後端已經釘住，前端改動會單方面漂移。
 3. **`deletedMedicalRecords` 沒有查詢介面** — 只寫不讀。
 4. **寄送失敗（`failed`）的報告仍可刪除** — 只擋了 `sent` 與 `sending`。

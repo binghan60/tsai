@@ -4,6 +4,7 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { connectDB } from './config/db.js';
+import { assertAppOriginConfigured } from './config/publicUrl.js';
 import ownersRouter from './routes/owners.js';
 import { ownerPetsRouter, petsRouter } from './routes/pets.js';
 import { petRecordsRouter, recordsRouter, publicReportsRouter } from './routes/records.js';
@@ -55,6 +56,10 @@ if (process.env.NODE_ENV === 'production') {
 
 app.use((err, req, res, next) => {
   console.error(err);
+  // 設定問題不是使用者做錯什麼，訊息要講得出「該去改哪個環境變數」。
+  if (err.code === 'PUBLIC_URL_NOT_CONFIGURED') {
+    return res.status(503).json({ message: err.message });
+  }
   if (err.name === 'CastError') {
     return res.status(400).json({ message: '參數格式不正確' });
   }
@@ -65,6 +70,16 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
+// 對外連結的網域要在啟動時就確定。漏設 PUBLIC_APP_URL 在正式環境是致命的：
+// 分享連結與寄給飼主的 Email 會改用請求的 Host 組出來，等於讓呼叫端決定信裡的網址。
+// 讓服務直接起不來，問題就會在部署當下被發現，而不是在第一封信寄出去之後。
+try {
+  assertAppOriginConfigured();
+} catch (err) {
+  console.error('[config]', err.message);
+  process.exit(1);
+}
 
 connectDB()
   .then(() => {

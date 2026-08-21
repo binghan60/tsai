@@ -9,6 +9,7 @@ import Owner from '../models/Owner.js';
 import { renderReportPdf } from '../lib/pdf.js';
 import { assertMailConfigured, sendHealthReportEmail } from '../lib/mailer.js';
 import { pdfAccessSecret } from '../config/pdfAccess.js';
+import { publicAppOrigin } from '../config/publicUrl.js';
 import { templateForRecord } from '../lib/formTemplate.js';
 import { composeReportSections } from '../lib/reportSections.js';
 import { escapeRegExp } from '../lib/regex.js';
@@ -63,17 +64,6 @@ function safePdfFilename(record) {
   const reportNumber = String(record.reportNumber || `HC-${record._id.toString().slice(-8).toUpperCase()}`)
     .replace(/[^a-zA-Z0-9_-]/g, '_');
   return `${reportNumber}.pdf`;
-}
-
-function publicAppOrigin(req) {
-  const configuredOrigin = process.env.PUBLIC_APP_URL || process.env.CLIENT_ORIGIN || process.env.ZEABUR_WEB_URL;
-  if (configuredOrigin) return configuredOrigin.replace(/\/$/, '');
-
-  const forwardedProtocol = req.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  const forwardedHost = req.get('x-forwarded-host')?.split(',')[0]?.trim();
-  const protocol = forwardedProtocol || req.protocol;
-  const host = forwardedHost || req.get('host');
-  return `${protocol}://${host}`;
 }
 
 function reportPayload(record, sections) {
