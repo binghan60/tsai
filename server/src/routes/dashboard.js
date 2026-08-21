@@ -7,6 +7,13 @@ const router = Router();
 
 const WEEKS = 6;
 
+// 儀錶板的每一個數字都只算「同一次健檢的最新版」，跟 GET /api/records 的佇列同一套判準。
+// 少了這層，一份改過三次的報告會在統計裡算三次，而點進去的清單只列一列——
+// 卡片正是為了點進去而存在的，兩邊對不上會直接讓人懷疑哪一邊在騙人。
+// 草稿不可能被取代（supersededBy 只會標在被修訂的已結案報告上），對它們是無害的贅詞，
+// 但寧可統一寫上：規則只有一條時才不會有人在新增查詢時漏掉。
+const CURRENT_VERSION = { supersededBy: null };
+
 router.get('/', async (req, res, next) => {
   try {
     const now = new Date();
@@ -19,13 +26,14 @@ router.get('/', async (req, res, next) => {
       await Promise.all([
         Owner.countDocuments(),
         Pet.countDocuments(),
-        MedicalRecord.countDocuments({ createdAt: { $gte: startOfMonth } }),
-        MedicalRecord.countDocuments({ status: 'draft' }),
+        MedicalRecord.countDocuments({ ...CURRENT_VERSION, createdAt: { $gte: startOfMonth } }),
+        MedicalRecord.countDocuments({ ...CURRENT_VERSION, status: 'draft' }),
         MedicalRecord.aggregate([
+          { $match: CURRENT_VERSION },
           { $group: { _id: { status: '$status', deliveryStatus: '$deliveryStatus' }, count: { $sum: 1 } } },
         ]),
-        MedicalRecord.find({ createdAt: { $gte: trendStart } }, 'createdAt'),
-        MedicalRecord.find()
+        MedicalRecord.find({ ...CURRENT_VERSION, createdAt: { $gte: trendStart } }, 'createdAt'),
+        MedicalRecord.find(CURRENT_VERSION)
           .sort({ updatedAt: -1 })
           .limit(5)
           .populate({ path: 'petId', select: 'name species medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } }),
@@ -64,7 +72,7 @@ router.get('/', async (req, res, next) => {
       statusBreakdown,
       weeklyTrend,
       recentRecords,
-      draftRecords: await MedicalRecord.find({ status: 'draft' })
+      draftRecords: await MedicalRecord.find({ ...CURRENT_VERSION, status: 'draft' })
         .sort({ updatedAt: -1 })
         .limit(5)
         .populate({ path: 'petId', select: 'name species medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } }),

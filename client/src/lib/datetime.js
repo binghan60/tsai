@@ -8,17 +8,26 @@ function toValidDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-// 取出指定時區下的年／月／日，避免用 getFullYear() 這類隱含本地時區的方法。
-function dateParts(date) {
-  const [year, month, day] = new Intl.DateTimeFormat('en-CA', {
+// <input type="date"> 的值：診所時區下的 YYYY-MM-DD。
+//
+// 不要用 new Date().toISOString().slice(0, 10) —— 那是 UTC 的日期，
+// 台灣時間半夜到早上八點之間開一份報告，健檢日期會預設成昨天。
+// 讀回既有日期時同理：資料庫存的是 UTC 時間點，要換算回診所時區才是當初填的那一天。
+// en-CA 的日期格式剛好就是 YYYY-MM-DD。
+export function clinicDateInput(value = new Date()) {
+  const date = toValidDate(value);
+  if (!date) return '';
+  return new Intl.DateTimeFormat('en-CA', {
     timeZone: CLINIC_TIME_ZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  })
-    .format(date)
-    .split('-')
-    .map(Number);
+  }).format(date);
+}
+
+// 取出指定時區下的年／月／日，避免用 getFullYear() 這類隱含本地時區的方法。
+function dateParts(date) {
+  const [year, month, day] = clinicDateInput(date).split('-').map(Number);
   return { year, month, day };
 }
 

@@ -468,8 +468,14 @@ recordsRouter.get('/:id/pdf', async (req, res, next) => {
       return res.status(409).json({ message: '請先結案，再下載正式 PDF' });
     }
     const pdfBuffer = await renderReportPdf(record.shareToken);
-    record.pdfGeneratedAt = new Date();
-    await record.save();
+    // 記下這次重繪的時間，但不要動 updatedAt —— 清單與工作台都照 updatedAt 排序，
+    // 用 record.save() 會讓「只是下載了一份 PDF」把一份早就結案的報告頂到待辦最上面。
+    // 下載不是對報告做了什麼，它的內容一個字都沒變。
+    await MedicalRecord.updateOne(
+      { _id: record._id },
+      { $set: { pdfGeneratedAt: new Date() } },
+      { timestamps: false }
+    );
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${safePdfFilename(record)}"`);
     res.send(pdfBuffer);

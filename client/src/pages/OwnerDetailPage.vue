@@ -6,6 +6,7 @@ import OwnerFormDialog from '../components/OwnerFormDialog.vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { http } from '../api/http';
+import { clinicDateInput } from '../lib/datetime';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import EmptyState from '../components/EmptyState.vue';
@@ -263,7 +264,7 @@ onMounted(async () => {
         breed: editPetTarget.breed,
         sex: editPetTarget.sex,
         neutered: editPetTarget.neutered,
-        birthDate: editPetTarget.birthDate?.slice(0, 10),
+        birthDate: clinicDateInput(editPetTarget.birthDate),
         weightKg: editPetTarget.weightKg,
         allergies: editPetTarget.allergies,
         chronicConditions: editPetTarget.chronicConditions,

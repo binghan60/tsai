@@ -6,7 +6,7 @@ import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import { http } from '../api/http';
-import { ageLabel as calcAgeLabel, formatDate as formatClinicDate, formatDateTime } from '../lib/datetime';
+import { ageLabel as calcAgeLabel, clinicDateInput, formatDate as formatClinicDate, formatDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -230,7 +230,7 @@ onMounted(fetchPet);
       <EmptyState v-else :icon="PawPrint" title="尚無健檢紀錄" />
     </div>
 
-    <PetFormDialog v-if="editOpen" title="編輯寵物資料" submit-label="儲存" :initial-value="{ ...pet, birthDate: pet.birthDate?.slice(0, 10) }" :submitting="editSaving" :error-message="editError" @submit="savePet" @close="editOpen = false" />
+    <PetFormDialog v-if="editOpen" title="編輯寵物資料" submit-label="儲存" :initial-value="{ ...pet, birthDate: clinicDateInput(pet.birthDate) }" :submitting="editSaving" :error-message="editError" @submit="savePet" @close="editOpen = false" />
     <ConfirmDialog
       :open="Boolean(shareToRevoke)"
       title="撤銷分享連結"

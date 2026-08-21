@@ -4,6 +4,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { Activity, AlertTriangle, Check, Clock3, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
+import { clinicDateInput } from '../lib/datetime';
 import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomId, sectionKeyForItem } from '../lib/formTemplate';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useQuickPhrases } from '../composables/useQuickPhrases';
@@ -123,7 +124,7 @@ const { to: backTo, label: backLabel } = useBackTarget(() => (petId.value ? `/pe
 // 參考範圍就存在範本項目上，不必另外請求。
 const labRanges = computed(() => referenceRanges(template.value));
 const vet = ref('');
-const visitDate = ref(new Date().toISOString().slice(0, 10));
+const visitDate = ref(clinicDateInput());
 // 三個 findings 陣列在範本載入後才建立（見 applyTemplateDefaults）。
 const record = reactive({
   weightKg: null,
@@ -263,7 +264,7 @@ function applyRecord(data) {
   reportVersion.value = data.reportVersion ?? 1;
   revisionReason.value = data.revisionReason ?? '';
   vet.value = data.vet ?? '';
-  visitDate.value = data.visitDate ? data.visitDate.slice(0, 10) : '';
+  visitDate.value = clinicDateInput(data.visitDate);
   for (const key of ['weightKg', 'temperatureC', 'heartRate', 'respiratoryRate', 'bodyConditionScore', 'chiefComplaint', 'history', 'conclusion', 'diagnosis', 'labSummary', 'treatmentPlan', 'other']) {
     if (data[key] !== undefined && data[key] !== null) record[key] = data[key];
   }
