@@ -12,6 +12,34 @@ import { useRoute, useRouter } from 'vue-router';
 //
 // defaultValue 是「這個參數不出現在網址上時代表什麼」。等於預設值就把參數拿掉，
 // 網址只記錄偏離預設的部分，不會被 ?view=todo&page=1 這種等同沒說的雜訊塞滿。
+
+// 這一輪待寫進網址的參數。
+//
+// 同一個 tick 裡改兩個參數（換佇列時同時把頁碼重設回 1 就是）會各觸發一次 watcher，
+// 而 router.replace 是非同步的：第二個 watcher 讀到的 route.query 還是舊的，
+// 組出來的網址會蓋掉第一個剛寫進去的參數。症狀是「在第 2 頁換佇列，網址上的 view 不見了」，
+// 畫面當下正確（ref 值是對的），重整或返回才會退回預設佇列 —— 正好抵銷這個 composable 的用意。
+//
+// 所以先把變更收集起來，等這一輪同步變更都跑完，再合併成一次 replace。
+let pendingPatch = null;
+
+function scheduleQueryPatch(router, route, name, value) {
+  if (pendingPatch) {
+    pendingPatch[name] = value;
+    return;
+  }
+  pendingPatch = { [name]: value };
+
+  queueMicrotask(() => {
+    const patch = pendingPatch;
+    pendingPatch = null;
+    // 合併的基準要等到這個時間點才讀，拿到的才是最新的網址。
+    const readCurrent = (key) => (typeof route.query[key] === 'string' ? route.query[key] : undefined);
+    if (Object.entries(patch).every(([key, next]) => next === readCurrent(key))) return;
+    router.replace({ query: { ...route.query, ...patch } });
+  });
+}
+
 export function useSearchQueryParam(paramName = 'q', defaultValue = '') {
   const route = useRoute();
   const router = useRouter();
@@ -20,10 +48,7 @@ export function useSearchQueryParam(paramName = 'q', defaultValue = '') {
 
   watch(query, (value) => {
     const next = String(value ?? '').trim();
-    const target = next && next !== defaultValue ? next : undefined;
-    const current = typeof route.query[paramName] === 'string' ? route.query[paramName] : undefined;
-    if (target === current) return;
-    router.replace({ query: { ...route.query, [paramName]: target } });
+    scheduleQueryPatch(router, route, paramName, next && next !== defaultValue ? next : undefined);
   });
 
   return query;

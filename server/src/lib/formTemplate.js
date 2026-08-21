@@ -146,9 +146,12 @@ function sanitizeItem(raw, key, index) {
     required: raw.required === true,
     numeric: raw.numeric !== false,
     rows: Number.isFinite(Number(raw.rows)) && raw.rows ? Number(raw.rows) : null,
-    min: raw.min === null || raw.min === undefined || raw.min === '' ? null : Number(raw.min),
-    max: raw.max === null || raw.max === undefined || raw.max === '' ? null : Number(raw.max),
-    step: raw.step === null || raw.step === undefined || raw.step === '' ? null : Number(raw.step),
+    // 跟 referenceMin／referenceMax 走同一個 numberOrNull。原本這三個只擋 ''，
+    // 於是打幾個空白會被 Number('  ') 判成 0——max 變成 0 的話每個數值都會超出上限，
+    // 那份報告就再也結不了案；打上非數字則是 NaN，存檔時直接 cast 失敗。
+    min: numberOrNull(raw.min),
+    max: numberOrNull(raw.max),
+    step: numberOrNull(raw.step),
     referenceMin: numberOrNull(raw.referenceMin),
     referenceMax: numberOrNull(raw.referenceMax),
   };

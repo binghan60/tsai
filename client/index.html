@@ -8,9 +8,16 @@
     <meta name="description" content="謙華動物醫院寵物健檢與報告管理系統" />
     <title>謙華動物醫院｜健檢與報告</title>
     <script>
+      // 在 body 之前就把主題定下來，否則會先閃一下淺色再切成深色。
+      // 沒有存過選擇＝還沒表態，這時跟著系統走；存過就以使用者的選擇為準。
+      // localStorage 在無痕模式或封鎖網站資料時讀取會直接丟例外，包起來才不會
+      // 讓整段腳本掛掉（掛掉的話 class 不會被設，主題永遠是淺色）。
       (function () {
-        var stored = localStorage.getItem('theme');
-        var dark = stored === 'dark';
+        var stored = null;
+        try { stored = localStorage.getItem('theme'); } catch (err) { stored = null; }
+        var dark = stored
+          ? stored === 'dark'
+          : window.matchMedia('(prefers-color-scheme: dark)').matches;
         document.documentElement.classList.toggle('dark', dark);
       })();
     </script>

@@ -241,9 +241,12 @@ async function sendEmail() {
     showFinalizeConfirm.value = false;
     showEmailConfirm.value = false;
   } catch (err) {
-    record.value.deliveryStatus = 'failed';
     const message = err.response?.data?.message ?? `寄送 Email 失敗，${wasDraft ? '請先確認報告已結案' : '已結案報告不受影響，可稍後重試'}`;
-    record.value.deliveryError = message;
+    // 不要自己把狀態改成「寄送失敗」。有幾種錯誤伺服器根本沒動過狀態
+    //（尚未結案、正在寄送中、飼主還沒填 Email），標成失敗只是憑空捏造一個結果；
+    // 而前端逾時的時候更糟——信可能正在成功寄出，畫面卻說失敗。
+    // 寄送狀態是伺服器說了算，直接回頭問一次。
+    await fetchReport();
     error.value = message;
     showFinalizeConfirm.value = false;
     showEmailConfirm.value = false;
