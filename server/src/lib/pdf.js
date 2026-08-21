@@ -81,7 +81,7 @@ async function renderNow(shareToken) {
     ? localOrigin
     : process.env.CLIENT_ORIGIN || localOrigin;
   const renderBaseUrl = (process.env.PDF_RENDER_BASE_URL || defaultOrigin).replace(/\/$/, '');
-  const url = `${renderBaseUrl}/report/${shareToken}?renderKey=${encodeURIComponent(pdfAccessSecret)}`;
+  const url = `${renderBaseUrl}/report/${shareToken}`;
 
   clearTimeout(idleTimer);
   activeRenders += 1;
@@ -103,6 +103,7 @@ async function renderNow(shareToken) {
 async function renderWith(browser, url) {
   const page = await browser.newPage();
   try {
+    await page.setExtraHTTPHeaders({ 'x-pdf-render-secret': pdfAccessSecret });
     // 瀏覽器實例重用之後連 HTTP 快取也一起重用，第二次載入同一份報告會拿到 304，
     // 而 response.ok() 只認 200–299，整個渲染就這樣失敗了。
     // 報告內容隨時可能剛被改過，這裡本來也不該吃快取。

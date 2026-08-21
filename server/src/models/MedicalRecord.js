@@ -121,6 +121,10 @@ const medicalRecordSchema = new mongoose.Schema(
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'FormTemplate', default: null },
     templateVersion: { type: Number, default: null },
     sections: { type: [reportSectionSchema], default: [] },
+    // Short-lived lease used while a draft is being frozen and rendered to PDF.
+    // It is operational state, so never return it in normal API responses.
+    finalizeAttemptId: { type: String, default: null, select: false },
+    finalizingAt: { type: Date, default: null, select: false },
 
     shareToken: { type: String, default: uuidv4, unique: true },
     shareEnabled: { type: Boolean, default: false },
@@ -145,6 +149,8 @@ const medicalRecordSchema = new mongoose.Schema(
     },
     deliveryError: { type: String, trim: true, default: '' },
     lastDeliveryAttemptAt: { type: Date, default: null },
+    // Stops a stale mail attempt from overwriting the result of a newer attempt.
+    deliveryAttemptId: { type: String, default: null, select: false },
     sentAt: { type: Date },
     sentTo: { type: String, trim: true, default: undefined },
     emailMessageId: { type: String, trim: true, default: undefined },
@@ -166,5 +172,13 @@ medicalRecordSchema.index({ reportNumber: 1 }, { unique: true, sparse: true });
 medicalRecordSchema.index({ supersededBy: 1, updatedAt: -1 });
 // 佇列篩選（草稿／待寄送／寄送失敗）。
 medicalRecordSchema.index({ status: 1, deliveryStatus: 1 });
+medicalRecordSchema.index(
+  { revisionOf: 1, status: 1 },
+  { unique: true, partialFilterExpression: { status: 'draft', revisionOf: { $type: 'objectId' } } }
+);
+medicalRecordSchema.index(
+  { revisionRootId: 1, reportVersion: 1 },
+  { unique: true, partialFilterExpression: { revisionRootId: { $type: 'objectId' } } }
+);
 
 export default mongoose.model('MedicalRecord', medicalRecordSchema);

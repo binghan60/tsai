@@ -85,8 +85,7 @@ async function fetchReport() {
       const { data } = await http.get(`/records/${route.params.id}`);
       record.value = normalizePreview(data);
     } else {
-      const params = route.query.renderKey ? { renderKey: route.query.renderKey } : {};
-      const { data } = await http.get(`/public/reports/${route.params.token}`, { params });
+      const { data } = await http.get(`/public/reports/${route.params.token}`);
       record.value = data;
     }
   } catch (err) {
