@@ -37,7 +37,7 @@ const navItems = [
   { to: '/owners', label: '飼主', exact: false, icon: Users },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
   { to: '/records', label: '健檢紀錄', exact: false, icon: FileText },
-  { to: '/records/deliveries', label: '寄送紀錄', exact: false, icon: Mail },
+  { to: '/records/deliveries', label: '寄送歷程', exact: false, icon: Mail },
   { to: '/settings/forms', label: '表單管理', exact: false, icon: ClipboardList },
   { to: '/settings/text-templates', label: '文字模板', exact: false, icon: FileText },
 ];

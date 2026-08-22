@@ -367,8 +367,8 @@ watch(
           </li>
         </ul>
         <p class="mt-3 border-t border-stone-200 pt-2 text-xs text-stone-500">
-          完整寄送紀錄（含已刪除報告）請見
-          <router-link to="/records/deliveries" class="font-medium underline">寄送紀錄</router-link>。
+          完整寄送歷程（含已刪除報告）請見
+          <router-link to="/records/deliveries" class="font-medium underline">寄送歷程</router-link>。
         </p>
       </details>
 

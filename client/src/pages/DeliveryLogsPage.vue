@@ -60,7 +60,7 @@ async function fetchLogs() {
     total.value = data.total ?? 0;
     limit.value = data.limit ?? 50;
   } catch (err) {
-    if (currentRequest === requestSequence) error.value = '寄送紀錄暫時無法載入，請稍後重試';
+    if (currentRequest === requestSequence) error.value = '寄送歷程暫時無法載入，請稍後重試';
   } finally {
     if (currentRequest === requestSequence) loading.value = false;
   }
@@ -115,8 +115,8 @@ onBeforeUnmount(() => {
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
     <div>
-      <h1 class="text-xl font-semibold text-foreground">寄送紀錄</h1>
-      <p class="mt-1 text-sm text-muted-foreground">每次寄送嘗試只顯示一次，保留收件信箱、最終結果與失敗原因。報告刪除後這裡仍然查得到。</p>
+      <h1 class="text-xl font-semibold text-foreground">寄送歷程</h1>
+      <p class="mt-1 text-sm text-muted-foreground">追查每一次寄送嘗試的收件信箱、最終結果與失敗原因；報告刪除後歷程仍會保留。</p>
     </div>
 
     <FilterTabs :model-value="event" :items="EVENTS" aria-label="寄送事件篩選" @update:model-value="selectEvent" />
@@ -125,7 +125,7 @@ onBeforeUnmount(() => {
         <span>關鍵字</span>
         <span class="relative block">
           <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input id="delivery-search" v-model="query" type="search" class="pl-10" placeholder="寵物、飼主、信箱或報告編號" aria-label="搜尋寄送紀錄" />
+          <Input id="delivery-search" v-model="query" type="search" class="pl-10" placeholder="寵物、飼主、信箱或報告編號" aria-label="搜尋寄送歷程" />
         </span>
       </label>
       <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始日期</span><Input v-model="dateFrom" type="date" aria-label="寄送起始日期" /></label>
@@ -135,7 +135,7 @@ onBeforeUnmount(() => {
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
     <p v-else-if="!logs.length" class="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-      目前沒有寄送紀錄。
+      目前沒有寄送歷程。
     </p>
 
     <template v-else>

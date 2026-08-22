@@ -34,7 +34,7 @@ const router = createRouter({
     { path: '/records', component: RecordsListPage, meta: { title: '健檢紀錄' } },
     // 寄送流水帳。掛在 /records 底下是因為它講的是報告的事，但它不依附任何一份報告——
     // 報告被刪除後，這裡仍然查得到當初寄給了誰。
-    { path: '/records/deliveries', component: DeliveryLogsPage, meta: { title: '寄送紀錄', nav: '/records/deliveries' } },
+    { path: '/records/deliveries', component: DeliveryLogsPage, meta: { title: '寄送歷程', nav: '/records/deliveries' } },
     // 表單管理：清單決定「有哪幾份表單」，設計頁決定「每份表單有哪些項目」。
     { path: '/settings', redirect: '/settings/forms' },
     { path: '/settings/forms', component: FormTemplateListPage, meta: { title: '表單管理' } },

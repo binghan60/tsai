@@ -20,7 +20,6 @@ const VIEWS = [
   { key: 'drafts', label: '草稿', tone: 'neutral' },
   { key: 'pending', label: '待寄送', tone: 'warning' },
   { key: 'failed', label: '失敗／待確認', tone: 'danger' },
-  { key: 'sent', label: '已寄送', tone: 'success' },
   { key: 'all', label: '全部', tone: 'neutral' },
 ];
 
