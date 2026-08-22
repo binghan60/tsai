@@ -40,8 +40,6 @@ let fetchSequence = 0;
 const sexLabel = computed(() => ({ male: '公', female: '母', unknown: '未記錄' })[pet.value?.sex] ?? '未記錄');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育', unknown: '未記錄' })[pet.value?.neutered] ?? '未記錄');
 const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), '年齡未記錄'));
-// 詳情頁的欄位跟編輯表單一對一。沒填的維持空白，不放「未記錄」這類佔位詞——
-// 一整排「未記錄」只是把版面塞滿，讀的人還是得逐格確認哪些真的有東西。
 const petInfoFields = computed(() => [
   { label: '最近體重', value: pet.value?.weightKg != null ? `${pet.value.weightKg} kg` : '' },
   { label: '過敏紀錄', value: pet.value?.allergies ?? '' },
@@ -49,6 +47,7 @@ const petInfoFields = computed(() => [
   { label: '目前用藥', value: pet.value?.currentMedications ?? '' },
   { label: '其他備註', value: pet.value?.notes ?? '' },
 ]);
+const filledPetInfoFields = computed(() => petInfoFields.value.filter((field) => String(field.value).trim()));
 
 function formatDate(value) {
   return formatClinicDate(value, '日期未填');
@@ -224,11 +223,10 @@ watch(
         <Button variant="outline" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
       </div>
 
-      <dl class="mt-5 grid gap-3 border-t border-border pt-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
-        <div v-for="field in petInfoFields" :key="field.label">
+      <dl v-if="filledPetInfoFields.length" class="mt-5 grid gap-3 border-t border-border pt-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
+        <div v-for="field in filledPetInfoFields" :key="field.label">
           <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
-          <!-- min-h 讓沒填的欄位仍佔住一行的高度，各格才不會因為有沒有值而高低不齊。 -->
-          <dd class="mt-1 min-h-5 whitespace-pre-wrap text-foreground">{{ field.value }}</dd>
+          <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ field.value }}</dd>
         </div>
       </dl>
     </Card>

@@ -36,7 +36,7 @@ const router = createRouter({
     { path: '/records/deliveries', component: DeliveryLogsPage, meta: { title: '寄送紀錄', nav: '/records/deliveries' } },
     // 表單管理：清單決定「有哪幾份表單」，設計頁決定「每份表單有哪些項目」。
     { path: '/settings', redirect: '/settings/forms' },
-    { path: '/settings/forms', component: FormTemplateListPage, meta: { title: '健檢表單' } },
+    { path: '/settings/forms', component: FormTemplateListPage, meta: { title: '表單管理' } },
     { path: '/settings/forms/:id', component: FormTemplateEditPage, meta: { title: '表單設計' } },
     // transient：不列入「使用者從哪來」的紀錄。存檔後這頁會 replace 成 /records/:id/edit，
     // 之後再回到這個 new 網址只會又開一份新草稿。

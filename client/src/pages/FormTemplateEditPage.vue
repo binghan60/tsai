@@ -54,6 +54,7 @@ const saving = ref(false);
 const error = ref('');
 const activeKey = ref('');
 const activeView = ref('design');
+const mobileEditorPane = ref('content');
 const savedSnapshot = ref('');
 
 const selectedItemKey = ref(null);
@@ -234,11 +235,13 @@ function move(list, index, offset) {
 function focusSection(key) {
   activeKey.value = key;
   selectedItemKey.value = null;
+  mobileEditorPane.value = 'content';
 }
 
 function selectItem(section, key) {
   activeKey.value = section.key;
   selectedItemKey.value = key;
+  mobileEditorPane.value = 'settings';
 }
 
 function addSection() {
@@ -298,6 +301,7 @@ function addItem(type) {
     referenceMax: null,
   });
   selectedItemKey.value = key;
+  mobileEditorPane.value = 'settings';
   nextTick(() => {
     const input = document.getElementById('item-label');
     input?.focus();
@@ -469,7 +473,7 @@ function resolveLeave(confirmed) {
     <header class="sticky top-16 z-10 lg:top-0 -mx-4 border-b border-border bg-muted/40 px-4 py-3 sm:-mx-6 sm:px-6">
       <div class="mx-auto flex max-w-350 flex-wrap items-center justify-between gap-3">
         <div class="flex min-w-0 items-center gap-3">
-          <router-link :to="backTo" class="inline-flex min-h-9 shrink-0 items-center text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400">
+          <router-link :to="backTo" class="inline-flex min-h-11 shrink-0 items-center text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400">
             ← {{ backLabel }}
           </router-link>
           <span class="h-4 w-px shrink-0 bg-muted" />
@@ -482,7 +486,7 @@ function resolveLeave(confirmed) {
           <nav class="inline-flex rounded-xl border border-border bg-card p-1" aria-label="編輯模式">
             <button
               type="button"
-              class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
+              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
               :class="activeView === 'design' ? 'bg-field text-belle-700 shadow-sm dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'"
               @click="activeView = 'design'"
             >
@@ -490,7 +494,7 @@ function resolveLeave(confirmed) {
             </button>
             <button
               type="button"
-              class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
+              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
               :class="activeView === 'preview' ? 'bg-field text-belle-700 shadow-sm dark:text-brand-300' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'"
               @click="activeView = 'preview'"
             >
@@ -540,9 +544,25 @@ function resolveLeave(confirmed) {
           </div>
         </div>
 
+        <nav class="grid grid-cols-3 gap-1 rounded-xl border border-border bg-card p-1 xl:hidden" aria-label="手機表單編輯區域">
+          <button
+            v-for="pane in [
+              { key: 'sections', label: '區塊與新增' },
+              { key: 'content', label: '表單內容' },
+              { key: 'settings', label: selectedItem ? '項目設定' : '區塊設定' },
+            ]"
+            :key="pane.key"
+            type="button"
+            class="min-h-11 rounded-lg px-2 text-sm font-medium transition-colors"
+            :class="mobileEditorPane === pane.key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'"
+            :aria-pressed="mobileEditorPane === pane.key"
+            @click="mobileEditorPane = pane.key"
+          >{{ pane.label }}</button>
+        </nav>
+
         <div class="grid items-start gap-5 xl:grid-cols-[236px_minmax(0,1fr)_320px]">
           <!-- 左：區塊清單 + 工具箱 -->
-          <aside class="space-y-4 xl:sticky xl:top-20">
+          <aside class="space-y-4 xl:sticky xl:top-20" :class="mobileEditorPane === 'sections' ? 'block' : 'hidden xl:block'">
             <div class="rounded-2xl border border-border bg-card p-3 shadow-sm">
               <div class="mb-2 flex items-center justify-between px-1">
                 <h2 class="text-base font-semibold text-foreground">區塊</h2>
@@ -556,7 +576,7 @@ function resolveLeave(confirmed) {
                   ? 'border-belle-300 bg-belle-100 dark:border-brand-500/40 dark:bg-brand-500/15'
                   : 'border-transparent hover:bg-muted/40 '"
               >
-                <button type="button" class="min-h-10 min-w-0 flex-1 rounded-lg px-2 text-left" @click="focusSection(section.key)">
+                <button type="button" class="min-h-11 min-w-0 flex-1 rounded-lg px-2 text-left" @click="focusSection(section.key)">
                   <span class="block truncate text-sm font-medium" :class="section.enabled === false ? 'text-muted-foreground ' : 'text-foreground '">
                     {{ section.title || '未命名區塊' }}
                   </span>
@@ -564,14 +584,14 @@ function resolveLeave(confirmed) {
                     {{ presentationMeta(section.presentation).title }} · {{ (section.items ?? []).length }} 項<span v-if="section.enabled === false"> · 已停用</span>
                   </span>
                 </button>
-                <button type="button" class="flex h-8 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
+                <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
                   <ChevronUp class="h-4 w-4" stroke-width="1.75" />
                 </button>
-                <button type="button" class="flex h-8 w-6 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
+                <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
                   <ChevronDown class="h-4 w-4" stroke-width="1.75" />
                 </button>
               </div>
-              <Button type="button" variant="outline" size="sm" class="mt-2 min-h-10 w-full" @click="addSection">
+              <Button type="button" variant="outline" size="sm" class="mt-2 w-full" @click="addSection">
                 <Plus class="h-4 w-4" stroke-width="1.75" />新增區塊
               </Button>
             </div>
@@ -589,7 +609,7 @@ function resolveLeave(confirmed) {
                     v-for="type in group.types"
                     :key="type"
                     type="button"
-                    class="flex w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                    class="flex min-h-11 w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                     :class="type === featuredType
                       ? 'border-belle-200 bg-field hover:border-belle-400 dark:border-brand-500/30  dark:hover:border-brand-500'
                       : 'border-transparent hover:bg-muted/40 '"
@@ -608,14 +628,17 @@ function resolveLeave(confirmed) {
           </aside>
 
           <!-- 中：畫布，就是醫師填表單時看到的樣子 -->
-          <div v-if="sections.length" class="space-y-4">
+          <div v-if="sections.length" class="space-y-4" :class="mobileEditorPane === 'content' ? 'block' : 'hidden xl:block'">
             <article
               v-for="(section, index) in sections"
               :key="section.key"
               class="rounded-2xl border p-4 transition-all sm:p-5"
-              :class="activeKey === section.key
-                ? 'border-belle-500 bg-field shadow-md ring-2 ring-belle-500/20 dark:border-brand-500  dark:shadow-[0_0_24px_-8px_var(--color-brand-500)] dark:ring-brand-500/25'
-                : 'cursor-pointer border-border bg-card shadow-sm hover:border-belle-300   '"
+              :class="[
+                activeKey === section.key
+                  ? 'border-belle-500 bg-field shadow-md ring-2 ring-belle-500/20 dark:border-brand-500 dark:shadow-[0_0_24px_-8px_var(--color-brand-500)] dark:ring-brand-500/25'
+                  : 'cursor-pointer border-border bg-card shadow-sm hover:border-belle-300',
+                activeKey !== section.key ? 'hidden xl:block' : '',
+              ]"
               @click="focusSection(section.key)"
             >
               <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
@@ -651,7 +674,7 @@ function resolveLeave(confirmed) {
             </div>
           </div>
 
-          <div v-else class="rounded-2xl border border-dashed border-border px-5 py-14 text-center">
+          <div v-else class="rounded-2xl border border-dashed border-border px-5 py-14 text-center" :class="mobileEditorPane === 'content' ? 'block' : 'hidden xl:block'">
             <LayoutList class="mx-auto h-8 w-8 text-muted-foreground" stroke-width="1.5" />
             <p class="mt-3 text-sm font-semibold text-foreground">尚未建立表單區塊</p>
             <p class="mt-1 text-xs text-muted-foreground">先建立一個區塊，再從工具箱加入欄位。</p>
@@ -661,7 +684,7 @@ function resolveLeave(confirmed) {
           </div>
 
           <!-- 右：設定面板，選什麼就設定什麼 -->
-          <aside class="xl:sticky xl:top-20">
+          <aside class="xl:sticky xl:top-20" :class="mobileEditorPane === 'settings' ? 'block' : 'hidden xl:block'">
             <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <!-- 項目設定 -->
               <template v-if="selectedItem">
@@ -671,10 +694,10 @@ function resolveLeave(confirmed) {
                     <h2 class="truncate text-base font-semibold text-foreground">{{ selectedItem.label || '未命名項目' }}</h2>
                   </div>
                   <div class="flex shrink-0 items-center gap-0.5">
-                    <button type="button" class="flex h-8 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="selectedIndex <= 0" aria-label="上移項目" @click="move(activeSection.items, selectedIndex, -1)">
+                    <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="selectedIndex <= 0" aria-label="上移項目" @click="move(activeSection.items, selectedIndex, -1)">
                       <ChevronUp class="h-4 w-4" stroke-width="1.75" />
                     </button>
-                    <button type="button" class="flex h-8 w-7 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="selectedIndex < 0 || selectedIndex === activeSection.items.length - 1" aria-label="下移項目" @click="move(activeSection.items, selectedIndex, 1)">
+                    <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-25 dark:hover:text-white" :disabled="selectedIndex < 0 || selectedIndex === activeSection.items.length - 1" aria-label="下移項目" @click="move(activeSection.items, selectedIndex, 1)">
                       <ChevronDown class="h-4 w-4" stroke-width="1.75" />
                     </button>
                   </div>
@@ -693,7 +716,7 @@ function resolveLeave(confirmed) {
                         v-for="type in typesForSelected"
                         :key="type"
                         type="button"
-                        class="flex min-h-10 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                        class="flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                         :class="selectedItem.type === type
                           ? 'border-belle-500 bg-belle-50 text-belle-700 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-300'
                           : 'border-border text-foreground hover:border-belle-300   dark:hover:border-brand-500/50'"
@@ -727,7 +750,7 @@ function resolveLeave(confirmed) {
                         v-for="option in SPAN_OPTIONS"
                         :key="option.value"
                         type="button"
-                        class="flex min-h-10 items-center justify-center rounded-lg border px-2 text-sm font-medium transition-colors"
+                        class="flex min-h-11 items-center justify-center rounded-lg border px-2 text-sm font-medium transition-colors"
                         :class="(selectedItem.span ?? 'auto') === option.value
                           ? 'border-belle-500 bg-belle-50 text-belle-700 dark:border-brand-500 dark:bg-brand-500/10 dark:text-brand-300'
                           : 'border-border text-foreground hover:border-belle-300   dark:hover:border-brand-500/50'"
@@ -785,7 +808,7 @@ function resolveLeave(confirmed) {
                         />
                         <button
                           type="button"
-                          class="flex h-11 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-red-700 dark:hover:text-red-300"
+                          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-red-700 dark:hover:text-red-300"
                           :aria-label="'刪除選項 ' + (index + 1)"
                           @click="removeOption(index)"
                         >

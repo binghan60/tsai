@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { RouterLink } from 'vue-router';
-import { AlertTriangle, ArrowRight, Check, FileText, PawPrint, Pencil, Trash2, Users } from '@lucide/vue';
+import { RouterLink, useRouter } from 'vue-router';
+import { AlertTriangle, ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Trash2, Users } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
@@ -10,14 +10,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import PetPickerDialog from '../components/PetPickerDialog.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 
+const router = useRouter();
 const loading = ref(true);
 const { isDark } = useTheme();
 const error = ref('');
 const dashboard = ref(null);
 const deletingDraftId = ref('');
 const draftToDiscard = ref(null);
+const petPickerOpen = ref(false);
 
 async function fetchDashboard() {
   loading.value = true;
@@ -107,6 +110,11 @@ function recordLink(item) {
   return item.status === 'draft' ? `/records/${item._id}/edit` : `/records/${item._id}/preview`;
 }
 
+async function startRecordForPet(pet) {
+  petPickerOpen.value = false;
+  await router.push(`/pets/${pet._id}/records/new`);
+}
+
 onMounted(fetchDashboard);
 </script>
 
@@ -114,6 +122,7 @@ onMounted(fetchDashboard);
   <section class="mx-auto max-w-7xl space-y-5">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div><h1 class="text-xl font-semibold text-foreground">健檢工作台</h1><p class="mt-1 text-sm text-muted-foreground">快速找到寵物、繼續草稿或建立新的健檢紀錄。</p></div>
+      <Button type="button" @click="petPickerOpen = true"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
     </div>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
@@ -210,6 +219,7 @@ onMounted(fetchDashboard);
         @update:open="(value) => !value && (draftToDiscard = null)"
         @confirm="discardDraft(draftToDiscard)"
       />
+      <PetPickerDialog :open="petPickerOpen" @close="petPickerOpen = false" @select="startRecordForPet" />
     </template>
   </section>
 </template>

@@ -947,7 +947,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       return res.status(409).json({ message: '寄送工作已由另一個請求取得，請稍後再查看狀態' });
     }
     // 先記 queued：後面產 PDF 或 SMTP 卡住而程序被中斷時，至少留得下「曾經嘗試寄送」。
-    await logDelivery(record, 'queued', { recipient });
+    await logDelivery(record, 'queued', { recipient, attemptId: deliveryAttemptId });
 
     assertMailConfigured();
     const pdfBuffer = await renderReportPdf(record.shareToken);
@@ -1008,7 +1008,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       error.code = 'DELIVERY_RESULT_NOT_SAVED';
       throw error;
     }
-    await logDelivery(record, 'sent', { recipient, messageId: smtpInfo.messageId });
+    await logDelivery(record, 'sent', { recipient, messageId: smtpInfo.messageId, attemptId: deliveryAttemptId });
 
     res.json({
       status: 'finalized',
@@ -1050,6 +1050,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
         recipient,
         messageId: smtpInfo?.messageId || '',
         error: deliveryError,
+        attemptId: deliveryAttemptId,
       });
       if (outcomeUncertain) {
         return res.status(202).json({

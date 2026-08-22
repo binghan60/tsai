@@ -772,7 +772,7 @@ function handleBeforeUnload(event) {
 <template>
   <section class="mx-auto max-w-6xl space-y-5 pb-28">
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><router-link :to="backTo" class="mb-2 inline-flex items-center text-sm font-medium text-belle-600 dark:text-brand-400">← {{ backLabel }}</router-link><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-belle-50 px-2.5 py-0.5 text-xs font-medium text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
+      <div><router-link :to="backTo" class="mb-1 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← {{ backLabel }}</router-link><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-belle-50 px-2.5 py-0.5 text-xs font-medium text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
     </div>
 
@@ -848,7 +848,7 @@ function handleBeforeUnload(event) {
               type="button"
               :data-form-section="section.id"
               :title="section.label"
-              class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               :class="[
                 compactSteps && activeSectionId !== section.id ? 'px-1' : 'px-2.5',
                 activeSectionId === section.id
@@ -907,7 +907,7 @@ function handleBeforeUnload(event) {
 
         <div class="flex items-center justify-between gap-3">
           <Button type="button" variant="outline" :disabled="activeSectionIndex === 0" @click="adjacentSection(-1)">← 上一區</Button>
-          <span class="text-xs text-muted-foreground">{{ activeSectionIndex + 1 }} / {{ FORM_SECTIONS.length }}</span>
+          <span class="text-xs text-muted-foreground">第 {{ activeSectionIndex + 1 }} / {{ FORM_SECTIONS.length }} 區</span>
           <Button type="button" variant="outline" :disabled="activeSectionIndex === FORM_SECTIONS.length - 1" @click="adjacentSection(1)">下一區 →</Button>
         </div>
       </form>
@@ -918,7 +918,7 @@ function handleBeforeUnload(event) {
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
       <div v-if="!isLocked" id="record-action-bar" class="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] lg:left-64">
         <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <p class="flex items-center gap-1.5 text-xs text-muted-foreground"><Activity class="h-4 w-4" />進度 {{ completedCount }}/{{ FORM_SECTIONS.length }}<span class="hidden sm:inline"> 個區段</span></p>
+          <p class="flex items-center gap-1.5 text-xs text-muted-foreground"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }}<span class="hidden sm:inline"> 個區段</span></p>
           <div class="ml-auto flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
             <Button type="button" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>

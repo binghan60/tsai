@@ -17,6 +17,9 @@ const deliveryLogSchema = new mongoose.Schema(
     reportNumber: { type: String, default: '' },
     petName: { type: String, default: '' },
     ownerName: { type: String, default: '' },
+    // 同一次寄送會先寫 queued，再寫最終結果。用同一個 attemptId 把兩個事件串在一起，
+    // 稽核資料仍完整，操作介面則可以整理成一次嘗試只顯示一列。
+    attemptId: { type: String, default: '' },
 
     // queued＝已送進寄送流程（PDF 還在產、SMTP 還沒回應），
     // uncertain 代表 SMTP 可能已接受，但本機無法確認最後狀態；不可當成單純失敗自動重送。
@@ -31,6 +34,7 @@ const deliveryLogSchema = new mongoose.Schema(
 
 // 兩種查法：看某一份報告的寄送歷程，以及看全部寄送紀錄（含已刪除報告的）。
 deliveryLogSchema.index({ recordId: 1, createdAt: -1 });
+deliveryLogSchema.index({ attemptId: 1, createdAt: 1 });
 deliveryLogSchema.index({ createdAt: -1 });
 
 export default mongoose.model('DeliveryLog', deliveryLogSchema);

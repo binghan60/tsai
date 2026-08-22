@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Cat, Pencil, Trash2, User } from '@lucide/vue';
+import { Cat, ClipboardPlus, Pencil, Trash2, User, X } from '@lucide/vue';
 import OwnerFormDialog from '../components/OwnerFormDialog.vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
@@ -30,6 +30,7 @@ const editOwnerError = ref('');
 const showCreatePet = ref(false);
 const creating = ref(false);
 const createError = ref('');
+const createdPet = ref(null);
 
 const deletingPetId = ref(null);
 const checkingPetId = ref(null);
@@ -90,8 +91,9 @@ async function createPet(values) {
   creating.value = true;
   createError.value = '';
   try {
-    await http.post(`/owners/${route.params.id}/pets`, values);
+    const { data } = await http.post(`/owners/${route.params.id}/pets`, values);
     closeCreatePet();
+    createdPet.value = data;
     toast.success(`已成功新增寵物「${values.name}」`, '新增寵物成功');
     await fetchOwner();
   } catch (err) {
@@ -197,6 +199,7 @@ watch(
     editPetTarget.value = null;
     petToRemove.value = null;
     petRecordBlock.value = null;
+    createdPet.value = null;
     fetchOwner(ownerId);
   },
   { immediate: true }
@@ -246,6 +249,15 @@ watch(
       </div>
 
       <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+
+      <div v-if="createdPet" class="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold">{{ createdPet.name }} 已新增</p>
+          <p class="text-xs opacity-80">可以直接建立第一份健檢，寵物資料會自動帶入。</p>
+        </div>
+        <Button as-child size="sm"><router-link :to="`/pets/${createdPet._id}/records/new`"><ClipboardPlus class="h-4 w-4" />建立第一份健檢</router-link></Button>
+        <Button type="button" variant="ghost" size="icon" :aria-label="`關閉 ${createdPet.name} 新增成功提示`" @click="createdPet = null"><X class="h-4 w-4" /></Button>
+      </div>
 
       <div v-if="owner.pets.length" class="grid gap-3 sm:grid-cols-2">
         <Card

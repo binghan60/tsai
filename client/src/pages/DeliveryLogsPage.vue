@@ -1,9 +1,10 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import { AlertTriangle, ArrowLeft, Mail, Trash2 } from '@lucide/vue';
+import { AlertTriangle, Mail, Search, Trash2, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDateTime } from '../lib/datetime';
 import { DELIVERY_EVENT_META } from '../lib/recordStatus';
+import { groupDeliveryAttempts } from '../lib/deliveryAttempts';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -12,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import FilterTabs from '../components/FilterTabs.vue';
+import { Input } from '../components/ui/input';
 
 // 這頁的重點不是「報告」而是「寄送這件事」：每一次嘗試各自一列，
 // 包含後來被刪掉的報告。報告清單那頁回答「還有什麼沒寄」，這頁回答「當初寄了什麼給誰」。
@@ -25,6 +27,9 @@ const EVENTS = [
 
 const event = useSearchQueryParam('event');
 const page = useSearchQueryParam('page', '1');
+const query = useSearchQueryParam('q');
+const dateFrom = useSearchQueryParam('from');
+const dateTo = useSearchQueryParam('to');
 
 const logs = ref([]);
 const total = ref(0);
@@ -33,6 +38,7 @@ const loading = ref(false);
 const error = ref('');
 
 let requestSequence = 0;
+const deliveryAttempts = computed(() => groupDeliveryAttempts(logs.value));
 
 async function fetchLogs() {
   const currentRequest = ++requestSequence;
@@ -43,6 +49,9 @@ async function fetchLogs() {
       params: {
         page: Number(page.value) || 1,
         ...(event.value ? { event: event.value } : {}),
+        ...(query.value.trim() ? { q: query.value.trim() } : {}),
+        ...(dateFrom.value ? { from: dateFrom.value } : {}),
+        ...(dateTo.value ? { to: dateTo.value } : {}),
       },
     });
     if (currentRequest !== requestSequence) return;
@@ -62,7 +71,6 @@ const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value),
 function selectEvent(key) {
   if (event.value === key) return;
   event.value = key;
-  page.value = '1';
 }
 
 function goToPage(next) {
@@ -71,7 +79,17 @@ function goToPage(next) {
   page.value = String(target);
 }
 
-watch([event, page], fetchLogs, { immediate: true });
+function clearSearchFilters() {
+  query.value = '';
+  dateFrom.value = '';
+  dateTo.value = '';
+}
+
+watch([event, query, dateFrom, dateTo], () => {
+  if (page.value !== '1') page.value = '1';
+  else fetchLogs();
+}, { immediate: true });
+watch(page, fetchLogs);
 onBeforeUnmount(() => {
   requestSequence += 1;
 });
@@ -81,10 +99,23 @@ onBeforeUnmount(() => {
   <section class="mx-auto max-w-7xl space-y-5">
     <div>
       <h1 class="text-xl font-semibold text-foreground">寄送紀錄</h1>
-      <p class="mt-1 text-sm text-muted-foreground">每一次寄送嘗試的完整歷程，包含收件信箱與失敗原因。報告刪除後這裡仍然查得到。</p>
+      <p class="mt-1 text-sm text-muted-foreground">每次寄送嘗試只顯示一次，保留收件信箱、最終結果與失敗原因。報告刪除後這裡仍然查得到。</p>
     </div>
 
     <FilterTabs :model-value="event" :items="EVENTS" aria-label="寄送事件篩選" @update:model-value="selectEvent" />
+    <div class="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:grid-cols-[minmax(220px,1fr)_170px_170px_auto]">
+      <label class="space-y-1 text-xs font-medium text-muted-foreground">
+        <span>關鍵字</span>
+        <span class="relative block">
+          <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input id="delivery-search" v-model="query" type="search" class="pl-10" placeholder="寵物、飼主、信箱或報告編號" aria-label="搜尋寄送紀錄" />
+        </span>
+      </label>
+      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始日期</span><Input v-model="dateFrom" type="date" aria-label="寄送起始日期" /></label>
+      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束日期</span><Input v-model="dateTo" type="date" aria-label="寄送結束日期" /></label>
+      <Button v-if="query || dateFrom || dateTo" type="button" variant="ghost" size="sm" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
+    </div>
+    <p v-if="logs.length" class="text-xs tabular-nums text-muted-foreground">本頁整理為 {{ deliveryAttempts.length }} 次寄送嘗試</p>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
@@ -106,8 +137,8 @@ onBeforeUnmount(() => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-for="log in logs" :key="log._id">
-              <TableCell class="text-sm tabular-nums text-foreground">{{ formatDateTime(log.createdAt) }}</TableCell>
+            <TableRow v-for="log in deliveryAttempts" :key="log.attemptId || log._id">
+              <TableCell class="text-sm tabular-nums text-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</TableCell>
               <TableCell >
                 <Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge>
               </TableCell>
@@ -143,14 +174,14 @@ onBeforeUnmount(() => {
 
       <!-- 手機：卡片 -->
       <div class="space-y-3 xl:hidden">
-        <Card v-for="log in logs" :key="log._id" class="gap-2 p-4 shadow-sm dark:shadow-none">
+        <Card v-for="log in deliveryAttempts" :key="log.attemptId || log._id" class="gap-2 p-4 shadow-sm dark:shadow-none">
           <div class="flex items-start justify-between gap-3">
             <Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge>
-            <span class="text-xs tabular-nums text-muted-foreground">{{ formatDateTime(log.createdAt) }}</span>
+            <span class="text-xs tabular-nums text-muted-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</span>
           </div>
           <p class="text-sm text-foreground">{{ log.petName || '寵物未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></p>
           <p class="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="tabular-nums underline">{{ log.reportNumber || '—' }}</router-link>
+            <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="inline-flex min-h-11 items-center tabular-nums underline">{{ log.reportNumber || '—' }}</router-link>
             <template v-else>
               <span class="tabular-nums">{{ log.reportNumber || '—' }}</span>
               <span class="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5"><Trash2 class="h-3 w-3" stroke-width="1.75" />報告已刪除</span>
@@ -166,7 +197,7 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
-        <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 筆・第 {{ currentPage }} / {{ totalPages }} 頁</p>
+        <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 個寄送事件・第 {{ currentPage }} / {{ totalPages }} 頁</p>
         <div class="flex gap-2">
           <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage <= 1" @click="goToPage(1)">第一頁</Button>
           <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>

@@ -10,6 +10,10 @@ describe('cross-document workflow schemas', () => {
     assert.ok(DeliveryLog.schema.path('event').enumValues.includes('uncertain'));
   });
 
+  it('links queued and outcome events from the same delivery attempt', () => {
+    assert.equal(DeliveryLog.schema.path('attemptId').instance, 'String');
+  });
+
   it('uses optimistic concurrency for form template edits', () => {
     assert.equal(FormTemplate.schema.options.optimisticConcurrency, true);
   });

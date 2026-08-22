@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import DeliveryLog from '../models/DeliveryLog.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import { escapeRegExp } from '../lib/regex.js';
 
 const router = Router();
 
@@ -14,6 +15,25 @@ router.get('/', async (req, res, next) => {
     const filter = {};
     if (req.query.recordId) filter.recordId = req.query.recordId;
     if (['queued', 'sent', 'failed', 'uncertain'].includes(req.query.event)) filter.event = req.query.event;
+    const keyword = String(req.query.q ?? '').trim();
+    if (keyword) {
+      const pattern = new RegExp(escapeRegExp(keyword), 'i');
+      filter.$or = [
+        { recipient: pattern },
+        { reportNumber: pattern },
+        { petName: pattern },
+        { ownerName: pattern },
+      ];
+    }
+    const createdAt = {};
+    const from = req.query.from ? new Date(`${req.query.from}T00:00:00`) : null;
+    const to = req.query.to ? new Date(`${req.query.to}T00:00:00`) : null;
+    if (from && !Number.isNaN(from.getTime())) createdAt.$gte = from;
+    if (to && !Number.isNaN(to.getTime())) {
+      to.setDate(to.getDate() + 1);
+      createdAt.$lt = to;
+    }
+    if (Object.keys(createdAt).length) filter.createdAt = createdAt;
 
     const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 200);

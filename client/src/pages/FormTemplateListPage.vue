@@ -220,7 +220,7 @@ onMounted(load);
                 v-for="option in SPECIES_FILTERS"
                 :key="option.value"
                 type="button"
-                class="inline-flex min-h-9 items-center rounded-lg border px-3 text-sm font-medium transition-colors"
+                class="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm font-medium transition-colors"
                 :class="speciesFilter === option.value
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border text-foreground hover:bg-muted/40   '"
@@ -237,7 +237,7 @@ onMounted(load);
                 v-for="option in STATUS_FILTERS"
                 :key="option.value"
                 type="button"
-                class="inline-flex min-h-9 items-center rounded-lg border px-3 text-sm font-medium transition-colors"
+                class="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm font-medium transition-colors"
                 :class="statusFilter === option.value
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border text-foreground hover:bg-muted/40   '"
@@ -247,7 +247,7 @@ onMounted(load);
             </div>
           </div>
 
-          <Button v-if="hasFilters" type="button" variant="ghost" size="sm" class="ml-auto min-h-9" @click="clearFilters">清除篩選</Button>
+          <Button v-if="hasFilters" type="button" variant="ghost" size="sm" class="ml-auto" @click="clearFilters">清除篩選</Button>
         </div>
       </SearchPanel>
 
