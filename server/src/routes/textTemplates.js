@@ -5,7 +5,6 @@ import FormTemplate from '../models/FormTemplate.js';
 import { escapeRegExp } from '../lib/regex.js';
 
 const router = Router();
-const CATEGORIES = new Set(['conclusion', 'care', 'history', 'exam', 'other']);
 const TEXT_TEMPLATE_ITEM_TYPES = new Set(['text', 'textarea', 'finding', 'lab']);
 
 function cleanItemKeys(value) {
@@ -30,7 +29,6 @@ export async function migrateLegacyQuickPhrases() {
         $setOnInsert: {
           name: legacyName(phrase.text),
           content: phrase.text,
-          category: 'other',
           availableForAllFields: false,
           applicableItemKeys: [phrase.itemKey],
           enabled: true,
@@ -55,7 +53,6 @@ function readPayload(body) {
   return {
     name,
     content,
-    category: CATEGORIES.has(body?.category) ? body.category : 'other',
     availableForAllFields,
     applicableItemKeys,
     enabled: body?.enabled !== false,
@@ -118,7 +115,7 @@ router.get('/', async (req, res, next) => {
       const keyword = new RegExp(escapeRegExp(query), 'i');
       filter.$or = [{ name: keyword }, { content: keyword }];
     }
-    const templates = await TextTemplate.find(filter).sort({ usageCount: -1, updatedAt: -1 });
+    const templates = await TextTemplate.find(filter).select('-category').sort({ usageCount: -1, updatedAt: -1 });
     res.json(templates);
   } catch (err) {
     next(err);
@@ -148,9 +145,9 @@ router.put('/:id', async (req, res, next) => {
     }
     const template = await TextTemplate.findOneAndUpdate(
       { _id: req.params.id, __v: expectedVersion },
-      { $set: payload, $inc: { __v: 1 } },
+      { $set: payload, $unset: { category: 1 }, $inc: { __v: 1 } },
       { new: true, runValidators: true }
-    );
+    ).select('-category');
     if (!template) {
       const current = await TextTemplate.findById(req.params.id).select('__v');
       if (!current) return res.status(404).json({ message: '找不到文字模板' });
@@ -164,7 +161,7 @@ router.put('/:id', async (req, res, next) => {
 
 router.post('/:id/use', async (req, res, next) => {
   try {
-    const template = await TextTemplate.findByIdAndUpdate(req.params.id, { $inc: { usageCount: 1 } }, { new: true });
+    const template = await TextTemplate.findByIdAndUpdate(req.params.id, { $inc: { usageCount: 1 } }, { new: true }).select('-category');
     if (!template) return res.status(404).json({ message: '找不到文字模板' });
     res.json(template);
   } catch (err) {

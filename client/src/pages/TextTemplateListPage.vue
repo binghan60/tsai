@@ -12,7 +12,6 @@ import ListSkeleton from '../components/ListSkeleton.vue';
 import ModalDialog from '../components/ModalDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
@@ -28,20 +27,10 @@ const router = useRouter();
 const toast = useToast();
 const { templates, loadTemplates, createTemplate, updateTemplate, deleteTemplate } = useTextTemplates();
 
-const CATEGORY_OPTIONS = [
-  { value: 'conclusion', label: '結論' },
-  { value: 'care', label: '照護建議' },
-  { value: 'history', label: '病史' },
-  { value: 'exam', label: '檢查說明' },
-  { value: 'other', label: '其他' },
-];
-const CATEGORY_LABELS = Object.fromEntries(CATEGORY_OPTIONS.map((entry) => [entry.value, entry.label]));
-
 const fields = ref([]);
 const loading = ref(true);
 const error = ref('');
 const query = ref('');
-const category = ref('all');
 const status = ref('all');
 const editorOpen = ref(false);
 const editingId = ref('');
@@ -55,7 +44,6 @@ const fieldFormFilter = ref('all');
 const form = reactive({
   name: '',
   content: '',
-  category: 'other',
   availableForAllFields: false,
   applicableItemKeys: [],
   enabled: true,
@@ -75,7 +63,6 @@ const filteredFields = computed(() => {
 const visibleTemplates = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   return templates.value.filter((template) => {
-    if (category.value !== 'all' && template.category !== category.value) return false;
     if (status.value === 'enabled' && template.enabled === false) return false;
     if (status.value === 'disabled' && template.enabled !== false) return false;
     return !keyword || `${template.name} ${template.content}`.toLowerCase().includes(keyword);
@@ -85,7 +72,6 @@ const visibleTemplates = computed(() => {
 function resetForm(template = null) {
   form.name = template?.name ?? '';
   form.content = template?.content ?? '';
-  form.category = template?.category ?? 'other';
   form.availableForAllFields = template?.availableForAllFields === true;
   form.applicableItemKeys = [...(template?.applicableItemKeys ?? [])];
   form.enabled = template?.enabled !== false;
@@ -133,7 +119,6 @@ async function save() {
   const payload = {
     name: form.name,
     content: form.content,
-    category: form.category,
     availableForAllFields: form.availableForAllFields,
     applicableItemKeys: form.applicableItemKeys,
     enabled: form.enabled,
@@ -157,7 +142,6 @@ async function toggleEnabled(template, enabled) {
     await updateTemplate(template._id, {
       name: template.name,
       content: template.content,
-      category: template.category,
       availableForAllFields: template.availableForAllFields,
       applicableItemKeys: template.applicableItemKeys,
       enabled,
@@ -216,9 +200,8 @@ onMounted(load);
     <template v-else>
       <SearchPanel id="text-template-search" v-model="query" label="搜尋文字模板" placeholder="搜尋模板名稱或內容">
         <div class="mt-3 flex flex-wrap items-center gap-3 px-1">
-          <Select v-model="category"><SelectTrigger class="w-40" aria-label="模板分類"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">全部分類</SelectItem><SelectItem v-for="option in CATEGORY_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</SelectItem></SelectContent></Select>
           <Select v-model="status"><SelectTrigger class="w-36" aria-label="模板狀態"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">全部狀態</SelectItem><SelectItem value="enabled">使用中</SelectItem><SelectItem value="disabled">已停用</SelectItem></SelectContent></Select>
-          <Button v-if="query || category !== 'all' || status !== 'all'" type="button" variant="ghost" @click="query = ''; category = 'all'; status = 'all'">清除篩選</Button>
+          <Button v-if="query || status !== 'all'" type="button" variant="ghost" @click="query = ''; status = 'all'">清除篩選</Button>
         </div>
       </SearchPanel>
 
@@ -226,10 +209,9 @@ onMounted(load);
       <EmptyState v-if="!visibleTemplates.length" :icon="templates.length ? SearchX : FileText" :title="templates.length ? '找不到符合條件的文字模板' : '尚未建立文字模板'" description="建立後，填寫健檢的文字欄位便能從模板介面插入。"><Button type="button" class="mt-4" @click="openCreate">新增第一份模板</Button></EmptyState>
 
       <Card v-if="visibleTemplates.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm xl:block">
-        <Table><TableHeader><TableRow><TableHead>模板名稱</TableHead><TableHead>分類</TableHead><TableHead>適用欄位</TableHead><TableHead>啟用</TableHead><TableHead class="text-right">操作</TableHead></TableRow></TableHeader>
+        <Table><TableHeader><TableRow><TableHead>模板名稱</TableHead><TableHead>適用欄位</TableHead><TableHead>啟用</TableHead><TableHead class="text-right">操作</TableHead></TableRow></TableHeader>
           <TableBody><TableRow v-for="template in visibleTemplates" :key="template._id">
             <TableCell class="max-w-md"><button type="button" class="block w-full text-left" @click="openEdit(template)"><span class="block font-medium text-belle-600 dark:text-brand-400">{{ template.name }}</span><span class="block truncate text-xs text-muted-foreground">{{ template.content }}</span></button></TableCell>
-            <TableCell><Badge variant="outline">{{ CATEGORY_LABELS[template.category] }}</Badge></TableCell>
             <TableCell class="max-w-64 truncate text-sm text-foreground" :title="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</TableCell>
             <TableCell><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></TableCell>
             <TableCell><div class="flex justify-end gap-1"><Button type="button" variant="ghost" size="icon" :aria-label="`編輯${template.name}`" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" :aria-label="`複製${template.name}`" @click="duplicate(template)"><Copy class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" :aria-label="`刪除${template.name}`" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button></div></TableCell>
@@ -238,7 +220,7 @@ onMounted(load);
       </Card>
 
       <div v-if="visibleTemplates.length" class="space-y-3 xl:hidden">
-        <Card v-for="template in visibleTemplates" :key="template._id" class="p-4"><div class="flex items-start justify-between gap-3"><button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)"><span class="font-semibold text-foreground">{{ template.name }}</span><span class="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{{ template.content }}</span></button><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></div><div class="mt-3 flex items-center gap-2 border-t border-border pt-3"><Badge variant="outline">{{ CATEGORY_LABELS[template.category] }}</Badge><span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ applicabilityLabel(template) }}</span><Button type="button" variant="ghost" size="icon" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button></div></Card>
+        <Card v-for="template in visibleTemplates" :key="template._id" class="p-4"><div class="flex items-start justify-between gap-3"><button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)"><span class="font-semibold text-foreground">{{ template.name }}</span><span class="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{{ template.content }}</span></button><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></div><div class="mt-3 flex items-center gap-2 border-t border-border pt-3"><span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ applicabilityLabel(template) }}</span><Button type="button" variant="ghost" size="icon" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button></div></Card>
       </div>
     </template>
 
@@ -247,7 +229,7 @@ onMounted(load);
       <form @submit.prevent="save">
         <div class="space-y-5 px-6 pb-6">
           <Alert v-if="editorError" variant="destructive"><AlertDescription>{{ editorError }}</AlertDescription></Alert>
-          <div class="grid gap-4 sm:grid-cols-[1fr_180px]"><div class="space-y-1.5"><Label for="text-template-name">模板名稱</Label><Input id="text-template-name" v-model="form.name" maxlength="80" placeholder="例如：老年犬年度健檢建議" /></div><div class="space-y-1.5"><Label for="text-template-category">分類</Label><Select v-model="form.category"><SelectTrigger id="text-template-category" class="w-full"><SelectValue /></SelectTrigger><SelectContent><SelectItem v-for="option in CATEGORY_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</SelectItem></SelectContent></Select></div></div>
+          <div class="space-y-1.5"><Label for="text-template-name">模板名稱</Label><Input id="text-template-name" v-model="form.name" maxlength="80" placeholder="例如：老年犬年度健檢建議" /></div>
           <div class="space-y-1.5"><Label for="text-template-content">模板內容</Label><Textarea id="text-template-content" v-model="form.content" class="min-h-64 whitespace-pre-wrap" maxlength="2000" placeholder="輸入要插入報告的完整文字內容…" /><p class="text-right text-xs tabular-nums text-muted-foreground">{{ form.content.length }} / 2,000</p></div>
           <div class="rounded-xl border border-border p-4"><div class="flex items-start justify-between gap-4"><div><p class="text-sm font-medium text-foreground">所有文字欄位皆可使用</p><p class="mt-1 text-xs text-muted-foreground">關閉後可指定一個或多個適用欄位。</p></div><Switch :model-value="form.availableForAllFields" aria-label="所有文字欄位皆可使用" @update:model-value="form.availableForAllFields = $event" /></div>
             <div v-if="!form.availableForAllFields" class="mt-4 border-t border-border pt-3">

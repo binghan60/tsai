@@ -4,21 +4,12 @@ import { FileText, Search } from '@lucide/vue';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
-import { Badge } from '../ui/badge';
 import { useTextTemplates } from '../../composables/useTextTemplates';
 
 const { picker, closePicker, templatesFor, markUsed } = useTextTemplates();
 const query = ref('');
 const scope = ref('relevant');
 const selectedId = ref('');
-
-const CATEGORY_LABELS = {
-  conclusion: '結論',
-  care: '照護建議',
-  history: '病史',
-  exam: '檢查說明',
-  other: '其他',
-};
 
 const candidates = computed(() => {
   if (!picker.value) return [];
@@ -73,10 +64,7 @@ function insert(mode) {
               :class="selectedId === template._id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/30'"
               @click="selectedId = template._id"
             >
-              <span class="flex items-start justify-between gap-2">
-                <span class="font-medium text-foreground">{{ template.name }}</span>
-                <Badge variant="outline" class="shrink-0">{{ CATEGORY_LABELS[template.category] }}</Badge>
-              </span>
+              <span class="font-medium text-foreground">{{ template.name }}</span>
               <span class="mt-1 line-clamp-2 whitespace-pre-wrap text-xs text-muted-foreground">{{ template.content }}</span>
             </button>
             <p v-if="!candidates.length" class="py-8 text-center text-sm text-muted-foreground">{{ scope === 'relevant' ? '目前沒有適用此欄位的模板。' : '找不到符合條件的模板。' }}</p>
@@ -85,10 +73,7 @@ function insert(mode) {
 
         <div class="min-h-48 overflow-y-auto p-5 md:max-h-[62vh]">
           <template v-if="selected">
-            <div class="flex flex-wrap items-center gap-2">
-              <h3 class="text-base font-semibold text-foreground">{{ selected.name }}</h3>
-              <Badge variant="outline">{{ CATEGORY_LABELS[selected.category] }}</Badge>
-            </div>
+            <h3 class="text-base font-semibold text-foreground">{{ selected.name }}</h3>
             <div class="mt-4 whitespace-pre-wrap rounded-xl border border-border bg-field p-4 text-sm leading-7 text-foreground">{{ selected.content }}</div>
           </template>
           <div v-else class="flex min-h-48 flex-col items-center justify-center text-center text-muted-foreground">

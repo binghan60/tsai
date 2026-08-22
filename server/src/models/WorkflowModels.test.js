@@ -27,6 +27,7 @@ describe('cross-document workflow schemas', () => {
   it('supports named long-form text templates with field scopes', () => {
     assert.equal(TextTemplate.schema.path('name').options.maxlength, 80);
     assert.equal(TextTemplate.schema.path('content').options.maxlength, 2000);
+    assert.equal(TextTemplate.schema.path('category'), undefined);
     assert.equal(TextTemplate.schema.path('availableForAllFields').instance, 'Boolean');
     assert.equal(TextTemplate.schema.path('applicableItemKeys').instance, 'Array');
     assert.equal(TextTemplate.schema.options.optimisticConcurrency, true);
