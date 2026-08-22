@@ -198,7 +198,7 @@ function goToPage(next) {
     <template v-else>
       <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 位飼主</p>
 
-      <Card v-if="owners.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm xl:block">
+      <Card v-if="owners.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm lg:block">
         <Table>
           <TableHeader>
             <TableRow class="border-border text-muted-foreground"><TableHead class="font-medium">姓名</TableHead><TableHead class="font-medium">電話</TableHead><TableHead class="font-medium">Email</TableHead><TableHead class="text-right font-medium">操作</TableHead></TableRow>
@@ -214,7 +214,7 @@ function goToPage(next) {
         </Table>
       </Card>
 
-      <div v-if="owners.length" class="space-y-3 xl:hidden">
+      <div v-if="owners.length" class="space-y-3 lg:hidden">
         <Card v-for="owner in owners" :key="owner._id" class="p-4">
           <div class="flex items-start gap-3">
             <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span><span class="min-w-0"><span class="block font-semibold text-foreground">{{ owner.name }}</span><span class="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground"><Phone class="h-3.5 w-3.5" />{{ owner.phone }}</span><span v-if="owner.email" class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground"><Mail class="h-3.5 w-3.5" />{{ owner.email }}</span></span></router-link>

@@ -87,8 +87,9 @@ onBeforeUnmount(() => {
       <p class="mt-1 text-sm text-muted-foreground">每一次寄送嘗試的完整歷程，包含收件信箱與失敗原因。報告刪除後這裡仍然查得到。</p>
     </div>
 
-    <nav class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-sm" aria-label="寄送事件篩選">
-      <button
+    <div class="relative">
+      <nav class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 pr-8 shadow-sm" aria-label="寄送事件篩選">
+        <button
         v-for="item in EVENTS"
         :key="item.key || 'all'"
         type="button"
@@ -98,8 +99,10 @@ onBeforeUnmount(() => {
           : 'border-transparent text-foreground hover:bg-muted/40  '"
         :aria-current="event === item.key ? 'page' : undefined"
         @click="selectEvent(item.key)"
-      >{{ item.label }}</button>
-    </nav>
+        >{{ item.label }}</button>
+      </nav>
+      <span aria-hidden="true" class="pointer-events-none absolute inset-y-1.5 right-1.5 w-10 rounded-r-lg bg-gradient-to-l from-card via-card/80 to-transparent sm:hidden"></span>
+    </div>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />

@@ -918,7 +918,7 @@ function handleBeforeUnload(event) {
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
       <div v-if="!isLocked" id="record-action-bar" class="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] lg:left-64">
         <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <p class="hidden items-center gap-2 text-xs text-muted-foreground sm:flex"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
+          <p class="flex items-center gap-1.5 text-xs text-muted-foreground"><Activity class="h-4 w-4" />進度 {{ completedCount }}/{{ FORM_SECTIONS.length }}<span class="hidden sm:inline"> 個區段</span></p>
           <div class="ml-auto flex flex-wrap items-center gap-2">
             <Button type="button" variant="outline" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
             <Button type="button" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>

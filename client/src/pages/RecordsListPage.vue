@@ -125,8 +125,9 @@ function actionLabel(record) {
     </div>
 
     <!-- 佇列切換。數字不隨關鍵字篩選變動，它回答的是「總共還有多少事沒做完」。 -->
-    <nav class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 shadow-sm" aria-label="健檢紀錄佇列">
-      <button
+    <div class="relative">
+      <nav class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 pr-8 shadow-sm" aria-label="健檢紀錄佇列">
+        <button
         v-for="item in VIEWS"
         :key="item.key"
         type="button"
@@ -143,8 +144,10 @@ function actionLabel(record) {
           class="rounded-full px-1.5 py-0.5 text-xs tabular-nums"
           :class="(view || 'todo') === item.key ? 'bg-white/20' : 'bg-muted/60 text-muted-foreground '"
         >{{ counts[item.key] }}</span>
-      </button>
-    </nav>
+        </button>
+      </nav>
+      <span aria-hidden="true" class="pointer-events-none absolute inset-y-1.5 right-1.5 w-10 rounded-r-lg bg-gradient-to-l from-card via-card/80 to-transparent sm:hidden"></span>
+    </div>
 
     <SearchPanel id="record-search" v-model="query" label="搜尋健檢紀錄" placeholder="輸入寵物名、飼主姓名、電話、報告編號或獸醫師" :loading="loading" :error="error" />
 

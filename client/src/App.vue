@@ -95,11 +95,11 @@ watch(
           <button
             type="button"
             class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            aria-label="搜尋飼主、寵物或病歷"
+            aria-label="搜尋飼主、寵物或寵物病歷號"
             @click="openGlobalSearch"
           >
             <Search class="h-4 w-4 shrink-0" stroke-width="1.9" />
-            <span class="truncate">搜尋飼主、寵物或病歷</span>
+            <span class="truncate">搜尋飼主、寵物或寵物病歷號</span>
             <kbd class="ml-auto shrink-0 rounded border border-sidebar-border px-1.5 py-0.5 text-xs text-sidebar-foreground/70">Ctrl K</kbd>
           </button>
         </div>
@@ -150,9 +150,20 @@ watch(
             <p class="truncate text-sm font-medium text-foreground">{{ activeTitle }}</p>
           </div>
 
-          <button type="button" aria-label="搜尋飼主、寵物或病歷" class="hidden min-h-11 min-w-72 items-center rounded-lg border border-input bg-card/70 px-3 text-sm text-muted-foreground shadow-sm hover:border-brand-400 hover:text-primary dark:bg-card/70 dark:hover:border-brand-500/70 dark:hover:text-brand-300 md:flex" @click="openGlobalSearch">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            class="min-w-11 md:hidden"
+            aria-label="搜尋飼主、寵物或寵物病歷號"
+            @click="openGlobalSearch"
+          >
+            <Search class="h-4 w-4" stroke-width="1.75" />
+          </Button>
+
+          <button type="button" aria-label="搜尋飼主、寵物或寵物病歷號" class="hidden min-h-11 min-w-72 items-center rounded-lg border border-input bg-card/70 px-3 text-sm text-muted-foreground shadow-sm hover:border-brand-400 hover:text-primary dark:bg-card/70 dark:hover:border-brand-500/70 dark:hover:text-brand-300 md:flex" @click="openGlobalSearch">
             <Search class="mr-2 h-4 w-4" stroke-width="1.75" />
-            <span class="py-2">搜尋飼主、寵物或病歷</span>
+            <span class="py-2">搜尋飼主、寵物或寵物病歷號</span>
           </button>
 
           <Button

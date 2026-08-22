@@ -119,7 +119,7 @@ onBeforeUnmount(() => {
       :show-close-button="false"
       @open-auto-focus.prevent
     >
-      <DialogTitle class="sr-only">搜尋飼主、寵物或病歷</DialogTitle>
+      <DialogTitle class="sr-only">搜尋飼主、寵物或寵物病歷號</DialogTitle>
       <DialogDescription class="sr-only">輸入關鍵字即時搜尋，用上下鍵選擇、Enter 前往。</DialogDescription>
 
       <div class="relative flex items-center gap-3 border-b border-border px-4">
@@ -139,7 +139,7 @@ onBeforeUnmount(() => {
       <div class="max-h-[min(60vh,26rem)] overflow-y-auto">
         <p v-if="searching" class="px-4 py-6 text-sm text-muted-foreground" role="status">搜尋中…</p>
         <p v-else-if="searchError" class="px-4 py-6 text-sm text-red-700 dark:text-red-300">{{ searchError }}</p>
-        <p v-else-if="!hasQuery" class="px-4 py-6 text-sm text-muted-foreground">輸入寵物名、飼主姓名、電話或病歷號開始搜尋。</p>
+        <p v-else-if="!hasQuery" class="px-4 py-6 text-sm text-muted-foreground">輸入寵物名、飼主姓名、電話或寵物病歷號開始搜尋。</p>
         <p v-else-if="!flatResults.length" class="px-4 py-6 text-sm text-muted-foreground">找不到符合的寵物或飼主。</p>
 
         <template v-else>

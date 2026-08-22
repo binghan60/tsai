@@ -94,7 +94,7 @@ function goToPage(next) {
     <template v-else>
       <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 隻寵物</p>
 
-      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none xl:block">
+      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none lg:block">
         <Table>
           <TableHeader>
             <TableRow class="border-border text-muted-foreground">
@@ -132,7 +132,7 @@ function goToPage(next) {
         </Table>
       </Card>
 
-      <div v-if="pets.length" class="space-y-3 xl:hidden">
+      <div v-if="pets.length" class="space-y-3 lg:hidden">
         <Card v-for="pet in pets" :key="pet._id" class="p-4 shadow-sm dark:shadow-none">
           <router-link :to="`/pets/${pet._id}`" class="flex items-start gap-3">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><Cat class="h-5 w-5" /></span>
