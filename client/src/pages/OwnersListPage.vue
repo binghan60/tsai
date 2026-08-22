@@ -1,10 +1,9 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Mail, Pencil, Phone, Trash2, Users } from '@lucide/vue';
 import OwnerFormDialog from '../components/OwnerFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
-import SearchPanel from '../components/SearchPanel.vue';
 import { http } from '../api/http';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -20,7 +19,6 @@ const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 const owners = ref([]);
-const query = useSearchQueryParam();
 const page = useSearchQueryParam('page', '1');
 const total = ref(0);
 const limit = ref(25);
@@ -45,7 +43,7 @@ async function fetchOwners() {
   error.value = '';
   try {
     const { data } = await http.get('/owners', {
-      params: { page: Number(page.value) || 1, ...(query.value ? { q: query.value } : {}) },
+      params: { page: Number(page.value) || 1 },
     });
     if (currentRequest === requestSequence) {
       owners.value = data.items ?? [];
@@ -153,19 +151,7 @@ function goManagePets() {
   router.push(`/owners/${id}`);
 }
 
-let debounceTimer;
-watch(query, () => {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    if (currentPage.value !== 1) {
-      page.value = '1';
-      return;
-    }
-    fetchOwners();
-  }, 300);
-});
 watch(page, fetchOwners, { immediate: true });
-onBeforeUnmount(() => clearTimeout(debounceTimer));
 
 onMounted(() => {
   if (route.query.create === '1') openCreate();
@@ -189,8 +175,6 @@ function goToPage(next) {
       </div>
       <Button type="button" @click="openCreate">+ 新增飼主</Button>
     </div>
-
-    <SearchPanel id="owner-search" v-model="query" label="搜尋飼主" placeholder="輸入姓名或電話" />
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
@@ -228,8 +212,10 @@ function goToPage(next) {
       <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
         <p class="text-xs tabular-nums text-muted-foreground">第 {{ currentPage }} / {{ totalPages }} 頁</p>
         <div class="flex gap-2">
+          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage <= 1" @click="goToPage(1)">第一頁</Button>
           <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
           <Button type="button" variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
+          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage >= totalPages" @click="goToPage(totalPages)">最後頁</Button>
         </div>
       </div>
     </template>

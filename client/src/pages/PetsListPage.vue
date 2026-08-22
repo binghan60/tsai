@@ -1,9 +1,8 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { Cat, ClipboardPlus, User } from '@lucide/vue';
 import { http } from '../api/http';
-import SearchPanel from '../components/SearchPanel.vue';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
@@ -14,7 +13,6 @@ import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 
 const route = useRoute();
 const pets = ref([]);
-const query = useSearchQueryParam();
 const page = useSearchQueryParam('page', '1');
 const total = ref(0);
 const limit = ref(25);
@@ -28,7 +26,7 @@ async function fetchPets() {
   error.value = '';
   try {
     const { data } = await http.get('/pets', {
-      params: { page: Number(page.value) || 1, ...(query.value ? { q: query.value } : {}) },
+      params: { page: Number(page.value) || 1 },
     });
     if (currentRequest === requestSequence) {
       pets.value = data.items ?? [];
@@ -49,19 +47,7 @@ function sexLabel(sex) {
   return { male: '公', female: '母', unknown: '性別未記錄' }[sex] ?? '性別未記錄';
 }
 
-let debounceTimer;
-watch(query, () => {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    if (currentPage.value !== 1) {
-      page.value = '1';
-      return;
-    }
-    fetchPets();
-  }, 300);
-});
 watch(page, fetchPets, { immediate: true });
-onBeforeUnmount(() => clearTimeout(debounceTimer));
 
 const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
@@ -83,10 +69,8 @@ function goToPage(next) {
     </div>
 
     <div v-if="route.query.intent === 'new-record'" class="rounded-xl border border-belle-200 bg-belle-50 px-4 py-3 text-sm text-belle-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
-      請搜尋並選擇寵物，接著點選「新增健檢」。
+      請使用側邊欄搜尋並選擇寵物，接著點選「新增健檢」。
     </div>
-
-    <SearchPanel id="pet-search" v-model="query" label="搜尋寵物" placeholder="輸入寵物名、飼主姓名或電話" />
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
@@ -155,8 +139,10 @@ function goToPage(next) {
       <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
         <p class="text-xs tabular-nums text-muted-foreground">第 {{ currentPage }} / {{ totalPages }} 頁</p>
         <div class="flex gap-2">
+          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage <= 1" @click="goToPage(1)">第一頁</Button>
           <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
           <Button type="button" variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
+          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage >= totalPages" @click="goToPage(totalPages)">最後頁</Button>
         </div>
       </div>
     </template>

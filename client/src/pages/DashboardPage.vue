@@ -1,12 +1,11 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { AlertTriangle, ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Phone, Trash2, User, Users } from '@lucide/vue';
+import { AlertTriangle, ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Trash2, Users } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
 import { useTheme } from '../composables/useTheme';
-import SearchPanel from '../components/SearchPanel.vue';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -17,10 +16,6 @@ const loading = ref(true);
 const { isDark } = useTheme();
 const error = ref('');
 const dashboard = ref(null);
-const query = ref('');
-const searching = ref(false);
-const searchError = ref('');
-const results = ref({ owners: [], pets: [] });
 const deletingDraftId = ref('');
 const draftToDiscard = ref(null);
 
@@ -80,28 +75,6 @@ const statusSegments = computed(() => {
   ];
 });
 
-let searchSequence = 0;
-
-async function searchAll() {
-  const value = query.value.trim();
-  if (!value) {
-    searchSequence += 1;
-    results.value = { owners: [], pets: [] };
-    return;
-  }
-  const currentRequest = ++searchSequence;
-  searching.value = true;
-  searchError.value = '';
-  try {
-    const { data } = await http.get('/search', { params: { q: value } });
-    if (currentRequest === searchSequence) results.value = data;
-  } catch (err) {
-    if (currentRequest === searchSequence) searchError.value = '搜尋暫時無法使用';
-  } finally {
-    if (currentRequest === searchSequence) searching.value = false;
-  }
-}
-
 async function discardDraft(item) {
   if (deletingDraftId.value) return;
   deletingDraftId.value = item._id;
@@ -121,13 +94,6 @@ function openDiscardDraft(item) {
   if (deletingDraftId.value) return;
   draftToDiscard.value = item;
 }
-
-let searchTimer;
-watch(query, () => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(searchAll, 250);
-});
-onBeforeUnmount(() => clearTimeout(searchTimer));
 
 function formatDate(value) {
   return formatClinicDate(value, '日期未填');
@@ -150,21 +116,6 @@ onMounted(fetchDashboard);
       <div><h1 class="text-xl font-semibold text-foreground">健檢工作台</h1><p class="mt-1 text-sm text-muted-foreground">快速找到寵物、繼續草稿或建立新的健檢紀錄。</p></div>
       <div class="flex flex-wrap gap-2"><Button as-child variant="outline"><router-link to="/owners?create=1">+ 新增飼主</router-link></Button><Button as-child><router-link to="/pets?intent=new-record"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button></div>
     </div>
-
-    <SearchPanel id="global-search" v-model="query" label="快速搜尋" placeholder="搜尋寵物、飼主或電話" :loading="searching" :error="searchError">
-      <div v-if="query.trim() && !searching" class="mt-3 grid gap-3 lg:grid-cols-2">
-        <div class="overflow-hidden rounded-xl border border-border">
-          <p class="border-b border-border px-4 py-2 text-xs font-semibold text-muted-foreground">寵物</p>
-          <router-link v-for="pet in results.pets" :key="pet._id" :to="`/pets/${pet._id}`" class="flex min-h-14 items-center justify-between gap-3 border-b border-border px-4 py-2 last:border-0 hover:bg-muted/40"><span class="flex min-w-0 items-center gap-3"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="min-w-0"><span class="block truncate text-sm font-medium text-foreground">{{ pet.name }}</span><span class="block truncate text-xs text-muted-foreground">飼主 {{ pet.ownerId?.name || '—' }}</span></span></span><ArrowRight class="h-4 w-4 shrink-0 text-muted-foreground" /></router-link>
-          <p v-if="results.pets.length === 0" class="px-4 py-4 text-sm text-muted-foreground">找不到寵物</p>
-        </div>
-        <div class="overflow-hidden rounded-xl border border-border">
-          <p class="border-b border-border px-4 py-2 text-xs font-semibold text-muted-foreground">飼主</p>
-          <router-link v-for="owner in results.owners" :key="owner._id" :to="`/owners/${owner._id}`" class="flex min-h-14 items-center justify-between gap-3 border-b border-border px-4 py-2 last:border-0 hover:bg-muted/40"><span class="flex min-w-0 items-center gap-3"><User class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="min-w-0"><span class="block truncate text-sm font-medium text-foreground">{{ owner.name }}</span><span class="flex items-center gap-1 text-xs text-muted-foreground"><Phone class="h-3 w-3" />{{ owner.phone }}</span></span></span><ArrowRight class="h-4 w-4 shrink-0 text-muted-foreground" /></router-link>
-          <p v-if="results.owners.length === 0" class="px-4 py-4 text-sm text-muted-foreground">找不到飼主</p>
-        </div>
-      </div>
-    </SearchPanel>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <p v-else-if="loading" class="text-sm text-muted-foreground" role="status">載入工作台…</p>

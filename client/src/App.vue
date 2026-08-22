@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, provide, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { Cat, ClipboardList, FileText, LayoutDashboard, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
 import { useTheme } from './composables/useTheme';
@@ -62,6 +62,7 @@ const navActiveClass = 'border-sidebar-border bg-sidebar-accent text-sidebar-acc
 function openGlobalSearch() {
   searchOpen.value = true;
 }
+provide('openGlobalSearch', openGlobalSearch);
 
 watch(
   () => route.fullPath,

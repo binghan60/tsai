@@ -1,11 +1,10 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { AlertTriangle, ClipboardPlus, FileText, MailCheck, PawPrint, Pencil, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
-import SearchPanel from '../components/SearchPanel.vue';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -22,7 +21,6 @@ const VIEWS = [
   { key: 'all', label: '全部' },
 ];
 
-const query = useSearchQueryParam('q');
 const view = useSearchQueryParam('view', 'todo');
 const page = useSearchQueryParam('page', '1');
 
@@ -44,7 +42,6 @@ async function fetchRecords() {
       params: {
         view: view.value || 'todo',
         page: Number(page.value) || 1,
-        ...(query.value.trim() ? { q: query.value.trim() } : {}),
       },
     });
     if (currentRequest !== requestSequence) return;
@@ -52,6 +49,12 @@ async function fetchRecords() {
     counts.value = data.counts ?? {};
     total.value = data.total ?? 0;
     limit.value = data.limit ?? 25;
+    const returnedTotalPages = Math.max(Math.ceil(total.value / limit.value), 1);
+    // 其他人刪除資料或新篩選條件縮小結果時，原本頁碼可能超出最後一頁；
+    // 立即回到有效頁碼，避免只看到空白狀態且沒有分頁可以離開。
+    if (!records.value.length && total.value > 0 && currentPage.value > returnedTotalPages) {
+      page.value = String(returnedTotalPages);
+    }
   } catch (err) {
     if (currentRequest === requestSequence) error.value = '健檢紀錄暫時無法載入，請稍後重試';
   } finally {
@@ -75,23 +78,7 @@ function goToPage(next) {
   page.value = String(target);
 }
 
-// 關鍵字要 debounce，換佇列與翻頁則要立刻反應——打字每個字都送一次請求太吵，
-// 但按下分頁鍵後等半秒才動會像卡住。
-let debounceTimer;
-watch(query, () => {
-  clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    // 換了關鍵字就是換一份清單，得從第 1 頁看起。
-    // 改 page 會由下面那個 watch 觸發 fetch，這裡不能再自己發一次。
-    if (currentPage.value !== 1) {
-      page.value = '1';
-      return;
-    }
-    fetchRecords();
-  }, 300);
-});
 watch([view, page], fetchRecords, { immediate: true });
-onBeforeUnmount(() => clearTimeout(debounceTimer));
 
 function formatDate(value) {
   return formatClinicDate(value, '日期未填');
@@ -149,10 +136,8 @@ function actionLabel(record) {
       <span aria-hidden="true" class="pointer-events-none absolute inset-y-1.5 right-1.5 w-10 rounded-r-lg bg-gradient-to-l from-card via-card/80 to-transparent sm:hidden"></span>
     </div>
 
-    <SearchPanel id="record-search" v-model="query" label="搜尋健檢紀錄" placeholder="輸入寵物名、飼主姓名、電話、報告編號或獸醫師" :loading="loading" :error="error" />
-
     <p v-if="!loading && !error && !records.length" class="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-      {{ query.trim() ? '找不到符合的健檢紀錄。' : '這個佇列目前是空的。' }}
+      這個佇列目前是空的。
     </p>
 
     <template v-else-if="records.length">
@@ -252,8 +237,10 @@ function actionLabel(record) {
       <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
         <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 筆・第 {{ currentPage }} / {{ totalPages }} 頁</p>
         <div class="flex gap-2">
+          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage <= 1" @click="goToPage(1)">第一頁</Button>
           <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
           <Button type="button" variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
+          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage >= totalPages" @click="goToPage(totalPages)">最後頁</Button>
         </div>
       </div>
     </template>
