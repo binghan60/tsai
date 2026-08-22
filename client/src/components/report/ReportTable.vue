@@ -35,18 +35,18 @@ function groupsOf(run) {
             <div
               v-for="finding in group.items"
               :key="finding.key"
-              class="grid grid-cols-[1fr_auto] gap-2 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[220px_95px_170px_1fr]"
+              class="grid grid-cols-[1fr_auto] gap-x-0 gap-y-2 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-4 sm:gap-y-0"
             >
-              <span class="font-medium text-stone-800">{{ finding.label }}</span>
-              <span :class="finding.status === 'abnormal' ? 'text-red-700' : finding.status === 'normal' ? 'text-emerald-700' : 'text-stone-500'">
+              <span class="min-w-0 pr-2 font-medium text-stone-800">{{ finding.label }}</span>
+              <span class="min-w-0 border-stone-100 pl-2 sm:border-l" :class="finding.status === 'abnormal' ? 'text-red-700' : finding.status === 'normal' ? 'text-emerald-700' : 'text-stone-500'">
                 {{ statusText(finding.status) }}
                 <small v-if="finding.statusSource === 'auto'" class="ml-1 text-xs text-stone-500">自動</small>
               </span>
-              <span class="text-stone-700">
+              <span class="min-w-0 border-stone-100 pl-2 text-stone-700 sm:border-l">
                 <strong class="font-medium">{{ labValueLabel(finding) }}</strong>
                 <small v-if="referenceLabel(finding)" class="mt-0.5 block text-xs text-stone-500">參考 {{ referenceLabel(finding) }}</small>
               </span>
-              <span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '' }}</span>
+              <span class="col-span-2 min-w-0 whitespace-pre-wrap text-stone-600 sm:col-span-1 sm:border-l sm:border-stone-100 sm:pl-2">{{ finding.note || '' }}</span>
             </div>
           </div>
         </div>

@@ -21,11 +21,11 @@ const runs = computed(() => sectionRuns(visible.value, (item) => item.type === '
         <div
           v-for="finding in run.items"
           :key="finding.key"
-          class="grid break-inside-avoid grid-cols-[1fr_auto] gap-3 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[190px_90px_1fr]"
+          class="grid break-inside-avoid grid-cols-[1fr_auto] gap-x-0 gap-y-2 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[1fr_1fr_2fr] sm:gap-y-0"
         >
-          <span class="font-medium text-stone-800">{{ finding.label }}</span>
-          <span :class="finding.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'">{{ finding.status === 'abnormal' ? '異常' : '正常' }}</span>
-          <span class="col-span-2 whitespace-pre-wrap text-stone-600 sm:col-span-1">{{ finding.note || '' }}</span>
+          <span class="min-w-0 pr-3 font-medium text-stone-800">{{ finding.label }}</span>
+          <span class="min-w-0 pl-3 sm:border-l sm:border-stone-100" :class="finding.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'">{{ finding.status === 'abnormal' ? '異常' : '正常' }}</span>
+          <span class="col-span-2 min-w-0 whitespace-pre-wrap text-stone-600 sm:col-span-1 sm:border-l sm:border-stone-100 sm:pl-3">{{ finding.note || '' }}</span>
         </div>
       </div>
       <div v-else class="space-y-4">
