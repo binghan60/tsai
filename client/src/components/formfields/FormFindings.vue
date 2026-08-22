@@ -4,7 +4,7 @@ import StatusToggle from './StatusToggle.vue';
 import FieldControl from './FieldControl.vue';
 import { Label } from '../ui/label';
 import SelectableItem from './SelectableItem.vue';
-import QuickPhrases from './QuickPhrases.vue';
+import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import { useRecordForm } from './context';
 import { sectionRuns } from '../../lib/sectionRuns';
 import { spanClass } from '../../lib/fieldSpan';
@@ -54,7 +54,7 @@ const findingsOf = (run) => run.items.map((item) => entryByKey.value.get(item.ke
                 class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none focus:ring-2 focus:ring-belle-100 dark:focus:ring-brand-500/20"
                 :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
               />
-              <QuickPhrases v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" />
+              <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-exam-note-${finding.key}`" />
             </div>
           </div>
         </SelectableItem>

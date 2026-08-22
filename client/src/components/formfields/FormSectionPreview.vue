@@ -54,8 +54,7 @@ function labRangeLabel(item) {
 const selectedKey = computed(() => props.selectedKey);
 const noop = () => {};
 provideRecordForm({
-  // 這是結構預覽，不是在填表 —— 常用語那類「填寫輔助」的 UI 要整個關掉，
-  // 否則畫布上會出現一份跟這份範本無關的真實常用語清單。
+  // 這是結構預覽，不是在填表 —— 文字模板這類「填寫輔助」UI 要整個關掉。
   preview: true,
   // 只有畫布模式才提供 selection；填表單頁不提供，SelectableItem 就完全不產生 DOM。
   selection: props.selectable

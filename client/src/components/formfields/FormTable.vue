@@ -5,7 +5,7 @@ import FieldControl from './FieldControl.vue';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import SelectableItem from './SelectableItem.vue';
-import QuickPhrases from './QuickPhrases.vue';
+import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import PreviousValue from './PreviousValue.vue';
 import { useRecordForm } from './context';
 import { sectionRuns } from '../../lib/sectionRuns';
@@ -74,13 +74,14 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                     class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
                     @input="finding.numeric !== false && autoJudgeLab(finding, $event.target.value)"
                   />
-                  <!-- 數值型欄位打的是數字，沒有常用語可言；只有文字結果才掛。
-                       key 加上 :value 後綴自成一組 —— 結果描述與備註寫的是兩件事，混在同一份清單裡只會互相干擾。 -->
-                  <QuickPhrases
+                  <!-- 數值型欄位打的是數字，不需要文字模板；只有文字結果才掛。
+                       key 加上 :value 後綴自成一組，讓結果描述與備註能指定不同模板。 -->
+                  <TextTemplateTrigger
                     v-if="finding.numeric === false"
                     v-model="finding.value"
                     :item-key="`${finding.key}:value`"
                     :label="`${finding.label}結果描述`"
+                    :input-id="`record-lab-value-${finding.key}`"
                   />
                 </div>
                 <div class="space-y-1.5">
@@ -98,7 +99,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                     class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
                     :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
                   />
-                  <QuickPhrases v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" />
+                  <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-lab-note-${finding.key}`" />
                 </div>
               </div>
             </SelectableItem>

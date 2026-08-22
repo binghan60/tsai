@@ -7,7 +7,7 @@ import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput } from '../lib/datetime';
 import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomId, sectionKeyForItem } from '../lib/formTemplate';
 import { useFormTemplate } from '../composables/useFormTemplate';
-import { useQuickPhrases } from '../composables/useQuickPhrases';
+import { useTextTemplates } from '../composables/useTextTemplates';
 import { useBackTarget } from '../composables/useBackTarget';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -16,14 +16,13 @@ import { Textarea } from '../components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FormSection from '../components/formfields/FormSection.vue';
-import QuickPhraseDeleteDialog from '../components/formfields/QuickPhraseDeleteDialog.vue';
-import QuickPhrasePickerDialog from '../components/formfields/QuickPhrasePickerDialog.vue';
+import TextTemplatePickerDialog from '../components/formfields/TextTemplatePickerDialog.vue';
 import { provideRecordForm } from '../components/formfields/context';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { useToast } from '../composables/useToast';
 
 const { template, loadTemplate, listTemplates } = useFormTemplate();
-const { loadPhrases } = useQuickPhrases();
+const { loadTemplates: loadTextTemplates } = useTextTemplates();
 
 // 區塊與項目定義全部來自範本，不再寫死在頁面裡。
 const TEMPLATE_SECTIONS = computed(() =>
@@ -752,9 +751,8 @@ async function confirmDiscard() {
 }
 onMounted(() => {
   init();
-  // 常用語清單只在模組層級抓一次，之後各欄位都從記憶體篩；
-  // 失敗不影響填表，composable 內部已經吞掉錯誤。
-  loadPhrases();
+  // 文字模板只在模組層級抓一次；載入失敗不該阻止醫師填寫健檢內容。
+  loadTextTemplates().catch(() => {});
   window.addEventListener('beforeunload', handleBeforeUnload);
 });
 onBeforeUnmount(() => {
@@ -945,7 +943,6 @@ function handleBeforeUnload(event) {
       @update:open="(value) => !value && (pendingLeavePath = '')"
       @confirm="confirmLeave"
     />
-    <QuickPhraseDeleteDialog />
-    <QuickPhrasePickerDialog />
+    <TextTemplatePickerDialog />
   </section>
 </template>

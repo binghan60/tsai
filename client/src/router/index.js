@@ -12,6 +12,7 @@ const DeliveryLogsPage = () => import('../pages/DeliveryLogsPage.vue');
 const ReportViewPage = () => import('../pages/ReportViewPage.vue');
 const FormTemplateListPage = () => import('../pages/FormTemplateListPage.vue');
 const FormTemplateEditPage = () => import('../pages/FormTemplateEditPage.vue');
+const TextTemplateListPage = () => import('../pages/TextTemplateListPage.vue');
 
 const router = createRouter({
   history: createWebHistory(),
@@ -38,6 +39,7 @@ const router = createRouter({
     { path: '/settings', redirect: '/settings/forms' },
     { path: '/settings/forms', component: FormTemplateListPage, meta: { title: '表單管理' } },
     { path: '/settings/forms/:id', component: FormTemplateEditPage, meta: { title: '表單設計' } },
+    { path: '/settings/text-templates', component: TextTemplateListPage, meta: { title: '文字模板' } },
     // transient：不列入「使用者從哪來」的紀錄。存檔後這頁會 replace 成 /records/:id/edit，
     // 之後再回到這個 new 網址只會又開一份新草稿。
     // nav：這頁的網址掛在 /pets 底下，但它做的是健檢紀錄，側邊欄該亮的是那一項。

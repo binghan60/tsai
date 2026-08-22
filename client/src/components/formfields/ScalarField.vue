@@ -4,7 +4,7 @@ import FieldShell from './FieldShell.vue';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import QuickPhrases from './QuickPhrases.vue';
+import TextTemplateTrigger from './TextTemplateTrigger.vue';
 
 // 文字／多行／日期／數字／下拉／單選／複選這幾種一般欄位共用同一個元件，
 // 差別只在控制項本身，標籤與必填標記由 FieldShell 統一處理。
@@ -25,7 +25,7 @@ const inputType = computed(() => (props.item.type === 'date' ? 'date' : props.it
 // 表單設計器新增選項時會先產生一列空白，這裡要擋住。
 const options = computed(() => (props.item.options ?? []).filter(Boolean));
 
-// 常用語只掛在真正需要打字的欄位；日期、數字與選項類欄位掛了只是雜訊。
+// 文字模板只掛在真正需要打字的欄位；日期、數字與選項類欄位不需要插入長文。
 const isTextual = computed(() => props.item.type === 'text' || props.item.type === 'textarea');
 const isMulti = computed(() => props.item.type === 'checkbox');
 const checkedList = computed(() => (Array.isArray(props.modelValue) ? props.modelValue : []));
@@ -96,6 +96,6 @@ function toggle(option, checked) {
       :step="item.step ?? undefined"
       :placeholder="item.placeholder"
     />
-    <QuickPhrases v-if="isTextual" v-model="value" :item-key="item.key" :label="item.label" />
+    <TextTemplateTrigger v-if="isTextual" v-model="value" :item-key="item.key" :label="item.label" />
   </FieldShell>
 </template>

@@ -4,7 +4,7 @@ import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
 import FieldControl from './FieldControl.vue';
 import SelectableItem from './SelectableItem.vue';
-import QuickPhrases from './QuickPhrases.vue';
+import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import { useRecordForm } from './context';
 import { sectionRuns } from '../../lib/sectionRuns';
 import { spanClass } from '../../lib/fieldSpan';
@@ -44,7 +44,7 @@ function eitherOrHint(item) {
               :placeholder="item.placeholder"
               @update:model-value="setValue(item, $event)"
             />
-            <QuickPhrases
+            <TextTemplateTrigger
               :item-key="item.key"
               :label="item.label"
               :model-value="valueFor(item)"
