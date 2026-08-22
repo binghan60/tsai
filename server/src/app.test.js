@@ -2,6 +2,7 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { app } from './app.js';
+import MedicalRecord from './models/MedicalRecord.js';
 
 describe('health endpoints', () => {
   let server;
@@ -27,5 +28,40 @@ describe('health endpoints', () => {
     const response = await fetch(`${origin}/api/health`);
     assert.equal(response.status, 503);
     assert.deepEqual(await response.json(), { status: 'unavailable', database: 'disconnected' });
+  });
+
+  it('refuses to finalize a draft that changed after the preview was loaded', async () => {
+    const originalFindById = MedicalRecord.findById;
+    MedicalRecord.findById = async () => ({ _id: 'record-1', status: 'draft', __v: 7 });
+    try {
+      const response = await fetch(`${origin}/api/records/record-1/finalize`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expectedVersion: 6 }),
+      });
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), {
+        message: '病歷在預覽後已被更新。系統已重新載入最新內容，請確認後再結案。',
+        currentVersion: 7,
+      });
+    } finally {
+      MedicalRecord.findById = originalFindById;
+    }
+  });
+
+  it('requires an explicit preview version before finalization', async () => {
+    const originalFindById = MedicalRecord.findById;
+    MedicalRecord.findById = async () => ({ _id: 'record-1', status: 'draft', __v: 7 });
+    try {
+      const response = await fetch(`${origin}/api/records/record-1/finalize`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
+      assert.equal(response.status, 428);
+      assert.deepEqual(await response.json(), { message: '缺少預覽版本資訊，請重新整理報告後再結案' });
+    } finally {
+      MedicalRecord.findById = originalFindById;
+    }
   });
 });

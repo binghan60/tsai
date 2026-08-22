@@ -13,6 +13,22 @@ const { isDark, toggleTheme } = useTheme();
 const mobileOpen = ref(false);
 const searchOpen = ref(false);
 
+// Vue Router 會重用同一條動態路由的元件實例。以資料識別碼作 key，確保從飼主 A
+// 切到飼主 B（或從舊版報告切到新版）時，舊元件與尚未完成的請求不會殘留在畫面上。
+// 查詢字串不放進 key，列表搜尋與分頁不會因此整頁重掛。
+const ROUTE_IDENTITY_PARAMS = {
+  '/owners/:id': 'id',
+  '/pets/:id': 'id',
+  '/records/:id/preview': 'id',
+  '/report/:token': 'token',
+  '/settings/forms/:id': 'id',
+};
+const routeViewKey = computed(() => {
+  const pattern = route.matched.at(-1)?.path ?? route.path;
+  const paramName = ROUTE_IDENTITY_PARAMS[pattern];
+  return paramName ? `${pattern}:${String(route.params[paramName] ?? '')}` : pattern;
+});
+
 // match：除了自己的網址前綴，還有哪些路徑也該算在這一項底下。目前用不到，
 // 但 /records 這種「有自己的頂層網址、心理上卻屬於別項」的路由隨時會再出現，
 // 沒有這層的話一進那些頁面側邊欄會全暗，等於在系統裡失去座標。
@@ -57,7 +73,7 @@ watch(
 
 <template>
   <div v-if="route.meta.bare">
-    <router-view />
+    <router-view :key="routeViewKey" />
   </div>
 
   <template v-else>
@@ -194,7 +210,7 @@ watch(
         </Sheet>
 
         <main class="min-w-0 px-4 py-5 sm:px-6 lg:px-8">
-          <router-view />
+          <router-view :key="routeViewKey" />
         </main>
       </div>
     </div>

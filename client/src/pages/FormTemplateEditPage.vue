@@ -23,7 +23,7 @@ import {
   Type,
   X,
 } from '@lucide/vue';
-import { onBeforeRouteLeave, useRoute } from 'vue-router';
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router';
 import { useBackTarget } from '../composables/useBackTarget';
 import { http } from '../api/http';
 import { useFormTemplate } from '../composables/useFormTemplate';
@@ -445,12 +445,15 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnloa
 const leaveResolve = ref(null);
 const showLeaveConfirm = computed(() => Boolean(leaveResolve.value));
 
-onBeforeRouteLeave(() => {
+function confirmUnsavedNavigation() {
   if (!isDirty.value) return true;
   return new Promise((resolve) => {
     leaveResolve.value = resolve;
   });
-});
+}
+
+onBeforeRouteLeave(confirmUnsavedNavigation);
+onBeforeRouteUpdate(confirmUnsavedNavigation);
 
 function resolveLeave(confirmed) {
   const resolve = leaveResolve.value;

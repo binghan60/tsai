@@ -46,6 +46,23 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+// sendMail 丟錯不一定等於「信確定沒寄出」。若連線在 DATA／最後確認階段中斷，
+// SMTP 伺服器可能已經收下郵件，只是本機沒收到成功回應；這種情況必須人工確認，
+// 不能標成普通失敗後鼓勵使用者直接重送。
+export function isAmbiguousMailFailure(err, { smtpStarted = false } = {}) {
+  if (!smtpStarted || !err) return false;
+  if (['MAIL_NOT_CONFIGURED', 'MAIL_RECIPIENT_REJECTED', 'EAUTH', 'EENVELOPE', 'EMESSAGE'].includes(err.code)) {
+    return false;
+  }
+  if (Number.isInteger(err.responseCode) && err.responseCode >= 400) return false;
+
+  const command = String(err.command ?? '').trim().toUpperCase();
+  if (/^(CONN|AUTH|EHLO|HELO|STARTTLS|MAIL|RCPT)/.test(command)) return false;
+
+  // 沒有明確拒絕回應、也無法證明錯誤發生在 SMTP 接受郵件之前時，採保守判定。
+  return true;
+}
+
 export async function sendHealthReportEmail({
   to,
   ownerName,

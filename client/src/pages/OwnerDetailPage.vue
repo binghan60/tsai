@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Cat, Pencil, Trash2, User } from '@lucide/vue';
 import OwnerFormDialog from '../components/OwnerFormDialog.vue';
@@ -37,14 +37,17 @@ const petRecordBlock = ref(null);
 const editPetTarget = ref(null);
 const editPetSaving = ref(false);
 const editPetError = ref('');
+let fetchSequence = 0;
 
-async function fetchOwner() {
+async function fetchOwner(ownerId = route.params.id) {
+  const currentRequest = ++fetchSequence;
   error.value = '';
   try {
-    const { data } = await http.get(`/owners/${route.params.id}`);
+    const { data } = await http.get(`/owners/${ownerId}`);
+    if (currentRequest !== fetchSequence || String(route.params.id) !== String(ownerId)) return;
     owner.value = data;
   } catch (err) {
-    error.value = '飼主資料載入失敗';
+    if (currentRequest === fetchSequence) error.value = '飼主資料載入失敗';
   }
 }
 
@@ -156,17 +159,33 @@ function goManageRecords() {
   router.push(`/pets/${id}`);
 }
 
-onMounted(async () => {
-  await fetchOwner();
-  if (route.query.edit === '1') editOwnerOpen.value = true;
-  if (route.query.addPet === '1') openCreatePet();
-  if (route.query.edit === '1' || route.query.addPet === '1') {
+watch(
+  () => route.params.id,
+  (ownerId) => {
+    owner.value = null;
+    editOwnerOpen.value = false;
+    showCreatePet.value = false;
+    editPetTarget.value = null;
+    petToRemove.value = null;
+    petRecordBlock.value = null;
+    fetchOwner(ownerId);
+  },
+  { immediate: true }
+);
+
+watch(
+  () => [route.query.edit, route.query.addPet],
+  async ([editIntent, addPetIntent]) => {
+    if (editIntent === '1') editOwnerOpen.value = true;
+    if (addPetIntent === '1') openCreatePet();
+    if (editIntent !== '1' && addPetIntent !== '1') return;
     const query = { ...route.query };
     delete query.edit;
     delete query.addPet;
     await router.replace({ query });
-  }
-});
+  },
+  { immediate: true }
+);
 </script>
 
 <template>

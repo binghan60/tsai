@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { AlertTriangle, ArrowLeft, CheckCircle2, Copy, Download, FilePenLine, Mail, Printer, Share2 } from '@lucide/vue';
 import { PDF_TIMEOUT_MS, http } from '../api/http';
@@ -52,6 +52,14 @@ const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
 // 這頁同時是飼主看的公開報告（/report/:token），收件信箱與失敗原因都是內部資訊，
 // 只在後台預覽（isPreview）載入與顯示，而且 print:hidden 讓它不會被截進 PDF。
 const deliveryLogs = ref([]);
+let reportRequestSequence = 0;
+let logRequestSequence = 0;
+
+function reportIdentity() {
+  return isPreview.value
+    ? `preview:${String(route.params.id ?? '')}`
+    : `public:${String(route.params.token ?? '')}`;
+}
 
 // 這頁固定淺色、不套 dark: variant（見 CLAUDE.md），所以不共用 DELIVERY_EVENT_META。
 const EVENT_STYLE = {
@@ -62,13 +70,20 @@ const EVENT_STYLE = {
 };
 
 async function fetchDeliveryLogs() {
-  if (!isPreview.value) return;
+  const identity = reportIdentity();
+  const currentRequest = ++logRequestSequence;
+  if (!isPreview.value) {
+    deliveryLogs.value = [];
+    return;
+  }
+  const recordId = route.params.id;
   try {
-    const { data } = await http.get('/delivery-logs', { params: { recordId: route.params.id, limit: 50 } });
+    const { data } = await http.get('/delivery-logs', { params: { recordId, limit: 50 } });
+    if (currentRequest !== logRequestSequence || identity !== reportIdentity()) return;
     deliveryLogs.value = data.items ?? [];
   } catch (err) {
     // 歷程載不出來不影響看報告本身，靜默略過即可。
-    deliveryLogs.value = [];
+    if (currentRequest === logRequestSequence && identity === reportIdentity()) deliveryLogs.value = [];
   }
 }
 
@@ -85,17 +100,25 @@ function normalizePreview(data) {
 }
 
 async function fetchReport() {
+  const identity = reportIdentity();
+  const currentRequest = ++reportRequestSequence;
   error.value = '';
   try {
     if (isPreview.value) {
-      const { data } = await http.get(`/records/${route.params.id}`);
+      const recordId = route.params.id;
+      const { data } = await http.get(`/records/${recordId}`);
+      if (currentRequest !== reportRequestSequence || identity !== reportIdentity()) return;
       record.value = normalizePreview(data);
     } else {
-      const { data } = await http.get(`/public/reports/${route.params.token}`);
+      const token = route.params.token;
+      const { data } = await http.get(`/public/reports/${token}`);
+      if (currentRequest !== reportRequestSequence || identity !== reportIdentity()) return;
       record.value = data;
     }
   } catch (err) {
-    error.value = err.response?.data?.message ?? '找不到這份報告，連結可能已失效';
+    if (currentRequest === reportRequestSequence && identity === reportIdentity()) {
+      error.value = err.response?.data?.message ?? '找不到這份報告，連結可能已失效';
+    }
   }
 }
 
@@ -123,17 +146,26 @@ const abnormalFindings = computed(() => allSectionItems.value.filter((item) => i
 
 async function finalizeReport() {
   if (!record.value || !isDraft.value) return;
+  const identity = reportIdentity();
   finalizing.value = true;
   error.value = '';
   try {
-    const { data } = await http.post(`/records/${route.params.id}/finalize`, null, { timeout: PDF_TIMEOUT_MS });
+    const { data } = await http.post(
+      `/records/${route.params.id}/finalize`,
+      { expectedVersion: record.value.__v },
+      { timeout: PDF_TIMEOUT_MS }
+    );
+    if (identity !== reportIdentity()) return;
     record.value.status = 'finalized';
     record.value.finalizedAt = data.finalizedAt;
     record.value.pdfGeneratedAt = data.pdfGeneratedAt;
     record.value.reportVersion = data.reportVersion;
     record.value.deliveryStatus = data.deliveryStatus || 'not_sent';
+    record.value.__v = data.documentVersion ?? record.value.__v;
     showFinalizeConfirm.value = false;
   } catch (err) {
+    if (identity !== reportIdentity()) return;
+    if (err.response?.status === 409) await fetchReport();
     error.value = err.response?.data?.message ?? '結案失敗，報告仍維持草稿';
     showFinalizeConfirm.value = false;
   } finally {
@@ -227,11 +259,13 @@ async function copyShareLink() {
 
 async function sendEmail() {
   if (!record.value || !ownerEmail.value) return;
+  const identity = reportIdentity();
   const wasDraft = isDraft.value;
   emailing.value = true;
   error.value = '';
   try {
     const { data } = await http.post(`/records/${route.params.id}/send-email`, null, { timeout: PDF_TIMEOUT_MS });
+    if (identity !== reportIdentity()) return;
     record.value.status = 'finalized';
     record.value.deliveryStatus = data.deliveryStatus || 'sent';
     record.value.deliveryError = data.deliveryStatus === 'uncertain' ? data.message : '';
@@ -253,6 +287,7 @@ async function sendEmail() {
     showFinalizeConfirm.value = false;
     showEmailConfirm.value = false;
   } catch (err) {
+    if (identity !== reportIdentity()) return;
     const message = err.response?.data?.message ?? `寄送 Email 失敗，${wasDraft ? '請先確認報告已結案' : '已結案報告不受影響，可稍後重試'}`;
     // 不要自己把狀態改成「寄送失敗」。有幾種錯誤伺服器根本沒動過狀態
     //（尚未結案、正在寄送中、飼主還沒填 Email），標成失敗只是憑空捏造一個結果；
@@ -272,10 +307,20 @@ function printReport() {
   window.print();
 }
 
-onMounted(async () => {
-  await fetchReport();
-  await fetchDeliveryLogs();
-});
+watch(
+  reportIdentity,
+  async () => {
+    record.value = null;
+    deliveryLogs.value = [];
+    error.value = '';
+    shareNotice.value = null;
+    showFinalizeConfirm.value = false;
+    showEmailConfirm.value = false;
+    showRevisionDialog.value = false;
+    await Promise.all([fetchReport(), fetchDeliveryLogs()]);
+  },
+  { immediate: true }
+);
 </script>
 
 <template>

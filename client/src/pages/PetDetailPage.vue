@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { CalendarDays, ClipboardPlus, FileText, PawPrint, Pencil, Share2, Trash2, User } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
@@ -33,6 +33,7 @@ const editError = ref('');
 const recordToRemove = ref(null);
 const deletingRecordId = ref(null);
 const removeError = ref('');
+let fetchSequence = 0;
 
 const sexLabel = computed(() => ({ male: '公', female: '母', unknown: '未記錄' })[pet.value?.sex] ?? '未記錄');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育', unknown: '未記錄' })[pet.value?.neutered] ?? '未記錄');
@@ -55,13 +56,15 @@ function isShareActive(record) {
   return Boolean(record?.shareEnabled && record.shareExpiresAt && new Date(record.shareExpiresAt) > new Date());
 }
 
-async function fetchPet() {
+async function fetchPet(petId = route.params.id) {
+  const currentRequest = ++fetchSequence;
   error.value = '';
   try {
-    const { data } = await http.get(`/pets/${route.params.id}`);
+    const { data } = await http.get(`/pets/${petId}`);
+    if (currentRequest !== fetchSequence || String(route.params.id) !== String(petId)) return;
     pet.value = data;
   } catch (err) {
-    error.value = '寵物資料暫時無法載入，請稍後重試';
+    if (currentRequest === fetchSequence) error.value = '寵物資料暫時無法載入，請稍後重試';
   }
 }
 
@@ -168,7 +171,18 @@ async function removeRecord(confirmText) {
   }
 }
 
-onMounted(fetchPet);
+watch(
+  () => route.params.id,
+  (petId) => {
+    pet.value = null;
+    editOpen.value = false;
+    shareNotice.value = null;
+    shareToRevoke.value = null;
+    recordToRemove.value = null;
+    fetchPet(petId);
+  },
+  { immediate: true }
+);
 </script>
 
 <template>

@@ -7,7 +7,7 @@ import DeliveryLog from '../models/DeliveryLog.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import { renderReportPdf } from '../lib/pdf.js';
-import { assertMailConfigured, sendHealthReportEmail } from '../lib/mailer.js';
+import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from '../lib/mailer.js';
 import { hasPdfRenderAccess } from '../config/pdfAccess.js';
 import { publicAppOrigin } from '../config/publicUrl.js';
 import { templateForRecord } from '../lib/formTemplate.js';
@@ -440,6 +440,18 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
         pdfGeneratedAt: record.pdfGeneratedAt,
         reportVersion: record.reportVersion || 1,
         deliveryStatus: effectiveDeliveryStatus(record),
+        documentVersion: record.__v,
+      });
+    }
+
+    const expectedVersion = Number(req.body?.expectedVersion);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+      return res.status(428).json({ message: '缺少預覽版本資訊，請重新整理報告後再結案' });
+    }
+    if (record.__v !== expectedVersion) {
+      return res.status(409).json({
+        message: '病歷在預覽後已被更新。系統已重新載入最新內容，請確認後再結案。',
+        currentVersion: record.__v,
       });
     }
 
@@ -461,6 +473,7 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       {
         _id: record._id,
         status: 'draft',
+        __v: expectedVersion,
         updatedAt: record.updatedAt,
         $or: [
           { finalizeAttemptId: null },
@@ -519,6 +532,7 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
             deliveryStatus: 'not_sent',
             deliveryError: '',
           },
+          $inc: { __v: 1 },
           $unset: { finalizeAttemptId: 1, finalizingAt: 1 },
         },
         { new: true, session }
@@ -564,6 +578,7 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       pdfGeneratedAt: record.pdfGeneratedAt,
       reportVersion: record.reportVersion || 1,
       deliveryStatus: effectiveDeliveryStatus(record),
+      documentVersion: record.__v,
     });
   } catch (err) {
     if (record?._id && finalizeAttemptId && !didFinalize && !err.isFinalizePdfError) {
@@ -860,6 +875,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
   let recipient = '';
   let deliveryAttemptId = '';
   let smtpInfo = null;
+  let smtpStarted = false;
   let activeShareExpiresAt = null;
   try {
     record = await MedicalRecord.findById(req.params.id).populate({
@@ -960,6 +976,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       throw error;
     }
 
+    smtpStarted = true;
     smtpInfo = await sendHealthReportEmail({
       to: recipient,
       ownerName: owner.name,
@@ -1008,10 +1025,12 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
     const response = mailErrorResponse(err);
 
     if (record?._id && deliveryAttemptId) {
-      const smtpAccepted = Boolean(smtpInfo);
-      const nextStatus = smtpAccepted ? 'uncertain' : 'failed';
-      const deliveryError = smtpAccepted
-        ? '郵件伺服器可能已接受，但系統無法確認最後寫入結果；請先確認收件匣，避免重複寄送'
+      const outcomeUncertain = Boolean(smtpInfo) || isAmbiguousMailFailure(err, { smtpStarted });
+      const nextStatus = outcomeUncertain ? 'uncertain' : 'failed';
+      const deliveryError = outcomeUncertain
+        ? smtpInfo
+          ? '郵件伺服器可能已接受，但系統無法確認最後寫入結果；請先確認收件匣，避免重複寄送'
+          : '寄送連線在郵件伺服器確認結果前中斷，郵件可能已送出；請先確認收件匣，避免重複寄送'
         : response?.message || '寄送失敗，請稍後重試';
       try {
         await MedicalRecord.updateOne(
@@ -1020,7 +1039,8 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
             $set: {
               deliveryStatus: nextStatus,
               deliveryError,
-              ...(smtpAccepted ? { sentTo: recipient, emailMessageId: smtpInfo.messageId } : {}),
+              ...(outcomeUncertain ? { sentTo: recipient } : {}),
+              ...(smtpInfo?.messageId ? { emailMessageId: smtpInfo.messageId } : {}),
             },
             $unset: { deliveryAttemptId: 1, deliveryLeaseExpiresAt: 1 },
           }
@@ -1033,7 +1053,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
         messageId: smtpInfo?.messageId || '',
         error: deliveryError,
       });
-      if (smtpAccepted) {
+      if (outcomeUncertain) {
         return res.status(202).json({
           message: deliveryError,
           deliveryStatus: 'uncertain',
