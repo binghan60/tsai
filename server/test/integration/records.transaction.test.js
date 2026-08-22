@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import mongoose from 'mongoose';
 import { app } from '../../src/app.js';
-import DeletedMedicalRecord from '../../src/models/DeletedMedicalRecord.js';
 import MedicalRecord from '../../src/models/MedicalRecord.js';
 import Owner from '../../src/models/Owner.js';
 import Pet from '../../src/models/Pet.js';
@@ -30,7 +29,6 @@ describe('record transaction workflow against a replica set', { skip: !uri }, ()
   after(async () => {
     if (record?._id) {
       await MedicalRecord.deleteOne({ _id: record._id }).catch(() => {});
-      await DeletedMedicalRecord.deleteOne({ originalId: record._id }).catch(() => {});
     }
     if (pet?._id) await Pet.deleteOne({ _id: pet._id }).catch(() => {});
     if (owner?._id) await Owner.deleteOne({ _id: owner._id }).catch(() => {});
@@ -38,7 +36,7 @@ describe('record transaction workflow against a replica set', { skip: !uri }, ()
     await mongoose.disconnect();
   });
 
-  it('archives and restores a medical record atomically', async () => {
+  it('permanently deletes a medical record through a transaction-capable database', async () => {
     owner = await Owner.create({ name: '整合測試飼主', phone: '0900000000' });
     pet = await Pet.create({ ownerId: owner._id, name: '整合測試寵物', species: '犬' });
     record = await MedicalRecord.create({ petId: pet._id, visitDate: new Date('2026-08-20T00:00:00.000Z') });
@@ -46,14 +44,5 @@ describe('record transaction workflow against a replica set', { skip: !uri }, ()
     const deletedResponse = await fetch(`${origin}/api/records/${record._id}`, { method: 'DELETE' });
     assert.equal(deletedResponse.status, 204);
     assert.equal(await MedicalRecord.exists({ _id: record._id }), null);
-
-    const audit = await DeletedMedicalRecord.findOne({ originalId: record._id });
-    assert.ok(audit);
-    assert.equal(audit.petName, pet.name);
-
-    const restoredResponse = await fetch(`${origin}/api/records/trash/${audit._id}/restore`, { method: 'POST' });
-    assert.equal(restoredResponse.status, 201);
-    assert.ok(await MedicalRecord.exists({ _id: record._id }));
-    assert.ok((await DeletedMedicalRecord.findById(audit._id)).restoredAt);
   });
 });

@@ -141,9 +141,6 @@ function valueByRole(role) {
   return value === null || value === undefined || String(value).trim() === '' ? '' : value;
 }
 
-const abnormalFindings = computed(() => allSectionItems.value.filter((item) => item.status === 'abnormal'));
-
-
 async function finalizeReport() {
   if (!record.value || !isDraft.value) return;
   const identity = reportIdentity();
@@ -423,12 +420,6 @@ watch(
           <p v-if="record.pet.allergies"><strong>過敏：</strong>{{ record.pet.allergies }}</p>
           <p v-if="record.pet.chronicConditions"><strong>慢性病／重要病史：</strong>{{ record.pet.chronicConditions }}</p>
           <p v-if="record.pet.currentMedications"><strong>目前用藥：</strong>{{ record.pet.currentMedications }}</p>
-        </section>
-
-        <section v-if="valueByRole('conclusion') || valueByRole('treatmentPlan') || abnormalFindings.length" class="mt-6 rounded-xl border border-brand-100 bg-brand-50/60 p-5 break-inside-avoid">
-          <div class="flex flex-wrap items-center justify-between gap-2"><h2 class="text-sm font-semibold text-brand-700">本次重點與下一步</h2><span v-if="abnormalFindings.length" class="rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700">{{ abnormalFindings.length }} 項異常</span></div>
-          <p v-if="valueByRole('conclusion')" class="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-stone-800">{{ valueByRole('conclusion') }}</p>
-          <div v-if="valueByRole('treatmentPlan')" class="mt-3"><h3 class="text-xs font-semibold text-stone-500">{{ itemByRole('treatmentPlan').label }}</h3><p class="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-stone-800">{{ valueByRole('treatmentPlan') }}</p></div>
         </section>
 
         <ReportSection

@@ -12,7 +12,7 @@ npm test
 npm run build
 ```
 
-## MongoDB transaction／回收站整合測試
+## MongoDB transaction／刪除流程整合測試
 
 `TEST_MONGODB_URI` 必須指向 MongoDB replica set，且資料庫名稱必須包含 `test`。測試只會清除自己建立的文件。
 

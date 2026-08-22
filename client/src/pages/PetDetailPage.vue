@@ -289,7 +289,7 @@ watch(
     <ConfirmDialog
       :open="Boolean(recordToRemove) && !isFinalizedRecord(recordToRemove)"
       title="捨棄健檢草稿"
-      :description="`確定要捨棄「${formatDate(recordToRemove?.visitDate)}」這筆草稿嗎？刪除後可從病歷回收站還原。`"
+      :description="`確定要捨棄「${formatDate(recordToRemove?.visitDate)}」這筆草稿嗎？此操作無法復原。`"
       confirm-label="捨棄草稿"
       :loading="Boolean(deletingRecordId)"
       @update:open="(value) => !value && (recordToRemove = null)"
