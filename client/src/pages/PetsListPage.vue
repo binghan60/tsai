@@ -16,7 +16,6 @@ import SearchPanel from '../components/SearchPanel.vue';
 const pets = ref([]);
 const page = useSearchQueryParam('page', '1');
 const query = useSearchQueryParam('q');
-const density = ref('comfortable');
 const total = ref(0);
 const limit = ref(25);
 const loading = ref(false);
@@ -122,15 +121,7 @@ async function createPet(values) {
       label="搜尋寵物"
       placeholder="搜尋寵物、飼主、電話或病歷號"
       :loading="loading && Boolean(query.trim())"
-    >
-      <div class="mt-3 hidden items-center justify-between border-t border-border pt-3 lg:flex">
-        <span class="text-xs text-muted-foreground">大量資料可切換成精簡列高，一頁更容易掃描。</span>
-        <div class="inline-flex rounded-lg border border-border bg-muted/30 p-1" aria-label="寵物清單顯示密度">
-          <button type="button" class="min-h-9 rounded-md px-3 text-sm font-medium" :class="density === 'comfortable' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'" :aria-pressed="density === 'comfortable'" @click="density = 'comfortable'">舒適</button>
-          <button type="button" class="min-h-9 rounded-md px-3 text-sm font-medium" :class="density === 'compact' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'" :aria-pressed="density === 'compact'" @click="density = 'compact'">精簡</button>
-        </div>
-      </div>
-    </SearchPanel>
+    />
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
@@ -138,7 +129,7 @@ async function createPet(values) {
     <template v-else>
       <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 隻寵物</p>
 
-      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none lg:block" :class="density === 'compact' ? '[&_td]:py-1' : ''">
+      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none lg:block">
         <Table>
           <TableHeader>
             <TableRow class="border-border text-muted-foreground">
