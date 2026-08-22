@@ -6,7 +6,6 @@ import { http } from '../api/http';
 import { useTextTemplates } from '../composables/useTextTemplates';
 import { useToast } from '../composables/useToast';
 import SettingsLayout from '../components/SettingsLayout.vue';
-import SearchPanel from '../components/SearchPanel.vue';
 import EmptyState from '../components/EmptyState.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import ModalDialog from '../components/ModalDialog.vue';
@@ -198,12 +197,24 @@ onMounted(load);
     <ListSkeleton v-if="loading" :rows="5" />
 
     <template v-else>
-      <SearchPanel id="text-template-search" v-model="query" label="搜尋文字模板" placeholder="搜尋模板名稱或內容">
-        <div class="mt-3 flex flex-wrap items-center gap-3 px-1">
-          <Select v-model="status"><SelectTrigger class="w-36" aria-label="模板狀態"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">全部狀態</SelectItem><SelectItem value="enabled">使用中</SelectItem><SelectItem value="disabled">已停用</SelectItem></SelectContent></Select>
-          <Button v-if="query || status !== 'all'" type="button" variant="ghost" @click="query = ''; status = 'all'">清除篩選</Button>
+      <Card class="p-3 shadow-sm dark:shadow-none">
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <div class="space-y-1">
+            <Label for="text-template-search">搜尋文字模板</Label>
+            <span class="relative block">
+              <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input id="text-template-search" v-model="query" type="search" autocomplete="off" class="w-full pl-10" placeholder="搜尋模板名稱或內容" aria-label="搜尋文字模板" />
+            </span>
+          </div>
+          <div class="space-y-1">
+            <Label>模板狀態</Label>
+            <span class="flex gap-2">
+              <Select v-model="status"><SelectTrigger class="w-full" aria-label="模板狀態"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">全部狀態</SelectItem><SelectItem value="enabled">使用中</SelectItem><SelectItem value="disabled">已停用</SelectItem></SelectContent></Select>
+              <Button v-if="query || status !== 'all'" type="button" variant="ghost" class="shrink-0" @click="query = ''; status = 'all'">清除篩選</Button>
+            </span>
+          </div>
         </div>
-      </SearchPanel>
+      </Card>
 
       <p class="text-sm text-muted-foreground">顯示 {{ visibleTemplates.length }} 份，共 {{ templates.length }} 份模板</p>
       <EmptyState v-if="!visibleTemplates.length" :icon="templates.length ? SearchX : FileText" :title="templates.length ? '找不到符合條件的文字模板' : '尚未建立文字模板'" description="建立後，填寫健檢的文字欄位便能從模板介面插入。"><Button type="button" class="mt-4" @click="openCreate">新增第一份模板</Button></EmptyState>

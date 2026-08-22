@@ -29,10 +29,6 @@ function applyTemplate(template, mode) {
     emit('update:modelValue', content);
     return;
   }
-  if (mode === 'append') {
-    emit('update:modelValue', `${base.replace(/\s+$/, '')}\n\n${content}`);
-    return;
-  }
   const start = Math.min(selection?.start ?? base.length, base.length);
   const end = Math.min(selection?.end ?? start, base.length);
   emit('update:modelValue', `${base.slice(0, start)}${content}${base.slice(end)}`);

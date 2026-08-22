@@ -220,7 +220,7 @@ onMounted(load);
                 v-for="option in SPECIES_FILTERS"
                 :key="option.value"
                 type="button"
-                class="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm font-medium transition-colors"
+                class="inline-flex min-h-11 w-24 items-center justify-center rounded-lg border px-3 text-sm font-medium transition-colors"
                 :class="speciesFilter === option.value
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border text-foreground hover:bg-muted/40   '"
@@ -237,7 +237,7 @@ onMounted(load);
                 v-for="option in STATUS_FILTERS"
                 :key="option.value"
                 type="button"
-                class="inline-flex min-h-11 items-center rounded-lg border px-3 text-sm font-medium transition-colors"
+                class="inline-flex min-h-11 w-24 items-center justify-center rounded-lg border px-3 text-sm font-medium transition-colors"
                 :class="statusFilter === option.value
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border text-foreground hover:bg-muted/40   '"

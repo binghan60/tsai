@@ -83,15 +83,10 @@ function insert(mode) {
         </div>
       </div>
 
-      <DialogFooter class="flex-wrap items-center">
-        <Button as-child type="button" variant="ghost" class="sm:mr-auto"><router-link to="/settings/text-templates?create=1" target="_blank">新增／管理模板</router-link></Button>
+      <DialogFooter>
         <Button type="button" variant="outline" @click="closePicker">取消</Button>
-        <template v-if="picker?.currentText">
-          <Button type="button" variant="destructive-outline" :disabled="!selected" @click="insert('replace')">覆蓋目前內容</Button>
-          <Button type="button" variant="outline" :disabled="!selected" @click="insert('append')">接在內容後面</Button>
-          <Button type="button" :disabled="!selected" @click="insert('cursor')">插入游標位置</Button>
-        </template>
-        <Button v-else type="button" :disabled="!selected" @click="insert('replace')">插入模板</Button>
+        <Button v-if="picker?.currentText" type="button" variant="destructive-outline" :disabled="!selected" @click="insert('replace')">覆蓋</Button>
+        <Button type="button" :disabled="!selected" @click="insert(picker?.currentText ? 'cursor' : 'replace')">插入</Button>
       </DialogFooter>
     </DialogContent>
   </Dialog>
