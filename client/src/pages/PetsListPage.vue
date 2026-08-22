@@ -119,7 +119,7 @@ async function createPet(values) {
       id="pet-list-search"
       v-model="query"
       label="搜尋寵物"
-      placeholder="搜尋寵物、飼主、電話或病歷號"
+      placeholder="搜尋寵物、飼主或電話"
       :loading="loading && Boolean(query.trim())"
     />
 

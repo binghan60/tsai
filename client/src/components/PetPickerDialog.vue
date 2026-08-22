@@ -111,7 +111,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
     <div class="space-y-3 px-6 pb-6 sm:px-7 sm:pb-7">
       <div class="relative">
         <Search class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
-        <Input v-model="query" type="search" class="h-11 pl-10 pr-10" placeholder="搜尋寵物、飼主、電話或病歷號" aria-label="搜尋寵物、飼主、電話或病歷號" />
+        <Input v-model="query" type="search" class="h-11 pl-10 pr-10" placeholder="搜尋寵物、飼主或電話" aria-label="搜尋寵物、飼主或電話" />
         <button v-if="query" type="button" class="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="清除搜尋" @click="clearQuery">
           <X class="h-4 w-4" />
         </button>

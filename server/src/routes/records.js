@@ -93,7 +93,6 @@ function reportPayload(record, sections) {
     pet: pet
       ? {
           name: pet.name,
-          medicalRecordNumber: pet.medicalRecordNumber || `PET-${pet._id.toString().slice(-8).toUpperCase()}`,
           species: pet.species,
           breed: pet.breed,
           sex: pet.sex,

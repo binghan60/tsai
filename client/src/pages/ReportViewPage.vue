@@ -408,7 +408,7 @@ watch(
         </header>
 
         <section class="mt-6 rounded-xl bg-stone-50 p-5">
-          <div class="flex flex-wrap items-baseline justify-between gap-2"><h1 class="text-2xl font-semibold text-stone-900">{{ record.pet?.name || '寵物姓名未記錄' }}</h1><span class="font-mono text-xs text-stone-500">病歷號：{{ record.pet?.medicalRecordNumber || '' }}</span></div>
+          <h1 class="text-2xl font-semibold text-stone-900">{{ record.pet?.name || '寵物姓名未記錄' }}</h1>
           <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
             <div><dt class="text-xs font-medium text-stone-500">飼主</dt><dd class="mt-1 text-stone-800">{{ record.owner?.name || '' }}</dd></div>
             <div><dt class="text-xs font-medium text-stone-500">物種／品種</dt><dd class="mt-1 text-stone-800">{{ record.pet?.species || '' }}<template v-if="record.pet?.breed">／{{ record.pet.breed }}</template></dd></div>
