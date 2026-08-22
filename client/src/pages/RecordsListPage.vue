@@ -7,6 +7,7 @@ import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../
 import { useRoute, useRouter } from 'vue-router';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import PetPickerDialog from '../components/PetPickerDialog.vue';
+import FilterTabs from '../components/FilterTabs.vue';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -15,12 +16,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 // 這頁的主軸是「還有什麼沒做完」，不是「所有報告的封存庫」——
 // 所以預設檢視是待辦，而不是全部；佇列順序也照著實際工作流程排。
 const VIEWS = [
-  { key: 'todo', label: '待辦' },
-  { key: 'drafts', label: '草稿' },
-  { key: 'pending', label: '待寄送' },
-  { key: 'failed', label: '失敗／待確認' },
-  { key: 'sent', label: '已寄送' },
-  { key: 'all', label: '全部' },
+  { key: 'todo', label: '待辦', tone: 'neutral' },
+  { key: 'drafts', label: '草稿', tone: 'neutral' },
+  { key: 'pending', label: '待寄送', tone: 'warning' },
+  { key: 'failed', label: '失敗／待確認', tone: 'danger' },
+  { key: 'sent', label: '已寄送', tone: 'success' },
+  { key: 'all', label: '全部', tone: 'neutral' },
 ];
 
 const view = useSearchQueryParam('view', 'todo');
@@ -137,30 +138,7 @@ function actionLabel(record) {
       </div>
     </div>
 
-    <!-- 佇列切換。數字不隨關鍵字篩選變動，它回答的是「總共還有多少事沒做完」。 -->
-    <div class="relative">
-      <nav class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 pr-8 shadow-sm" aria-label="健檢紀錄佇列">
-        <button
-        v-for="item in VIEWS"
-        :key="item.key"
-        type="button"
-        class="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium transition-colors"
-        :class="(view || 'todo') === item.key
-          ? 'border-primary bg-primary text-primary-foreground'
-          : 'border-transparent text-foreground hover:bg-muted/40  '"
-        :aria-current="(view || 'todo') === item.key ? 'page' : undefined"
-        @click="selectView(item.key)"
-      >
-        {{ item.label }}
-        <span
-          v-if="counts[item.key] !== undefined"
-          class="rounded-full px-1.5 py-0.5 text-xs tabular-nums"
-          :class="(view || 'todo') === item.key ? 'bg-white/20' : 'bg-muted/60 text-muted-foreground '"
-        >{{ counts[item.key] }}</span>
-        </button>
-      </nav>
-      <span aria-hidden="true" class="pointer-events-none absolute inset-y-1.5 right-1.5 w-10 rounded-r-lg bg-gradient-to-l from-card via-card/80 to-transparent sm:hidden"></span>
-    </div>
+    <FilterTabs :model-value="view || 'todo'" :items="VIEWS" :counts="counts" aria-label="健檢紀錄佇列" @update:model-value="selectView" />
 
     <p v-if="!loading && !error && !records.length" class="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
       這個佇列目前是空的。

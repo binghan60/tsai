@@ -11,15 +11,16 @@ import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
+import FilterTabs from '../components/FilterTabs.vue';
 
 // 這頁的重點不是「報告」而是「寄送這件事」：每一次嘗試各自一列，
 // 包含後來被刪掉的報告。報告清單那頁回答「還有什麼沒寄」，這頁回答「當初寄了什麼給誰」。
 const EVENTS = [
-  { key: '', label: '全部' },
-  { key: 'sent', label: '寄送成功' },
-  { key: 'failed', label: '寄送失敗' },
-  { key: 'uncertain', label: '結果待確認' },
-  { key: 'queued', label: '開始寄送' },
+  { key: '', label: '全部', tone: 'neutral' },
+  { key: 'sent', label: '寄送成功', tone: 'success' },
+  { key: 'failed', label: '寄送失敗', tone: 'danger' },
+  { key: 'uncertain', label: '結果待確認', tone: 'warning' },
+  { key: 'queued', label: '開始寄送', tone: 'info' },
 ];
 
 const event = useSearchQueryParam('event');
@@ -83,22 +84,7 @@ onBeforeUnmount(() => {
       <p class="mt-1 text-sm text-muted-foreground">每一次寄送嘗試的完整歷程，包含收件信箱與失敗原因。報告刪除後這裡仍然查得到。</p>
     </div>
 
-    <div class="relative">
-      <nav class="flex gap-1 overflow-x-auto rounded-xl border border-border bg-card p-1.5 pr-8 shadow-sm" aria-label="寄送事件篩選">
-        <button
-        v-for="item in EVENTS"
-        :key="item.key || 'all'"
-        type="button"
-        class="inline-flex min-h-10 shrink-0 items-center rounded-lg border px-3 text-sm font-medium transition-colors"
-        :class="event === item.key
-          ? 'border-primary bg-primary text-primary-foreground'
-          : 'border-transparent text-foreground hover:bg-muted/40  '"
-        :aria-current="event === item.key ? 'page' : undefined"
-        @click="selectEvent(item.key)"
-        >{{ item.label }}</button>
-      </nav>
-      <span aria-hidden="true" class="pointer-events-none absolute inset-y-1.5 right-1.5 w-10 rounded-r-lg bg-gradient-to-l from-card via-card/80 to-transparent sm:hidden"></span>
-    </div>
+    <FilterTabs :model-value="event" :items="EVENTS" aria-label="寄送事件篩選" @update:model-value="selectEvent" />
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
