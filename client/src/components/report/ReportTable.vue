@@ -31,9 +31,8 @@ function groupsOf(run) {
       <div v-if="run.kind === 'primary'" class="space-y-5">
         <div v-for="group in groupsOf(run)" :key="group.label" class="break-inside-avoid">
           <h3 v-if="group.label" class="mb-2 text-xs font-semibold text-stone-500">{{ group.label }}</h3>
-          <div class="overflow-hidden rounded-xl border border-stone-200">
-            <!-- 桌機版欄位標題 -->
-            <div class="hidden border-b border-stone-200 bg-stone-50/80 px-4 py-2 text-xs font-semibold text-stone-500 sm:grid sm:grid-cols-5">
+          <div class="overflow-x-auto rounded-xl border border-stone-200">
+            <div class="grid min-w-[640px] grid-cols-5 border-b border-stone-200 bg-stone-50/80 px-4 py-2 text-xs font-semibold text-stone-500">
               <span>項目名稱</span>
               <span class="border-l border-stone-200 pl-2">結果</span>
               <span class="border-l border-stone-200 pl-2">本次數值</span>
@@ -43,31 +42,31 @@ function groupsOf(run) {
             <div
               v-for="finding in group.items"
               :key="finding.key"
-              class="grid grid-cols-[1fr_auto] gap-x-0 gap-y-2 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-5 sm:gap-y-0"
+              class="grid min-w-[640px] grid-cols-5 gap-x-0 border-b border-stone-200 px-4 py-3 text-sm last:border-0"
             >
               <!-- 1. 項目名稱 -->
               <span class="min-w-0 pr-2 font-medium text-stone-800">{{ finding.label }}</span>
               <!-- 2. 結果 -->
-              <span class="min-w-0 border-stone-100 pl-2 sm:border-l" :class="finding.status === 'abnormal' ? 'text-red-700' : finding.status === 'normal' ? 'text-emerald-700' : 'text-stone-500'">
+              <span class="min-w-0 border-l border-stone-100 pl-2" :class="finding.status === 'abnormal' ? 'text-red-700' : finding.status === 'normal' ? 'text-emerald-700' : 'text-stone-500'">
                 {{ statusText(finding.status) }}
                 <small v-if="finding.statusSource === 'auto'" class="ml-1 text-xs text-stone-500">自動</small>
               </span>
               <!-- 3. 本次數值 -->
-              <span class="min-w-0 border-stone-100 pl-2 text-stone-700 sm:border-l">
+              <span class="min-w-0 border-l border-stone-100 pl-2 text-stone-700">
                 <strong class="font-medium">{{ labValueLabel(finding) }}</strong>
                 <small v-if="referenceLabel(finding)" class="mt-0.5 block text-xs text-stone-500">參考 {{ referenceLabel(finding) }}</small>
               </span>
               <!-- 4. 上次數值（獨立欄位，沒有歷史數值時保持空白） -->
-              <span class="col-span-2 min-w-0 border-stone-100 text-stone-700 sm:col-span-1 sm:border-l sm:pl-2">
-          <template v-if="previousLabValueLabel(finding)">
-                  <span class="inline-flex items-baseline gap-1 whitespace-nowrap">
+              <span class="min-w-0 border-l border-stone-100 pl-2 text-stone-700">
+                <template v-if="previousLabValueLabel(finding)">
+                  <span>
                     <strong class="font-medium">{{ previousLabValueLabel(finding) }}</strong>
-                    <small v-if="previousDateLabel(finding)" class="text-xs text-stone-500">({{ previousDateLabel(finding) }})</small>
+                    <small v-if="previousDateLabel(finding)" class="block text-xs text-stone-500 sm:ml-1 sm:inline">({{ previousDateLabel(finding) }})</small>
                   </span>
-          </template>
+                </template>
               </span>
               <!-- 5. 備註 -->
-              <span class="col-span-2 min-w-0 whitespace-pre-wrap text-stone-600 sm:col-span-1 sm:border-l sm:border-stone-100 sm:pl-2">{{ finding.note || '' }}</span>
+              <span class="min-w-0 whitespace-pre-wrap border-l border-stone-100 pl-2 text-stone-600">{{ finding.note || '' }}</span>
             </div>
           </div>
         </div>

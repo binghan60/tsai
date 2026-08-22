@@ -22,8 +22,8 @@ const others = computed(() => (props.section.items ?? []).filter((item) => famil
 <template>
   <section v-if="measured.length || others.length" class="mt-8 break-inside-avoid">
     <h2 class="mb-3 text-sm font-semibold text-brand-700">{{ section.title }}</h2>
-    <div v-if="measured.length" class="overflow-hidden rounded-xl border border-stone-200">
-      <div class="hidden border-b border-stone-200 bg-stone-50/80 px-4 py-2 text-xs font-semibold text-stone-500 sm:grid sm:grid-cols-[1fr_2fr_2fr]">
+    <div v-if="measured.length" class="overflow-x-auto rounded-xl border border-stone-200">
+      <div class="grid min-w-[300px] grid-cols-[1fr_2fr_2fr] border-b border-stone-200 bg-stone-50/80 px-3 py-1.5 text-xs font-semibold text-stone-500 sm:min-w-[640px] sm:px-4 sm:py-2">
         <span>項目名稱</span>
         <span class="border-l border-stone-200 pl-2">本次數值</span>
         <span class="border-l border-stone-200 pl-2">上次數值</span>
@@ -31,17 +31,18 @@ const others = computed(() => (props.section.items ?? []).filter((item) => famil
       <div
         v-for="item in measured"
         :key="item.key"
-        class="grid grid-cols-[1fr_auto] gap-x-0 gap-y-2 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[1fr_2fr_2fr] sm:gap-y-0"
+        class="grid min-w-[300px] grid-cols-[1fr_2fr_2fr] gap-x-0 border-b border-stone-200 px-3 py-2 text-sm last:border-0 sm:min-w-[640px] sm:px-4 sm:py-3"
       >
         <span class="min-w-0 pr-2 font-medium text-stone-800">{{ item.label }}</span>
-        <span class="min-w-0 border-stone-100 pl-2 text-stone-700 sm:border-l">
+        <span class="min-w-0 border-l border-stone-100 pl-2 text-stone-700">
           <strong class="font-medium">{{ item.display }}</strong>
           <small v-if="referenceLabel(item)" class="mt-0.5 block text-xs text-stone-500">參考 {{ referenceLabel(item) }}</small>
         </span>
-        <span class="col-span-2 min-w-0 border-stone-100 text-stone-700 sm:col-span-1 sm:border-l sm:pl-2">
+        <span class="min-w-0 border-l border-stone-100 pl-2 text-stone-700">
           <template v-if="previousMeasurementLabel(item)">
+            <small class="mr-1 text-xs text-stone-400 sm:hidden">上次</small>
             <strong class="font-medium">{{ previousMeasurementLabel(item) }}</strong>
-            <small v-if="previousDateLabel(item)" class="ml-1 text-xs text-stone-500">({{ previousDateLabel(item) }})</small>
+            <small v-if="previousDateLabel(item)" class="block text-xs text-stone-500 sm:ml-1 sm:inline">({{ previousDateLabel(item) }})</small>
           </template>
         </span>
       </div>
