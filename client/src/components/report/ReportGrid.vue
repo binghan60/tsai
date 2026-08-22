@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { hasContent, measurementLabel, referenceLabel } from './reportItem';
+import { hasContent, measurementLabel, previousDateLabel, previousMeasurementLabel, referenceLabel } from './reportItem';
 import { spanClass } from '../../lib/fieldSpan';
 import ReportField from './ReportField.vue';
 import { familyOf } from '../../lib/fieldFamily';
@@ -32,6 +32,10 @@ const others = computed(() => (props.section.items ?? []).filter((item) => famil
           :class="item.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'"
         >{{ item.status === 'abnormal' ? '異常' : '正常' }}・自動</dd>
         <dd v-if="referenceLabel(item)" class="mt-0.5 text-xs text-stone-500">參考 {{ referenceLabel(item) }}</dd>
+        <dd v-if="previousMeasurementLabel(item)" class="mt-1 border-t border-stone-100 pt-1 text-[11px] text-stone-500">
+          ↺ 上次 {{ previousMeasurementLabel(item) }}
+          <span v-if="previousDateLabel(item)" class="block text-[10px] text-stone-400">({{ previousDateLabel(item) }})</span>
+        </dd>
       </div>
     </dl>
     <div v-if="others.length" class="mt-4 grid gap-4 sm:grid-cols-2">

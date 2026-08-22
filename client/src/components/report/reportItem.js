@@ -53,3 +53,30 @@ export function statusText(status) {
   if (status === 'normal') return '正常';
   return '未標示';
 }
+
+export function hasPreviousValue(item) {
+  return item?.previousValue !== null && item?.previousValue !== undefined && String(item.previousValue).trim() !== '';
+}
+
+export function previousMeasurementLabel(item) {
+  if (!hasPreviousValue(item)) return null;
+  const unit = item.previousUnit || item.unit || '';
+  return `${item.previousValue}${unit ? ` ${unit}` : ''}`;
+}
+
+export function previousLabValueLabel(item) {
+  if (!hasPreviousValue(item)) return '';
+  const unit = item.previousUnit || item.unit || '';
+  return `${item.previousValue}${unit ? ` ${unit}` : ''}`;
+}
+
+export function previousDateLabel(item) {
+  if (!item?.previousVisitDate) return '';
+  const date = new Date(item.previousVisitDate);
+  if (Number.isNaN(date.getTime())) return '';
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}/${m}/${d}`;
+}
+

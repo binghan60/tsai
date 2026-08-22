@@ -68,6 +68,11 @@ const reportSectionItemSchema = new mongoose.Schema(
     note: { type: String, default: '' },
     numeric: { type: Boolean, default: true },
     required: { type: Boolean, default: false },
+    // Historical comparison data is frozen with a finalized report.
+    previousValue: { type: mongoose.Schema.Types.Mixed, default: undefined },
+    previousUnit: { type: String, default: '' },
+    previousStatus: { type: String, default: null },
+    previousVisitDate: { type: Date, default: null },
   },
   { _id: false }
 );

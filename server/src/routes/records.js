@@ -15,6 +15,7 @@ import { escapeRegExp } from '../lib/regex.js';
 import { validateFinalRecord } from '../lib/recordValidation.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
+import { enrichSectionsWithPreviousValues, getPetPreviousValues } from '../lib/historyValues.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -136,10 +137,8 @@ petRecordsRouter.get('/', async (req, res, next) => {
 // 這隻寵物過去每個項目最近一次的紀錄，不限健檢類型：只要以前量過血小板，
 // 這次的表單有血小板就能顯示上次的值，即使兩次用的是不同的健檢表單。
 // 只收得出數值的型別 —— 理學檢查只有正常／異常，沒有可以拿來對照的數字。
-const HISTORY_ITEM_TYPES = new Set(['lab', 'measurement', 'number']);
 // 逐份走訪已結案報告找「每個項目最近一次」的值。太久以前的紀錄拿來對照的意義有限，
 // 也不該讓填表頁為了翻完全部病歷而多等，只看最近這幾份。
-const HISTORY_RECORD_LIMIT = 20;
 const FINALIZE_LEASE_MS = 5 * 60 * 1000;
 const DELIVERY_LEASE_MS = 10 * 60 * 1000;
 const configuredShareDays = Number.parseInt(process.env.SHARE_LINK_DAYS, 10);
@@ -152,63 +151,12 @@ function shareExpiryFromNow(days = DEFAULT_SHARE_DAYS) {
   return new Date(Date.now() + safeDays * 24 * 60 * 60 * 1000);
 }
 
-function historyEntry(record, item) {
-  return {
-    key: item.key,
-    label: item.label,
-    type: item.type,
-    value: item.value,
-    unit: item.unit ?? '',
-    status: item.status ?? null,
-    note: item.note ?? '',
-    visitDate: record.visitDate,
-    examType: record.examType,
-    recordId: record._id,
-  };
-}
-
 // 正在填的這份報告與它的其他版本都不算「上次」——
 // 修訂草稿要對照的是更早的那次健檢，不是自己的前一版。
-async function excludedHistoryIds(recordId) {
-  if (!recordId || !mongoose.isValidObjectId(recordId)) return [];
-  const current = await MedicalRecord.findById(recordId).select('revisionRootId revisionOf');
-  const rootId = current?.revisionRootId || current?.revisionOf;
-  if (!rootId) return [recordId];
-  const family = await MedicalRecord.find({ $or: [{ _id: rootId }, { revisionRootId: rootId }] }).select('_id');
-  return [recordId, ...family.map((doc) => doc._id)];
-}
-
 petRecordsRouter.get('/previous-values', async (req, res, next) => {
   try {
-    const records = await MedicalRecord.find({
-      petId: req.params.petId,
-      // 草稿還沒定稿，不能拿來當歷史數值；
-      // 已被修訂版取代的舊版也不算，同一次健檢只看最後定稿的內容。
-      status: { $ne: 'draft' },
-      supersededBy: null,
-      _id: { $nin: await excludedHistoryIds(req.query.excludeRecordId) },
-    })
-      .sort({ visitDate: -1, finalizedAt: -1, reportVersion: -1 })
-      .limit(HISTORY_RECORD_LIMIT)
-      .select('sections visitDate examType');
-
-    const byKey = {};
-    const byLabel = {};
-    // 由新到舊走訪，每個項目只留第一次遇到的（也就是最近一次的）紀錄。
-    for (const record of records) {
-      // 已結案報告一定有 sections 快照，不必回頭組範本。
-      for (const item of (record.sections ?? []).flatMap((section) => section.items ?? [])) {
-        // 只按了「正常」卻沒填數值的項目留不下可比較的東西，不列入。
-        if (!HISTORY_ITEM_TYPES.has(item.type) || String(item.value ?? '').trim() === '') continue;
-        const entry = historyEntry(record, item);
-        if (!byKey[item.key]) byKey[item.key] = entry;
-        // 自訂項目的 key 是各表單各自產生的，跨類型對不起來；
-        // 同型別又同名稱的項目視為同一件事，換一種健檢也才看得到上次的值。
-        const labelKey = `${item.type}:${String(item.label ?? '').trim()}`;
-        if (!byLabel[labelKey]) byLabel[labelKey] = entry;
-      }
-    }
-    res.json({ byKey, byLabel });
+    const data = await getPetPreviousValues(req.params.petId, req.query.excludeRecordId);
+    res.json(data);
   } catch (err) {
     next(err);
   }
@@ -402,8 +350,10 @@ recordsRouter.get('/:id', async (req, res, next) => {
       populate: { path: 'ownerId', select: 'name phone email' },
     });
     if (!record) return res.status(404).json({ message: '找不到報告' });
-    // 預覽模式與報告頁共用同一套渲染，草稿也要能拿到區塊結構。
-    const sections = record.sections?.length ? record.sections : composeReportSections(record, await templateForRecord(record));
+    // 預覽模式與報告頁共用同一套渲染，草稿也要能拿到區塊結構與歷史對照數值。
+    const rawSections = record.sections?.length ? record.sections : composeReportSections(record, await templateForRecord(record));
+    const previousValues = await getPetPreviousValues(record.petId, record._id, record);
+    const sections = enrichSectionsWithPreviousValues(rawSections, previousValues);
     // 一定要用 toJSON()：toObject() 預設不 flatten Map，展開後 customValues 會變成 {}，
     // 自訂項目的作答一開啟編輯頁就空白，接著自動儲存把 {} 寫回資料庫。
     res.json({ ...record.toJSON(), sections, deliveryStatus: effectiveDeliveryStatus(record) });
@@ -483,7 +433,8 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
     if (!template) {
       return res.status(409).json({ message: '這份報告的健檢類型已不存在，無法結案' });
     }
-    const composedSections = composeReportSections(record, template);
+    const previousValues = await getPetPreviousValues(record.petId, record._id, record);
+    const composedSections = enrichSectionsWithPreviousValues(composeReportSections(record, template), previousValues);
 
     const missing = validateFinalRecord(composedSections);
     if (missing.length) {
@@ -1116,7 +1067,9 @@ publicReportsRouter.get('/:token', async (req, res, next) => {
     }
 
     // 已結案報告用自己的快照；草稿還沒凍結結構，即時用目前範本組合。
-    const sections = record.sections?.length ? record.sections : composeReportSections(record, await templateForRecord(record));
+    const rawSections = record.sections?.length ? record.sections : composeReportSections(record, await templateForRecord(record));
+    const previousValues = await getPetPreviousValues(record.petId, record._id, record);
+    const sections = enrichSectionsWithPreviousValues(rawSections, previousValues);
     res.set('Cache-Control', 'private, no-store');
     res.json(reportPayload(record, sections));
   } catch (err) {
