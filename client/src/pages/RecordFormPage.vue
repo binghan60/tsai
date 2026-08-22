@@ -289,7 +289,7 @@ const saveLabel = computed(() => {
   if (saveState.value === 'error') return '自動儲存失敗';
   if (isDirty.value) return '有尚未儲存的變更';
   if (lastSavedAt.value) return `已儲存 ${lastSavedAt.value.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })}`;
-  return '尚未開始填寫';
+  return '尚未儲存';
 });
 
 function mergeFindings(definitions, savedItems, extraFields, defaults = {}) {
@@ -829,7 +829,7 @@ function handleBeforeUnload(event) {
   <section class="mx-auto max-w-6xl space-y-5 pb-28">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div><router-link :to="backTo" class="mb-1 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← {{ backLabel }}</router-link><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-belle-50 px-2.5 py-0.5 text-xs font-medium text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
-      <div v-if="!isLocked" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
+      <div v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
     </div>
 
     <Alert v-if="loadError" variant="destructive"><AlertDescription>{{ loadError }}</AlertDescription></Alert>

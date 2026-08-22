@@ -148,7 +148,7 @@ onBeforeUnmount(() => {
               <TableHead >事件</TableHead>
               <TableHead >報告</TableHead>
               <TableHead >收件信箱</TableHead>
-              <TableHead >備註</TableHead>
+              <TableHead >處理結果</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -161,9 +161,8 @@ onBeforeUnmount(() => {
                 <span class="block text-sm text-foreground">{{ log.petName || '寵物未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></span>
                 <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <!-- 報告還在就給連結；已刪除的直接標明，連過去只會是 404。 -->
-                  <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="tabular-nums underline hover:text-belle-600 dark:hover:text-brand-400">{{ log.reportNumber || '—' }}</router-link>
+                  <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="underline hover:text-belle-600 dark:hover:text-brand-400">查看報告</router-link>
                   <template v-else>
-                    <span class="tabular-nums">{{ log.reportNumber || '—' }}</span>
                     <span class="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-muted-foreground">
                       <Trash2 class="h-3 w-3" stroke-width="1.75" />報告已刪除
                     </span>
@@ -192,19 +191,9 @@ onBeforeUnmount(() => {
                     {{ detailExpanded(log) ? '收合詳情' : '展開詳情' }}
                   </button>
                 </div>
-                <div v-else-if="log.messageId" class="max-w-80 text-xs text-muted-foreground">
-                  <span class="block whitespace-normal break-all" :class="detailExpanded(log) ? '' : 'line-clamp-2'">{{ log.messageId }}</span>
-                  <button
-                    v-if="log.messageId.length > 48"
-                    type="button"
-                    class="mt-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 font-medium hover:bg-muted/50 hover:text-foreground"
-                    @click="toggleDetail(log)"
-                  >
-                    <ChevronUp v-if="detailExpanded(log)" class="h-3.5 w-3.5" />
-                    <ChevronDown v-else class="h-3.5 w-3.5" />
-                    {{ detailExpanded(log) ? '收合 ID' : '完整 ID' }}
-                  </button>
-                </div>
+                <span v-else-if="log.event === 'sent'" class="text-xs text-emerald-700 dark:text-emerald-300">已寄送</span>
+                <span v-else-if="log.event === 'queued'" class="text-xs text-sky-700 dark:text-sky-300">等待寄送完成</span>
+                <span v-else-if="log.event === 'uncertain'" class="text-xs text-amber-700 dark:text-amber-300">寄送結果待確認</span>
                 <span v-else class="text-xs text-muted-foreground">—</span>
               </TableCell>
             </TableRow>
@@ -221,9 +210,8 @@ onBeforeUnmount(() => {
           </div>
           <p class="text-sm text-foreground">{{ log.petName || '寵物未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></p>
           <p class="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="inline-flex min-h-11 items-center tabular-nums underline">{{ log.reportNumber || '—' }}</router-link>
+            <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="inline-flex min-h-11 items-center underline">查看報告</router-link>
             <template v-else>
-              <span class="tabular-nums">{{ log.reportNumber || '—' }}</span>
               <span class="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5"><Trash2 class="h-3 w-3" stroke-width="1.75" />報告已刪除</span>
             </template>
           </p>

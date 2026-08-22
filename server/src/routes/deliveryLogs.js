@@ -39,7 +39,9 @@ router.get('/', async (req, res, next) => {
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 200);
 
     const [items, total] = await Promise.all([
-      DeliveryLog.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit),
+      // Message-ID 是 SMTP 供應商用來追蹤信件的技術識別碼，並非人可讀的寄送備註。
+      // 流水帳介面不需要它，保留在資料庫供系統除錯即可。
+      DeliveryLog.find(filter).select('-messageId').sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit),
       DeliveryLog.countDocuments(filter),
     ]);
 
