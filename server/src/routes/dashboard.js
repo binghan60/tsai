@@ -49,7 +49,7 @@ router.get('/', async (req, res, next) => {
       return { weekEnd, count };
     });
 
-    const statusBreakdown = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0 };
+    const statusBreakdown = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0, uncertain: 0 };
     statusCounts.forEach(({ _id, count }) => {
       if (_id.status === 'draft') {
         statusBreakdown.draft += count;
@@ -58,6 +58,7 @@ router.get('/', async (req, res, next) => {
       const deliveryStatus = _id.deliveryStatus || 'not_sent';
       if (deliveryStatus === 'sent') statusBreakdown.sent += count;
       else if (deliveryStatus === 'failed') statusBreakdown.failed += count;
+      else if (deliveryStatus === 'uncertain') statusBreakdown.uncertain += count;
       else if (deliveryStatus === 'sending') statusBreakdown.sending += count;
       else statusBreakdown.finalized += count;
     });
@@ -67,8 +68,8 @@ router.get('/', async (req, res, next) => {
       petCount,
       monthlyReportCount,
       draftCount,
-      finalizedPendingCount: statusBreakdown.finalized + statusBreakdown.sending,
-      failedCount: statusBreakdown.failed,
+      finalizedPendingCount: statusBreakdown.finalized + statusBreakdown.sending + statusBreakdown.uncertain,
+      failedCount: statusBreakdown.failed + statusBreakdown.uncertain,
       statusBreakdown,
       weeklyTrend,
       recentRecords,

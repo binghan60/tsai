@@ -125,9 +125,5 @@ async function renderWith(browser, url) {
   }
 }
 
-// 開發時 nodemon 一直重啟，不主動關掉的話 Chromium 會一個個殘留在背景。
-for (const signal of ['SIGINT', 'SIGTERM']) {
-  process.once(signal, () => {
-    closeBrowser().finally(() => process.exit(0));
-  });
-}
+// 關機時由 app.js 統一停止 HTTP、等待既有請求、關 Chromium 與 MongoDB。
+// library 自己呼叫 process.exit() 會截斷還在寫回的寄送或病歷操作。

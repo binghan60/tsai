@@ -18,6 +18,7 @@ const EVENTS = [
   { key: '', label: '全部' },
   { key: 'sent', label: '寄送成功' },
   { key: 'failed', label: '寄送失敗' },
+  { key: 'uncertain', label: '結果待確認' },
   { key: 'queued', label: '開始寄送' },
 ];
 

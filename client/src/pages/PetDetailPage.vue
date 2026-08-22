@@ -52,7 +52,7 @@ function formatDate(value) {
 }
 
 function isShareActive(record) {
-  return Boolean(record?.shareEnabled);
+  return Boolean(record?.shareEnabled && record.shareExpiresAt && new Date(record.shareExpiresAt) > new Date());
 }
 
 async function fetchPet() {
@@ -215,13 +215,13 @@ onMounted(fetchPet);
         <li v-for="record in pet.medicalRecords" :key="record._id">
           <Card class="p-4 shadow-sm dark:shadow-none">
           <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">無期限分享</Badge></div><p class="mt-1 text-xs text-muted-foreground">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
+            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">分享中</Badge></div><p class="mt-1 text-xs text-muted-foreground">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
             <div class="flex flex-wrap items-center gap-1 text-sm">
               <Button v-if="record.status === 'draft'" as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
               <Button v-else as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
               <Button v-if="isFinalizedRecord(record) && !isShareActive(record)" type="button" variant="secondary" size="sm" :disabled="sharingId === record._id" @click="shareRecord(record)"><Share2 class="h-4 w-4" />{{ sharingId === record._id ? '處理中…' : '分享' }}</Button>
               <template v-if="isShareActive(record)"><Button type="button" variant="secondary" size="sm" @click="copyExistingShare(record)">複製連結</Button><Button type="button" variant="destructive-outline" size="sm" :disabled="revokingId === record._id" @click="openRevokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</Button></template>
-              <Button v-if="!['sent', 'sending'].includes(getDeliveryStatus(record))" type="button" variant="destructive" size="sm" :disabled="deletingRecordId === record._id" :aria-label="`刪除健檢紀錄 ${formatDate(record.visitDate)}`" @click="openRemoveRecord(record)"><Trash2 class="h-4 w-4" />刪除</Button>
+              <Button v-if="!['sent', 'sending', 'uncertain'].includes(getDeliveryStatus(record))" type="button" variant="destructive" size="sm" :disabled="deletingRecordId === record._id" :aria-label="`刪除健檢紀錄 ${formatDate(record.visitDate)}`" @click="openRemoveRecord(record)"><Trash2 class="h-4 w-4" />刪除</Button>
             </div>
           </div>
           </Card>

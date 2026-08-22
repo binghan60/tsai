@@ -73,8 +73,9 @@ const formTemplateSchema = new mongoose.Schema(
     sections: { type: [formSectionSchema], default: [] },
     // 已刪除過的 key 不再重複使用，避免新項目繼承到舊項目的歷史語意。
     retiredKeys: { type: [String], default: [] },
+    relationVersion: { type: Number, default: 0, select: false },
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 // 類型名稱要能一眼分辨，不允許重複。

@@ -13,7 +13,7 @@ router.get('/', async (req, res, next) => {
   try {
     const filter = {};
     if (req.query.recordId) filter.recordId = req.query.recordId;
-    if (['queued', 'sent', 'failed'].includes(req.query.event)) filter.event = req.query.event;
+    if (['queued', 'sent', 'failed', 'uncertain'].includes(req.query.event)) filter.event = req.query.event;
 
     const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 200);

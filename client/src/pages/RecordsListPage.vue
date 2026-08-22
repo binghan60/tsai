@@ -17,7 +17,7 @@ const VIEWS = [
   { key: 'todo', label: '待辦' },
   { key: 'drafts', label: '草稿' },
   { key: 'pending', label: '待寄送' },
-  { key: 'failed', label: '寄送失敗' },
+  { key: 'failed', label: '失敗／待確認' },
   { key: 'sent', label: '已寄送' },
   { key: 'all', label: '全部' },
 ];

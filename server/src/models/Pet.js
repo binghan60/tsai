@@ -20,6 +20,7 @@ const petSchema = new mongoose.Schema(
     chronicConditions: { type: String, default: '', trim: true },
     currentMedications: { type: String, default: '', trim: true },
     notes: { type: String, default: '', trim: true },
+    relationVersion: { type: Number, default: 0, select: false },
   },
   { timestamps: true }
 );

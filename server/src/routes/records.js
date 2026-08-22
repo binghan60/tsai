@@ -14,6 +14,7 @@ import { templateForRecord } from '../lib/formTemplate.js';
 import { composeReportSections } from '../lib/reportSections.js';
 import { escapeRegExp } from '../lib/regex.js';
 import { validateFinalRecord } from '../lib/recordValidation.js';
+import { withTransaction } from '../lib/transaction.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -88,6 +89,7 @@ function reportPayload(record, sections) {
     deliveryStatus: effectiveDeliveryStatus(record),
     sentAt: record.sentAt,
     shareEnabled: record.shareEnabled,
+    shareExpiresAt: record.shareExpiresAt,
     pet: pet
       ? {
           name: pet.name,
@@ -108,10 +110,16 @@ function reportPayload(record, sections) {
 
 // 掛載於 /api/pets/:petId/records
 export const petRecordsRouter = Router({ mergeParams: true });
+const PET_RECORD_LIST_FIELDS =
+  'petId reportNumber vet visitDate examType status deliveryStatus deliveryError reportVersion revisionOf revisionRootId supersededBy shareToken shareEnabled sharedAt shareExpiresAt sentAt sentTo finalizedAt updatedAt createdAt';
 
 petRecordsRouter.get('/', async (req, res, next) => {
   try {
-    const records = await MedicalRecord.find({ petId: req.params.petId }).sort({ visitDate: -1, reportVersion: -1, updatedAt: -1 });
+    // 寵物頁只畫摘要，不能把每份報告的大型 sections 快照與全部臨床內容一起載回。
+    const records = await MedicalRecord.find({ petId: req.params.petId })
+      .sort({ visitDate: -1, reportVersion: -1, updatedAt: -1 })
+      .select(PET_RECORD_LIST_FIELDS)
+      .lean();
     res.json(records);
   } catch (err) {
     next(err);
@@ -127,6 +135,16 @@ const HISTORY_ITEM_TYPES = new Set(['lab', 'measurement', 'number']);
 // 也不該讓填表頁為了翻完全部病歷而多等，只看最近這幾份。
 const HISTORY_RECORD_LIMIT = 20;
 const FINALIZE_LEASE_MS = 5 * 60 * 1000;
+const DELIVERY_LEASE_MS = 10 * 60 * 1000;
+const configuredShareDays = Number.parseInt(process.env.SHARE_LINK_DAYS, 10);
+const DEFAULT_SHARE_DAYS = Number.isInteger(configuredShareDays) && configuredShareDays > 0
+  ? Math.min(configuredShareDays, 365)
+  : 30;
+
+function shareExpiryFromNow(days = DEFAULT_SHARE_DAYS) {
+  const safeDays = Number.isInteger(days) ? Math.min(Math.max(days, 1), 365) : DEFAULT_SHARE_DAYS;
+  return new Date(Date.now() + safeDays * 24 * 60 * 60 * 1000);
+}
 
 function historyEntry(record, item) {
   return {
@@ -192,9 +210,6 @@ petRecordsRouter.get('/previous-values', async (req, res, next) => {
 
 petRecordsRouter.post('/', async (req, res, next) => {
   try {
-    const pet = await Pet.findById(req.params.petId);
-    if (!pet) return res.status(404).json({ message: '找不到寵物' });
-
     // 健檢類型就是「用哪一份範本」，只在建立時決定；
     // 中途換範本會讓已填的作答對不上結構，所以之後不允許更改。
     // 沒有預設類型，一律要求明確指定。
@@ -204,16 +219,38 @@ petRecordsRouter.post('/', async (req, res, next) => {
     if (!mongoose.isValidObjectId(req.body.templateId)) {
       return res.status(422).json({ message: '健檢類型格式不正確' });
     }
-    const template = await FormTemplate.findById(req.body.templateId);
-    if (!template) return res.status(422).json({ message: '找不到指定的健檢類型' });
-    if (template.enabled === false) return res.status(422).json({ message: `「${template.name}」已停用，無法用來建立報告` });
+    let record;
+    await withTransaction(async (session) => {
+      // 遞增父文件 relationVersion，讓「建立報告」與「刪除寵物／表單」無法同時提交。
+      const pet = await Pet.findOneAndUpdate(
+        { _id: req.params.petId },
+        { $inc: { relationVersion: 1 } },
+        { new: true, session }
+      ).select('+relationVersion');
+      if (!pet) {
+        const error = new Error('找不到寵物');
+        error.status = 404;
+        throw error;
+      }
 
-    const record = await MedicalRecord.create({
-      petId: req.params.petId,
-      ...pickRecordFields(req.body),
-      templateId: template._id,
-      templateVersion: template.version,
-      examType: template.name,
+      const template = await FormTemplate.findOneAndUpdate(
+        { _id: req.body.templateId, enabled: { $ne: false } },
+        { $inc: { relationVersion: 1 } },
+        { new: true, session }
+      ).select('+relationVersion');
+      if (!template) {
+        const error = new Error('找不到指定的健檢類型，或該類型已停用');
+        error.status = 422;
+        throw error;
+      }
+
+      [record] = await MedicalRecord.create([{
+        petId: pet._id,
+        ...pickRecordFields(req.body),
+        templateId: template._id,
+        templateVersion: template.version,
+        examType: template.name,
+      }], { session });
     });
     res.status(201).json(record);
   } catch (err) {
@@ -233,8 +270,8 @@ const RECORD_VIEW_FILTERS = {
   // 待辦＝還沒送到飼主手上的：草稿，以及已結案但未寄送／寄送中／寄送失敗的。
   todo: { $or: [{ status: 'draft' }, { deliveryStatus: { $ne: 'sent' } }] },
   drafts: { status: 'draft' },
-  pending: { status: 'finalized', deliveryStatus: { $in: ['not_sent', 'sending'] } },
-  failed: { deliveryStatus: 'failed' },
+  pending: { status: 'finalized', deliveryStatus: { $in: ['not_sent', 'sending', 'uncertain'] } },
+  failed: { deliveryStatus: { $in: ['failed', 'uncertain'] } },
   sent: { deliveryStatus: 'sent' },
   all: {},
 };
@@ -270,7 +307,7 @@ async function buildRecordListFilter(query) {
   if (Object.keys(RECORD_VIEW_FILTERS[view]).length) and.push(RECORD_VIEW_FILTERS[view]);
 
   if (['draft', 'finalized'].includes(query.status)) filter.status = query.status;
-  if (['not_sent', 'sending', 'sent', 'failed'].includes(query.delivery)) filter.deliveryStatus = query.delivery;
+  if (['not_sent', 'sending', 'sent', 'failed', 'uncertain'].includes(query.delivery)) filter.deliveryStatus = query.delivery;
   if (String(query.vet ?? '').trim()) filter.vet = new RegExp(escapeRegExp(String(query.vet).trim()), 'i');
 
   // 被修訂版取代的舊版預設不列出：同一次健檢在清單上只該出現最後定稿的那份，
@@ -354,24 +391,33 @@ recordsRouter.get('/:id', async (req, res, next) => {
 
 recordsRouter.put('/:id', async (req, res, next) => {
   try {
+    const expectedVersion = Number(req.body?.expectedVersion);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+      return res.status(428).json({ message: '缺少病歷版本資訊，請重新整理後再儲存' });
+    }
     const record = await MedicalRecord.findOneAndUpdate(
       {
         _id: req.params.id,
         status: 'draft',
+        __v: expectedVersion,
         $or: [{ finalizeAttemptId: null }, { finalizeAttemptId: { $exists: false } }],
       },
-      { $set: pickRecordFields(req.body) },
+      { $set: pickRecordFields(req.body), $inc: { __v: 1 } },
       { new: true, runValidators: true }
     );
     if (!record) {
       const existing = await MedicalRecord.findById(req.params.id).select('+finalizeAttemptId');
+      if (!existing) return res.status(404).json({ message: '找不到報告' });
       if (existing?.status === 'draft' && existing.finalizeAttemptId) {
         return res.status(409).json({ message: '病歷正在結案並產生 PDF，請稍後再試' });
       }
-    }
-    if (!record) return res.status(404).json({ message: '找不到報告' });
-    if (record.status !== 'draft') {
-      return res.status(409).json({ message: '這份報告已結案，無法直接修改，請建立修訂草稿' });
+      if (existing.status !== 'draft') {
+        return res.status(409).json({ message: '這份報告已結案，無法直接修改，請建立修訂草稿' });
+      }
+      return res.status(409).json({
+        message: '這份草稿已在其他分頁或裝置更新。為避免覆蓋內容，請重新整理後再編輯。',
+        currentVersion: existing.__v,
+      });
     }
     res.json(record);
   } catch (err) {
@@ -381,6 +427,9 @@ recordsRouter.put('/:id', async (req, res, next) => {
 
 recordsRouter.post('/:id/finalize', async (req, res, next) => {
   let record;
+  let finalizeAttemptId = '';
+  let previousTemplateVersion = null;
+  let didFinalize = false;
   try {
     record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
@@ -406,8 +455,8 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       return res.status(422).json({ message: `請先補齊：${missing.join('、')}` });
     }
 
-    const previousTemplateVersion = record.templateVersion;
-    const finalizeAttemptId = uuidv4();
+    previousTemplateVersion = record.templateVersion;
+    finalizeAttemptId = uuidv4();
     const lockedRecord = await MedicalRecord.findOneAndUpdate(
       {
         _id: record._id,
@@ -437,58 +486,77 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
     }
     record = lockedRecord;
 
-    const previousFinalizedAt = record.finalizedAt;
-    const previousPdfGeneratedAt = record.pdfGeneratedAt;
-    record.deliveryStatus = 'not_sent';
-    record.deliveryError = '';
-    // 結案時凍結表單結構與作答，日後改範本不會影響這份已結案報告。
-    record.templateId = template._id;
-    record.templateVersion = template.version;
-    record.sections = composedSections;
-    await record.save();
-
     try {
       await renderReportPdf(record.shareToken);
     } catch (pdfError) {
-      record.status = 'draft';
-      record.finalizedAt = previousFinalizedAt;
-      record.pdfGeneratedAt = previousPdfGeneratedAt;
-      record.finalizeAttemptId = undefined;
-      record.finalizingAt = null;
       // 只回滾「結案時才產生」的東西。templateId 是建立報告時就綁定的，
       // 清掉它會讓這份草稿失去自己的健檢類型，之後連編輯頁都打不開。
-      record.templateVersion = previousTemplateVersion;
-      record.sections = [];
-      await record.save();
+      await MedicalRecord.updateOne(
+        { _id: record._id, finalizeAttemptId },
+        {
+          $set: { status: 'draft', templateVersion: previousTemplateVersion, sections: [] },
+          $unset: { finalizeAttemptId: 1, finalizingAt: 1 },
+        }
+      );
       pdfError.isFinalizePdfError = true;
       throw pdfError;
     }
 
-    record.status = 'finalized';
-    record.finalizedAt = new Date();
-    record.pdfGeneratedAt = new Date();
-    record.finalizeAttemptId = undefined;
-    record.finalizingAt = null;
-    await record.save();
-    if (record.revisionOf) {
-      try {
-        await MedicalRecord.findByIdAndUpdate(record.revisionOf, { supersededBy: record._id });
-      } catch (supersedeError) {
-        console.error('報告已結案，但標記前一版為已被取代失敗', supersedeError);
-      }
-    }
     // 靠 role 找體重，不寫死欄位名稱；使用者若停用或刪除該欄位就不同步。
     const weightItem = composedSections.flatMap((section) => section.items ?? []).find((item) => item.role === 'weight');
     // Number(null) 與 Number('') 都是 0 —— 沒填體重時不能把寵物的體重蓋成 0。
     const weightText = String(weightItem?.value ?? '').trim();
     const weightValue = Number(weightText);
-    if (weightText && Number.isFinite(weightValue)) {
-      try {
-        await Pet.findByIdAndUpdate(record.petId, { weightKg: weightValue });
-      } catch (petUpdateError) {
-        console.error('報告已結案，但更新寵物最近體重失敗', petUpdateError);
+    const finalizedAt = new Date();
+    await withTransaction(async (session) => {
+      const finalizedRecord = await MedicalRecord.findOneAndUpdate(
+        { _id: record._id, status: 'draft', finalizeAttemptId },
+        {
+          $set: {
+            status: 'finalized',
+            finalizedAt,
+            pdfGeneratedAt: finalizedAt,
+            deliveryStatus: 'not_sent',
+            deliveryError: '',
+          },
+          $unset: { finalizeAttemptId: 1, finalizingAt: 1 },
+        },
+        { new: true, session }
+      );
+      if (!finalizedRecord) {
+        const error = new Error('結案工作已失去擁有權，請重新整理後確認報告狀態');
+        error.status = 409;
+        throw error;
       }
-    }
+
+      if (record.revisionOf) {
+        const superseded = await MedicalRecord.updateOne(
+          { _id: record.revisionOf, status: 'finalized', supersededBy: null },
+          { $set: { supersededBy: record._id } },
+          { session }
+        );
+        if (superseded.matchedCount !== 1) {
+          const error = new Error('前一版報告已被其他修訂取代，無法建立分叉版本');
+          error.status = 409;
+          throw error;
+        }
+      }
+
+      if (weightText && Number.isFinite(weightValue)) {
+        const petUpdate = await Pet.updateOne(
+          { _id: record.petId },
+          { $set: { weightKg: weightValue } },
+          { session }
+        );
+        if (petUpdate.matchedCount !== 1) {
+          const error = new Error('找不到報告所屬寵物，無法完成結案');
+          error.status = 409;
+          throw error;
+        }
+      }
+      record = finalizedRecord;
+    });
+    didFinalize = true;
 
     res.json({
       status: 'finalized',
@@ -498,6 +566,19 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       deliveryStatus: effectiveDeliveryStatus(record),
     });
   } catch (err) {
+    if (record?._id && finalizeAttemptId && !didFinalize && !err.isFinalizePdfError) {
+      try {
+        await MedicalRecord.updateOne(
+          { _id: record._id, finalizeAttemptId },
+          {
+            $set: { status: 'draft', templateVersion: previousTemplateVersion, sections: [] },
+            $unset: { finalizeAttemptId: 1, finalizingAt: 1 },
+          }
+        );
+      } catch (cleanupError) {
+        console.error('結案失敗後釋放鎖定時發生錯誤', cleanupError);
+      }
+    }
     if (err.isFinalizePdfError) {
       // 這條路徑不會走到全域錯誤處理，不自己記一筆就完全查不到失敗原因。
       console.error('結案時產生 PDF 失敗', err);
@@ -533,54 +614,76 @@ recordsRouter.get('/:id/pdf', async (req, res, next) => {
 
 recordsRouter.post('/:id/revisions', async (req, res, next) => {
   try {
-    const source = await MedicalRecord.findById(req.params.id);
-    if (!source) return res.status(404).json({ message: '找不到報告' });
-    if (!isFinalizedRecord(source)) {
-      return res.status(409).json({ message: '草稿可直接編輯，不需要建立修訂版' });
-    }
-    if (source.supersededBy) {
-      return res.status(409).json({
-        message: '這份報告已有後續修訂版本',
-        newerRecordId: source.supersededBy,
-      });
-    }
+    let revision;
+    await withTransaction(async (session) => {
+      const source = await MedicalRecord.findById(req.params.id).session(session);
+      if (!source) {
+        const error = new Error('找不到報告');
+        error.status = 404;
+        throw error;
+      }
+      if (!isFinalizedRecord(source)) {
+        const error = new Error('草稿可直接編輯，不需要建立修訂版');
+        error.status = 409;
+        throw error;
+      }
+      if (source.supersededBy) {
+        const error = new Error('這份報告已有後續修訂版本');
+        error.status = 409;
+        error.details = { newerRecordId: source.supersededBy };
+        throw error;
+      }
 
-    const existingDraft = await MedicalRecord.findOne({ revisionOf: source._id, status: 'draft' });
-    if (existingDraft) {
-      return res.status(409).json({
-        message: '這份報告已有待完成的修訂草稿',
-        revisionId: existingDraft._id,
-      });
-    }
+      const existingDraft = await MedicalRecord.findOne({ revisionOf: source._id, status: 'draft' }).session(session);
+      if (existingDraft) {
+        const error = new Error('這份報告已有待完成的修訂草稿');
+        error.status = 409;
+        error.details = { revisionId: existingDraft._id };
+        throw error;
+      }
 
-    const rootId = source.revisionRootId || source._id;
-    const latestVersion = await MedicalRecord.findOne({
-      $or: [{ _id: rootId }, { revisionRootId: rootId }],
-    }).sort({ reportVersion: -1 }).select('reportVersion');
-    const reportVersion = Math.max(latestVersion?.reportVersion || 1, source.reportVersion || 1) + 1;
-    const revision = await MedicalRecord.create({
-      petId: source.petId,
-      ...recordSnapshot(source),
-      // 修訂版沿用原報告的健檢類型，才會看到同一份表單結構。
-      templateId: source.templateId,
-      templateVersion: source.templateVersion,
-      examType: source.examType,
-      sections: [],
-      status: 'draft',
-      reportVersion,
-      revisionOf: source._id,
-      revisionRootId: rootId,
-      revisionReason: String(req.body.reason || '').trim(),
-      finalizedAt: null,
-      pdfGeneratedAt: null,
-      deliveryStatus: 'not_sent',
-      deliveryError: '',
-      lastDeliveryAttemptAt: null,
-      shareEnabled: false,
-      sharedAt: null,
-      sentAt: undefined,
-      sentTo: undefined,
-      emailMessageId: undefined,
+      const rootId = source.revisionRootId || source._id;
+      const latestVersion = await MedicalRecord.findOne({
+        $or: [{ _id: rootId }, { revisionRootId: rootId }],
+      }).sort({ reportVersion: -1 }).select('reportVersion').session(session);
+      const reportVersion = Math.max(latestVersion?.reportVersion || 1, source.reportVersion || 1) + 1;
+
+      const touchedSource = await MedicalRecord.updateOne(
+        { _id: source._id, status: 'finalized', supersededBy: null },
+        { $inc: { relationVersion: 1 } },
+        { session }
+      );
+      if (touchedSource.matchedCount !== 1) {
+        const error = new Error('報告正在被其他修訂或刪除操作更新，請重新整理後再試');
+        error.status = 409;
+        throw error;
+      }
+
+      [revision] = await MedicalRecord.create([{
+        petId: source.petId,
+        ...recordSnapshot(source),
+        // 修訂版沿用原報告的健檢類型，才會看到同一份表單結構。
+        templateId: source.templateId,
+        templateVersion: source.templateVersion,
+        examType: source.examType,
+        sections: [],
+        status: 'draft',
+        reportVersion,
+        revisionOf: source._id,
+        revisionRootId: rootId,
+        revisionReason: String(req.body.reason || '').trim(),
+        finalizedAt: null,
+        pdfGeneratedAt: null,
+        deliveryStatus: 'not_sent',
+        deliveryError: '',
+        lastDeliveryAttemptAt: null,
+        shareEnabled: false,
+        sharedAt: null,
+        shareExpiresAt: null,
+        sentAt: undefined,
+        sentTo: undefined,
+        emailMessageId: undefined,
+      }], { session });
     });
 
     res.status(201).json(revision);
@@ -604,8 +707,12 @@ recordsRouter.delete('/:id', async (req, res, next) => {
     if (!record) return res.status(404).json({ message: '找不到報告' });
     // 草稿與已結案但還沒寄送的報告都可以刪；已經寄出的不給刪（飼主手上已經有連結／附件，
     // 刪除本地紀錄也追不回去），寄送中的也不給刪（避免刪除跟寄送流程互相打架）。
-    if (record.deliveryStatus === 'sent' || record.deliveryStatus === 'sending') {
-      const message = record.deliveryStatus === 'sending' ? '報告寄送中，請稍後再刪除' : '已寄送的報告不能刪除';
+    if (['sent', 'sending', 'uncertain'].includes(record.deliveryStatus)) {
+      const message = record.deliveryStatus === 'sending'
+        ? '報告寄送中，請稍後再刪除'
+        : record.deliveryStatus === 'uncertain'
+          ? '寄送結果尚待確認，為避免刪除可能已寄出的報告，目前不能刪除'
+          : '已寄送的報告不能刪除';
       return res.status(409).json({ message });
     }
     // 只有已結案的報告要打字確認。它已經產生過正式 PDF、可能也已經給過飼主連結，
@@ -625,16 +732,70 @@ recordsRouter.delete('/:id', async (req, res, next) => {
         return res.status(422).json({ message: '確認文字不符，請輸入完整的寵物名稱' });
       }
     }
-    // 刪除前先存一份快照，供之後回溯查詢或還原用。
-    await DeletedMedicalRecord.create({
-      originalId: record._id,
-      petId: record.petId,
-      reportNumber: record.reportNumber,
-      status: record.status,
-      deliveryStatus: record.deliveryStatus,
-      snapshot: record.toObject(),
+    // 稽核快照、修訂鏈回復與刪除必須一起成功；任何一步失敗就全部回滾。
+    await withTransaction(async (session) => {
+      const current = await MedicalRecord.findById(record._id).session(session);
+      if (!current) {
+        const error = new Error('找不到報告，可能已由其他操作刪除');
+        error.status = 404;
+        throw error;
+      }
+      if (['sent', 'sending', 'uncertain'].includes(current.deliveryStatus)) {
+        const error = new Error('報告已寄送、正在寄送或寄送結果待確認，不能刪除');
+        error.status = 409;
+        throw error;
+      }
+      if (current.supersededBy) {
+        const error = new Error('這份報告屬於修訂歷程中的舊版本，不能單獨刪除');
+        error.status = 409;
+        throw error;
+      }
+      // 報告可能在最初讀取與 transaction 開始之間剛好完成結案，
+      // 因此確認文字必須用 transaction 內的最新狀態再驗一次。
+      if (isFinalizedRecord(current)) {
+        const currentPet = await Pet.findById(current.petId).select('name').session(session);
+        if (!currentPet) {
+          const error = new Error('找不到報告所屬寵物，無法確認刪除');
+          error.status = 409;
+          throw error;
+        }
+        const confirmedName = String(req.body?.confirmPetName ?? '').trim();
+        if (confirmedName !== String(currentPet.name ?? '').trim()) {
+          const error = new Error('確認文字不符，請輸入完整的寵物名稱');
+          error.status = 422;
+          throw error;
+        }
+      }
+
+      await DeletedMedicalRecord.create([{
+        originalId: current._id,
+        petId: current.petId,
+        reportNumber: current.reportNumber,
+        status: current.status,
+        deliveryStatus: current.deliveryStatus,
+        snapshot: current.toObject(),
+      }], { session });
+
+      if (current.revisionOf) {
+        const restoredPrevious = await MedicalRecord.updateOne(
+          { _id: current.revisionOf, supersededBy: current._id },
+          { $set: { supersededBy: null } },
+          { session }
+        );
+        if (restoredPrevious.matchedCount !== 1) {
+          const error = new Error('修訂歷程已被其他操作更新，請重新整理後再試');
+          error.status = 409;
+          throw error;
+        }
+      }
+
+      const deleted = await MedicalRecord.deleteOne({ _id: current._id }, { session });
+      if (deleted.deletedCount !== 1) {
+        const error = new Error('刪除報告時發生競態，請重新整理後再試');
+        error.status = 409;
+        throw error;
+      }
     });
-    await record.deleteOne();
     res.status(204).end();
   } catch (err) {
     next(err);
@@ -649,10 +810,12 @@ recordsRouter.post('/:id/share', async (req, res, next) => {
 
     record.shareEnabled = true;
     record.sharedAt = new Date();
+    record.shareExpiresAt = shareExpiryFromNow(Number.parseInt(req.body?.expiresInDays, 10));
     await record.save();
 
     res.json({
       url: `${publicAppOrigin(req)}/report/${record.shareToken}`,
+      expiresAt: record.shareExpiresAt,
     });
   } catch (err) {
     next(err);
@@ -680,31 +843,75 @@ async function logDelivery(record, event, extra = {}) {
   }
 }
 
+function mailErrorResponse(err) {
+  if (err.code === 'MAIL_NOT_CONFIGURED') return { status: 503, message: err.message };
+  if (err.code === 'MAIL_RECIPIENT_REJECTED') return { status: 422, message: err.message };
+  if (err.code === 'EAUTH') return { status: 502, message: 'Gmail 驗證失敗，請確認寄信設定後再試；報告已結案，不受影響' };
+  if (err.code === 'ETIMEDOUT') return { status: 504, message: '連線 Gmail 逾時，請確認網路後再試；報告已結案，不受影響' };
+  if (err.code === 'ECONNECTION') return { status: 502, message: '無法連線 Gmail SMTP，請確認網路或防火牆設定；報告已結案，不受影響' };
+  if (['EENVELOPE', 'EMESSAGE', 'EPROTOCOL'].includes(err.code)) {
+    return { status: 502, message: 'Gmail 未接受這封郵件，請稍後再試；報告已結案，不受影響' };
+  }
+  return null;
+}
+
 recordsRouter.post('/:id/send-email', async (req, res, next) => {
   let record;
+  let recipient = '';
+  let deliveryAttemptId = '';
+  let smtpInfo = null;
+  let activeShareExpiresAt = null;
   try {
     record = await MedicalRecord.findById(req.params.id).populate({
       path: 'petId',
       populate: { path: 'ownerId', select: 'name email' },
-    });
+    }).select('+deliveryAttemptId +deliveryLeaseExpiresAt');
     if (!record) return res.status(404).json({ message: '找不到報告' });
     if (!isFinalizedRecord(record)) {
       return res.status(409).json({ message: '請先完成結案，再寄送正式報告' });
     }
-    const sendingRecently = effectiveDeliveryStatus(record) === 'sending';
-    if (sendingRecently) {
-      return res.status(409).json({ message: '報告正在寄送中，請勿重複操作' });
+    if (effectiveDeliveryStatus(record) === 'sending') {
+      const leaseIsActive = record.deliveryLeaseExpiresAt && record.deliveryLeaseExpiresAt > new Date();
+      if (leaseIsActive) {
+        return res.status(409).json({ message: '報告正在寄送中，請勿重複操作' });
+      }
+
+      // 程序在寄送中途消失時，不能假設郵件「一定沒寄出」後自動重送。
+      // SMTP 可能已經接受，只是本機還沒寫回 sent；先標為待確認，由使用者決定是否重寄。
+      await MedicalRecord.updateOne(
+        {
+          _id: record._id,
+          deliveryStatus: 'sending',
+          $or: [
+            { deliveryLeaseExpiresAt: null },
+            { deliveryLeaseExpiresAt: { $exists: false } },
+            { deliveryLeaseExpiresAt: { $lte: new Date() } },
+          ],
+        },
+        {
+          $set: {
+            deliveryStatus: 'uncertain',
+            deliveryError: '上一次寄送程序中斷，郵件可能已送出；請先確認收件匣，再決定是否重新寄送',
+          },
+          $unset: { deliveryAttemptId: 1, deliveryLeaseExpiresAt: 1 },
+        }
+      );
+      return res.status(409).json({
+        message: '上一次寄送結果無法確認。請先確認飼主信箱；若確定未收到，再次按下寄送即可重試。',
+        deliveryStatus: 'uncertain',
+      });
     }
 
     const pet = record.petId;
     const owner = pet?.ownerId;
-    const recipient = owner?.email?.trim();
+    recipient = owner?.email?.trim();
     if (!recipient) return res.status(422).json({ message: '這位飼主尚未填寫 Email，請先補齊飼主資料' });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
       return res.status(422).json({ message: '飼主 Email 格式不正確，請先修正飼主資料' });
     }
 
-    const deliveryAttemptId = uuidv4();
+    deliveryAttemptId = uuidv4();
+    const claimedAt = new Date();
     const claimedDelivery = await MedicalRecord.findOneAndUpdate(
       {
         _id: record._id,
@@ -715,79 +922,126 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
         $set: {
           deliveryStatus: 'sending',
           deliveryError: '',
-          lastDeliveryAttemptAt: new Date(),
+          lastDeliveryAttemptAt: claimedAt,
           deliveryAttemptId,
+          deliveryLeaseExpiresAt: new Date(claimedAt.getTime() + DELIVERY_LEASE_MS),
         },
       },
       { new: true }
-    ).select('+deliveryAttemptId');
+    ).select('+deliveryAttemptId +deliveryLeaseExpiresAt');
     if (!claimedDelivery) {
       return res.status(409).json({ message: '寄送工作已由另一個請求取得，請稍後再查看狀態' });
     }
-    record.deliveryStatus = 'sending';
-    record.deliveryError = '';
-    record.lastDeliveryAttemptAt = claimedDelivery.lastDeliveryAttemptAt;
-    record.deliveryAttemptId = deliveryAttemptId;
     // 先記 queued：後面產 PDF 或 SMTP 卡住而程序被中斷時，至少留得下「曾經嘗試寄送」。
     await logDelivery(record, 'queued', { recipient });
 
     assertMailConfigured();
     const pdfBuffer = await renderReportPdf(record.shareToken);
     const reportUrl = `${publicAppOrigin(req)}/report/${record.shareToken}`;
-    const info = await sendHealthReportEmail({
+
+    // 郵件寄出前先確保信內的分享連結已經可用，並把 lease 往後延長涵蓋 SMTP 階段。
+    activeShareExpiresAt = record.shareExpiresAt && record.shareExpiresAt > new Date()
+      ? record.shareExpiresAt
+      : shareExpiryFromNow();
+    const readyForSmtp = await MedicalRecord.updateOne(
+      { _id: record._id, deliveryAttemptId },
+      {
+        $set: {
+          shareEnabled: true,
+          sharedAt: record.sharedAt || new Date(),
+          shareExpiresAt: activeShareExpiresAt,
+          deliveryLeaseExpiresAt: new Date(Date.now() + DELIVERY_LEASE_MS),
+        },
+      }
+    );
+    if (readyForSmtp.matchedCount !== 1) {
+      const error = new Error('寄送工作已失去擁有權，已停止寄信');
+      error.code = 'DELIVERY_ATTEMPT_LOST';
+      throw error;
+    }
+
+    smtpInfo = await sendHealthReportEmail({
       to: recipient,
       ownerName: owner.name,
       petName: pet.name,
       reportNumber: record.reportNumber,
       reportUrl,
+      reportExpiresAt: activeShareExpiresAt,
       pdfBuffer,
     });
 
-    // SMTP 接受郵件後只更新寄送狀態；報告的結案狀態不依賴 Email。
-    record.shareEnabled = true;
-    record.sharedAt = record.sharedAt || new Date();
-    record.status = 'finalized';
-    record.deliveryStatus = 'sent';
-    record.deliveryError = '';
-    record.pdfGeneratedAt = new Date();
-    record.sentAt = new Date();
-    record.sentTo = recipient;
-    record.emailMessageId = info.messageId;
-    record.deliveryAttemptId = undefined;
-    await record.save();
-    await logDelivery(record, 'sent', { recipient, messageId: info.messageId });
+    // 只允許取得這次 attempt 的請求寫入結果，避免舊請求覆蓋較新的寄送狀態。
+    const sentAt = new Date();
+    const sentRecord = await MedicalRecord.findOneAndUpdate(
+      { _id: record._id, deliveryAttemptId },
+      {
+        $set: {
+          status: 'finalized',
+          deliveryStatus: 'sent',
+          deliveryError: '',
+          pdfGeneratedAt: sentAt,
+          sentAt,
+          sentTo: recipient,
+          emailMessageId: smtpInfo.messageId,
+        },
+        $unset: { deliveryAttemptId: 1, deliveryLeaseExpiresAt: 1 },
+      },
+      { new: true }
+    );
+    if (!sentRecord) {
+      const error = new Error('郵件已被伺服器接受，但寄送結果無法寫回');
+      error.code = 'DELIVERY_RESULT_NOT_SAVED';
+      throw error;
+    }
+    await logDelivery(record, 'sent', { recipient, messageId: smtpInfo.messageId });
 
     res.json({
       status: 'finalized',
-      deliveryStatus: record.deliveryStatus,
-      sentAt: record.sentAt,
-      sentTo: record.sentTo,
-      messageId: record.emailMessageId,
+      deliveryStatus: sentRecord.deliveryStatus,
+      sentAt: sentRecord.sentAt,
+      sentTo: sentRecord.sentTo,
+      messageId: sentRecord.emailMessageId,
       shareUrl: reportUrl,
+      shareExpiresAt: activeShareExpiresAt,
     });
   } catch (err) {
-    let response;
-    if (err.code === 'MAIL_NOT_CONFIGURED') response = { status: 503, message: err.message };
-    else if (err.code === 'MAIL_RECIPIENT_REJECTED') response = { status: 422, message: err.message };
-    else if (err.code === 'EAUTH') response = { status: 502, message: 'Gmail 驗證失敗，請確認寄信設定後再試；報告已結案，不受影響' };
-    else if (err.code === 'ETIMEDOUT') response = { status: 504, message: '連線 Gmail 逾時，請確認網路後再試；報告已結案，不受影響' };
-    else if (err.code === 'ECONNECTION') response = { status: 502, message: '無法連線 Gmail SMTP，請確認網路或防火牆設定；報告已結案，不受影響' };
-    else if (['EENVELOPE', 'EMESSAGE', 'EPROTOCOL'].includes(err.code)) response = { status: 502, message: 'Gmail 未接受這封郵件，請稍後再試；報告已結案，不受影響' };
+    const response = mailErrorResponse(err);
 
-    if (record && isFinalizedRecord(record) && record.deliveryStatus === 'sending') {
-      record.deliveryStatus = 'failed';
-      record.deliveryAttemptId = undefined;
-      record.deliveryError = response?.message || '寄送失敗，請稍後重試';
+    if (record?._id && deliveryAttemptId) {
+      const smtpAccepted = Boolean(smtpInfo);
+      const nextStatus = smtpAccepted ? 'uncertain' : 'failed';
+      const deliveryError = smtpAccepted
+        ? '郵件伺服器可能已接受，但系統無法確認最後寫入結果；請先確認收件匣，避免重複寄送'
+        : response?.message || '寄送失敗，請稍後重試';
       try {
-        await record.save();
+        await MedicalRecord.updateOne(
+          { _id: record._id, deliveryAttemptId },
+          {
+            $set: {
+              deliveryStatus: nextStatus,
+              deliveryError,
+              ...(smtpAccepted ? { sentTo: recipient, emailMessageId: smtpInfo.messageId } : {}),
+            },
+            $unset: { deliveryAttemptId: 1, deliveryLeaseExpiresAt: 1 },
+          }
+        );
       } catch (saveError) {
         console.error('記錄寄送失敗狀態時發生錯誤', saveError);
       }
-      // record.deliveryError 只留得住最後一次失敗，流水帳這筆才是完整的失敗歷程。
-      await logDelivery(record, 'failed', {
-        recipient: record.petId?.ownerId?.email?.trim() || '',
-        error: record.deliveryError,
+      await logDelivery(record, nextStatus === 'uncertain' ? 'uncertain' : 'failed', {
+        recipient,
+        messageId: smtpInfo?.messageId || '',
+        error: deliveryError,
       });
+      if (smtpAccepted) {
+        return res.status(202).json({
+          message: deliveryError,
+          deliveryStatus: 'uncertain',
+          sentTo: recipient,
+          shareUrl: `${publicAppOrigin(req)}/report/${record.shareToken}`,
+          shareExpiresAt: activeShareExpiresAt,
+        });
+      }
     }
     if (response) return res.status(response.status).json({ message: response.message });
     next(err);
@@ -800,6 +1054,7 @@ recordsRouter.post('/:id/revoke-share', async (req, res, next) => {
     if (!record) return res.status(404).json({ message: '找不到報告' });
     record.shareEnabled = false;
     record.shareToken = uuidv4();
+    record.shareExpiresAt = null;
     await record.save();
     res.json({ message: '分享連結已撤銷' });
   } catch (err) {
@@ -819,7 +1074,9 @@ publicReportsRouter.get('/:token', async (req, res, next) => {
     if (!record) return res.status(404).json({ message: '找不到這份報告，連結可能已失效' });
 
     const isInternalRender = hasPdfRenderAccess(req);
-    if (!isInternalRender && (!record.shareEnabled || !isFinalizedRecord(record))) {
+    // 舊資料沒有到期日也視為失效；院方重新分享時會補上新的期限。
+    const shareExpired = !record.shareExpiresAt || record.shareExpiresAt <= new Date();
+    if (!isInternalRender && (!record.shareEnabled || !isFinalizedRecord(record) || shareExpired)) {
       return res.status(410).json({ message: '這份報告的分享連結已失效' });
     }
 

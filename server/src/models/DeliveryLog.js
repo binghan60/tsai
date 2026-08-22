@@ -19,8 +19,8 @@ const deliveryLogSchema = new mongoose.Schema(
     ownerName: { type: String, default: '' },
 
     // queued＝已送進寄送流程（PDF 還在產、SMTP 還沒回應），
-    // 之後一定會再補一筆 sent 或 failed；只有 queued 而沒有後續的，代表程序中途掛了。
-    event: { type: String, enum: ['queued', 'sent', 'failed'], required: true },
+    // uncertain 代表 SMTP 可能已接受，但本機無法確認最後狀態；不可當成單純失敗自動重送。
+    event: { type: String, enum: ['queued', 'sent', 'failed', 'uncertain'], required: true },
     recipient: { type: String, default: '' },
     messageId: { type: String, default: '' },
     error: { type: String, default: '' },

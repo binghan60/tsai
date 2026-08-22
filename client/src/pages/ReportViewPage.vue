@@ -32,7 +32,12 @@ const deliveryStatus = computed(() => getDeliveryStatus(record.value));
 const isSent = computed(() => deliveryStatus.value === 'sent');
 const deliveryFailed = computed(() => deliveryStatus.value === 'failed');
 const deliverySending = computed(() => deliveryStatus.value === 'sending');
-const shareIsActive = computed(() => Boolean(record.value?.shareEnabled));
+const deliveryUncertain = computed(() => deliveryStatus.value === 'uncertain');
+const shareIsActive = computed(() => Boolean(
+  record.value?.shareEnabled
+  && record.value.shareExpiresAt
+  && new Date(record.value.shareExpiresAt) > new Date()
+));
 const shareActionLabel = computed(() => {
   if (sharing.value) return '處理中…';
   if (shareIsActive.value) return '取得飼主分享連結';
@@ -53,6 +58,7 @@ const EVENT_STYLE = {
   queued: { label: '開始寄送', class: 'bg-sky-50 text-sky-700' },
   sent: { label: '寄送成功', class: 'bg-emerald-50 text-emerald-700' },
   failed: { label: '寄送失敗', class: 'bg-red-50 text-red-700' },
+  uncertain: { label: '結果待確認', class: 'bg-amber-50 text-amber-800' },
 };
 
 async function fetchDeliveryLogs() {
@@ -156,6 +162,7 @@ async function createShareLink() {
       const { data } = await http.post(`/records/${route.params.id}/share`);
       ({ url } = data);
       record.value.shareEnabled = true;
+      record.value.shareExpiresAt = data.expiresAt;
     }
     const copied = await copyText(url);
     shareNotice.value = { url, copied };
@@ -227,16 +234,22 @@ async function sendEmail() {
     const { data } = await http.post(`/records/${route.params.id}/send-email`, null, { timeout: PDF_TIMEOUT_MS });
     record.value.status = 'finalized';
     record.value.deliveryStatus = data.deliveryStatus || 'sent';
-    record.value.deliveryError = '';
+    record.value.deliveryError = data.deliveryStatus === 'uncertain' ? data.message : '';
     record.value.sentAt = data.sentAt;
     record.value.sentTo = data.sentTo;
     record.value.emailMessageId = data.messageId;
     record.value.shareEnabled = true;
-    shareNotice.value = {
-      url: data.shareUrl,
-      copied: false,
-      emailed: true,
-    };
+    record.value.shareExpiresAt = data.shareExpiresAt;
+    if (data.deliveryStatus === 'uncertain') {
+      shareNotice.value = null;
+      error.value = data.message;
+    } else {
+      shareNotice.value = {
+        url: data.shareUrl,
+        copied: false,
+        emailed: true,
+      };
+    }
     showFinalizeConfirm.value = false;
     showEmailConfirm.value = false;
   } catch (err) {
@@ -286,9 +299,9 @@ onMounted(async () => {
         class="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm print:hidden"
         :class="deliveryFailed ? 'border-red-200 bg-red-50 text-red-800' : isSent ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : deliverySending ? 'border-sky-200 bg-sky-50 text-sky-800' : 'border-brand-200 bg-brand-50 text-brand-800'"
       >
-        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案 · 第 {{ record.reportVersion || 1 }} 版</strong><span class="block">{{ isSent ? `已寄送至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
+        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案 · 第 {{ record.reportVersion || 1 }} 版</strong><span class="block">{{ isSent ? `已寄送至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="flex flex-wrap items-center gap-2">
-          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" :disabled="emailing || deliverySending" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</Button>
+          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" :disabled="emailing || deliverySending" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</Button>
           <Button v-else-if="record.owner?._id" as-child variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white"><router-link :to="`/owners/${record.owner._id}?edit=1`">補填 Email</router-link></Button>
           <Button type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</Button>
           <Button v-if="!record.supersededBy" type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" @click="showRevisionDialog = true"><FilePenLine class="h-4 w-4" />建立修訂版</Button>
@@ -400,9 +413,9 @@ onMounted(async () => {
     />
     <ConfirmDialog
       :open="showEmailConfirm"
-      :title="isSent ? '重新寄送健檢報告' : '寄送健檢報告'"
-      :description="`系統會將 PDF 附件及無期限查看連結寄到 ${ownerEmail}。若寄送失敗，已結案的正式報告不會受到影響。`"
-      :confirm-label="isSent ? '重新寄送' : '確認寄送'"
+      :title="isSent || deliveryUncertain ? '重新寄送健檢報告' : '寄送健檢報告'"
+      :description="deliveryUncertain ? `上一次寄送結果無法確認，郵件可能已經送達 ${ownerEmail}。請先檢查收件匣；確認未收到後才重新寄送。` : `系統會將 PDF 附件及限時查看連結寄到 ${ownerEmail}。若寄送失敗，已結案的正式報告不會受到影響。`"
+      :confirm-label="isSent || deliveryUncertain ? '確認重新寄送' : '確認寄送'"
       cancel-label="取消"
       :loading="emailing"
       :destructive="false"

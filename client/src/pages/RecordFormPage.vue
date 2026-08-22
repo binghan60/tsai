@@ -101,6 +101,7 @@ const recordId = ref(route.params.id ?? null);
 const isEdit = computed(() => Boolean(recordId.value));
 const recordStatus = ref('draft');
 const reportVersion = ref(1);
+const documentVersion = ref(0);
 const revisionReason = ref('');
 const isLocked = computed(() => recordStatus.value !== 'draft');
 const showDiscardConfirm = ref(false);
@@ -262,6 +263,7 @@ function mergeFindings(definitions, savedItems, extraFields, defaults = {}) {
 function applyRecord(data) {
   recordStatus.value = data.status ?? 'draft';
   reportVersion.value = data.reportVersion ?? 1;
+  documentVersion.value = data.__v ?? 0;
   revisionReason.value = data.revisionReason ?? '';
   vet.value = data.vet ?? '';
   visitDate.value = clinicDateInput(data.visitDate);
@@ -523,7 +525,8 @@ provideRecordForm({
 function optionalNumber(value) {
   if (value === '' || value === null || value === undefined) return null;
   const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
+  // 非數字不能悄悄轉成 null 再顯示「已儲存」；保留原值送出，讓後端拒絕並顯示儲存失敗。
+  return Number.isFinite(numeric) ? numeric : value;
 }
 
 function buildPayload() {
@@ -550,7 +553,10 @@ async function saveRecord({ silent = false } = {}) {
     const savedSnapshot = JSON.stringify(payload);
     let saved;
     if (recordId.value) {
-      ({ data: saved } = await http.put(`/records/${recordId.value}`, payload));
+      ({ data: saved } = await http.put(`/records/${recordId.value}`, {
+        ...payload,
+        expectedVersion: documentVersion.value,
+      }));
     } else {
       ({ data: saved } = await http.post(`/pets/${petId.value}/records`, { ...payload, templateId: chosenTemplateId.value }));
       recordId.value = saved._id;
@@ -559,6 +565,7 @@ async function saveRecord({ silent = false } = {}) {
       await router.replace(`/records/${saved._id}/edit`);
       leavingAfterAction.value = wasLeavingAfterAction;
     }
+    documentVersion.value = saved.__v ?? documentVersion.value;
     lastSavedAt.value = new Date();
     saveError.value = '';
     const hasNewChanges = JSON.stringify(buildPayload()) !== savedSnapshot;

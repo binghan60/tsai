@@ -22,6 +22,7 @@ MONGODB_URI=<MongoDB 連線字串>
 PUBLIC_APP_URL=${ZEABUR_WEB_URL}
 CLIENT_ORIGIN=${ZEABUR_WEB_URL}
 PDF_RENDER_SECRET=${PASSWORD}
+SHARE_LINK_DAYS=30
 
 SMTP_EMAIL=<寄件 Gmail>
 SMTP_PASSWORD=<Google 應用程式密碼>
@@ -39,7 +40,8 @@ MAIL_REPLY_TO=
 - 若使用既有 MongoDB Atlas，將正式連線字串填入 `MONGODB_URI`。
 - 若在 Zeabur 加入 MongoDB Template，應使用 MongoDB Connections 頁面的 Internal／Private URI，速度較快且不耗用公開流量。
 - `PUBLIC_APP_URL` **在正式環境是必填**：沒設定（且 `CLIENT_ORIGIN`、`ZEABUR_WEB_URL` 也都空著）時容器會直接啟動失敗，log 印出 `[config] 正式環境必須設定 PUBLIC_APP_URL`。這是刻意的——退而用請求的 `Host` 推斷，等於讓呼叫端決定寄給飼主的信裡出現哪個網域。
-- `PUBLIC_APP_URL` 用於永久分享連結與 Email；分享連結仍維持無到期日，只有院方手動撤銷才失效。
+- `PUBLIC_APP_URL` 用於分享連結與 Email；分享連結預設 30 天到期，可用 `SHARE_LINK_DAYS` 設為 1–365 天，院方也能提前撤銷。
+- 舊版建立、沒有到期日的分享連結會在部署後失效；院方重新按下分享即可產生帶期限的新連結。
 - PDF 預設從容器內部的 `127.0.0.1` 讀取報告，不必公開 `PDF_RENDER_BASE_URL`。
 
 若剛建立服務時還沒有公開網址，可先部署、產生 Domain，再確認 `PUBLIC_APP_URL` 與 `CLIENT_ORIGIN` 已解析為完整的 `https://...` 網址並重新部署。
@@ -55,7 +57,7 @@ https://你的網域/api/health
 應回傳：
 
 ```json
-{"status":"ok"}
+{"status":"ok","database":"connected","transactions":"supported"}
 ```
 
 接著依序測試：
@@ -63,7 +65,7 @@ https://你的網域/api/health
 1. 首頁與重新整理後的子頁路由能正常開啟。
 2. 建立一筆草稿並重新整理，確認 MongoDB 寫入正常。
 3. 將報告結案並下載 PDF，確認 Chromium 與中文字型正常。
-4. 寄送測試 Email，確認附件與永久分享網址使用正式網域。
+4. 寄送測試 Email，確認附件、限時分享網址與到期日使用正式設定。
 
 ## 4. 本機 Docker 測試
 

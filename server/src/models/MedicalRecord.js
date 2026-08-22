@@ -129,6 +129,7 @@ const medicalRecordSchema = new mongoose.Schema(
     shareToken: { type: String, default: uuidv4, unique: true },
     shareEnabled: { type: Boolean, default: false },
     sharedAt: { type: Date, default: null },
+    shareExpiresAt: { type: Date, default: null },
     status: {
       type: String,
       // 寄送狀態獨立記在 deliveryStatus，不佔用生命週期狀態。
@@ -142,20 +143,24 @@ const medicalRecordSchema = new mongoose.Schema(
     revisionRootId: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicalRecord', default: null },
     revisionReason: { type: String, trim: true, default: '' },
     supersededBy: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicalRecord', default: null },
+    relationVersion: { type: Number, default: 0, select: false },
     deliveryStatus: {
       type: String,
-      enum: ['not_sent', 'sending', 'sent', 'failed'],
+      // uncertain＝SMTP 可能已接受郵件，但伺服器沒能可靠寫回結果。
+      // 這時不能自動重送，否則飼主可能收到重複郵件；要由使用者確認後再決定。
+      enum: ['not_sent', 'sending', 'sent', 'failed', 'uncertain'],
       default: 'not_sent',
     },
     deliveryError: { type: String, trim: true, default: '' },
     lastDeliveryAttemptAt: { type: Date, default: null },
     // Stops a stale mail attempt from overwriting the result of a newer attempt.
     deliveryAttemptId: { type: String, default: null, select: false },
+    deliveryLeaseExpiresAt: { type: Date, default: null, select: false },
     sentAt: { type: Date },
     sentTo: { type: String, trim: true, default: undefined },
     emailMessageId: { type: String, trim: true, default: undefined },
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 medicalRecordSchema.index({ petId: 1 });

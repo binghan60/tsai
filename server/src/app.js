@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import mongoose from 'mongoose';
 import { connectDB } from './config/db.js';
 import { assertAppOriginConfigured } from './config/publicUrl.js';
 import ownersRouter from './routes/owners.js';
@@ -13,9 +14,12 @@ import dashboardRouter from './routes/dashboard.js';
 import searchRouter from './routes/search.js';
 import settingsRouter from './routes/settings.js';
 import quickPhrasesRouter from './routes/quickPhrases.js';
+import { closeBrowser } from './lib/pdf.js';
 
 const app = express();
 const clientDistPath = fileURLToPath(new URL('../../client/dist/', import.meta.url));
+let httpServer = null;
+let shuttingDown = false;
 
 app.set('trust proxy', 1);
 // cors 套件在 origin 為 falsy 時會回 `Access-Control-Allow-Origin: *`，
@@ -27,8 +31,27 @@ if (process.env.CLIENT_ORIGIN) {
 }
 app.use(express.json());
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health/live', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+app.get('/api/health', async (req, res) => {
+  if (shuttingDown || mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ status: 'unavailable', database: 'disconnected' });
+  }
+  try {
+    const hello = await mongoose.connection.db.admin().command({ hello: 1 }, { maxTimeMS: 1000 });
+    if (!hello.setName && hello.msg !== 'isdbgrid') {
+      return res.status(503).json({
+        status: 'unavailable',
+        database: 'connected',
+        transactions: 'unsupported',
+      });
+    }
+    return res.json({ status: 'ok', database: 'connected', transactions: 'supported' });
+  } catch {
+    return res.status(503).json({ status: 'unavailable', database: 'unreachable' });
+  }
 });
 
 app.use('/api/owners/:ownerId/pets', ownerPetsRouter);
@@ -60,32 +83,72 @@ app.use((err, req, res, next) => {
   if (err.code === 'PUBLIC_URL_NOT_CONFIGURED') {
     return res.status(503).json({ message: err.message });
   }
+  if (Number.isInteger(err.status) && err.status >= 400 && err.status < 600) {
+    return res.status(err.status).json({ message: err.message, ...(err.details ?? {}) });
+  }
   if (err.name === 'CastError') {
     return res.status(400).json({ message: '參數格式不正確' });
   }
   if (err.name === 'ValidationError') {
     return res.status(422).json({ message: err.message });
   }
+  if (err.name === 'VersionError') {
+    return res.status(409).json({ message: '資料已被其他分頁或使用者更新，請重新整理後再試' });
+  }
+  if (err.code === 11000) {
+    return res.status(409).json({ message: '資料已存在或正在被另一個操作更新，請重新整理後再試' });
+  }
   res.status(500).json({ message: '伺服器發生錯誤' });
 });
 
-const PORT = process.env.PORT || 3000;
+export async function startServer() {
+  if (httpServer) return httpServer;
+  shuttingDown = false;
+  const port = process.env.PORT || 3000;
 
-// 對外連結的網域要在啟動時就確定。漏設 PUBLIC_APP_URL 在正式環境是致命的：
-// 分享連結與寄給飼主的 Email 會改用請求的 Host 組出來，等於讓呼叫端決定信裡的網址。
-// 讓服務直接起不來，問題就會在部署當下被發現，而不是在第一封信寄出去之後。
-try {
+  // 對外連結的網域要在啟動時就確定。漏設 PUBLIC_APP_URL 在正式環境是致命的。
   assertAppOriginConfigured();
-} catch (err) {
-  console.error('[config]', err.message);
-  process.exit(1);
+  await connectDB();
+  httpServer = app.listen(port, () => console.log(`[server] listening on http://localhost:${port}`));
+  return httpServer;
 }
 
-connectDB()
-  .then(() => {
-    app.listen(PORT, () => console.log(`[server] listening on http://localhost:${PORT}`));
-  })
-  .catch((err) => {
-    console.error('[db] 連線失敗', err);
-    process.exit(1);
-  });
+export async function stopServer({ forceExit = false } = {}) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  const server = httpServer;
+  httpServer = null;
+
+  if (server) {
+    await new Promise((resolve) => server.close(() => resolve()));
+  }
+  await closeBrowser();
+  if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
+  if (forceExit) process.exit(0);
+}
+
+function installShutdownHandlers() {
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.once(signal, () => {
+      // 平台最終仍可能強制終止；先停止接新請求，讓已進行的寄信與 transaction 有機會完成。
+      const hardStop = setTimeout(() => process.exit(1), 30_000);
+      hardStop.unref?.();
+      stopServer({ forceExit: true }).catch((err) => {
+        console.error('[shutdown] 關機失敗', err);
+        process.exit(1);
+      });
+    });
+  }
+}
+
+const isMainModule = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isMainModule) {
+  startServer()
+    .then(installShutdownHandlers)
+    .catch((err) => {
+      console.error(err.code === 'PUBLIC_URL_NOT_CONFIGURED' ? '[config]' : '[startup]', err.message);
+      process.exit(1);
+    });
+}
+
+export { app };

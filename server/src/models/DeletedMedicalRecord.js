@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 // 所以整份原始文件直接存成 Mixed，不必另外維護一份 schema 跟著原表同步變動。
 const deletedMedicalRecordSchema = new mongoose.Schema(
   {
-    originalId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+    originalId: { type: mongoose.Schema.Types.ObjectId, required: true, unique: true },
     petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', required: true },
     reportNumber: { type: String, default: '' },
     status: { type: String, default: '' },

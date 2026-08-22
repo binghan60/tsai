@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
+import { withTransaction } from '../lib/transaction.js';
 
 const router = Router();
 
@@ -72,12 +73,25 @@ router.put('/:id', async (req, res, next) => {
 
 router.delete('/:id', async (req, res, next) => {
   try {
-    const petCount = await Pet.countDocuments({ ownerId: req.params.id });
-    if (petCount > 0) {
-      return res.status(409).json({ message: '此飼主底下仍有寵物，請先刪除或轉移寵物' });
-    }
-    const owner = await Owner.findByIdAndDelete(req.params.id);
-    if (!owner) return res.status(404).json({ message: '找不到飼主' });
+    await withTransaction(async (session) => {
+      const owner = await Owner.findById(req.params.id).session(session);
+      if (!owner) {
+        const error = new Error('找不到飼主');
+        error.status = 404;
+        throw error;
+      }
+      if (await Pet.exists({ ownerId: owner._id }).session(session)) {
+        const error = new Error('此飼主底下仍有寵物，請先刪除或轉移寵物');
+        error.status = 409;
+        throw error;
+      }
+      const deleted = await Owner.deleteOne({ _id: owner._id }, { session });
+      if (deleted.deletedCount !== 1) {
+        const error = new Error('飼主資料正在被其他操作更新，請重新整理後再試');
+        error.status = 409;
+        throw error;
+      }
+    });
     res.status(204).end();
   } catch (err) {
     next(err);

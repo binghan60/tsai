@@ -55,6 +55,7 @@ const statusColors = computed(() => (isDark.value
       sending: 'bg-sky-600',
       sent: 'bg-emerald-600',
       failed: 'bg-red-600',
+      uncertain: 'bg-amber-500',
     }
   : {
       draft: 'bg-zinc-500',
@@ -62,11 +63,12 @@ const statusColors = computed(() => (isDark.value
       sending: 'bg-sky-700',
       sent: 'bg-emerald-600',
       failed: 'bg-red-700',
+      uncertain: 'bg-amber-600',
     }));
 
 const statusSegments = computed(() => {
-  const values = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0, ...(dashboard.value?.statusBreakdown ?? {}) };
-  const total = Math.max(values.draft + values.finalized + values.sending + values.sent + values.failed, 1);
+  const values = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0, uncertain: 0, ...(dashboard.value?.statusBreakdown ?? {}) };
+  const total = Math.max(values.draft + values.finalized + values.sending + values.sent + values.failed + values.uncertain, 1);
   const colors = statusColors.value;
   return [
     { key: 'draft', label: '草稿', value: values.draft, width: (values.draft / total) * 100, class: colors.draft },
@@ -74,6 +76,7 @@ const statusSegments = computed(() => {
     { key: 'sending', label: '寄送中', value: values.sending, width: (values.sending / total) * 100, class: colors.sending },
     { key: 'sent', label: '已寄送', value: values.sent, width: (values.sent / total) * 100, class: colors.sent },
     { key: 'failed', label: '寄送失敗', value: values.failed, width: (values.failed / total) * 100, class: colors.failed },
+    { key: 'uncertain', label: '結果待確認', value: values.uncertain, width: (values.uncertain / total) * 100, class: colors.uncertain },
   ];
 });
 
@@ -192,7 +195,7 @@ onMounted(fetchDashboard);
         class="flex min-h-14 items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 transition-colors hover:border-red-300 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/60"
       >
         <AlertTriangle class="h-5 w-5 shrink-0" stroke-width="1.75" />
-        <span class="min-w-0 flex-1">有 {{ dashboard.failedCount }} 份報告寄送失敗，需要重新寄送。</span>
+        <span class="min-w-0 flex-1">有 {{ dashboard.failedCount }} 份報告寄送失敗或結果待確認，需要處理。</span>
         <ArrowRight class="h-4 w-4 shrink-0" stroke-width="1.75" />
       </RouterLink>
 

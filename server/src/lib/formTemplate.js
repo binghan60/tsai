@@ -87,6 +87,7 @@ export function serializeTemplate(template, { includeDisabled = false } = {}) {
     enabled: doc.enabled !== false,
     order: doc.order ?? 0,
     version: doc.version,
+    documentVersion: doc.__v ?? 0,
     updatedAt: doc.updatedAt,
     sections,
   };
@@ -101,6 +102,7 @@ export function serializeTemplateSummary(template) {
     description: doc.description ?? '',
     species: doc.species ?? 'all',
     enabled: doc.enabled !== false,
+    documentVersion: doc.__v ?? 0,
     order: doc.order ?? 0,
     sectionCount: (doc.sections ?? []).length,
     itemCount: (doc.sections ?? []).reduce((sum, section) => sum + (section.items ?? []).length, 0),

@@ -164,9 +164,13 @@ async function createTemplate() {
 async function toggleEnabled(template, enabled) {
   busyId.value = template._id;
   try {
-    await http.put(`/settings/form-templates/${template._id}`, { enabled });
+    const { data } = await http.put(`/settings/form-templates/${template._id}`, {
+      enabled,
+      expectedVersion: template.documentVersion ?? 0,
+    });
     clearTemplateCache();
     template.enabled = enabled;
+    template.documentVersion = data.documentVersion;
     toast.success(enabled ? `「${template.name}」已可供建立報告` : `「${template.name}」已停用`, '狀態已更新');
   } catch (err) {
     toast.error(err.response?.data?.message ?? '更新失敗', '更新失敗');

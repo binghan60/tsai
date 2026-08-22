@@ -6,6 +6,7 @@ import { buildDefaultSections } from '../config/formTemplateSeed.js';
 import {
   listTemplates, missingRoles, sanitizeSections, serializeTemplate, serializeTemplateSummary,
 } from '../lib/formTemplate.js';
+import { withTransaction } from '../lib/transaction.js';
 
 const router = Router();
 const VALID_SPECIES = new Set(['cat', 'dog', 'all']);
@@ -92,6 +93,13 @@ router.put('/form-templates/:id', async (req, res, next) => {
   try {
     const template = await FormTemplate.findById(req.params.id);
     if (!template) return res.status(404).json({ message: '找不到這個健檢類型' });
+    const expectedVersion = Number(req.body?.expectedVersion);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+      return res.status(428).json({ message: '缺少表單版本資訊，請重新整理後再儲存' });
+    }
+    if (template.__v !== expectedVersion) {
+      return res.status(409).json({ message: '這份表單已在其他分頁被更新，請重新整理後再編輯' });
+    }
 
     if (req.body?.name !== undefined) {
       const name = String(req.body.name).trim();
@@ -132,20 +140,43 @@ router.put('/form-templates/:id', async (req, res, next) => {
 // 刪除健檢類型。已有報告引用時只能停用，否則那些報告會失去自己的表單結構。
 router.delete('/form-templates/:id', async (req, res, next) => {
   try {
-    const template = await FormTemplate.findById(req.params.id);
-    if (!template) return res.status(404).json({ message: '找不到這個健檢類型' });
+    await withTransaction(async (session) => {
+      const template = await FormTemplate.findById(req.params.id).session(session);
+      if (!template) {
+        const error = new Error('找不到這個健檢類型');
+        error.status = 404;
+        throw error;
+      }
 
-    // 已結案報告雖然有自己的 sections 快照，但對它建修訂草稿時會沿用 templateId，
-    // 範本被刪掉那份草稿就再也結不了案。只要有報告引用就不能刪，改用停用。
-    const inUse = await MedicalRecord.countDocuments({ templateId: template._id });
-    if (inUse) {
-      return res.status(409).json({ message: `還有 ${inUse} 份報告正在使用「${template.name}」，請改為停用這個類型` });
-    }
-    if (await FormTemplate.countDocuments() <= 1) {
-      return res.status(409).json({ message: '至少要保留一種健檢類型' });
-    }
+      // 所有刪除都寫入同一份排序最前的範本，避免兩個 transaction 同時各刪一份，
+      // 都看到「尚有兩份」後一起提交，最後違反至少保留一份的規則。
+      await FormTemplate.findOneAndUpdate(
+        {},
+        { $inc: { relationVersion: 1 } },
+        { sort: { _id: 1 }, session }
+      ).select('+relationVersion');
 
-    await template.deleteOne();
+      // 已結案報告雖然有自己的 sections 快照，但對它建修訂草稿時會沿用 templateId，
+      // 範本被刪掉那份草稿就再也結不了案。只要有報告引用就不能刪，改用停用。
+      const inUse = await MedicalRecord.countDocuments({ templateId: template._id }).session(session);
+      if (inUse) {
+        const error = new Error(`還有 ${inUse} 份報告正在使用「${template.name}」，請改為停用這個類型`);
+        error.status = 409;
+        throw error;
+      }
+      if (await FormTemplate.countDocuments().session(session) <= 1) {
+        const error = new Error('至少要保留一種健檢類型');
+        error.status = 409;
+        throw error;
+      }
+
+      const deleted = await FormTemplate.deleteOne({ _id: template._id }, { session });
+      if (deleted.deletedCount !== 1) {
+        const error = new Error('表單正在被其他操作使用，請重新整理後再試');
+        error.status = 409;
+        throw error;
+      }
+    });
     res.json({ ok: true });
   } catch (err) {
     next(err);

@@ -48,6 +48,7 @@ const currentName = ref('');
 const currentDescription = ref('');
 const currentSpecies = ref('all');
 const sections = ref([]);
+const documentVersion = ref(0);
 const loading = ref(true);
 const saving = ref(false);
 const error = ref('');
@@ -191,6 +192,7 @@ function applyTemplate(data) {
   currentName.value = data.name ?? '';
   currentDescription.value = data.description ?? '';
   currentSpecies.value = data.species ?? 'all';
+  documentVersion.value = data.documentVersion ?? 0;
   sections.value = Array.isArray(data.sections) ? data.sections : [];
   if (!sections.value.some((section) => section.key === activeKey.value)) {
     activeKey.value = sections.value[0]?.key ?? '';
@@ -394,6 +396,7 @@ async function save({ confirmRoleRemoval = false } = {}) {
     const { data } = await http.put('/settings/form-templates/' + currentId.value, {
       ...editorPayload.value,
       confirmRoleRemoval,
+      expectedVersion: documentVersion.value,
     });
     applyTemplate(data);
     // 儲存後伺服器會重新編 key，選取狀態盡量留在原地，留不住就退回第一個區塊。
