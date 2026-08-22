@@ -214,6 +214,23 @@ petRecordsRouter.get('/previous-values', async (req, res, next) => {
   }
 });
 
+// 建立新健檢時可選擇任一份已結案報告帶入文字內容。
+// 只回傳來源資訊；實際內容仍由既有報告端點取得，避免這支清單端點意外擴大資料範圍。
+petRecordsRouter.get('/finalized-sources', async (req, res, next) => {
+  try {
+    const records = await MedicalRecord.find({
+      petId: req.params.petId,
+      status: { $ne: 'draft' },
+    })
+      .sort({ finalizedAt: -1, visitDate: -1, reportVersion: -1, updatedAt: -1 })
+      .limit(20)
+      .select('templateId examType visitDate finalizedAt reportVersion');
+    res.json(records);
+  } catch (err) {
+    next(err);
+  }
+});
+
 petRecordsRouter.post('/', async (req, res, next) => {
   try {
     // 健檢類型就是「用哪一份範本」，只在建立時決定；

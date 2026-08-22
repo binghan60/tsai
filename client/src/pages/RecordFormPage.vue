@@ -4,7 +4,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { Activity, AlertTriangle, Check, Clock3, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
-import { clinicDateInput } from '../lib/datetime';
+import { clinicDateInput, formatDate } from '../lib/datetime';
 import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomId, sectionKeyForItem } from '../lib/formTemplate';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useTextTemplates } from '../composables/useTextTemplates';
@@ -13,7 +13,6 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FormSection from '../components/formfields/FormSection.vue';
 import TextTemplatePickerDialog from '../components/formfields/TextTemplatePickerDialog.vue';
@@ -115,6 +114,10 @@ const examTypeName = ref('');
 // 建立報告一律先選類型 —— 類型決定整份表單且建立後不可更改，
 // 所以做成「選擇 → 確認」兩步，避免誤點就定案。
 const pendingTemplateId = ref('');
+const startMode = ref('blank');
+const finalizedSources = ref([]);
+const copyFromId = ref(String(route.query.copyFrom ?? ''));
+const selectedFinalizedSource = computed(() => finalizedSources.value.find((record) => String(record._id) === copyFromId.value) ?? null);
 const needsTypeChoice = computed(() => !recordId.value && !chosenTemplateId.value);
 const confirmingExamType = ref(false);
 const typeChoiceError = ref('');
@@ -189,6 +192,16 @@ async function confirmExamType() {
   hydrated.value = false;
   try {
     await applyTemplate(pendingTemplateId.value);
+    if (startMode.value === 'previous' && selectedFinalizedSource.value?._id) {
+      const { data } = await http.get(`/records/${selectedFinalizedSource.value._id}`);
+      const copiedCount = copyForwardTextValues(data);
+      toast.info(
+        copiedCount
+          ? `已帶入 ${copiedCount} 個文字欄位；日期、獸醫師、量測與檢驗數值仍維持空白。`
+          : '來源報告沒有可帶入的相同文字欄位，因此保持空白。',
+        '已帶入上次報告',
+      );
+    }
     await nextTick();
     isDirty.value = false;
     saveState.value = 'saved';
@@ -197,6 +210,38 @@ async function confirmExamType() {
   } finally {
     hydrated.value = true;
     confirmingExamType.value = false;
+  }
+}
+
+const COPY_FORWARD_TYPES = new Set(['text', 'textarea']);
+
+function copyForwardTextValues(sourceRecord) {
+  const sourceItems = (sourceRecord?.sections ?? []).flatMap((section) => section.items ?? []);
+  const sourceByKey = new Map(sourceItems.map((item) => [item.key, item]));
+  const sourceByTypeAndLabel = new Map(sourceItems.map((item) => [`${item.type}:${String(item.label ?? '').trim()}`, item]));
+  let copiedCount = 0;
+  for (const section of TEMPLATE_SECTIONS.value) {
+    for (const item of section.items ?? []) {
+      if (!COPY_FORWARD_TYPES.has(item.type) || item.role === 'vet' || item.role === 'visitDate') continue;
+      const source = sourceByKey.get(item.key)
+        ?? sourceByTypeAndLabel.get(`${item.type}:${String(item.label ?? '').trim()}`);
+      const value = source?.value ?? sourceRecord?.customValues?.[item.key] ?? sourceRecord?.[item.key];
+      if (value === undefined || value === null || String(value).trim() === '') continue;
+      setValue(item, value);
+      copiedCount += 1;
+    }
+  }
+  return copiedCount;
+}
+
+async function loadFinalizedSources() {
+  try {
+    const { data } = await http.get(`/pets/${petId.value}/records/finalized-sources`);
+    finalizedSources.value = Array.isArray(data) ? data : [];
+    if (!selectedFinalizedSource.value) copyFromId.value = '';
+  } catch (err) {
+    finalizedSources.value = [];
+    copyFromId.value = '';
   }
 }
 
@@ -405,10 +450,23 @@ async function init() {
       // 這個階段「不」載入任何表單結構，等使用者確認類型後才載入。
       await loadPetContext(petId.value);
       await loadPreviousValues();
+      await loadFinalizedSources();
       examTypes.value = await listTemplates({ species: pet.value?.species });
       if (!examTypes.value.length) {
         loadError.value = `目前沒有適用於「${pet.value?.species || '這個物種'}」的健檢表單，請先到設定新增。`;
         return;
+      }
+      // 從已結案報告按下「以此開始新健檢」時，來源已經明確，
+      // 直接套用同一份表單並帶入內容，不再要求使用者重選一次。
+      if (route.query.copyFrom && selectedFinalizedSource.value?.templateId) {
+        const sourceTemplateId = String(selectedFinalizedSource.value.templateId);
+        const sourceTemplate = examTypes.value.find((template) => String(template._id) === sourceTemplateId);
+        if (sourceTemplate) {
+          startMode.value = 'previous';
+          pendingTemplateId.value = String(sourceTemplate._id);
+          await confirmExamType();
+          return;
+        }
       }
       // 只有一種可選時先幫忙選起來，仍需按下確認。
       if (examTypes.value.length === 1) pendingTemplateId.value = examTypes.value[0]._id;
@@ -783,6 +841,32 @@ function handleBeforeUnload(event) {
       <p class="mt-1 text-sm text-muted-foreground">
         每種類型有各自的健檢表單。<strong class="font-medium text-foreground">建立後就不能更改</strong>，請確認後再開始填寫。
       </p>
+      <div v-if="finalizedSources.length" class="mt-4 rounded-xl border border-border bg-muted/20 p-4">
+        <p class="text-sm font-medium text-foreground">開始方式</p>
+        <p class="mt-1 text-xs text-muted-foreground">可選擇任一份已結案報告，帶入其中的文字內容。</p>
+        <div class="mt-3 grid gap-2 sm:grid-cols-2">
+          <button type="button" class="rounded-lg border px-3 py-3 text-left transition-colors" :class="startMode === 'blank' ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-muted/40'" :aria-pressed="startMode === 'blank'" @click="startMode = 'blank'">
+            <span class="block text-sm font-medium text-foreground">從空白開始</span>
+            <span class="mt-1 block text-xs text-muted-foreground">所有欄位維持空白。</span>
+          </button>
+          <button type="button" class="rounded-lg border px-3 py-3 text-left transition-colors" :class="startMode === 'previous' ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-muted/40'" :aria-pressed="startMode === 'previous'" @click="startMode = 'previous'; if (!copyFromId) copyFromId = String(finalizedSources[0]?._id ?? '')">
+            <span class="block text-sm font-medium text-foreground">從已結案報告開始</span>
+            <span class="mt-1 block text-xs text-muted-foreground">僅帶入文字內容；日期、獸醫師、量測與檢驗數值不帶入。</span>
+          </button>
+        </div>
+        <div v-if="startMode === 'previous'" class="mt-3">
+          <Label for="copy-from-record">選擇要帶入的報告</Label>
+          <select
+            id="copy-from-record"
+            v-model="copyFromId"
+            class="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <option v-for="source in finalizedSources" :key="source._id" :value="String(source._id)">
+              {{ formatDate(source.visitDate) }} · {{ source.examType || '健檢報告' }} · 第 {{ source.reportVersion || 1 }} 版
+            </option>
+          </select>
+        </div>
+      </div>
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <button
           v-for="type in examTypes"
