@@ -5,6 +5,7 @@ import { Copy, LayoutList, Pencil, Plus, SearchX, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useToast } from '../composables/useToast';
+import { getAvailabilityStatusMeta } from '../lib/recordStatus';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -300,8 +301,8 @@ onMounted(load);
                     :disabled="busyId === template._id"
                     @update:model-value="toggleEnabled(template, $event)"
                   />
-                  <Label :for="`enabled-${template._id}`" class="text-xs" :class="template.enabled ? 'text-emerald-700 dark:text-emerald-300' : 'text-muted-foreground '">
-                    {{ template.enabled ? '使用中' : '已停用' }}
+                  <Label :for="`enabled-${template._id}`" class="text-xs" :class="getAvailabilityStatusMeta(template.enabled).textClass">
+                    {{ getAvailabilityStatusMeta(template.enabled).label }}
                   </Label>
                 </div>
               </TableCell>
@@ -355,8 +356,8 @@ onMounted(load);
 
           <div class="flex flex-wrap items-center gap-2">
             <Badge variant="outline" class="rounded-full">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</Badge>
-            <Badge :class="template.enabled ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' : 'bg-muted text-muted-foreground '" class="rounded-full">
-              {{ template.enabled ? '使用中' : '已停用' }}
+            <Badge :class="getAvailabilityStatusMeta(template.enabled).class" class="rounded-full">
+              {{ getAvailabilityStatusMeta(template.enabled).label }}
             </Badge>
             <span class="text-xs text-muted-foreground">{{ template.sectionCount }} 個區塊・{{ template.itemCount }} 個項目</span>
           </div>

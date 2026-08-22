@@ -5,7 +5,6 @@ import { AlertTriangle, ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pe
 import { http } from '../api/http'
 import { formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime'
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus'
-import { useTheme } from '../composables/useTheme'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
@@ -15,7 +14,6 @@ import { Alert, AlertDescription } from '../components/ui/alert'
 
 const router = useRouter()
 const loading = ref(true)
-const { isDark } = useTheme()
 const error = ref('')
 const dashboard = ref(null)
 const deletingDraftId = ref('')
@@ -96,39 +94,16 @@ const primaryAction = computed(() => {
   }
 })
 
-// 圖表分類色依主題切換：深色卡片（--card #121b22 底）要比一般品牌色再深一階才有足夠對比，
-// 淺色（Belle Époque）則用古董金等較深的色階。draft／sent 兩色深淺共用。
-const statusColors = computed(() =>
-  isDark.value
-    ? {
-        draft: 'bg-zinc-500',
-        finalized: 'bg-brand-600',
-        sending: 'bg-sky-600',
-        sent: 'bg-emerald-600',
-        failed: 'bg-red-600',
-        uncertain: 'bg-amber-500',
-      }
-    : {
-        draft: 'bg-zinc-500',
-        finalized: 'bg-amber-800',
-        sending: 'bg-sky-700',
-        sent: 'bg-emerald-600',
-        failed: 'bg-red-700',
-        uncertain: 'bg-amber-600',
-      },
-)
-
 const statusSegments = computed(() => {
   const values = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0, uncertain: 0, ...(dashboard.value?.statusBreakdown ?? {}) }
   const total = Math.max(values.draft + values.finalized + values.sending + values.sent + values.failed + values.uncertain, 1)
-  const colors = statusColors.value
   return [
-    { key: 'draft', label: '草稿', value: values.draft, width: (values.draft / total) * 100, class: colors.draft },
-    { key: 'finalized', label: '已結案待寄送', value: values.finalized, width: (values.finalized / total) * 100, class: colors.finalized },
-    { key: 'sending', label: '寄送中', value: values.sending, width: (values.sending / total) * 100, class: colors.sending },
-    { key: 'sent', label: '已寄送', value: values.sent, width: (values.sent / total) * 100, class: colors.sent },
-    { key: 'failed', label: '寄送失敗', value: values.failed, width: (values.failed / total) * 100, class: colors.failed },
-    { key: 'uncertain', label: '結果待確認', value: values.uncertain, width: (values.uncertain / total) * 100, class: colors.uncertain },
+    { key: 'draft', label: RECORD_STATUS_META.draft.label, value: values.draft, width: (values.draft / total) * 100, class: RECORD_STATUS_META.draft.dotClass },
+    { key: 'finalized', label: DELIVERY_STATUS_META.not_sent.label, value: values.finalized, width: (values.finalized / total) * 100, class: DELIVERY_STATUS_META.not_sent.dotClass },
+    { key: 'sending', label: DELIVERY_STATUS_META.sending.label, value: values.sending, width: (values.sending / total) * 100, class: DELIVERY_STATUS_META.sending.dotClass },
+    { key: 'sent', label: DELIVERY_STATUS_META.sent.label, value: values.sent, width: (values.sent / total) * 100, class: DELIVERY_STATUS_META.sent.dotClass },
+    { key: 'failed', label: DELIVERY_STATUS_META.failed.label, value: values.failed, width: (values.failed / total) * 100, class: DELIVERY_STATUS_META.failed.dotClass },
+    { key: 'uncertain', label: DELIVERY_STATUS_META.uncertain.label, value: values.uncertain, width: (values.uncertain / total) * 100, class: DELIVERY_STATUS_META.uncertain.dotClass },
   ]
 })
 
@@ -166,19 +141,19 @@ function recordLink(item) {
 
 function actionMeta(item) {
   if (item.status === 'draft') {
-    return { label: '繼續填寫', detail: `更新 ${formatDateTime(item.updatedAt)}`, class: RECORD_STATUS_META.draft?.class }
+    return { label: RECORD_STATUS_META.draft.label, action: '繼續填寫', detail: `上次更新：${formatDateTime(item.updatedAt)}`, class: RECORD_STATUS_META.draft.class }
   }
   const deliveryStatus = getDeliveryStatus(item)
   if (deliveryStatus === 'failed') {
-    return { label: '處理失敗', detail: '寄送失敗，請確認信箱或重新寄送', class: DELIVERY_STATUS_META.failed?.class }
+    return { label: DELIVERY_STATUS_META.failed.label, action: '重試寄送', detail: '請確認收件信箱後重新寄送', class: DELIVERY_STATUS_META.failed.class }
   }
   if (deliveryStatus === 'uncertain') {
-    return { label: '確認結果', detail: '寄送結果不明，需要人工確認', class: DELIVERY_STATUS_META.uncertain?.class }
+    return { label: DELIVERY_STATUS_META.uncertain.label, action: '確認後重寄', detail: '請先確認飼主是否已收到報告', class: DELIVERY_STATUS_META.uncertain.class }
   }
   if (deliveryStatus === 'sending') {
-    return { label: '查看進度', detail: '報告正在寄送中', class: DELIVERY_STATUS_META.sending?.class }
+    return { label: DELIVERY_STATUS_META.sending.label, action: '查看報告', detail: '郵件正在傳送，請稍候確認結果', class: DELIVERY_STATUS_META.sending.class }
   }
-  return { label: '寄送報告', detail: '報告已結案，尚未寄送', class: DELIVERY_STATUS_META.not_sent?.class }
+  return { label: DELIVERY_STATUS_META.not_sent.label, action: '寄送報告', detail: '報告已結案，可寄送給飼主', class: DELIVERY_STATUS_META.not_sent.class }
 }
 
 async function startRecordForPet(pet) {
@@ -268,22 +243,19 @@ onMounted(fetchDashboard)
           </CardHeader>
           <CardContent class="p-0">
             <div v-if="dashboard.actionRecords?.length" class="divide-y divide-border">
-              <div v-for="item in dashboard.actionRecords" :key="item._id" class="flex min-h-[72px] items-center justify-between gap-3 px-5 py-3 hover:bg-muted/40">
-                <router-link :to="recordLink(item)" class="flex min-w-0 flex-1 items-center justify-between gap-3">
-                  <span class="min-w-0">
-                    <span class="block truncate text-sm font-medium text-foreground"
-                      >{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-muted-foreground">{{ item.petId?.ownerId?.name }}</span></span
-                    >
-                    <span class="mt-0.5 block truncate text-xs text-muted-foreground">{{ formatDate(item.visitDate) }} · {{ actionMeta(item).detail }}</span>
-                  </span>
-                  <span class="flex shrink-0 items-center gap-2">
-                    <Badge variant="status" :class="actionMeta(item).class">{{ actionMeta(item).label }}</Badge>
-                    <ArrowRight class="h-4 w-4 text-muted-foreground" stroke-width="1.75" />
-                  </span>
-                </router-link>
+              <div v-for="item in dashboard.actionRecords" :key="item._id" class="flex min-h-[88px] items-center justify-between gap-4 px-5 py-4">
+                <div class="min-w-0">
+                  <Badge variant="status" :class="actionMeta(item).class">{{ actionMeta(item).label }}</Badge>
+                  <p class="mt-2 truncate text-sm font-medium text-foreground">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-muted-foreground">{{ item.petId?.ownerId?.name }}</span></p>
+                  <p class="mt-1 truncate text-xs text-muted-foreground">{{ actionMeta(item).detail }}<span v-if="item.visitDate"> · 健檢日 {{ formatDate(item.visitDate) }}</span></p>
+                </div>
+                <div class="flex shrink-0 items-center gap-2">
+                  <Button as-child type="button" variant="outline" size="sm"><router-link :to="recordLink(item)">{{ actionMeta(item).action }}<ArrowRight class="h-4 w-4" /></router-link></Button>
+                
                 <Button v-if="item.status === 'draft'" type="button" variant="destructive" size="icon" class="h-11 w-11 shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
                   <Trash2 class="h-4 w-4" />
                 </Button>
+                </div>
               </div>
             </div>
             <div v-else class="px-5 py-10 text-center">

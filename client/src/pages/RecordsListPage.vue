@@ -17,8 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 // 所以預設檢視是待辦，而不是全部；佇列順序也照著實際工作流程排。
 const VIEWS = [
   { key: 'todo', label: '待辦', tone: 'neutral' },
-  { key: 'drafts', label: '草稿', tone: 'neutral' },
-  { key: 'pending', label: '待寄送', tone: 'warning' },
+  { key: 'drafts', label: RECORD_STATUS_META.draft.label, tone: 'warning' },
+  { key: 'pending', label: DELIVERY_STATUS_META.not_sent.label, tone: 'warning' },
   { key: 'failed', label: '失敗／待確認', tone: 'danger' },
   { key: 'all', label: '全部', tone: 'neutral' },
 ];
