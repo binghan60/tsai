@@ -4,7 +4,9 @@ import { AlertTriangle, ClipboardPlus, FileText, MailCheck, PawPrint, Pencil, Us
 import { http } from '../api/http';
 import { formatDate as formatClinicDate } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
+import { useRoute, useRouter } from 'vue-router';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
+import PetPickerDialog from '../components/PetPickerDialog.vue';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -23,6 +25,8 @@ const VIEWS = [
 
 const view = useSearchQueryParam('view', 'todo');
 const page = useSearchQueryParam('page', '1');
+const route = useRoute();
+const router = useRouter();
 
 const records = ref([]);
 const counts = ref({});
@@ -30,6 +34,7 @@ const total = ref(0);
 const limit = ref(25);
 const loading = ref(false);
 const error = ref('');
+const petPickerOpen = ref(false);
 
 let requestSequence = 0;
 
@@ -78,7 +83,33 @@ function goToPage(next) {
   page.value = String(target);
 }
 
+function openPetPicker() {
+  petPickerOpen.value = true;
+}
+
+function closePetPicker() {
+  petPickerOpen.value = false;
+  if (route.query.new === '1') {
+    const query = { ...route.query };
+    delete query.new;
+    router.replace({ path: route.path, query });
+  }
+}
+
+async function startRecordForPet(pet) {
+  petPickerOpen.value = false;
+  if (route.query.new === '1') {
+    const query = { ...route.query };
+    delete query.new;
+    await router.replace({ path: route.path, query });
+  }
+  await router.push(`/pets/${pet._id}/records/new`);
+}
+
 watch([view, page], fetchRecords, { immediate: true });
+watch(() => route.query.new, (value) => {
+  if (value === '1') openPetPicker();
+}, { immediate: true });
 
 function formatDate(value) {
   return formatClinicDate(value, '日期未填');
@@ -105,9 +136,7 @@ function actionLabel(record) {
         <Button as-child variant="outline">
           <router-link to="/records/deliveries"><MailCheck class="h-4 w-4" stroke-width="1.75" />寄送紀錄</router-link>
         </Button>
-        <Button as-child>
-          <router-link to="/pets?intent=new-record"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</router-link>
-        </Button>
+        <Button type="button" @click="openPetPicker"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
       </div>
     </div>
 
@@ -245,4 +274,5 @@ function actionLabel(record) {
       </div>
     </template>
   </section>
+  <PetPickerDialog :open="petPickerOpen" @close="closePetPicker" @select="startRecordForPet" />
 </template>

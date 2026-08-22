@@ -1,8 +1,9 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
 import { Cat, ClipboardPlus, User } from '@lucide/vue';
 import { http } from '../api/http';
+import OwnerPickerDialog from '../components/OwnerPickerDialog.vue';
+import PetFormDialog from '../components/PetFormDialog.vue';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
@@ -11,13 +12,16 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 
-const route = useRoute();
 const pets = ref([]);
 const page = useSearchQueryParam('page', '1');
 const total = ref(0);
 const limit = ref(25);
 const loading = ref(false);
 const error = ref('');
+const ownerPickerOpen = ref(false);
+const petOwner = ref(null);
+const petCreating = ref(false);
+const petCreateError = ref('');
 let requestSequence = 0;
 
 async function fetchPets() {
@@ -56,6 +60,31 @@ function goToPage(next) {
   const target = Math.min(Math.max(next, 1), totalPages.value);
   if (target !== currentPage.value) page.value = String(target);
 }
+
+function openCreatePet() {
+  ownerPickerOpen.value = true;
+}
+
+function selectOwner(owner) {
+  ownerPickerOpen.value = false;
+  petCreateError.value = '';
+  petOwner.value = owner;
+}
+
+async function createPet(values) {
+  if (!petOwner.value || petCreating.value) return;
+  petCreating.value = true;
+  petCreateError.value = '';
+  try {
+    await http.post(`/owners/${petOwner.value._id}/pets`, values);
+    petOwner.value = null;
+    await fetchPets();
+  } catch (err) {
+    petCreateError.value = err.response?.data?.message ?? '新增寵物失敗，請稍後再試。';
+  } finally {
+    petCreating.value = false;
+  }
+}
 </script>
 
 <template>
@@ -65,11 +94,7 @@ function goToPage(next) {
         <h1 class="text-xl font-semibold text-foreground">寵物資料</h1>
         <p class="mt-1 text-sm text-muted-foreground">先確認寵物與飼主身分，再建立健檢紀錄。</p>
       </div>
-      <Button as-child variant="outline"><router-link to="/owners?create=1">+ 新增飼主與寵物</router-link></Button>
-    </div>
-
-    <div v-if="route.query.intent === 'new-record'" class="rounded-xl border border-belle-200 bg-belle-50 px-4 py-3 text-sm text-belle-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300">
-      請使用側邊欄搜尋並選擇寵物，接著點選「新增健檢」。
+      <Button type="button" @click="openCreatePet">+ 新增寵物</Button>
     </div>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
@@ -147,4 +172,14 @@ function goToPage(next) {
       </div>
     </template>
   </section>
+  <OwnerPickerDialog :open="ownerPickerOpen" @close="ownerPickerOpen = false" @select="selectOwner" />
+  <PetFormDialog
+    v-if="petOwner"
+    title="新增寵物"
+    submit-label="新增寵物"
+    :submitting="petCreating"
+    :error-message="petCreateError"
+    @submit="createPet"
+    @close="petOwner = null"
+  />
 </template>

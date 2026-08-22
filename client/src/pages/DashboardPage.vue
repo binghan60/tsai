@@ -114,7 +114,7 @@ onMounted(fetchDashboard);
   <section class="mx-auto max-w-7xl space-y-5">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div><h1 class="text-xl font-semibold text-foreground">健檢工作台</h1><p class="mt-1 text-sm text-muted-foreground">快速找到寵物、繼續草稿或建立新的健檢紀錄。</p></div>
-      <div class="flex flex-wrap gap-2"><Button as-child variant="outline"><router-link to="/owners?create=1">+ 新增飼主</router-link></Button><Button as-child><router-link to="/pets?intent=new-record"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button></div>
+      <div class="flex flex-wrap gap-2"><Button as-child variant="outline"><router-link to="/owners?create=1">+ 新增飼主</router-link></Button><Button as-child><router-link to="/records?new=1"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button></div>
     </div>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
