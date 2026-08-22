@@ -110,6 +110,23 @@ function recordLink(item) {
   return item.status === 'draft' ? `/records/${item._id}/edit` : `/records/${item._id}/preview`;
 }
 
+function actionMeta(item) {
+  if (item.status === 'draft') {
+    return { label: '繼續填寫', detail: `更新 ${formatDateTime(item.updatedAt)}`, class: RECORD_STATUS_META.draft?.class };
+  }
+  const deliveryStatus = getDeliveryStatus(item);
+  if (deliveryStatus === 'failed') {
+    return { label: '處理失敗', detail: '寄送失敗，請確認信箱或重新寄送', class: DELIVERY_STATUS_META.failed?.class };
+  }
+  if (deliveryStatus === 'uncertain') {
+    return { label: '確認結果', detail: '寄送結果不明，需要人工確認', class: DELIVERY_STATUS_META.uncertain?.class };
+  }
+  if (deliveryStatus === 'sending') {
+    return { label: '查看進度', detail: '報告正在寄送中', class: DELIVERY_STATUS_META.sending?.class };
+  }
+  return { label: '寄送報告', detail: '報告已結案，尚未寄送', class: DELIVERY_STATUS_META.not_sent?.class };
+}
+
 async function startRecordForPet(pet) {
   petPickerOpen.value = false;
   await router.push(`/pets/${pet._id}/records/new`);
@@ -146,43 +163,38 @@ onMounted(fetchDashboard);
         </Card>
       </div>
 
-      <!-- 寄送失敗不佔一張統計卡（版面只放得下五張），但它是唯一「已經出過錯」的狀態，
-           不主動浮出來就會沉在清單裡沒人發現。只有真的有失敗時才出現。 -->
-      <RouterLink
-        v-if="dashboard.failedCount"
-        to="/records?view=failed"
-        class="flex min-h-14 items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 transition-colors hover:border-red-300 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/60"
-      >
-        <AlertTriangle class="h-5 w-5 shrink-0" stroke-width="1.75" />
-        <span class="min-w-0 flex-1">有 {{ dashboard.failedCount }} 份報告寄送失敗或結果待確認，需要處理。</span>
-        <ArrowRight class="h-4 w-4 shrink-0" stroke-width="1.75" />
-      </RouterLink>
-
       <div class="grid gap-4 xl:grid-cols-2">
         <Card class="gap-0 overflow-hidden py-0 shadow-sm">
           <CardHeader class="flex-row items-center justify-between gap-3 border-b border-border px-5 py-4">
-            <div><CardTitle class="text-sm">繼續填寫草稿</CardTitle><CardDescription class="mt-0.5 text-xs">依最後更新時間排序</CardDescription></div>
-            <Pencil class="h-5 w-5 text-muted-foreground" />
+            <div><CardTitle class="text-sm">待辦工作</CardTitle><CardDescription class="mt-0.5 text-xs">寄送異常優先，其次是待寄送報告與草稿</CardDescription></div>
+            <AlertTriangle v-if="dashboard.failedCount" class="h-5 w-5 text-red-600 dark:text-red-300" />
+            <Check v-else class="h-5 w-5 text-emerald-600" />
           </CardHeader>
           <CardContent class="p-0">
-            <div v-if="dashboard.draftRecords?.length" class="divide-y divide-border">
-              <div v-for="item in dashboard.draftRecords" :key="item._id" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-muted/40">
-                <router-link :to="`/records/${item._id}/edit`" class="flex min-w-0 flex-1 items-center justify-between gap-3">
-                  <span class="min-w-0"><span class="block truncate text-sm font-medium text-foreground">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-muted-foreground">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-muted-foreground">{{ formatDate(item.visitDate) }} · 更新 {{ formatDateTime(item.updatedAt) }}</span></span>
-                  <span class="shrink-0 text-sm font-medium text-belle-600 dark:text-brand-400">繼續填寫</span>
+            <div v-if="dashboard.actionRecords?.length" class="divide-y divide-border">
+              <div v-for="item in dashboard.actionRecords" :key="item._id" class="flex min-h-[72px] items-center justify-between gap-3 px-5 py-3 hover:bg-muted/40">
+                <router-link :to="recordLink(item)" class="flex min-w-0 flex-1 items-center justify-between gap-3">
+                  <span class="min-w-0">
+                    <span class="block truncate text-sm font-medium text-foreground">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-muted-foreground">{{ item.petId?.ownerId?.name }}</span></span>
+                    <span class="mt-0.5 block truncate text-xs text-muted-foreground">{{ formatDate(item.visitDate) }} · {{ actionMeta(item).detail }}</span>
+                  </span>
+                  <span class="flex shrink-0 items-center gap-2">
+                    <Badge variant="status" :class="actionMeta(item).class">{{ actionMeta(item).label }}</Badge>
+                    <ArrowRight class="h-4 w-4 text-muted-foreground" stroke-width="1.75" />
+                  </span>
                 </router-link>
-                <Button type="button" variant="destructive" size="icon" class="h-11 w-11 shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
+                <Button v-if="item.status === 'draft'" type="button" variant="destructive" size="icon" class="h-11 w-11 shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
                   <Trash2 class="h-4 w-4" />
                 </Button>
               </div>
             </div>
-            <div v-else class="px-5 py-10 text-center"><Check class="mx-auto h-7 w-7 text-emerald-600" /><p class="mt-2 text-sm text-muted-foreground">目前沒有待完成草稿</p></div>
+            <div v-else class="px-5 py-10 text-center"><Check class="mx-auto h-7 w-7 text-emerald-600" /><p class="mt-2 text-sm text-muted-foreground">目前沒有待處理工作</p></div>
           </CardContent>
         </Card>
 
         <Card class="gap-0 overflow-hidden py-0 shadow-sm">
           <CardHeader class="flex-row items-center justify-between gap-3 border-b border-border px-5 py-4">
-            <div><CardTitle class="text-sm">最近健檢紀錄</CardTitle><CardDescription class="mt-0.5 text-xs">快速回到最近處理的寵物</CardDescription></div>
+            <div><CardTitle class="text-sm">最近完成紀錄</CardTitle><CardDescription class="mt-0.5 text-xs">最近已成功寄送的健檢報告</CardDescription></div>
             <FileText class="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent class="p-0">
@@ -192,12 +204,9 @@ onMounted(fetchDashboard);
                   <span class="min-w-0"><span class="block truncate text-sm font-medium text-foreground">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-muted-foreground">{{ item.petId?.ownerId?.name }}</span></span><span class="block text-xs text-muted-foreground">{{ formatDate(item.visitDate) }} · {{ item.vet || '獸醫師未填' }}</span></span>
                   <span class="flex shrink-0 flex-wrap justify-end gap-1.5"><Badge variant="status" :class="RECORD_STATUS_META[item.status]?.class">{{ RECORD_STATUS_META[item.status]?.label }}</Badge><Badge v-if="item.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(item)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(item)]?.label }}</Badge></span>
                 </router-link>
-                <Button v-if="item.status === 'draft'" type="button" variant="destructive" size="icon" class="h-11 w-11 shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
-                  <Trash2 class="h-4 w-4" />
-                </Button>
               </div>
             </div>
-            <div v-else class="px-5 py-10 text-center"><PawPrint class="mx-auto h-7 w-7 text-muted-foreground" /><p class="mt-2 text-sm text-muted-foreground">目前沒有健檢紀錄</p></div>
+            <div v-else class="px-5 py-10 text-center"><PawPrint class="mx-auto h-7 w-7 text-muted-foreground" /><p class="mt-2 text-sm text-muted-foreground">目前沒有已寄送紀錄</p></div>
           </CardContent>
         </Card>
       </div>

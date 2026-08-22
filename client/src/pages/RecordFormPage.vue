@@ -907,19 +907,16 @@ function handleBeforeUnload(event) {
 
         <div class="flex items-center justify-between gap-3">
           <Button type="button" variant="outline" :disabled="activeSectionIndex === 0" @click="adjacentSection(-1)">← 上一區</Button>
-          <span class="text-xs text-muted-foreground">第 {{ activeSectionIndex + 1 }} / {{ FORM_SECTIONS.length }} 區</span>
           <Button type="button" variant="outline" :disabled="activeSectionIndex === FORM_SECTIONS.length - 1" @click="adjacentSection(1)">下一區 →</Button>
         </div>
       </form>
 
-      <div v-if="!isLocked" class="flex justify-end">
-        <Button type="button" variant="destructive-outline" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄這份草稿</Button>
-      </div>
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
       <div v-if="!isLocked" id="record-action-bar" class="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] lg:left-64">
         <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <p class="flex items-center gap-1.5 text-xs text-muted-foreground"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }}<span class="hidden sm:inline"> 個區段</span></p>
           <div class="ml-auto flex flex-wrap items-center gap-2">
+            <Button type="button" variant="destructive-outline" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄草稿</Button>
             <Button type="button" variant="outline" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
             <Button type="button" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
           </div>

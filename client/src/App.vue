@@ -98,10 +98,11 @@ watch(
             type="button"
             class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
             aria-label="搜尋飼主、寵物或寵物病歷號"
+            title="搜尋飼主、寵物或寵物病歷號"
             @click="openGlobalSearch"
           >
             <Search class="h-4 w-4 shrink-0" stroke-width="1.9" />
-            <span class="truncate">搜尋飼主、寵物或寵物病歷號</span>
+            <span class="truncate">搜尋資料</span>
             <kbd class="ml-auto shrink-0 rounded border border-sidebar-border px-1.5 py-0.5 text-xs text-sidebar-foreground/70">Ctrl K</kbd>
           </button>
         </div>

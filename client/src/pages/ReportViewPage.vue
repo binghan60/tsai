@@ -323,7 +323,7 @@ watch(
 <template>
   <div class="min-h-screen bg-stone-100 px-4 py-6 print:bg-white print:p-0 sm:px-6 sm:py-10">
     <section v-if="record" class="mx-auto max-w-[210mm] space-y-4 print:max-w-none print:space-y-0">
-      <div class="flex flex-wrap items-center justify-between gap-3 print:hidden">
+      <div class="sticky top-16 z-20 -mx-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-100/95 px-2 py-2 shadow-sm print:hidden lg:top-2">
         <Button v-if="isPreview" type="button" variant="outline" class="border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
         <div v-else></div>
         <div class="flex flex-wrap justify-end gap-2">

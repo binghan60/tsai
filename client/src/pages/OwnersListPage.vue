@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Mail, Pencil, Phone, Trash2, Users } from '@lucide/vue';
 import OwnerFormDialog from '../components/OwnerFormDialog.vue';
@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import EmptyState from '../components/EmptyState.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
+import SearchPanel from '../components/SearchPanel.vue';
 
 import { useToast } from '../composables/useToast';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
@@ -20,6 +21,8 @@ const router = useRouter();
 const toast = useToast();
 const owners = ref([]);
 const page = useSearchQueryParam('page', '1');
+const query = useSearchQueryParam('q');
+const density = ref('comfortable');
 const total = ref(0);
 const limit = ref(25);
 const loading = ref(false);
@@ -36,6 +39,7 @@ const editSaving = ref(false);
 const editError = ref('');
 
 let requestSequence = 0;
+let searchTimer;
 
 async function fetchOwners() {
   const currentRequest = ++requestSequence;
@@ -43,7 +47,10 @@ async function fetchOwners() {
   error.value = '';
   try {
     const { data } = await http.get('/owners', {
-      params: { page: Number(page.value) || 1 },
+      params: {
+        page: Number(page.value) || 1,
+        ...(query.value.trim() ? { q: query.value.trim() } : {}),
+      },
     });
     if (currentRequest === requestSequence) {
       owners.value = data.items ?? [];
@@ -152,6 +159,18 @@ function goManagePets() {
 }
 
 watch(page, fetchOwners, { immediate: true });
+watch(query, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    if (page.value !== '1') page.value = '1';
+    else fetchOwners();
+  }, 250);
+});
+
+onBeforeUnmount(() => {
+  clearTimeout(searchTimer);
+  requestSequence += 1;
+});
 
 onMounted(() => {
   if (route.query.create === '1') openCreate();
@@ -176,13 +195,29 @@ function goToPage(next) {
       <Button type="button" @click="openCreate">+ 新增飼主</Button>
     </div>
 
+    <SearchPanel
+      id="owner-list-search"
+      v-model="query"
+      label="搜尋飼主"
+      placeholder="搜尋姓名或電話"
+      :loading="loading && Boolean(query.trim())"
+    >
+      <div class="mt-3 hidden items-center justify-between border-t border-border pt-3 lg:flex">
+        <span class="text-xs text-muted-foreground">大量資料可切換成精簡列高，一頁更容易掃描。</span>
+        <div class="inline-flex rounded-lg border border-border bg-muted/30 p-1" aria-label="飼主清單顯示密度">
+          <button type="button" class="min-h-9 rounded-md px-3 text-sm font-medium" :class="density === 'comfortable' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'" :aria-pressed="density === 'comfortable'" @click="density = 'comfortable'">舒適</button>
+          <button type="button" class="min-h-9 rounded-md px-3 text-sm font-medium" :class="density === 'compact' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'" :aria-pressed="density === 'compact'" @click="density = 'compact'">精簡</button>
+        </div>
+      </div>
+    </SearchPanel>
+
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
       <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 位飼主</p>
 
-      <Card v-if="owners.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm lg:block">
+      <Card v-if="owners.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm lg:block" :class="density === 'compact' ? '[&_td]:py-1' : ''">
         <Table>
           <TableHeader>
             <TableRow class="border-border text-muted-foreground"><TableHead class="font-medium">姓名</TableHead><TableHead class="font-medium">電話</TableHead><TableHead class="font-medium">Email</TableHead><TableHead class="text-right font-medium">操作</TableHead></TableRow>
@@ -207,7 +242,7 @@ function goToPage(next) {
         </Card>
       </div>
 
-      <EmptyState v-if="owners.length === 0" :icon="Users" title="找不到符合條件的飼主" />
+      <EmptyState v-if="owners.length === 0" :icon="Users" :title="query ? '找不到符合條件的飼主' : '尚未建立飼主資料'" />
 
       <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
         <p class="text-xs tabular-nums text-muted-foreground">第 {{ currentPage }} / {{ totalPages }} 頁</p>

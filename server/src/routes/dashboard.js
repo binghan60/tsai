@@ -23,6 +23,18 @@ export function fillWeeklyTrend(boundaries, buckets) {
   }));
 }
 
+export function prioritizeActionRecords(attentionRecords = [], pendingRecords = [], draftRecords = [], limit = 8) {
+  const seen = new Set();
+  return [...attentionRecords, ...pendingRecords, ...draftRecords]
+    .filter((record) => {
+      const id = String(record._id);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .slice(0, limit);
+}
+
 // 儀錶板的每一個數字都只算「同一次健檢的最新版」，跟 GET /api/records 的佇列同一套判準。
 // 少了這層，一份改過三次的報告會在統計裡算三次，而點進去的清單只列一列——
 // 卡片正是為了點進去而存在的，兩邊對不上會直接讓人懷疑哪一邊在騙人。
@@ -41,7 +53,7 @@ router.get('/', async (req, res, next) => {
     const weekBoundaries = buildWeekBoundaries(trendStart);
     const trendEnd = weekBoundaries.at(-1);
 
-    const [ownerCount, petCount, [summary], recentRecords, draftRecords] =
+    const [ownerCount, petCount, [summary], recentRecords, draftRecords, attentionRecords, pendingRecords] =
       await Promise.all([
         Owner.countDocuments(),
         Pet.countDocuments(),
@@ -64,12 +76,31 @@ router.get('/', async (req, res, next) => {
             },
           },
         ]),
-        MedicalRecord.find(CURRENT_VERSION)
-          .sort({ visitDate: -1, updatedAt: -1 })
+        MedicalRecord.find({ ...CURRENT_VERSION, status: { $ne: 'draft' }, deliveryStatus: 'sent' })
+          .sort({ sentAt: -1, updatedAt: -1 })
           .limit(5)
           .populate({ path: 'petId', select: 'name species medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } }),
         MedicalRecord.find({ ...CURRENT_VERSION, status: 'draft' })
           .sort({ updatedAt: -1 })
+          .limit(5)
+          .populate({ path: 'petId', select: 'name species medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } }),
+        MedicalRecord.find({
+          ...CURRENT_VERSION,
+          status: { $ne: 'draft' },
+          deliveryStatus: { $in: ['failed', 'uncertain'] },
+        })
+          .sort({ lastDeliveryAttemptAt: -1, updatedAt: -1 })
+          .limit(5)
+          .populate({ path: 'petId', select: 'name species medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } }),
+        MedicalRecord.find({
+          ...CURRENT_VERSION,
+          status: { $ne: 'draft' },
+          $or: [
+            { deliveryStatus: { $in: ['not_sent', 'sending'] } },
+            { deliveryStatus: { $exists: false } },
+          ],
+        })
+          .sort({ finalizedAt: -1, updatedAt: -1 })
           .limit(5)
           .populate({ path: 'petId', select: 'name species medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } }),
       ]);
@@ -92,6 +123,10 @@ router.get('/', async (req, res, next) => {
       else statusBreakdown.finalized += count;
     });
 
+    // 工作台只保留一份有明確優先順序的待辦：寄送異常 → 待寄送／寄送中 → 草稿。
+    // 每類查詢各自限量，再去重截斷，避免某一類大量資料把其他需要處理的狀態完全擠掉。
+    const actionRecords = prioritizeActionRecords(attentionRecords, pendingRecords, draftRecords);
+
     res.json({
       ownerCount,
       petCount,
@@ -103,6 +138,7 @@ router.get('/', async (req, res, next) => {
       weeklyTrend,
       recentRecords,
       draftRecords,
+      actionRecords,
     });
   } catch (err) {
     next(err);

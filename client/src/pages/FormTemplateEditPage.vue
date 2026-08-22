@@ -55,6 +55,7 @@ const error = ref('');
 const activeKey = ref('');
 const activeView = ref('design');
 const mobileEditorPane = ref('content');
+const desktopCanvasMode = ref('focused');
 const savedSnapshot = ref('');
 
 const selectedItemKey = ref(null);
@@ -236,6 +237,7 @@ function focusSection(key) {
   activeKey.value = key;
   selectedItemKey.value = null;
   mobileEditorPane.value = 'content';
+  desktopCanvasMode.value = 'focused';
 }
 
 function selectItem(section, key) {
@@ -560,9 +562,36 @@ function resolveLeave(confirmed) {
           >{{ pane.label }}</button>
         </nav>
 
+        <div class="hidden items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3 shadow-sm xl:flex">
+          <div class="min-w-0">
+            <p class="text-sm font-medium text-foreground">
+              {{ desktopCanvasMode === 'focused' ? `正在編輯：${activeSection?.title || '未命名區塊'}` : `表單總覽 · ${sections.length} 個區塊` }}
+            </p>
+            <p class="mt-0.5 text-xs text-muted-foreground">
+              {{ desktopCanvasMode === 'focused' ? '一次專注一個區塊，左右面板可各自捲動。' : '點選任一區塊即可回到聚焦編輯。' }}
+            </p>
+          </div>
+          <div class="inline-flex shrink-0 rounded-lg border border-border bg-muted/30 p-1" aria-label="桌機畫布顯示方式">
+            <button
+              type="button"
+              class="min-h-9 rounded-md px-3 text-sm font-medium transition-colors"
+              :class="desktopCanvasMode === 'focused' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+              :aria-pressed="desktopCanvasMode === 'focused'"
+              @click="desktopCanvasMode = 'focused'"
+            >聚焦區塊</button>
+            <button
+              type="button"
+              class="min-h-9 rounded-md px-3 text-sm font-medium transition-colors"
+              :class="desktopCanvasMode === 'overview' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+              :aria-pressed="desktopCanvasMode === 'overview'"
+              @click="desktopCanvasMode = 'overview'"
+            >表單總覽</button>
+          </div>
+        </div>
+
         <div class="grid items-start gap-5 xl:grid-cols-[236px_minmax(0,1fr)_320px]">
           <!-- 左：區塊清單 + 工具箱 -->
-          <aside class="space-y-4 xl:sticky xl:top-20" :class="mobileEditorPane === 'sections' ? 'block' : 'hidden xl:block'">
+          <aside class="space-y-4 xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-1" :class="mobileEditorPane === 'sections' ? 'block' : 'hidden xl:block'">
             <div class="rounded-2xl border border-border bg-card p-3 shadow-sm">
               <div class="mb-2 flex items-center justify-between px-1">
                 <h2 class="text-base font-semibold text-foreground">區塊</h2>
@@ -637,7 +666,9 @@ function resolveLeave(confirmed) {
                 activeKey === section.key
                   ? 'border-belle-500 bg-field shadow-md ring-2 ring-belle-500/20 dark:border-brand-500 dark:shadow-[0_0_24px_-8px_var(--color-brand-500)] dark:ring-brand-500/25'
                   : 'cursor-pointer border-border bg-card shadow-sm hover:border-belle-300',
-                activeKey !== section.key ? 'hidden xl:block' : '',
+                activeKey !== section.key
+                  ? (desktopCanvasMode === 'overview' ? 'hidden xl:block' : 'hidden')
+                  : '',
               ]"
               @click="focusSection(section.key)"
             >
@@ -684,7 +715,7 @@ function resolveLeave(confirmed) {
           </div>
 
           <!-- 右：設定面板，選什麼就設定什麼 -->
-          <aside class="xl:sticky xl:top-20" :class="mobileEditorPane === 'settings' ? 'block' : 'hidden xl:block'">
+          <aside class="xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-1" :class="mobileEditorPane === 'settings' ? 'block' : 'hidden xl:block'">
             <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
               <!-- 項目設定 -->
               <template v-if="selectedItem">

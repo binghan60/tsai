@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Cat, ClipboardPlus, User } from '@lucide/vue';
 import { http } from '../api/http';
 import OwnerPickerDialog from '../components/OwnerPickerDialog.vue';
@@ -11,9 +11,12 @@ import EmptyState from '../components/EmptyState.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
+import SearchPanel from '../components/SearchPanel.vue';
 
 const pets = ref([]);
 const page = useSearchQueryParam('page', '1');
+const query = useSearchQueryParam('q');
+const density = ref('comfortable');
 const total = ref(0);
 const limit = ref(25);
 const loading = ref(false);
@@ -23,6 +26,7 @@ const petOwner = ref(null);
 const petCreating = ref(false);
 const petCreateError = ref('');
 let requestSequence = 0;
+let searchTimer;
 
 async function fetchPets() {
   const currentRequest = ++requestSequence;
@@ -30,7 +34,10 @@ async function fetchPets() {
   error.value = '';
   try {
     const { data } = await http.get('/pets', {
-      params: { page: Number(page.value) || 1 },
+      params: {
+        page: Number(page.value) || 1,
+        ...(query.value.trim() ? { q: query.value.trim() } : {}),
+      },
     });
     if (currentRequest === requestSequence) {
       pets.value = data.items ?? [];
@@ -52,6 +59,18 @@ function sexLabel(sex) {
 }
 
 watch(page, fetchPets, { immediate: true });
+watch(query, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    if (page.value !== '1') page.value = '1';
+    else fetchPets();
+  }, 250);
+});
+
+onBeforeUnmount(() => {
+  clearTimeout(searchTimer);
+  requestSequence += 1;
+});
 
 const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
@@ -97,13 +116,29 @@ async function createPet(values) {
       <Button type="button" @click="openCreatePet">+ 新增寵物</Button>
     </div>
 
+    <SearchPanel
+      id="pet-list-search"
+      v-model="query"
+      label="搜尋寵物"
+      placeholder="搜尋寵物、飼主、電話或病歷號"
+      :loading="loading && Boolean(query.trim())"
+    >
+      <div class="mt-3 hidden items-center justify-between border-t border-border pt-3 lg:flex">
+        <span class="text-xs text-muted-foreground">大量資料可切換成精簡列高，一頁更容易掃描。</span>
+        <div class="inline-flex rounded-lg border border-border bg-muted/30 p-1" aria-label="寵物清單顯示密度">
+          <button type="button" class="min-h-9 rounded-md px-3 text-sm font-medium" :class="density === 'comfortable' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'" :aria-pressed="density === 'comfortable'" @click="density = 'comfortable'">舒適</button>
+          <button type="button" class="min-h-9 rounded-md px-3 text-sm font-medium" :class="density === 'compact' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'" :aria-pressed="density === 'compact'" @click="density = 'compact'">精簡</button>
+        </div>
+      </div>
+    </SearchPanel>
+
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
       <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 隻寵物</p>
 
-      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none lg:block">
+      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none lg:block" :class="density === 'compact' ? '[&_td]:py-1' : ''">
         <Table>
           <TableHeader>
             <TableRow class="border-border text-muted-foreground">
@@ -159,7 +194,7 @@ async function createPet(values) {
         </Card>
       </div>
 
-      <EmptyState v-if="pets.length === 0" :icon="Cat" title="找不到符合條件的寵物" />
+      <EmptyState v-if="pets.length === 0" :icon="Cat" :title="query ? '找不到符合條件的寵物' : '尚未建立寵物資料'" />
 
       <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
         <p class="text-xs tabular-nums text-muted-foreground">第 {{ currentPage }} / {{ totalPages }} 頁</p>

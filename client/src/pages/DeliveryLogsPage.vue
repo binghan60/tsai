@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import { AlertTriangle, Mail, Search, Trash2, X } from '@lucide/vue';
+import { AlertTriangle, ChevronDown, ChevronUp, Mail, Search, Trash2, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDateTime } from '../lib/datetime';
 import { DELIVERY_EVENT_META } from '../lib/recordStatus';
@@ -36,6 +36,7 @@ const total = ref(0);
 const limit = ref(50);
 const loading = ref(false);
 const error = ref('');
+const expandedDetails = ref(new Set());
 
 let requestSequence = 0;
 const deliveryAttempts = computed(() => groupDeliveryAttempts(logs.value));
@@ -85,6 +86,22 @@ function clearSearchFilters() {
   dateTo.value = '';
 }
 
+function detailKey(log) {
+  return log.attemptId || log._id;
+}
+
+function detailExpanded(log) {
+  return expandedDetails.value.has(detailKey(log));
+}
+
+function toggleDetail(log) {
+  const next = new Set(expandedDetails.value);
+  const key = detailKey(log);
+  if (next.has(key)) next.delete(key);
+  else next.add(key);
+  expandedDetails.value = next;
+}
+
 watch([event, query, dateFrom, dateTo], () => {
   if (page.value !== '1') page.value = '1';
   else fetchLogs();
@@ -115,8 +132,6 @@ onBeforeUnmount(() => {
       <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束日期</span><Input v-model="dateTo" type="date" aria-label="寄送結束日期" /></label>
       <Button v-if="query || dateFrom || dateTo" type="button" variant="ghost" size="sm" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
     </div>
-    <p v-if="logs.length" class="text-xs tabular-nums text-muted-foreground">本頁整理為 {{ deliveryAttempts.length }} 次寄送嘗試</p>
-
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
     <p v-else-if="!logs.length" class="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
@@ -161,10 +176,35 @@ onBeforeUnmount(() => {
                 </span>
               </TableCell>
               <TableCell >
-                <span v-if="log.error" class="flex items-start gap-1 text-xs text-red-700 dark:text-red-300">
-                  <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" /><span class="min-w-0">{{ log.error }}</span>
-                </span>
-                <span v-else-if="log.messageId" class="block truncate text-xs text-muted-foreground" :title="log.messageId">{{ log.messageId }}</span>
+                <div v-if="log.error" class="max-w-80 text-xs text-red-700 dark:text-red-300">
+                  <span class="flex items-start gap-1">
+                    <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />
+                    <span class="min-w-0 whitespace-normal break-words" :class="detailExpanded(log) || log.error.length <= 40 ? '' : 'line-clamp-2'">{{ log.error }}</span>
+                  </span>
+                  <button
+                    v-if="log.error.length > 40"
+                    type="button"
+                    class="mt-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                    @click="toggleDetail(log)"
+                  >
+                    <ChevronUp v-if="detailExpanded(log)" class="h-3.5 w-3.5" />
+                    <ChevronDown v-else class="h-3.5 w-3.5" />
+                    {{ detailExpanded(log) ? '收合詳情' : '展開詳情' }}
+                  </button>
+                </div>
+                <div v-else-if="log.messageId" class="max-w-80 text-xs text-muted-foreground">
+                  <span class="block whitespace-normal break-all" :class="detailExpanded(log) ? '' : 'line-clamp-2'">{{ log.messageId }}</span>
+                  <button
+                    v-if="log.messageId.length > 48"
+                    type="button"
+                    class="mt-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 font-medium hover:bg-muted/50 hover:text-foreground"
+                    @click="toggleDetail(log)"
+                  >
+                    <ChevronUp v-if="detailExpanded(log)" class="h-3.5 w-3.5" />
+                    <ChevronDown v-else class="h-3.5 w-3.5" />
+                    {{ detailExpanded(log) ? '收合 ID' : '完整 ID' }}
+                  </button>
+                </div>
                 <span v-else class="text-xs text-muted-foreground">—</span>
               </TableCell>
             </TableRow>
