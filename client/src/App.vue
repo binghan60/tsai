@@ -1,7 +1,7 @@
 <script setup>
 import { computed, provide, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { Cat, ClipboardList, FileText, LayoutDashboard, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
+import { Cat, ClipboardList, FileText, LayoutDashboard, Mail, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
 import { useTheme } from './composables/useTheme';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
@@ -37,6 +37,7 @@ const navItems = [
   { to: '/owners', label: '飼主', exact: false, icon: Users },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
   { to: '/records', label: '健檢紀錄', exact: false, icon: FileText },
+  { to: '/records/deliveries', label: '寄送紀錄', exact: false, icon: Mail },
   { to: '/settings', label: '表單管理', exact: false, icon: ClipboardList },
 ];
 

@@ -242,7 +242,7 @@ watch(
     <div class="space-y-4">
       <div class="flex items-center justify-between">
         <h2 class="text-base font-semibold text-foreground">寵物</h2>
-        <Button type="button" size="sm" class="min-h-9" @click="openCreatePet">+ 新增寵物</Button>
+        <Button type="button" size="sm" @click="openCreatePet">+ 新增寵物</Button>
       </div>
 
       <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>

@@ -13,6 +13,7 @@ const props = defineProps({
   },
   asChild: { type: Boolean, required: false },
   as: { type: null, required: false, default: "button" },
+  type: { type: String, required: false, default: "button" },
 });
 </script>
 
@@ -23,7 +24,8 @@ const props = defineProps({
     :data-size="size"
     :as="as"
     :as-child="asChild"
-    :class="cn(buttonVariants({ variant, size }), props.class)"
+    :type="type"
+    :class="cn(buttonVariants({ variant, size }), 'cursor-pointer active:translate-y-px disabled:cursor-not-allowed', props.class)"
   >
     <slot />
   </Primitive>

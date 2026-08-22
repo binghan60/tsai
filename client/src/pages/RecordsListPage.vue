@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { AlertTriangle, ClipboardPlus, FileText, MailCheck, PawPrint, Pencil, User } from '@lucide/vue';
+import { AlertTriangle, ClipboardPlus, FileText, PawPrint, Pencil, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
@@ -133,9 +133,6 @@ function actionLabel(record) {
       </div>
       <div class="flex flex-wrap gap-2">
         <!-- 寄送紀錄是另一種問法：這頁問「還有什麼沒寄」，那頁問「當初寄了什麼給誰」。 -->
-        <Button as-child variant="outline">
-          <router-link to="/records/deliveries"><MailCheck class="h-4 w-4" stroke-width="1.75" />寄送紀錄</router-link>
-        </Button>
         <Button type="button" @click="openPetPicker"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
       </div>
     </div>

@@ -78,10 +78,6 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <router-link to="/records" class="inline-flex items-center gap-1 text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400 dark:hover:text-brand-300">
-      <ArrowLeft class="h-4 w-4" stroke-width="1.75" />回健檢紀錄
-    </router-link>
-
     <div>
       <h1 class="text-xl font-semibold text-foreground">寄送紀錄</h1>
       <p class="mt-1 text-sm text-muted-foreground">每一次寄送嘗試的完整歷程，包含收件信箱與失敗原因。報告刪除後這裡仍然查得到。</p>

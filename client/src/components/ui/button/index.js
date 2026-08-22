@@ -41,13 +41,13 @@ export const buttonVariants = cva(
       size: {
         default:
           "h-11 gap-2 px-4 has-data-[icon=inline-end]:pr-3.5 has-data-[icon=inline-start]:pl-3.5",
-        xs: "h-9 gap-1.5 px-2.5 [&_svg:not([class*=size-])]:size-3.5",
-        sm: "h-10 gap-1.5 px-3 [&_svg:not([class*=size-])]:size-3.5",
-        lg: "h-12 gap-2 px-5 text-base",
+        xs: "h-11 gap-2 px-4",
+        sm: "h-11 gap-2 px-4",
+        lg: "h-11 gap-2 px-4",
         icon: "size-11",
-        "icon-xs": "size-9 [&_svg:not([class*=size-])]:size-3.5",
-        "icon-sm": "size-10",
-        "icon-lg": "size-12",
+        "icon-xs": "size-11",
+        "icon-sm": "size-11",
+        "icon-lg": "size-11",
       },
     },
     defaultVariants: {

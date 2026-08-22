@@ -362,10 +362,10 @@ onMounted(load);
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" class="min-h-10" @click="router.push(`/settings/forms/${template._id}`)">
+        <Button type="button" size="sm" @click="router.push(`/settings/forms/${template._id}`)">
               <Pencil class="h-4 w-4" stroke-width="1.75" />編輯表單
             </Button>
-            <Button type="button" variant="outline" size="sm" class="min-h-10" :disabled="Boolean(busyId)" @click="openDuplicate(template)">
+        <Button type="button" variant="outline" size="sm" :disabled="Boolean(busyId)" @click="openDuplicate(template)">
               <Copy class="h-4 w-4" stroke-width="1.75" />以此建立
             </Button>
             <Button
