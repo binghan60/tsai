@@ -10,7 +10,7 @@ describe('record status helpers', () => {
   });
 
   it('uses one canonical presentation for workflow and availability statuses', () => {
-    assert.equal(getRecordWorkflowStatusMeta({ status: 'draft' }).label, '草稿待完成');
+    assert.equal(getRecordWorkflowStatusMeta({ status: 'draft' }).label, '草稿');
     assert.equal(getRecordWorkflowStatusMeta({ status: 'finalized', deliveryStatus: 'not_sent' }).label, '待寄送');
     assert.match(getRecordWorkflowStatusMeta({ status: 'finalized', deliveryStatus: 'failed' }).class, /red/);
     assert.equal(getAvailabilityStatusMeta(true).label, '使用中');

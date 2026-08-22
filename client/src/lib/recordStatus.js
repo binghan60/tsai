@@ -1,7 +1,7 @@
 export const RECORD_STATUS_META = {
   // 原本是 bg-cream-200 搭 text-ink-600，對比只有 3.7:1，過不了 4.5。
   // 徽章的「低調」該來自中性底色，不是把文字洗淡。
-  draft: { label: '草稿待完成', class: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300', dotClass: 'bg-amber-600' },
+  draft: { label: '草稿', class: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300', dotClass: 'bg-amber-600' },
   finalized: { label: '已結案', class: 'bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300', dotClass: 'bg-brand-600' },
 };
 
