@@ -7,6 +7,22 @@ const router = Router();
 
 const WEEKS = 6;
 
+export function buildWeekBoundaries(trendStart, weeks = WEEKS) {
+  return Array.from({ length: weeks + 1 }, (_, index) => {
+    const boundary = new Date(trendStart);
+    boundary.setDate(boundary.getDate() + index * 7);
+    return boundary;
+  });
+}
+
+export function fillWeeklyTrend(boundaries, buckets) {
+  const counts = new Map(buckets.map((bucket) => [new Date(bucket._id).getTime(), bucket.count]));
+  return boundaries.slice(0, -1).map((weekStart, index) => ({
+    weekEnd: boundaries[index + 1],
+    count: counts.get(weekStart.getTime()) ?? 0,
+  }));
+}
+
 // 儀錶板的每一個數字都只算「同一次健檢的最新版」，跟 GET /api/records 的佇列同一套判準。
 // 少了這層，一份改過三次的報告會在統計裡算三次，而點進去的清單只列一列——
 // 卡片正是為了點進去而存在的，兩邊對不上會直接讓人懷疑哪一邊在騙人。
@@ -18,39 +34,52 @@ router.get('/', async (req, res, next) => {
   try {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
     const trendStart = new Date(now);
     trendStart.setDate(trendStart.getDate() - (WEEKS - 1) * 7 - 6);
     trendStart.setHours(0, 0, 0, 0);
+    const weekBoundaries = buildWeekBoundaries(trendStart);
+    const trendEnd = weekBoundaries.at(-1);
 
-    const [ownerCount, petCount, monthlyReportCount, draftCount, statusCounts, trendRecords, recentRecords] =
+    const [ownerCount, petCount, [summary], recentRecords, draftRecords] =
       await Promise.all([
         Owner.countDocuments(),
         Pet.countDocuments(),
-        MedicalRecord.countDocuments({ ...CURRENT_VERSION, createdAt: { $gte: startOfMonth } }),
-        MedicalRecord.countDocuments({ ...CURRENT_VERSION, status: 'draft' }),
         MedicalRecord.aggregate([
           { $match: CURRENT_VERSION },
-          { $group: { _id: { status: '$status', deliveryStatus: '$deliveryStatus' }, count: { $sum: 1 } } },
+          {
+            $facet: {
+              monthly: [
+                { $match: { visitDate: { $gte: startOfMonth, $lt: startOfNextMonth } } },
+                { $count: 'count' },
+              ],
+              drafts: [{ $match: { status: 'draft' } }, { $count: 'count' }],
+              statuses: [
+                { $group: { _id: { status: '$status', deliveryStatus: '$deliveryStatus' }, count: { $sum: 1 } } },
+              ],
+              weekly: [
+                { $match: { visitDate: { $gte: trendStart, $lt: trendEnd } } },
+                { $bucket: { groupBy: '$visitDate', boundaries: weekBoundaries, output: { count: { $sum: 1 } } } },
+              ],
+            },
+          },
         ]),
-        MedicalRecord.find({ ...CURRENT_VERSION, createdAt: { $gte: trendStart } }, 'createdAt'),
         MedicalRecord.find(CURRENT_VERSION)
+          .sort({ visitDate: -1, updatedAt: -1 })
+          .limit(5)
+          .populate({ path: 'petId', select: 'name species medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } }),
+        MedicalRecord.find({ ...CURRENT_VERSION, status: 'draft' })
           .sort({ updatedAt: -1 })
           .limit(5)
           .populate({ path: 'petId', select: 'name species medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } }),
       ]);
 
-    // 依週分桶（近 6 週，含本週），資料量小直接在 JS 裡分桶，不用寫聚合管線
-    const weeklyTrend = Array.from({ length: WEEKS }, (_, i) => {
-      const weekStart = new Date(trendStart);
-      weekStart.setDate(weekStart.getDate() + i * 7);
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekEnd.getDate() + 7);
-      const count = trendRecords.filter((r) => r.createdAt >= weekStart && r.createdAt < weekEnd).length;
-      return { weekEnd, count };
-    });
+    const monthlyReportCount = summary?.monthly?.[0]?.count ?? 0;
+    const draftCount = summary?.drafts?.[0]?.count ?? 0;
+    const weeklyTrend = fillWeeklyTrend(weekBoundaries, summary?.weekly ?? []);
 
     const statusBreakdown = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0, uncertain: 0 };
-    statusCounts.forEach(({ _id, count }) => {
+    (summary?.statuses ?? []).forEach(({ _id, count }) => {
       if (_id.status === 'draft') {
         statusBreakdown.draft += count;
         return;
@@ -73,10 +102,7 @@ router.get('/', async (req, res, next) => {
       statusBreakdown,
       weeklyTrend,
       recentRecords,
-      draftRecords: await MedicalRecord.find({ ...CURRENT_VERSION, status: 'draft' })
-        .sort({ updatedAt: -1 })
-        .limit(5)
-        .populate({ path: 'petId', select: 'name species medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } }),
+      draftRecords,
     });
   } catch (err) {
     next(err);

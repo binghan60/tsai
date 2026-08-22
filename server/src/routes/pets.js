@@ -3,6 +3,7 @@ import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import { withTransaction } from '../lib/transaction.js';
+import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
 
 const PET_FIELDS = [
   'name',
@@ -33,8 +34,13 @@ export const ownerPetsRouter = Router({ mergeParams: true });
 
 ownerPetsRouter.get('/', async (req, res, next) => {
   try {
-    const pets = await Pet.find({ ownerId: req.params.ownerId }).sort({ createdAt: -1 });
-    res.json(pets);
+    const pagination = paginationOptions(req.query);
+    const filter = { ownerId: req.params.ownerId };
+    const [pets, total] = await Promise.all([
+      Pet.find(filter).sort({ createdAt: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit),
+      Pet.countDocuments(filter),
+    ]);
+    res.json(paginatedPayload(pets, total, pagination));
   } catch (err) {
     next(err);
   }
@@ -87,8 +93,16 @@ petsRouter.get('/', async (req, res, next) => {
         ],
       };
     }
-    const pets = await Pet.find(filter).sort({ updatedAt: -1 }).populate('ownerId', 'name phone');
-    res.json(pets);
+    const pagination = paginationOptions(req.query);
+    const [pets, total] = await Promise.all([
+      Pet.find(filter)
+        .sort({ updatedAt: -1, _id: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .populate('ownerId', 'name phone'),
+      Pet.countDocuments(filter),
+    ]);
+    res.json(paginatedPayload(pets, total, pagination));
   } catch (err) {
     next(err);
   }
@@ -98,11 +112,27 @@ petsRouter.get('/:id', async (req, res, next) => {
   try {
     const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone email');
     if (!pet) return res.status(404).json({ message: '找不到寵物' });
-    const medicalRecords = await MedicalRecord.find({ petId: pet._id })
-      .sort({ visitDate: -1, reportVersion: -1, updatedAt: -1 })
-      .select(MEDICAL_RECORD_SUMMARY_FIELDS)
-      .lean();
-    res.json({ ...pet.toObject(), medicalRecords });
+    const pagination = paginationOptions(req.query, {
+      defaultLimit: 10,
+      maxLimit: 50,
+      pageParam: 'recordPage',
+      limitParam: 'recordLimit',
+    });
+    const filter = { petId: pet._id };
+    const [medicalRecords, total] = await Promise.all([
+      MedicalRecord.find(filter)
+        .sort({ visitDate: -1, reportVersion: -1, updatedAt: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .select(MEDICAL_RECORD_SUMMARY_FIELDS)
+        .lean(),
+      MedicalRecord.countDocuments(filter),
+    ]);
+    res.json({
+      ...pet.toObject(),
+      medicalRecords,
+      recordPagination: paginationMeta(total, pagination),
+    });
   } catch (err) {
     next(err);
   }
@@ -110,8 +140,23 @@ petsRouter.get('/:id', async (req, res, next) => {
 
 petsRouter.put('/:id', async (req, res, next) => {
   try {
-    const pet = await Pet.findByIdAndUpdate(req.params.id, pickPetFields(req.body), { new: true, runValidators: true });
-    if (!pet) return res.status(404).json({ message: '找不到寵物' });
+    const expectedVersion = Number(req.body?.expectedVersion);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+      return res.status(428).json({ message: '缺少寵物資料版本，請重新整理後再試' });
+    }
+    const pet = await Pet.findOneAndUpdate(
+      { _id: req.params.id, __v: expectedVersion },
+      { $set: pickPetFields(req.body), $inc: { __v: 1 } },
+      { new: true, runValidators: true }
+    );
+    if (!pet) {
+      const current = await Pet.findById(req.params.id).select('__v');
+      if (!current) return res.status(404).json({ message: '找不到寵物' });
+      return res.status(409).json({
+        message: '寵物資料已被其他分頁更新，已重新載入最新內容，請確認後再修改',
+        currentVersion: current.__v,
+      });
+    }
     res.json(pet);
   } catch (err) {
     next(err);

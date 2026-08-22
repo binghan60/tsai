@@ -3,7 +3,7 @@
 // 這種錯誤要等實際打到那條 API 才會 500。
 export default [
   {
-    files: ['src/**/*.js'],
+    files: ['src/**/*.js', 'test/**/*.js'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',

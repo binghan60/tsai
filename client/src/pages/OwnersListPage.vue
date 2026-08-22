@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Mail, Pencil, Phone, Trash2, Users } from '@lucide/vue';
 import OwnerFormDialog from '../components/OwnerFormDialog.vue';
@@ -21,6 +21,9 @@ const router = useRouter();
 const toast = useToast();
 const owners = ref([]);
 const query = useSearchQueryParam();
+const page = useSearchQueryParam('page', '1');
+const total = ref(0);
+const limit = ref(25);
 const loading = ref(false);
 const error = ref('');
 const showCreate = ref(false);
@@ -41,8 +44,17 @@ async function fetchOwners() {
   loading.value = true;
   error.value = '';
   try {
-    const { data } = await http.get('/owners', { params: query.value ? { q: query.value } : {} });
-    if (currentRequest === requestSequence) owners.value = data;
+    const { data } = await http.get('/owners', {
+      params: { page: Number(page.value) || 1, ...(query.value ? { q: query.value } : {}) },
+    });
+    if (currentRequest === requestSequence) {
+      owners.value = data.items ?? [];
+      total.value = data.total ?? 0;
+      limit.value = data.limit ?? 25;
+      if (!owners.value.length && total.value > 0 && currentPage.value > data.totalPages) {
+        page.value = String(data.totalPages);
+      }
+    }
   } catch (err) {
     if (currentRequest === requestSequence) error.value = '飼主資料暫時無法載入，請稍後重試';
   } finally {
@@ -80,13 +92,20 @@ async function submitEdit(values) {
   editSaving.value = true;
   editError.value = '';
   try {
-    await http.put(`/owners/${editTarget.value._id}`, values);
+    await http.put(`/owners/${editTarget.value._id}`, {
+      ...values,
+      expectedVersion: editTarget.value.__v,
+    });
     editTarget.value = null;
     toast.success(`已成功更新飼主「${values.name}」的資料`, '修改資料成功');
     await fetchOwners();
   } catch (err) {
     editError.value = err.response?.data?.message ?? '編輯飼主失敗';
     toast.error(editError.value, '修改資料失敗');
+    if (err.response?.status === 409) {
+      editTarget.value = null;
+      await fetchOwners();
+    }
   } finally {
     editSaving.value = false;
   }
@@ -114,9 +133,9 @@ async function openRemoveOwner(owner) {
   if (deletingId.value || checkingOwnerId.value) return;
   checkingOwnerId.value = owner._id;
   try {
-    const { data: pets } = await http.get(`/owners/${owner._id}/pets`);
-    if (pets.length > 0) {
-      ownerPetBlock.value = { owner, pets };
+    const { data } = await http.get(`/owners/${owner._id}/pets`, { params: { limit: 5 } });
+    if (data.total > 0) {
+      ownerPetBlock.value = { owner, pets: data.items, total: data.total };
     } else {
       ownerToRemove.value = owner;
     }
@@ -137,14 +156,28 @@ function goManagePets() {
 let debounceTimer;
 watch(query, () => {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(fetchOwners, 300);
+  debounceTimer = setTimeout(() => {
+    if (currentPage.value !== 1) {
+      page.value = '1';
+      return;
+    }
+    fetchOwners();
+  }, 300);
 });
+watch(page, fetchOwners, { immediate: true });
 onBeforeUnmount(() => clearTimeout(debounceTimer));
 
 onMounted(() => {
-  fetchOwners();
   if (route.query.create === '1') openCreate();
 });
+
+const currentPage = computed(() => Number(page.value) || 1);
+const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
+
+function goToPage(next) {
+  const target = Math.min(Math.max(next, 1), totalPages.value);
+  if (target !== currentPage.value) page.value = String(target);
+}
 </script>
 
 <template>
@@ -163,7 +196,7 @@ onMounted(() => {
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <p class="text-xs tabular-nums text-muted-foreground">共 {{ owners.length }} 位飼主</p>
+      <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 位飼主</p>
 
       <Card v-if="owners.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm xl:block">
         <Table>
@@ -191,6 +224,14 @@ onMounted(() => {
       </div>
 
       <EmptyState v-if="owners.length === 0" :icon="Users" title="找不到符合條件的飼主" />
+
+      <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
+        <p class="text-xs tabular-nums text-muted-foreground">第 {{ currentPage }} / {{ totalPages }} 頁</p>
+        <div class="flex gap-2">
+          <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
+          <Button type="button" variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
+        </div>
+      </div>
     </template>
 
     <OwnerFormDialog v-if="editTarget" title="編輯飼主資料" submit-label="儲存" :initial-value="{ name: editTarget.name, phone: editTarget.phone, email: editTarget.email ?? '' }" :submitting="editSaving" :error-message="editError" @submit="submitEdit" @close="editTarget = null" />
@@ -207,7 +248,7 @@ onMounted(() => {
     <ConfirmDialog
       :open="Boolean(ownerPetBlock)"
       title="無法刪除飼主"
-      :description="`「${ownerPetBlock?.owner?.name || ''}」底下還有 ${ownerPetBlock?.pets?.length || 0} 隻寵物（${ownerPetBlock?.pets?.map((pet) => pet.name).join('、')}），請先刪除或轉移這些寵物，才能刪除飼主。`"
+      :description="`「${ownerPetBlock?.owner?.name || ''}」底下還有 ${ownerPetBlock?.total || 0} 隻寵物（${ownerPetBlock?.pets?.map((pet) => pet.name).join('、')}${ownerPetBlock?.total > ownerPetBlock?.pets?.length ? '等' : ''}），請先刪除或轉移這些寵物，才能刪除飼主。`"
       confirm-label="前往管理寵物"
       cancel-label="關閉"
       :destructive="false"

@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            client/package-lock.json
+      - name: Install server dependencies
+        working-directory: server
+        env:
+          PUPPETEER_SKIP_DOWNLOAD: 'true'
+        run: npm ci
+      - name: Verify server
+        working-directory: server
+        run: |
+          npm run lint
+          npm test
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+      - name: Verify client
+        working-directory: client
+        run: |
+          npm test
+          npm run build

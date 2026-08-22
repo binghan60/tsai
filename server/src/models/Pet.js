@@ -22,10 +22,11 @@ const petSchema = new mongoose.Schema(
     notes: { type: String, default: '', trim: true },
     relationVersion: { type: Number, default: 0, select: false },
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
-petSchema.index({ ownerId: 1 });
+petSchema.index({ ownerId: 1, createdAt: -1, _id: -1 });
 petSchema.index({ medicalRecordNumber: 1 }, { unique: true, sparse: true });
+petSchema.index({ updatedAt: -1, _id: -1 });
 
 export default mongoose.model('Pet', petSchema);

@@ -64,4 +64,24 @@ describe('health endpoints', () => {
       MedicalRecord.findById = originalFindById;
     }
   });
+
+  it('requires a document version when updating an owner', async () => {
+    const response = await fetch(`${origin}/api/owners/owner-1`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: '王小明', phone: '0912345678', email: '' }),
+    });
+    assert.equal(response.status, 428);
+    assert.deepEqual(await response.json(), { message: '缺少飼主資料版本，請重新整理後再試' });
+  });
+
+  it('requires a document version when updating a pet', async () => {
+    const response = await fetch(`${origin}/api/pets/pet-1`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: '小白' }),
+    });
+    assert.equal(response.status, 428);
+    assert.deepEqual(await response.json(), { message: '缺少寵物資料版本，請重新整理後再試' });
+  });
 });

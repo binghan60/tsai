@@ -59,7 +59,7 @@ function submit() {
       </div>
       <div>
         <DialogTitle>刪除健檢報告</DialogTitle>
-        <DialogDescription class="mt-0.5 text-xs">此操作無法復原，請謹慎確認。</DialogDescription>
+        <DialogDescription class="mt-0.5 text-xs">系統會保留稽核快照，可在病歷回收站還原。</DialogDescription>
       </div>
     </div>
 

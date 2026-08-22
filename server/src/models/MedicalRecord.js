@@ -163,7 +163,7 @@ const medicalRecordSchema = new mongoose.Schema(
   { timestamps: true, optimisticConcurrency: true }
 );
 
-medicalRecordSchema.index({ petId: 1 });
+medicalRecordSchema.index({ petId: 1, visitDate: -1, reportVersion: -1, updatedAt: -1 });
 medicalRecordSchema.index({ reportNumber: 1 }, { unique: true, sparse: true });
 
 // 以下兩個是給跨寵物的健檢紀錄清單（GET /api/records）用的。
@@ -175,6 +175,8 @@ medicalRecordSchema.index({ reportNumber: 1 }, { unique: true, sparse: true });
 // 欄位順序照 ESR：等值比對的 supersededBy 在前，排序用的 updatedAt 在後——
 // 這樣 MongoDB 直接照索引順序讀，連排序這個步驟都不需要。
 medicalRecordSchema.index({ supersededBy: 1, updatedAt: -1 });
+// 工作台的本月數量、週趨勢與最近健檢都依實際看診日查詢。
+medicalRecordSchema.index({ supersededBy: 1, visitDate: -1 });
 // 佇列篩選（草稿／待寄送／寄送失敗）。
 medicalRecordSchema.index({ status: 1, deliveryStatus: 1 });
 medicalRecordSchema.index(

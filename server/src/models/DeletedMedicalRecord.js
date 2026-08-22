@@ -10,10 +10,17 @@ const deletedMedicalRecordSchema = new mongoose.Schema(
     reportNumber: { type: String, default: '' },
     status: { type: String, default: '' },
     deliveryStatus: { type: String, default: '' },
+    petName: { type: String, default: '' },
+    examType: { type: String, default: '' },
+    visitDate: { type: Date, default: null },
     snapshot: { type: mongoose.Schema.Types.Mixed, required: true },
     deletedAt: { type: Date, default: Date.now },
+    restoredAt: { type: Date, default: null },
+    restoreCount: { type: Number, default: 0 },
   },
   { timestamps: false }
 );
+
+deletedMedicalRecordSchema.index({ restoredAt: 1, deletedAt: -1 });
 
 export default mongoose.model('DeletedMedicalRecord', deletedMedicalRecordSchema);

@@ -8,10 +8,11 @@ const ownerSchema = new mongoose.Schema(
     // 子資料建立時會遞增，讓「新增寵物」與「刪除飼主」在 transaction 中產生寫入衝突。
     relationVersion: { type: Number, default: 0, select: false },
   },
-  { timestamps: true }
+  { timestamps: true, optimisticConcurrency: true }
 );
 
 ownerSchema.index({ name: 1 });
 ownerSchema.index({ phone: 1 });
+ownerSchema.index({ createdAt: -1, _id: -1 });
 
 export default mongoose.model('Owner', ownerSchema);

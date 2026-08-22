@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { Cat, ClipboardPlus, User } from '@lucide/vue';
 import { http } from '../api/http';
@@ -15,6 +15,9 @@ import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 const route = useRoute();
 const pets = ref([]);
 const query = useSearchQueryParam();
+const page = useSearchQueryParam('page', '1');
+const total = ref(0);
+const limit = ref(25);
 const loading = ref(false);
 const error = ref('');
 let requestSequence = 0;
@@ -24,8 +27,17 @@ async function fetchPets() {
   loading.value = true;
   error.value = '';
   try {
-    const { data } = await http.get('/pets', { params: query.value ? { q: query.value } : {} });
-    if (currentRequest === requestSequence) pets.value = data;
+    const { data } = await http.get('/pets', {
+      params: { page: Number(page.value) || 1, ...(query.value ? { q: query.value } : {}) },
+    });
+    if (currentRequest === requestSequence) {
+      pets.value = data.items ?? [];
+      total.value = data.total ?? 0;
+      limit.value = data.limit ?? 25;
+      if (!pets.value.length && total.value > 0 && currentPage.value > data.totalPages) {
+        page.value = String(data.totalPages);
+      }
+    }
   } catch (err) {
     if (currentRequest === requestSequence) error.value = '寵物資料暫時無法載入，請稍後重試';
   } finally {
@@ -40,11 +52,24 @@ function sexLabel(sex) {
 let debounceTimer;
 watch(query, () => {
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(fetchPets, 300);
+  debounceTimer = setTimeout(() => {
+    if (currentPage.value !== 1) {
+      page.value = '1';
+      return;
+    }
+    fetchPets();
+  }, 300);
 });
+watch(page, fetchPets, { immediate: true });
 onBeforeUnmount(() => clearTimeout(debounceTimer));
 
-onMounted(fetchPets);
+const currentPage = computed(() => Number(page.value) || 1);
+const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
+
+function goToPage(next) {
+  const target = Math.min(Math.max(next, 1), totalPages.value);
+  if (target !== currentPage.value) page.value = String(target);
+}
 </script>
 
 <template>
@@ -67,7 +92,7 @@ onMounted(fetchPets);
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <p class="text-xs tabular-nums text-muted-foreground">共 {{ pets.length }} 隻寵物</p>
+      <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 隻寵物</p>
 
       <Card v-if="pets.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none xl:block">
         <Table>
@@ -126,6 +151,14 @@ onMounted(fetchPets);
       </div>
 
       <EmptyState v-if="pets.length === 0" :icon="Cat" title="找不到符合條件的寵物" />
+
+      <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
+        <p class="text-xs tabular-nums text-muted-foreground">第 {{ currentPage }} / {{ totalPages }} 頁</p>
+        <div class="flex gap-2">
+          <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
+          <Button type="button" variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
+        </div>
+      </div>
     </template>
   </section>
 </template>

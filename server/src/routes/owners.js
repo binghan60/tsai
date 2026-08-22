@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import { withTransaction } from '../lib/transaction.js';
+import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
 
 const router = Router();
 
@@ -24,8 +25,12 @@ router.get('/', async (req, res, next) => {
     const filter = keyword
       ? { $or: [{ name: keyword }, { phone: keyword }] }
       : {};
-    const owners = await Owner.find(filter).sort({ createdAt: -1 });
-    res.json(owners);
+    const pagination = paginationOptions(req.query);
+    const [owners, total] = await Promise.all([
+      Owner.find(filter).sort({ createdAt: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit),
+      Owner.countDocuments(filter),
+    ]);
+    res.json(paginatedPayload(owners, total, pagination));
   } catch (err) {
     next(err);
   }
@@ -47,8 +52,18 @@ router.get('/:id', async (req, res, next) => {
   try {
     const owner = await Owner.findById(req.params.id);
     if (!owner) return res.status(404).json({ message: '找不到飼主' });
-    const pets = await Pet.find({ ownerId: owner._id });
-    res.json({ ...owner.toObject(), pets });
+    const pagination = paginationOptions(req.query, {
+      defaultLimit: 12,
+      maxLimit: 50,
+      pageParam: 'petPage',
+      limitParam: 'petLimit',
+    });
+    const filter = { ownerId: owner._id };
+    const [pets, total] = await Promise.all([
+      Pet.find(filter).sort({ createdAt: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit),
+      Pet.countDocuments(filter),
+    ]);
+    res.json({ ...owner.toObject(), pets, petPagination: paginationMeta(total, pagination) });
   } catch (err) {
     next(err);
   }
@@ -59,12 +74,23 @@ router.put('/:id', async (req, res, next) => {
     const { name, phone, email } = req.body;
     const validationError = validateOwnerInput({ name, phone, email });
     if (validationError) return res.status(422).json({ message: validationError });
-    const owner = await Owner.findByIdAndUpdate(
-      req.params.id,
-      { name, phone, email },
+    const expectedVersion = Number(req.body?.expectedVersion);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+      return res.status(428).json({ message: '缺少飼主資料版本，請重新整理後再試' });
+    }
+    const owner = await Owner.findOneAndUpdate(
+      { _id: req.params.id, __v: expectedVersion },
+      { $set: { name, phone, email }, $inc: { __v: 1 } },
       { new: true, runValidators: true }
     );
-    if (!owner) return res.status(404).json({ message: '找不到飼主' });
+    if (!owner) {
+      const current = await Owner.findById(req.params.id).select('__v');
+      if (!current) return res.status(404).json({ message: '找不到飼主' });
+      return res.status(409).json({
+        message: '飼主資料已被其他分頁更新，已重新載入最新內容，請確認後再修改',
+        currentVersion: current.__v,
+      });
+    }
     res.json(owner);
   } catch (err) {
     next(err);

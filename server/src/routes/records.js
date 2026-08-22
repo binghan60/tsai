@@ -15,6 +15,7 @@ import { composeReportSections } from '../lib/reportSections.js';
 import { escapeRegExp } from '../lib/regex.js';
 import { validateFinalRecord } from '../lib/recordValidation.js';
 import { withTransaction } from '../lib/transaction.js';
+import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -115,12 +116,19 @@ const PET_RECORD_LIST_FIELDS =
 
 petRecordsRouter.get('/', async (req, res, next) => {
   try {
+    const pagination = paginationOptions(req.query);
     // 寵物頁只畫摘要，不能把每份報告的大型 sections 快照與全部臨床內容一起載回。
-    const records = await MedicalRecord.find({ petId: req.params.petId })
-      .sort({ visitDate: -1, reportVersion: -1, updatedAt: -1 })
-      .select(PET_RECORD_LIST_FIELDS)
-      .lean();
-    res.json(records);
+    const filter = { petId: req.params.petId };
+    const [records, total] = await Promise.all([
+      MedicalRecord.find(filter)
+        .sort({ visitDate: -1, reportVersion: -1, updatedAt: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .select(PET_RECORD_LIST_FIELDS)
+        .lean(),
+      MedicalRecord.countDocuments(filter),
+    ]);
+    res.json(paginatedPayload(records, total, pagination));
   } catch (err) {
     next(err);
   }
@@ -367,6 +375,90 @@ recordsRouter.get('/', async (req, res, next) => {
     ]);
 
     res.json({ items, total, page, limit, view, counts });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 已刪除病歷仍保留完整快照；清單刻意不回傳 snapshot，避免回收站一次載入所有大型報告內容。
+recordsRouter.get('/trash', async (req, res, next) => {
+  try {
+    const pagination = paginationOptions(req.query, { defaultLimit: 25, maxLimit: 100 });
+    const filter = req.query.includeRestored === '1' ? {} : { restoredAt: null };
+    const [items, total] = await Promise.all([
+      DeletedMedicalRecord.find(filter)
+        .sort({ deletedAt: -1, _id: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .select('-snapshot'),
+      DeletedMedicalRecord.countDocuments(filter),
+    ]);
+    res.json(paginatedPayload(items, total, pagination));
+  } catch (err) {
+    next(err);
+  }
+});
+
+recordsRouter.post('/trash/:id/restore', async (req, res, next) => {
+  try {
+    let restoredRecord;
+    await withTransaction(async (session) => {
+      const deleted = await DeletedMedicalRecord.findById(req.params.id).session(session);
+      if (!deleted) {
+        const error = new Error('找不到已刪除的病歷快照');
+        error.status = 404;
+        throw error;
+      }
+      if (deleted.restoredAt) {
+        const error = new Error('這份病歷已經還原');
+        error.status = 409;
+        throw error;
+      }
+      if (await MedicalRecord.exists({ _id: deleted.originalId }).session(session)) {
+        const error = new Error('原病歷識別碼已被使用，無法還原');
+        error.status = 409;
+        throw error;
+      }
+      if (!(await Pet.exists({ _id: deleted.petId }).session(session))) {
+        const error = new Error('原寵物資料已不存在，請先還原寵物後再還原病歷');
+        error.status = 409;
+        throw error;
+      }
+
+      const snapshot = { ...deleted.snapshot, _id: deleted.originalId };
+      delete snapshot.finalizeAttemptId;
+      delete snapshot.finalizingAt;
+      delete snapshot.deliveryAttemptId;
+      delete snapshot.deliveryLeaseExpiresAt;
+      restoredRecord = new MedicalRecord(snapshot);
+
+      // 只有已結案的修訂版曾把前一版標成 superseded；修訂草稿沒有改動這條鏈。
+      if (snapshot.revisionOf && snapshot.status !== 'draft') {
+        const linked = await MedicalRecord.updateOne(
+          { _id: snapshot.revisionOf, supersededBy: null },
+          { $set: { supersededBy: deleted.originalId } },
+          { session }
+        );
+        if (linked.matchedCount !== 1) {
+          const error = new Error('前一版病歷不存在或修訂鏈已改變，無法安全還原');
+          error.status = 409;
+          throw error;
+        }
+      }
+
+      await restoredRecord.save({ session, timestamps: false });
+      const marked = await DeletedMedicalRecord.updateOne(
+        { _id: deleted._id, restoredAt: null },
+        { $set: { restoredAt: new Date() }, $inc: { restoreCount: 1 } },
+        { session }
+      );
+      if (marked.matchedCount !== 1) {
+        const error = new Error('病歷已由其他操作還原，請重新整理');
+        error.status = 409;
+        throw error;
+      }
+    });
+    res.status(201).json(restoredRecord);
   } catch (err) {
     next(err);
   }
@@ -774,7 +866,7 @@ recordsRouter.delete('/:id', async (req, res, next) => {
           error.status = 409;
           throw error;
         }
-        const confirmedName = String(req.body?.confirmPetName ?? '').trim();
+        const confirmedName = String(req.body?.confirmText ?? '').trim();
         if (confirmedName !== String(currentPet.name ?? '').trim()) {
           const error = new Error('確認文字不符，請輸入完整的寵物名稱');
           error.status = 422;
@@ -782,16 +874,28 @@ recordsRouter.delete('/:id', async (req, res, next) => {
         }
       }
 
-      await DeletedMedicalRecord.create([{
-        originalId: current._id,
-        petId: current.petId,
-        reportNumber: current.reportNumber,
-        status: current.status,
-        deliveryStatus: current.deliveryStatus,
-        snapshot: current.toObject(),
-      }], { session });
+      const auditPet = await Pet.findById(current.petId).select('name').session(session);
+      await DeletedMedicalRecord.findOneAndUpdate(
+        { originalId: current._id },
+        {
+          $set: {
+            petId: current.petId,
+            petName: auditPet?.name ?? '',
+            reportNumber: current.reportNumber,
+            examType: current.examType,
+            visitDate: current.visitDate,
+            status: current.status,
+            deliveryStatus: current.deliveryStatus,
+            snapshot: current.toObject(),
+            deletedAt: new Date(),
+            restoredAt: null,
+          },
+          $setOnInsert: { originalId: current._id, restoreCount: 0 },
+        },
+        { upsert: true, new: true, session, setDefaultsOnInsert: true }
+      );
 
-      if (current.revisionOf) {
+      if (current.revisionOf && isFinalizedRecord(current)) {
         const restoredPrevious = await MedicalRecord.updateOne(
           { _id: current.revisionOf, supersededBy: current._id },
           { $set: { supersededBy: null } },

@@ -20,6 +20,8 @@ import { useToast } from '../composables/useToast';
 const route = useRoute();
 const toast = useToast();
 const pet = ref(null);
+const recordPage = ref(1);
+const recordPagination = ref({ total: 0, page: 1, limit: 10, totalPages: 1 });
 const { to: backTo, label: backLabel } = useBackTarget(() => (pet.value?.ownerId?._id ? `/owners/${pet.value.ownerId._id}` : '/owners'), '回飼主資料');
 const error = ref('');
 const sharingId = ref(null);
@@ -60,9 +62,13 @@ async function fetchPet(petId = route.params.id) {
   const currentRequest = ++fetchSequence;
   error.value = '';
   try {
-    const { data } = await http.get(`/pets/${petId}`);
+    const { data } = await http.get(`/pets/${petId}`, { params: { recordPage: recordPage.value } });
     if (currentRequest !== fetchSequence || String(route.params.id) !== String(petId)) return;
     pet.value = data;
+    recordPagination.value = data.recordPagination ?? recordPagination.value;
+    if (!data.medicalRecords?.length && data.recordPagination?.total > 0 && recordPage.value > data.recordPagination.totalPages) {
+      recordPage.value = data.recordPagination.totalPages;
+    }
   } catch (err) {
     if (currentRequest === fetchSequence) error.value = '寵物資料暫時無法載入，請稍後重試';
   }
@@ -72,13 +78,17 @@ async function savePet(values) {
   editSaving.value = true;
   editError.value = '';
   try {
-    await http.put(`/pets/${pet.value._id}`, values);
+    await http.put(`/pets/${pet.value._id}`, { ...values, expectedVersion: pet.value.__v });
     editOpen.value = false;
     toast.success(`已成功更新「${values.name || pet.value.name}」的資料`, '修改資料成功');
     await fetchPet();
   } catch (err) {
     editError.value = err.response?.data?.message ?? '寵物資料儲存失敗';
     toast.error(editError.value, '修改資料失敗');
+    if (err.response?.status === 409) {
+      editOpen.value = false;
+      await fetchPet();
+    }
   } finally {
     editSaving.value = false;
   }
@@ -171,10 +181,22 @@ async function removeRecord(confirmText) {
   }
 }
 
+const totalRecordPages = computed(() => recordPagination.value.totalPages ?? 1);
+
+function goToRecordPage(next) {
+  const target = Math.min(Math.max(next, 1), totalRecordPages.value);
+  if (target !== recordPage.value) recordPage.value = target;
+}
+
+watch(recordPage, () => {
+  if (pet.value) fetchPet();
+});
+
 watch(
   () => route.params.id,
   (petId) => {
     pet.value = null;
+    recordPage.value = 1;
     editOpen.value = false;
     shareNotice.value = null;
     shareToRevoke.value = null;
@@ -242,6 +264,14 @@ watch(
         </li>
       </ul>
       <EmptyState v-else :icon="PawPrint" title="尚無健檢紀錄" />
+
+      <div v-if="totalRecordPages > 1" class="flex items-center justify-between gap-3">
+        <p class="text-xs tabular-nums text-muted-foreground">共 {{ recordPagination.total }} 筆・第 {{ recordPage }} / {{ totalRecordPages }} 頁</p>
+        <div class="flex gap-2">
+          <Button type="button" variant="outline" size="sm" :disabled="recordPage <= 1" @click="goToRecordPage(recordPage - 1)">上一頁</Button>
+          <Button type="button" variant="outline" size="sm" :disabled="recordPage >= totalRecordPages" @click="goToRecordPage(recordPage + 1)">下一頁</Button>
+        </div>
+      </div>
     </div>
 
     <PetFormDialog v-if="editOpen" title="編輯寵物資料" submit-label="儲存" :initial-value="{ ...pet, birthDate: clinicDateInput(pet.birthDate) }" :submitting="editSaving" :error-message="editError" @submit="savePet" @close="editOpen = false" />
@@ -259,7 +289,7 @@ watch(
     <ConfirmDialog
       :open="Boolean(recordToRemove) && !isFinalizedRecord(recordToRemove)"
       title="捨棄健檢草稿"
-      :description="`確定要捨棄「${formatDate(recordToRemove?.visitDate)}」這筆草稿嗎？此操作無法復原。`"
+      :description="`確定要捨棄「${formatDate(recordToRemove?.visitDate)}」這筆草稿嗎？刪除後可從病歷回收站還原。`"
       confirm-label="捨棄草稿"
       :loading="Boolean(deletingRecordId)"
       @update:open="(value) => !value && (recordToRemove = null)"

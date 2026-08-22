@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Cat, Pencil, Trash2, User } from '@lucide/vue';
 import OwnerFormDialog from '../components/OwnerFormDialog.vue';
@@ -19,6 +19,8 @@ const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 const owner = ref(null);
+const petPage = ref(1);
+const petPagination = ref({ total: 0, page: 1, limit: 12, totalPages: 1 });
 const { to: backTo, label: backLabel } = useBackTarget('/owners', '回飼主列表');
 const error = ref('');
 const editOwnerOpen = ref(false);
@@ -43,9 +45,13 @@ async function fetchOwner(ownerId = route.params.id) {
   const currentRequest = ++fetchSequence;
   error.value = '';
   try {
-    const { data } = await http.get(`/owners/${ownerId}`);
+    const { data } = await http.get(`/owners/${ownerId}`, { params: { petPage: petPage.value } });
     if (currentRequest !== fetchSequence || String(route.params.id) !== String(ownerId)) return;
     owner.value = data;
+    petPagination.value = data.petPagination ?? petPagination.value;
+    if (!data.pets?.length && data.petPagination?.total > 0 && petPage.value > data.petPagination.totalPages) {
+      petPage.value = data.petPagination.totalPages;
+    }
   } catch (err) {
     if (currentRequest === fetchSequence) error.value = '飼主資料載入失敗';
   }
@@ -55,13 +61,17 @@ async function saveOwner(values) {
   editOwnerSaving.value = true;
   editOwnerError.value = '';
   try {
-    await http.put(`/owners/${route.params.id}`, values);
+    await http.put(`/owners/${route.params.id}`, { ...values, expectedVersion: owner.value.__v });
     editOwnerOpen.value = false;
     toast.success(`已成功更新飼主「${values.name}」的資料`, '修改資料成功');
     await fetchOwner();
   } catch (err) {
     editOwnerError.value = err.response?.data?.message ?? '飼主資料儲存失敗';
     toast.error(editOwnerError.value, '修改資料失敗');
+    if (err.response?.status === 409) {
+      editOwnerOpen.value = false;
+      await fetchOwner();
+    }
   } finally {
     editOwnerSaving.value = false;
   }
@@ -105,13 +115,20 @@ async function submitEditPet(values) {
   editPetSaving.value = true;
   editPetError.value = '';
   try {
-    await http.put(`/pets/${editPetTarget.value._id}`, values);
+    await http.put(`/pets/${editPetTarget.value._id}`, {
+      ...values,
+      expectedVersion: editPetTarget.value.__v,
+    });
     closeEditPet();
     toast.success(`已成功更新寵物「${values.name}」的資料`, '修改資料成功');
     await fetchOwner();
   } catch (err) {
     editPetError.value = err.response?.data?.message ?? '編輯寵物失敗';
     toast.error(editPetError.value, '修改資料失敗');
+    if (err.response?.status === 409) {
+      closeEditPet();
+      await fetchOwner();
+    }
   } finally {
     editPetSaving.value = false;
   }
@@ -139,9 +156,9 @@ async function openRemovePet(pet) {
   if (deletingPetId.value || checkingPetId.value) return;
   checkingPetId.value = pet._id;
   try {
-    const { data: records } = await http.get(`/pets/${pet._id}/records`);
-    if (records.length > 0) {
-      petRecordBlock.value = { pet, records };
+    const { data } = await http.get(`/pets/${pet._id}/records`, { params: { limit: 5 } });
+    if (data.total > 0) {
+      petRecordBlock.value = { pet, records: data.items, total: data.total };
     } else {
       petToRemove.value = pet;
     }
@@ -159,10 +176,22 @@ function goManageRecords() {
   router.push(`/pets/${id}`);
 }
 
+const totalPetPages = computed(() => petPagination.value.totalPages ?? 1);
+
+function goToPetPage(next) {
+  const target = Math.min(Math.max(next, 1), totalPetPages.value);
+  if (target !== petPage.value) petPage.value = target;
+}
+
+watch(petPage, () => {
+  if (owner.value) fetchOwner();
+});
+
 watch(
   () => route.params.id,
   (ownerId) => {
     owner.value = null;
+    petPage.value = 1;
     editOwnerOpen.value = false;
     showCreatePet.value = false;
     editPetTarget.value = null;
@@ -260,6 +289,14 @@ watch(
         </Card>
       </div>
       <EmptyState v-else title="尚無寵物資料" />
+
+      <div v-if="totalPetPages > 1" class="flex items-center justify-between gap-3">
+        <p class="text-xs tabular-nums text-muted-foreground">共 {{ petPagination.total }} 隻・第 {{ petPage }} / {{ totalPetPages }} 頁</p>
+        <div class="flex gap-2">
+          <Button type="button" variant="outline" size="sm" :disabled="petPage <= 1" @click="goToPetPage(petPage - 1)">上一頁</Button>
+          <Button type="button" variant="outline" size="sm" :disabled="petPage >= totalPetPages" @click="goToPetPage(petPage + 1)">下一頁</Button>
+        </div>
+      </div>
     </div>
 
     <OwnerFormDialog
@@ -317,7 +354,7 @@ watch(
     <ConfirmDialog
       :open="Boolean(petRecordBlock)"
       title="無法刪除寵物"
-      :description="`「${petRecordBlock?.pet?.name || ''}」底下還有 ${petRecordBlock?.records?.length || 0} 筆健檢紀錄，請先刪除這些紀錄，才能刪除寵物。`"
+      :description="`「${petRecordBlock?.pet?.name || ''}」底下還有 ${petRecordBlock?.total || 0} 筆健檢紀錄，請先刪除這些紀錄，才能刪除寵物。`"
       confirm-label="前往管理健檢紀錄"
       cancel-label="關閉"
       :destructive="false"
