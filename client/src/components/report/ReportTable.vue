@@ -59,10 +59,12 @@ function groupsOf(run) {
               </span>
               <!-- 4. 上次數值（獨立欄位，沒有歷史數值時保持空白） -->
               <span class="col-span-2 min-w-0 border-stone-100 text-stone-700 sm:col-span-1 sm:border-l sm:pl-2">
-                <template v-if="previousLabValueLabel(finding)">
-                  <strong class="font-medium">{{ previousLabValueLabel(finding) }}</strong>
-                  <small v-if="previousDateLabel(finding)" class="mt-0.5 block text-xs text-stone-500">({{ previousDateLabel(finding) }})</small>
-                </template>
+          <template v-if="previousLabValueLabel(finding)">
+                  <span class="inline-flex items-baseline gap-1 whitespace-nowrap">
+                    <strong class="font-medium">{{ previousLabValueLabel(finding) }}</strong>
+                    <small v-if="previousDateLabel(finding)" class="text-xs text-stone-500">({{ previousDateLabel(finding) }})</small>
+                  </span>
+          </template>
               </span>
               <!-- 5. 備註 -->
               <span class="col-span-2 min-w-0 whitespace-pre-wrap text-stone-600 sm:col-span-1 sm:border-l sm:border-stone-100 sm:pl-2">{{ finding.note || '' }}</span>
