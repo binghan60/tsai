@@ -12,6 +12,7 @@ const props = defineProps({
   // 範本項目或作答列都可以；作答列沒有 type，用 type prop 補上。
   item: { type: Object, required: true },
   type: { type: String, default: '' },
+  showLabel: { type: Boolean, default: true },
 });
 
 const { previousFor } = useRecordForm();
@@ -47,36 +48,24 @@ const tooltip = computed(() => {
     target="_blank"
     rel="noopener"
     :title="tooltip"
-    class="group mt-2 block min-w-0 rounded-xl border px-3 py-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+    class="group mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
     :class="isAbnormal
       ? 'border-red-200 bg-red-50/70 hover:border-red-300 hover:bg-red-50 dark:border-red-900/60 dark:bg-red-950/25 dark:hover:border-red-800 dark:hover:bg-red-950/40'
-      : 'border-border bg-field/70 hover:border-belle-500 hover:bg-belle-50   dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
+      : 'border-border/80 bg-muted/30 hover:border-belle-500 hover:bg-belle-50 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
   >
-    <!-- 先交代這是哪一次健檢，再給數值：不知道是什麼時候量的，數字本身沒有意義。 -->
-    <span class="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-      <span v-if="dateText" class="shrink-0 tabular-nums">{{ dateText }}</span>
-      <span
-        v-if="examTypeText"
-        class="min-w-0 truncate rounded-full bg-muted/60 px-1.5 py-0.5 font-medium text-muted-foreground"
-      >{{ examTypeText }}</span>
-      <ExternalLink
-        class="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-belle-600 dark:text-muted-foreground dark:group-hover:text-brand-400"
-        stroke-width="1.75"
-      />
-    </span>
-    <!-- 數值是這張卡片的主角：字級比說明大一階，數字等寬才不會在多列之間跳動。 -->
-    <span class="mt-1 flex min-w-0 items-baseline gap-1.5">
+    <span v-if="showLabel" class="shrink-0 font-medium text-muted-foreground">上次</span>
+    <span class="flex min-w-0 items-baseline gap-1">
       <span
         class="truncate text-sm font-semibold tabular-nums"
         :class="isAbnormal ? 'text-red-600 dark:text-red-400' : 'text-foreground '"
       >{{ valueText }}</span>
       <span v-if="unitText" class="shrink-0 text-xs text-muted-foreground">{{ unitText }}</span>
-      <span
-        v-if="isAbnormal"
-        class="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/60 dark:text-red-300"
-      >異常</span>
     </span>
-    <span v-if="noteText" class="mt-1 block truncate text-xs text-muted-foreground">{{ noteText }}</span>
+    <span v-if="isAbnormal" class="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-950/60 dark:text-red-300">異常</span>
+    <span v-if="dateText" class="shrink-0 tabular-nums text-muted-foreground">{{ dateText }}</span>
+    <span v-if="examTypeText" class="min-w-0 truncate text-muted-foreground">{{ examTypeText }}</span>
+    <span v-if="noteText" class="min-w-0 truncate text-muted-foreground">· {{ noteText }}</span>
+    <ExternalLink class="ml-auto size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-belle-600 dark:group-hover:text-brand-400" stroke-width="1.75" aria-hidden="true" />
     <span class="sr-only">開新分頁查看這份報告</span>
   </router-link>
 </template>
