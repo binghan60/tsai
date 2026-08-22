@@ -16,7 +16,7 @@ export const buttonVariants = cva(
         default:
           "border-primary bg-primary text-primary-foreground hover:bg-primary/90 aria-expanded:bg-primary/90",
         outline:
-          "border-primary/35 bg-card text-primary hover:border-primary/60 hover:bg-secondary hover:text-secondary-foreground aria-expanded:border-primary/60 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "border-primary/30 bg-primary/8 text-primary hover:border-primary/55 hover:bg-primary/14 aria-expanded:border-primary/55 aria-expanded:bg-primary/14",
         secondary:
           "border-secondary bg-secondary text-secondary-foreground hover:border-primary/25 hover:bg-muted aria-expanded:bg-muted aria-expanded:text-foreground",
         // ghost 原本帶 border-border/70 bg-muted/70——那是 secondary 的長相，不是 ghost。
