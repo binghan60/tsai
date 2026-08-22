@@ -13,20 +13,31 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
-// 這頁的主軸是「還有什麼沒做完」，不是「所有報告的封存庫」——
-// 所以預設檢視是待辦，而不是全部；佇列順序也照著實際工作流程排。
+// 預設先提供完整紀錄；需要處理的工作則依優先級排列在後續篩選中。
 const VIEWS = [
-  { key: 'todo', label: '待辦', tone: 'neutral' },
-  { key: 'drafts', label: RECORD_STATUS_META.draft.label, tone: 'warning' },
-  { key: 'pending', label: DELIVERY_STATUS_META.not_sent.label, tone: 'warning' },
-  { key: 'failed', label: '失敗／待確認', tone: 'danger' },
   { key: 'all', label: '全部', tone: 'neutral' },
+  { key: 'todo', label: '待辦', tone: 'neutral' },
+  { key: 'failed', label: '失敗／待確認', tone: 'danger' },
+  { key: 'pending', label: DELIVERY_STATUS_META.not_sent.label, tone: 'warning' },
+  { key: 'drafts', label: RECORD_STATUS_META.draft.label, tone: 'warning' },
 ];
+const VIEW_PREFERENCE_KEY = 'health-check:records-view';
 
-const view = useSearchQueryParam('view', 'todo');
+const view = useSearchQueryParam('view', 'all');
 const page = useSearchQueryParam('page', '1');
 const route = useRoute();
 const router = useRouter();
+
+// 網址上的 view 是明確指定（書籤／分享連結）時最高優先；只有未指定時才套用個人偏好。
+// localStorage 可能被無痕模式或瀏覽器設定封鎖，因此讀寫都不能影響正常使用。
+if (!route.query.view) {
+  try {
+    const savedView = localStorage.getItem(VIEW_PREFERENCE_KEY);
+    if (VIEWS.some((item) => item.key === savedView)) view.value = savedView;
+  } catch {
+    // 忽略儲存空間不可用，維持「全部」預設即可。
+  }
+}
 
 const records = ref([]);
 const counts = ref({});
@@ -45,7 +56,7 @@ async function fetchRecords() {
   try {
     const { data } = await http.get('/records', {
       params: {
-        view: view.value || 'todo',
+        view: view.value || 'all',
         page: Number(page.value) || 1,
       },
     });
@@ -71,7 +82,7 @@ const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
 
 function selectView(key) {
-  if ((view.value || 'todo') === key) return;
+  if ((view.value || 'all') === key) return;
   view.value = key;
   // 換佇列等於換一份清單，停在第 3 頁沒有意義（那一頁多半根本不存在）。
   page.value = '1';
@@ -107,6 +118,13 @@ async function startRecordForPet(pet) {
 }
 
 watch([view, page], fetchRecords, { immediate: true });
+watch(view, (nextView) => {
+  try {
+    localStorage.setItem(VIEW_PREFERENCE_KEY, nextView || 'all');
+  } catch {
+    // 偏好記不住不該阻止篩選功能本身。
+  }
+});
 watch(() => route.query.new, (value) => {
   if (value === '1') openPetPicker();
 }, { immediate: true });
@@ -129,7 +147,7 @@ function actionLabel(record) {
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 class="text-xl font-semibold text-foreground">健檢紀錄</h1>
-        <p class="mt-1 text-sm text-muted-foreground">依處理狀態分組，先看還沒送到飼主手上的。</p>
+        <p class="mt-1 text-sm text-muted-foreground">依處理狀態篩選與追蹤每筆健檢紀錄。</p>
       </div>
       <div class="flex flex-wrap gap-2">
         <!-- 寄送紀錄是另一種問法：這頁問「還有什麼沒寄」，那頁問「當初寄了什麼給誰」。 -->
@@ -137,7 +155,7 @@ function actionLabel(record) {
       </div>
     </div>
 
-    <FilterTabs :model-value="view || 'todo'" :items="VIEWS" :counts="counts" aria-label="健檢紀錄佇列" @update:model-value="selectView" />
+    <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="健檢紀錄佇列" @update:model-value="selectView" />
 
     <p v-if="!loading && !error && !records.length" class="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
       這個佇列目前是空的。

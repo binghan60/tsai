@@ -6,6 +6,7 @@ import { formatDateTime } from '../lib/datetime';
 import { DELIVERY_EVENT_META } from '../lib/recordStatus';
 import { groupDeliveryAttempts } from '../lib/deliveryAttempts';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
+import { useRoute } from 'vue-router';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -24,12 +25,24 @@ const EVENTS = [
   { key: 'uncertain', label: '結果待確認', tone: 'warning' },
   { key: 'queued', label: '開始寄送', tone: 'info' },
 ];
+const EVENT_PREFERENCE_KEY = 'health-check:delivery-event';
 
 const event = useSearchQueryParam('event');
 const page = useSearchQueryParam('page', '1');
 const query = useSearchQueryParam('q');
 const dateFrom = useSearchQueryParam('from');
 const dateTo = useSearchQueryParam('to');
+const route = useRoute();
+
+// 分享或書籤中的網址篩選優先；未指定時才延續使用者上次查看的事件。
+if (!route.query.event) {
+  try {
+    const savedEvent = localStorage.getItem(EVENT_PREFERENCE_KEY);
+    if (EVENTS.some((item) => item.key === savedEvent)) event.value = savedEvent;
+  } catch {
+    // localStorage 不可用時，維持「全部」。
+  }
+}
 
 const logs = ref([]);
 const total = ref(0);
@@ -107,6 +120,13 @@ watch([event, query, dateFrom, dateTo], () => {
   else fetchLogs();
 }, { immediate: true });
 watch(page, fetchLogs);
+watch(event, (nextEvent) => {
+  try {
+    localStorage.setItem(EVENT_PREFERENCE_KEY, nextEvent || '');
+  } catch {
+    // 儲存偏好失敗不影響寄送歷程查詢。
+  }
+});
 onBeforeUnmount(() => {
   requestSequence += 1;
 });
