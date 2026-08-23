@@ -180,17 +180,6 @@ onMounted(fetchDashboard)
     <p v-else-if="loading" class="text-sm text-muted-foreground" role="status">載入工作台…</p>
 
     <template v-else>
-      <Card class="p-5 shadow-sm">
-        <div class="mb-3 flex items-center justify-between"><CardTitle class="text-sm">報告狀態</CardTitle><span class="text-xs text-muted-foreground">流程概況</span></div>
-        <div class="flex h-3 overflow-hidden rounded-full bg-muted/60"><div v-for="segment in statusSegments" :key="segment.key" :class="segment.class" :style="{ width: `${segment.width}%` }"></div></div>
-
-        <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2">
-          <span v-for="segment in statusSegments" :key="segment.key" class="flex items-center gap-2 text-sm text-foreground"
-            ><span class="h-2 w-2 shrink-0 rounded-full" :class="segment.class" aria-hidden="true"></span>{{ segment.label }} <strong>{{ segment.value }}</strong></span
-          >
-        </div>
-      </Card>
-
       <Card class="border p-5 shadow-sm dark:shadow-none" :class="primaryAction.class">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div class="flex items-start gap-3">
@@ -209,7 +198,16 @@ onMounted(fetchDashboard)
           <Button v-else type="button" class="shrink-0" @click="petPickerOpen = true"><ClipboardPlus class="h-4 w-4" />{{ primaryAction.action }}</Button>
         </div>
       </Card>
+      <Card class="p-5 shadow-sm">
+        <div class="mb-3 flex items-center justify-between"><CardTitle class="text-sm">報告狀態</CardTitle><span class="text-xs text-muted-foreground">流程概況</span></div>
+        <div class="flex h-3 overflow-hidden rounded-full bg-muted/60"><div v-for="segment in statusSegments" :key="segment.key" :class="segment.class" :style="{ width: `${segment.width}%` }"></div></div>
 
+        <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2">
+          <span v-for="segment in statusSegments" :key="segment.key" class="flex items-center gap-2 text-sm text-foreground"
+            ><span class="h-2 w-2 shrink-0 rounded-full" :class="segment.class" aria-hidden="true"></span>{{ segment.label }} <strong>{{ segment.value }}</strong></span
+          >
+        </div>
+      </Card>
       <div class="grid gap-3 md:grid-cols-3">
         <router-link v-for="stage in workStages" :key="stage.key" :to="stage.to" class="rounded-xl border p-4 transition-colors hover:bg-card/70" :class="stage.class">
           <div class="flex items-start justify-between gap-3">

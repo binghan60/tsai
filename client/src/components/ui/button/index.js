@@ -24,10 +24,8 @@ export const buttonVariants = cva(
         // 真正的 ghost 平時完全透明，只有 hover 才浮出來。
         ghost:
           "border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
-        // destructive 同理降權重：列表裡每一列常駐一顆紅按鈕，等於把最危險又最少用的
-        // 操作放到最顯眼的位置。平時中性，hover 才轉紅——意圖在滑過去時才需要被確認。
         destructive:
-          "border-transparent bg-transparent text-muted-foreground shadow-none hover:bg-destructive/10 hover:text-destructive focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:hover:bg-destructive/20 dark:focus-visible:ring-destructive/40",
+          "border-destructive/30 bg-destructive/10 text-destructive hover:border-destructive/50 hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         "destructive-solid":
           "border-destructive-solid bg-destructive-solid text-destructive-solid-foreground hover:bg-destructive-solid/90 focus-visible:ring-destructive-solid/30",
         "destructive-outline":
