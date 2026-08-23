@@ -21,7 +21,7 @@ const runs = computed(() => sectionRuns(visible.value, (item) => item.type === '
         <div
           v-for="finding in run.items"
           :key="finding.key"
-          class="grid break-inside-avoid grid-cols-[1fr_auto] gap-x-0 gap-y-2 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[1fr_1fr_2fr] sm:gap-y-0"
+          class="grid break-inside-avoid grid-cols-[1fr_auto] gap-x-0 gap-y-2 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[1fr_1fr_3fr] sm:gap-y-0"
         >
           <span class="min-w-0 pr-3 font-medium text-stone-800">{{ finding.label }}</span>
           <span class="min-w-0 pl-3 sm:border-l sm:border-stone-100" :class="finding.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'">{{ finding.status === 'abnormal' ? '異常' : '正常' }}</span>
