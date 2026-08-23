@@ -123,7 +123,7 @@ async function fetchReport() {
 }
 
 function sexLabel(sex) {
-  return { male: '公', female: '母', unknown: '未記錄' }[sex] ?? '未記錄';
+  return { male: '公', female: '母' }[sex] ?? '';
 }
 
 // 報告內文由區塊快照決定；頁首與摘要則靠 role 取值，
@@ -140,6 +140,12 @@ function valueByRole(role) {
   const value = itemByRole(role)?.value;
   return value === null || value === undefined || String(value).trim() === '' ? '' : value;
 }
+
+// 寵物資料中的「未記錄」是尚未填寫，不應在正式報告中佔一個欄位。
+const sexAndAgeLabel = computed(() => [
+  sexLabel(record.value?.pet?.sex),
+  ageLabel(record.value?.pet?.birthDate, valueByRole('visitDate') || record.value?.visitDate, ''),
+].filter(Boolean).join('／'));
 
 async function finalizeReport() {
   if (!record.value || !isDraft.value) return;
@@ -395,11 +401,10 @@ watch(
                 <div class="mt-0.5 text-sm font-medium text-stone-600">寵物健康檢查報告</div>
               </div>
             </div>
-            <p class="mt-2 font-mono text-xs text-stone-500">報告編號：{{ record.reportNumber }} · 第 {{ record.reportVersion || 1 }} 版</p>
           </div>
           <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-stone-600 sm:text-right">
             <template v-for="role in HEADER_ROLES" :key="role">
-              <template v-if="itemByRole(role)">
+              <template v-if="itemByRole(role) && valueByRole(role)">
                 <dt class="font-medium">{{ itemByRole(role).label }}</dt>
                 <dd>{{ role === 'visitDate' ? formatDate(valueByRole(role), '') : valueByRole(role) }}</dd>
               </template>
@@ -411,9 +416,9 @@ watch(
         <section class="mt-6 rounded-xl bg-stone-50 p-5">
           <h1 class="text-2xl font-semibold text-stone-900">{{ record.pet?.name || '寵物姓名未記錄' }}</h1>
           <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-            <div><dt class="text-xs font-medium text-stone-500">飼主</dt><dd class="mt-1 text-stone-800">{{ record.owner?.name || '' }}</dd></div>
-            <div><dt class="text-xs font-medium text-stone-500">物種／品種</dt><dd class="mt-1 text-stone-800">{{ record.pet?.species || '' }}<template v-if="record.pet?.breed">／{{ record.pet.breed }}</template></dd></div>
-            <div><dt class="text-xs font-medium text-stone-500">性別／健檢時年齡</dt><dd class="mt-1 text-stone-800">{{ sexLabel(record.pet?.sex) }}／{{ ageLabel(record.pet?.birthDate, valueByRole('visitDate') || record.visitDate) }}</dd></div>
+            <div v-if="record.owner?.name"><dt class="text-xs font-medium text-stone-500">飼主</dt><dd class="mt-1 text-stone-800">{{ record.owner.name }}</dd></div>
+            <div v-if="record.pet?.species || record.pet?.breed"><dt class="text-xs font-medium text-stone-500">物種／品種</dt><dd class="mt-1 text-stone-800">{{ record.pet?.species || '' }}<template v-if="record.pet?.species && record.pet?.breed">／</template>{{ record.pet?.breed || '' }}</dd></div>
+            <div v-if="sexAndAgeLabel"><dt class="text-xs font-medium text-stone-500">性別／健檢時年齡</dt><dd class="mt-1 text-stone-800">{{ sexAndAgeLabel }}</dd></div>
           </dl>
         </section>
 
