@@ -141,19 +141,19 @@ function recordLink(item) {
 
 function actionMeta(item) {
   if (item.status === 'draft') {
-    return { label: RECORD_STATUS_META.draft.label, action: '繼續填寫', detail: `上次更新：${formatDateTime(item.updatedAt)}`, class: RECORD_STATUS_META.draft.class }
+    return { label: RECORD_STATUS_META.draft.label, action: '繼續填寫', detail: `上次更新：${formatDateTime(item.updatedAt)}`, class: RECORD_STATUS_META.draft.class, buttonVariant: 'outline' }
   }
   const deliveryStatus = getDeliveryStatus(item)
   if (deliveryStatus === 'failed') {
-    return { label: DELIVERY_STATUS_META.failed.label, action: '重試寄送', detail: '請確認收件信箱後重新寄送', class: DELIVERY_STATUS_META.failed.class }
+    return { label: DELIVERY_STATUS_META.failed.label, action: '重試寄送', detail: '請確認收件信箱後重新寄送', class: DELIVERY_STATUS_META.failed.class, buttonVariant: 'destructive' }
   }
   if (deliveryStatus === 'uncertain') {
-    return { label: DELIVERY_STATUS_META.uncertain.label, action: '確認後重寄', detail: '請先確認飼主是否已收到報告', class: DELIVERY_STATUS_META.uncertain.class }
+    return { label: DELIVERY_STATUS_META.uncertain.label, action: '確認後重寄', detail: '請先確認飼主是否已收到報告', class: DELIVERY_STATUS_META.uncertain.class, buttonVariant: 'destructive' }
   }
   if (deliveryStatus === 'sending') {
-    return { label: DELIVERY_STATUS_META.sending.label, action: '查看報告', detail: '郵件正在傳送，請稍候確認結果', class: DELIVERY_STATUS_META.sending.class }
+    return { label: DELIVERY_STATUS_META.sending.label, action: '查看報告', detail: '郵件正在傳送，請稍候確認結果', class: DELIVERY_STATUS_META.sending.class, buttonVariant: 'outline' }
   }
-  return { label: DELIVERY_STATUS_META.not_sent.label, action: '寄送報告', detail: '報告已結案，可寄送給飼主', class: DELIVERY_STATUS_META.not_sent.class }
+  return { label: DELIVERY_STATUS_META.not_sent.label, action: '寄送報告', detail: '報告已結案，可寄送給飼主', class: DELIVERY_STATUS_META.not_sent.class, buttonVariant: 'default' }
 }
 
 async function startRecordForPet(pet) {
@@ -233,47 +233,46 @@ onMounted(fetchDashboard)
 
       <div class="grid gap-4 xl:grid-cols-2">
         <Card class="gap-0 overflow-hidden py-0 shadow-sm">
-          <CardHeader class="flex-row items-center justify-between gap-3 border-b border-border px-5 py-4">
+          <CardHeader class="flex-row items-center justify-between gap-3 border-b border-border px-5 py-3">
             <div><CardTitle class="text-sm">待辦工作</CardTitle><CardDescription class="mt-0.5 text-xs">寄送異常優先，其次是待寄送報告與草稿</CardDescription></div>
-            <AlertTriangle v-if="dashboard.failedCount" class="h-5 w-5 text-red-600 dark:text-red-300" />
-            <Check v-else class="h-5 w-5 text-emerald-600" />
           </CardHeader>
           <CardContent class="p-0">
             <div v-if="dashboard.actionRecords?.length" class="divide-y divide-border">
-              <div v-for="item in dashboard.actionRecords" :key="item._id" class="flex min-h-[88px] items-center justify-between gap-4 px-5 py-4">
-                <div class="min-w-0">
-                  <Badge variant="status" :class="actionMeta(item).class">{{ actionMeta(item).label }}</Badge>
-                  <p class="mt-2 truncate text-sm font-medium text-foreground">{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-muted-foreground">{{ item.petId?.ownerId?.name }}</span></p>
-                  <p class="mt-1 truncate text-xs text-muted-foreground">{{ actionMeta(item).detail }}<span v-if="item.visitDate"> · 健檢日 {{ formatDate(item.visitDate) }}</span></p>
+              <div v-for="item in dashboard.actionRecords" :key="item._id" class="flex min-h-[64px] items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/40">
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="truncate text-sm font-medium text-foreground">{{ item.petId?.name || '寵物未找到' }}</span>
+                    <span v-if="item.petId?.ownerId?.name" class="text-xs text-muted-foreground font-normal">{{ item.petId?.ownerId?.name }}</span>
+                    <Badge variant="status" :class="actionMeta(item).class" class="shrink-0">{{ actionMeta(item).label }}</Badge>
+                  </div>
+                  <p class="mt-0.5 truncate text-xs text-muted-foreground">{{ actionMeta(item).detail }}<span v-if="item.visitDate"> · 健檢日 {{ formatDate(item.visitDate) }}</span></p>
                 </div>
-                <div class="flex shrink-0 items-center gap-2">
-                  <Button as-child type="button" variant="outline" size="sm"><router-link :to="recordLink(item)">{{ actionMeta(item).action }}<ArrowRight class="h-4 w-4" /></router-link></Button>
-                
-                <Button v-if="item.status === 'draft'" type="button" variant="destructive" size="icon" class="h-11 w-11 shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
-                  <Trash2 class="h-4 w-4" />
-                </Button>
+                <div class="flex shrink-0 items-center gap-1.5">
+                  <Button as-child type="button" :variant="actionMeta(item).buttonVariant" size="sm"><router-link :to="recordLink(item)">{{ actionMeta(item).action }}<ArrowRight class="ml-1 h-3.5 w-3.5" /></router-link></Button>
+                  <Button v-if="item.status === 'draft'" type="button" variant="ghost" size="icon" class="h-8 w-8 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
+                    <Trash2 class="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </div>
-            <div v-else class="px-5 py-10 text-center">
-              <Check class="mx-auto h-7 w-7 text-emerald-600" />
+            <div v-else class="px-5 py-8 text-center">
+              <Check class="mx-auto h-6 w-6 text-emerald-600" />
               <p class="mt-2 text-sm text-muted-foreground">目前沒有待處理工作</p>
             </div>
           </CardContent>
         </Card>
 
         <Card class="gap-0 overflow-hidden py-0 shadow-sm">
-          <CardHeader class="flex-row items-center justify-between gap-3 border-b border-border px-5 py-4">
+          <CardHeader class="flex-row items-center justify-between gap-3 border-b border-border px-5 py-3">
             <div><CardTitle class="text-sm">最近完成紀錄</CardTitle><CardDescription class="mt-0.5 text-xs">最近已成功寄送的健檢報告</CardDescription></div>
-            <FileText class="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent class="p-0">
             <div v-if="dashboard.recentRecords?.length" class="divide-y divide-border">
-              <div v-for="item in dashboard.recentRecords" :key="item._id" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 hover:bg-muted/40">
+              <div v-for="item in dashboard.recentRecords" :key="item._id" class="flex min-h-[64px] items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/40">
                 <router-link :to="recordLink(item)" class="flex min-w-0 flex-1 items-center justify-between gap-3">
                   <span class="min-w-0"
                     ><span class="block truncate text-sm font-medium text-foreground"
-                      >{{ item.petId?.name || '寵物未找到' }}<span class="ml-2 font-normal text-muted-foreground">{{ item.petId?.ownerId?.name }}</span></span
+                      >{{ item.petId?.name || '寵物未找到' }}<span v-if="item.petId?.ownerId?.name" class="ml-2 font-normal text-muted-foreground">{{ item.petId?.ownerId?.name }}</span></span
                     ><span class="block text-xs text-muted-foreground">{{ formatDate(item.visitDate) }} · {{ item.vet || '獸醫師未填' }}</span></span
                   >
                   <span class="flex shrink-0 flex-wrap justify-end gap-1.5"
@@ -283,8 +282,8 @@ onMounted(fetchDashboard)
                 </router-link>
               </div>
             </div>
-            <div v-else class="px-5 py-10 text-center">
-              <PawPrint class="mx-auto h-7 w-7 text-muted-foreground" />
+            <div v-else class="px-5 py-8 text-center">
+              <PawPrint class="mx-auto h-6 w-6 text-muted-foreground" />
               <p class="mt-2 text-sm text-muted-foreground">目前沒有已寄送紀錄</p>
             </div>
           </CardContent>
