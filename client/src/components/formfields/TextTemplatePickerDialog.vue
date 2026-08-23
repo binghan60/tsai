@@ -6,10 +6,14 @@ import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { useTextTemplates } from '../../composables/useTextTemplates';
 
-const { picker, closePicker, templatesFor, markUsed } = useTextTemplates();
+const { picker, closePicker, createTemplate, templates, templatesFor, markUsed } = useTextTemplates();
 const query = ref('');
 const scope = ref('relevant');
 const selectedId = ref('');
+const creating = ref(false);
+const saving = ref(false);
+const createError = ref('');
+const form = ref({ scope: 'field' });
 
 const candidates = computed(() => {
   if (!picker.value) return [];
@@ -24,6 +28,9 @@ watch(picker, (value) => {
   query.value = '';
   scope.value = 'relevant';
   selectedId.value = '';
+  creating.value = value.quickCreate === true;
+  createError.value = '';
+  form.value = { scope: 'field' };
 });
 watch(candidates, (list) => {
   if (selectedId.value && !list.some((template) => template._id === selectedId.value)) selectedId.value = '';
@@ -35,17 +42,57 @@ function insert(mode) {
   markUsed(selected.value);
   closePicker();
 }
+
+function nextTemplateName() {
+  const label = String(picker.value?.label ?? '文字模板').trim() || '文字模板';
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const sequence = templates.value.reduce((largest, template) => {
+    const match = String(template.name ?? '').match(new RegExp(`^${escapedLabel}\\s+(\\d+)$`));
+    return match ? Math.max(largest, Number(match[1])) : largest;
+  }, 0) + 1;
+  return `${label} ${sequence}`.slice(0, 80);
+}
+
+async function saveTemplate() {
+  if (!picker.value || saving.value) return;
+  saving.value = true;
+  createError.value = '';
+  try {
+    const template = await createTemplate({
+      name: nextTemplateName(),
+      content: picker.value.currentText,
+      availableForAllFields: form.value.scope === 'all',
+      applicableItemKeys: form.value.scope === 'all' ? [] : [picker.value.itemKey],
+      enabled: true,
+    });
+    scope.value = 'relevant';
+    selectedId.value = template._id;
+    creating.value = false;
+  } catch (err) {
+    createError.value = err.response?.data?.message ?? '新增文字模板失敗，請稍後再試。';
+  } finally {
+    saving.value = false;
+  }
+}
 </script>
 
 <template>
   <Dialog :open="Boolean(picker)" @update:open="(value) => !value && closePicker()">
     <DialogContent size="lg" class="max-h-[90vh] flex flex-col">
-      <div class="space-y-1.5 p-6 pb-4 pr-16">
-        <DialogTitle>插入文字模板</DialogTitle>
-        <DialogDescription>{{ picker?.label ? `選擇要插入「${picker.label}」的內容。` : '選擇要插入欄位的內容。' }}</DialogDescription>
+      <div class="p-6 pb-4 pr-16">
+        <div class="space-y-1.5">
+          <DialogTitle>{{ creating ? '新增文字模板' : '插入文字模板' }}</DialogTitle>
+          <DialogDescription>{{ creating ? '會直接使用目前輸入框的文字建立模板。' : (picker?.label ? `選擇要插入「${picker.label}」的內容。` : '選擇要插入欄位的內容。') }}</DialogDescription>
+        </div>
       </div>
 
-      <div class="grid min-h-0 flex-1 border-y border-border md:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.1fr)]">
+      <form v-if="creating" class="min-h-0 flex-1 space-y-5 border-y border-border p-6" @submit.prevent="saveTemplate">
+        <p v-if="createError" class="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{{ createError }}</p>
+        <div class="rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground"><p class="font-medium text-foreground">{{ picker?.label || '目前欄位' }}</p><p class="mt-2 line-clamp-4 whitespace-pre-wrap">{{ picker?.currentText }}</p></div>
+        <div class="space-y-1.5"><p class="text-sm font-medium text-foreground">適用範圍</p><div class="grid grid-cols-2 gap-2"><button type="button" class="min-h-11 rounded-lg border px-3 text-sm font-medium" :class="form.scope === 'field' ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:bg-muted/30'" @click="form.scope = 'field'">適用此欄位</button><button type="button" class="min-h-11 rounded-lg border px-3 text-sm font-medium" :class="form.scope === 'all' ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:bg-muted/30'" @click="form.scope = 'all'">通用</button></div></div>
+      </form>
+
+      <div v-else class="grid min-h-0 flex-1 border-y border-border md:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.1fr)]">
         <div class="flex min-h-0 flex-col border-b border-border p-4 md:border-b-0 md:border-r">
           <div class="relative">
             <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -84,9 +131,15 @@ function insert(mode) {
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" @click="closePicker">取消</Button>
-        <Button v-if="picker?.currentText" type="button" variant="destructive-outline" :disabled="!selected" @click="insert('replace')">覆蓋</Button>
-        <Button type="button" :disabled="!selected" @click="insert(picker?.currentText ? 'cursor' : 'replace')">插入</Button>
+        <template v-if="creating">
+          <Button type="button" variant="outline" :disabled="saving" @click="creating = false">返回模板清單</Button>
+          <Button type="button" :disabled="saving" @click="saveTemplate">{{ saving ? '新增中…' : '新增模板' }}</Button>
+        </template>
+        <template v-else>
+          <Button type="button" variant="outline" @click="closePicker">取消</Button>
+          <Button v-if="picker?.currentText" type="button" variant="destructive-outline" :disabled="!selected" @click="insert('replace')">覆蓋</Button>
+          <Button type="button" :disabled="!selected" @click="insert(picker?.currentText ? 'cursor' : 'replace')">插入</Button>
+        </template>
       </DialogFooter>
     </DialogContent>
   </Dialog>

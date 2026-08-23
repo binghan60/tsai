@@ -9,7 +9,9 @@ const textTemplateSchema = new mongoose.Schema(
     enabled: { type: Boolean, default: true },
     usageCount: { type: Number, default: 0, min: 0 },
     // 舊常用語轉換時用來保證重跑不會產生重複資料。
-    legacyQuickPhraseId: { type: mongoose.Schema.Types.ObjectId, default: null, select: false },
+    // 唯一的 sparse 索引只應收錄真正有舊片語關聯的模板；預設 null 也會被索引，
+    // 使第二筆一般模板被誤判為重複資料。
+    legacyQuickPhraseId: { type: mongoose.Schema.Types.ObjectId, default: undefined, select: false },
   },
   { timestamps: true, optimisticConcurrency: true }
 );

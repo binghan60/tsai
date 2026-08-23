@@ -42,6 +42,15 @@ function open() {
     onInsert: applyTemplate,
   });
 }
+
+function saveAsTemplate() {
+  openPicker({
+    itemKey: props.itemKey,
+    label: props.label,
+    currentText: String(props.modelValue ?? ''),
+    quickCreate: true,
+  });
+}
 </script>
 
 <template>
@@ -55,6 +64,16 @@ function open() {
     >
       <FilePlus2 class="h-3.5 w-3.5" stroke-width="1.75" />
       插入模板
+    </button>
+    <button
+      v-if="modelValue"
+      type="button"
+      class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-belle-600 dark:hover:text-brand-400"
+      :aria-label="label ? `將${label}內容儲存為文字模板` : '儲存為文字模板'"
+      @click="saveAsTemplate"
+    >
+      <FilePlus2 class="h-3.5 w-3.5" stroke-width="1.75" />
+      儲存為模板
     </button>
   </div>
 </template>
