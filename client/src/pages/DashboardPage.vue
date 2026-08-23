@@ -209,14 +209,13 @@ onMounted(fetchDashboard)
         </div>
       </Card>
       <div class="grid gap-3 md:grid-cols-3">
-        <router-link v-for="stage in workStages" :key="stage.key" :to="stage.to" class="rounded-xl border p-4 transition-colors hover:bg-card/70" :class="stage.class">
-          <div class="flex items-start justify-between gap-3">
-            <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-card/80 text-foreground dark:bg-card/30"><component :is="stage.icon" class="h-4 w-4" stroke-width="1.75" /></span>
-            <span class="text-2xl font-semibold tabular-nums text-foreground">{{ stage.count }}</span>
-          </div>
-          <h3 class="mt-3 text-sm font-semibold text-foreground">{{ stage.label }}</h3>
-          <p class="mt-1 text-xs text-muted-foreground">{{ stage.description }}</p>
-          <span class="mt-3 inline-flex items-center gap-1 text-xs font-medium text-foreground">{{ stage.action }}<ArrowRight class="h-3.5 w-3.5" /></span>
+        <router-link v-for="stage in workStages" :key="stage.key" :to="stage.to" class="flex items-center gap-3 rounded-xl border p-3 transition-colors hover:bg-card/70" :class="stage.class">
+          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-card/80 text-foreground dark:bg-card/30"><component :is="stage.icon" class="h-4 w-4" stroke-width="1.75" /></span>
+          <span class="min-w-0 flex-1">
+            <span class="flex items-center gap-1 text-sm font-semibold leading-none text-foreground">{{ stage.label }}<ArrowRight class="h-3.5 w-3.5" /></span>
+            <span class="mt-1 block truncate text-xs text-muted-foreground">{{ stage.description }}</span>
+          </span>
+          <span class="text-xl font-semibold leading-none tabular-nums text-foreground">{{ stage.count }}</span>
         </router-link>
       </div>
 
