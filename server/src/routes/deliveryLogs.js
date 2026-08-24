@@ -16,6 +16,20 @@ router.get('/', async (req, res, next) => {
     const filter = {};
     if (req.query.recordId) filter.recordId = req.query.recordId;
     if (['queued', 'sent', 'failed', 'uncertain'].includes(req.query.event)) filter.event = req.query.event;
+
+    // 「寄送中」分頁代表「還在寄送中、尚未有結果」，不是「曾經有過 queued 事件」——
+    // 每次寄送都會先寫 queued 再寫最終結果，兩筆共用同一個 attemptId。已經有結果的那些，
+    // 它的 queued 那筆只是歷史紀錄，不該再算進「還在寄送中」，否則同一次寄送會同時
+    // 出現在「寄送成功」和「寄送中」兩個分頁，看起來像是兩筆不同的紀錄。
+    // 沒有 attemptId 的舊資料沒辦法配對，維持原樣顯示。
+    if (filter.event === 'queued') {
+      const resolvedAttemptIds = await DeliveryLog.distinct('attemptId', {
+        event: { $in: ['sent', 'failed', 'uncertain'] },
+        attemptId: { $ne: '' },
+      });
+      if (resolvedAttemptIds.length) filter.attemptId = { $nin: resolvedAttemptIds };
+    }
+
     const keyword = String(req.query.q ?? '').trim();
     if (keyword) {
       const pattern = new RegExp(escapeRegExp(keyword), 'i');

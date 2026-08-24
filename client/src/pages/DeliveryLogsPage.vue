@@ -24,7 +24,7 @@ const EVENTS = [
   { key: 'sent', label: '寄送成功', tone: 'success' },
   { key: 'failed', label: '寄送失敗', tone: 'danger' },
   { key: 'uncertain', label: '結果待確認', tone: 'warning' },
-  { key: 'queued', label: '開始寄送', tone: 'info' },
+  { key: 'queued', label: '寄送中', tone: 'info' },
 ];
 const EVENT_PREFERENCE_KEY = 'health-check:delivery-event';
 
