@@ -14,6 +14,9 @@ import { Textarea } from './ui/textarea';
 import { DatePicker } from './ui/date-picker';
 import { TimePicker } from './ui/time-picker';
 
+// 掛號區間：早上 10:00–11:30、下午 14:00–19:30，超出這兩段的時間選單不給選。
+const REGISTRATION_HOURS = [['10:00', '11:30'], ['14:00', '19:30']];
+
 const props = defineProps({
   open: { type: Boolean, default: false },
   defaultDate: { type: String, default: '' },
@@ -160,7 +163,7 @@ async function submit() {
           </div>
           <div class="space-y-1.5">
             <Label for="appointment-time" class="text-xs font-medium text-foreground">預約時間</Label>
-            <TimePicker id="appointment-time" v-model="form.time" aria-label="預約時間" />
+            <TimePicker id="appointment-time" v-model="form.time" :ranges="REGISTRATION_HOURS" aria-label="預約時間" />
           </div>
         </div>
         <div class="space-y-1.5">
