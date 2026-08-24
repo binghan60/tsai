@@ -2,7 +2,7 @@ export const APPOINTMENT_STATUSES = ['scheduled', 'arrived', 'completed', 'cance
 
 const APPOINTMENT_STATUS_LABELS = {
   scheduled: '已預約',
-  arrived: '已到診',
+  arrived: '報到',
   completed: '已完成',
   cancelled: '已取消',
   no_show: '未到診',

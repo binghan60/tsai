@@ -251,7 +251,7 @@ onMounted(fetchDashboard)
                 </div>
                 <div class="flex shrink-0 items-center gap-1.5">
                   <Button as-child type="button" :variant="actionMeta(item).buttonVariant" size="sm"><router-link :to="recordLink(item)">{{ actionMeta(item).action }}<ArrowRight class="ml-1 h-3.5 w-3.5" /></router-link></Button>
-                  <Button v-if="item.status === 'draft'" type="button" variant="ghost" size="icon" class="h-8 w-8 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
+                  <Button v-if="item.status === 'draft'" type="button" variant="destructive" size="icon" class="h-8 w-8 shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
                     <Trash2 class="h-4 w-4" />
                   </Button>
                 </div>

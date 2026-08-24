@@ -247,7 +247,7 @@ GET    /api/health
   | 刪除等危險操作確認 | `<ConfirmDialog>` | **禁止用瀏覽器原生 `confirm()`／`alert()`**——樣式跳出主題、行動裝置體驗差、也擋不住連點 |
   | 操作結果提示（成功／失敗） | `useToast()`（`success`／`error`） | 同上，不要用 `alert()` |
 
-  按鈕高度由 `size` 決定（`xs` 36 / `sm` 40 / `default` 44 / `lg` 48），**不要用 `min-h-11` 覆寫**——那會讓高度與 padding 對不上。`ghost` 與 `destructive` 平時是透明的，hover 才上色：列表裡每列常駐一顆實心紅按鈕，等於把最危險又最少用的操作放到最顯眼的位置。
+  按鈕高度由 `size` 決定（`xs` 36 / `sm` 40 / `default` 44 / `lg` 48），**不要用 `min-h-11` 覆寫**——那會讓高度與 padding 對不上。`ghost` 平時完全透明、hover 才上色，只用在中性、低風險的操作（編輯、展開、關閉…）。**危險操作（取消、刪除、捨棄草稿等）一律用 `variant="destructive"`**——它本身就是常駐可見的淡紅底＋紅字，不需要 hover 才看得出來是危險操作。**禁止**用 `ghost` 再手刻 `class="text-destructive hover:bg-destructive/10"` 這種只有滑鼠移過去才現形的寫法：危險操作被做成視覺上跟中性操作沒有分別，使用者掃過列表時完全看不出哪個會出事。
 
   表格的 padding、表頭底色、sticky、hover 都在 `ui/table/*` 裡，頁面只放內容。桌機表格與手機卡片的切換斷點統一是 `xl`(1280px)，跟 `max-w-7xl` 對齊。
 

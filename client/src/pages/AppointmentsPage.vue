@@ -9,7 +9,7 @@ import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { useToast } from '../composables/useToast';
 import AppointmentFormDialog from '../components/AppointmentFormDialog.vue';
 import AppointmentCreatePatientDialog from '../components/AppointmentCreatePatientDialog.vue';
-import ConfirmDialog from '../components/ConfirmDialog.vue';
+import CancelAppointmentDialog from '../components/CancelAppointmentDialog.vue';
 import EmptyState from '../components/EmptyState.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import FilterTabs from '../components/FilterTabs.vue';
@@ -39,6 +39,7 @@ const error = ref('');
 const formDialogOpen = ref(false);
 const createPatientTarget = ref(null);
 const cancelTarget = ref(null);
+const cancelSubmitting = ref(false);
 const statusUpdatingId = ref('');
 
 let requestSequence = 0;
@@ -120,11 +121,24 @@ function openCancel(appointment) {
   cancelTarget.value = appointment;
 }
 
-async function confirmCancel() {
-  if (!cancelTarget.value) return;
-  const appointment = cancelTarget.value;
+function closeCancel() {
+  if (cancelSubmitting.value) return;
   cancelTarget.value = null;
-  await markStatus(appointment, 'cancelled');
+}
+
+async function confirmCancel(reason) {
+  if (!cancelTarget.value || cancelSubmitting.value) return;
+  const appointment = cancelTarget.value;
+  cancelSubmitting.value = true;
+  try {
+    await http.patch(`/appointments/${appointment._id}/status`, { status: 'cancelled', cancelReason: reason });
+    cancelTarget.value = null;
+    await fetchAppointments();
+  } catch (err) {
+    toast.error(err.response?.data?.message ?? '取消預約失敗');
+  } finally {
+    cancelSubmitting.value = false;
+  }
 }
 
 async function goToRecordForm(petId) {
@@ -166,14 +180,14 @@ function getActions(appointment) {
   switch (appointment.status) {
     case 'scheduled':
       return [
-        { key: 'arrived', label: '已到診', variant: 'outline', handler: () => markStatus(appointment, 'arrived') },
-        { key: 'cancel', label: '取消', variant: 'ghost', class: 'text-destructive hover:bg-destructive/10', handler: () => openCancel(appointment) },
+        { key: 'arrived', label: '報到', variant: 'default', handler: () => markStatus(appointment, 'arrived') },
+        { key: 'cancel', label: '取消', variant: 'destructive', handler: () => openCancel(appointment) },
       ];
     case 'arrived':
       return [
         { key: 'report', label: '建立健檢報告', variant: 'default', handler: () => startReport(appointment) },
         { key: 'complete', label: '標記完成', variant: 'outline', handler: () => markStatus(appointment, 'completed') },
-        { key: 'cancel', label: '取消', variant: 'ghost', class: 'text-destructive hover:bg-destructive/10', handler: () => openCancel(appointment) },
+        { key: 'cancel', label: '取消', variant: 'destructive', handler: () => openCancel(appointment) },
       ];
     case 'no_show':
     case 'cancelled':
@@ -330,12 +344,5 @@ function getActions(appointment) {
 
   <AppointmentFormDialog :open="formDialogOpen" :default-date="dateFrom || clinicDateInput()" @close="formDialogOpen = false" @created="onAppointmentCreated" />
   <AppointmentCreatePatientDialog :appointment="createPatientTarget" @close="createPatientTarget = null" @created="onPatientCreated" />
-  <ConfirmDialog
-    :open="Boolean(cancelTarget)"
-    title="取消預約"
-    :description="`確定要取消 ${cancelTarget?.petName || cancelTarget?.ownerName || ''} 的預約嗎？`"
-    confirm-label="取消預約"
-    @update:open="(value) => !value && (cancelTarget = null)"
-    @confirm="confirmCancel"
-  />
+  <CancelAppointmentDialog :appointment="cancelTarget" :submitting="cancelSubmitting" @confirm="confirmCancel" @close="closeCancel" />
 </template>
