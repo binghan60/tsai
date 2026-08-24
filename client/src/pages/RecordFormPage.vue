@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, AlertTriangle, Check, Clock3, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
+import { Activity, AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, formatDate } from '../lib/datetime';
@@ -14,6 +14,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import FormSection from '../components/formfields/FormSection.vue';
 import TextTemplatePickerDialog from '../components/formfields/TextTemplatePickerDialog.vue';
 import { provideRecordForm } from '../components/formfields/context';
@@ -86,10 +87,11 @@ const LAB_TESTS = computed(() => labDefs(template.value));
 
 const activeSectionId = ref('');
 const activeSectionIndex = computed(() => FORM_SECTIONS.value.findIndex((section) => section.id === activeSectionId.value));
-// 超過這個數量就只顯示目前所在區塊的文字，其餘收成編號圓圈，
-// 否則導覽列會長到必須大幅橫捲才找得到自己在哪。
-const COMPACT_STEP_THRESHOLD = 6;
-const compactSteps = computed(() => FORM_SECTIONS.value.length > COMPACT_STEP_THRESHOLD);
+// 超過這個數量，橫向清單再怎麼捲動都不好找自己在哪，改用固定寬度的「上一段/下一段＋目前位置」，
+// 完整清單收進側邊抽屜。低於門檻維持原本一眼看到全部區段的橫向清單。
+const SECTION_LIST_THRESHOLD = 8;
+const useCompactNav = computed(() => FORM_SECTIONS.value.length > SECTION_LIST_THRESHOLD);
+const sectionListOpen = ref(false);
 
 const route = useRoute();
 const router = useRouter();
@@ -918,9 +920,10 @@ function handleBeforeUnload(event) {
         <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
       </div>
 
-      <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序 -->
+      <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序。
+           區段不多時橫向清單一次看到全部；超過門檻改用固定寬度的目前位置＋抽屜，見下方 useCompactNav 分支。 -->
       <nav
-        v-if="!isLocked"
+        v-if="!isLocked && !useCompactNav"
         aria-label="健檢表單區段"
         class="sticky top-16 z-20 overflow-x-auto lg:top-0 rounded-2xl border border-border bg-card px-2 py-2 shadow-sm"
       >
@@ -930,13 +933,12 @@ function handleBeforeUnload(event) {
               type="button"
               :data-form-section="section.id"
               :title="section.label"
-              class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              :class="[
-                compactSteps && activeSectionId !== section.id ? 'px-1' : 'px-2.5',
+              class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              :class="
                 activeSectionId === section.id
                   ? 'font-semibold text-foreground '
-                  : 'font-medium text-muted-foreground hover:text-foreground  ',
-              ]"
+                  : 'font-medium text-muted-foreground hover:text-foreground  '
+              "
               :aria-current="activeSectionId === section.id ? 'step' : undefined"
               @click="scrollToSection(section.id)"
             >
@@ -947,7 +949,7 @@ function handleBeforeUnload(event) {
                 <Check v-if="completionSections[index] && activeSectionId !== section.id" class="h-3.5 w-3.5" stroke-width="2.5" />
                 <template v-else>{{ index + 1 }}</template>
               </span>
-              <span v-if="!compactSteps || activeSectionId === section.id" class="whitespace-nowrap">{{ section.label }}</span>
+              <span class="whitespace-nowrap">{{ section.label }}</span>
               <span class="sr-only">{{ section.label }}{{ completionSections[index] ? '（已有內容）' : '（尚未填寫）' }}</span>
             </button>
             <span
@@ -959,6 +961,75 @@ function handleBeforeUnload(event) {
           </li>
         </ol>
       </nav>
+
+      <nav
+        v-if="!isLocked && useCompactNav"
+        aria-label="健檢表單區段"
+        class="sticky top-16 z-20 lg:top-0 flex items-center gap-1 rounded-2xl border border-border bg-card px-2 py-2 shadow-sm"
+      >
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          :disabled="activeSectionIndex <= 0"
+          aria-label="上一段"
+          @click="adjacentSection(-1)"
+        ><ChevronLeft class="h-4 w-4" /></Button>
+        <button
+          type="button"
+          :aria-expanded="sectionListOpen"
+          class="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          @click="sectionListOpen = !sectionListOpen"
+        >
+          <span
+            class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors"
+            :class="stepBadgeClass(activeSectionIndex, activeSectionId)"
+          >
+            <Check v-if="completionSections[activeSectionIndex]" class="h-3.5 w-3.5" stroke-width="2.5" />
+            <template v-else>{{ activeSectionIndex + 1 }}</template>
+          </span>
+          <span class="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{{ FORM_SECTIONS[activeSectionIndex]?.label }}</span>
+          <span class="shrink-0 text-xs text-muted-foreground">{{ activeSectionIndex + 1 }} / {{ FORM_SECTIONS.length }}</span>
+          <ChevronDown class="h-4 w-4 shrink-0 text-muted-foreground transition-transform" :class="sectionListOpen ? 'rotate-180' : ''" />
+        </button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          :disabled="activeSectionIndex >= FORM_SECTIONS.length - 1"
+          aria-label="下一段"
+          @click="adjacentSection(1)"
+        ><ChevronRight class="h-4 w-4" /></Button>
+      </nav>
+
+      <Sheet v-model:open="sectionListOpen">
+        <SheetContent side="right" class="flex flex-col gap-0 p-0">
+          <SheetHeader class="border-b border-border px-5 py-4"><SheetTitle>健檢表單區段</SheetTitle></SheetHeader>
+          <div class="flex-1 space-y-1 overflow-y-auto p-3">
+            <button
+              v-for="(section, index) in FORM_SECTIONS"
+              :key="section.key"
+              type="button"
+              class="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors"
+              :class="
+                activeSectionId === section.id
+                  ? 'bg-primary/10 font-semibold text-foreground'
+                  : 'font-medium text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+              "
+              @click="scrollToSection(section.id); sectionListOpen = false"
+            >
+              <span
+                class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors"
+                :class="stepBadgeClass(index, section.id)"
+              >
+                <Check v-if="completionSections[index] && activeSectionId !== section.id" class="h-3.5 w-3.5" stroke-width="2.5" />
+                <template v-else>{{ index + 1 }}</template>
+              </span>
+              <span class="min-w-0 flex-1 truncate">{{ section.label }}</span>
+            </button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <div id="form-errors" v-if="!isLocked && validationErrors.length" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200" role="alert"><p class="font-semibold">正式報告尚缺少以下內容：</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="issue in validationErrors" :key="`${issue.targetId}-${issue.message}`"><button type="button" class="text-left font-medium underline decoration-red-300 underline-offset-2 hover:text-red-950 dark:hover:text-white" @click="goToValidationIssue(issue)">{{ issue.message }}</button></li></ul><p class="mt-3 text-xs">點擊任一項可前往對應欄位。</p></div>
 

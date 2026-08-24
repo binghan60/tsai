@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import 'shadcn-vue/tailwind.css';
+@import 'tw-animate-css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -234,25 +235,27 @@ select {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* 隱藏 input[type=number] 的原生上下調整按鈕，維持跟其他輸入框一致的外觀。 */
+input[type='number'] {
+  appearance: textfield;
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+/* 捲軸完全隱藏、不佔版面寬度——Windows 的 Chrome/Edge 已經拿掉 overflow: overlay，
+   沒有純 CSS 能做到「浮動不佔寬」的原生捲軸，只能在佔寬與看得見之間二選一。
+   滾輪／觸控板／鍵盤照常可以捲動，只是沒有視覺捲軸可以拖曳。 */
 * {
-  scrollbar-color: color-mix(in oklab, var(--color-brand-500) 58%, var(--color-ink-700)) transparent;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: color-mix(in oklab, var(--color-brand-500) 52%, var(--color-ink-700));
-  border: 3px solid transparent;
-  border-radius: 999px;
-  background-clip: content-box;
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
