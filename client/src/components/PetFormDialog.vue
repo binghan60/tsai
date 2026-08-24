@@ -1,4 +1,5 @@
 <script setup>
+import { watch } from 'vue';
 import { useForm, useField } from 'vee-validate';
 import { Cat, Activity } from '@lucide/vue';
 import ModalDialog from './ModalDialog.vue';
@@ -9,47 +10,19 @@ import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-
-const defaults = {
-  name: '',
-  species: '貓',
-  breed: '',
-  sex: 'unknown',
-  neutered: 'unknown',
-  birthDate: '',
-  weightKg: null,
-  allergies: '',
-  chronicConditions: '',
-  currentMedications: '',
-  notes: '',
-};
+import { emptyPetDraft } from '@/lib/formDrafts';
 
 const props = defineProps({
   title: { type: String, required: true },
-  initialValue: {
-    type: Object,
-    default: () => ({
-      name: '',
-      species: '貓',
-      breed: '',
-      sex: 'unknown',
-      neutered: 'unknown',
-      birthDate: '',
-      weightKg: null,
-      allergies: '',
-      chronicConditions: '',
-      currentMedications: '',
-      notes: '',
-    }),
-  },
+  initialValue: { type: Object, default: () => emptyPetDraft() },
   submitLabel: { type: String, default: '儲存' },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
 });
-const emit = defineEmits(['submit', 'close']);
+const emit = defineEmits(['submit', 'close', 'update:draft']);
 
 const requiredRule = (value) => (value && String(value).trim() !== '') || '必填';
-const { handleSubmit } = useForm({ initialValues: { ...defaults, ...props.initialValue } });
+const { handleSubmit, values } = useForm({ initialValues: { ...emptyPetDraft(), ...props.initialValue } });
 const { value: name, errorMessage: nameError } = useField('name', requiredRule);
 const { value: species, errorMessage: speciesError } = useField('species', requiredRule);
 const { value: breed } = useField('breed');
@@ -73,11 +46,15 @@ const neuteredOptions = [
   { title: '未絕育', value: 'no' },
 ];
 
-const onSubmit = handleSubmit((values) => {
+// 讓開啟這個 Modal 的頁面能保管草稿：Modal 是 v-if 掛載的，關掉就整個卸載，
+// 表單內容得先交回頁面才活得過一次關閉。
+watch(values, (current) => emit('update:draft', { ...current }), { deep: true });
+
+const onSubmit = handleSubmit((formValues) => {
   emit('submit', {
-    ...values,
-    birthDate: values.birthDate || null,
-    weightKg: values.weightKg === '' || values.weightKg == null ? null : Number(values.weightKg),
+    ...formValues,
+    birthDate: formValues.birthDate || null,
+    weightKg: formValues.weightKg === '' || formValues.weightKg == null ? null : Number(formValues.weightKg),
   });
 });
 </script>

@@ -1,4 +1,5 @@
 <script setup>
+import { watch } from 'vue';
 import { useForm, useField } from 'vee-validate';
 import { User } from '@lucide/vue';
 import ModalDialog from './ModalDialog.vue';
@@ -7,25 +8,30 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
+import { emptyOwnerDraft } from '@/lib/formDrafts';
 
 const props = defineProps({
   title: { type: String, required: true },
-  initialValue: { type: Object, default: () => ({ name: '', phone: '', email: '' }) },
+  initialValue: { type: Object, default: () => emptyOwnerDraft() },
   submitLabel: { type: String, default: '儲存' },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
 });
-const emit = defineEmits(['submit', 'close']);
+const emit = defineEmits(['submit', 'close', 'update:draft']);
 
 const requiredRule = (v) => (v && String(v).trim() !== '') || '必填';
 const emailRule = (value) => !String(value || '').trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim()) || 'Email 格式不正確';
 
-const { handleSubmit } = useForm({ initialValues: props.initialValue });
+const { handleSubmit, values } = useForm({ initialValues: { ...emptyOwnerDraft(), ...props.initialValue } });
 const { value: name, errorMessage: nameError } = useField('name', requiredRule);
 const { value: phone, errorMessage: phoneError } = useField('phone', requiredRule);
 const { value: email, errorMessage: emailError } = useField('email', emailRule);
 
-const onSubmit = handleSubmit((values) => emit('submit', values));
+// 讓開啟這個 Modal 的頁面能保管草稿：Modal 是 v-if 掛載的，關掉就整個卸載，
+// 表單內容得先交回頁面才活得過一次關閉。
+watch(values, (current) => emit('update:draft', { ...current }), { deep: true });
+
+const onSubmit = handleSubmit((formValues) => emit('submit', formValues));
 </script>
 
 <template>

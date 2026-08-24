@@ -12,6 +12,7 @@ import EmptyState from '../components/EmptyState.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import SearchPanel from '../components/SearchPanel.vue';
+import { emptyOwnerDraft } from '../lib/formDrafts';
 
 import { useToast } from '../composables/useToast';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
@@ -29,6 +30,7 @@ const error = ref('');
 const showCreate = ref(false);
 const creating = ref(false);
 const createError = ref('');
+const createDraft = ref(emptyOwnerDraft());
 const deletingId = ref(null);
 const checkingOwnerId = ref(null);
 const ownerToRemove = ref(null);
@@ -77,6 +79,7 @@ async function createOwner(values) {
   try {
     const { data } = await http.post('/owners', values);
     showCreate.value = false;
+    createDraft.value = emptyOwnerDraft();
     toast.success(`已成功新增飼主「${data.name || values.name}」`, '新增飼主成功');
     await router.push(`/owners/${data._id}?addPet=1`);
   } catch (err) {
@@ -247,7 +250,7 @@ function goToPage(next) {
     </template>
 
     <OwnerFormDialog v-if="editTarget" title="編輯飼主資料" submit-label="儲存" :initial-value="{ name: editTarget.name, phone: editTarget.phone, email: editTarget.email ?? '' }" :submitting="editSaving" :error-message="editError" @submit="submitEdit" @close="editTarget = null" />
-    <OwnerFormDialog v-if="showCreate" title="新增飼主資料" submit-label="下一步：新增寵物" :submitting="creating" :error-message="createError" @submit="createOwner" @close="showCreate = false" />
+    <OwnerFormDialog v-if="showCreate" title="新增飼主資料" submit-label="下一步：新增寵物" :initial-value="createDraft" :submitting="creating" :error-message="createError" @submit="createOwner" @update:draft="createDraft = $event" @close="showCreate = false" />
     <ConfirmDialog
       :open="Boolean(ownerToRemove)"
       title="刪除飼主"

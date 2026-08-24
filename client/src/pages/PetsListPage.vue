@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import SearchPanel from '../components/SearchPanel.vue';
+import { emptyPetDraft } from '../lib/formDrafts';
 
 const pets = ref([]);
 const page = useSearchQueryParam('page', '1');
@@ -24,6 +25,7 @@ const ownerPickerOpen = ref(false);
 const petOwner = ref(null);
 const petCreating = ref(false);
 const petCreateError = ref('');
+const petDraft = ref(emptyPetDraft());
 let requestSequence = 0;
 let searchTimer;
 
@@ -96,6 +98,7 @@ async function createPet(values) {
   try {
     await http.post(`/owners/${petOwner.value._id}/pets`, values);
     petOwner.value = null;
+    petDraft.value = emptyPetDraft();
     await fetchPets();
   } catch (err) {
     petCreateError.value = err.response?.data?.message ?? '新增寵物失敗，請稍後再試。';
@@ -203,9 +206,11 @@ async function createPet(values) {
     v-if="petOwner"
     title="新增寵物"
     submit-label="新增寵物"
+    :initial-value="petDraft"
     :submitting="petCreating"
     :error-message="petCreateError"
     @submit="createPet"
+    @update:draft="petDraft = $event"
     @close="petOwner = null"
   />
 </template>

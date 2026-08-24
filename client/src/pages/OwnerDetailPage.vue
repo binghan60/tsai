@@ -7,6 +7,7 @@ import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { http } from '../api/http';
 import { clinicDateInput } from '../lib/datetime';
+import { emptyPetDraft } from '../lib/formDrafts';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import EmptyState from '../components/EmptyState.vue';
@@ -31,6 +32,7 @@ const showCreatePet = ref(false);
 const creating = ref(false);
 const createError = ref('');
 const createdPet = ref(null);
+const createPetDraft = ref(emptyPetDraft());
 
 const deletingPetId = ref(null);
 const checkingPetId = ref(null);
@@ -93,6 +95,7 @@ async function createPet(values) {
   try {
     const { data } = await http.post(`/owners/${route.params.id}/pets`, values);
     closeCreatePet();
+    createPetDraft.value = emptyPetDraft();
     createdPet.value = data;
     toast.success(`已成功新增寵物「${values.name}」`, '新增寵物成功');
     await fetchOwner();
@@ -349,9 +352,11 @@ watch(
       v-if="showCreatePet"
       title="新增寵物資料"
       submit-label="新增"
+      :initial-value="createPetDraft"
       :submitting="creating"
       :error-message="createError"
       @submit="createPet"
+      @update:draft="createPetDraft = $event"
       @close="closeCreatePet"
     />
     <ConfirmDialog
