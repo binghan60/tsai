@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { AlertTriangle, ArrowRight, Check, ClipboardPlus, FileText, PawPrint, Pencil, Trash2, Users } from '@lucide/vue'
+import { AlertTriangle, ArrowRight, CalendarClock, Check, ClipboardPlus, FileText, PawPrint, Pencil, Trash2, Users } from '@lucide/vue'
 import { http } from '../api/http'
 import { formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime'
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus'
@@ -34,6 +34,7 @@ async function fetchDashboard() {
 }
 
 const stats = computed(() => [
+  { label: '今日預約', value: dashboard.value?.todayAppointmentCount ?? '—', icon: CalendarClock, to: '/appointments' },
   { label: '飼主', value: dashboard.value?.ownerCount ?? '—', icon: Users, to: '/owners' },
   { label: '寵物', value: dashboard.value?.petCount ?? '—', icon: PawPrint, to: '/pets' },
   // 本月健檢沒有 to：清單頁還沒有日期區間篩選，連過去只會看到跟卡片對不上的筆數。
@@ -219,7 +220,7 @@ onMounted(fetchDashboard)
         </router-link>
       </div>
 
-      <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card v-for="stat in stats" :key="stat.label" class="border p-0 shadow-sm dark:shadow-none" :class="stat.emphasis && stat.value ? 'border-belle-300 dark:border-brand-500/50' : ' '">
           <component :is="stat.to ? RouterLink : 'div'" :to="stat.to" class="flex flex-row items-center gap-3 rounded-xl p-4" :class="stat.to ? 'transition-colors hover:bg-muted/40 ' : ''">
             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><component :is="stat.icon" class="h-5 w-5" /></div>

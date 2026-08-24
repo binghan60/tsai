@@ -2,6 +2,8 @@ import { Router } from 'express';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import Appointment from '../models/Appointment.js';
+import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
 
 const router = Router();
 
@@ -53,10 +55,16 @@ router.get('/', async (req, res, next) => {
     const weekBoundaries = buildWeekBoundaries(trendStart);
     const trendEnd = weekBoundaries.at(-1);
 
-    const [ownerCount, petCount, [summary], recentRecords, draftRecords, attentionRecords, pendingRecords] =
+    const today = clinicToday(now);
+
+    const [ownerCount, petCount, todayAppointmentCount, [summary], recentRecords, draftRecords, attentionRecords, pendingRecords] =
       await Promise.all([
         Owner.countDocuments(),
         Pet.countDocuments(),
+        Appointment.countDocuments({
+          scheduledAt: { $gte: clinicDayStart(today), $lt: clinicDayStart(today, 1) },
+          status: { $ne: 'cancelled' },
+        }),
         MedicalRecord.aggregate([
           { $match: CURRENT_VERSION },
           {
@@ -130,6 +138,7 @@ router.get('/', async (req, res, next) => {
     res.json({
       ownerCount,
       petCount,
+      todayAppointmentCount,
       monthlyReportCount,
       draftCount,
       finalizedPendingCount: statusBreakdown.finalized + statusBreakdown.sending + statusBreakdown.uncertain,

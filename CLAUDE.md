@@ -8,6 +8,8 @@
 
 單人使用的健檢報告產生 + 分發系統（不是看診紀錄／排班系統）。核心流程：
 
+（例外：系統另外有一份輕量的電話預約每日看診列表，見第二節 `appointments`，純粹是「接電話登記、按日期看清單」，不做時段衝突／診間容量檢查，不構成完整排班系統。）
+
 ```
 選健檢表單 → 填寫報告 → 結案（產生 PDF 快照並鎖定）→ 寄送 Email／分享連結給飼主
                               ↓
@@ -59,6 +61,17 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 
 ### deletedMedicalRecords 刪除稽核快照
 報告刪除時存一份完整快照。**目前只寫不讀**，沒有查詢介面，需要回溯時直接查這張表。
+
+### appointments 電話預約
+電話接洽時登記的每日看診列表。`date`（`YYYY-MM-DD`）／`time`（`HH:mm`，可留白）是使用者填的來源真相，`scheduledAt` 是兩者換算出的實際時刻，只服務排序與範圍查詢，由 `pre('validate')` 自動算好。
+
+`ownerId`／`petId` 有值代表連結既有病患，為 `null` 代表初診尚未建檔；不管哪種情況都存 `ownerName`／`ownerPhone`／`petName`／`species` 快照（跟 `deliveryLogs` 一樣，理由是列表要能不 populate 就顯示，且飼主之後改名不該讓「當初電話登記的名字」跟著變）。`status`：`scheduled` / `arrived` / `completed` / `cancelled` / `no_show`，轉換規則見 `server/src/lib/appointmentStatus.js`（`completed` 是終態）。`convertedRecordId` 只是「有沒有轉出過報告」的旁證欄位，不驅動任何邏輯。
+
+刻意不用 `optimisticConcurrency`／`relationVersion`：寫入幾乎都是單一狀態切換的按鈕操作，單人使用衝突機率低；也沒有子集合掛在底下，不會有 Owner/Pet 那種刪除競態。
+
+索引只開 `{scheduledAt: 1}` 與 `{status: 1, scheduledAt: 1}`，對應當日列表與當日列表+狀態篩選兩種查詢；沒有 `petId`/`ownerId` 索引，因為目前沒有「看這隻寵物過去預約紀錄」的查詢，等真的需要再補。
+
+初診到診後透過 `POST /api/appointments/:id/create-patient` 在 transaction 中建立 Owner+Pet、回填 `ownerId`/`petId`，銜接進既有的 `/pets/:petId/records/new` 健檢報告流程——這支端點本身不建立 MedicalRecord。
 
 ## 三、技術棧
 
@@ -124,6 +137,15 @@ POST   /api/records/:id/share           建立分享連結
 POST   /api/records/:id/revoke-share    撤銷分享
 POST   /api/records/:id/send-email      寄送 PDF + 連結給飼主
 
+預約
+GET    /api/appointments                當日看診列表（?date=YYYY-MM-DD，預設今天 / ?status=）
+POST   /api/appointments                建立（帶 petId＝既有病患，不帶＝初診自由文字）
+GET    /api/appointments/:id
+PUT    /api/appointments/:id            只能改 date/time/reason/notes/petName/species/ownerPhone
+PATCH  /api/appointments/:id/status     狀態轉換，非法轉換回 422
+POST   /api/appointments/:id/create-patient   初診到診後補建 Owner+Pet，回傳 {ownerId, petId}
+DELETE /api/appointments/:id            已完成的預約不給刪
+
 寄送紀錄
 GET    /api/delivery-logs               流水帳（?recordId= / ?event= / 分頁）
 
@@ -144,7 +166,7 @@ DELETE /api/text-templates/:id
 
 其他
 GET    /api/search                      全站搜尋（飼主 + 寵物）
-GET    /api/dashboard                   彙總數字 + 最近報告
+GET    /api/dashboard                   彙總數字（含 todayAppointmentCount）+ 最近報告
 GET    /api/public/reports/:token        公開，飼主查看報告用
 GET    /api/health
 ```
@@ -160,6 +182,7 @@ GET    /api/health
 | 路由 | 頁面 | 說明 |
 |---|---|---|
 | `/` | 工作台 | 統計卡片（可點進對應佇列）、草稿與最近報告、報告狀態圖表、寄送失敗橫幅 |
+| `/appointments` | 電話預約 | 每日看診列表，可切換日期與狀態，到診後可轉建健檢報告 |
 | `/owners`、`/owners/:id` | 飼主列表／詳情 | |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含歷次報告 |
 | `/records` | 健檢紀錄清單 | 跨寵物，佇列切換 |
@@ -256,16 +279,17 @@ npm run dev            # 使用者自己開
 
 ## 九、現況與待辦
 
-已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋。
+已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋、電話預約每日看診列表（含初診轉建檔）。
 
 待處理（依急迫性）：
 
-1. **認證機制** — 目前 `/api/*` 完全沒有保護。部署後任何人都能讀寫全部資料，並用 `POST /api/records/:id/send-email` 借你的 Gmail 發信（被濫用時 Google 封的是帳號本身）。單人使用不需要 JWT，一組環境變數密碼 + signed cookie 即可，但要放行 `/api/public/reports/:token` 與 PDF 存取。同時值得替寄信單獨加頻率限制。
+1. **認證機制** — 目前 `/api/*` 完全沒有保護，`/api/appointments/*` 同樣涵蓋在內。部署後任何人都能讀寫全部資料，並用 `POST /api/records/:id/send-email` 借你的 Gmail 發信（被濫用時 Google 封的是帳號本身）。單人使用不需要 JWT，一組環境變數密碼 + signed cookie 即可，但要放行 `/api/public/reports/:token` 與 PDF 存取。同時值得替寄信單獨加頻率限制。
    （已處理一半：對外連結的網域改由 `config/publicUrl.js` 決定，正式環境必須設定 `PUBLIC_APP_URL`，否則啟動失敗。濫用寄信至少不會再寄出指向他人網域的連結，但寄信本身仍然沒有任何門檻。）
 2. **前端 `validateForPreview()` 沒有測試** — `RecordFormPage.vue` 裡與後端 `validateFinalRecord` 對應的那份判準是各寫一份的，後端已經釘住，前端改動會單方面漂移。
 3. **`deletedMedicalRecords` 沒有查詢介面** — 只寫不讀。
 4. **寄送失敗（`failed`）的報告仍可刪除** — 只擋了 `sent` 與 `sending`。
 5. `/owners`、`/pets` 列表沒有分頁；搜尋是全表 regex 掃描，走不到索引。目前資料量還撐得住。
+6. `appointments` 沒有「依寵物查詢歷史預約」的索引與查詢介面——v1 沒有這個查詢模式，等真的需要再補。
 
 部署見 [docs/ZEABUR_DEPLOY.md](docs/ZEABUR_DEPLOY.md)。
 

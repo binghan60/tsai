@@ -1,7 +1,7 @@
 <script setup>
 import { computed, provide, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { Cat, ClipboardList, FileText, LayoutDashboard, Mail, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
+import { CalendarClock, Cat, ClipboardList, FileText, LayoutDashboard, Mail, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
 import { useTheme } from './composables/useTheme';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
@@ -34,6 +34,7 @@ const routeViewKey = computed(() => {
 // 沒有這層的話一進那些頁面側邊欄會全暗，等於在系統裡失去座標。
 const navItems = [
   { to: '/', label: '工作台', exact: true, icon: LayoutDashboard },
+  { to: '/appointments', label: '預約', exact: false, icon: CalendarClock },
   { to: '/owners', label: '飼主', exact: false, icon: Users },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
   { to: '/records', label: '健檢紀錄', exact: false, icon: FileText },

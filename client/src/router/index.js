@@ -2,6 +2,7 @@ import { ref } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 
 const DashboardPage = () => import('../pages/DashboardPage.vue');
+const AppointmentsPage = () => import('../pages/AppointmentsPage.vue');
 const OwnersListPage = () => import('../pages/OwnersListPage.vue');
 const OwnerDetailPage = () => import('../pages/OwnerDetailPage.vue');
 const PetsListPage = () => import('../pages/PetsListPage.vue');
@@ -27,6 +28,7 @@ const router = createRouter({
   },
   routes: [
     { path: '/', component: DashboardPage, meta: { title: '工作台' } },
+    { path: '/appointments', component: AppointmentsPage, meta: { title: '電話預約' } },
     { path: '/owners', component: OwnersListPage, meta: { title: '飼主' } },
     { path: '/owners/:id', component: OwnerDetailPage, meta: { title: '飼主資料' } },
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },
