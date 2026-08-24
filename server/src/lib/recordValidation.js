@@ -51,9 +51,5 @@ export function validateFinalRecord(sections) {
     .map((item) => item.label);
   if (abnormalWithoutNote.length) missing.push(`異常說明（${abnormalWithoutNote.join('、')}）`);
 
-  const invalidLabValues = items
-    .filter((item) => item.type === 'lab' && item.numeric !== false && String(item.value ?? '').trim() && !Number.isFinite(Number(item.value)))
-    .map((item) => item.label);
-  if (invalidLabValues.length) missing.push(`檢驗數值格式（${invalidLabValues.join('、')}）`);
   return missing;
 }

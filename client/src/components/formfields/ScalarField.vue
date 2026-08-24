@@ -20,7 +20,8 @@ const value = computed({
   get: () => props.modelValue ?? '',
   set: (next) => emit('update:modelValue', next),
 });
-const inputType = computed(() => (props.item.type === 'date' ? 'date' : props.item.type === 'number' ? 'number' : 'text'));
+const inputType = computed(() => (props.item.type === 'date' ? 'date' : 'text'));
+const inputMode = computed(() => (props.item.type === 'number' ? 'decimal' : undefined));
 // 空字串在 Select 裡是保留值（代表「沒有選取」），拿它當選項會直接拋錯 ——
 // 表單設計器新增選項時會先產生一列空白，這裡要擋住。
 const options = computed(() => (props.item.options ?? []).filter(Boolean));
@@ -91,9 +92,7 @@ function toggle(option, checked) {
       :id="inputId"
       v-model="value"
       :type="inputType"
-      :min="item.min ?? undefined"
-      :max="item.max ?? undefined"
-      :step="item.step ?? undefined"
+      :inputmode="inputMode"
       :placeholder="item.placeholder"
     />
     <TextTemplateTrigger v-if="isTextual" v-model="value" :item-key="item.key" :label="item.label" />

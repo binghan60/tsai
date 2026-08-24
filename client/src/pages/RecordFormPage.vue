@@ -705,10 +705,6 @@ function validateForPreview() {
   for (const finding of record.labFindings.filter((f) => f.status === 'abnormal' && !f.note?.trim())) {
     addError(`請補充檢驗異常說明：${finding.label}`, `record-lab-row-${finding.key}`, `record-lab-note-${finding.key}`);
   }
-  for (const finding of record.labFindings.filter((f) => f.numeric !== false && f.value?.trim() && !Number.isFinite(Number(f.value)))) {
-    addError(`檢驗數值必須是數字：${finding.label}`, `record-lab-row-${finding.key}`, `record-lab-value-${finding.key}`);
-  }
-
   validationErrors.value = errors;
   return errors.length === 0;
 }

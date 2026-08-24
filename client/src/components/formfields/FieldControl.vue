@@ -100,10 +100,8 @@ const referenceText = computed(() => labRangeLabel(props.item));
       :id="inputId"
       :model-value="valueFor(item)"
       class="measurement-field"
-      type="number"
-      :min="item.min ?? undefined"
-      :max="item.max ?? undefined"
-      :step="item.step ?? undefined"
+      type="text"
+      inputmode="decimal"
       @update:model-value="setValue(item, $event); autoJudgeMeasurement(item, $event)"
     />
     <div class="mt-1.5 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">

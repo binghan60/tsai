@@ -118,22 +118,16 @@ describe('validateFinalRecord', () => {
   });
 
   describe('檢驗數值格式', () => {
-    it('填了非數字會被擋', () => {
+    it('數值型項目填非數字不會被擋——只有 numeric 開著才自動判讀正常/異常，格式本身不強制', () => {
       const sections = validSections();
       sections[0].items.push({ key: 'alt', label: 'ALT', type: 'lab', status: 'normal', value: '偏高' });
-      assert.ok(validateFinalRecord(sections).some((m) => m.includes('ALT')));
-    });
-
-    it('numeric 為 false 的項目不檢查格式', () => {
-      // 有些檢驗結果本來就是文字（例如「陰性」），範本可以把它標成非數值。
-      const sections = validSections();
-      sections[0].items.push({ key: 'fiv', label: 'FIV', type: 'lab', status: 'normal', value: '陰性', numeric: false });
       assert.deepEqual(validateFinalRecord(sections), []);
     });
 
-    it('空值不算格式錯誤', () => {
+    it('numeric 為 false 的項目本來就是文字結果，同樣不擋', () => {
+      // 有些檢驗結果本來就是文字（例如「陰性」），範本可以把它標成非數值。
       const sections = validSections();
-      sections[0].items.push({ key: 'alt', label: 'ALT', type: 'lab', status: 'normal', value: '' });
+      sections[0].items.push({ key: 'fiv', label: 'FIV', type: 'lab', status: 'normal', value: '陰性', numeric: false });
       assert.deepEqual(validateFinalRecord(sections), []);
     });
   });

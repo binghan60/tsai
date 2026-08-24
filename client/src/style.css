@@ -312,18 +312,6 @@ select:focus-visible {
   }
 }
 
-.measurement-field input[type='number'] {
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
-
-.measurement-field input[type='number']::-webkit-inner-spin-button,
-.measurement-field input[type='number']::-webkit-outer-spin-button {
-  margin: 0;
-  appearance: none;
-  -webkit-appearance: none;
-}
-
 /* 裝飾用的角落光暈。原本是 blur-3xl／blur-2xl 的實心圓，但 filter: blur() 在
    對話框進場（zoom + fade）期間每一幀都要重算一次，是開場卡頓的來源之一。
    radial-gradient 由合成器直接畫出來，成本接近零，視覺結果幾乎相同。

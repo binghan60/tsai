@@ -30,10 +30,8 @@ const runs = computed(() => sectionRuns(props.section.items, (item) => item.type
               :id="`record-${metric.key}`"
               :model-value="valueFor(metric)"
               class="measurement-field mt-1.5"
-              type="number"
-              :min="metric.min ?? undefined"
-              :max="metric.max ?? undefined"
-              :step="metric.step ?? undefined"
+              type="text"
+              inputmode="decimal"
               @update:model-value="setValue(metric, $event); autoJudgeMeasurement(metric, $event)"
             />
             <div class="mt-2 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">
