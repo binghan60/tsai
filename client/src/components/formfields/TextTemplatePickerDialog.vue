@@ -1,12 +1,15 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { FileText, Search } from '@lucide/vue';
+import { FileText, Search, Trash2 } from '@lucide/vue';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
+import ConfirmDialog from '../ConfirmDialog.vue';
 import { useTextTemplates } from '../../composables/useTextTemplates';
+import { useToast } from '../../composables/useToast';
 
-const { picker, closePicker, createTemplate, templates, templatesFor, markUsed } = useTextTemplates();
+const { picker, closePicker, createTemplate, templates, templatesFor, markUsed, deleteTemplate } = useTextTemplates();
+const toast = useToast();
 const query = ref('');
 const scope = ref('relevant');
 const selectedId = ref('');
@@ -14,6 +17,8 @@ const creating = ref(false);
 const saving = ref(false);
 const createError = ref('');
 const form = ref({ scope: 'field' });
+const deleteTarget = ref(null);
+const deleting = ref(false);
 
 const candidates = computed(() => {
   if (!picker.value) return [];
@@ -41,6 +46,21 @@ function insert(mode) {
   picker.value.onInsert?.(selected.value, mode);
   markUsed(selected.value);
   closePicker();
+}
+
+async function confirmDelete() {
+  if (!deleteTarget.value || deleting.value) return;
+  deleting.value = true;
+  try {
+    await deleteTemplate(deleteTarget.value._id);
+    if (selectedId.value === deleteTarget.value._id) selectedId.value = '';
+    toast.success(`已刪除「${deleteTarget.value.name}」`);
+    deleteTarget.value = null;
+  } catch (err) {
+    toast.error(err.response?.data?.message ?? '刪除文字模板失敗');
+  } finally {
+    deleting.value = false;
+  }
 }
 
 function nextTemplateName() {
@@ -103,17 +123,25 @@ async function saveTemplate() {
             <button type="button" class="min-h-9 rounded-md px-2 text-sm font-medium" :class="scope === 'all' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'" @click="scope = 'all'">全部模板</button>
           </div>
           <div class="mt-3 max-h-72 space-y-2 overflow-y-auto md:max-h-[46vh]">
-            <button
+            <div
               v-for="template in candidates"
               :key="template._id"
-              type="button"
-              class="w-full rounded-xl border p-3 text-left transition-colors"
+              class="group relative w-full rounded-xl border p-3 pr-10 text-left transition-colors"
               :class="selectedId === template._id ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/30'"
-              @click="selectedId = template._id"
             >
-              <span class="font-medium text-foreground">{{ template.name }}</span>
-              <span class="mt-1 line-clamp-2 whitespace-pre-wrap text-xs text-muted-foreground">{{ template.content }}</span>
-            </button>
+              <button type="button" class="block w-full text-left" @click="selectedId = template._id">
+                <span class="font-medium text-foreground">{{ template.name }}</span>
+                <span class="mt-1 line-clamp-2 whitespace-pre-wrap text-xs text-muted-foreground">{{ template.content }}</span>
+              </button>
+              <button
+                type="button"
+                class="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                aria-label="刪除模板"
+                @click.stop="deleteTarget = template"
+              >
+                <Trash2 class="h-4 w-4" stroke-width="1.75" />
+              </button>
+            </div>
             <p v-if="!candidates.length" class="py-8 text-center text-sm text-muted-foreground">{{ scope === 'relevant' ? '目前沒有適用此欄位的模板。' : '找不到符合條件的模板。' }}</p>
           </div>
         </div>
@@ -143,4 +171,14 @@ async function saveTemplate() {
       </DialogFooter>
     </DialogContent>
   </Dialog>
+
+  <ConfirmDialog
+    :open="Boolean(deleteTarget)"
+    title="刪除文字模板"
+    :description="`確定要刪除「${deleteTarget?.name || ''}」嗎？已插入報告的文字不受影響。`"
+    confirm-label="刪除模板"
+    :loading="deleting"
+    @update:open="(value) => !value && (deleteTarget = null)"
+    @confirm="confirmDelete"
+  />
 </template>

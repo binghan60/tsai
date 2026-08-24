@@ -219,6 +219,8 @@ GET    /api/health
   | 錯誤訊息 | `<Alert variant="destructive"><AlertDescription>` | 不要手寫紅框 |
   | 對話框 | `<DialogContent size="sm|md|lg">` | 不要用 `class="sm:max-w-*"` 覆寫寬度 |
   | 狀態徽章 | `<Badge variant="status">` | 不要覆寫 padding／圓角 |
+  | 刪除等危險操作確認 | `<ConfirmDialog>` | **禁止用瀏覽器原生 `confirm()`／`alert()`**——樣式跳出主題、行動裝置體驗差、也擋不住連點 |
+  | 操作結果提示（成功／失敗） | `useToast()`（`success`／`error`） | 同上，不要用 `alert()` |
 
   按鈕高度由 `size` 決定（`xs` 36 / `sm` 40 / `default` 44 / `lg` 48），**不要用 `min-h-11` 覆寫**——那會讓高度與 padding 對不上。`ghost` 與 `destructive` 平時是透明的，hover 才上色：列表裡每列常駐一顆實心紅按鈕，等於把最危險又最少用的操作放到最顯眼的位置。
 
