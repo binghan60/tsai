@@ -12,6 +12,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { DatePicker } from './ui/date-picker';
+import { TimePicker } from './ui/time-picker';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -159,7 +160,7 @@ async function submit() {
           </div>
           <div class="space-y-1.5">
             <Label for="appointment-time" class="text-xs font-medium text-foreground">預約時間</Label>
-            <Input id="appointment-time" v-model="form.time" type="time" />
+            <TimePicker id="appointment-time" v-model="form.time" aria-label="預約時間" />
           </div>
         </div>
         <div class="space-y-1.5">
