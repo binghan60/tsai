@@ -51,7 +51,7 @@ export function referenceLabel(item) {
 export function statusText(status) {
   if (status === 'abnormal') return '異常';
   if (status === 'normal') return '正常';
-  return '未標示';
+  return '未檢查';
 }
 
 export function hasPreviousValue(item) {
@@ -70,13 +70,14 @@ export function previousLabValueLabel(item) {
   return `${item.previousValue}${unit ? ` ${unit}` : ''}`;
 }
 
+// 只留月／日、不印年份——這欄語境已經是「上一次看診」，年份多數時候可以推斷，
+// 換來窄欄位裡不會被日期硬撐寬。
 export function previousDateLabel(item) {
   if (!item?.previousVisitDate) return '';
   const date = new Date(item.previousVisitDate);
   if (Number.isNaN(date.getTime())) return '';
-  const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
-  return `${y}/${m}/${d}`;
+  return `${m}/${d}`;
 }
 
