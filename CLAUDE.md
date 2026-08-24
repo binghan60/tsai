@@ -143,7 +143,7 @@ POST   /api/records/:id/send-email      寄送 PDF + 連結給飼主
 GET    /api/appointments                跨日清單（?q= 關鍵字搜尋寵物／飼主／電話／原因 / ?from=&to=YYYY-MM-DD 日期區間 / ?status= / ?page=，回傳帶 counts 給狀態徽章）
 POST   /api/appointments                建立（帶 petId＝既有病患，不帶＝初診自由文字）
 GET    /api/appointments/:id
-PUT    /api/appointments/:id            只能改 date/time/reason/notes/petName/species/ownerPhone
+PUT    /api/appointments/:id            只能改 date/time/reason/notes/petName/species/ownerPhone/isSurgery/surgeryName
 PATCH  /api/appointments/:id/status     狀態轉換，非法轉換回 422
 POST   /api/appointments/:id/create-patient   初診到診後補建 Owner+Pet，回傳 {ownerId, petId}
 DELETE /api/appointments/:id            已完成的預約不給刪
@@ -184,7 +184,7 @@ GET    /api/health
 | 路由 | 頁面 | 說明 |
 |---|---|---|
 | `/` | 工作台 | 統計卡片（可點進對應佇列）、草稿與最近報告、報告狀態圖表、寄送失敗橫幅 |
-| `/appointments` | 電話預約 | 跨日清單，篩選面板（關鍵字＋起始／結束日期＋搜尋／清除）與分頁比照健檢紀錄／寄送歷程，可切換狀態，到診後可轉建健檢報告 |
+| `/appointments` | 電話預約 | 跨日清單，篩選面板（關鍵字＋起始／結束日期＋搜尋／清除）與分頁比照健檢紀錄／寄送歷程，可切換狀態，到診後可轉建健檢報告；網址沒帶日期篩選時（非書籤／分享連結）預設只顯示今天 |
 | `/owners`、`/owners/:id` | 飼主列表／詳情 | |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含歷次報告 |
 | `/records` | 健檢紀錄清單 | 跨寵物，佇列切換 |

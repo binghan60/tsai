@@ -211,8 +211,8 @@ function getActions(appointment) {
   <section class="mx-auto max-w-7xl space-y-5">
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 class="text-xl font-semibold text-foreground">電話預約</h1>
-        <p class="mt-1 text-sm text-muted-foreground">接電話時登記，自動彙整成看診列表。</p>
+        <h1 class="text-xl font-semibold text-foreground">預約</h1>
+        <p class="mt-1 text-sm text-muted-foreground">登記後自動彙整成看診列表。</p>
       </div>
       <Button type="button" @click="formDialogOpen = true"><CalendarPlus class="h-4 w-4" stroke-width="1.75" />新增預約</Button>
     </div>
