@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { AlertTriangle, ArrowRight, CalendarClock, Check, ClipboardPlus, FileText, PawPrint, Pencil, Trash2, Users } from '@lucide/vue'
 import { http } from '../api/http'
-import { formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime'
+import { clinicDateInput, formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime'
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -34,7 +34,8 @@ async function fetchDashboard() {
 }
 
 const stats = computed(() => [
-  { label: '今日預約', value: dashboard.value?.todayAppointmentCount ?? '—', icon: CalendarClock, to: '/appointments' },
+  // 預約清單改成日期區間查詢後不再預設今天，這裡把當天日期一起帶過去，卡片數字才對得上清單。
+  { label: '今日預約', value: dashboard.value?.todayAppointmentCount ?? '—', icon: CalendarClock, to: `/appointments?from=${clinicDateInput()}&to=${clinicDateInput()}` },
   { label: '飼主', value: dashboard.value?.ownerCount ?? '—', icon: Users, to: '/owners' },
   { label: '寵物', value: dashboard.value?.petCount ?? '—', icon: PawPrint, to: '/pets' },
   // 本月健檢沒有 to：清單頁還沒有日期區間篩選，連過去只會看到跟卡片對不上的筆數。

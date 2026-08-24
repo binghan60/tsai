@@ -4,7 +4,8 @@ import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import { withTransaction } from '../lib/transaction.js';
-import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
+import { clinicDayStart } from '../lib/clinicTime.js';
+import { escapeRegExp } from '../lib/regex.js';
 import { APPOINTMENT_STATUSES, canTransitionAppointmentStatus, describeAppointmentTransition } from '../lib/appointmentStatus.js';
 
 const router = Router();
@@ -21,21 +22,36 @@ function validateAppointmentInput({ date, ownerName }) {
   return '';
 }
 
-// GET /api/appointments?date=YYYY-MM-DD&status=
+// GET /api/appointments?q=&from=YYYY-MM-DD&to=YYYY-MM-DD&status=&page=
 router.get('/', async (req, res, next) => {
   try {
-    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? req.query.date : clinicToday();
-    const dayStart = clinicDayStart(date);
-    const dayEnd = clinicDayStart(date, 1);
-    if (!dayStart || !dayEnd) return res.status(422).json({ message: '日期格式不正確' });
+    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 25, 1), 100);
+
+    const scheduledAt = {};
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.from || '')) ? clinicDayStart(req.query.from) : null;
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.to || '')) ? clinicDayStart(req.query.to, 1) : null;
+    if (from) scheduledAt.$gte = from;
+    if (to) scheduledAt.$lt = to;
+
+    // 篩選條件不含狀態，讓 FilterTabs 上的數字反映「這個關鍵字／日期區間底下各狀態各有幾筆」。
+    const baseFilter = Object.keys(scheduledAt).length ? { scheduledAt } : {};
+    const keyword = String(req.query.q || '').trim();
+    if (keyword) {
+      const pattern = new RegExp(escapeRegExp(keyword), 'i');
+      baseFilter.$or = [{ petName: pattern }, { ownerName: pattern }, { ownerPhone: pattern }, { reason: pattern }];
+    }
 
     const status = String(req.query.status || '').trim();
-    const dayFilter = { scheduledAt: { $gte: dayStart, $lt: dayEnd } };
-    const filter = status && APPOINTMENT_STATUSES.includes(status) ? { ...dayFilter, status } : dayFilter;
+    const listFilter = status && APPOINTMENT_STATUSES.includes(status) ? { ...baseFilter, status } : baseFilter;
 
-    const [items, countBuckets] = await Promise.all([
-      Appointment.find(filter).sort({ scheduledAt: 1, createdAt: 1 }),
-      Appointment.aggregate([{ $match: dayFilter }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
+    const [items, total, countBuckets] = await Promise.all([
+      Appointment.find(listFilter)
+        .sort({ scheduledAt: 1, createdAt: 1 })
+        .skip((page - 1) * limit)
+        .limit(limit),
+      Appointment.countDocuments(listFilter),
+      Appointment.aggregate([{ $match: baseFilter }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
     ]);
 
     const counts = Object.fromEntries(APPOINTMENT_STATUSES.map((key) => [key, 0]));
@@ -44,7 +60,7 @@ router.get('/', async (req, res, next) => {
     });
     counts.all = countBuckets.reduce((sum, bucket) => sum + bucket.count, 0);
 
-    res.json({ date, items, counts });
+    res.json({ items, total, page, limit, counts });
   } catch (err) {
     next(err);
   }

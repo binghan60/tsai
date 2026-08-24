@@ -1,9 +1,9 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { CalendarClock, CalendarPlus, CalendarX, ChevronLeft, ChevronRight, PawPrint, Phone, User } from '@lucide/vue';
+import { CalendarPlus, CalendarX, PawPrint, Phone, Search, User, X } from '@lucide/vue';
 import { http } from '../api/http';
-import { clinicDateInput, formatDate } from '../lib/datetime';
+import { clinicDateInput } from '../lib/datetime';
 import { APPOINTMENT_STATUS_META, APPOINTMENT_VIEWS } from '../lib/appointmentStatus';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { useToast } from '../composables/useToast';
@@ -16,17 +16,23 @@ import FilterTabs from '../components/FilterTabs.vue';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
+import { Input } from '../components/ui/input';
 import { DatePicker } from '../components/ui/date-picker';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 const router = useRouter();
 const toast = useToast();
 
-const date = useSearchQueryParam('date', clinicDateInput());
 const view = useSearchQueryParam('status', 'all');
+const page = useSearchQueryParam('page', '1');
+const query = useSearchQueryParam('q');
+const dateFrom = useSearchQueryParam('from');
+const dateTo = useSearchQueryParam('to');
 
 const appointments = ref([]);
 const counts = ref({});
+const total = ref(0);
+const limit = ref(25);
 const loading = ref(false);
 const error = ref('');
 
@@ -43,11 +49,23 @@ async function fetchAppointments() {
   error.value = '';
   try {
     const { data } = await http.get('/appointments', {
-      params: { date: date.value || clinicDateInput(), ...(view.value && view.value !== 'all' ? { status: view.value } : {}) },
+      params: {
+        page: Number(page.value) || 1,
+        ...(view.value && view.value !== 'all' ? { status: view.value } : {}),
+        ...(query.value.trim() ? { q: query.value.trim() } : {}),
+        ...(dateFrom.value ? { from: dateFrom.value } : {}),
+        ...(dateTo.value ? { to: dateTo.value } : {}),
+      },
     });
     if (currentRequest !== requestSequence) return;
     appointments.value = data.items ?? [];
     counts.value = data.counts ?? {};
+    total.value = data.total ?? 0;
+    limit.value = data.limit ?? 25;
+    const returnedTotalPages = Math.max(Math.ceil(total.value / limit.value), 1);
+    if (!appointments.value.length && total.value > 0 && currentPage.value > returnedTotalPages) {
+      page.value = String(returnedTotalPages);
+    }
   } catch (err) {
     if (currentRequest === requestSequence) error.value = '預約清單暫時無法載入，請稍後重試';
   } finally {
@@ -55,23 +73,35 @@ async function fetchAppointments() {
   }
 }
 
-watch([date, view], fetchAppointments, { immediate: true });
-
-function shiftDate(days) {
-  const [year, month, day] = (date.value || clinicDateInput()).split('-').map(Number);
-  const next = new Date(Date.UTC(year, month - 1, day + days));
-  date.value = next.toISOString().slice(0, 10);
-}
-
-function goToday() {
-  date.value = clinicDateInput();
-}
+const currentPage = computed(() => Number(page.value) || 1);
+const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
 
 function selectView(key) {
+  if ((view.value || 'all') === key) return;
   view.value = key;
 }
 
-const headerDateLabel = computed(() => formatDate(date.value, '選擇日期'));
+function goToPage(next) {
+  const target = Math.min(Math.max(next, 1), totalPages.value);
+  if (target === currentPage.value) return;
+  page.value = String(target);
+}
+
+// 關鍵字與日期是選好、按下搜尋才查，跟健檢紀錄／寄送歷程同一套規矩。
+function applyFilters() {
+  if (page.value !== '1') page.value = '1';
+  else fetchAppointments();
+}
+
+function clearSearchFilters() {
+  query.value = '';
+  dateFrom.value = '';
+  dateTo.value = '';
+  applyFilters();
+}
+
+watch(view, applyFilters);
+watch(page, fetchAppointments, { immediate: true });
 
 async function markStatus(appointment, status) {
   if (statusUpdatingId.value) return;
@@ -159,27 +189,29 @@ function getActions(appointment) {
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 class="text-xl font-semibold text-foreground">電話預約</h1>
-        <p class="mt-1 text-sm text-muted-foreground">接電話時登記，自動彙整成每天的看診列表。</p>
+        <p class="mt-1 text-sm text-muted-foreground">接電話時登記，自動彙整成看診列表。</p>
       </div>
       <Button type="button" @click="formDialogOpen = true"><CalendarPlus class="h-4 w-4" stroke-width="1.75" />新增預約</Button>
     </div>
 
-    <div class="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-3 shadow-sm">
-      <Button type="button" variant="ghost" size="icon" aria-label="前一天" @click="shiftDate(-1)"><ChevronLeft class="h-4 w-4" /></Button>
-      <div class="min-w-40 flex-1 sm:flex-none">
-        <DatePicker v-model="date" aria-label="選擇日期" />
-      </div>
-      <Button type="button" variant="ghost" size="icon" aria-label="後一天" @click="shiftDate(1)"><ChevronRight class="h-4 w-4" /></Button>
-      <Button type="button" variant="outline" size="sm" @click="goToday">回到今天</Button>
-      <span class="ml-auto flex items-center gap-1.5 text-sm font-medium text-foreground">
-        <CalendarClock class="h-4 w-4 text-muted-foreground" stroke-width="1.75" />{{ headerDateLabel }}
-      </span>
-    </div>
-
     <FilterTabs :model-value="view || 'all'" :items="APPOINTMENT_VIEWS" :counts="counts" aria-label="預約狀態" @update:model-value="selectView" />
 
+    <form class="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:grid-cols-[minmax(220px,1fr)_170px_170px_auto_auto]" @submit.prevent="applyFilters">
+      <label class="space-y-1 text-xs font-medium text-muted-foreground">
+        <span>關鍵字</span>
+        <span class="relative block">
+          <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input id="appointments-search" v-model="query" type="search" class="pl-10" placeholder="寵物、飼主或電話" aria-label="搜尋預約" />
+        </span>
+      </label>
+      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始日期</span><DatePicker v-model="dateFrom" aria-label="預約起始日期" /></label>
+      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束日期</span><DatePicker v-model="dateTo" aria-label="預約結束日期" /></label>
+      <Button type="submit" size="sm" class="self-end"><Search class="h-4 w-4" stroke-width="1.75" />搜尋</Button>
+      <Button type="button" variant="outline" size="sm" class="self-end" :disabled="!query && !dateFrom && !dateTo" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
+    </form>
+
     <ListSkeleton v-if="loading" :rows="4" />
-    <EmptyState v-else-if="!error && !appointments.length" :icon="CalendarX" title="這天沒有預約" description="按右上角新增一筆預約" />
+    <EmptyState v-else-if="!error && !appointments.length" :icon="CalendarX" title="沒有符合條件的預約" description="調整搜尋條件，或按右上角新增一筆預約" />
 
     <template v-else-if="appointments.length">
       <!-- 桌機：表格 -->
@@ -187,7 +219,7 @@ function getActions(appointment) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>時間</TableHead>
+              <TableHead>日期／時間</TableHead>
               <TableHead>寵物／飼主</TableHead>
               <TableHead>原因</TableHead>
               <TableHead>狀態</TableHead>
@@ -196,7 +228,7 @@ function getActions(appointment) {
           </TableHeader>
           <TableBody>
             <TableRow v-for="appointment in appointments" :key="appointment._id">
-              <TableCell class="text-sm tabular-nums text-foreground">{{ appointment.time || '未定' }}</TableCell>
+              <TableCell class="text-sm tabular-nums text-foreground">{{ appointment.date }}{{ appointment.time ? ` ${appointment.time}` : '' }}</TableCell>
               <TableCell>
                 <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" class="group flex items-center gap-3">
                   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
@@ -261,7 +293,7 @@ function getActions(appointment) {
                 </span>
               </span>
             </div>
-            <span class="shrink-0 text-sm font-medium tabular-nums text-foreground">{{ appointment.time || '未定' }}</span>
+            <span class="shrink-0 text-sm font-medium tabular-nums text-foreground">{{ appointment.date }}{{ appointment.time ? ` ${appointment.time}` : '' }}</span>
           </div>
 
           <Badge variant="status" :class="APPOINTMENT_STATUS_META[appointment.status]?.class">{{ APPOINTMENT_STATUS_META[appointment.status]?.label }}</Badge>
@@ -283,10 +315,20 @@ function getActions(appointment) {
           </div>
         </Card>
       </div>
+
+      <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
+        <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 筆・第 {{ currentPage }} / {{ totalPages }} 頁</p>
+        <div class="flex gap-2">
+          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage <= 1" @click="goToPage(1)">第一頁</Button>
+          <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
+          <Button type="button" variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
+          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage >= totalPages" @click="goToPage(totalPages)">最後頁</Button>
+        </div>
+      </div>
     </template>
   </section>
 
-  <AppointmentFormDialog :open="formDialogOpen" :default-date="date" @close="formDialogOpen = false" @created="onAppointmentCreated" />
+  <AppointmentFormDialog :open="formDialogOpen" :default-date="dateFrom || clinicDateInput()" @close="formDialogOpen = false" @created="onAppointmentCreated" />
   <AppointmentCreatePatientDialog :appointment="createPatientTarget" @close="createPatientTarget = null" @created="onPatientCreated" />
   <ConfirmDialog
     :open="Boolean(cancelTarget)"

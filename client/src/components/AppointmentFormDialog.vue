@@ -112,7 +112,7 @@ async function submit() {
 
         <div class="grid grid-cols-2 gap-2">
           <Button type="button" :variant="mode === 'existing' ? 'default' : 'outline'" @click="mode = 'existing'">
-            <User class="h-4 w-4" stroke-width="1.75" />既有病患
+            <User class="h-4 w-4" stroke-width="1.75" />回診
           </Button>
           <Button type="button" :variant="mode === 'new' ? 'default' : 'outline'" @click="mode = 'new'">
             <Cat class="h-4 w-4" stroke-width="1.75" />初診

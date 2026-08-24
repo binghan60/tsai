@@ -69,7 +69,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 
 刻意不用 `optimisticConcurrency`／`relationVersion`：寫入幾乎都是單一狀態切換的按鈕操作，單人使用衝突機率低；也沒有子集合掛在底下，不會有 Owner/Pet 那種刪除競態。
 
-索引只開 `{scheduledAt: 1}` 與 `{status: 1, scheduledAt: 1}`，對應當日列表與當日列表+狀態篩選兩種查詢；沒有 `petId`/`ownerId` 索引，因為目前沒有「看這隻寵物過去預約紀錄」的查詢，等真的需要再補。
+索引只開 `{scheduledAt: 1}` 與 `{status: 1, scheduledAt: 1}`，對應清單排序與狀態篩選；沒有 `petId`/`ownerId` 索引，因為目前沒有「看這隻寵物過去預約紀錄」的查詢，等真的需要再補。
 
 初診到診後透過 `POST /api/appointments/:id/create-patient` 在 transaction 中建立 Owner+Pet、回填 `ownerId`/`petId`，銜接進既有的 `/pets/:petId/records/new` 健檢報告流程——這支端點本身不建立 MedicalRecord。
 
@@ -138,7 +138,7 @@ POST   /api/records/:id/revoke-share    撤銷分享
 POST   /api/records/:id/send-email      寄送 PDF + 連結給飼主
 
 預約
-GET    /api/appointments                當日看診列表（?date=YYYY-MM-DD，預設今天 / ?status=）
+GET    /api/appointments                跨日清單（?q= 關鍵字搜尋寵物／飼主／電話／原因 / ?from=&to=YYYY-MM-DD 日期區間 / ?status= / ?page=，回傳帶 counts 給狀態徽章）
 POST   /api/appointments                建立（帶 petId＝既有病患，不帶＝初診自由文字）
 GET    /api/appointments/:id
 PUT    /api/appointments/:id            只能改 date/time/reason/notes/petName/species/ownerPhone
@@ -182,7 +182,7 @@ GET    /api/health
 | 路由 | 頁面 | 說明 |
 |---|---|---|
 | `/` | 工作台 | 統計卡片（可點進對應佇列）、草稿與最近報告、報告狀態圖表、寄送失敗橫幅 |
-| `/appointments` | 電話預約 | 每日看診列表，可切換日期與狀態，到診後可轉建健檢報告 |
+| `/appointments` | 電話預約 | 跨日清單，篩選面板（關鍵字＋起始／結束日期＋搜尋／清除）與分頁比照健檢紀錄／寄送歷程，可切換狀態，到診後可轉建健檢報告 |
 | `/owners`、`/owners/:id` | 飼主列表／詳情 | |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含歷次報告 |
 | `/records` | 健檢紀錄清單 | 跨寵物，佇列切換 |
