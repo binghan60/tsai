@@ -13,6 +13,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { DatePicker } from './ui/date-picker';
 import { TimePicker } from './ui/time-picker';
+import { Switch } from './ui/switch';
 
 // 掛號區間：早上 10:00–11:30、下午 14:00–19:30，超出這兩段的時間選單不給選。
 const REGISTRATION_HOURS = [['10:00', '11:30'], ['14:00', '19:30']];
@@ -38,6 +39,8 @@ const form = ref({
   species: '',
   reason: '',
   notes: '',
+  isSurgery: false,
+  surgeryName: '',
 });
 
 watch(() => props.open, (open) => {
@@ -54,6 +57,8 @@ watch(() => props.open, (open) => {
     species: '',
     reason: '',
     notes: '',
+    isSurgery: false,
+    surgeryName: '',
   };
 });
 
@@ -84,6 +89,8 @@ async function submit() {
       time: form.value.time,
       reason: form.value.reason,
       notes: form.value.notes,
+      isSurgery: form.value.isSurgery,
+      surgeryName: form.value.isSurgery ? form.value.surgeryName : '',
       ...(mode.value === 'existing'
         ? { petId: selectedPet.value._id }
         : {
@@ -169,6 +176,14 @@ async function submit() {
         <div class="space-y-1.5">
           <Label for="appointment-reason" class="text-xs font-medium text-foreground">看診原因</Label>
           <Input id="appointment-reason" v-model="form.reason" placeholder="主訴或掛號原因" />
+        </div>
+        <div class="flex min-h-11 items-center justify-between rounded-xl border border-border px-4">
+          <Label for="appointment-is-surgery" class="text-xs font-medium text-foreground">是否手術</Label>
+          <Switch id="appointment-is-surgery" v-model="form.isSurgery" aria-label="是否手術" />
+        </div>
+        <div v-if="form.isSurgery" class="space-y-1.5">
+          <Label for="appointment-surgery-name" class="text-xs font-medium text-foreground">手術名稱</Label>
+          <Input id="appointment-surgery-name" v-model="form.surgeryName" placeholder="例：絕育、洗牙…" />
         </div>
         <div class="space-y-1.5">
           <Label for="appointment-notes" class="text-xs font-medium text-foreground">備註</Label>

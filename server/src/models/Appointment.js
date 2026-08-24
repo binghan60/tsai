@@ -23,6 +23,9 @@ const appointmentSchema = new mongoose.Schema(
 
     reason: { type: String, default: '', trim: true },
     notes: { type: String, default: '', trim: true },
+    isSurgery: { type: Boolean, default: false },
+    // 只在 isSurgery 為 true 時才有意義，不強制必填——接電話當下可能還沒問清楚術式名稱。
+    surgeryName: { type: String, default: '', trim: true },
 
     status: {
       type: String,

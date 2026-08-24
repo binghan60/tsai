@@ -10,7 +10,7 @@ import { APPOINTMENT_STATUSES, canTransitionAppointmentStatus, describeAppointme
 
 const router = Router();
 
-const EDITABLE_FIELDS = ['date', 'time', 'reason', 'notes', 'petName', 'species', 'ownerPhone'];
+const EDITABLE_FIELDS = ['date', 'time', 'reason', 'notes', 'petName', 'species', 'ownerPhone', 'isSurgery', 'surgeryName'];
 
 function pickEditableFields(body) {
   return Object.fromEntries(EDITABLE_FIELDS.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
@@ -68,7 +68,7 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { date, time, petId, reason, notes } = req.body;
+    const { date, time, petId, reason, notes, isSurgery, surgeryName } = req.body;
     let { ownerId, ownerName, ownerPhone, petName, species } = req.body;
 
     if (petId !== undefined && petId !== null && petId !== '') {
@@ -99,6 +99,8 @@ router.post('/', async (req, res, next) => {
       species: species || '',
       reason: reason || '',
       notes: notes || '',
+      isSurgery: Boolean(isSurgery),
+      surgeryName: isSurgery ? surgeryName || '' : '',
     });
     res.status(201).json(appointment);
   } catch (err) {

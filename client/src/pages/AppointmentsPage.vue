@@ -268,7 +268,12 @@ function getActions(appointment) {
                   </span>
                 </span>
               </TableCell>
-              <TableCell class="max-w-56 truncate text-sm text-foreground">{{ appointment.reason || '—' }}</TableCell>
+              <TableCell class="max-w-56 text-sm text-foreground">
+                <span class="truncate">{{ appointment.reason || '—' }}</span>
+                <Badge v-if="appointment.isSurgery" variant="status" class="ml-1.5 bg-belle-50 text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">
+                  手術{{ appointment.surgeryName ? `・${appointment.surgeryName}` : '' }}
+                </Badge>
+              </TableCell>
               <TableCell>
                 <Badge variant="status" :class="APPOINTMENT_STATUS_META[appointment.status]?.class">{{ APPOINTMENT_STATUS_META[appointment.status]?.label }}</Badge>
               </TableCell>
@@ -312,7 +317,12 @@ function getActions(appointment) {
             <span class="shrink-0 text-sm font-medium tabular-nums text-foreground">{{ appointment.date }}{{ appointment.time ? ` ${appointment.time}` : '' }}</span>
           </div>
 
-          <Badge variant="status" :class="APPOINTMENT_STATUS_META[appointment.status]?.class">{{ APPOINTMENT_STATUS_META[appointment.status]?.label }}</Badge>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <Badge variant="status" :class="APPOINTMENT_STATUS_META[appointment.status]?.class">{{ APPOINTMENT_STATUS_META[appointment.status]?.label }}</Badge>
+            <Badge v-if="appointment.isSurgery" variant="status" class="bg-belle-50 text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">
+              手術{{ appointment.surgeryName ? `・${appointment.surgeryName}` : '' }}
+            </Badge>
+          </div>
           <p v-if="appointment.checkinNumber" class="text-xs font-medium tabular-nums text-muted-foreground">看診序：第 {{ appointment.checkinNumber }} 號</p>
 
           <p v-if="appointment.reason" class="text-xs text-muted-foreground">{{ appointment.reason }}</p>

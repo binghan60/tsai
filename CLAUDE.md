@@ -65,7 +65,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ### appointments 電話預約
 電話接洽時登記的每日看診列表。`date`（`YYYY-MM-DD`）／`time`（`HH:mm`，可留白）是使用者填的來源真相，`scheduledAt` 是兩者換算出的實際時刻，只服務排序與範圍查詢，由 `pre('validate')` 自動算好。
 
-`ownerId`／`petId` 有值代表連結既有病患，為 `null` 代表初診尚未建檔；不管哪種情況都存 `ownerName`／`ownerPhone`／`petName`／`species` 快照（跟 `deliveryLogs` 一樣，理由是列表要能不 populate 就顯示，且飼主之後改名不該讓「當初電話登記的名字」跟著變）。`status`：`scheduled` / `arrived` / `completed` / `cancelled` / `no_show`，轉換規則見 `server/src/lib/appointmentStatus.js`（`completed` 是終態）。`convertedRecordId` 只是「有沒有轉出過報告」的旁證欄位，不驅動任何邏輯。
+`ownerId`／`petId` 有值代表連結既有病患，為 `null` 代表初診尚未建檔；不管哪種情況都存 `ownerName`／`ownerPhone`／`petName`／`species` 快照（跟 `deliveryLogs` 一樣，理由是列表要能不 populate 就顯示，且飼主之後改名不該讓「當初電話登記的名字」跟著變）。`status`：`scheduled` / `arrived` / `completed` / `cancelled` / `no_show`，轉換規則見 `server/src/lib/appointmentStatus.js`（`completed` 是終態）。`convertedRecordId` 只是「有沒有轉出過報告」的旁證欄位，不驅動任何邏輯。`isSurgery`／`surgeryName` 是掛號時登記的手術資訊，`surgeryName` 只在 `isSurgery` 為 true 時才有意義、不強制必填。
 
 `checkinNumber` 是報到當下配的當日看診序（從 1 開始，依報到先後、不是依掛號時段排），在 `PATCH /:id/status` 轉成 `arrived` 時當場算：數當天 `checkinNumber` 不是 `null` 的筆數 + 1。轉回 `scheduled`（撤銷報到）會把它清成 `null`——讓號碼回去給之後真的報到的人，不能佔著。轉去 `completed`／`cancelled` 則保留原號碼，當作那天有報到過的紀錄。
 
