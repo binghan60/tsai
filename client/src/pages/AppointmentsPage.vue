@@ -233,6 +233,7 @@ function getActions(appointment) {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>序號</TableHead>
               <TableHead>日期／時間</TableHead>
               <TableHead>寵物／飼主</TableHead>
               <TableHead>原因</TableHead>
@@ -242,6 +243,7 @@ function getActions(appointment) {
           </TableHeader>
           <TableBody>
             <TableRow v-for="appointment in appointments" :key="appointment._id">
+              <TableCell class="text-sm tabular-nums text-foreground">{{ appointment.checkinNumber ? `第 ${appointment.checkinNumber} 號` : '—' }}</TableCell>
               <TableCell class="text-sm tabular-nums text-foreground">{{ appointment.date }}{{ appointment.time ? ` ${appointment.time}` : '' }}</TableCell>
               <TableCell>
                 <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" class="group flex items-center gap-3">
@@ -311,6 +313,7 @@ function getActions(appointment) {
           </div>
 
           <Badge variant="status" :class="APPOINTMENT_STATUS_META[appointment.status]?.class">{{ APPOINTMENT_STATUS_META[appointment.status]?.label }}</Badge>
+          <p v-if="appointment.checkinNumber" class="text-xs font-medium tabular-nums text-muted-foreground">看診序：第 {{ appointment.checkinNumber }} 號</p>
 
           <p v-if="appointment.reason" class="text-xs text-muted-foreground">{{ appointment.reason }}</p>
           <p v-if="appointment.ownerPhone" class="flex items-center gap-1 text-xs text-muted-foreground"><Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}</p>

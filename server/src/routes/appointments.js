@@ -143,6 +143,14 @@ router.patch('/:id/status', async (req, res, next) => {
 
     appointment.status = status;
     appointment.cancelReason = status === 'cancelled' ? cancelReason || '' : '';
+    if (status === 'arrived' && appointment.checkinNumber == null) {
+      // 當日已經報到過的筆數 + 1，號碼照報到先後發，不是照掛號時段排的。
+      const takenToday = await Appointment.countDocuments({ date: appointment.date, checkinNumber: { $ne: null } });
+      appointment.checkinNumber = takenToday + 1;
+    } else if (status === 'scheduled') {
+      // 撤銷報到：這個號碼讓給之後真的報到的人，不能留著佔位。
+      appointment.checkinNumber = null;
+    }
     await appointment.save();
     res.json(appointment);
   } catch (err) {

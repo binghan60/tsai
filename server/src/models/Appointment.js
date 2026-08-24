@@ -30,6 +30,9 @@ const appointmentSchema = new mongoose.Schema(
       default: 'scheduled',
     },
     cancelReason: { type: String, default: '', trim: true },
+    // 報到當下配的當日看診序，從 1 開始、依報到先後排。只在轉成 arrived 時配號，
+    // 撤銷報到（改回 scheduled）就清掉——之後重新報到要排在新的隊尾，不能沿用舊號。
+    checkinNumber: { type: Number, default: null },
     // 轉出健檢報告後回填，只是「有沒有轉過」的旁證，不驅動任何 UI 邏輯。
     convertedRecordId: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicalRecord', default: null },
   },
