@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { CalendarPlus, CalendarX, PawPrint, Phone, Search, User, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { clinicDateInput } from '../lib/datetime';
@@ -20,6 +20,7 @@ import { Input } from '../components/ui/input';
 import { DatePicker } from '../components/ui/date-picker';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
+const route = useRoute();
 const router = useRouter();
 const toast = useToast();
 
@@ -28,6 +29,14 @@ const page = useSearchQueryParam('page', '1');
 const query = useSearchQueryParam('q');
 const dateFrom = useSearchQueryParam('from');
 const dateTo = useSearchQueryParam('to');
+
+// 網址完全沒帶日期篩選時（第一次進來，不是書籤或分享連結），預設只看今天的預約——
+// 電話預約本質是「今天要處理的事」，全部攤開反而要先篩選才找得到重點。
+// 用網址是否帶參數判斷、不是存偏好：日期每天都不一樣，沒有「上次選的日期」這種東西好記。
+if (!route.query.from && !route.query.to) {
+  dateFrom.value = clinicDateInput();
+  dateTo.value = clinicDateInput();
+}
 
 const appointments = ref([]);
 const counts = ref({});
