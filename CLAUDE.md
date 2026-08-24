@@ -49,8 +49,8 @@
 ### formTemplates 健檢表單範本
 `name`、`description`、`species`、`enabled`、`order`、`version`，底下是 `sections[]`，每個 section 有 `items[]`。使用者可自由增刪區塊與項目。詳見 [docs/FORM_BUILDER.md](docs/FORM_BUILDER.md)。
 
-### quickPhrases 常用語
-`text`、`itemKey`、`usageCount`。填表時各欄位可挑選的常用句子。
+### textTemplates 文字模板
+`name`、`content`、`availableForAllFields`、`applicableItemKeys`、`enabled`、`usageCount`。填表時可插入文字欄位的長篇內容，取代了早期的 quickPhrases 常用語（該 collection 與其路由已移除）。
 
 ### deliveryLogs 寄送流水帳
 append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
@@ -134,11 +134,13 @@ GET    /api/settings/form-templates/:id
 PUT    /api/settings/form-templates/:id
 DELETE /api/settings/form-templates/:id
 
-常用語
-GET    /api/quick-phrases
-POST   /api/quick-phrases
-POST   /api/quick-phrases/:id/use       累計使用次數
-DELETE /api/quick-phrases/:id
+文字模板
+GET    /api/text-templates              列表（?includeDisabled= / ?q=）
+GET    /api/text-templates/fields       可套用模板的欄位清單（掃描所有健檢範本）
+POST   /api/text-templates
+PUT    /api/text-templates/:id
+POST   /api/text-templates/:id/use      累計使用次數
+DELETE /api/text-templates/:id
 
 其他
 GET    /api/search                      全站搜尋（飼主 + 寵物）

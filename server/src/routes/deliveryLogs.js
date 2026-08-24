@@ -2,6 +2,7 @@ import { Router } from 'express';
 import DeliveryLog from '../models/DeliveryLog.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import { escapeRegExp } from '../lib/regex.js';
+import { clinicDayStart } from '../lib/clinicTime.js';
 
 const router = Router();
 
@@ -25,14 +26,14 @@ router.get('/', async (req, res, next) => {
         { ownerName: pattern },
       ];
     }
+    // createdAt 是真正的時刻，而使用者挑的是「診所的那一天」，所以邊界要用診所時區換算。
+    // 直接 new Date(`${from}T00:00:00`) 吃的是伺服器本地時區（正式環境是 UTC），
+    // 整段區間會偏移八小時。to 要含當天整天，取隔天的開頭當上界。
     const createdAt = {};
-    const from = req.query.from ? new Date(`${req.query.from}T00:00:00`) : null;
-    const to = req.query.to ? new Date(`${req.query.to}T00:00:00`) : null;
-    if (from && !Number.isNaN(from.getTime())) createdAt.$gte = from;
-    if (to && !Number.isNaN(to.getTime())) {
-      to.setDate(to.getDate() + 1);
-      createdAt.$lt = to;
-    }
+    const from = clinicDayStart(req.query.from);
+    const to = clinicDayStart(req.query.to, 1);
+    if (from) createdAt.$gte = from;
+    if (to) createdAt.$lt = to;
     if (Object.keys(createdAt).length) filter.createdAt = createdAt;
 
     const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);

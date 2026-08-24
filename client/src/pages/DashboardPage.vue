@@ -40,41 +40,41 @@ const stats = computed(() => [
   { label: '本月健檢', value: dashboard.value?.monthlyReportCount ?? '—', icon: FileText },
 ])
 
-const workStages = computed(() => {
-  const breakdown = dashboard.value?.statusBreakdown ?? {}
-  return [
-    {
-      key: 'drafts',
-      label: '完成草稿',
-      count: dashboard.value?.draftCount ?? 0,
-      description: '補齊健檢內容並結案',
-      action: '查看草稿',
-      to: '/records?view=drafts',
-      icon: Pencil,
-      class: 'border-amber-200 bg-amber-50/60 dark:border-amber-500/25 dark:bg-amber-500/5',
-    },
-    {
-      key: 'pending',
-      label: '寄送報告',
-      count: (breakdown.finalized ?? 0) + (breakdown.sending ?? 0),
-      description: '已結案，等待寄送給飼主',
-      action: '查看待寄送',
-      to: '/records?view=pending',
-      icon: FileText,
-      class: 'border-sky-200 bg-sky-50/60 dark:border-sky-500/25 dark:bg-sky-500/5',
-    },
-    {
-      key: 'attention',
-      label: '處理異常',
-      count: (breakdown.failed ?? 0) + (breakdown.uncertain ?? 0),
-      description: '確認寄送結果或重新寄送',
-      action: '處理異常',
-      to: '/records?view=failed',
-      icon: AlertTriangle,
-      class: 'border-red-200 bg-red-50/60 dark:border-red-500/25 dark:bg-red-500/5',
-    },
-  ]
-})
+// 數字一律用後端算好的 finalizedPendingCount／failedCount，不要在這裡從 statusBreakdown
+// 重算：那份加總必須跟 records.js 的 view 篩選條件逐字對齊（pending 含 uncertain，
+// failed 也含 uncertain），一在前端重算就會漏掉狀態——卡片點得進清單，兩邊對不上等於在騙人。
+const workStages = computed(() => [
+  {
+    key: 'drafts',
+    label: '完成草稿',
+    count: dashboard.value?.draftCount ?? 0,
+    description: '補齊健檢內容並結案',
+    action: '查看草稿',
+    to: '/records?view=drafts',
+    icon: Pencil,
+    class: 'border-amber-200 bg-amber-50/60 dark:border-amber-500/25 dark:bg-amber-500/5',
+  },
+  {
+    key: 'pending',
+    label: '寄送報告',
+    count: dashboard.value?.finalizedPendingCount ?? 0,
+    description: '已結案，等待寄送給飼主',
+    action: '查看待寄送',
+    to: '/records?view=pending',
+    icon: FileText,
+    class: 'border-sky-200 bg-sky-50/60 dark:border-sky-500/25 dark:bg-sky-500/5',
+  },
+  {
+    key: 'attention',
+    label: '處理異常',
+    count: dashboard.value?.failedCount ?? 0,
+    description: '確認寄送結果或重新寄送',
+    action: '處理異常',
+    to: '/records?view=failed',
+    icon: AlertTriangle,
+    class: 'border-red-200 bg-red-50/60 dark:border-red-500/25 dark:bg-red-500/5',
+  },
+])
 
 const primaryAction = computed(() => {
   const stages = workStages.value

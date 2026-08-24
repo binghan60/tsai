@@ -153,9 +153,17 @@ function shareExpiryFromNow(days = DEFAULT_SHARE_DAYS) {
 
 // 正在填的這份報告與它的其他版本都不算「上次」——
 // 修訂草稿要對照的是更早的那次健檢，不是自己的前一版。
+//
+// 也要帶上這份報告自己的日期當歷史邊界。少了它，編輯一份較早的報告時
+// 「上次數值」會抓到比它更晚的看診，跟預覽頁與結案快照（那三處都有傳 record）
+// 對同一個欄位顯示不同的值。新報告沒有 excludeRecordId，本來就沒有邊界可言。
 petRecordsRouter.get('/previous-values', async (req, res, next) => {
   try {
-    const data = await getPetPreviousValues(req.params.petId, req.query.excludeRecordId);
+    const excludeRecordId = req.query.excludeRecordId;
+    const boundary = mongoose.isValidObjectId(excludeRecordId)
+      ? await MedicalRecord.findById(excludeRecordId).select('visitDate finalizedAt')
+      : null;
+    const data = await getPetPreviousValues(req.params.petId, excludeRecordId, boundary);
     res.json(data);
   } catch (err) {
     next(err);

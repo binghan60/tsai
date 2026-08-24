@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import TextTemplate from '../models/TextTemplate.js';
-import QuickPhrase from '../models/QuickPhrase.js';
 import FormTemplate from '../models/FormTemplate.js';
 import { escapeRegExp } from '../lib/regex.js';
 
@@ -10,39 +9,6 @@ const TEXT_TEMPLATE_ITEM_TYPES = new Set(['text', 'textarea', 'finding', 'lab'])
 function cleanItemKeys(value) {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((entry) => String(entry ?? '').trim()).filter(Boolean))].slice(0, 100);
-}
-
-function legacyName(text) {
-  const firstLine = String(text ?? '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) || '舊常用語';
-  return firstLine.length > 28 ? `${firstLine.slice(0, 28)}…` : firstLine;
-}
-
-// 現有診所資料不能因功能升級而消失。第一次讀取模板時，將舊常用語逐筆轉成
-// 有名稱、且仍套用於原欄位的文字模板；legacyQuickPhraseId 讓這個動作可安全重跑。
-export async function migrateLegacyQuickPhrases() {
-  const legacy = await QuickPhrase.find({ migratedAt: null }).select('+migratedAt').lean();
-  if (!legacy.length) return;
-  await TextTemplate.bulkWrite(legacy.map((phrase) => ({
-    updateOne: {
-      filter: { legacyQuickPhraseId: phrase._id },
-      update: {
-        $setOnInsert: {
-          name: legacyName(phrase.text),
-          content: phrase.text,
-          availableForAllFields: false,
-          applicableItemKeys: [phrase.itemKey],
-          enabled: true,
-          usageCount: phrase.usageCount ?? 0,
-          legacyQuickPhraseId: phrase._id,
-        },
-      },
-      upsert: true,
-    },
-  })), { ordered: false });
-  await QuickPhrase.updateMany(
-    { _id: { $in: legacy.map((phrase) => phrase._id) }, migratedAt: null },
-    { $set: { migratedAt: new Date() } }
-  );
 }
 
 function readPayload(body) {
@@ -107,7 +73,6 @@ router.get('/fields', async (req, res, next) => {
 
 router.get('/', async (req, res, next) => {
   try {
-    await migrateLegacyQuickPhrases();
     const includeDisabled = req.query.includeDisabled === '1' || req.query.includeDisabled === 'true';
     const query = String(req.query.q ?? '').trim();
     const filter = includeDisabled ? {} : { enabled: true };

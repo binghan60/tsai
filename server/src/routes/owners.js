@@ -3,12 +3,9 @@ import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
+import { escapeRegExp } from '../lib/regex.js';
 
 const router = Router();
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 function validateOwnerInput({ name, phone, email }) {
   if (!String(name || '').trim()) return '請填寫飼主姓名';

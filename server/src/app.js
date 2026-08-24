@@ -13,7 +13,6 @@ import deliveryLogsRouter from './routes/deliveryLogs.js';
 import dashboardRouter from './routes/dashboard.js';
 import searchRouter from './routes/search.js';
 import settingsRouter from './routes/settings.js';
-import quickPhrasesRouter from './routes/quickPhrases.js';
 import textTemplatesRouter from './routes/textTemplates.js';
 import { closeBrowser } from './lib/pdf.js';
 
@@ -65,7 +64,6 @@ app.use('/api/delivery-logs', deliveryLogsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/search', searchRouter);
 app.use('/api/settings', settingsRouter);
-app.use('/api/quick-phrases', quickPhrasesRouter);
 app.use('/api/text-templates', textTemplatesRouter);
 
 app.use('/api', (req, res) => {
