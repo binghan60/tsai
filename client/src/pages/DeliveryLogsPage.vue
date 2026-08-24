@@ -172,24 +172,24 @@ onBeforeUnmount(() => {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead >時間</TableHead>
-              <TableHead >事件</TableHead>
-              <TableHead >報告</TableHead>
-              <TableHead >收件信箱</TableHead>
-              <TableHead >處理結果</TableHead>
+              <TableHead>時間</TableHead>
+              <TableHead>事件</TableHead>
+              <TableHead>報告</TableHead>
+              <TableHead>收件信箱</TableHead>
+              <TableHead>處理結果</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow v-for="log in deliveryAttempts" :key="log.attemptId || log._id">
               <TableCell class="text-sm tabular-nums text-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</TableCell>
-              <TableCell >
+              <TableCell>
                 <Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge>
               </TableCell>
-              <TableCell >
+              <TableCell>
                 <span class="block text-sm text-foreground">{{ log.petName || '寵物未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></span>
                 <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <!-- 報告還在就給連結；已刪除的直接標明，連過去只會是 404。 -->
-                  <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="underline hover:text-belle-600 dark:hover:text-brand-400">查看報告</router-link>
+                  <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="font-medium text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary">查看報告</router-link>
                   <template v-else>
                     <span class="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-muted-foreground">
                       <Trash2 class="h-3 w-3" stroke-width="1.75" />報告已刪除
@@ -197,13 +197,13 @@ onBeforeUnmount(() => {
                   </template>
                 </span>
               </TableCell>
-              <TableCell >
+              <TableCell>
                 <span class="flex items-center gap-1.5 text-sm text-foreground">
                   <Mail class="h-3.5 w-3.5 shrink-0 text-muted-foreground" stroke-width="1.75" />{{ log.recipient || '—' }}
                 </span>
               </TableCell>
-              <TableCell >
-                <div v-if="log.error" class="max-w-80 text-xs text-red-700 dark:text-red-300">
+              <TableCell>
+                <div v-if="log.error" class="max-w-80 text-xs text-danger">
                   <span class="flex items-start gap-1">
                     <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />
                     <span class="min-w-0 whitespace-normal break-words" :class="detailExpanded(log) || log.error.length <= 40 ? '' : 'line-clamp-2'">{{ log.error }}</span>
@@ -211,7 +211,7 @@ onBeforeUnmount(() => {
                   <button
                     v-if="log.error.length > 40"
                     type="button"
-                    class="mt-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 font-medium text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                    class="mt-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 font-medium text-danger hover:bg-danger-surface"
                     @click="toggleDetail(log)"
                   >
                     <ChevronUp v-if="detailExpanded(log)" class="h-3.5 w-3.5" />
@@ -219,9 +219,9 @@ onBeforeUnmount(() => {
                     {{ detailExpanded(log) ? '收合詳情' : '展開詳情' }}
                   </button>
                 </div>
-                <span v-else-if="log.event === 'sent'" class="text-xs text-emerald-700 dark:text-emerald-300">已寄送</span>
-                <span v-else-if="log.event === 'queued'" class="text-xs text-sky-700 dark:text-sky-300">等待寄送完成</span>
-                <span v-else-if="log.event === 'uncertain'" class="text-xs text-amber-700 dark:text-amber-300">寄送結果待確認</span>
+                <span v-else-if="log.event === 'sent'" class="text-xs text-success">已寄送</span>
+                <span v-else-if="log.event === 'queued'" class="text-xs text-info">等待寄送完成</span>
+                <span v-else-if="log.event === 'uncertain'" class="text-xs text-warning">寄送結果待確認</span>
                 <span v-else class="text-xs text-muted-foreground">—</span>
               </TableCell>
             </TableRow>
@@ -238,7 +238,7 @@ onBeforeUnmount(() => {
           </div>
           <p class="text-sm text-foreground">{{ log.petName || '寵物未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></p>
           <p class="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-            <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="inline-flex min-h-11 items-center underline">查看報告</router-link>
+            <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="inline-flex min-h-11 items-center font-medium text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary">查看報告</router-link>
             <template v-else>
               <span class="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5"><Trash2 class="h-3 w-3" stroke-width="1.75" />報告已刪除</span>
             </template>
@@ -246,7 +246,7 @@ onBeforeUnmount(() => {
           <p class="flex items-center gap-1.5 text-sm text-foreground">
             <Mail class="h-3.5 w-3.5 shrink-0 text-muted-foreground" stroke-width="1.75" />{{ log.recipient || '—' }}
           </p>
-          <p v-if="log.error" class="flex items-start gap-1 text-xs text-red-700 dark:text-red-300">
+          <p v-if="log.error" class="flex items-start gap-1 text-xs text-danger">
             <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" /><span class="min-w-0">{{ log.error }}</span>
           </p>
         </Card>

@@ -60,7 +60,13 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 **刻意不設 `ref`、改冗餘存報告編號與姓名**——報告可以被刪除，而這筆紀錄的價值正是在報告消失後還查得到寄給了誰。同理它是獨立 collection 而不是內嵌陣列。medicalRecords 上的 `sentTo`/`sentAt` 只留得住最後一次，重寄就覆蓋。
 
 ### deletedMedicalRecords 刪除稽核快照
-報告刪除時存一份完整快照。**目前只寫不讀**，沒有查詢介面，需要回溯時直接查這張表。
+報告刪除時存一份完整快照，append-only。`recordId`（原報告的 _id）、`reportNumber`、`petId`、`petName`、`ownerName`、`vet`、`visitDate`、`examType`、`status`、`deliveryStatus`、`reportVersion`、`snapshot`、`deletedAt`。
+
+**跟 `deliveryLogs` 同一套哲學**：刻意不設 `ref`、把姓名與報告編號冗餘存下來——這筆紀錄的價值正是在原始資料消失之後還查得到，而寵物本身之後也可能被刪，populate 一個不存在的文件是查不出東西的。`snapshot` 型別是 `Mixed`：表單結構由使用者自訂，快照的意義是「當時原封不動的樣子」，不是「符合今天 schema 的樣子」。
+
+寫入在 `DELETE /api/records/:id` 的同一個 transaction 內，跟修訂鏈回復與刪除一起成功或一起回滾。索引 `{deletedAt: -1, _id: -1}`（清單排序）與 `{recordId: 1}`（回查某份報告是不是被刪了）。
+
+查詢走 `GET /api/deleted-records`，前端頁面是 `/records/deleted`。**列表不回傳 `snapshot`**——那是整份報告的完整內容，一頁全帶會是好幾百 KB，要看內容再打 `/:id`。
 
 ### appointments 電話預約
 電話接洽時登記的每日看診列表。`date`（`YYYY-MM-DD`）／`time`（`HH:mm`，可留白）是使用者填的來源真相，`scheduledAt` 是兩者換算出的實際時刻，只服務排序與範圍查詢，由 `pre('validate')` 自動算好。
@@ -153,6 +159,10 @@ DELETE /api/appointments/:id            已完成的預約不給刪
 寄送紀錄
 GET    /api/delivery-logs               流水帳（?recordId= / ?event= / 分頁）
 
+刪除稽核
+GET    /api/deleted-records             已刪除報告的快照清單（?q= 寵物／飼主／獸醫師／報告編號 / ?from=&to= 刪除日區間 / 分頁；不含 snapshot）
+GET    /api/deleted-records/:id         單筆完整快照
+
 健檢表單設定
 GET    /api/settings/form-templates
 POST   /api/settings/form-templates
@@ -170,7 +180,7 @@ DELETE /api/text-templates/:id
 
 其他
 GET    /api/search                      全站搜尋（飼主 + 寵物）
-GET    /api/dashboard                   彙總數字（含 todayAppointmentCount）+ 最近報告
+GET    /api/dashboard                   儀表板彙總：今日門診依狀態分解（todayAppointments）、報告狀態分佈（statusBreakdown / draftCount / finalizedPendingCount / failedCount）、近 6 週健檢量（weeklyTrend）、本月與累計的飼主／寵物數、待辦與最近報告
 GET    /api/public/reports/:token        公開，飼主查看報告用
 GET    /api/health
 ```
@@ -185,12 +195,13 @@ GET    /api/health
 
 | 路由 | 頁面 | 說明 |
 |---|---|---|
-| `/` | 工作台 | 統計卡片（可點進對應佇列）、草稿與最近報告、報告狀態圖表、寄送失敗橫幅 |
+| `/` | 工作台 | 全站綜覽儀表板，由粗到細三層：**現在**（寄送異常橫幅、今日門診依狀態分解）→ **分佈與趨勢**（報告流程四格、近 6 週健檢量長條、本月與累計數字）→ **明細**（待辦清單、最近完成）。**同一個數字只在其中一層出現一次**——之前草稿數同時出現在優先處理卡、workStage 卡、待辦清單與狀態長條四個地方，那是這頁最主要的雜訊來源。每一格數字都要能點進對應清單 |
 | `/appointments` | 電話預約 | 跨日清單，狀態切換走共用的 `FilterTabs`，篩選面板（關鍵字＋起始／結束日期＋搜尋／清除）與分頁的元件、樣式跟健檢紀錄／寄送歷程完全一致，沒有另外的日期導覽卡——起訖日期就是篩選面板本身。網址沒帶日期篩選時（非書籤／分享連結）預設只顯示今天。時程依實際看診時段分組（上午 10:00–11:30、下午 14:00–19:30）。已報到（`arrived`）的卡片可展開手風琴就地填寫體重／體溫／備註，按下「完成看診」即存檔並把預約轉成已完成——這個按鈕取代了原本分開的「開始看診」／「完成」，轉建健檢報告改走候診名單側欄的「看診」按鈕 |
 | `/owners`、`/owners/:id` | 飼主列表／詳情 | |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含歷次報告 |
 | `/records` | 健檢紀錄清單 | 跨寵物，佇列切換 |
 | `/records/deliveries` | 寄送紀錄 | 流水帳，含已刪除報告的紀錄 |
+| `/records/deleted` | 已刪除的報告 | 刪除稽核快照，可搜尋與看當時的作答內容。稽核用、頻率很低，**不進側邊欄**，入口在健檢紀錄清單頁；`meta.nav` 歸在 `/records` 底下 |
 | `/pets/:petId/records/new`、`/records/:id/edit` | 報告填寫表單 | 自動存草稿、離開前攔截未儲存變更 |
 | `/records/:id/preview` | 報告預覽 | `meta.bare`，後台用，有結案／寄送／分享操作 |
 | `/report/:token` | 報告檢視頁 | `meta.bare`，**公開**，飼主查看用 + PDF 截圖來源 |
@@ -206,19 +217,28 @@ GET    /api/health
 ## 七、UI／視覺設計規範
 
 - **明暗主題**：後台管理頁面支援明暗切換，側邊欄最下方有切換鈕，狀態存 `localStorage`、預設跟隨系統。共用邏輯在 `client/src/composables/useTheme.js`，深淺色用 Tailwind 的 `dark:` variant（`@custom-variant dark` 定義在 `style.css`，對應 `<html class="dark">`）。
-  - **淺色 = 法國美好年代（Belle Époque）風格**：酒紅主色 `belle`(50–800)、象牙／羊皮紙底色 `cream`(50–300)、暖棕黑文字 `ink`(400–900)，定義在 `style.css`。
-  - **深色 = 科技感風格**：近黑底色是帶藍的 ink 系（`#0b1218` 頁面底 / `#121b22` 卡片 / `#30434c` 邊框，定義在 `style.css` 的 `.dark`），主色是琥珀橘 `brand`(50–900)。
+  - **主色 = 深青藍 `petrol`(50–900)**，明暗兩態同一個色相、只換明度：淺色 `petrol-600` 配白字，深色 `petrol-400` 配深墨字（亮階當底、`on-primary` 當字）。主色刻意不放在紅色區——紅色完整讓給 destructive 與 failed，金色 `brand` 只留給側邊欄 active 與 Logo，三者各佔一塊色相互不重疊。
+  - **表面 = 暖中性 `paper`(0–900)**：淺色頁面底 `paper-100`、卡片純白，卡片靠 1.12 的明度差加一條細邊框浮起來。舊版是象牙卡片疊在米黃底上（對比 1.22），卡片是不是獨立物件全靠深卡其邊框硬切，整片畫面因此又黃又髒。**頁面底不要再疊漸層**：層數越多卡片越浮不起來。
+  - **深色維持科技感深藍黑**：`#0b1218` 頁面底 / `#121b22` 卡片 / `#2c3a44` 邊框，文字是中性偏冷的白 `#e9eef1`（原本的暖米白疊在 petrol 上會發黃）。
+  - `belle`／`cream`／`ink` 已經退位成報告紙面與側邊欄專用，**後台頁面不要再碰**。
 - **一律用語意 token，不要在頁面手寫色票。** `bg-card`／`bg-field`／`text-foreground`／`text-muted-foreground`／`border-border`／`bg-muted`／`bg-accent` 這組已經自己處理明暗兩態，寫 `text-ink-900 dark:text-white` 這種雙寫只會製造出第二套色彩系統——兩套並行正是「配色沒問題但細節很髒」的來源。需要新的語意角色時，加 token 到 `style.css`，不要在使用端硬寫。
-  - `bg-field` 是「浮在卡片上的可點表面」：輸入框、狀態切換鈕、常用語籤、選取中的卡片。淺色是純白（比象牙白的卡片再亮一階），深色是比卡片略淺的凹陷面。**不要為了這類表面寫 `bg-white`**——那在深色主題是白底配米白字，等於看不見。
+  - **狀態語意有四組 token**：`--success`／`--warning`／`--info`／`--danger`，每組各配一個 `-surface` 底色，使用端寫 `bg-success-surface text-success`。**不要用 Tailwind 的 `emerald-50`／`amber-50` 那類固定色階**——它們是冷調亮白，疊在卡片上對比只有 1.00–1.02，底色等於沒畫出來，狀態實際上只剩文字顏色在傳達。
+  - `bg-field` 是「可以動的表面」：輸入框、狀態切換鈕、常用語籤、選取中的卡片。卡片改成純白之後這層不可能再更亮，所以淺色是往下凹一階；深色沒有更暗可用（會跟頁面底糊在一起），仍然往上浮。兩態方向相反、講的是同一件事。**不要為了這類表面寫 `bg-white`**——那在深色主題是白底配米白字，等於看不見。
   - 例外只有兩個：報告頁（固定淺色，見下）與側邊欄（兩個主題都是深底，用 `sidebar-*` 那組 token，**不要用 `text-muted-foreground`**——淺色主題下那是深灰字，會糊在深色側邊欄上）。
   - `/report/:token` 與 `/records/:id/preview` 報告頁**固定淺色，不受主題切換影響**──它同時是 Puppeteer 截圖產 PDF 的來源，深色底 + 淺色文字直接列印容易變成看不見字，獨立用 `stone`/`brand` 配色，**不套用 `dark:` variant**。在那兩頁加東西時不要共用後台的樣式常數（例如 `DELIVERY_EVENT_META`），要另外定義純淺色版本。
-- **報告狀態色彩語意**（徽章與圖表都要遵循同一套對應）：
-  - `draft` 草稿 → 中性（徽章用 `bg-muted/60 text-foreground`；圖表用 zinc-500）
-  - `finalized` 已結案 → 品牌色階 `brand`（淺色 `brand-50/700`、深色 `brand-500/10` + `brand-300`）
-  - `sent` 已寄送 → 綠（emerald-600）；`failed` 寄送失敗 → 紅；`sending` 寄送中 → 天藍
+- **報告狀態色彩語意**（徽章、圓點與圖表遵循同一套對應，定義在 `lib/recordStatus.js`）：
+  - `draft` 草稿 → 中性 `bg-muted text-foreground`（沒有人在等它）
+  - `finalized` 已結案 → 主色淡面 `bg-accent text-accent-foreground`——它不是異常也不是完成，是流程走到主線上的下一步
+  - `not_sent` 待寄送 → `warning`（在等你動手）；`sending` 寄送中 → `info`；`sent` 已寄送 → `success`；`failed` 寄送失敗 → `danger`
+  - `uncertain` 結果待確認 → `border-danger/45 text-danger`，跟 failed 同色相但走外框而不是實心淡底：兩者都要人看一眼，但這個是不確定、不是已知失敗
+  - **草稿與待寄送不可以同色**。之前兩者共用同一組 amber，畫面上分不出「還沒寫完」跟「寫完了還沒寄」
   - 徽章一律用 `<Badge variant="status" :class="META[...].class">`，形狀與留白由 variant 決定、顏色由 `lib/recordStatus.js` 的 meta 提供，不要在使用端再覆寫 padding 或圓角。
+- **文字顏色**：預設 `text-foreground`，不可點的內容不上色。`text-primary` 只給三種東西：沒有按鈕外框的可點文字（清單項目名稱、純文字連結）、選取／啟用中的狀態、以及站在 `bg-accent` 上的前景（那種情況寫 `text-accent-foreground`）。**可點的東西靜止時就要看得出來**，不可以只寫 `group-hover:text-primary`。**必填星號用 `text-danger` 不是主色**——它是警示不是連結。詳見 [docs/STYLE_GUIDE.md](docs/STYLE_GUIDE.md) 的「文字顏色」。
 - **圖示**：統一用 `@lucide/vue`，**不要用 emoji**。線條粗細統一 `stroke-width="1.75"`，顏色預設跟隨 `currentColor`。
-- **圖表**：照 `dataviz` skill 的方法做──先選圖表形式（part-to-whole 用堆疊長條，不用圓餅圖）、色彩最後決定且要跑該 skill 附的 `validate_palette.js` 驗證對比與色盲安全性，不要憑感覺挑色。深色卡片（`#121b22` 底）上的分類色要比一般品牌色再深一階才過驗證。會隨主題變色的圖表，色碼要放進 `computed()`（依 `isDark` 切換），不要寫死。
+- **圖表**：照 `dataviz` skill 的方法做──先選圖表形式（part-to-whole 用堆疊長條，不用圓餅圖）、色彩最後決定且要跑該 skill 附的 `validate_palette.js` 驗證對比與色盲安全性，不要憑感覺挑色。會隨主題變色的圖表，色碼要放進 `computed()`（依 `isDark` 切換），不要寫死。
+  - **圖表色走自己的 slot**：`--chart-1`（淺 `#068ba6` / 深 `#2fa3bf`），不要借 primary。primary 是 petrol-600/400，OKLab 彩度只有 0.073／0.086，過不了驗證器的 chroma floor（0.1）——那條檢查在講「這個顏色鋪成色塊會讀成灰的」。`--chart-1` 是同色相家族往飽和再走一階，明暗兩態都通過 lightness band、chroma floor 與 3:1 對比。要加第二個序列就往 `--chart-2` 擴，不要在使用端挑色。
+  - 全站目前只有一張圖：工作台的「近 6 週健檢量」（`components/TrendBars.vue`）。單一序列的量值長條，所以沒有圖例（標題就說明了它是什麼）、沒有 y 軸刻度、沒有格線；直接標籤只給最新一根，其餘靠 tooltip；`sr-only` 清單提供完整數值。**數量為 0 的那一週仍保留 2px 高的底**——高度歸零會讓人以為那一根不存在，「這週是 0」跟「沒有這週」必須看得出差別。
+  - 工作台原本還有一條報告狀態堆疊長條，已經拿掉：它把「已寄送」（完成、不用管）跟待處理狀態混在同一條上，長條變長只代表資料變多、不代表有事要做。那份資訊現在是四格可點的數字。要做這種「沿用狀態語意色」的圖時記得紅與琥珀在紅色覺缺陷下的模擬 ΔE 只有 5.2，段與段之間要留可見分隔線、圖例要帶標籤與數值——顏色不能是唯一線索。
 - **字體**：`Noto Sans TC Variable`，自架（`@fontsource-variable/noto-sans-tc`，在 `main.js` 匯入）。**不要改成 CDN**——`/report/:token` 是 Puppeteer 產 PDF 的來源，字體連外會讓正式報告的排版取決於當下網路。用 Variable 版也是刻意的：系統中文字體只有 Regular/Bold 兩級，`font-medium`(500)／`font-semibold`(600) 在中文上會失效，介面靠字重建立的階層就整個不存在。
 - **字體層級**（後台管理介面）：
 
@@ -264,6 +284,7 @@ GET    /api/health
 ```bash
 # 前端（client/）
 npm run build          # 驗證改動用這個
+npm test               # node --test，src/lib/*.test.js（純邏輯：日期、狀態、寄送彙整、表單驗證）
 npm run dev            # 使用者自己開，不要主動啟動（會搶 port）
 
 # 後端（server/）
@@ -272,7 +293,7 @@ npm run lint           # eslint
 npm run dev            # 使用者自己開
 ```
 
-改完後的驗證順序：後端 `npm run lint` + `npm test`，前端 `npm run build`。dev server 通常已經在跑（3000 / 5173），可以直接 curl API 驗證。
+改完後的驗證順序：後端 `npm run lint` + `npm test`，前端 `npm run build` + `npm test`。**前端那個 `npm test` 很容易漏掉**——它只涵蓋 `src/lib` 底下的純邏輯，但改動色彩 token 或狀態語意時正是它會抓到問題（斷言綁的是語意 token 名，不是色階名）。dev server 通常已經在跑（3000 / 5173），可以直接 curl API 驗證。
 
 幾件要注意的：
 
@@ -289,10 +310,10 @@ npm run dev            # 使用者自己開
 
 1. **認證機制** — 目前 `/api/*` 完全沒有保護，`/api/appointments/*` 同樣涵蓋在內。部署後任何人都能讀寫全部資料，並用 `POST /api/records/:id/send-email` 借你的 Gmail 發信（被濫用時 Google 封的是帳號本身）。單人使用不需要 JWT，一組環境變數密碼 + signed cookie 即可，但要放行 `/api/public/reports/:token` 與 PDF 存取。同時值得替寄信單獨加頻率限制。
    （已處理一半：對外連結的網域改由 `config/publicUrl.js` 決定，正式環境必須設定 `PUBLIC_APP_URL`，否則啟動失敗。濫用寄信至少不會再寄出指向他人網域的連結，但寄信本身仍然沒有任何門檻。）
-2. **前端 `validateForPreview()` 沒有測試** — `RecordFormPage.vue` 裡與後端 `validateFinalRecord` 對應的那份判準是各寫一份的，後端已經釘住，前端改動會單方面漂移。
-3. **`deletedMedicalRecords` 沒有查詢介面** — 只寫不讀。
-4. **寄送失敗（`failed`）的報告仍可刪除** — 只擋了 `sent` 與 `sending`。
-5. `/owners`、`/pets` 列表沒有分頁；搜尋是全表 regex 掃描，走不到索引。目前資料量還撐得住。
+2. ~~**前端 `validateForPreview()` 沒有測試**~~ — 已完成。判準抽到 `client/src/lib/recordFormValidation.js`（與後端 `recordValidation.js` 是同一套規則的兩個實作），`recordFormValidation.test.js` 有 21 個案例釘住。改任一邊時兩邊的測試都要一起看。
+3. ~~**`deletedMedicalRecords` 沒有查詢介面**~~ — 已完成，但發現的問題比原本記載的嚴重：**那個 collection 根本沒有被實作過**，刪除交易裡只有 `deleteOne`，沒有寫任何快照。現在 model、寫入、查詢 API 與 `/records/deleted` 頁面都補上了。
+4. ~~**寄送失敗（`failed`）的報告仍可刪除**~~ — 查證後這不是缺陷，項目取消。`DELETE /api/records/:id` 實際擋的是 `sent`／`sending`／`uncertain`（`uncertain` 早就補上了，這條待辦的描述是舊的）。`failed` 刻意不擋：寄送失敗代表飼主手上什麼都沒有，刪掉重來是安全的；擋住反而會讓失敗的報告永遠卡在系統裡。判準是「飼主收到了嗎」，不是「寄送有沒有出過事」。
+5. `/owners`、`/pets` 的**搜尋**走不到索引 —— 分頁部分這條記載是舊的，前後端早就都做好了（`paginationOptions`／`paginatedPayload` + 前端的 `totalPages` 與分頁列）。真正剩下的是搜尋：`new RegExp(q, 'i')` 不區分大小寫又不錨定在開頭，即使 Owner 已有 `name`／`phone` 索引也用不上，Pet 更是連 `name` 索引都沒有。要處理得換 text index 或 collation。目前資料量還撐得住。
 6. `appointments` 沒有「依寵物查詢歷史預約」的索引與查詢介面——v1 沒有這個查詢模式，等真的需要再補。
 
 部署見 [docs/ZEABUR_DEPLOY.md](docs/ZEABUR_DEPLOY.md)。

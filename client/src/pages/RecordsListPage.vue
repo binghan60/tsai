@@ -8,6 +8,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import PetPickerDialog from '../components/PetPickerDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
+import EmptyState from '../components/EmptyState.vue';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -175,6 +176,7 @@ function actionLabel(record) {
       </div>
       <div class="flex flex-wrap gap-2">
         <!-- 寄送紀錄是另一種問法：這頁問「還有什麼沒寄」，那頁問「當初寄了什麼給誰」。 -->
+        <Button as-child variant="outline" size="sm"><router-link to="/records/deleted">已刪除的報告</router-link></Button>
         <Button type="button" @click="openPetPicker"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
       </div>
     </div>
@@ -195,9 +197,9 @@ function actionLabel(record) {
       <Button type="button" variant="outline" size="sm" class="self-end" :disabled="!query && !dateFrom && !dateTo" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
     </form>
 
-    <p v-if="!loading && !error && !records.length" class="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-      這個佇列目前是空的。
-    </p>
+    <Card v-if="!loading && !error && !records.length">
+      <EmptyState inset :icon="FileText" title="這個佇列目前是空的" description="換一個佇列，或直接建立新的健檢紀錄。" />
+    </Card>
 
     <template v-else-if="records.length">
       <!-- 桌機：表格 -->
@@ -205,40 +207,40 @@ function actionLabel(record) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead >寵物</TableHead>
-              <TableHead >健檢類型</TableHead>
-              <TableHead >看診日</TableHead>
-              <TableHead >獸醫師</TableHead>
-              <TableHead >狀態</TableHead>
+              <TableHead>寵物</TableHead>
+              <TableHead>健檢類型</TableHead>
+              <TableHead>看診日</TableHead>
+              <TableHead>獸醫師</TableHead>
+              <TableHead>狀態</TableHead>
               <TableHead class="text-right">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow v-for="record in records" :key="record._id">
-              <TableCell >
+              <TableCell>
                 <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="group flex items-center gap-3">
-                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
                     <PawPrint class="h-5 w-5" stroke-width="1.75" />
                   </span>
                   <span class="min-w-0">
-                    <span class="block truncate text-sm font-medium text-foreground group-hover:text-belle-600 dark:group-hover:text-brand-400">{{ record.petId?.name || '寵物未找到' }}</span>
+                    <span class="block truncate text-sm font-medium text-primary">{{ record.petId?.name || '寵物未找到' }}</span>
                     <span class="block truncate text-xs text-muted-foreground">{{ record.petId?.ownerId?.name || '飼主未知' }}</span>
                   </span>
                 </router-link>
               </TableCell>
-              <TableCell >
+              <TableCell>
                 <span class="text-sm text-foreground">{{ record.examType || '—' }}</span>
                 <span v-if="record.reportVersion > 1" class="ml-2 text-xs text-muted-foreground">第 {{ record.reportVersion }} 版</span>
               </TableCell>
               <TableCell class="text-sm tabular-nums text-foreground">{{ formatDate(record.visitDate) }}</TableCell>
               <TableCell class="text-sm text-foreground">{{ record.vet || '未填' }}</TableCell>
-              <TableCell >
+              <TableCell>
                 <span class="flex flex-wrap gap-1.5">
                   <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
                   <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
                 </span>
                 <!-- 寄送失敗最需要知道的是原因，不然只能一份份點進去查。 -->
-                <span v-if="record.deliveryError" class="mt-1 flex items-start gap-1 text-xs text-red-700 dark:text-red-300">
+                <span v-if="record.deliveryError" class="mt-1 flex items-start gap-1 text-xs text-danger">
                   <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />
                   <span class="min-w-0">{{ record.deliveryError }}</span>
                 </span>
@@ -260,11 +262,11 @@ function actionLabel(record) {
       <div class="space-y-3 xl:hidden">
         <Card v-for="record in records" :key="record._id" class="gap-3 p-4 shadow-sm dark:shadow-none">
           <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="flex items-start gap-3">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
               <PawPrint class="h-5 w-5" stroke-width="1.75" />
             </span>
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-medium text-foreground">{{ record.petId?.name || '寵物未找到' }}</span>
+              <span class="block truncate text-sm font-medium text-primary">{{ record.petId?.name || '寵物未找到' }}</span>
               <span class="flex items-center gap-1 truncate text-xs text-muted-foreground">
                 <User class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ record.petId?.ownerId?.name || '飼主未知' }}
               </span>
@@ -279,7 +281,7 @@ function actionLabel(record) {
           <p class="text-xs text-muted-foreground">
             {{ record.examType || '健檢' }} · {{ formatDate(record.visitDate) }} · {{ record.vet || '獸醫師未填' }}
           </p>
-          <p v-if="record.deliveryError" class="flex items-start gap-1 text-xs text-red-700 dark:text-red-300">
+          <p v-if="record.deliveryError" class="flex items-start gap-1 text-xs text-danger">
             <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />
             <span class="min-w-0">{{ record.deliveryError }}</span>
           </p>

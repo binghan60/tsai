@@ -49,13 +49,13 @@ const emit = defineEmits(['start-report']);
           <dt class="text-xs text-muted-foreground">總預約</dt>
           <dd class="mt-0.5 text-xl font-semibold tabular-nums text-foreground">{{ total }}</dd>
         </div>
-        <div class="rounded-xl bg-emerald-50 p-2.5 dark:bg-emerald-500/10">
-          <dt class="text-xs text-emerald-700 dark:text-emerald-300">已完成</dt>
-          <dd class="mt-0.5 text-xl font-semibold tabular-nums text-emerald-700 dark:text-emerald-300">{{ counts.completed || 0 }}</dd>
+        <div class="rounded-xl bg-success-surface p-2.5">
+          <dt class="text-xs text-success">已完成</dt>
+          <dd class="mt-0.5 text-xl font-semibold tabular-nums text-success">{{ counts.completed || 0 }}</dd>
         </div>
-        <div class="rounded-xl bg-amber-50 p-2.5 dark:bg-amber-500/10">
-          <dt class="text-xs text-amber-800 dark:text-amber-300">未到</dt>
-          <dd class="mt-0.5 text-xl font-semibold tabular-nums text-amber-800 dark:text-amber-300">{{ counts.no_show || 0 }}</dd>
+        <div class="rounded-xl bg-warning-surface p-2.5">
+          <dt class="text-xs text-warning">未到</dt>
+          <dd class="mt-0.5 text-xl font-semibold tabular-nums text-warning">{{ counts.no_show || 0 }}</dd>
         </div>
         <div class="rounded-xl bg-muted/45 p-2.5">
           <dt class="text-xs text-muted-foreground">已取消</dt>

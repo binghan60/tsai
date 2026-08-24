@@ -34,8 +34,8 @@ function eitherOrHint(item) {
           <div class="space-y-1.5">
             <Label :for="`record-${item.key}`" class="text-xs font-medium text-muted-foreground">
               {{ item.label }}
-              <span v-if="item.required" class="text-red-600 dark:text-red-400" aria-hidden="true">*</span>
-              <span v-else-if="eitherOrHint(item)" class="text-red-600 dark:text-red-400"> {{ eitherOrHint(item) }}</span>
+              <span v-if="item.required" class="text-danger" aria-hidden="true">*</span>
+              <span v-else-if="eitherOrHint(item)" class="text-danger"> {{ eitherOrHint(item) }}</span>
             </Label>
             <Textarea
               :id="`record-${item.key}`"

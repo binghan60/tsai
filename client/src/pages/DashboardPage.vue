@@ -1,15 +1,19 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
-import { AlertTriangle, ArrowRight, CalendarClock, Check, ClipboardPlus, FileText, PawPrint, Pencil, Trash2, Users } from '@lucide/vue'
+import { useRouter } from 'vue-router'
+import { AlertTriangle, ArrowRight, CalendarClock, Check, ClipboardPlus, PawPrint, Trash2 } from '@lucide/vue'
 import { http } from '../api/http'
 import { clinicDateInput, formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime'
+import { APPOINTMENT_STATUS_META } from '../lib/appointmentStatus'
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import EmptyState from '../components/EmptyState.vue'
+import ListSkeleton from '../components/ListSkeleton.vue'
 import PetPickerDialog from '../components/PetPickerDialog.vue'
+import TrendBars from '../components/TrendBars.vue'
 import { Alert, AlertDescription } from '../components/ui/alert'
 
 const router = useRouter()
@@ -33,81 +37,41 @@ async function fetchDashboard() {
   }
 }
 
-const stats = computed(() => [
-  // 預約清單改成日期區間查詢後不再預設今天，這裡把當天日期一起帶過去，卡片數字才對得上清單。
-  { label: '今日預約', value: dashboard.value?.todayAppointmentCount ?? '—', icon: CalendarClock, to: `/appointments?from=${clinicDateInput()}&to=${clinicDateInput()}` },
-  { label: '飼主', value: dashboard.value?.ownerCount ?? '—', icon: Users, to: '/owners' },
-  { label: '寵物', value: dashboard.value?.petCount ?? '—', icon: PawPrint, to: '/pets' },
-  // 本月健檢沒有 to：清單頁還沒有日期區間篩選，連過去只會看到跟卡片對不上的筆數。
-  { label: '本月健檢', value: dashboard.value?.monthlyReportCount ?? '—', icon: FileText },
-])
+// 預約清單改成日期區間查詢後不再預設今天，這裡把當天日期一起帶過去，數字才對得上清單。
+const todayLink = computed(() => `/appointments?from=${clinicDateInput()}&to=${clinicDateInput()}`)
 
-// 數字一律用後端算好的 finalizedPendingCount／failedCount，不要在這裡從 statusBreakdown
-// 重算：那份加總必須跟 records.js 的 view 篩選條件逐字對齊（pending 含 uncertain，
-// failed 也含 uncertain），一在前端重算就會漏掉狀態——卡片點得進清單，兩邊對不上等於在騙人。
-const workStages = computed(() => [
-  {
-    key: 'drafts',
-    label: '完成草稿',
-    count: dashboard.value?.draftCount ?? 0,
-    description: '補齊健檢內容並結案',
-    action: '查看草稿',
-    to: '/records?view=drafts',
-    icon: Pencil,
-    class: 'border-amber-200 bg-amber-50/60 dark:border-amber-500/25 dark:bg-amber-500/5',
-  },
-  {
-    key: 'pending',
-    label: '寄送報告',
-    count: dashboard.value?.finalizedPendingCount ?? 0,
-    description: '已結案，等待寄送給飼主',
-    action: '查看待寄送',
-    to: '/records?view=pending',
-    icon: FileText,
-    class: 'border-sky-200 bg-sky-50/60 dark:border-sky-500/25 dark:bg-sky-500/5',
-  },
-  {
-    key: 'attention',
-    label: '處理異常',
-    count: dashboard.value?.failedCount ?? 0,
-    description: '確認寄送結果或重新寄送',
-    action: '處理異常',
-    to: '/records?view=failed',
-    icon: AlertTriangle,
-    class: 'border-red-200 bg-red-50/60 dark:border-red-500/25 dark:bg-red-500/5',
-  },
-])
-
-const primaryAction = computed(() => {
-  const stages = workStages.value
-  const attention = stages[2]
-  if (attention.count) return { ...attention, title: `有 ${attention.count} 份報告需要確認`, detail: '請先確認寄送結果，避免飼主漏收報告。' }
-  const pending = stages[1]
-  if (pending.count) return { ...pending, title: `有 ${pending.count} 份報告待寄送`, detail: '報告已結案，下一步是寄送給飼主。' }
-  const drafts = stages[0]
-  if (drafts.count) return { ...drafts, title: `有 ${drafts.count} 份草稿待完成`, detail: '完成填寫並結案後，才能寄送正式報告。' }
-  return {
-    title: '目前沒有待處理的健檢報告',
-    detail: '可以開始一份新的健檢紀錄。',
-    action: '新增健檢',
-    icon: Check,
-    class: 'border-emerald-200 bg-emerald-50/60 dark:border-emerald-500/25 dark:bg-emerald-500/5',
-    to: '',
-  }
-})
-
-const statusSegments = computed(() => {
-  const values = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0, uncertain: 0, ...(dashboard.value?.statusBreakdown ?? {}) }
-  const total = Math.max(values.draft + values.finalized + values.sending + values.sent + values.failed + values.uncertain, 1)
+// 今日門診依狀態拆開。每一格都連進預約頁的對應篩選，數字點得進去才算數。
+const todayBreakdown = computed(() => {
+  const today = dashboard.value?.todayAppointments ?? {}
   return [
-    { key: 'draft', label: RECORD_STATUS_META.draft.label, value: values.draft, width: (values.draft / total) * 100, class: RECORD_STATUS_META.draft.dotClass },
-    { key: 'finalized', label: DELIVERY_STATUS_META.not_sent.label, value: values.finalized, width: (values.finalized / total) * 100, class: DELIVERY_STATUS_META.not_sent.dotClass },
-    { key: 'sending', label: DELIVERY_STATUS_META.sending.label, value: values.sending, width: (values.sending / total) * 100, class: DELIVERY_STATUS_META.sending.dotClass },
-    { key: 'sent', label: DELIVERY_STATUS_META.sent.label, value: values.sent, width: (values.sent / total) * 100, class: DELIVERY_STATUS_META.sent.dotClass },
-    { key: 'failed', label: DELIVERY_STATUS_META.failed.label, value: values.failed, width: (values.failed / total) * 100, class: DELIVERY_STATUS_META.failed.dotClass },
-    { key: 'uncertain', label: DELIVERY_STATUS_META.uncertain.label, value: values.uncertain, width: (values.uncertain / total) * 100, class: DELIVERY_STATUS_META.uncertain.dotClass },
-  ]
+    { key: 'scheduled', label: '待報到', count: today.scheduled ?? 0 },
+    { key: 'arrived', label: '已報到', count: today.arrived ?? 0 },
+    { key: 'completed', label: '已完成', count: today.completed ?? 0 },
+    { key: 'no_show', label: '未到診', count: today.no_show ?? 0 },
+  ].map((item) => ({
+    ...item,
+    dot: APPOINTMENT_STATUS_META[item.key]?.dotClass ?? 'bg-muted-foreground',
+    to: `${todayLink.value}&view=${item.key}`,
+  }))
 })
+
+// 報告流程分佈。數字一律用後端算好的 finalizedPendingCount／failedCount，不要在這裡從
+// statusBreakdown 重算：那份加總必須跟 records.js 的 view 篩選條件逐字對齊（pending 含
+// uncertain，failed 也含 uncertain），一在前端重算就會漏掉狀態——數字點得進清單，
+// 兩邊對不上等於在騙人。
+//
+// 這裡刻意用四個數字而不是一條堆疊長條：「已寄送」是完成、其他三個是待辦，
+// 混在同一條上只會讓長條變長代表資料變多，看不出有沒有事要做。
+const reportFlow = computed(() => [
+  { key: 'drafts', label: '草稿', count: dashboard.value?.draftCount ?? 0, to: '/records?view=drafts', dot: RECORD_STATUS_META.draft.dotClass, hint: '尚未結案' },
+  { key: 'pending', label: '待寄送', count: dashboard.value?.finalizedPendingCount ?? 0, to: '/records?view=pending', dot: DELIVERY_STATUS_META.not_sent.dotClass, hint: '已結案，等寄出' },
+  { key: 'sent', label: '已寄送', count: dashboard.value?.statusBreakdown?.sent ?? 0, to: '/records?view=sent', dot: DELIVERY_STATUS_META.sent.dotClass, hint: '飼主已收到' },
+  { key: 'failed', label: '寄送異常', count: dashboard.value?.failedCount ?? 0, to: '/records?view=failed', dot: DELIVERY_STATUS_META.failed.dotClass, hint: '需要確認', danger: true },
+])
+
+// 橫幅只留給「真的卡住了」。草稿和待寄送是正常流程，每天開工作台都被一個大橫幅
+// 告知「你有草稿」，那個橫幅就會被當成背景忽略掉，真的出事時反而看不見。
+const attentionCount = computed(() => dashboard.value?.failedCount ?? 0)
 
 async function discardDraft(item) {
   if (deletingDraftId.value) return
@@ -167,133 +131,226 @@ onMounted(fetchDashboard)
 </script>
 
 <template>
-  <section class="mx-auto max-w-7xl space-y-5">
+  <!--
+    三層閱讀順序，由粗到細：
+      1 現在   今日門診、異常警示
+      2 分佈與趨勢   報告流程、近 6 週健檢量、本月概況
+      3 明細   待辦清單、最近完成
+    同一個數字只在其中一層出現一次。之前草稿數同時出現在優先處理卡、workStage 卡、
+    待辦清單與狀態長條四個地方，那是這頁最主要的雜訊來源。
+  -->
+  <section class="mx-auto max-w-7xl space-y-4">
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="text-xl font-semibold text-foreground">健檢工作台</h1>
-        <p class="mt-1 text-sm text-muted-foreground">快速找到寵物、繼續草稿或建立新的健檢紀錄。</p>
+        <p class="mt-1 text-sm text-muted-foreground">今日門診、報告流程與最近的健檢量一覽。</p>
       </div>
       <Button type="button" @click="petPickerOpen = true"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
     </div>
 
-    <Alert v-if="error" variant="destructive"
-      ><AlertDescription>{{ error }}</AlertDescription></Alert
-    >
-    <p v-else-if="loading" class="text-sm text-muted-foreground" role="status">載入工作台…</p>
+    <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+
+    <ListSkeleton v-if="loading" :rows="6" />
 
     <template v-else>
-      <Card class="border p-5 shadow-sm dark:shadow-none" :class="primaryAction.class">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div class="flex items-start gap-3">
-            <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-card/80 text-foreground shadow-sm dark:bg-card/30">
-              <component :is="primaryAction.icon" class="h-5 w-5" stroke-width="1.75" />
-            </div>
+      <!-- ── 第 1 層：現在 ────────────────────────────────────── -->
+      <router-link
+        v-if="attentionCount"
+        to="/records?view=failed"
+        class="flex items-center gap-3 rounded-xl border border-danger/40 bg-danger-surface p-4 transition-colors hover:border-danger/60"
+      >
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-card/70 text-danger">
+          <AlertTriangle class="h-5 w-5" stroke-width="1.75" />
+        </span>
+        <span class="min-w-0 flex-1">
+          <span class="block text-base font-semibold text-danger">有 {{ attentionCount }} 份報告需要確認</span>
+          <span class="mt-0.5 block text-sm text-muted-foreground">請先確認寄送結果，避免飼主漏收報告。</span>
+        </span>
+        <ArrowRight class="h-4 w-4 shrink-0 text-danger" stroke-width="1.75" />
+      </router-link>
+
+      <Card class="p-5 shadow-sm dark:shadow-none">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+              <CalendarClock class="h-5 w-5" stroke-width="1.75" />
+            </span>
             <div>
-              <p class="text-xs font-medium text-muted-foreground">現在優先處理</p>
-              <h2 class="mt-1 text-base font-semibold text-foreground">{{ primaryAction.title }}</h2>
-              <p class="mt-1 text-sm text-muted-foreground">{{ primaryAction.detail }}</p>
+              <CardTitle class="text-sm">今日門診</CardTitle>
+              <p class="mt-0.5 text-xs text-muted-foreground">
+                共 <strong class="text-sm font-semibold tabular-nums text-foreground">{{ dashboard.todayAppointments?.total ?? 0 }}</strong> 診次
+                <template v-if="dashboard.todayAppointments?.cancelled"> · 已取消 {{ dashboard.todayAppointments.cancelled }}</template>
+              </p>
             </div>
           </div>
-          <Button v-if="primaryAction.to" as-child class="shrink-0"
-            ><router-link :to="primaryAction.to">{{ primaryAction.action }}<ArrowRight class="h-4 w-4" /></router-link
-          ></Button>
-          <Button v-else type="button" class="shrink-0" @click="petPickerOpen = true"><ClipboardPlus class="h-4 w-4" />{{ primaryAction.action }}</Button>
+          <Button as-child variant="outline" size="sm">
+            <router-link :to="todayLink">查看預約<ArrowRight class="h-4 w-4" /></router-link>
+          </Button>
         </div>
-      </Card>
-      <Card class="p-5 shadow-sm">
-        <div class="mb-3 flex items-center justify-between"><CardTitle class="text-sm">報告狀態</CardTitle><span class="text-xs text-muted-foreground">流程概況</span></div>
-        <div class="flex h-3 overflow-hidden rounded-full bg-muted/60"><div v-for="segment in statusSegments" :key="segment.key" :class="segment.class" :style="{ width: `${segment.width}%` }"></div></div>
 
-        <div class="mt-4 flex flex-wrap gap-x-6 gap-y-2">
-          <span v-for="segment in statusSegments" :key="segment.key" class="flex items-center gap-2 text-sm text-foreground"
-            ><span class="h-2 w-2 shrink-0 rounded-full" :class="segment.class" aria-hidden="true"></span>{{ segment.label }} <strong>{{ segment.value }}</strong></span
+        <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <router-link
+            v-for="item in todayBreakdown"
+            :key="item.key"
+            :to="item.to"
+            class="rounded-lg border border-border bg-field px-3 py-2.5 transition-colors hover:border-primary/45 hover:bg-accent"
           >
+            <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="item.count ? item.dot : 'bg-muted-foreground/40'" aria-hidden="true"></span>
+              {{ item.label }}
+            </span>
+            <span class="mt-1 block text-xl font-semibold leading-none tabular-nums text-foreground">{{ item.count }}</span>
+          </router-link>
         </div>
       </Card>
-      <div class="grid gap-3 md:grid-cols-3">
-        <router-link v-for="stage in workStages" :key="stage.key" :to="stage.to" class="flex items-center gap-3 rounded-xl border p-3 transition-colors hover:bg-card/70" :class="stage.class">
-          <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-card/80 text-foreground dark:bg-card/30"><component :is="stage.icon" class="h-4 w-4" stroke-width="1.75" /></span>
-          <span class="min-w-0 flex-1">
-            <span class="flex items-center gap-1 text-sm font-semibold leading-none text-foreground">{{ stage.label }}<ArrowRight class="h-3.5 w-3.5" /></span>
-            <span class="mt-1 block truncate text-xs text-muted-foreground">{{ stage.description }}</span>
-          </span>
-          <span class="text-xl font-semibold leading-none tabular-nums text-foreground">{{ stage.count }}</span>
-        </router-link>
-      </div>
 
-      <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <Card v-for="stat in stats" :key="stat.label" class="border p-0 shadow-sm dark:shadow-none" :class="stat.emphasis && stat.value ? 'border-belle-300 dark:border-brand-500/50' : ' '">
-          <component :is="stat.to ? RouterLink : 'div'" :to="stat.to" class="flex flex-row items-center gap-3 rounded-xl p-4" :class="stat.to ? 'transition-colors hover:bg-muted/40 ' : ''">
-            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><component :is="stat.icon" class="h-5 w-5" /></div>
-            <div class="min-w-0">
-              <div class="text-xl font-semibold tabular-nums text-foreground">{{ stat.value }}</div>
-              <div class="text-xs text-muted-foreground">{{ stat.label }}</div>
+      <!-- ── 第 2 層：分佈與趨勢 ──────────────────────────────── -->
+      <Card class="p-5 shadow-sm dark:shadow-none">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle class="text-sm">報告流程</CardTitle>
+            <CardDescription class="mt-0.5 text-xs">每一格都能點進對應的健檢紀錄佇列</CardDescription>
+          </div>
+        </div>
+        <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <router-link
+            v-for="stage in reportFlow"
+            :key="stage.key"
+            :to="stage.to"
+            class="rounded-lg border px-3 py-2.5 transition-colors"
+            :class="stage.danger && stage.count
+              ? 'border-danger/40 bg-danger-surface hover:border-danger/60'
+              : 'border-border bg-field hover:border-primary/45 hover:bg-accent'"
+          >
+            <span class="flex items-center gap-1.5 text-xs" :class="stage.danger && stage.count ? 'text-danger' : 'text-muted-foreground'">
+              <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="stage.count ? stage.dot : 'bg-muted-foreground/40'" aria-hidden="true"></span>
+              {{ stage.label }}
+            </span>
+            <span class="mt-1 block text-xl font-semibold leading-none tabular-nums" :class="stage.danger && stage.count ? 'text-danger' : 'text-foreground'">{{ stage.count }}</span>
+            <span class="mt-1 block truncate text-xs text-muted-foreground">{{ stage.hint }}</span>
+          </router-link>
+        </div>
+      </Card>
+
+      <div class="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <Card class="p-5 shadow-sm dark:shadow-none">
+          <CardTitle class="text-sm">近 6 週健檢量</CardTitle>
+          <CardDescription class="mt-0.5 text-xs">依健檢日期計算，每根一週</CardDescription>
+          <div class="mt-4">
+            <TrendBars :data="dashboard.weeklyTrend ?? []" label="每週健檢量" />
+          </div>
+        </Card>
+
+        <Card class="p-5 shadow-sm dark:shadow-none">
+          <CardTitle class="text-sm">本月</CardTitle>
+          <!-- 本月健檢沒有連結：清單頁還沒有月份篩選，連過去只會看到跟這個數字對不上的筆數。 -->
+          <div class="mt-3 flex items-baseline gap-2">
+            <span class="text-xl font-semibold leading-none tabular-nums text-foreground">{{ dashboard.monthlyReportCount ?? 0 }}</span>
+            <span class="text-xs text-muted-foreground">份健檢</span>
+          </div>
+          <dl class="mt-4 space-y-2 border-t border-border pt-3 text-xs">
+            <div class="flex items-center justify-between gap-3">
+              <dt class="text-muted-foreground">本月新飼主</dt>
+              <dd class="tabular-nums text-foreground">{{ dashboard.monthlyNewOwnerCount ?? 0 }}</dd>
             </div>
-          </component>
+            <div class="flex items-center justify-between gap-3">
+              <dt class="text-muted-foreground">本月新寵物</dt>
+              <dd class="tabular-nums text-foreground">{{ dashboard.monthlyNewPetCount ?? 0 }}</dd>
+            </div>
+            <div class="flex items-center justify-between gap-3 border-t border-border pt-2">
+              <dt class="text-muted-foreground">累計飼主 / 寵物</dt>
+              <dd class="tabular-nums text-foreground">
+                <router-link to="/owners" class="text-primary">{{ dashboard.ownerCount ?? 0 }}</router-link>
+                /
+                <router-link to="/pets" class="text-primary">{{ dashboard.petCount ?? 0 }}</router-link>
+              </dd>
+            </div>
+          </dl>
         </Card>
       </div>
 
+      <!-- ── 第 3 層：明細 ────────────────────────────────────── -->
       <div class="grid gap-4 xl:grid-cols-2">
-        <Card class="gap-0 overflow-hidden py-0 shadow-sm">
+        <Card class="gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none">
           <CardHeader class="flex-row items-center justify-between gap-3 border-b border-border px-5 py-3">
-            <div><CardTitle class="text-sm">待辦工作</CardTitle><CardDescription class="mt-0.5 text-xs">寄送異常優先，其次是待寄送報告與草稿</CardDescription></div>
+            <div>
+              <CardTitle class="text-sm">待辦工作</CardTitle>
+              <CardDescription class="mt-0.5 text-xs">寄送異常優先，其次是待寄送報告與草稿</CardDescription>
+            </div>
+            <Button as-child variant="outline" size="sm" class="shrink-0">
+              <router-link to="/records?view=todo">查看全部<ArrowRight class="h-4 w-4" /></router-link>
+            </Button>
           </CardHeader>
           <CardContent class="p-0">
             <div v-if="dashboard.actionRecords?.length" class="divide-y divide-border">
-              <div v-for="item in dashboard.actionRecords" :key="item._id" class="flex min-h-[64px] items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/40">
+              <div v-for="item in dashboard.actionRecords" :key="item._id" class="flex min-h-16 items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/40">
                 <div class="min-w-0 flex-1">
                   <div class="flex flex-wrap items-center gap-2">
-                    <span class="truncate text-sm font-medium text-foreground">{{ item.petId?.name || '寵物未找到' }}</span>
-                    <span v-if="item.petId?.ownerId?.name" class="text-xs text-muted-foreground font-normal">{{ item.petId?.ownerId?.name }}</span>
+                    <router-link :to="item.petId ? `/pets/${item.petId._id}` : recordLink(item)" class="truncate text-sm font-medium text-primary">{{ item.petId?.name || '寵物未找到' }}</router-link>
+                    <span v-if="item.petId?.ownerId?.name" class="text-xs font-normal text-muted-foreground">{{ item.petId?.ownerId?.name }}</span>
                     <Badge variant="status" :class="actionMeta(item).class" class="shrink-0">{{ actionMeta(item).label }}</Badge>
                   </div>
                   <p class="mt-0.5 truncate text-xs text-muted-foreground">{{ actionMeta(item).detail }}<span v-if="item.visitDate"> · 健檢日 {{ formatDate(item.visitDate) }}</span></p>
                 </div>
                 <div class="flex shrink-0 items-center gap-1.5">
-                  <Button as-child type="button" :variant="actionMeta(item).buttonVariant" size="sm"><router-link :to="recordLink(item)">{{ actionMeta(item).action }}<ArrowRight class="ml-1 h-3.5 w-3.5" /></router-link></Button>
-                  <Button v-if="item.status === 'draft'" type="button" variant="destructive" size="icon" class="h-8 w-8 shrink-0" :disabled="deletingDraftId === item._id" :aria-label="`捨棄 ${item.petId?.name || '草稿'}`" title="捨棄草稿" @click="openDiscardDraft(item)">
+                  <Button as-child type="button" :variant="actionMeta(item).buttonVariant" size="sm">
+                    <router-link :to="recordLink(item)">{{ actionMeta(item).action }}<ArrowRight class="h-4 w-4" /></router-link>
+                  </Button>
+                  <Button
+                    v-if="item.status === 'draft'"
+                    type="button"
+                    variant="destructive"
+                    size="icon-sm"
+                    class="shrink-0"
+                    :disabled="deletingDraftId === item._id"
+                    :aria-label="`捨棄 ${item.petId?.name || '草稿'}`"
+                    title="捨棄草稿"
+                    @click="openDiscardDraft(item)"
+                  >
                     <Trash2 class="h-4 w-4" />
                   </Button>
                 </div>
               </div>
             </div>
-            <div v-else class="px-5 py-8 text-center">
-              <Check class="mx-auto h-6 w-6 text-emerald-600" />
-              <p class="mt-2 text-sm text-muted-foreground">目前沒有待處理工作</p>
-            </div>
+            <EmptyState v-else inset :icon="Check" title="目前沒有待處理工作" description="所有報告都已寄出，可以開始新的健檢。" />
           </CardContent>
         </Card>
 
-        <Card class="gap-0 overflow-hidden py-0 shadow-sm">
-          <CardHeader class="flex-row items-center justify-between gap-3 border-b border-border px-5 py-3">
-            <div><CardTitle class="text-sm">最近完成紀錄</CardTitle><CardDescription class="mt-0.5 text-xs">最近已成功寄送的健檢報告</CardDescription></div>
+        <Card class="gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none">
+          <CardHeader class="border-b border-border px-5 py-3">
+            <CardTitle class="text-sm">最近完成</CardTitle>
+            <CardDescription class="mt-0.5 text-xs">最近已成功寄送的健檢報告</CardDescription>
           </CardHeader>
           <CardContent class="p-0">
             <div v-if="dashboard.recentRecords?.length" class="divide-y divide-border">
-              <div v-for="item in dashboard.recentRecords" :key="item._id" class="flex min-h-[64px] items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-muted/40">
-                <router-link :to="recordLink(item)" class="flex min-w-0 flex-1 items-center justify-between gap-3">
-                  <span class="min-w-0"
-                    ><span class="block truncate text-sm font-medium text-foreground"
-                      >{{ item.petId?.name || '寵物未找到' }}<span v-if="item.petId?.ownerId?.name" class="ml-2 font-normal text-muted-foreground">{{ item.petId?.ownerId?.name }}</span></span
-                    ><span class="block text-xs text-muted-foreground">{{ formatDate(item.visitDate) }} · {{ item.vet || '獸醫師未填' }}</span></span
-                  >
-                  <span class="flex shrink-0 flex-wrap justify-end gap-1.5"
-                    ><Badge variant="status" :class="RECORD_STATUS_META[item.status]?.class">{{ RECORD_STATUS_META[item.status]?.label }}</Badge
-                    ><Badge v-if="item.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(item)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(item)]?.label }}</Badge></span
-                  >
-                </router-link>
-              </div>
+              <router-link
+                v-for="item in dashboard.recentRecords"
+                :key="item._id"
+                :to="recordLink(item)"
+                class="block px-5 py-3 transition-colors hover:bg-muted/40"
+              >
+                <span class="block truncate text-sm font-medium text-primary">{{ item.petId?.name || '寵物未找到' }}</span>
+                <span class="mt-0.5 block truncate text-xs text-muted-foreground">
+                  {{ formatDate(item.visitDate) }} · {{ item.vet || '獸醫師未填' }}
+                  <template v-if="item.petId?.ownerId?.name"> · {{ item.petId.ownerId.name }}</template>
+                </span>
+              </router-link>
             </div>
-            <div v-else class="px-5 py-8 text-center">
-              <PawPrint class="mx-auto h-6 w-6 text-muted-foreground" />
-              <p class="mt-2 text-sm text-muted-foreground">目前沒有已寄送紀錄</p>
-            </div>
+            <EmptyState v-else inset :icon="PawPrint" title="還沒有已寄送紀錄" />
           </CardContent>
         </Card>
       </div>
-
-      <ConfirmDialog :open="Boolean(draftToDiscard)" title="捨棄草稿" :description="`確定要捨棄 ${draftToDiscard?.petId?.name || '這份'} 的草稿嗎？此操作無法復原。`" confirm-label="捨棄草稿" :loading="Boolean(deletingDraftId)" @update:open="(value) => !value && (draftToDiscard = null)" @confirm="discardDraft(draftToDiscard)" />
-      <PetPickerDialog :open="petPickerOpen" @close="petPickerOpen = false" @select="startRecordForPet" />
     </template>
+
+    <ConfirmDialog
+      :open="Boolean(draftToDiscard)"
+      title="捨棄草稿"
+      :description="`確定要捨棄 ${draftToDiscard?.petId?.name || '這份'} 的草稿嗎？此操作無法復原。`"
+      confirm-label="捨棄草稿"
+      :loading="Boolean(deletingDraftId)"
+      @update:open="(value) => !value && (draftToDiscard = null)"
+      @confirm="discardDraft(draftToDiscard)"
+    />
+    <PetPickerDialog :open="petPickerOpen" @close="petPickerOpen = false" @select="startRecordForPet" />
   </section>
 </template>

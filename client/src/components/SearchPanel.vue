@@ -32,7 +32,7 @@ const emit = defineEmits(['update:modelValue']);
       />
     </div>
     <p v-if="loading" class="mt-2 px-1 text-xs text-muted-foreground" role="status">搜尋中…</p>
-    <p v-else-if="error" class="mt-2 px-1 text-xs text-red-700 dark:text-red-300">{{ error }}</p>
+    <p v-else-if="error" class="mt-2 px-1 text-xs text-danger">{{ error }}</p>
     <slot />
   </Card>
 </template>

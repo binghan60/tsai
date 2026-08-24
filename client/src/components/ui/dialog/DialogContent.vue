@@ -8,7 +8,6 @@ import {
   useForwardPropsEmits,
 } from "reka-ui";
 import { cn } from "@/lib/utils";
-import { Button } from '@/components/ui/button';
 import DialogOverlay from "./DialogOverlay.vue";
 
 defineOptions({
@@ -66,7 +65,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
 // - 進場 150ms、離場 100ms：關閉要比開啟更快，才不會有「黏住」的感覺。
 // 陰影從 shadow-xl 降到 shadow-lg：遮罩已經從 /75 降到 /60，兩者原本都很重，
 // 疊起來對比過猛，面板像是浮在很遠的地方。
-const CONTENT_CLASS = 'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-lg shadow-ink-900/20 dark:border-brand-500/25 dark:shadow-black/60 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-closed:duration-100 outline-none';
+const CONTENT_CLASS = 'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-lg shadow-black/20 dark:shadow-black/60 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-closed:duration-100 outline-none';
 </script>
 
 <template>
@@ -79,7 +78,7 @@ const CONTENT_CLASS = 'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-
     >
       <!-- 頂部飾線。兩個主題各用各的主色，不混色：
            淺色是 Belle Époque 的酒紅描金，深色是科技感的琥珀橘。 -->
-      <div class="absolute inset-x-0 top-0 z-10 h-0.5 bg-gradient-to-r from-belle-600 via-brand-300 to-belle-600 dark:from-brand-600 dark:via-brand-300 dark:to-brand-600"></div>
+      <div class="absolute inset-x-0 top-0 z-10 h-0.5 bg-primary/70"></div>
 
       <!-- 原本這裡還有一層角落光暈。拿掉的理由是它出現在「確定要刪除嗎」這種
            兩行的對話框上時，裝飾元素比內容還多——頂部飾線已經足夠標示這是誰的介面。 -->
@@ -88,7 +87,7 @@ const CONTENT_CLASS = 'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-
       <DialogClose v-if="showCloseButton" data-slot="dialog-close" as-child>
         <button
           type="button"
-          class="absolute top-5 right-5 z-20 sm:top-6 sm:right-6 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/40 text-muted-foreground transition-colors duration-150 hover:border-belle-500/40 hover:bg-belle-50 hover:text-belle-600 active:scale-95 dark:hover:border-brand-500/50 dark:hover:text-brand-400"
+          class="absolute top-5 right-5 z-20 sm:top-6 sm:right-6 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-muted/40 text-muted-foreground transition-colors duration-150 hover:border-primary/40 hover:bg-accent hover:text-primary active:scale-95"
         >
           <XIcon class="h-4 w-4" stroke-width="1.75" />
           <span class="sr-only">關閉</span>

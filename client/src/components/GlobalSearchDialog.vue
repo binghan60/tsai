@@ -138,7 +138,7 @@ onBeforeUnmount(() => {
 
       <div class="max-h-[min(60vh,26rem)] overflow-y-auto">
         <p v-if="searching" class="px-4 py-6 text-sm text-muted-foreground" role="status">搜尋中…</p>
-        <p v-else-if="searchError" class="px-4 py-6 text-sm text-red-700 dark:text-red-300">{{ searchError }}</p>
+        <p v-else-if="searchError" class="px-4 py-6 text-sm text-danger">{{ searchError }}</p>
         <p v-else-if="!hasQuery" class="px-4 py-6 text-sm text-muted-foreground">輸入寵物名、飼主姓名或電話開始搜尋。</p>
         <p v-else-if="!flatResults.length" class="px-4 py-6 text-sm text-muted-foreground">找不到符合的寵物或飼主。</p>
 
@@ -158,7 +158,7 @@ onBeforeUnmount(() => {
               <span class="flex min-w-0 items-center gap-3">
                 <component
                   :is="item.kind === 'pet' ? PawPrint : User"
-                  class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400"
+                  class="h-5 w-5 shrink-0 text-primary"
                   stroke-width="1.75"
                 />
                 <span class="min-w-0">

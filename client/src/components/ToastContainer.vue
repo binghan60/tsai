@@ -4,24 +4,27 @@ import { useToast } from '../composables/useToast';
 
 const { toasts, removeToast } = useToast();
 
+// 每種提示只用一個語意色。之前 topBar 是三色漸層（success 是 emerald→brand→emerald，
+// 深色再換成 brand→belle→amber），一個 4px 高的裝飾條上放了三個色站、明暗兩態各一組，
+// 六個色值只為了畫一條線——而讀者真正要辨認的只有「成功還是失敗」這一件事。
 const typeConfig = {
   success: {
     icon: CheckCircle2,
-    badge: 'bg-emerald-500/10 text-emerald-600 border-emerald-200/80 dark:bg-brand-500/15 dark:text-brand-300 dark:border-brand-500/40',
-    topBar: 'bg-gradient-to-r from-emerald-500 via-brand-400 to-emerald-600 dark:from-brand-500 dark:via-belle-400 dark:to-amber-300',
-    glow: '[--glow-color:color-mix(in_oklab,var(--color-emerald-500)_16%,transparent)] dark:[--glow-color:color-mix(in_oklab,var(--color-brand-500)_16%,transparent)]',
+    badge: 'bg-success-surface text-success border-success/30',
+    topBar: 'bg-success',
+    glow: '[--glow-color:color-mix(in_oklab,var(--success)_14%,transparent)]',
   },
   error: {
     icon: XCircle,
-    badge: 'bg-red-500/10 text-red-600 border-red-200/80 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/60',
-    topBar: 'bg-gradient-to-r from-red-500 via-belle-500 to-red-600 dark:from-red-600 dark:via-red-400 dark:to-amber-500',
-    glow: '[--glow-color:color-mix(in_oklab,var(--color-red-500)_16%,transparent)]',
+    badge: 'bg-danger-surface text-danger border-danger/30',
+    topBar: 'bg-danger',
+    glow: '[--glow-color:color-mix(in_oklab,var(--danger)_14%,transparent)]',
   },
   info: {
     icon: Info,
-    badge: 'bg-sky-500/10 text-sky-600 border-sky-200/80 dark:bg-sky-950/40 dark:text-sky-400 dark:border-sky-900/60',
-    topBar: 'bg-gradient-to-r from-sky-500 via-ink-500 to-sky-600 dark:from-sky-600 dark:via-sky-400 dark:to-brand-400',
-    glow: '[--glow-color:color-mix(in_oklab,var(--color-sky-500)_16%,transparent)]',
+    badge: 'bg-info-surface text-info border-info/30',
+    topBar: 'bg-info',
+    glow: '[--glow-color:color-mix(in_oklab,var(--info)_14%,transparent)]',
   },
 };
 </script>
@@ -39,7 +42,7 @@ const typeConfig = {
       <div
         v-for="toast in toasts"
         :key="toast.id"
-        class="pointer-events-auto relative flex items-start gap-3.5 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-lg shadow-ink-900/15 dark:shadow-black/60"
+        class="pointer-events-auto relative flex items-start gap-3.5 overflow-hidden rounded-2xl border border-border bg-card p-4 shadow-lg shadow-black/10 dark:shadow-black/60"
       >
         <!-- Top accent line -->
         <div class="absolute inset-x-0 top-0 h-1" :class="typeConfig[toast.type]?.topBar || typeConfig.success.topBar"></div>
@@ -60,7 +63,7 @@ const typeConfig = {
         <!-- Close button -->
         <button
           type="button"
-          class="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted/40 text-foreground shadow-sm transition-colors hover:bg-muted/60 hover:text-foreground dark:hover:text-white"
+          class="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted/40 text-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground"
           aria-label="關閉通知"
           @click="removeToast(toast.id)"
         >

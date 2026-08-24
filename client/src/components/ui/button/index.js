@@ -32,20 +32,20 @@ export const buttonVariants = cva(
           "border-destructive/40 bg-card text-destructive hover:border-destructive/60 hover:bg-destructive/10 focus-visible:ring-destructive/20 dark:border-destructive/50 dark:hover:bg-destructive/15",
         link: "border-transparent bg-transparent text-primary shadow-none underline-offset-4 hover:underline",
       },
-      // 字級下限提到 16px 之後，舊的高度全部矮一階：h-8 裝 16px 文字只剩 8px 上下留白。
-      // default 維持 h-11(44px) 正好等於觸控目標下限，所以使用端那些 min-h-11 覆寫
-      // 變成多餘的，可以直接刪掉而不改變任何視覺結果。
-      // xs 原本的 text-xs 也拿掉了——xs 與 sm 已收斂成同一級，留著只會誤導。
+      // 高度階層是真的分階，不是四個名字指向同一個 h-11。之前全部塌成 44px，
+      // 結果密集表格的每一列都被一顆 44px 的按鈕撐開，清單看起來又鬆又笨重。
+      // 文字盒有 leading-none 壓住（16px 字＝16px 盒），h-9 上下仍有 10px 留白。
+      // xs 只給桌機的密集表格用；觸控介面最低到 sm(40px)，一般操作用 default(44px)。
       size: {
         default:
           "h-11 gap-2 px-4 has-data-[icon=inline-end]:pr-3.5 has-data-[icon=inline-start]:pl-3.5",
-        xs: "h-11 gap-2 px-4",
-        sm: "h-11 gap-2 px-4",
-        lg: "h-11 gap-2 px-4",
+        xs: "h-9 gap-1.5 px-3 text-xs",
+        sm: "h-10 gap-2 px-3.5",
+        lg: "h-12 gap-2 px-5",
         icon: "size-11",
-        "icon-xs": "size-11",
-        "icon-sm": "size-11",
-        "icon-lg": "size-11",
+        "icon-xs": "size-9",
+        "icon-sm": "size-10",
+        "icon-lg": "size-12",
       },
     },
     defaultVariants: {

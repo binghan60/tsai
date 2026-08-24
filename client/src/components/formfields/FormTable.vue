@@ -42,9 +42,9 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
       <div v-if="run.kind === 'primary'">
         <div v-for="group in groupsOf(run)" :key="group" class="mb-7 last:mb-0">
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 v-if="group" class="text-sm font-semibold text-belle-600 dark:text-brand-400">{{ group }}</h3>
+            <h3 v-if="group" class="text-sm font-semibold text-primary">{{ group }}</h3>
             <span v-else />
-            <Button type="button" variant="ghost" size="sm" class="min-h-10 text-xs" @click="markEmptyLabGroupNormal(section, group)">空白項目全部正常</Button>
+            <Button type="button" variant="ghost" size="sm" class="text-xs" @click="markEmptyLabGroupNormal(section, group)">空白項目全部正常</Button>
           </div>
           <div class="divide-y divide-border rounded-xl border border-border">
             <SelectableItem v-for="finding in labsOfGroup(run, group)" :key="finding.key" :item-key="finding.key">
@@ -54,7 +54,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
               >
                 <div class="min-w-0">
                   <p class="text-sm font-medium text-foreground">{{ finding.label }}</p>
-                  <p v-if="labRangeLabel(finding)" class="mt-0.5 text-xs text-emerald-700 dark:text-emerald-300">參考 {{ labRangeLabel(finding) }}</p>
+                  <p v-if="labRangeLabel(finding)" class="mt-0.5 text-xs text-success">參考 {{ labRangeLabel(finding) }}</p>
                   <PreviousValue :item="finding" type="lab" class="mt-0.5" />
                 </div>
                 <!-- 三個控制項都有標題列，橫向才對得齊；沒有標題的欄位會比隔壁高出一截。 -->
@@ -71,7 +71,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                     inputmode="decimal"
                     :aria-label="`${finding.label}數值`"
                     :placeholder="finding.numeric === false ? '選填' : labRanges[finding.key]?.unit ? `輸入數值（${labRanges[finding.key].unit}）` : '選填'"
-                    class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+                    class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
                     @input="finding.numeric !== false && autoJudgeLab(finding, $event.target.value)"
                   />
                   <!-- 數值型欄位打的是數字，不需要文字模板；只有文字結果才掛。
@@ -86,7 +86,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                 </div>
                 <div class="space-y-1.5">
                   <Label :for="`record-lab-note-${finding.key}`" class="text-xs font-medium text-muted-foreground">
-                    備註<span v-if="finding.status === 'abnormal'" class="text-red-600 dark:text-red-400"> 異常說明 *</span>
+                    備註<span v-if="finding.status === 'abnormal'" class="text-danger"> 異常說明 *</span>
                   </Label>
                   <input
                     :id="`record-lab-note-${finding.key}`"
@@ -96,8 +96,8 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                     :aria-invalid="finding.status === 'abnormal' && !finding.note.trim()"
                     :required="finding.status === 'abnormal'"
                     :placeholder="finding.status === 'abnormal' ? '請描述異常' : '選填'"
-                    class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
-                    :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
+                    class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                    :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-danger/35' : 'border-border '"
                   />
                   <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-lab-note-${finding.key}`" />
                 </div>

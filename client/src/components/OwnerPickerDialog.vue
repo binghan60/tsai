@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import { ChevronLeft, ChevronRight, Search, User, X } from '@lucide/vue';
+import { ChevronLeft, ChevronRight, Search, X } from '@lucide/vue';
 import { http } from '../api/http';
 import ModalDialog from './ModalDialog.vue';
 import { DialogDescription, DialogTitle } from './ui/dialog';
@@ -127,12 +127,12 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
           class="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
           @click="selectOwner(owner)"
         >
-          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span>
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span>
           <span class="min-w-0 flex-1">
             <span class="block truncate text-sm font-medium text-foreground">{{ owner.name }}</span>
             <span class="mt-0.5 block truncate text-xs text-muted-foreground">{{ owner.phone || '未填電話' }}</span>
           </span>
-          <span class="shrink-0 text-sm font-medium text-belle-600 dark:text-brand-400">選擇</span>
+          <span class="shrink-0 text-sm font-medium text-primary">選擇</span>
         </button>
       </div>
       <p v-else class="rounded-xl border border-border px-4 py-8 text-center text-sm text-muted-foreground">{{ query.trim() ? '找不到符合的飼主。' : '目前沒有飼主資料。' }}</p>

@@ -67,9 +67,9 @@ const emit = defineEmits(['update:modelValue', 'update:placeholder']);
               :class="
                 cn(
                   'mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-sm text-foreground transition-colors hover:bg-muted/60',
-                  'data-[today]:font-semibold data-[today]:text-belle-600 dark:data-[today]:text-brand-400',
+                  'data-[today]:font-semibold data-[today]:text-primary dark:data-[today]:text-primary',
                   'data-[outside-view]:text-muted-foreground/50',
-                  'data-[selected]:bg-belle-600 data-[selected]:text-white data-[selected]:hover:bg-belle-600 dark:data-[selected]:bg-brand-600 dark:data-[selected]:text-cream-50 dark:data-[selected]:hover:bg-brand-600',
+                  'data-[selected]:bg-primary data-[selected]:text-primary-foreground data-[selected]:hover:bg-primary',
                   'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
                   'data-[unavailable]:pointer-events-none data-[unavailable]:text-muted-foreground/40 data-[unavailable]:line-through',
                 )

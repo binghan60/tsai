@@ -132,7 +132,7 @@ async function createPet(values) {
     <template v-else>
       <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 隻寵物</p>
 
-      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none lg:block">
+      <Card v-if="pets.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none xl:block">
         <Table>
           <TableHeader>
             <TableRow class="border-border text-muted-foreground">
@@ -143,19 +143,19 @@ async function createPet(values) {
           </TableHeader>
           <TableBody>
             <TableRow v-for="pet in pets" :key="pet._id" class="border-border">
-              <TableCell >
+              <TableCell>
                 <router-link :to="`/pets/${pet._id}`" class="group flex items-center gap-3">
-                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
                     <Cat class="h-4.5 w-4.5" stroke-width="1.75" />
                   </span>
                   <span>
-                    <span class="block font-medium text-belle-600 group-hover:text-belle-700 dark:text-brand-400 dark:group-hover:text-brand-300">{{ pet.name }}</span>
+                    <span class="block font-medium text-primary">{{ pet.name }}</span>
                     <span class="text-xs text-muted-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
                   </span>
                 </router-link>
               </TableCell>
-              <TableCell >
-                <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="inline-flex items-center gap-2 text-foreground hover:text-belle-600 dark:hover:text-brand-400">
+              <TableCell>
+                <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="inline-flex items-center gap-2 text-primary">
                   <User class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.75" />
                   <span><span class="block">{{ pet.ownerId.name }}</span><span class="block text-xs text-muted-foreground">{{ pet.ownerId.phone }}</span></span>
                 </router-link>
@@ -170,12 +170,12 @@ async function createPet(values) {
         </Table>
       </Card>
 
-      <div v-if="pets.length" class="space-y-3 lg:hidden">
+      <div v-if="pets.length" class="space-y-3 xl:hidden">
         <Card v-for="pet in pets" :key="pet._id" class="p-4 shadow-sm dark:shadow-none">
           <router-link :to="`/pets/${pet._id}`" class="flex items-start gap-3">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400"><Cat class="h-5 w-5" /></span>
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="h-5 w-5" /></span>
             <span class="min-w-0 flex-1">
-              <span class="block text-base font-semibold text-foreground">{{ pet.name }}</span>
+              <span class="block text-base font-semibold text-primary">{{ pet.name }}</span>
               <span class="block text-sm text-muted-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
             </span>
           </router-link>

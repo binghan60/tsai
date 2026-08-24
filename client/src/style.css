@@ -10,7 +10,40 @@
      介面靠字重建立的階層在中文上等於不存在。變數字體才有真正的 100–900。 */
   --font-sans: 'Noto Sans TC Variable', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
 
-  /* Brand accent: brass and stage-light gold. Use for highlights, not primary actions. */
+  /* ── 主色：深青藍 Petrol ────────────────────────────────────────────────
+     主色刻意不放在紅色區。原本的 primary 是酒紅 #81333A，跟 destructive #B42332
+     同色相，在徽章與小圖示的尺寸下分不出「這是主要操作」還是「這會出事」。
+     移到深青之後紅色完整讓給危險與失敗，金色 brand 留給側邊欄 active 與品牌，
+     三者各佔一塊色相互不重疊。深青與側邊欄的深藍黑同色相家族，整體更像一套。 */
+  --color-petrol-50: #eef7f9;
+  --color-petrol-100: #d3eaef;
+  --color-petrol-200: #a7d3dc;
+  --color-petrol-300: #72b4c3;
+  --color-petrol-400: #3e93a6;
+  --color-petrol-500: #25798d;
+  --color-petrol-600: #0e5a6b;
+  --color-petrol-700: #0c4857;
+  --color-petrol-800: #0a3743;
+  --color-petrol-900: #072932;
+
+  /* ── 表面：暖中性紙感 Paper ─────────────────────────────────────────────
+     舊的象牙白卡片 #FFF8EA 疊在米黃底 #EFE2C1 上，明度差只有 1.22——卡片是不是
+     一個獨立物件，全靠 #C8AF78 那條深卡其邊框在扛，整片畫面因此又黃又髒。
+     這組把飽和度幾乎拉光：卡片純白、頁面底暖灰白，白/灰的明度差(1.12)加一條
+     細邊框就夠讓卡片浮起來，顏色預算全部讓給主行動與狀態。 */
+  --color-paper-0: #ffffff;
+  --color-paper-50: #faf8f5;
+  --color-paper-100: #f5f2ed;
+  --color-paper-200: #ede9e2;
+  --color-paper-300: #e0dad1;
+  --color-paper-400: #c7bfb3;
+  --color-paper-500: #9a9288;
+  --color-paper-600: #6d665d;
+  --color-paper-700: #4a443d;
+  --color-paper-800: #302b26;
+  --color-paper-900: #1f1b17;
+
+  /* 品牌金。側邊欄 active、Logo、報告紙面用；不作後台的主要操作色。 */
   --color-brand-50: #fff7df;
   --color-brand-100: #f7e8b8;
   --color-brand-200: #efd283;
@@ -22,7 +55,7 @@
   --color-brand-800: #512716;
   --color-brand-900: #35170d;
 
-  /* Primary action: velvet rouge. */
+  /* 酒紅。已不是後台主色，只留給 /report/:token 與 /records/:id/preview 的紙面。 */
   --color-belle-50: #fff1ea;
   --color-belle-100: #f8d9c8;
   --color-belle-200: #ebb49f;
@@ -33,13 +66,13 @@
   --color-belle-700: #5f2530;
   --color-belle-800: #3d1824;
 
-  /* Surfaces: aged paper and lamplight. */
+  /* 象牙／羊皮紙。同上，只服務報告紙面。 */
   --color-cream-50: #fffaf0;
   --color-cream-100: #f3e6c9;
   --color-cream-200: #e3cf9d;
   --color-cream-300: #ccb27a;
 
-  /* Text and navigation: ink and deep theatre shadow. */
+  /* 深墨。側邊欄與深色主題的底層用色。 */
   --color-ink-400: #62655e;
   --color-ink-500: #50554f;
   --color-ink-600: #414d55;
@@ -77,33 +110,52 @@
   --text-xl--line-height: 1.4;
 }
 
-/* Semantic component tokens: the source of truth for shared UI components. */
+/* Semantic component tokens: the source of truth for shared UI components.
+   使用端一律寫語意 token，不要碰上面的色階——text-ink-900 dark:text-white 那種
+   雙寫等於在系統裡養第二套配色，兩套並行正是「配色沒問題但細節很髒」的來源。 */
 :root {
-  --background: #efe2c1;
-  --foreground: var(--color-ink-900);
-  --card: #fff8ea;
-  --card-foreground: var(--color-ink-900);
-  --popover: #fff8ea;
-  --popover-foreground: var(--color-ink-900);
-  --primary: var(--color-belle-600);
-  --primary-foreground: var(--color-cream-50);
-  --secondary: #e7d3a6;
-  --secondary-foreground: #233742;
-  --muted: #dec99b;
-  --muted-foreground: #62655e;
-  --accent: #f2d6b7;
-  --accent-foreground: var(--color-belle-700);
-  --destructive: #b42332;
+  --background: var(--color-paper-100);
+  --foreground: var(--color-paper-900);
+  --card: var(--color-paper-0);
+  --card-foreground: var(--color-paper-900);
+  --popover: var(--color-paper-0);
+  --popover-foreground: var(--color-paper-900);
+  --primary: var(--color-petrol-600);
+  --primary-foreground: #ffffff;
+  --secondary: var(--color-paper-200);
+  --secondary-foreground: var(--color-paper-800);
+  --muted: var(--color-paper-200);
+  --muted-foreground: var(--color-paper-600);
+  --accent: var(--color-petrol-50);
+  --accent-foreground: var(--color-petrol-700);
+  --destructive: #b3202d;
   --destructive-solid: var(--destructive);
-  --destructive-solid-foreground: var(--color-cream-50);
-  --border: #c8af78;
-  --input: #c8af78;
-  /* 輸入框與「浮在卡片上」的可點表面（狀態切換鈕、常用語籤、選取中的卡片）。
-     卡片底色是象牙白 #fff8ea，這層要比它再亮一階才看得出是可以動的東西，
-     所以淺色是純白而不是 --card。深色沒有「更亮」可言，改用比卡片略淺的凹陷面。
-     不設這個 token 的話使用端只能寫 bg-white，那在深色主題是白底配米白字。 */
-  --field: #ffffff;
-  --ring: var(--color-brand-500);
+  --destructive-solid-foreground: #ffffff;
+  --border: var(--color-paper-300);
+  --input: var(--color-paper-300);
+  /* field：輸入框與浮在卡片上的可點表面。卡片改成純白之後，這層不可能再「比卡片
+     更亮」，所以淺色改成往下凹一階；深色沒有更暗可用（會跟頁面底糊在一起），
+     仍然往上浮。兩態方向相反、傳達的是同一件事：這塊是可以動的東西。 */
+  --field: #f6f3ee;
+  --ring: var(--color-petrol-600);
+
+  /* 狀態語意。四個色相各自獨佔一種語意，且都不是 primary——主色只表示「主要操作」，
+     狀態只表示「這筆資料現在怎麼了」，兩者在畫面上不會被誤讀成對方。
+     surface 是徽章／橫幅的底色：舊版直接用 Tailwind 的 amber-50／emerald-50，
+     那是冷調亮白，疊在象牙卡片上對比只有 1.00–1.02，等於底色根本沒畫出來。 */
+  --success: #146a47;
+  --success-surface: #e4f3ea;
+  --warning: #8a5809;
+  --warning-surface: #fbf0da;
+  --info: #175e8e;
+  --info-surface: #e2effa;
+  --danger: #a31f2b;
+  --danger-surface: #fbe8e9;
+
+  --chart-1: #068ba6;
+
+  /* 側邊欄兩個主題都是深底，自成一套。不要在側邊欄裡用 text-muted-foreground——
+     淺色主題下那是暖灰字，會整片糊在深色側邊欄上。 */
   --sidebar: #182733;
   --sidebar-foreground: #e8d8b3;
   --sidebar-primary: var(--color-brand-400);
@@ -116,27 +168,43 @@
 
 .dark {
   --background: #0b1218;
-  --foreground: #f4ead0;
+  /* 原本是 #f4ead0（暖米白），那是配酒紅／金的舊主色留下的。疊在 petrol 上會發黃、
+     顯髒，改成中性偏冷的白，跟深青主色同一個溫度。 */
+  --foreground: #e9eef1;
   --card: #121b22;
-  --card-foreground: #f4ead0;
+  --card-foreground: #e9eef1;
   --popover: #121b22;
-  --popover-foreground: #f4ead0;
-  --primary: var(--color-brand-600);
-  --primary-foreground: #fffaf0;
-  --secondary: #20313d;
-  --secondary-foreground: #f0dfb9;
+  --popover-foreground: #e9eef1;
+  /* 深色主題最亮的東西應該是主行動。舊值 brand-600 #8D541D 對卡片只有 2.84，
+     主要按鈕反而是畫面上最沉的一塊。改成亮階當底、深墨當字（Material 3 的
+     on-primary 做法），對比 4.92 / 4.68。 */
+  --primary: var(--color-petrol-400);
+  --primary-foreground: #04222a;
+  --secondary: #1e2a33;
+  --secondary-foreground: #e3e8eb;
   --muted: #1b2a35;
-  --muted-foreground: #b9ae96;
-  --accent: #34222a;
-  --accent-foreground: #e6bf77;
-  --destructive: #ff8a80;
-  --destructive-solid: #c8313f;
-  --destructive-solid-foreground: #fff8ea;
-  --border: #30434c;
-  --input: #3c505a;
-  /* input/30 疊在卡片 #121b22 上的實際結果，與共用的 Input 元件看起來一致。 */
-  --field: #1f2b33;
-  --ring: var(--color-brand-500);
+  --muted-foreground: #9aa5ad;
+  --accent: #0e2830;
+  --accent-foreground: var(--color-petrol-300);
+  --destructive: #ff8f86;
+  --destructive-solid: #c0303c;
+  --destructive-solid-foreground: #ffffff;
+  --border: #2c3a44;
+  --input: #35454f;
+  --field: #1c2831;
+  --ring: var(--color-petrol-400);
+
+  --success: #5fd3a0;
+  --success-surface: #12261d;
+  --warning: #e8b45c;
+  --warning-surface: #2a2113;
+  --info: #6fb6e8;
+  --info-surface: #122430;
+  --danger: #ff9a93;
+  --danger-surface: #351c1f;
+
+  --chart-1: #2fa3bf;
+
   --sidebar: #070d12;
   --sidebar-foreground: #d7c8a5;
   --sidebar-primary: var(--color-brand-500);
@@ -169,6 +237,15 @@
   --color-input: var(--input);
   --color-field: var(--field);
   --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
+  --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
+  --color-danger: var(--danger);
+  --color-danger-surface: var(--danger-surface);
+  --color-chart-1: var(--chart-1);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -187,30 +264,16 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
-    /* 原本疊了五層漸層，加上 .belle-light-shell 的五層與一個 ::before，
-       背景一直在動；而卡片(#fff8ea)對底色(#efe2c1)的明度差本來就小，
-       卡片浮不起來。留兩層定調，其餘對比讓給內容。 */
-    background-image:
-      radial-gradient(circle at 12% 7%, color-mix(in oklab, var(--color-brand-300) 22%, transparent) 0, transparent 32rem),
-      radial-gradient(circle at 88% 16%, color-mix(in oklab, var(--color-belle-700) 10%, transparent) 0, transparent 30rem);
   }
 }
 
-/* 同樣從五層收到兩層：一層頂部的光、一層整體的底。
-   ::before 那層額外的斜向反光整個拿掉了——它疊在上面幾乎看不出來，
-   但每次捲動都要重新合成。 */
-.belle-light-shell {
+/* 內容區的底。漸層全部收掉了——舊版 body 兩層 radial 加這裡兩層再加一個 ::before，
+   主介面底色是四層合成的暖黃，層數越多卡片越浮不起來（當時卡片對底色只有 1.22）。
+   現在頁面底是單一實色、卡片是純白，明度差自己就能把卡片托起來。 */
+.app-shell {
   position: relative;
   isolation: isolate;
-  background:
-    radial-gradient(ellipse at 30% -8%, rgb(255 250 240 / 0.6) 0, rgb(243 230 201 / 0.22) 24rem, transparent 42rem),
-    linear-gradient(180deg, rgb(239 226 193 / 0.92), rgb(239 226 193 / 0.76));
-}
-
-.dark .belle-light-shell {
-  background:
-    radial-gradient(ellipse at 26% -10%, rgb(173 119 39 / 0.22) 0, transparent 31rem),
-    linear-gradient(180deg, rgb(11 18 24 / 0.97), rgb(11 18 24 / 0.9));
+  background: var(--background);
 }
 
 .belle-sidebar {
@@ -246,29 +309,43 @@ input[type='number']::-webkit-outer-spin-button {
   margin: 0;
 }
 
-/* 捲軸完全隱藏、不佔版面寬度——Windows 的 Chrome/Edge 已經拿掉 overflow: overlay，
-   沒有純 CSS 能做到「浮動不佔寬」的原生捲軸，只能在佔寬與看得見之間二選一。
-   滾輪／觸控板／鍵盤照常可以捲動，只是沒有視覺捲軸可以拖曳。 */
+/* 捲軸做細、但不隱藏。之前是 scrollbar-width: none 加 width: 0 全域隱藏，
+   換來的是長清單、對話框內容、橫向頁籤全都沒有「還有多少沒看到」的線索——
+   FilterTabs 為此還自己做了一個右側漸層箭頭在補這個洞。scrollbar-gutter: stable
+   讓捲軸出現與否都佔同一份寬度，版面不會因為內容變長而橫向跳動。 */
+html {
+  scrollbar-gutter: stable;
+}
+
 * {
-  scrollbar-width: none;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--muted-foreground) 35%, transparent) transparent;
 }
 
 *::-webkit-scrollbar {
-  width: 0;
-  height: 0;
+  width: 10px;
+  height: 10px;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in oklab, var(--color-brand-400) 68%, var(--color-ink-700));
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 9999px;
+  background: color-mix(in oklab, var(--muted-foreground) 35%, transparent);
   background-clip: content-box;
 }
 
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-textarea:focus-visible,
-select:focus-visible {
-  @apply outline-2 outline-offset-2 outline-brand-500 dark:outline-brand-400;
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  background-clip: content-box;
+}
+
+
+:where(button, a, input, textarea, select):not(:where([data-slot], [class*='ring-'])):focus-visible {
+  @apply outline-2 outline-offset-2 outline-ring;
 }
 
 /* 基本量測：使用元件本身的 focus 邊框，避免 input 內層外框錯位。 */

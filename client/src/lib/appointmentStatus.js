@@ -1,12 +1,13 @@
-// 顏色大致沿用 recordStatus.js 同一套語意分工：
-// sky＝進行中尚無定論、primary＝目前最該關注的焦點狀態（跟主題切換：淺色 belle／深色 brand）、
-// emerald＝正向已完結、bg-muted＝終結但非錯誤、amber＝待處理需要人回頭看。
+// 顏色沿用 recordStatus.js 同一套語意分工：
+// info＝已排進來但還沒發生、primary＝此刻正在診間裡、需要人盯著的那一筆、
+// success＝正向已完結、muted＝終結但不是錯誤、warning＝要人回頭處理。
+// 一律走語意 token，不再有淺色一組色階、深色另一組色階的雙寫。
 export const APPOINTMENT_STATUS_META = {
-  scheduled: { label: '已預約', class: 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300', dotClass: 'bg-sky-600' },
+  scheduled: { label: '已預約', class: 'bg-info-surface text-info', dotClass: 'bg-info' },
   arrived: { label: '報到', class: 'bg-primary text-primary-foreground', dotClass: 'bg-primary' },
-  completed: { label: '已完成', class: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400', dotClass: 'bg-emerald-600' },
+  completed: { label: '已完成', class: 'bg-success-surface text-success', dotClass: 'bg-success' },
   cancelled: { label: '已取消', class: 'bg-muted text-muted-foreground', dotClass: 'bg-muted-foreground' },
-  no_show: { label: '未到診', class: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300', dotClass: 'bg-amber-600' },
+  no_show: { label: '未到診', class: 'bg-warning-surface text-warning', dotClass: 'bg-warning' },
 };
 
 export const APPOINTMENT_VIEWS = [

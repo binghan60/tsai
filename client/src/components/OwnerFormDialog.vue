@@ -37,7 +37,7 @@ const onSubmit = handleSubmit((formValues) => emit('submit', formValues));
 <template>
   <ModalDialog @close="$emit('close')">
     <div class="flex items-center gap-3.5 p-6 pb-2 sm:p-7 sm:pb-2">
-      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-belle-300/70 bg-belle-50/80 text-belle-600 shadow-sm dark:border-brand-500/35 dark:bg-brand-500/10 dark:text-brand-400">
+      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/70 bg-accent/80 text-accent-foreground shadow-sm">
         <User class="h-5.5 w-5.5" stroke-width="1.8" />
       </div>
       <div>
@@ -49,20 +49,20 @@ const onSubmit = handleSubmit((formValues) => emit('submit', formValues));
     <form class="flex flex-col" @submit.prevent="onSubmit">
       <div class="space-y-4 p-6 pt-3 sm:p-7 sm:pt-3">
         <div class="space-y-1.5">
-          <Label for="owner-name" class="text-xs font-medium text-foreground">姓名 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
-          <Input id="owner-name" v-model="name" class="border-border focus:border-brand-500" placeholder="例：王小明" autofocus />
+          <Label for="owner-name" class="text-xs font-medium text-foreground">姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+          <Input id="owner-name" v-model="name" class="border-border focus:border-primary" placeholder="例：王小明" autofocus />
           <p v-if="nameError" class="text-xs font-medium text-destructive">{{ nameError }}</p>
         </div>
 
         <div class="space-y-1.5">
-          <Label for="owner-phone" class="text-xs font-medium text-foreground">電話 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
-          <Input id="owner-phone" v-model="phone" class="border-border focus:border-brand-500" placeholder="例：0912-345-678" />
+          <Label for="owner-phone" class="text-xs font-medium text-foreground">電話 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+          <Input id="owner-phone" v-model="phone" class="border-border focus:border-primary" placeholder="例：0912-345-678" />
           <p v-if="phoneError" class="text-xs font-medium text-destructive">{{ phoneError }}</p>
         </div>
 
         <div class="space-y-1.5">
           <Label for="owner-email" class="text-xs font-medium text-foreground">Email（選填）</Label>
-          <Input id="owner-email" v-model="email" type="email" class="border-border focus:border-brand-500" placeholder="例：owner@example.com" />
+          <Input id="owner-email" v-model="email" type="email" class="border-border focus:border-primary" placeholder="例：owner@example.com" />
           <p v-if="emailError" class="text-xs font-medium text-destructive">{{ emailError }}</p>
         </div>
 

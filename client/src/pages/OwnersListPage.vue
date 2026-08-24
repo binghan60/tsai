@@ -211,27 +211,27 @@ function goToPage(next) {
     <template v-else>
       <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 位飼主</p>
 
-      <Card v-if="owners.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm lg:block">
+      <Card v-if="owners.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm xl:block">
         <Table>
           <TableHeader>
             <TableRow class="border-border text-muted-foreground"><TableHead class="font-medium">姓名</TableHead><TableHead class="font-medium">電話</TableHead><TableHead class="font-medium">Email</TableHead><TableHead class="text-right font-medium">操作</TableHead></TableRow>
           </TableHeader>
           <TableBody>
             <TableRow v-for="owner in owners" :key="owner._id" class="border-border">
-              <TableCell ><router-link :to="`/owners/${owner._id}`" class="group flex items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-belle-50 text-xs font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span><span class="font-medium text-belle-600 group-hover:text-belle-700 dark:text-brand-400">{{ owner.name }}</span></router-link></TableCell>
+              <TableCell><router-link :to="`/owners/${owner._id}`" class="group flex items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span><span class="font-medium text-primary">{{ owner.name }}</span></router-link></TableCell>
               <TableCell class="tabular-nums text-foreground"><span class="flex items-center gap-2"><Phone class="h-4 w-4 text-muted-foreground" />{{ owner.phone }}</span></TableCell>
               <TableCell class="text-foreground">{{ owner.email || '—' }}</TableCell>
-              <TableCell ><div class="flex justify-end gap-1"><Button type="button" variant="ghost" size="icon" class="h-11 w-11" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" class="h-11 w-11" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div></TableCell>
+              <TableCell><div class="flex justify-end gap-1"><Button type="button" variant="ghost" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div></TableCell>
             </TableRow>
           </TableBody>
         </Table>
       </Card>
 
-      <div v-if="owners.length" class="space-y-3 lg:hidden">
+      <div v-if="owners.length" class="space-y-3 xl:hidden">
         <Card v-for="owner in owners" :key="owner._id" class="p-4">
           <div class="flex items-start gap-3">
-            <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ owner.name?.[0] ?? '?' }}</span><span class="min-w-0"><span class="block font-semibold text-foreground">{{ owner.name }}</span><span class="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground"><Phone class="h-3.5 w-3.5" />{{ owner.phone }}</span><span v-if="owner.email" class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground"><Mail class="h-3.5 w-3.5" />{{ owner.email }}</span></span></router-link>
-            <div class="flex shrink-0"><Button type="button" variant="ghost" size="icon" class="h-11 w-11" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" class="h-11 w-11" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div>
+            <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span><span class="min-w-0"><span class="block font-semibold text-primary">{{ owner.name }}</span><span class="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground"><Phone class="h-3.5 w-3.5" />{{ owner.phone }}</span><span v-if="owner.email" class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground"><Mail class="h-3.5 w-3.5" />{{ owner.email }}</span></span></router-link>
+            <div class="flex shrink-0"><Button type="button" variant="ghost" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div>
           </div>
         </Card>
       </div>

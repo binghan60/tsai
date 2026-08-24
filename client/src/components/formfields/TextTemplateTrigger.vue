@@ -57,7 +57,7 @@ function saveAsTemplate() {
   <div v-if="!preview" class="mt-1 flex min-h-9 items-center">
     <button
       type="button"
-      class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-belle-600 dark:hover:text-brand-400"
+      class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-primary transition-colors hover:bg-accent"
       :aria-label="label ? `插入${label}的文字模板` : '插入文字模板'"
       @pointerdown="captureSelection"
       @click="open"
@@ -68,7 +68,7 @@ function saveAsTemplate() {
     <button
       v-if="modelValue"
       type="button"
-      class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/40 hover:text-belle-600 dark:hover:text-brand-400"
+      class="inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-primary transition-colors hover:bg-accent"
       :aria-label="label ? `將${label}內容儲存為文字模板` : '儲存為文字模板'"
       @click="saveAsTemplate"
     >

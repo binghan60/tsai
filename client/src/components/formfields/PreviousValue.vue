@@ -50,22 +50,22 @@ const tooltip = computed(() => {
     :title="tooltip"
     class="group mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
     :class="isAbnormal
-      ? 'border-red-200 bg-red-50/70 hover:border-red-300 hover:bg-red-50 dark:border-red-900/60 dark:bg-red-950/25 dark:hover:border-red-800 dark:hover:bg-red-950/40'
-      : 'border-border/80 bg-muted/30 hover:border-belle-500 hover:bg-belle-50 dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
+      ? 'border-danger/35 bg-danger-surface/70 hover:border-danger/55 hover:bg-danger-surface'
+      : 'border-border/80 bg-muted/30 hover:border-primary hover:bg-accent'"
   >
     <span v-if="showLabel" class="shrink-0 font-medium text-muted-foreground">上次</span>
     <span class="flex min-w-0 items-baseline gap-1">
       <span
         class="truncate text-sm font-semibold tabular-nums"
-        :class="isAbnormal ? 'text-red-600 dark:text-red-400' : 'text-foreground '"
+        :class="isAbnormal ? 'text-danger' : 'text-foreground '"
       >{{ valueText }}</span>
       <span v-if="unitText" class="shrink-0 text-xs text-muted-foreground">{{ unitText }}</span>
     </span>
-    <span v-if="isAbnormal" class="shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-950/60 dark:text-red-300">異常</span>
+    <span v-if="isAbnormal" class="shrink-0 rounded-full bg-danger-surface px-1.5 py-0.5 font-medium text-danger">異常</span>
     <span v-if="dateText" class="shrink-0 tabular-nums text-muted-foreground">{{ dateText }}</span>
     <span v-if="examTypeText" class="min-w-0 truncate text-muted-foreground">{{ examTypeText }}</span>
     <span v-if="noteText" class="min-w-0 truncate text-muted-foreground">· {{ noteText }}</span>
-    <ExternalLink class="ml-auto size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-belle-600 dark:group-hover:text-brand-400" stroke-width="1.75" aria-hidden="true" />
+    <ExternalLink class="ml-auto size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" stroke-width="1.75" aria-hidden="true" />
     <span class="sr-only">開新分頁查看這份報告</span>
   </router-link>
 </template>

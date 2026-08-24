@@ -41,7 +41,7 @@ const findingsOf = (run) => run.items.map((item) => entryByKey.value.get(item.ke
             <StatusToggle :finding="finding" :aria-label="`${finding.label}檢查結果`" @select="finding.status = $event" />
             <div class="space-y-1.5">
               <Label :for="`record-exam-note-${finding.key}`" class="text-xs font-medium text-muted-foreground">
-                備註<span v-if="finding.status === 'abnormal'" class="text-red-600 dark:text-red-400"> 異常說明 *</span>
+                備註<span v-if="finding.status === 'abnormal'" class="text-danger"> 異常說明 *</span>
               </Label>
               <input
                 :id="`record-exam-note-${finding.key}`"
@@ -51,8 +51,8 @@ const findingsOf = (run) => run.items.map((item) => entryByKey.value.get(item.ke
                 :aria-invalid="finding.status === 'abnormal' && !finding.note.trim()"
                 :required="finding.status === 'abnormal'"
                 :placeholder="finding.status === 'abnormal' ? '請描述異常，例如：輕微牙齦紅' : '選填'"
-                class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none focus:ring-2 focus:ring-belle-100 dark:focus:ring-brand-500/20"
-                :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
+                class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/35"
+                :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-danger/35' : 'border-border '"
               />
               <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-exam-note-${finding.key}`" />
             </div>

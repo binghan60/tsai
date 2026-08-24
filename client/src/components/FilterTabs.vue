@@ -14,34 +14,25 @@ const scroller = ref(null);
 const hasMoreRight = ref(false);
 let resizeObserver;
 
-const toneClasses = {
-  neutral: 'bg-background text-foreground ring-border/80',
-  primary: 'bg-primary/10 text-primary ring-primary/20',
-  info: 'bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:ring-sky-500/30',
-  success: 'bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-500/30',
-  danger: 'bg-red-50 text-red-700 ring-red-200 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/30',
-  warning: 'bg-amber-50 text-amber-800 ring-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-500/30',
-};
-
-const toneBadgeClasses = {
-  neutral: 'bg-foreground/10 text-foreground',
-  primary: 'bg-primary/15 text-primary',
-  info: 'bg-sky-200/70 text-sky-800 dark:bg-sky-400/20 dark:text-sky-200',
-  success: 'bg-emerald-200/70 text-emerald-800 dark:bg-emerald-400/20 dark:text-emerald-200',
-  danger: 'bg-red-200/70 text-red-800 dark:bg-red-400/20 dark:text-red-200',
-  warning: 'bg-amber-200/80 text-amber-900 dark:bg-amber-400/20 dark:text-amber-200',
-};
+// 篩選頁籤是導覽，不是狀態顯示。之前每個 tone 都會把整顆按鈕染成自己的顏色
+// （info 藍、success 綠、danger 紅…），一排篩選籤變成六色彩虹，跟徽章又是
+// 另一套色值，畫面上最不重要的控制列反而最搶眼。
+//
+// 現在選取態一律是主色的淡面，tone 只留給前面那顆小圓點——「這個佇列是關於
+// 哪種狀態」的線索還在，但顏色的份量退回它該有的位置。
+const selectedClasses = 'bg-accent text-accent-foreground ring-primary/25';
+const idleClasses = 'text-muted-foreground hover:bg-card hover:text-foreground';
+const selectedBadgeClasses = 'bg-primary/15 text-accent-foreground';
+const idleBadgeClasses = 'bg-background text-muted-foreground';
 
 const toneDotClasses = {
-  neutral: 'bg-foreground/45',
+  neutral: 'bg-muted-foreground',
   primary: 'bg-primary',
-  info: 'bg-sky-500',
-  success: 'bg-emerald-500',
-  danger: 'bg-red-500',
-  warning: 'bg-amber-500',
+  info: 'bg-info',
+  success: 'bg-success',
+  danger: 'bg-danger',
+  warning: 'bg-warning',
 };
-
-const idleClasses = 'text-muted-foreground hover:bg-background/70 hover:text-foreground';
 
 function onTabKeydown(event, index, items, emit) {
   let next = null;
@@ -78,17 +69,17 @@ watch(() => props.items, async () => {
 
 <template>
   <nav
-    class="relative flex items-stretch gap-2 rounded-2xl border border-border/70 bg-card/90 p-2 shadow-sm dark:shadow-none"
+    class="relative flex items-stretch gap-2 rounded-2xl border border-border bg-card p-2 shadow-sm dark:shadow-none"
     :aria-label="ariaLabel"
   >
-    <div class="hidden shrink-0 items-center gap-2 border-r border-border/70 px-2 pr-4 text-sm font-medium text-muted-foreground sm:flex" aria-hidden="true">
+    <div class="hidden shrink-0 items-center gap-2 border-r border-border px-2 pr-4 text-sm font-medium text-muted-foreground sm:flex" aria-hidden="true">
       <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
         <SlidersHorizontal class="h-4 w-4" stroke-width="1.75" />
       </span>
       <span>篩選</span>
     </div>
 
-    <div ref="scroller" class="min-w-0 flex-1 overflow-x-auto rounded-xl bg-muted/60 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" @scroll="updateScrollHint">
+    <div ref="scroller" class="min-w-0 flex-1 overflow-x-auto rounded-xl bg-muted/50 p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" role="tablist" @scroll="updateScrollHint">
       <div class="flex min-w-max gap-1 sm:min-w-full">
         <button
           v-for="item in items"
@@ -96,9 +87,7 @@ watch(() => props.items, async () => {
           type="button"
           role="tab"
           class="group inline-flex min-h-11 min-w-28 flex-1 shrink-0 items-center justify-center gap-2 rounded-lg px-3.5 text-sm font-medium ring-1 ring-transparent transition-[color,background-color,box-shadow] duration-200 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-          :class="modelValue === item.key
-            ? [toneClasses[item.tone || 'primary'], 'shadow-sm']
-            : idleClasses"
+          :class="modelValue === item.key ? [selectedClasses, 'shadow-sm'] : idleClasses"
           :aria-selected="modelValue === item.key"
           :aria-current="modelValue === item.key ? 'page' : undefined"
           :tabindex="modelValue === item.key ? 0 : -1"
@@ -114,7 +103,7 @@ watch(() => props.items, async () => {
           <span
             v-if="counts[item.key] !== undefined"
             class="inline-flex min-w-6 items-center justify-center rounded-full px-1.5 py-0.5 text-xs font-semibold tabular-nums transition-colors"
-            :class="modelValue === item.key ? toneBadgeClasses[item.tone || 'primary'] : 'bg-background/80 text-muted-foreground'"
+            :class="modelValue === item.key ? selectedBadgeClasses : idleBadgeClasses"
           >{{ counts[item.key] }}</span>
         </button>
       </div>

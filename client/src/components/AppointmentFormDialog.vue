@@ -132,7 +132,7 @@ async function submit() {
 
         <div v-if="mode === 'existing'" class="space-y-2">
           <div v-if="selectedPet" class="flex items-center gap-3 rounded-xl border border-border bg-field p-3">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
               <Cat class="h-5 w-5" stroke-width="1.75" />
             </span>
             <span class="min-w-0 flex-1">
@@ -146,7 +146,7 @@ async function submit() {
 
         <div v-else class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
-            <Label for="appointment-owner-name" class="text-xs font-medium text-foreground">飼主姓名 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
+            <Label for="appointment-owner-name" class="text-xs font-medium text-foreground">飼主姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
             <Input id="appointment-owner-name" v-model="form.ownerName" placeholder="王小明" />
           </div>
           <div class="space-y-1.5">
@@ -165,7 +165,7 @@ async function submit() {
 
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
-            <Label class="text-xs font-medium text-foreground">預約日期 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
+            <Label class="text-xs font-medium text-foreground">預約日期 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
             <DatePicker v-model="form.date" aria-label="預約日期" />
           </div>
           <div class="space-y-1.5">

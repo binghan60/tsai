@@ -39,7 +39,7 @@ const runs = computed(() => sectionRuns(props.section.items, (item) => item.type
               <span
                 v-if="measurementAssessment(metric)?.status !== 'not_checked'"
                 class="rounded-full px-2 py-0.5 font-medium"
-                :class="measurementAssessment(metric)?.status === 'abnormal' ? 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300' : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'"
+                :class="measurementAssessment(metric)?.status === 'abnormal' ? 'bg-danger-surface text-danger' : 'bg-success-surface text-success'"
               >{{ measurementAssessment(metric)?.status === 'abnormal' ? '異常' : '正常' }}・自動</span>
             </div>
             <PreviousValue :item="metric" class="mt-1" />

@@ -62,7 +62,7 @@ async function submit() {
       <div class="space-y-4 px-6 pb-6 sm:px-7 sm:pb-7">
         <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
         <div class="space-y-1.5">
-          <Label for="create-patient-pet-name" class="text-xs font-medium text-foreground">寵物名稱 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
+          <Label for="create-patient-pet-name" class="text-xs font-medium text-foreground">寵物名稱 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <Input id="create-patient-pet-name" v-model="petName" autofocus placeholder="小白" />
         </div>
         <div class="space-y-1.5">

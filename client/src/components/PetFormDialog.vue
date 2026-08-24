@@ -62,7 +62,7 @@ const onSubmit = handleSubmit((formValues) => {
 <template>
   <ModalDialog size="lg" @close="$emit('close')">
     <div class="flex items-center gap-3.5 p-6 pb-2 sm:p-7 sm:pb-2">
-      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-belle-300/70 bg-belle-50/80 text-belle-600 shadow-sm dark:border-brand-500/35 dark:bg-brand-500/10 dark:text-brand-400">
+      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/70 bg-accent/80 text-accent-foreground shadow-sm">
         <Cat class="h-5.5 w-5.5" stroke-width="1.8" />
       </div>
       <div>
@@ -77,12 +77,12 @@ const onSubmit = handleSubmit((formValues) => {
         <div class="space-y-3.5">
           <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2">
             <div class="space-y-1.5">
-              <Label for="pet-name" class="text-xs font-medium text-foreground">寵物名字 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
+              <Label for="pet-name" class="text-xs font-medium text-foreground">寵物名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
               <Input id="pet-name" v-model="name" class="border-border" autofocus placeholder="例：咪咪" />
               <p v-if="nameError" class="text-xs font-medium text-destructive">{{ nameError }}</p>
             </div>
             <div class="space-y-1.5">
-              <Label for="pet-species" class="text-xs font-medium text-foreground">物種 <span class="text-belle-600 dark:text-brand-400">*</span></Label>
+              <Label for="pet-species" class="text-xs font-medium text-foreground">物種 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
               <Input id="pet-species" v-model="species" class="border-border" placeholder="例：貓、狗" />
               <p v-if="speciesError" class="text-xs font-medium text-destructive">{{ speciesError }}</p>
             </div>
@@ -122,7 +122,7 @@ const onSubmit = handleSubmit((formValues) => {
         <!-- Section 2: 重要健康摘要 -->
         <div class="space-y-4 border-t border-border pt-5">
           <div class="flex items-center gap-2">
-            <Activity class="h-4 w-4 text-belle-600 dark:text-brand-400" stroke-width="2" />
+            <Activity class="h-4 w-4 text-primary" stroke-width="2" />
             <h3 class="text-xs font-semibold tracking-wide text-foreground uppercase">重要健康摘要</h3>
           </div>
 

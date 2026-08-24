@@ -114,7 +114,7 @@ function clearTime(event) {
             :class="
               cn(
                 'block w-full rounded-lg px-2 py-1.5 text-center text-sm text-foreground transition-colors hover:bg-muted/60',
-                parts.hour === hour && 'bg-belle-600 text-white hover:bg-belle-600 dark:bg-brand-600 dark:text-cream-50 dark:hover:bg-brand-600',
+                parts.hour === hour && 'bg-primary text-primary-foreground hover:bg-primary',
               )
             "
             @click="selectHour(hour)"
@@ -128,7 +128,7 @@ function clearTime(event) {
             :class="
               cn(
                 'block w-full rounded-lg px-2 py-1.5 text-center text-sm text-foreground transition-colors hover:bg-muted/60',
-                parts.minute === minute && 'bg-belle-600 text-white hover:bg-belle-600 dark:bg-brand-600 dark:text-cream-50 dark:hover:bg-brand-600',
+                parts.minute === minute && 'bg-primary text-primary-foreground hover:bg-primary',
               )
             "
             @click="selectMinute(minute)"

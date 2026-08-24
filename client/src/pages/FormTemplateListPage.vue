@@ -283,9 +283,9 @@ onMounted(load);
           </TableHeader>
           <TableBody>
             <TableRow v-for="template in visibleTemplates" :key="template._id" class="border-border">
-              <TableCell >
+              <TableCell>
                 <router-link :to="`/settings/forms/${template._id}`" class="group flex flex-col justify-center">
-                  <span class="font-medium text-belle-600 group-hover:text-belle-700 dark:text-brand-400">{{ template.name }}</span>
+                  <span class="font-medium text-primary">{{ template.name }}</span>
                   <span class="text-xs" :class="template.description ? 'text-muted-foreground ' : 'text-muted-foreground '">
                     {{ template.description || '尚未填寫表單說明' }}
                   </span>
@@ -293,7 +293,7 @@ onMounted(load);
               </TableCell>
               <TableCell class="text-foreground">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</TableCell>
               <TableCell class="text-foreground">{{ template.sectionCount }} 個區塊・{{ template.itemCount }} 個項目</TableCell>
-              <TableCell >
+              <TableCell>
                 <div class="flex items-center gap-2">
                   <Switch
                     :id="`enabled-${template._id}`"
@@ -306,12 +306,12 @@ onMounted(load);
                   </Label>
                 </div>
               </TableCell>
-              <TableCell >
+              <TableCell>
                 <div class="flex justify-end gap-1">
-                  <Button type="button" variant="ghost" size="icon" class="h-11 w-11" :aria-label="`編輯表單 ${template.name}`" @click="router.push(`/settings/forms/${template._id}`)">
+                  <Button type="button" variant="ghost" size="icon" :aria-label="`編輯表單 ${template.name}`" @click="router.push(`/settings/forms/${template._id}`)">
                     <Pencil class="h-4 w-4" stroke-width="1.75" />
                   </Button>
-                  <Button type="button" variant="ghost" size="icon" class="h-11 w-11" :disabled="Boolean(busyId)" :aria-label="`以「${template.name}」建立新表單`" @click="openDuplicate(template)">
+                  <Button type="button" variant="ghost" size="icon" :disabled="Boolean(busyId)" :aria-label="`以「${template.name}」建立新表單`" @click="openDuplicate(template)">
                     <Copy class="h-4 w-4" stroke-width="1.75" />
                   </Button>
                   <Button
@@ -338,7 +338,7 @@ onMounted(load);
         <Card v-for="template in visibleTemplates" :key="template._id" class="gap-3 p-4 shadow-sm">
           <div class="flex items-start justify-between gap-3">
             <router-link :to="`/settings/forms/${template._id}`" class="min-w-0">
-              <span class="block font-semibold text-foreground">{{ template.name }}</span>
+              <span class="block font-semibold text-primary">{{ template.name }}</span>
               <span class="mt-0.5 block text-xs" :class="template.description ? 'text-muted-foreground ' : 'text-muted-foreground '">
                 {{ template.description || '尚未填寫表單說明' }}
               </span>
@@ -373,7 +373,7 @@ onMounted(load);
               type="button"
               variant="ghost"
               size="sm"
-              class="ml-auto min-h-10 text-red-700 dark:text-red-300"
+              class="ml-auto min-h-10 text-danger"
               :disabled="Boolean(busyId) || !canDelete"
               :title="canDelete ? '刪除這份表單' : '至少要保留一份表單'"
               @click="templateToDelete = template"
@@ -437,7 +437,7 @@ onMounted(load);
                 :key="mode.value"
                 type="button"
                 class="rounded-xl border p-4 text-left transition-colors"
-                :class="startMode === mode.value ? 'border-primary bg-belle-50 ring-2 ring-primary/15 dark:bg-brand-500/10' : 'border-border bg-field hover:border-belle-300 '"
+                :class="startMode === mode.value ? 'border-primary bg-accent ring-2 ring-primary/15' : 'border-border bg-field hover:border-primary/35 '"
                 :aria-pressed="startMode === mode.value"
                 @click="startMode = mode.value"
               >

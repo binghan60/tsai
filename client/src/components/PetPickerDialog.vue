@@ -127,7 +127,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
           class="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
           @click="selectPet(pet)"
         >
-          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
             <Cat class="h-5 w-5" stroke-width="1.75" />
           </span>
           <span class="min-w-0 flex-1">
@@ -136,7 +136,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
               <User class="h-3.5 w-3.5 shrink-0" />{{ pet.ownerId?.name || '未指定飼主' }}
             </span>
           </span>
-          <span class="shrink-0 text-sm font-medium text-belle-600 dark:text-brand-400">選擇</span>
+          <span class="shrink-0 text-sm font-medium text-primary">選擇</span>
         </button>
       </div>
       <p v-else class="rounded-xl border border-border px-4 py-8 text-center text-sm text-muted-foreground">{{ query.trim() ? '找不到符合的寵物。' : '目前沒有可選擇的寵物。' }}</p>

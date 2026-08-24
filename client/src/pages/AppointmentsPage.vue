@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router';
 import { CalendarPlus, CalendarX, Search, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { clinicDateInput } from '../lib/datetime';
-import { APPOINTMENT_VIEWS } from '../lib/appointmentStatus';
+import { APPOINTMENT_STATUS_META, APPOINTMENT_VIEWS } from '../lib/appointmentStatus';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { useToast } from '../composables/useToast';
 import FilterTabs from '../components/FilterTabs.vue';
@@ -19,6 +19,7 @@ import ListSkeleton from '../components/ListSkeleton.vue';
 import { Button } from '../components/ui/button';
 import { DatePicker } from '../components/ui/date-picker';
 import { Input } from '../components/ui/input';
+import { Badge } from '../components/ui/badge';
 
 const router = useRouter();
 const toast = useToast();
@@ -285,7 +286,7 @@ watch(page, fetchAppointments, { immediate: true });
 </script>
 
 <template>
-  <section class="mx-auto max-w-[1440px] space-y-3">
+  <section class="mx-auto max-w-7xl space-y-3">
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 class="text-xl font-semibold text-foreground">預約與候診</h1>
@@ -321,9 +322,7 @@ watch(page, fetchAppointments, { immediate: true });
             <h2 class="text-base font-semibold text-foreground">門診時程</h2>
             <p class="mt-0.5 text-xs text-muted-foreground">{{ total }} 筆預約，依時間排序</p>
           </div>
-          <span class="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
-            待報到 {{ counts.scheduled || 0 }}
-          </span>
+          <Badge variant="status" :class="APPOINTMENT_STATUS_META.scheduled.class">待報到 {{ counts.scheduled || 0 }}</Badge>
         </div>
 
         <ListSkeleton v-if="loading" :rows="5" class="p-3" />

@@ -81,7 +81,7 @@ watch(
   </div>
 
   <template v-else>
-    <div class="belle-light-shell min-h-screen text-foreground lg:flex">
+    <div class="app-shell min-h-screen text-foreground lg:flex">
       <aside class="belle-sidebar hidden min-h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-screen">
         <div class="border-b border-sidebar-border p-3">
           <router-link to="/" class="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 text-left text-sm font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
@@ -166,7 +166,7 @@ watch(
             <Search class="h-4 w-4" stroke-width="1.75" />
           </Button>
 
-          <button type="button" aria-label="搜尋飼主、寵物或電話" class="hidden min-h-11 min-w-72 items-center rounded-lg border border-input bg-card/70 px-3 text-sm text-muted-foreground shadow-sm hover:border-brand-400 hover:text-primary dark:bg-card/70 dark:hover:border-brand-500/70 dark:hover:text-brand-300 md:flex" @click="openGlobalSearch">
+          <button type="button" aria-label="搜尋飼主、寵物或電話" class="hidden min-h-11 min-w-72 items-center rounded-lg border border-input bg-field px-3 text-sm text-muted-foreground shadow-sm hover:border-ring hover:text-foreground md:flex" @click="openGlobalSearch">
             <Search class="mr-2 h-4 w-4" stroke-width="1.75" />
             <span class="py-2">搜尋飼主、寵物或電話</span>
           </button>

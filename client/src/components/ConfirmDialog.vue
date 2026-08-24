@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { AlertTriangle, CheckCircle2 } from '@lucide/vue';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 
 const props = defineProps({
@@ -25,7 +25,7 @@ const tone = computed(() =>
     : {
         icon: CheckCircle2,
         // 淺色走 belle 酒紅、深色走 brand 琥珀橘，與全站主色分工一致。
-        shell: 'border-belle-300 bg-belle-50 text-belle-600 dark:border-brand-500/40 dark:bg-brand-500/15 dark:text-brand-300',
+        shell: 'border-primary/35 bg-accent text-accent-foreground',
       }
 );
 

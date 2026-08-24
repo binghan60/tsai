@@ -225,14 +225,14 @@ watch(
 
 <template>
   <section v-if="owner" class="space-y-6">
-    <router-link :to="backTo" class="text-sm font-medium text-belle-600 hover:text-belle-700 dark:text-brand-400 dark:hover:text-brand-300">
+    <router-link :to="backTo" class="text-sm font-medium text-primary hover:underline hover:underline-offset-4">
       ← {{ backLabel }}
     </router-link>
 
-    <Card class="p-6 shadow-sm dark:shadow-none">
+    <Card class="p-5 shadow-sm dark:shadow-none">
       <div class="flex flex-wrap items-start justify-between gap-4">
         <div class="flex items-center gap-4">
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-belle-50 text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">
+          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
             <User class="h-7 w-7" stroke-width="1.75" />
           </div>
           <div>
@@ -253,7 +253,7 @@ watch(
 
       <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
-      <div v-if="createdPet" class="flex flex-wrap items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
+      <div v-if="createdPet" class="flex flex-wrap items-center gap-3 rounded-xl border border-success/35 bg-success-surface px-4 py-3 text-success">
         <div class="min-w-0 flex-1">
           <p class="text-sm font-semibold">{{ createdPet.name }} 已新增</p>
           <p class="text-xs opacity-80">可以直接建立第一份健檢，寵物資料會自動帶入。</p>
@@ -266,12 +266,12 @@ watch(
         <Card
           v-for="pet in owner.pets"
           :key="pet._id"
-          class="flex-row items-center gap-3 border-border p-4 shadow-sm hover:border-belle-300 hover:bg-belle-50/40 dark:shadow-none dark:hover:border-brand-500/40"
+          class="flex-row items-center gap-3 border-border p-4 shadow-sm hover:border-primary/35 hover:bg-accent/40 dark:shadow-none"
         >
           <router-link :to="`/pets/${pet._id}`" class="flex min-w-0 flex-1 items-center gap-3">
-            <Cat class="h-6 w-6 shrink-0 text-belle-600 dark:text-brand-400" stroke-width="1.75" />
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="h-5 w-5" stroke-width="1.75" /></span>
             <span class="min-w-0">
-              <span class="block truncate font-medium text-foreground">{{ pet.name }}</span>
+              <span class="block truncate font-medium text-primary">{{ pet.name }}</span>
               <span class="block truncate text-xs text-muted-foreground">
                 {{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template>
               </span>

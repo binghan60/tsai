@@ -14,7 +14,7 @@ defineProps({
       {{ item.label }}
       <span v-if="item.unit" class="text-muted-foreground">（{{ item.unit }}）</span>
       <template v-if="item.required">
-        <span class="text-red-600 dark:text-red-400" aria-hidden="true">*</span><span class="sr-only">必填</span>
+        <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span>
       </template>
     </Label>
     <slot />

@@ -24,7 +24,7 @@ function submit() {
 <template>
   <ModalDialog @close="emit('close')">
     <div class="flex items-center gap-3.5 p-6 pb-2 sm:p-7 sm:pb-2">
-      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-brand-300/80 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-500/10 dark:text-brand-300">
+      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/80 bg-accent text-accent-foreground">
         <FilePenLine class="h-5 w-5" />
       </div>
       <div>

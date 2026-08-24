@@ -59,7 +59,7 @@ function saveVitals() {
         <router-link
           v-if="appointment.petId"
           :to="`/pets/${appointment.petId}`"
-          class="inline-flex min-w-0 items-center gap-2 text-base font-semibold text-foreground hover:text-primary"
+          class="inline-flex min-w-0 items-center gap-2 text-base font-semibold text-primary"
         >
           <PawPrint class="h-4 w-4 shrink-0" stroke-width="1.75" />
           <span class="truncate">{{ appointment.petName || '未命名寵物' }}</span>
@@ -73,7 +73,7 @@ function saveVitals() {
           {{ APPOINTMENT_STATUS_META[appointment.status]?.label || appointment.status }}
         </Badge>
         <Badge v-if="!appointment.petId" variant="status" class="bg-muted text-muted-foreground">未建檔</Badge>
-        <Badge v-if="appointment.isSurgery" variant="status" class="bg-belle-50 text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">
+        <Badge v-if="appointment.isSurgery" variant="status" class="bg-accent text-accent-foreground">
           <Scissors class="mr-1 h-3 w-3" />手術
         </Badge>
 

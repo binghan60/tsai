@@ -73,7 +73,7 @@ function submit() {
           <Input id="delete-record-confirm" ref="inputEl" v-model="input" autofocus autocomplete="off" placeholder="在此輸入寵物名稱" />
           <button
             type="button"
-            class="inline-flex min-h-9 items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-belle-700 dark:hover:text-brand-300"
+            class="inline-flex min-h-9 items-center gap-1.5 text-xs font-medium text-primary underline decoration-primary/40 underline-offset-2 transition-colors hover:decoration-primary"
             @click="fillConfirmWord"
           >
             <CornerDownLeft class="h-3.5 w-3.5 shrink-0 -scale-x-100" stroke-width="1.75" />

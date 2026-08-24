@@ -5,14 +5,13 @@ import { Activity, AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight,
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, formatDate } from '../lib/datetime';
+import { collectPreviewIssues } from '../lib/recordFormValidation';
 import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomId, sectionKeyForItem } from '../lib/formTemplate';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useTextTemplates } from '../composables/useTextTemplates';
 import { useBackTarget } from '../composables/useBackTarget';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Textarea } from '../components/ui/textarea';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import FormSection from '../components/formfields/FormSection.vue';
@@ -405,7 +404,7 @@ function eitherOrPending() {
 // 分段導覽的圓圈有三種狀態：目前所在、已有內容、尚未填寫。
 function stepBadgeClass(index, sectionId) {
   if (activeSectionId.value === sectionId) return 'bg-primary text-primary-foreground';
-  if (completionSections.value[index]) return 'bg-primary/15 text-primary dark:bg-brand-500/20 dark:text-brand-300';
+  if (completionSections.value[index]) return 'bg-primary/15 text-primary';
   return 'border border-border bg-field text-muted-foreground   ';
 }
 
@@ -649,64 +648,16 @@ function scheduleAutosave() {
 
 // 這裡的規則要跟後端 validateFinalRecord 對齊，否則會出現
 // 「前端說不行、後端說可以」或反過來的矛盾。欄位一律從範本取，不寫死名稱。
+// 判準本身抽到 lib/recordFormValidation.js 了——它跟後端 recordValidation.js 是同一套
+// 規則的兩個實作，抽出來才釘得住測試。這裡只負責把畫面上的資料餵進去。
 function validateForPreview() {
-  const errors = [];
-  const addError = (message, targetId, focusId = targetId) => errors.push({ message, targetId, focusId });
-  const items = FORM_SECTIONS.value.flatMap((section) => section.items ?? []);
-  const byRole = (role) => items.find((item) => item.role === role) ?? null;
-
-  // 錨點要用實際渲染出來的 DOM id，不同型別的版式元件命名規則不同。
-  const anchorFor = (item) => {
-    if (!item) return FORM_SECTIONS.value[0]?.id ?? '';
-    if (item.type === 'finding') return `record-exam-row-${item.key}`;
-    if (item.type === 'lab') return `record-lab-row-${item.key}`;
-    return `record-${item.key}`;
-  };
-  const filled = (item) => {
-    if (!item) return false;
-    if (item.type === 'finding') return record.examinationFindings.some((f) => f.key === item.key && f.status !== 'not_checked');
-    if (item.type === 'lab') return record.labFindings.some((f) => f.key === item.key && (f.status !== 'not_checked' || f.value?.trim()));
-    return Boolean(String(valueFor(item) ?? '').trim());
-  };
-
-  for (const item of items.filter((entry) => entry.required)) {
-    if (!filled(item)) addError(`請填寫${item.label}`, anchorFor(item));
-  }
-
-  // 與後端相同：visitDate 有預設值、vet 是行政欄位，都不算臨床內容。
-  const ADMIN_ROLES = new Set(['visitDate', 'vet']);
-  if (!items.some((item) => !ADMIN_ROLES.has(item.role) && filled(item))) {
-    addError('請至少填寫一個區塊的檢查內容', FORM_SECTIONS.value[0]?.id ?? '');
-  }
-
-  const conclusion = byRole('conclusion');
-  const treatmentPlan = byRole('treatmentPlan');
-  if ((conclusion || treatmentPlan) && !filled(conclusion) && !filled(treatmentPlan)) {
-    const label = [conclusion?.label, treatmentPlan?.label].filter(Boolean).join('或');
-    addError(`請填寫${label}`, anchorFor(conclusion ?? treatmentPlan));
-  }
-
-  // 數值範圍取自範本項目，不再寫死「體態評分 1–9」。
-  for (const item of items.filter((entry) => entry.type === 'measurement' || entry.type === 'number')) {
-    const raw = valueFor(item);
-    if (raw === null || raw === undefined || String(raw).trim() === '') continue;
-    const numeric = Number(raw);
-    if (!Number.isFinite(numeric)) {
-      addError(`${item.label}必須是數字`, anchorFor(item));
-      continue;
-    }
-    if (item.min != null && numeric < item.min) addError(`${item.label}不可小於 ${item.min}`, anchorFor(item));
-    if (item.max != null && numeric > item.max) addError(`${item.label}不可大於 ${item.max}`, anchorFor(item));
-  }
-
-  for (const finding of record.examinationFindings.filter((f) => f.status === 'abnormal' && !f.note?.trim())) {
-    addError(`請補充理學檢查異常說明：${finding.label}`, `record-exam-row-${finding.key}`, `record-exam-note-${finding.key}`);
-  }
-  for (const finding of record.labFindings.filter((f) => f.status === 'abnormal' && !f.note?.trim())) {
-    addError(`請補充檢驗異常說明：${finding.label}`, `record-lab-row-${finding.key}`, `record-lab-note-${finding.key}`);
-  }
-  validationErrors.value = errors;
-  return errors.length === 0;
+  validationErrors.value = collectPreviewIssues({
+    sections: FORM_SECTIONS.value,
+    getValue: valueFor,
+    findings: record.examinationFindings,
+    labFindings: record.labFindings,
+  });
+  return validationErrors.value.length === 0;
 }
 
 async function goToValidationIssue(issue) {
@@ -826,8 +777,8 @@ function handleBeforeUnload(event) {
 <template>
   <section class="mx-auto max-w-6xl space-y-5 pb-28">
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><router-link :to="backTo" class="mb-1 inline-flex min-h-11 items-center text-sm font-medium text-belle-600 dark:text-brand-400">← {{ backLabel }}</router-link><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-belle-50 px-2.5 py-0.5 text-xs font-medium text-belle-700 dark:bg-brand-500/10 dark:text-brand-300">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
-      <div v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-red-600 dark:text-red-300' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
+      <div><router-link :to="backTo" class="mb-1 inline-flex min-h-11 items-center text-sm font-medium text-accent-foreground">← {{ backLabel }}</router-link><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
+      <div v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-danger' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
     </div>
 
     <Alert v-if="loadError" variant="destructive"><AlertDescription>{{ loadError }}</AlertDescription></Alert>
@@ -872,8 +823,8 @@ function handleBeforeUnload(event) {
           type="button"
           class="rounded-xl border p-4 text-left transition-colors"
           :class="pendingTemplateId === type._id
-            ? 'border-primary bg-belle-50 ring-1 ring-primary dark:bg-brand-500/10'
-            : 'border-border bg-field hover:border-belle-500 hover:bg-belle-50   dark:hover:border-brand-500/50 dark:hover:bg-brand-500/5'"
+            ? 'border-primary bg-accent ring-1 ring-primary'
+            : 'border-border bg-field hover:border-primary hover:bg-accent'"
           :aria-pressed="pendingTemplateId === type._id"
           @click="pendingTemplateId = type._id"
         >
@@ -897,7 +848,7 @@ function handleBeforeUnload(event) {
     </div>
 
     <template v-else>
-      <div v-if="isLocked" class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-sm dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-200">
+      <div v-if="isLocked" class="rounded-2xl border border-warning/35 bg-warning-surface p-5 text-warning shadow-sm">
         <div class="flex items-start gap-3">
           <LockKeyhole class="mt-0.5 h-5 w-5 shrink-0" />
           <div class="min-w-0 flex-1">
@@ -912,8 +863,8 @@ function handleBeforeUnload(event) {
       </div>
 
       <div v-if="!isLocked" id="record-context-bar" class="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
-        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-belle-600 dark:text-brand-400" /><span class="font-semibold text-foreground">{{ pet?.name ?? '—' }}</span></div><div class="flex items-center gap-2 text-sm text-foreground"><User class="h-4 w-4 text-muted-foreground" />{{ pet?.ownerId?.name ?? '—' }}</div></div></div>
-        <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-200"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
+        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-primary" /><span class="font-semibold text-foreground">{{ pet?.name ?? '—' }}</span></div><div class="flex items-center gap-2 text-sm text-foreground"><User class="h-4 w-4 text-muted-foreground" />{{ pet?.ownerId?.name ?? '—' }}</div></div></div>
+        <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-warning-surface px-3 py-2 text-xs text-warning"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
       </div>
 
       <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序。
@@ -1027,7 +978,7 @@ function handleBeforeUnload(event) {
         </SheetContent>
       </Sheet>
 
-      <div id="form-errors" v-if="!isLocked && validationErrors.length" class="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200" role="alert"><p class="font-semibold">正式報告尚缺少以下內容：</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="issue in validationErrors" :key="`${issue.targetId}-${issue.message}`"><button type="button" class="text-left font-medium underline decoration-red-300 underline-offset-2 hover:text-red-950 dark:hover:text-white" @click="goToValidationIssue(issue)">{{ issue.message }}</button></li></ul><p class="mt-3 text-xs">點擊任一項可前往對應欄位。</p></div>
+      <div id="form-errors" v-if="!isLocked && validationErrors.length" class="rounded-2xl border border-danger/35 bg-danger-surface p-4 text-sm text-danger" role="alert"><p class="font-semibold">正式報告尚缺少以下內容：</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="issue in validationErrors" :key="`${issue.targetId}-${issue.message}`"><button type="button" class="text-left font-medium underline decoration-red-300 underline-offset-2 hover:text-danger" @click="goToValidationIssue(issue)">{{ issue.message }}</button></li></ul><p class="mt-3 text-xs">點擊任一項可前往對應欄位。</p></div>
 
       <form v-if="!isLocked" class="space-y-5" @submit.prevent>
         <section
@@ -1039,7 +990,7 @@ function handleBeforeUnload(event) {
         >
           <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-3">
-              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-belle-50 text-sm font-semibold text-belle-600 dark:bg-brand-500/10 dark:text-brand-400">{{ index + 1 }}</span>
+              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ index + 1 }}</span>
               <div>
                 <h2 class="text-base font-semibold text-foreground">{{ section.label }}</h2>
                 <p v-if="section.description" class="text-xs text-muted-foreground">{{ section.description }}</p>
