@@ -15,6 +15,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import FilterTabs from '../components/FilterTabs.vue';
 import { Input } from '../components/ui/input';
+import { DatePicker } from '../components/ui/date-picker';
 
 // 這頁的重點不是「報告」而是「寄送這件事」：每一次嘗試各自一列，
 // 包含後來被刪掉的報告。報告清單那頁回答「還有什麼沒寄」，這頁回答「當初寄了什麼給誰」。
@@ -148,8 +149,8 @@ onBeforeUnmount(() => {
           <Input id="delivery-search" v-model="query" type="search" class="pl-10" placeholder="寵物、飼主、信箱或報告編號" aria-label="搜尋寄送歷程" />
         </span>
       </label>
-      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始日期</span><Input v-model="dateFrom" type="date" aria-label="寄送起始日期" /></label>
-      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束日期</span><Input v-model="dateTo" type="date" aria-label="寄送結束日期" /></label>
+      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始日期</span><DatePicker v-model="dateFrom" aria-label="寄送起始日期" /></label>
+      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束日期</span><DatePicker v-model="dateTo" aria-label="寄送結束日期" /></label>
       <Button v-if="query || dateFrom || dateTo" type="button" variant="ghost" size="sm" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
     </div>
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>

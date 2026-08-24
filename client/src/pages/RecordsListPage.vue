@@ -12,6 +12,7 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { DatePicker } from '../components/ui/date-picker';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 // 預設先提供完整紀錄；需要處理的工作則依優先級排列在後續篩選中。
@@ -182,8 +183,8 @@ function actionLabel(record) {
           <Input id="records-search" v-model="query" type="search" class="pl-10" placeholder="寵物、飼主或報告編號" aria-label="搜尋健檢紀錄" />
         </span>
       </label>
-      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始看診日</span><Input v-model="dateFrom" type="date" aria-label="健檢紀錄起始看診日" /></label>
-      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束看診日</span><Input v-model="dateTo" type="date" aria-label="健檢紀錄結束看診日" /></label>
+      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始看診日</span><DatePicker v-model="dateFrom" aria-label="健檢紀錄起始看診日" /></label>
+      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束看診日</span><DatePicker v-model="dateTo" aria-label="健檢紀錄結束看診日" /></label>
       <Button v-if="query || dateFrom || dateTo" type="button" variant="ghost" size="sm" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
     </div>
 
