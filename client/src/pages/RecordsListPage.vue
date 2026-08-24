@@ -102,10 +102,19 @@ function goToPage(next) {
   page.value = String(target);
 }
 
+// 關鍵字與日期是選好、按下搜尋才查——邊選邊查在切換佇列分頁時很自然，
+// 但打關鍵字或翻開日期選單挑月份的過程都會經過好幾個「還沒決定好」的中間值，
+// 每次都送一次查詢沒有意義。
+function applyFilters() {
+  if (page.value !== '1') page.value = '1';
+  else fetchRecords();
+}
+
 function clearSearchFilters() {
   query.value = '';
   dateFrom.value = '';
   dateTo.value = '';
+  applyFilters();
 }
 
 function openPetPicker() {
@@ -131,10 +140,7 @@ async function startRecordForPet(pet) {
   await router.push(`/pets/${pet._id}/records/new`);
 }
 
-watch([view, query, dateFrom, dateTo], () => {
-  if (page.value !== '1') page.value = '1';
-  else fetchRecords();
-});
+watch(view, applyFilters);
 watch(page, fetchRecords, { immediate: true });
 watch(view, (nextView) => {
   try {
@@ -175,7 +181,7 @@ function actionLabel(record) {
 
     <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="健檢紀錄佇列" @update:model-value="selectView" />
 
-    <div class="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:grid-cols-[minmax(220px,1fr)_170px_170px_auto]">
+    <form class="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:grid-cols-[minmax(220px,1fr)_170px_170px_auto_auto]" @submit.prevent="applyFilters">
       <label class="space-y-1 text-xs font-medium text-muted-foreground">
         <span>關鍵字</span>
         <span class="relative block">
@@ -185,8 +191,9 @@ function actionLabel(record) {
       </label>
       <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始看診日</span><DatePicker v-model="dateFrom" aria-label="健檢紀錄起始看診日" /></label>
       <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束看診日</span><DatePicker v-model="dateTo" aria-label="健檢紀錄結束看診日" /></label>
-      <Button v-if="query || dateFrom || dateTo" type="button" variant="ghost" size="sm" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
-    </div>
+      <Button type="submit" size="sm" class="self-end"><Search class="h-4 w-4" stroke-width="1.75" />搜尋</Button>
+      <Button type="button" variant="outline" size="sm" class="self-end" :disabled="!query && !dateFrom && !dateTo" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
+    </form>
 
     <p v-if="!loading && !error && !records.length" class="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
       這個佇列目前是空的。
