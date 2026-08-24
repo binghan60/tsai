@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { AlertTriangle, ClipboardPlus, FileText, PawPrint, Pencil, User } from '@lucide/vue';
+import { AlertTriangle, ClipboardPlus, FileText, PawPrint, Pencil, Search, User, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
@@ -11,6 +11,7 @@ import FilterTabs from '../components/FilterTabs.vue';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
+import { Input } from '../components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 
 // 預設先提供完整紀錄；需要處理的工作則依優先級排列在後續篩選中。
@@ -25,6 +26,9 @@ const VIEW_PREFERENCE_KEY = 'health-check:records-view';
 
 const view = useSearchQueryParam('view', 'all');
 const page = useSearchQueryParam('page', '1');
+const query = useSearchQueryParam('q');
+const dateFrom = useSearchQueryParam('from');
+const dateTo = useSearchQueryParam('to');
 const route = useRoute();
 const router = useRouter();
 
@@ -58,6 +62,9 @@ async function fetchRecords() {
       params: {
         view: view.value || 'all',
         page: Number(page.value) || 1,
+        ...(query.value.trim() ? { q: query.value.trim() } : {}),
+        ...(dateFrom.value ? { from: dateFrom.value } : {}),
+        ...(dateTo.value ? { to: dateTo.value } : {}),
       },
     });
     if (currentRequest !== requestSequence) return;
@@ -83,15 +90,21 @@ const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value),
 
 function selectView(key) {
   if ((view.value || 'all') === key) return;
+  // 換佇列等於換一份清單，停在第 3 頁沒有意義（那一頁多半根本不存在）——
+  // 交給下面的 watcher 統一處理頁碼重置，避免這裡跟日期篩選各自重置一次觸發兩次查詢。
   view.value = key;
-  // 換佇列等於換一份清單，停在第 3 頁沒有意義（那一頁多半根本不存在）。
-  page.value = '1';
 }
 
 function goToPage(next) {
   const target = Math.min(Math.max(next, 1), totalPages.value);
   if (target === currentPage.value) return;
   page.value = String(target);
+}
+
+function clearSearchFilters() {
+  query.value = '';
+  dateFrom.value = '';
+  dateTo.value = '';
 }
 
 function openPetPicker() {
@@ -117,7 +130,11 @@ async function startRecordForPet(pet) {
   await router.push(`/pets/${pet._id}/records/new`);
 }
 
-watch([view, page], fetchRecords, { immediate: true });
+watch([view, query, dateFrom, dateTo], () => {
+  if (page.value !== '1') page.value = '1';
+  else fetchRecords();
+});
+watch(page, fetchRecords, { immediate: true });
 watch(view, (nextView) => {
   try {
     localStorage.setItem(VIEW_PREFERENCE_KEY, nextView || 'all');
@@ -156,6 +173,19 @@ function actionLabel(record) {
     </div>
 
     <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="健檢紀錄佇列" @update:model-value="selectView" />
+
+    <div class="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:grid-cols-[minmax(220px,1fr)_170px_170px_auto]">
+      <label class="space-y-1 text-xs font-medium text-muted-foreground">
+        <span>關鍵字</span>
+        <span class="relative block">
+          <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+          <Input id="records-search" v-model="query" type="search" class="pl-10" placeholder="寵物、飼主或報告編號" aria-label="搜尋健檢紀錄" />
+        </span>
+      </label>
+      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始看診日</span><Input v-model="dateFrom" type="date" aria-label="健檢紀錄起始看診日" /></label>
+      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束看診日</span><Input v-model="dateTo" type="date" aria-label="健檢紀錄結束看診日" /></label>
+      <Button v-if="query || dateFrom || dateTo" type="button" variant="ghost" size="sm" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
+    </div>
 
     <p v-if="!loading && !error && !records.length" class="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
       這個佇列目前是空的。
