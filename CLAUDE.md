@@ -69,6 +69,8 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 
 `checkinNumber` 是報到當下配的當日看診序（從 1 開始，依報到先後、不是依掛號時段排），在 `PATCH /:id/status` 轉成 `arrived` 時當場算：數當天 `checkinNumber` 不是 `null` 的筆數 + 1。轉回 `scheduled`（撤銷報到）會把它清成 `null`——讓號碼回去給之後真的報到的人，不能佔著。轉去 `completed`／`cancelled` 則保留原號碼，當作那天有報到過的紀錄。
 
+`weightKg`／`temperatureC` 是報到後在候診卡片就地填寫的生命徵象量測值，選填、可留空（`null`）。這是掛號流程自己的欄位，**不會**回填到轉出的健檢報告——報告的體重／體溫是填表時另外量測、獨立作答，兩邊故意不共用，避免報到時的量測值被誤當成正式報告數據。
+
 刻意不用 `optimisticConcurrency`／`relationVersion`：寫入幾乎都是單一狀態切換的按鈕操作，單人使用衝突機率低；也沒有子集合掛在底下，不會有 Owner/Pet 那種刪除競態。
 
 索引只開 `{scheduledAt: 1}` 與 `{status: 1, scheduledAt: 1}`，對應清單排序與狀態篩選；沒有 `petId`/`ownerId` 索引，因為目前沒有「看這隻寵物過去預約紀錄」的查詢，等真的需要再補。
@@ -143,7 +145,7 @@ POST   /api/records/:id/send-email      寄送 PDF + 連結給飼主
 GET    /api/appointments                跨日清單（?q= 關鍵字搜尋寵物／飼主／電話／原因 / ?from=&to=YYYY-MM-DD 日期區間 / ?status= / ?page=，回傳帶 counts 給狀態徽章）
 POST   /api/appointments                建立（帶 petId＝既有病患，不帶＝初診自由文字）
 GET    /api/appointments/:id
-PUT    /api/appointments/:id            只能改 date/time/reason/notes/petName/species/ownerPhone/isSurgery/surgeryName
+PUT    /api/appointments/:id            只能改 date/time/reason/notes/petName/species/ownerPhone/isSurgery/surgeryName/weightKg/temperatureC
 PATCH  /api/appointments/:id/status     狀態轉換，非法轉換回 422
 POST   /api/appointments/:id/create-patient   初診到診後補建 Owner+Pet，回傳 {ownerId, petId}
 DELETE /api/appointments/:id            已完成的預約不給刪
@@ -184,7 +186,7 @@ GET    /api/health
 | 路由 | 頁面 | 說明 |
 |---|---|---|
 | `/` | 工作台 | 統計卡片（可點進對應佇列）、草稿與最近報告、報告狀態圖表、寄送失敗橫幅 |
-| `/appointments` | 電話預約 | 跨日清單，篩選面板（關鍵字＋起始／結束日期＋搜尋／清除）與分頁比照健檢紀錄／寄送歷程，可切換狀態，到診後可轉建健檢報告；網址沒帶日期篩選時（非書籤／分享連結）預設只顯示今天 |
+| `/appointments` | 電話預約 | 跨日清單，狀態切換走共用的 `FilterTabs`，篩選面板（關鍵字＋起始／結束日期＋搜尋／清除）與分頁的元件、樣式跟健檢紀錄／寄送歷程完全一致，沒有另外的日期導覽卡——起訖日期就是篩選面板本身。網址沒帶日期篩選時（非書籤／分享連結）預設只顯示今天。時程依實際看診時段分組（上午 10:00–11:30、下午 14:00–19:30）。已報到（`arrived`）的卡片可展開手風琴就地填寫體重／體溫／備註，按下「完成看診」即存檔並把預約轉成已完成——這個按鈕取代了原本分開的「開始看診」／「完成」，轉建健檢報告改走候診名單側欄的「看診」按鈕 |
 | `/owners`、`/owners/:id` | 飼主列表／詳情 | |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含歷次報告 |
 | `/records` | 健檢紀錄清單 | 跨寵物，佇列切換 |

@@ -23,6 +23,9 @@ const appointmentSchema = new mongoose.Schema(
 
     reason: { type: String, default: '', trim: true },
     notes: { type: String, default: '', trim: true },
+    // 報到後量測的生命徵象，供候診卡片就地填寫；不回填病歷，避免與健檢報告的欄位混為一談。
+    weightKg: { type: Number, min: 0, default: null },
+    temperatureC: { type: Number, min: 0, default: null },
     isSurgery: { type: Boolean, default: false },
     // 只在 isSurgery 為 true 時才有意義，不強制必填——接電話當下可能還沒問清楚術式名稱。
     surgeryName: { type: String, default: '', trim: true },

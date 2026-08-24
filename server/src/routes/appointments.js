@@ -10,10 +10,15 @@ import { APPOINTMENT_STATUSES, canTransitionAppointmentStatus, describeAppointme
 
 const router = Router();
 
-const EDITABLE_FIELDS = ['date', 'time', 'reason', 'notes', 'petName', 'species', 'ownerPhone', 'isSurgery', 'surgeryName'];
+const EDITABLE_FIELDS = ['date', 'time', 'reason', 'notes', 'petName', 'species', 'ownerPhone', 'isSurgery', 'surgeryName', 'weightKg', 'temperatureC'];
+const NULLABLE_NUMBER_FIELDS = ['weightKg', 'temperatureC'];
 
 function pickEditableFields(body) {
-  return Object.fromEntries(EDITABLE_FIELDS.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
+  const updates = Object.fromEntries(EDITABLE_FIELDS.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
+  for (const field of NULLABLE_NUMBER_FIELDS) {
+    if (updates[field] === '') updates[field] = null;
+  }
+  return updates;
 }
 
 function validateAppointmentInput({ date, ownerName }) {
@@ -134,7 +139,7 @@ router.put('/:id', async (req, res, next) => {
 
 router.patch('/:id/status', async (req, res, next) => {
   try {
-    const { status, cancelReason } = req.body;
+    const { status, cancelReason, checkinNumber: requestedCheckinNumber } = req.body;
     if (!APPOINTMENT_STATUSES.includes(status)) return res.status(422).json({ message: '狀態不正確' });
 
     const appointment = await Appointment.findById(req.params.id);
@@ -145,11 +150,23 @@ router.patch('/:id/status', async (req, res, next) => {
 
     appointment.status = status;
     appointment.cancelReason = status === 'cancelled' ? cancelReason || '' : '';
-    if (status === 'arrived' && appointment.checkinNumber == null) {
-      // 當日已經報到過的筆數 + 1，號碼照報到先後發，不是照掛號時段排的。
-      const takenToday = await Appointment.countDocuments({ date: appointment.date, checkinNumber: { $ne: null } });
-      appointment.checkinNumber = takenToday + 1;
-    } else if (status === 'scheduled') {
+    if (status === 'cancelled') {
+      appointment.checkinNumber = null;
+    } else if (status === 'arrived' && appointment.checkinNumber == null) {
+      const hasRequestedCheckinNumber = requestedCheckinNumber !== undefined && String(requestedCheckinNumber).trim() !== '';
+      const checkinNumber = hasRequestedCheckinNumber ? Number(requestedCheckinNumber) : null;
+      if (hasRequestedCheckinNumber && (!Number.isInteger(checkinNumber) || checkinNumber < 1)) {
+        return res.status(422).json({ message: '候診序號須為正整數' });
+      }
+      if (hasRequestedCheckinNumber) {
+        const exists = await Appointment.exists({ date: appointment.date, checkinNumber, _id: { $ne: appointment._id } });
+        if (exists) return res.status(409).json({ message: '這個候診序號已被使用' });
+      }
+      const latestNumberedAppointment = hasRequestedCheckinNumber
+        ? null
+        : await Appointment.findOne({ date: appointment.date, checkinNumber: { $ne: null } }).sort({ checkinNumber: -1 });
+      appointment.checkinNumber = checkinNumber ?? ((latestNumberedAppointment?.checkinNumber ?? 0) + 1);
+    } else if (status === 'scheduled' && appointment.checkinNumber == null) {
       // 撤銷報到：這個號碼讓給之後真的報到的人，不能留著佔位。
       appointment.checkinNumber = null;
     }
