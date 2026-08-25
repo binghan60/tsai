@@ -87,7 +87,6 @@ const PAGE_SIZE = 10;
 const page = ref(1);
 const totalPages = computed(() => Math.max(Math.ceil(visibleTemplates.value.length / PAGE_SIZE), 1));
 const pagedTemplates = computed(() => visibleTemplates.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
-const paddingRows = computed(() => Math.max(0, PAGE_SIZE - pagedTemplates.value.length));
 
 // 關鍵字選好、按下搜尋才查——全站搜尋一律走提交式，不做即時。
 function applyFilters() {
@@ -275,9 +274,13 @@ onMounted(load);
           <span class="desktop-data-cell"></span>
         </div>
         <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row">
-          <router-link :to="`/settings/forms/${template._id}`" class="desktop-data-cell">
-            <span class="block truncate text-sm font-semibold text-primary">{{ template.name }}</span>
-            <span class="block truncate text-xs text-muted-foreground">{{ template.description || '尚未填寫表單說明' }}</span>
+          <router-link
+            :to="`/settings/forms/${template._id}`"
+            class="desktop-data-cell flex items-center gap-2 text-sm"
+            :title="`${template.name} · ${template.description || '尚未填寫表單說明'}`"
+          >
+            <span class="max-w-[65%] shrink-0 truncate font-semibold text-primary">{{ template.name }}</span>
+            <span class="min-w-0 truncate text-xs text-muted-foreground">· {{ template.description || '尚未填寫表單說明' }}</span>
           </router-link>
           <span class="desktop-data-cell text-sm text-foreground">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</span>
           <span class="desktop-data-cell whitespace-nowrap text-sm text-foreground">{{ template.sectionCount }} 區塊・{{ template.itemCount }} 項目</span>
@@ -310,17 +313,6 @@ onMounted(load);
             >
               <Trash2 class="h-4 w-4" stroke-width="1.75" />
             </Button>
-          </span>
-        </div>
-        <div
-          v-for="n in paddingRows"
-          :key="`pad-${n}`"
-          class="desktop-data-row"
-          aria-hidden="true"
-        >
-          <span class="desktop-data-cell">
-            <span class="block text-sm font-semibold text-transparent">.</span>
-            <span class="block text-xs text-transparent">.</span>
           </span>
         </div>
       </Card>

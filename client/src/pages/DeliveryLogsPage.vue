@@ -82,10 +82,6 @@ async function fetchLogs() {
 
 const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
-// 同一次寄送嘗試的多筆事件在畫面上會合併成一列，所以補空列要用實際畫出來的
-// 列數（deliveryAttempts），不是原始 limit 筆數，否則兩者對不上會補太多列。
-const paddingRows = computed(() => Math.max(0, limit.value - deliveryAttempts.value.length));
-
 function selectEvent(key) {
   if (event.value === key) return;
   event.value = key;
@@ -165,7 +161,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <!-- 桌機：清單卡。寄送失敗的列左側加一條警示色條，這裡「有事要處理」的判準是
            log.event === 'failed'，跟健檢紀錄頁用 deliveryStatus 是同一個道理、不同資料來源。 -->
-      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: 10rem 7rem minmax(12rem, 1fr) minmax(12rem, 1fr) minmax(13rem, 1.15fr)">
+      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: 9rem 6.5rem minmax(10rem, 1fr) minmax(10rem, 1fr) minmax(11rem, 1.1fr)">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">時間</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">事件</span>
@@ -177,20 +173,25 @@ onBeforeUnmount(() => {
           v-for="log in deliveryAttempts"
           :key="log.attemptId || log._id"
           class="desktop-data-row"
-          :class="log.event === 'failed' ? 'bg-danger-surface/40 shadow-[inset_3px_0_0_var(--danger)]' : ''"
+          :class="[
+            log.event === 'failed' ? 'bg-danger-surface/40 shadow-[inset_3px_0_0_var(--danger)]' : '',
+            detailExpanded(log) ? 'desktop-data-row--expanded' : '',
+          ]"
         >
           <span class="desktop-data-cell whitespace-nowrap text-xs tabular-nums text-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</span>
           <span class="desktop-data-cell"><Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge></span>
           <span class="desktop-data-cell">
-            <span class="block truncate text-sm text-foreground">{{ log.petName || '寵物未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></span>
-            <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <!-- 報告還在就給連結；已刪除的直接標明，連過去只會是 404。 -->
-              <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="font-medium text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary">查看報告</router-link>
-              <template v-else>
-                <span class="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-muted-foreground">
-                  <Trash2 class="h-3 w-3" stroke-width="1.75" />報告已刪除
-                </span>
-              </template>
+            <router-link
+              v-if="log.recordExists"
+              :to="`/records/${log.recordId}/preview`"
+              class="block truncate text-sm font-medium text-primary"
+              :title="`${log.petName || '寵物未記錄'} · ${log.ownerName || '飼主未記錄'}`"
+            >
+              {{ log.petName || '寵物未記錄' }}<span class="font-normal text-muted-foreground"> · {{ log.ownerName || '飼主未記錄' }}</span>
+            </router-link>
+            <span v-else class="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground" :title="`${log.petName || '寵物未記錄'} · 報告已刪除`">
+              <Trash2 class="h-3.5 w-3.5 shrink-0" stroke-width="1.75" />
+              <span class="truncate">{{ log.petName || '寵物未記錄' }} · 報告已刪除</span>
             </span>
           </span>
           <span class="desktop-data-cell flex items-center gap-1.5 text-sm text-foreground">
@@ -219,17 +220,6 @@ onBeforeUnmount(() => {
             <span v-else-if="log.event === 'queued'" class="text-xs text-info">等待寄送完成</span>
             <span v-else-if="log.event === 'uncertain'" class="text-xs text-warning">寄送結果待確認</span>
             <span v-else class="text-xs text-muted-foreground">—</span>
-          </span>
-        </div>
-        <div
-          v-for="n in paddingRows"
-          :key="`pad-${n}`"
-          class="desktop-data-row"
-          aria-hidden="true"
-        >
-          <span class="desktop-data-cell">
-            <span class="block text-sm text-transparent">.</span>
-            <span class="block text-xs text-transparent">.</span>
           </span>
         </div>
       </Card>

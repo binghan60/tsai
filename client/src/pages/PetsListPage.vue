@@ -74,7 +74,6 @@ onBeforeUnmount(() => {
 
 const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
-const paddingRows = computed(() => Math.max(0, limit.value - pets.value.length));
 
 function goToPage(next) {
   const target = Math.min(Math.max(next, 1), totalPages.value);
@@ -128,39 +127,24 @@ async function createPet(values) {
           <span class="desktop-data-cell"></span>
         </div>
         <div v-for="pet in pets" :key="pet._id" class="desktop-data-row">
-          <router-link :to="`/pets/${pet._id}`" class="desktop-data-cell flex items-center gap-3.5">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-              <Cat class="h-4.5 w-4.5" stroke-width="1.75" />
+          <router-link :to="`/pets/${pet._id}`" class="desktop-data-cell flex items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+              <Cat class="h-4 w-4" stroke-width="1.75" />
             </span>
-            <span class="min-w-0">
-              <span class="block truncate text-sm font-semibold text-primary">{{ pet.name }}</span>
-              <span class="block truncate text-xs text-muted-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
+            <span class="min-w-0 truncate text-sm font-semibold text-primary" :title="`${pet.name} · ${pet.species || '寵物'}${pet.breed ? ` · ${pet.breed}` : ''} · ${sexLabel(pet.sex)}`">
+              {{ pet.name }}<span class="font-normal text-muted-foreground"> · {{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
             </span>
           </router-link>
           <span class="desktop-data-cell">
-            <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="flex items-center gap-2 text-primary">
+            <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="flex min-w-0 items-center gap-2 text-primary" :title="`${pet.ownerId.name} · ${pet.ownerId.phone || '未填電話'}`">
               <User class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.75" />
-              <span class="min-w-0"><span class="block truncate text-sm">{{ pet.ownerId.name }}</span><span class="block text-xs text-muted-foreground">{{ pet.ownerId.phone }}</span></span>
+              <span class="min-w-0 truncate text-sm">{{ pet.ownerId.name }}<span class="text-xs text-muted-foreground"> · {{ pet.ownerId.phone || '未填電話' }}</span></span>
             </router-link>
           </span>
           <span class="desktop-data-cell text-right">
             <Button as-child size="sm"><router-link :to="`/pets/${pet._id}/records/new`">
               <ClipboardPlus class="h-4 w-4" />新增健檢
             </router-link></Button>
-          </span>
-        </div>
-        <div
-          v-for="n in paddingRows"
-          :key="`pad-${n}`"
-          class="desktop-data-row"
-          aria-hidden="true"
-        >
-          <span class="desktop-data-cell flex items-center gap-3.5">
-            <span class="h-10 w-10 shrink-0 rounded-full"></span>
-            <span class="min-w-0">
-              <span class="block text-sm font-semibold text-transparent">.</span>
-              <span class="block text-xs text-transparent">.</span>
-            </span>
           </span>
         </div>
       </Card>

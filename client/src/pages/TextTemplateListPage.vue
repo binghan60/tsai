@@ -96,7 +96,6 @@ const PAGE_SIZE = 10;
 const page = ref(1);
 const totalPages = computed(() => Math.max(Math.ceil(visibleTemplates.value.length / PAGE_SIZE), 1));
 const pagedTemplates = computed(() => visibleTemplates.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
-const paddingRows = computed(() => Math.max(0, PAGE_SIZE - pagedTemplates.value.length));
 
 // 狀態切換鈕組是即時篩選，不經過 applyFilters，換條件時單獨重置頁碼。
 watch(status, () => {
@@ -252,9 +251,9 @@ onMounted(load);
           <span class="desktop-data-cell"></span>
         </div>
         <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row">
-          <button type="button" class="desktop-data-cell text-left" @click="openEdit(template)">
-            <span class="block truncate text-sm font-semibold text-primary">{{ template.name }}</span>
-            <span class="block truncate text-xs text-muted-foreground">{{ template.content }}</span>
+          <button type="button" class="desktop-data-cell flex items-center gap-2 text-left text-sm" :title="`${template.name} · ${template.content}`" @click="openEdit(template)">
+            <span class="max-w-[65%] shrink-0 truncate font-semibold text-primary">{{ template.name }}</span>
+            <span class="min-w-0 truncate text-xs text-muted-foreground">· {{ template.content }}</span>
           </button>
           <span class="desktop-data-cell truncate text-sm text-foreground" :title="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
           <span class="desktop-data-cell"><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></span>
@@ -262,17 +261,6 @@ onMounted(load);
             <Button type="button" variant="ghost" size="icon-sm" :aria-label="`編輯${template.name}`" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button>
             <Button type="button" variant="ghost" size="icon-sm" :aria-label="`複製${template.name}`" @click="duplicate(template)"><Copy class="h-4 w-4" /></Button>
             <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${template.name}`" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button>
-          </span>
-        </div>
-        <div
-          v-for="n in paddingRows"
-          :key="`pad-${n}`"
-          class="desktop-data-row"
-          aria-hidden="true"
-        >
-          <span class="desktop-data-cell">
-            <span class="block text-sm font-semibold text-transparent">.</span>
-            <span class="block text-xs text-transparent">.</span>
           </span>
         </div>
       </Card>

@@ -179,7 +179,6 @@ onMounted(() => {
 
 const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
-const paddingRows = computed(() => Math.max(0, limit.value - owners.value.length));
 
 function goToPage(next) {
   const target = Math.min(Math.max(next, 1), totalPages.value);
@@ -208,8 +207,8 @@ function goToPage(next) {
           <span class="desktop-data-cell"></span>
         </div>
         <div v-for="owner in owners" :key="owner._id" class="desktop-data-row">
-          <router-link :to="`/owners/${owner._id}`" class="desktop-data-cell flex items-center gap-3.5">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span>
+          <router-link :to="`/owners/${owner._id}`" class="desktop-data-cell flex items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span>
             <span class="truncate text-sm font-semibold text-primary">{{ owner.name }}</span>
           </router-link>
           <span class="desktop-data-cell flex items-center gap-2 text-sm tabular-nums text-foreground"><Phone class="h-4 w-4 shrink-0 text-muted-foreground" /><span class="truncate">{{ owner.phone }}</span></span>
@@ -217,17 +216,6 @@ function goToPage(next) {
           <span class="desktop-data-cell flex justify-end gap-1">
             <Button type="button" variant="ghost" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button>
             <Button type="button" variant="destructive" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button>
-          </span>
-        </div>
-        <div
-          v-for="n in paddingRows"
-          :key="`pad-${n}`"
-          class="desktop-data-row"
-          aria-hidden="true"
-        >
-          <span class="desktop-data-cell flex items-center gap-3.5">
-            <span class="h-10 w-10 shrink-0 rounded-full"></span>
-            <span class="text-sm text-transparent">.</span>
           </span>
         </div>
       </Card>

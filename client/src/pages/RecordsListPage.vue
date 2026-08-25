@@ -90,8 +90,6 @@ async function fetchRecords() {
 
 const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
-// 不滿一頁時補空列撐住高度，避免最後一頁筆數少時整塊表格突然變矮、跳動。
-const paddingRows = computed(() => Math.max(0, limit.value - records.value.length));
 
 function selectView(key) {
   if ((view.value || 'all') === key) return;
@@ -200,7 +198,7 @@ function actionLabel(record) {
     <template v-else-if="records.length">
       <!-- 桌機：清單卡，不是傳統網格表格——每列是身分區塊＋類型日期＋狀態徽章＋一顆主要按鈕，
            沒有直線分隔，靠橫向髮線區隔列與列。寄送失敗的列左側加一條警示色條，不用額外圖示搶注意力。 -->
-      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(15rem, 1.6fr) minmax(10rem, 0.8fr) minmax(11rem, 0.9fr) 8.5rem">
+      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(14rem, 1.3fr) minmax(14rem, 1fr) minmax(11rem, 0.8fr) 8.5rem">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物 / 飼主</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型．看診日</span>
@@ -213,31 +211,24 @@ function actionLabel(record) {
           class="desktop-data-row"
           :class="getDeliveryStatus(record) === 'failed' ? 'bg-danger-surface/40 shadow-[inset_3px_0_0_var(--danger)]' : ''"
         >
-          <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="desktop-data-cell flex items-center gap-3.5">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-              <PawPrint class="h-4.5 w-4.5" stroke-width="1.75" />
+          <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="desktop-data-cell flex items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+              <PawPrint class="h-4 w-4" stroke-width="1.75" />
             </span>
-            <span class="min-w-0">
-              <span class="block truncate text-sm font-semibold text-primary">{{ record.petId?.name || '寵物未找到' }}</span>
-              <span class="block truncate text-xs text-muted-foreground">{{ record.petId?.ownerId?.name || '飼主未知' }}</span>
+            <span class="min-w-0 truncate text-sm font-semibold text-primary" :title="`${record.petId?.name || '寵物未找到'} · ${record.petId?.ownerId?.name || '飼主未知'}`">
+              {{ record.petId?.name || '寵物未找到' }}<span class="font-normal text-muted-foreground"> · {{ record.petId?.ownerId?.name || '飼主未知' }}</span>
             </span>
           </router-link>
 
-          <span class="desktop-data-cell text-sm text-foreground">
-            <span class="block truncate" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> ・第 {{ record.reportVersion }} 版</span></span>
-            <span class="block text-xs text-muted-foreground">{{ formatDate(record.visitDate) }}</span>
+          <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground">
+            <span class="min-w-0 flex-1 truncate" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> ・第 {{ record.reportVersion }} 版</span></span>
+            <span class="shrink-0 text-xs text-muted-foreground">{{ formatDate(record.visitDate) }}</span>
           </span>
 
-          <span class="desktop-data-cell">
-            <span class="flex flex-wrap gap-1.5">
-              <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
-              <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
-            </span>
-            <!-- 寄送失敗最需要知道的是原因，不然只能一份份點進去查。 -->
-            <span v-if="record.deliveryError" class="mt-1 flex min-w-0 items-center gap-1 text-xs text-danger">
-              <AlertTriangle class="h-3 w-3 shrink-0" stroke-width="1.75" />
-              <span class="min-w-0 truncate" :title="record.deliveryError">{{ record.deliveryError }}</span>
-            </span>
+          <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap">
+            <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
+            <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
+            <AlertTriangle v-if="record.deliveryError" class="h-3.5 w-3.5 shrink-0 text-danger" stroke-width="1.75" :title="record.deliveryError" />
           </span>
 
           <span class="desktop-data-cell text-right">
@@ -247,20 +238,6 @@ function actionLabel(record) {
                 {{ actionLabel(record) }}
               </router-link>
             </Button>
-          </span>
-        </div>
-        <div
-          v-for="n in paddingRows"
-          :key="`pad-${n}`"
-          class="desktop-data-row"
-          aria-hidden="true"
-        >
-          <span class="desktop-data-cell flex items-center gap-3.5">
-            <span class="h-10 w-10 shrink-0 rounded-full"></span>
-            <span class="min-w-0">
-              <span class="block text-sm font-semibold text-transparent">.</span>
-              <span class="block text-xs text-transparent">.</span>
-            </span>
           </span>
         </div>
       </Card>
