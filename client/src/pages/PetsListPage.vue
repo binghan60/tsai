@@ -7,6 +7,7 @@ import PetFormDialog from '../components/PetFormDialog.vue';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import FilterBar from '../components/FilterBar.vue';
+import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
 import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
@@ -109,28 +110,25 @@ async function createPet(values) {
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <div>
-      <h1 class="text-xl font-semibold text-foreground">寵物資料</h1>
-      <p class="mt-1 text-sm text-muted-foreground">先確認寵物與飼主身分，再建立健檢紀錄。</p>
-    </div>
-
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <FilterBar id="pet-list-search" v-model="query" label="搜尋寵物" placeholder="搜尋寵物、飼主或電話" class="max-w-lg" @submit="applyFilters" />
-      <Button type="button" @click="openCreatePet">+ 新增寵物</Button>
-    </div>
+    <PageHeader title="寵物資料" description="先確認寵物與飼主身分，再建立健檢紀錄。">
+      <template #actions>
+        <FilterBar id="pet-list-search" v-model="query" label="搜尋寵物" placeholder="搜尋寵物、飼主或電話" class="w-full min-w-0 md:w-96 xl:w-[28rem]" @submit="applyFilters" />
+        <Button type="button" @click="openCreatePet">+ 新增寵物</Button>
+      </template>
+    </PageHeader>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <Card v-if="pets.length" class="hidden overflow-hidden p-0 shadow-sm dark:shadow-none xl:block">
-        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
-          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物</span>
-          <span class="w-56 text-xs font-semibold tracking-wide text-muted-foreground uppercase">飼主</span>
-          <span class="w-36"></span>
+      <Card v-if="pets.length" class="hidden overflow-hidden p-0 shadow-sm dark:shadow-none xl:block" style="--data-columns: minmax(16rem, 1.2fr) minmax(14rem, 1fr) 9rem">
+        <div class="desktop-data-header">
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">飼主</span>
+          <span class="desktop-data-cell"></span>
         </div>
-        <div v-for="pet in pets" :key="pet._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
-          <router-link :to="`/pets/${pet._id}`" class="flex min-w-0 flex-1 items-center gap-3.5">
+        <div v-for="pet in pets" :key="pet._id" class="desktop-data-row">
+          <router-link :to="`/pets/${pet._id}`" class="desktop-data-cell flex items-center gap-3.5">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
               <Cat class="h-4.5 w-4.5" stroke-width="1.75" />
             </span>
@@ -139,13 +137,13 @@ async function createPet(values) {
               <span class="block truncate text-xs text-muted-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
             </span>
           </router-link>
-          <span class="w-56">
+          <span class="desktop-data-cell">
             <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="flex items-center gap-2 text-primary">
               <User class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.75" />
               <span class="min-w-0"><span class="block truncate text-sm">{{ pet.ownerId.name }}</span><span class="block text-xs text-muted-foreground">{{ pet.ownerId.phone }}</span></span>
             </router-link>
           </span>
-          <span class="w-36 shrink-0 text-right">
+          <span class="desktop-data-cell text-right">
             <Button as-child size="sm"><router-link :to="`/pets/${pet._id}/records/new`">
               <ClipboardPlus class="h-4 w-4" />新增健檢
             </router-link></Button>
@@ -154,10 +152,10 @@ async function createPet(values) {
         <div
           v-for="n in paddingRows"
           :key="`pad-${n}`"
-          class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0"
+          class="desktop-data-row"
           aria-hidden="true"
         >
-          <span class="flex min-w-0 flex-1 items-center gap-3.5">
+          <span class="desktop-data-cell flex items-center gap-3.5">
             <span class="h-10 w-10 shrink-0 rounded-full"></span>
             <span class="min-w-0">
               <span class="block text-sm font-semibold text-transparent">.</span>

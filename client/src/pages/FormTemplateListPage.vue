@@ -226,16 +226,16 @@ onMounted(load);
 
 <template>
   <SettingsLayout title="表單管理" description="醫師建立健檢時可選用的表單。每份表單都能設定適用物種與檢查內容。">
+    <template #actions>
+      <Button type="button" @click="openCreate"><Plus class="h-4 w-4" stroke-width="1.75" />新增健檢表單</Button>
+    </template>
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-if="loading" :rows="4" />
 
     <template v-else-if="templates.length">
-      <div class="space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <FilterBar id="template-search" v-model="queryInput" label="搜尋健檢表單" placeholder="輸入表單名稱或說明" class="max-w-lg" @submit="applyFilters" />
-          <Button type="button" @click="openCreate"><Plus class="h-4 w-4" stroke-width="1.75" />新增健檢表單</Button>
-        </div>
-        <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
+      <div class="grid gap-3 xl:grid-cols-[minmax(22rem,1fr)_auto] xl:items-center">
+        <FilterBar id="template-search" v-model="queryInput" label="搜尋健檢表單" placeholder="輸入表單名稱或說明" class="w-full min-w-0 xl:max-w-xl" @submit="applyFilters" />
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-3 xl:justify-end">
           <div class="flex flex-wrap items-center gap-2">
             <span class="text-xs font-medium text-muted-foreground">適用物種</span>
             <SegmentedControl v-model="speciesFilter" size="sm" aria-label="依適用物種篩選" :options="SPECIES_FILTERS" />
@@ -266,22 +266,22 @@ onMounted(load);
       </EmptyState>
 
       <!-- 桌機：清單卡，與其他列表頁同一套版式 -->
-      <Card v-if="visibleTemplates.length" class="hidden overflow-hidden p-0 shadow-sm xl:block">
-        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
-          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">表單名稱</span>
-          <span class="w-24 text-xs font-semibold tracking-wide text-muted-foreground uppercase">適用物種</span>
-          <span class="w-40 text-xs font-semibold tracking-wide text-muted-foreground uppercase">內容</span>
-          <span class="w-28 text-xs font-semibold tracking-wide text-muted-foreground uppercase">啟用</span>
-          <span class="w-32"></span>
+      <Card v-if="visibleTemplates.length" class="hidden overflow-hidden p-0 shadow-sm xl:block" style="--data-columns: minmax(14rem, 1.4fr) 7rem 10rem 7.5rem 8rem">
+        <div class="desktop-data-header">
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">表單名稱</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">適用物種</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">內容</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">啟用</span>
+          <span class="desktop-data-cell"></span>
         </div>
-        <div v-for="template in pagedTemplates" :key="template._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
-          <router-link :to="`/settings/forms/${template._id}`" class="min-w-0 flex-1">
+        <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row">
+          <router-link :to="`/settings/forms/${template._id}`" class="desktop-data-cell">
             <span class="block truncate text-sm font-semibold text-primary">{{ template.name }}</span>
             <span class="block truncate text-xs text-muted-foreground">{{ template.description || '尚未填寫表單說明' }}</span>
           </router-link>
-          <span class="w-24 text-sm text-foreground">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</span>
-          <span class="w-40 text-sm text-foreground">{{ template.sectionCount }} 區塊・{{ template.itemCount }} 項目</span>
-          <span class="w-28 flex items-center gap-2">
+          <span class="desktop-data-cell text-sm text-foreground">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</span>
+          <span class="desktop-data-cell whitespace-nowrap text-sm text-foreground">{{ template.sectionCount }} 區塊・{{ template.itemCount }} 項目</span>
+          <span class="desktop-data-cell flex items-center gap-2">
             <Switch
               :id="`enabled-${template._id}`"
               :model-value="template.enabled"
@@ -292,7 +292,7 @@ onMounted(load);
               {{ getAvailabilityStatusMeta(template.enabled).label }}
             </Label>
           </span>
-          <span class="flex w-32 shrink-0 justify-end gap-1">
+          <span class="desktop-data-cell flex justify-end gap-1">
             <Button type="button" variant="ghost" size="icon-sm" :aria-label="`編輯表單 ${template.name}`" @click="router.push(`/settings/forms/${template._id}`)">
               <Pencil class="h-4 w-4" stroke-width="1.75" />
             </Button>
@@ -315,10 +315,10 @@ onMounted(load);
         <div
           v-for="n in paddingRows"
           :key="`pad-${n}`"
-          class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0"
+          class="desktop-data-row"
           aria-hidden="true"
         >
-          <span class="min-w-0 flex-1">
+          <span class="desktop-data-cell">
             <span class="block text-sm font-semibold text-transparent">.</span>
             <span class="block text-xs text-transparent">.</span>
           </span>

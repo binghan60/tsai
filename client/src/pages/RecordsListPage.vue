@@ -9,6 +9,7 @@ import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import PetPickerDialog from '../components/PetPickerDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
 import FilterBar from '../components/FilterBar.vue';
+import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
 import Pagination from '../components/Pagination.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
@@ -165,14 +166,14 @@ function actionLabel(record) {
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <div>
-      <h1 class="text-xl font-semibold text-foreground">健檢紀錄</h1>
-      <p class="mt-1 text-sm text-muted-foreground">依處理狀態篩選與追蹤每筆健檢紀錄。</p>
-    </div>
+    <PageHeader title="健檢紀錄" description="依處理狀態篩選與追蹤每筆健檢紀錄。">
+      <template #actions>
+        <Button type="button" @click="openPetPicker"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
+      </template>
+    </PageHeader>
 
-    <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="健檢紀錄佇列" @update:model-value="selectView" />
-
-    <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,24rem)] xl:items-center">
+      <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="健檢紀錄佇列" @update:model-value="selectView" />
       <FilterBar
         id="records-search"
         v-model="query"
@@ -183,16 +184,11 @@ function actionLabel(record) {
         :date-to="dateTo"
         date-from-label="起始看診日"
         date-to-label="結束看診日"
-        class="max-w-xl"
+        class="w-full min-w-0"
         @update:date-from="dateFrom = $event"
         @update:date-to="dateTo = $event"
         @submit="applyFilters"
       />
-      <div class="flex flex-wrap gap-2">
-        <!-- 寄送紀錄是另一種問法：這頁問「還有什麼沒寄」，那頁問「當初寄了什麼給誰」。 -->
-        <Button as-child variant="outline" size="sm"><router-link to="/records/deleted">已刪除的報告</router-link></Button>
-        <Button type="button" @click="openPetPicker"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
-      </div>
     </div>
 
     <ListSkeleton v-if="loading" :rows="6" />
@@ -204,20 +200,20 @@ function actionLabel(record) {
     <template v-else-if="records.length">
       <!-- 桌機：清單卡，不是傳統網格表格——每列是身分區塊＋類型日期＋狀態徽章＋一顆主要按鈕，
            沒有直線分隔，靠橫向髮線區隔列與列。寄送失敗的列左側加一條警示色條，不用額外圖示搶注意力。 -->
-      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none">
-        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
-          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物 / 飼主</span>
-          <span class="w-48 text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型．看診日</span>
-          <span class="w-36 text-xs font-semibold tracking-wide text-muted-foreground uppercase">狀態</span>
-          <span class="w-32"></span>
+      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(15rem, 1.6fr) minmax(10rem, 0.8fr) minmax(11rem, 0.9fr) 8.5rem">
+        <div class="desktop-data-header">
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物 / 飼主</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型．看診日</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">狀態</span>
+          <span class="desktop-data-cell"></span>
         </div>
         <div
           v-for="record in records"
           :key="record._id"
-          class="flex items-center gap-3 border-b border-border/60 py-3.5 pr-6 pl-6 last:border-b-0"
-          :class="getDeliveryStatus(record) === 'failed' ? 'border-l-3 border-l-danger bg-danger-surface/40 pl-5.25' : ''"
+          class="desktop-data-row"
+          :class="getDeliveryStatus(record) === 'failed' ? 'bg-danger-surface/40 shadow-[inset_3px_0_0_var(--danger)]' : ''"
         >
-          <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="flex min-w-0 flex-1 items-center gap-3.5">
+          <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="desktop-data-cell flex items-center gap-3.5">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
               <PawPrint class="h-4.5 w-4.5" stroke-width="1.75" />
             </span>
@@ -227,24 +223,24 @@ function actionLabel(record) {
             </span>
           </router-link>
 
-          <span class="w-48 text-sm text-foreground">
-            {{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> ・第 {{ record.reportVersion }} 版</span>
+          <span class="desktop-data-cell text-sm text-foreground">
+            <span class="block truncate" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> ・第 {{ record.reportVersion }} 版</span></span>
             <span class="block text-xs text-muted-foreground">{{ formatDate(record.visitDate) }}</span>
           </span>
 
-          <span class="w-36">
+          <span class="desktop-data-cell">
             <span class="flex flex-wrap gap-1.5">
               <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
               <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
             </span>
             <!-- 寄送失敗最需要知道的是原因，不然只能一份份點進去查。 -->
-            <span v-if="record.deliveryError" class="mt-1 flex items-start gap-1 text-xs text-danger">
-              <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />
-              <span class="min-w-0">{{ record.deliveryError }}</span>
+            <span v-if="record.deliveryError" class="mt-1 flex min-w-0 items-center gap-1 text-xs text-danger">
+              <AlertTriangle class="h-3 w-3 shrink-0" stroke-width="1.75" />
+              <span class="min-w-0 truncate" :title="record.deliveryError">{{ record.deliveryError }}</span>
             </span>
           </span>
 
-          <span class="w-32 shrink-0 text-right">
+          <span class="desktop-data-cell text-right">
             <Button as-child variant="outline" size="sm">
               <router-link :to="recordLink(record)">
                 <component :is="record.status === 'draft' ? Pencil : FileText" class="h-4 w-4" stroke-width="1.75" />
@@ -256,10 +252,10 @@ function actionLabel(record) {
         <div
           v-for="n in paddingRows"
           :key="`pad-${n}`"
-          class="flex items-center gap-3 border-b border-border/60 py-3.5 pr-6 pl-6 last:border-b-0"
+          class="desktop-data-row"
           aria-hidden="true"
         >
-          <span class="flex min-w-0 flex-1 items-center gap-3.5">
+          <span class="desktop-data-cell flex items-center gap-3.5">
             <span class="h-10 w-10 shrink-0 rounded-full"></span>
             <span class="min-w-0">
               <span class="block text-sm font-semibold text-transparent">.</span>

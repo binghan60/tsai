@@ -14,6 +14,7 @@ import ListSkeleton from '../components/ListSkeleton.vue';
 import Pagination from '../components/Pagination.vue';
 import FilterTabs from '../components/FilterTabs.vue';
 import FilterBar from '../components/FilterBar.vue';
+import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
 
 // 這頁的重點不是「報告」而是「寄送這件事」：每一次嘗試各自一列，
@@ -137,27 +138,26 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <div>
-      <h1 class="text-xl font-semibold text-foreground">寄送歷程</h1>
-      <p class="mt-1 text-sm text-muted-foreground">追查每一次寄送嘗試的收件信箱、最終結果與失敗原因；報告刪除後歷程仍會保留。</p>
-    </div>
+    <PageHeader title="寄送歷程" description="追查每一次寄送嘗試的收件信箱、最終結果與失敗原因；報告刪除後歷程仍會保留。" />
 
-    <FilterTabs :model-value="event" :items="EVENTS" aria-label="寄送事件篩選" @update:model-value="selectEvent" />
-    <FilterBar
-      id="delivery-search"
-      v-model="query"
-      label="搜尋寄送歷程"
-      placeholder="寵物、飼主、信箱或報告編號"
-      with-date-range
-      :date-from="dateFrom"
-      :date-to="dateTo"
-      date-from-label="起始日期"
-      date-to-label="結束日期"
-      class="max-w-xl"
-      @update:date-from="dateFrom = $event"
-      @update:date-to="dateTo = $event"
-      @submit="applyFilters"
-    />
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,24rem)] xl:items-center">
+      <FilterTabs :model-value="event" :items="EVENTS" aria-label="寄送事件篩選" @update:model-value="selectEvent" />
+      <FilterBar
+        id="delivery-search"
+        v-model="query"
+        label="搜尋寄送歷程"
+        placeholder="寵物、飼主、信箱或報告編號"
+        with-date-range
+        :date-from="dateFrom"
+        :date-to="dateTo"
+        date-from-label="起始日期"
+        date-to-label="結束日期"
+        class="w-full min-w-0"
+        @update:date-from="dateFrom = $event"
+        @update:date-to="dateTo = $event"
+        @submit="applyFilters"
+      />
+    </div>
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
     <Card v-else-if="!logs.length"><EmptyState inset :icon="Mail" title="目前沒有寄送歷程" /></Card>
@@ -165,23 +165,23 @@ onBeforeUnmount(() => {
     <template v-else>
       <!-- 桌機：清單卡。寄送失敗的列左側加一條警示色條，這裡「有事要處理」的判準是
            log.event === 'failed'，跟健檢紀錄頁用 deliveryStatus 是同一個道理、不同資料來源。 -->
-      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none">
-        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
-          <span class="w-36 text-xs font-semibold tracking-wide text-muted-foreground uppercase">時間</span>
-          <span class="w-28 text-xs font-semibold tracking-wide text-muted-foreground uppercase">事件</span>
-          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">報告</span>
-          <span class="w-52 text-xs font-semibold tracking-wide text-muted-foreground uppercase">收件信箱</span>
-          <span class="w-64 text-xs font-semibold tracking-wide text-muted-foreground uppercase">處理結果</span>
+      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: 10rem 7rem minmax(12rem, 1fr) minmax(12rem, 1fr) minmax(13rem, 1.15fr)">
+        <div class="desktop-data-header">
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">時間</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">事件</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">報告</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">收件信箱</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">處理結果</span>
         </div>
         <div
           v-for="log in deliveryAttempts"
           :key="log.attemptId || log._id"
-          class="flex items-center gap-3 border-b border-border/60 py-3.5 pr-6 pl-6 last:border-b-0"
-          :class="log.event === 'failed' ? 'border-l-3 border-l-danger bg-danger-surface/40 pl-5.25' : ''"
+          class="desktop-data-row"
+          :class="log.event === 'failed' ? 'bg-danger-surface/40 shadow-[inset_3px_0_0_var(--danger)]' : ''"
         >
-          <span class="w-36 text-sm tabular-nums text-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</span>
-          <span class="w-28"><Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge></span>
-          <span class="min-w-0 flex-1">
+          <span class="desktop-data-cell whitespace-nowrap text-xs tabular-nums text-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</span>
+          <span class="desktop-data-cell"><Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge></span>
+          <span class="desktop-data-cell">
             <span class="block truncate text-sm text-foreground">{{ log.petName || '寵物未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></span>
             <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
               <!-- 報告還在就給連結；已刪除的直接標明，連過去只會是 404。 -->
@@ -193,24 +193,26 @@ onBeforeUnmount(() => {
               </template>
             </span>
           </span>
-          <span class="flex w-52 items-center gap-1.5 text-sm text-foreground">
-            <Mail class="h-3.5 w-3.5 shrink-0 text-muted-foreground" stroke-width="1.75" />{{ log.recipient || '—' }}
+          <span class="desktop-data-cell flex items-center gap-1.5 text-sm text-foreground">
+            <Mail class="h-3.5 w-3.5 shrink-0 text-muted-foreground" stroke-width="1.75" /><span class="min-w-0 truncate" :title="log.recipient || '—'">{{ log.recipient || '—' }}</span>
           </span>
-          <span class="w-64">
-            <div v-if="log.error" class="text-xs text-danger">
-              <span class="flex items-start gap-1">
-                <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />
-                <span class="min-w-0 wrap-break-word whitespace-normal" :class="detailExpanded(log) || log.error.length <= 40 ? '' : 'line-clamp-2'">{{ log.error }}</span>
-              </span>
+          <span class="desktop-data-cell">
+            <div v-if="log.error" class="flex min-w-0 items-center gap-1 text-xs text-danger" :class="detailExpanded(log) ? 'items-start' : ''">
+              <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />
+              <span
+                class="min-w-0 flex-1 wrap-break-word"
+                :class="detailExpanded(log) ? 'whitespace-normal' : 'truncate'"
+                :title="log.error"
+              >{{ log.error }}</span>
               <button
                 v-if="log.error.length > 40"
                 type="button"
-                class="mt-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 font-medium text-danger hover:bg-danger-surface"
+                class="inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-1 font-medium text-danger hover:bg-danger-surface"
                 @click="toggleDetail(log)"
               >
                 <ChevronUp v-if="detailExpanded(log)" class="h-3.5 w-3.5" />
                 <ChevronDown v-else class="h-3.5 w-3.5" />
-                {{ detailExpanded(log) ? '收合詳情' : '展開詳情' }}
+                {{ detailExpanded(log) ? '收合' : '詳情' }}
               </button>
             </div>
             <span v-else-if="log.event === 'sent'" class="text-xs text-success">已寄送</span>
@@ -222,10 +224,10 @@ onBeforeUnmount(() => {
         <div
           v-for="n in paddingRows"
           :key="`pad-${n}`"
-          class="flex items-center gap-3 border-b border-border/60 py-3.5 pr-6 pl-6 last:border-b-0"
+          class="desktop-data-row"
           aria-hidden="true"
         >
-          <span class="min-w-0 flex-1">
+          <span class="desktop-data-cell">
             <span class="block text-sm text-transparent">.</span>
             <span class="block text-xs text-transparent">.</span>
           </span>

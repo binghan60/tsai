@@ -353,6 +353,37 @@ html {
   outline: none;
 }
 
+/* 桌機資料清單：表頭與資料列共用同一份 --data-columns，避免各欄靠 w-* 個別拼接後
+   因長文字換行而錯位。每頁只需要定義欄位比例；列內文字預設由使用端 truncate／clamp。 */
+.desktop-data-header,
+.desktop-data-row {
+  display: grid;
+  grid-template-columns: var(--data-columns, minmax(0, 1fr));
+  align-items: center;
+  column-gap: 1rem;
+  padding-inline: 1.25rem;
+}
+
+.desktop-data-header {
+  min-height: 2.75rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--muted) 40%, transparent);
+}
+
+.desktop-data-row {
+  min-height: 4.5rem;
+  padding-block: 0.75rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+
+.desktop-data-row:last-child {
+  border-bottom: 0;
+}
+
+.desktop-data-cell {
+  min-width: 0;
+}
+
 /* 報告紙面走自己的字級尺度，不跟著後台的 16px 下限走。
    兩個理由：一、它是 A4 列印文件不是螢幕介面，放大會直接改變分頁位置，
    而 PDF 是要寄給飼主的正式文件；二、report/* 那組元件與後台共用

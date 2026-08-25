@@ -4,7 +4,6 @@ import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import DeliveryLog from '../models/DeliveryLog.js';
 import Pet from '../models/Pet.js';
-import DeletedMedicalRecord from '../models/DeletedMedicalRecord.js';
 import Owner from '../models/Owner.js';
 import { renderReportPdf } from '../lib/pdf.js';
 import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from '../lib/mailer.js';
@@ -730,7 +729,7 @@ recordsRouter.delete('/:id', async (req, res, next) => {
         return res.status(422).json({ message: '確認文字不符，請輸入完整的寵物名稱' });
       }
     }
-    // 稽核快照、修訂鏈回復與刪除必須一起成功；任何一步失敗就全部回滾。
+    // 修訂鏈回復與刪除必須一起成功；任何一步失敗就全部回滾。
     await withTransaction(async (session) => {
       const current = await MedicalRecord.findById(record._id).session(session);
       if (!current) {
@@ -777,33 +776,6 @@ recordsRouter.delete('/:id', async (req, res, next) => {
           throw error;
         }
       }
-
-      // 姓名當場抄一份而不是留 ref：報告刪掉之後這筆紀錄要還查得到寄給了誰、是哪隻寵物，
-      // 而寵物本身之後也可能被刪。populate 一個不存在的文件是查不出東西的。
-      const auditPet = await Pet.findById(current.petId)
-        .select('name ownerId')
-        .populate({ path: 'ownerId', select: 'name' })
-        .session(session);
-      await DeletedMedicalRecord.create(
-        [
-          {
-            recordId: current._id,
-            reportNumber: current.reportNumber,
-            petId: current.petId,
-            petName: auditPet?.name ?? '',
-            ownerName: auditPet?.ownerId?.name ?? '',
-            vet: current.vet,
-            visitDate: current.visitDate,
-            examType: current.examType,
-            status: current.status,
-            deliveryStatus: current.deliveryStatus,
-            reportVersion: current.reportVersion,
-            snapshot: current.toObject(),
-            deletedAt: new Date(),
-          },
-        ],
-        { session }
-      );
 
       const deleted = await MedicalRecord.deleteOne({ _id: current._id }, { session });
       if (deleted.deletedCount !== 1) {

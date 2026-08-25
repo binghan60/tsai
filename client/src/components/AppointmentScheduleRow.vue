@@ -55,33 +55,38 @@ function saveVitals() {
         <span v-else class="mt-0.5 text-xs text-muted-foreground">尚未報到</span>
       </div>
 
-      <div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
-        <router-link
-          v-if="appointment.petId"
-          :to="`/pets/${appointment.petId}`"
-          class="inline-flex min-w-0 items-center gap-2 text-base font-semibold text-primary"
-        >
-          <PawPrint class="h-4 w-4 shrink-0" stroke-width="1.75" />
-          <span class="truncate">{{ appointment.petName || '未命名寵物' }}</span>
-        </router-link>
-        <span v-else class="inline-flex min-w-0 items-center gap-2 text-base font-semibold text-foreground">
-          <UserRound class="h-4 w-4 shrink-0" stroke-width="1.75" />
-          <span class="truncate">{{ appointment.petName || appointment.ownerName }}</span>
-        </span>
+      <div class="min-w-0 flex-1 px-3 py-2">
+        <div class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <router-link
+            v-if="appointment.petId"
+            :to="`/pets/${appointment.petId}`"
+            class="inline-flex min-w-0 max-w-64 items-center gap-2 text-base font-semibold text-primary"
+            :title="appointment.petName || '未命名寵物'"
+          >
+            <PawPrint class="h-4 w-4 shrink-0" stroke-width="1.75" />
+            <span class="truncate">{{ appointment.petName || '未命名寵物' }}</span>
+          </router-link>
+          <span v-else class="inline-flex min-w-0 max-w-64 items-center gap-2 text-base font-semibold text-foreground" :title="appointment.petName || appointment.ownerName">
+            <UserRound class="h-4 w-4 shrink-0" stroke-width="1.75" />
+            <span class="truncate">{{ appointment.petName || appointment.ownerName }}</span>
+          </span>
 
-        <Badge variant="status" :class="APPOINTMENT_STATUS_META[appointment.status]?.class">
-          {{ APPOINTMENT_STATUS_META[appointment.status]?.label || appointment.status }}
-        </Badge>
-        <Badge v-if="!appointment.petId" variant="status" class="bg-muted text-muted-foreground">未建檔</Badge>
-        <Badge v-if="appointment.isSurgery" variant="status" class="bg-accent text-accent-foreground">
-          <Scissors class="mr-1 h-3 w-3" />手術
-        </Badge>
+          <Badge variant="status" :class="APPOINTMENT_STATUS_META[appointment.status]?.class">
+            {{ APPOINTMENT_STATUS_META[appointment.status]?.label || appointment.status }}
+          </Badge>
+          <Badge v-if="!appointment.petId" variant="status" class="bg-muted text-muted-foreground">未建檔</Badge>
+          <Badge v-if="appointment.isSurgery" variant="status" class="bg-accent text-accent-foreground">
+            <Scissors class="mr-1 h-3 w-3" />手術
+          </Badge>
+        </div>
 
-        <span class="text-sm text-muted-foreground">飼主 {{ appointment.ownerName }}</span>
-        <span v-if="appointment.reason" class="truncate text-sm text-muted-foreground">· {{ appointment.reason }}</span>
-        <span v-if="appointment.ownerPhone" class="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          <Phone class="h-3 w-3" stroke-width="1.75" />{{ appointment.ownerPhone }}
-        </span>
+        <div class="mt-0.5 flex min-w-0 items-center gap-2 text-muted-foreground">
+          <span class="max-w-44 shrink-0 truncate text-sm" :title="`飼主 ${appointment.ownerName}`">飼主 {{ appointment.ownerName }}</span>
+          <span v-if="appointment.reason" class="min-w-0 flex-1 truncate text-sm" :title="appointment.reason">· {{ appointment.reason }}</span>
+          <span v-if="appointment.ownerPhone" class="inline-flex shrink-0 items-center gap-1 text-xs">
+            <Phone class="h-3 w-3" stroke-width="1.75" />{{ appointment.ownerPhone }}
+          </span>
+        </div>
       </div>
 
       <div v-if="actions.length" class="flex w-full shrink-0 flex-wrap items-center justify-end gap-1.5 border-t border-border px-3 py-1.5 sm:w-auto sm:border-t-0 sm:border-l">

@@ -8,6 +8,7 @@ import { http } from '../api/http';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import FilterBar from '../components/FilterBar.vue';
+import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
 import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
@@ -188,35 +189,32 @@ function goToPage(next) {
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <div>
-      <h1 class="text-xl font-semibold text-foreground">飼主資料</h1>
-      <p class="mt-1 text-sm text-muted-foreground">管理聯絡資訊與名下寵物。</p>
-    </div>
-
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <FilterBar id="owner-list-search" v-model="query" label="搜尋飼主" placeholder="搜尋姓名或電話" class="max-w-lg" @submit="applyFilters" />
-      <Button type="button" @click="openCreate">+ 新增飼主</Button>
-    </div>
+    <PageHeader title="飼主資料" description="管理聯絡資訊與名下寵物。">
+      <template #actions>
+        <FilterBar id="owner-list-search" v-model="query" label="搜尋飼主" placeholder="搜尋姓名或電話" class="w-full min-w-0 md:w-96 xl:w-[28rem]" @submit="applyFilters" />
+        <Button type="button" @click="openCreate">+ 新增飼主</Button>
+      </template>
+    </PageHeader>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <Card v-if="owners.length" class="hidden overflow-hidden p-0 shadow-sm xl:block">
-        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
-          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">姓名</span>
-          <span class="w-52 text-xs font-semibold tracking-wide text-muted-foreground uppercase">電話</span>
-          <span class="w-56 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Email</span>
-          <span class="w-24"></span>
+      <Card v-if="owners.length" class="hidden overflow-hidden p-0 shadow-sm xl:block" style="--data-columns: minmax(15rem, 1.2fr) 12rem minmax(14rem, 1fr) 6rem">
+        <div class="desktop-data-header">
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">姓名</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">電話</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">Email</span>
+          <span class="desktop-data-cell"></span>
         </div>
-        <div v-for="owner in owners" :key="owner._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
-          <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3.5">
+        <div v-for="owner in owners" :key="owner._id" class="desktop-data-row">
+          <router-link :to="`/owners/${owner._id}`" class="desktop-data-cell flex items-center gap-3.5">
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span>
             <span class="truncate text-sm font-semibold text-primary">{{ owner.name }}</span>
           </router-link>
-          <span class="flex w-52 items-center gap-2 text-sm tabular-nums text-foreground"><Phone class="h-4 w-4 shrink-0 text-muted-foreground" />{{ owner.phone }}</span>
-          <span class="w-56 truncate text-sm text-foreground">{{ owner.email || '—' }}</span>
-          <span class="flex w-24 shrink-0 justify-end gap-1">
+          <span class="desktop-data-cell flex items-center gap-2 text-sm tabular-nums text-foreground"><Phone class="h-4 w-4 shrink-0 text-muted-foreground" /><span class="truncate">{{ owner.phone }}</span></span>
+          <span class="desktop-data-cell truncate text-sm text-foreground" :title="owner.email || '—'">{{ owner.email || '—' }}</span>
+          <span class="desktop-data-cell flex justify-end gap-1">
             <Button type="button" variant="ghost" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button>
             <Button type="button" variant="destructive" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button>
           </span>
@@ -224,10 +222,10 @@ function goToPage(next) {
         <div
           v-for="n in paddingRows"
           :key="`pad-${n}`"
-          class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0"
+          class="desktop-data-row"
           aria-hidden="true"
         >
-          <span class="flex min-w-0 flex-1 items-center gap-3.5">
+          <span class="desktop-data-cell flex items-center gap-3.5">
             <span class="h-10 w-10 shrink-0 rounded-full"></span>
             <span class="text-sm text-transparent">.</span>
           </span>

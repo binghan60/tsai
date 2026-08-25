@@ -226,16 +226,16 @@ onMounted(load);
 
 <template>
   <SettingsLayout title="文字模板" description="集中管理可插入健檢文字欄位的長篇內容；填表時不會自動跳出提示。">
+    <template #actions>
+      <Button type="button" @click="openCreate"><Plus class="h-4 w-4" />新增文字模板</Button>
+    </template>
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-if="loading" :rows="5" />
 
     <template v-else>
-      <div class="space-y-3">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <FilterBar id="text-template-search" v-model="queryInput" label="搜尋文字模板" placeholder="搜尋模板名稱或內容" class="max-w-lg" @submit="applyFilters" />
-          <Button type="button" @click="openCreate"><Plus class="h-4 w-4" />新增文字模板</Button>
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
+      <div class="grid gap-3 xl:grid-cols-[minmax(22rem,1fr)_auto] xl:items-center">
+        <FilterBar id="text-template-search" v-model="queryInput" label="搜尋文字模板" placeholder="搜尋模板名稱或內容" class="w-full min-w-0 xl:max-w-xl" @submit="applyFilters" />
+        <div class="flex flex-wrap items-center gap-2 xl:justify-end">
           <span class="text-xs font-medium text-muted-foreground">狀態</span>
           <SegmentedControl v-model="status" size="sm" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
         </div>
@@ -244,21 +244,21 @@ onMounted(load);
       <p class="text-sm text-muted-foreground">顯示 {{ visibleTemplates.length }} 份，共 {{ templates.length }} 份模板</p>
       <EmptyState v-if="!visibleTemplates.length" :icon="templates.length ? SearchX : FileText" :title="templates.length ? '找不到符合條件的文字模板' : '尚未建立文字模板'" description="建立後，填寫健檢的文字欄位便能從模板介面插入。"><Button type="button" class="mt-4" @click="openCreate">新增第一份模板</Button></EmptyState>
 
-      <Card v-if="visibleTemplates.length" class="hidden overflow-hidden p-0 shadow-sm xl:block">
-        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
-          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">模板名稱</span>
-          <span class="w-56 text-xs font-semibold tracking-wide text-muted-foreground uppercase">適用欄位</span>
-          <span class="w-16 text-xs font-semibold tracking-wide text-muted-foreground uppercase">啟用</span>
-          <span class="w-32"></span>
+      <Card v-if="visibleTemplates.length" class="hidden overflow-hidden p-0 shadow-sm xl:block" style="--data-columns: minmax(16rem, 1.5fr) minmax(14rem, 1fr) 5rem 8rem">
+        <div class="desktop-data-header">
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">模板名稱</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">適用欄位</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">啟用</span>
+          <span class="desktop-data-cell"></span>
         </div>
-        <div v-for="template in pagedTemplates" :key="template._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
-          <button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)">
+        <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row">
+          <button type="button" class="desktop-data-cell text-left" @click="openEdit(template)">
             <span class="block truncate text-sm font-semibold text-primary">{{ template.name }}</span>
             <span class="block truncate text-xs text-muted-foreground">{{ template.content }}</span>
           </button>
-          <span class="w-56 truncate text-sm text-foreground" :title="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
-          <span class="w-16"><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></span>
-          <span class="flex w-32 shrink-0 justify-end gap-1">
+          <span class="desktop-data-cell truncate text-sm text-foreground" :title="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
+          <span class="desktop-data-cell"><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></span>
+          <span class="desktop-data-cell flex justify-end gap-1">
             <Button type="button" variant="ghost" size="icon-sm" :aria-label="`編輯${template.name}`" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button>
             <Button type="button" variant="ghost" size="icon-sm" :aria-label="`複製${template.name}`" @click="duplicate(template)"><Copy class="h-4 w-4" /></Button>
             <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${template.name}`" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button>
@@ -267,10 +267,10 @@ onMounted(load);
         <div
           v-for="n in paddingRows"
           :key="`pad-${n}`"
-          class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0"
+          class="desktop-data-row"
           aria-hidden="true"
         >
-          <span class="min-w-0 flex-1">
+          <span class="desktop-data-cell">
             <span class="block text-sm font-semibold text-transparent">.</span>
             <span class="block text-xs text-transparent">.</span>
           </span>

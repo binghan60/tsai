@@ -9,6 +9,7 @@ import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { useToast } from '../composables/useToast';
 import FilterTabs from '../components/FilterTabs.vue';
 import FilterBar from '../components/FilterBar.vue';
+import PageHeader from '../components/PageHeader.vue';
 import AppointmentScheduleRow from '../components/AppointmentScheduleRow.vue';
 import AppointmentQueuePanel from '../components/AppointmentQueuePanel.vue';
 import AppointmentFormDialog from '../components/AppointmentFormDialog.vue';
@@ -279,15 +280,17 @@ watch(page, fetchAppointments, { immediate: true });
 </script>
 
 <template>
-  <section class="mx-auto max-w-7xl space-y-3">
-    <div>
-      <h1 class="text-xl font-semibold text-foreground">預約與候診</h1>
-      <p class="mt-1 text-sm text-muted-foreground">管理門診時段、病患報到與候診順序。</p>
-    </div>
+  <section class="mx-auto max-w-7xl space-y-4">
+    <PageHeader title="預約與候診" description="管理門診時段、病患報到與候診順序。">
+      <template #actions>
+        <Button type="button" @click="formDialogOpen = true">
+          <CalendarPlus class="h-4 w-4" stroke-width="1.75" />新增預約
+        </Button>
+      </template>
+    </PageHeader>
 
-    <FilterTabs :model-value="view || 'all'" :items="APPOINTMENT_VIEWS" :counts="counts" aria-label="預約狀態" @update:model-value="selectView" />
-
-    <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,24rem)] xl:items-center">
+      <FilterTabs :model-value="view || 'all'" :items="APPOINTMENT_VIEWS" :counts="counts" aria-label="預約狀態" @update:model-value="selectView" />
       <FilterBar
         id="appointments-search"
         v-model="query"
@@ -298,14 +301,11 @@ watch(page, fetchAppointments, { immediate: true });
         :date-to="dateTo"
         date-from-label="起始日期"
         date-to-label="結束日期"
-        class="max-w-xl"
+        class="w-full min-w-0"
         @update:date-from="dateFrom = $event"
         @update:date-to="dateTo = $event"
         @submit="applyFilters"
       />
-      <Button type="button" @click="formDialogOpen = true">
-        <CalendarPlus class="h-4 w-4" stroke-width="1.75" />新增預約
-      </Button>
     </div>
 
     <div v-if="error" class="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{{ error }}</div>
