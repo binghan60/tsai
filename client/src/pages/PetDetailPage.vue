@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { CalendarDays, ClipboardPlus, FileText, PawPrint, Pencil, Share2, Trash2, User } from '@lucide/vue';
+import { CalendarDays, ClipboardPlus, Copy, FileText, Link2Off, PawPrint, Pencil, Share2, Trash2, User } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
@@ -13,7 +13,10 @@ import { Card } from '../components/ui/card';
 import { useBackTarget } from '../composables/useBackTarget';
 import { Badge } from '../components/ui/badge';
 import EmptyState from '../components/EmptyState.vue';
+import RowActions from '../components/RowActions.vue';
+import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import ListSkeleton from '../components/ListSkeleton.vue';
 
 import { useToast } from '../composables/useToast';
 
@@ -49,6 +52,29 @@ const petInfoFields = computed(() => [
 ]);
 const filledPetInfoFields = computed(() => petInfoFields.value.filter((field) => String(field.value).trim()));
 
+// 列上只留一個主要操作，其餘走「更多」選單。這裡集中決定「這一列現在有哪些次要操作」，
+// 條件跟原本並排按鈕的 v-if 完全一樣，只是換成資料而不是模板分支。
+function rowActions(record) {
+  const actions = [];
+  if (isFinalizedRecord(record) && !isShareActive(record)) {
+    actions.push({ key: 'share', label: sharingId.value === record._id ? '處理中…' : '建立分享連結', icon: Share2, disabled: sharingId.value === record._id });
+  }
+  if (isShareActive(record)) {
+    actions.push({ key: 'copy', label: '複製分享連結', icon: Copy });
+    actions.push({ key: 'revoke', label: revokingId.value === record._id ? '撤銷中…' : '撤銷分享', icon: Link2Off, danger: true, disabled: revokingId.value === record._id });
+  }
+  if (!['sent', 'sending', 'uncertain'].includes(getDeliveryStatus(record))) {
+    actions.push({ key: 'delete', label: '刪除報告', icon: Trash2, danger: true, disabled: deletingRecordId.value === record._id });
+  }
+  return actions;
+}
+
+function handleRowAction(record, action) {
+  if (action === 'share') return shareRecord(record);
+  if (action === 'copy') return copyExistingShare(record);
+  if (action === 'revoke') return openRevokeShare(record);
+  if (action === 'delete') return openRemoveRecord(record);
+}
 function formatDate(value) {
   return formatClinicDate(value, '日期未填');
 }
@@ -207,7 +233,8 @@ watch(
 </script>
 
 <template>
-  <section v-if="pet" class="mx-auto max-w-7xl space-y-5">
+  <div class="mx-auto max-w-7xl">
+  <section v-if="pet" class="space-y-5">
     <router-link :to="backTo" class="inline-flex items-center text-sm font-medium text-primary hover:underline hover:underline-offset-4">← {{ backLabel }}</router-link>
 
     <Card class="p-5 shadow-sm dark:shadow-none">
@@ -250,26 +277,23 @@ watch(
           <Card class="p-4 shadow-sm dark:shadow-none">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 text-xs text-muted-foreground">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
-            <div class="flex flex-wrap items-center gap-1 text-sm">
+            <div class="flex shrink-0 items-center gap-1.5 text-sm">
               <Button v-if="record.status === 'draft'" as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
               <Button v-else as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
-              <Button v-if="isFinalizedRecord(record) && !isShareActive(record)" type="button" variant="secondary" size="sm" :disabled="sharingId === record._id" @click="shareRecord(record)"><Share2 class="h-4 w-4" />{{ sharingId === record._id ? '處理中…' : '分享' }}</Button>
-              <template v-if="isShareActive(record)"><Button type="button" variant="secondary" size="sm" @click="copyExistingShare(record)">複製連結</Button><Button type="button" variant="destructive-outline" size="sm" :disabled="revokingId === record._id" @click="openRevokeShare(record)">{{ revokingId === record._id ? '撤銷中…' : '撤銷' }}</Button></template>
-              <Button v-if="!['sent', 'sending', 'uncertain'].includes(getDeliveryStatus(record))" type="button" variant="destructive" size="sm" :disabled="deletingRecordId === record._id" :aria-label="`刪除健檢紀錄 ${formatDate(record.visitDate)}`" @click="openRemoveRecord(record)"><Trash2 class="h-4 w-4" />刪除</Button>
+              <RowActions
+                v-if="rowActions(record).length"
+                :actions="rowActions(record)"
+                :label="`${formatDate(record.visitDate)} 的更多操作`"
+                @select="(action) => handleRowAction(record, action)"
+              />
             </div>
           </div>
           </Card>
         </li>
       </ul>
-      <EmptyState v-else :icon="PawPrint" title="尚無健檢紀錄" />
+      <EmptyState v-else :icon="PawPrint" title="尚無健檢紀錄" description="點右上角「新增健檢」建立第一份報告。" />
 
-      <div v-if="totalRecordPages > 1" class="flex items-center justify-between gap-3">
-        <p class="text-xs tabular-nums text-muted-foreground">共 {{ recordPagination.total }} 筆・第 {{ recordPage }} / {{ totalRecordPages }} 頁</p>
-        <div class="flex gap-2">
-          <Button type="button" variant="outline" size="sm" :disabled="recordPage <= 1" @click="goToRecordPage(recordPage - 1)">上一頁</Button>
-          <Button type="button" variant="outline" size="sm" :disabled="recordPage >= totalRecordPages" @click="goToRecordPage(recordPage + 1)">下一頁</Button>
-        </div>
-      </div>
+      <Pagination v-if="pet.medicalRecords.length" :page="recordPage" :total-pages="totalRecordPages" @update:page="goToRecordPage" />
     </div>
 
     <PetFormDialog v-if="editOpen" title="編輯寵物資料" submit-label="儲存" :initial-value="{ ...pet, birthDate: clinicDateInput(pet.birthDate) }" :submitting="editSaving" :error-message="editError" @submit="savePet" @close="editOpen = false" />
@@ -305,5 +329,6 @@ watch(
   </section>
 
   <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
-  <p v-else class="text-sm text-muted-foreground" role="status">載入寵物資料…</p>
+  <ListSkeleton v-else :rows="5" />
+  </div>
 </template>

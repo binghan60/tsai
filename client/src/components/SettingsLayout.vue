@@ -8,12 +8,9 @@ defineProps({
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
     <div class="min-w-0 space-y-5">
-      <div class="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 class="text-xl font-semibold text-foreground">{{ title }}</h1>
-          <p v-if="description" class="mt-1 text-sm text-muted-foreground">{{ description }}</p>
-        </div>
-        <slot name="actions" />
+      <div>
+        <h1 class="text-xl font-semibold text-foreground">{{ title }}</h1>
+        <p v-if="description" class="mt-1 text-sm text-muted-foreground">{{ description }}</p>
       </div>
 
       <slot />

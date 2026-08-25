@@ -11,7 +11,9 @@ import { emptyPetDraft } from '../lib/formDrafts';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import EmptyState from '../components/EmptyState.vue';
+import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import ListSkeleton from '../components/ListSkeleton.vue';
 
 import { useToast } from '../composables/useToast';
 import { useBackTarget } from '../composables/useBackTarget';
@@ -224,6 +226,7 @@ watch(
 </script>
 
 <template>
+  <div class="mx-auto max-w-7xl">
   <section v-if="owner" class="space-y-6">
     <router-link :to="backTo" class="text-sm font-medium text-primary hover:underline hover:underline-offset-4">
       ← {{ backLabel }}
@@ -303,15 +306,9 @@ watch(
           </div>
         </Card>
       </div>
-      <EmptyState v-else title="尚無寵物資料" />
+      <EmptyState v-else :icon="Cat" title="尚無寵物資料" description="點上方「新增寵物」建立第一隻，之後就能開始健檢紀錄。" />
 
-      <div v-if="totalPetPages > 1" class="flex items-center justify-between gap-3">
-        <p class="text-xs tabular-nums text-muted-foreground">共 {{ petPagination.total }} 隻・第 {{ petPage }} / {{ totalPetPages }} 頁</p>
-        <div class="flex gap-2">
-          <Button type="button" variant="outline" size="sm" :disabled="petPage <= 1" @click="goToPetPage(petPage - 1)">上一頁</Button>
-          <Button type="button" variant="outline" size="sm" :disabled="petPage >= totalPetPages" @click="goToPetPage(petPage + 1)">下一頁</Button>
-        </div>
-      </div>
+      <Pagination v-if="owner.pets.length" :page="petPage" :total-pages="totalPetPages" @update:page="goToPetPage" />
     </div>
 
     <OwnerFormDialog
@@ -380,5 +377,6 @@ watch(
     />
   </section>
   <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
-  <p v-else class="text-sm text-muted-foreground">載入中…</p>
+  <ListSkeleton v-else :rows="5" />
+  </div>
 </template>

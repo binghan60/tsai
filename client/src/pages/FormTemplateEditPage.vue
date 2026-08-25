@@ -37,6 +37,8 @@ import { Switch } from '../components/ui/switch';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FormSectionPreview from '../components/formfields/FormSectionPreview.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import ListSkeleton from '../components/ListSkeleton.vue';
+import SegmentedControl from '../components/SegmentedControl.vue';
 
 const route = useRoute();
 const { to: backTo, label: backLabel } = useBackTarget('/settings/forms', '回健檢表單');
@@ -55,6 +57,13 @@ const error = ref('');
 const activeKey = ref('');
 const activeView = ref('design');
 const mobileEditorPane = ref('content');
+// 「項目設定」還是「區塊設定」看目前有沒有選到項目——跟切換鈕本身分開定義，
+// 才不用在 template 裡塞一段行內陣列常數。
+const mobileEditorPanes = computed(() => [
+  { value: 'sections', label: '區塊與新增' },
+  { value: 'content', label: '表單內容' },
+  { value: 'settings', label: selectedItem.value ? '項目設定' : '區塊設定' },
+]);
 const desktopCanvasMode = ref('focused');
 const savedSnapshot = ref('');
 
@@ -514,9 +523,7 @@ function resolveLeave(confirmed) {
     <Alert v-if="error" variant="destructive">
       <AlertDescription>{{ error }}</AlertDescription>
     </Alert>
-    <p v-if="loading" class="py-12 text-center text-sm text-muted-foreground" role="status">
-      載入表單中…
-    </p>
+    <ListSkeleton v-if="loading" :rows="6" />
 
     <template v-else>
       <div v-if="activeView === 'design'" class="space-y-5">
@@ -546,21 +553,9 @@ function resolveLeave(confirmed) {
           </div>
         </div>
 
-        <nav class="grid grid-cols-3 gap-1 rounded-xl border border-border bg-card p-1 xl:hidden" aria-label="手機表單編輯區域">
-          <button
-            v-for="pane in [
-              { key: 'sections', label: '區塊與新增' },
-              { key: 'content', label: '表單內容' },
-              { key: 'settings', label: selectedItem ? '項目設定' : '區塊設定' },
-            ]"
-            :key="pane.key"
-            type="button"
-            class="min-h-11 rounded-lg px-2 text-sm font-medium transition-colors"
-            :class="mobileEditorPane === pane.key ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground'"
-            :aria-pressed="mobileEditorPane === pane.key"
-            @click="mobileEditorPane = pane.key"
-          >{{ pane.label }}</button>
-        </nav>
+        <div class="xl:hidden">
+          <SegmentedControl v-model="mobileEditorPane" full-width aria-label="手機表單編輯區域" :options="mobileEditorPanes" />
+        </div>
 
         <div class="hidden items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3 shadow-sm xl:flex">
           <div class="min-w-0">
@@ -571,22 +566,7 @@ function resolveLeave(confirmed) {
               {{ desktopCanvasMode === 'focused' ? '一次專注一個區塊，左右面板可各自捲動。' : '點選任一區塊即可回到聚焦編輯。' }}
             </p>
           </div>
-          <div class="inline-flex shrink-0 rounded-lg border border-border bg-muted/30 p-1" aria-label="桌機畫布顯示方式">
-            <button
-              type="button"
-              class="min-h-9 rounded-md px-3 text-sm font-medium transition-colors"
-              :class="desktopCanvasMode === 'focused' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-              :aria-pressed="desktopCanvasMode === 'focused'"
-              @click="desktopCanvasMode = 'focused'"
-            >聚焦區塊</button>
-            <button
-              type="button"
-              class="min-h-9 rounded-md px-3 text-sm font-medium transition-colors"
-              :class="desktopCanvasMode === 'overview' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'"
-              :aria-pressed="desktopCanvasMode === 'overview'"
-              @click="desktopCanvasMode = 'overview'"
-            >表單總覽</button>
-          </div>
+          <SegmentedControl v-model="desktopCanvasMode" size="sm" aria-label="桌機畫布顯示方式" :options="[{ value: 'focused', label: '聚焦區塊' }, { value: 'overview', label: '表單總覽' }]" />
         </div>
 
         <div class="grid items-start gap-5 xl:grid-cols-[236px_minmax(0,1fr)_320px]">

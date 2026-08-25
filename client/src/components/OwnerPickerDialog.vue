@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Search, X } from '@lucide/vue';
 import { http } from '../api/http';
 import ModalDialog from './ModalDialog.vue';
 import { DialogDescription, DialogTitle } from './ui/dialog';
+import ListSkeleton from './ListSkeleton.vue';
 import { Alert, AlertDescription } from './ui/alert';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -118,7 +119,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
       </div>
       <p v-if="!loading" class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 位飼主</p>
       <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
-      <p v-if="loading" class="py-8 text-center text-sm text-muted-foreground" role="status">載入飼主清單…</p>
+      <ListSkeleton v-if="loading" inset :rows="4" />
       <div v-else-if="owners.length" class="divide-y divide-border overflow-hidden rounded-xl border border-border">
         <button
           v-for="owner in owners"

@@ -326,7 +326,7 @@ recordsRouter.get('/', async (req, res, next) => {
   try {
     const { filter, view } = await buildRecordListFilter(req.query);
     const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 25, 1), 100);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 10, 1), 100);
 
     // 佇列上的數字不套用關鍵字與日期篩選——它們回答的是「還有多少事沒做完」，
     // 會隨著使用者打字忽上忽下的話就失去參考價值了。

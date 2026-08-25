@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import { AlertTriangle, ChevronDown, ChevronUp, Mail, Search, Trash2, X } from '@lucide/vue';
+import { AlertTriangle, ChevronDown, ChevronUp, Mail, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDateTime } from '../lib/datetime';
 import { DELIVERY_EVENT_META } from '../lib/recordStatus';
@@ -8,14 +8,13 @@ import { groupDeliveryAttempts } from '../lib/deliveryAttempts';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { useRoute } from 'vue-router';
 import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
+import Pagination from '../components/Pagination.vue';
 import FilterTabs from '../components/FilterTabs.vue';
-import { Input } from '../components/ui/input';
-import { DatePicker } from '../components/ui/date-picker';
+import FilterBar from '../components/FilterBar.vue';
+import EmptyState from '../components/EmptyState.vue';
 
 // 這頁的重點不是「報告」而是「寄送這件事」：每一次嘗試各自一列，
 // 包含後來被刪掉的報告。報告清單那頁回答「還有什麼沒寄」，這頁回答「當初寄了什麼給誰」。
@@ -47,7 +46,7 @@ if (!route.query.event) {
 
 const logs = ref([]);
 const total = ref(0);
-const limit = ref(50);
+const limit = ref(10);
 const loading = ref(false);
 const error = ref('');
 const expandedDetails = ref(new Set());
@@ -72,7 +71,7 @@ async function fetchLogs() {
     if (currentRequest !== requestSequence) return;
     logs.value = data.items ?? [];
     total.value = data.total ?? 0;
-    limit.value = data.limit ?? 50;
+    limit.value = data.limit ?? 10;
   } catch (err) {
     if (currentRequest === requestSequence) error.value = '寄送歷程暫時無法載入，請稍後重試';
   } finally {
@@ -82,6 +81,9 @@ async function fetchLogs() {
 
 const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
+// 同一次寄送嘗試的多筆事件在畫面上會合併成一列，所以補空列要用實際畫出來的
+// 列數（deliveryAttempts），不是原始 limit 筆數，否則兩者對不上會補太多列。
+const paddingRows = computed(() => Math.max(0, limit.value - deliveryAttempts.value.length));
 
 function selectEvent(key) {
   if (event.value === key) return;
@@ -100,13 +102,6 @@ function goToPage(next) {
 function applyFilters() {
   if (page.value !== '1') page.value = '1';
   else fetchLogs();
-}
-
-function clearSearchFilters() {
-  query.value = '';
-  dateFrom.value = '';
-  dateTo.value = '';
-  applyFilters();
 }
 
 function detailKey(log) {
@@ -137,6 +132,7 @@ watch(event, (nextEvent) => {
 onBeforeUnmount(() => {
   requestSequence += 1;
 });
+
 </script>
 
 <template>
@@ -147,86 +143,93 @@ onBeforeUnmount(() => {
     </div>
 
     <FilterTabs :model-value="event" :items="EVENTS" aria-label="寄送事件篩選" @update:model-value="selectEvent" />
-    <form class="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:grid-cols-[minmax(220px,1fr)_170px_170px_auto_auto]" @submit.prevent="applyFilters">
-      <label class="space-y-1 text-xs font-medium text-muted-foreground">
-        <span>關鍵字</span>
-        <span class="relative block">
-          <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input id="delivery-search" v-model="query" type="search" class="pl-10" placeholder="寵物、飼主、信箱或報告編號" aria-label="搜尋寄送歷程" />
-        </span>
-      </label>
-      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始日期</span><DatePicker v-model="dateFrom" aria-label="寄送起始日期" /></label>
-      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束日期</span><DatePicker v-model="dateTo" aria-label="寄送結束日期" /></label>
-      <Button type="submit" size="sm" class="self-end"><Search class="h-4 w-4" stroke-width="1.75" />搜尋</Button>
-      <Button type="button" variant="outline" size="sm" class="self-end" :disabled="!query && !dateFrom && !dateTo" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
-    </form>
+    <FilterBar
+      id="delivery-search"
+      v-model="query"
+      label="搜尋寄送歷程"
+      placeholder="寵物、飼主、信箱或報告編號"
+      with-date-range
+      :date-from="dateFrom"
+      :date-to="dateTo"
+      date-from-label="起始日期"
+      date-to-label="結束日期"
+      class="max-w-xl"
+      @update:date-from="dateFrom = $event"
+      @update:date-to="dateTo = $event"
+      @submit="applyFilters"
+    />
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
-    <p v-else-if="!logs.length" class="rounded-xl border border-border bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-      目前沒有寄送歷程。
-    </p>
+    <Card v-else-if="!logs.length"><EmptyState inset :icon="Mail" title="目前沒有寄送歷程" /></Card>
 
     <template v-else>
-      <!-- 桌機：表格 -->
+      <!-- 桌機：清單卡。寄送失敗的列左側加一條警示色條，這裡「有事要處理」的判準是
+           log.event === 'failed'，跟健檢紀錄頁用 deliveryStatus 是同一個道理、不同資料來源。 -->
       <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>時間</TableHead>
-              <TableHead>事件</TableHead>
-              <TableHead>報告</TableHead>
-              <TableHead>收件信箱</TableHead>
-              <TableHead>處理結果</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-for="log in deliveryAttempts" :key="log.attemptId || log._id">
-              <TableCell class="text-sm tabular-nums text-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</TableCell>
-              <TableCell>
-                <Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge>
-              </TableCell>
-              <TableCell>
-                <span class="block text-sm text-foreground">{{ log.petName || '寵物未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></span>
-                <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <!-- 報告還在就給連結；已刪除的直接標明，連過去只會是 404。 -->
-                  <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="font-medium text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary">查看報告</router-link>
-                  <template v-else>
-                    <span class="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-muted-foreground">
-                      <Trash2 class="h-3 w-3" stroke-width="1.75" />報告已刪除
-                    </span>
-                  </template>
+        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
+          <span class="w-36 text-xs font-semibold tracking-wide text-muted-foreground uppercase">時間</span>
+          <span class="w-28 text-xs font-semibold tracking-wide text-muted-foreground uppercase">事件</span>
+          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">報告</span>
+          <span class="w-52 text-xs font-semibold tracking-wide text-muted-foreground uppercase">收件信箱</span>
+          <span class="w-64 text-xs font-semibold tracking-wide text-muted-foreground uppercase">處理結果</span>
+        </div>
+        <div
+          v-for="log in deliveryAttempts"
+          :key="log.attemptId || log._id"
+          class="flex items-center gap-3 border-b border-border/60 py-3.5 pr-6 pl-6 last:border-b-0"
+          :class="log.event === 'failed' ? 'border-l-3 border-l-danger bg-danger-surface/40 pl-5.25' : ''"
+        >
+          <span class="w-36 text-sm tabular-nums text-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</span>
+          <span class="w-28"><Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge></span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-sm text-foreground">{{ log.petName || '寵物未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></span>
+            <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <!-- 報告還在就給連結；已刪除的直接標明，連過去只會是 404。 -->
+              <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="font-medium text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary">查看報告</router-link>
+              <template v-else>
+                <span class="inline-flex items-center gap-1 rounded-full bg-muted/60 px-1.5 py-0.5 text-muted-foreground">
+                  <Trash2 class="h-3 w-3" stroke-width="1.75" />報告已刪除
                 </span>
-              </TableCell>
-              <TableCell>
-                <span class="flex items-center gap-1.5 text-sm text-foreground">
-                  <Mail class="h-3.5 w-3.5 shrink-0 text-muted-foreground" stroke-width="1.75" />{{ log.recipient || '—' }}
-                </span>
-              </TableCell>
-              <TableCell>
-                <div v-if="log.error" class="max-w-80 text-xs text-danger">
-                  <span class="flex items-start gap-1">
-                    <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />
-                    <span class="min-w-0 whitespace-normal break-words" :class="detailExpanded(log) || log.error.length <= 40 ? '' : 'line-clamp-2'">{{ log.error }}</span>
-                  </span>
-                  <button
-                    v-if="log.error.length > 40"
-                    type="button"
-                    class="mt-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 font-medium text-danger hover:bg-danger-surface"
-                    @click="toggleDetail(log)"
-                  >
-                    <ChevronUp v-if="detailExpanded(log)" class="h-3.5 w-3.5" />
-                    <ChevronDown v-else class="h-3.5 w-3.5" />
-                    {{ detailExpanded(log) ? '收合詳情' : '展開詳情' }}
-                  </button>
-                </div>
-                <span v-else-if="log.event === 'sent'" class="text-xs text-success">已寄送</span>
-                <span v-else-if="log.event === 'queued'" class="text-xs text-info">等待寄送完成</span>
-                <span v-else-if="log.event === 'uncertain'" class="text-xs text-warning">寄送結果待確認</span>
-                <span v-else class="text-xs text-muted-foreground">—</span>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+              </template>
+            </span>
+          </span>
+          <span class="flex w-52 items-center gap-1.5 text-sm text-foreground">
+            <Mail class="h-3.5 w-3.5 shrink-0 text-muted-foreground" stroke-width="1.75" />{{ log.recipient || '—' }}
+          </span>
+          <span class="w-64">
+            <div v-if="log.error" class="text-xs text-danger">
+              <span class="flex items-start gap-1">
+                <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />
+                <span class="min-w-0 wrap-break-word whitespace-normal" :class="detailExpanded(log) || log.error.length <= 40 ? '' : 'line-clamp-2'">{{ log.error }}</span>
+              </span>
+              <button
+                v-if="log.error.length > 40"
+                type="button"
+                class="mt-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1 font-medium text-danger hover:bg-danger-surface"
+                @click="toggleDetail(log)"
+              >
+                <ChevronUp v-if="detailExpanded(log)" class="h-3.5 w-3.5" />
+                <ChevronDown v-else class="h-3.5 w-3.5" />
+                {{ detailExpanded(log) ? '收合詳情' : '展開詳情' }}
+              </button>
+            </div>
+            <span v-else-if="log.event === 'sent'" class="text-xs text-success">已寄送</span>
+            <span v-else-if="log.event === 'queued'" class="text-xs text-info">等待寄送完成</span>
+            <span v-else-if="log.event === 'uncertain'" class="text-xs text-warning">寄送結果待確認</span>
+            <span v-else class="text-xs text-muted-foreground">—</span>
+          </span>
+        </div>
+        <div
+          v-for="n in paddingRows"
+          :key="`pad-${n}`"
+          class="flex items-center gap-3 border-b border-border/60 py-3.5 pr-6 pl-6 last:border-b-0"
+          aria-hidden="true"
+        >
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm text-transparent">.</span>
+            <span class="block text-xs text-transparent">.</span>
+          </span>
+        </div>
       </Card>
 
       <!-- 手機：卡片 -->
@@ -252,15 +255,7 @@ onBeforeUnmount(() => {
         </Card>
       </div>
 
-      <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
-        <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 個寄送事件・第 {{ currentPage }} / {{ totalPages }} 頁</p>
-        <div class="flex gap-2">
-          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage <= 1" @click="goToPage(1)">第一頁</Button>
-          <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
-          <Button type="button" variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
-          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage >= totalPages" @click="goToPage(totalPages)">最後頁</Button>
-        </div>
-      </div>
+      <Pagination :page="currentPage" :total-pages="totalPages" @update:page="goToPage" />
     </template>
   </section>
 </template>

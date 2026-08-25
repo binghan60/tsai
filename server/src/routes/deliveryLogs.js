@@ -51,7 +51,7 @@ router.get('/', async (req, res, next) => {
     if (Object.keys(createdAt).length) filter.createdAt = createdAt;
 
     const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 200);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 10, 1), 200);
 
     const [items, total] = await Promise.all([
       // Message-ID 是 SMTP 供應商用來追蹤信件的技術識別碼，並非人可讀的寄送備註。

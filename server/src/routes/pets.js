@@ -93,7 +93,7 @@ petsRouter.get('/', async (req, res, next) => {
         ],
       };
     }
-    const pagination = paginationOptions(req.query);
+    const pagination = paginationOptions(req.query, { defaultLimit: 10 });
     const [pets, total] = await Promise.all([
       Pet.find(filter)
         .sort({ updatedAt: -1, _id: -1 })

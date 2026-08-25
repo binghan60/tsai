@@ -4,6 +4,7 @@ import { Cat, ChevronLeft, ChevronRight, Search, User, X } from '@lucide/vue';
 import { http } from '../api/http';
 import ModalDialog from './ModalDialog.vue';
 import { DialogDescription, DialogTitle } from './ui/dialog';
+import ListSkeleton from './ListSkeleton.vue';
 import { Alert, AlertDescription } from './ui/alert';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -118,7 +119,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
       </div>
       <p v-if="!loading" class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 隻寵物</p>
       <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
-      <p v-if="loading" class="py-8 text-center text-sm text-muted-foreground" role="status">載入寵物清單…</p>
+      <ListSkeleton v-if="loading" inset :rows="4" />
       <div v-else-if="pets.length" class="divide-y divide-border overflow-hidden rounded-xl border border-border">
         <button
           v-for="pet in pets"

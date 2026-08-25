@@ -11,11 +11,14 @@ defineProps({
   rows: { type: Number, default: 5 },
   // 有頭像／圖示欄的清單（飼主、寵物、報告）留一個圓形佔位
   avatar: { type: Boolean, default: true },
+  // 對話框或卡片內部用：外層已經有一圈邊框，再包一層 Card 會變成框中框。
+  // 跟 EmptyState 的 inset 是同一個理由。
+  inset: { type: Boolean, default: false },
 });
 </script>
 
 <template>
-  <Card class="overflow-hidden p-0" role="status" aria-label="載入中">
+  <component :is="inset ? 'div' : Card" :class="inset ? '' : 'overflow-hidden p-0'" role="status" aria-label="載入中">
     <div class="divide-y divide-border">
       <div v-for="row in rows" :key="row" class="flex items-center gap-4 px-5 py-3">
         <Skeleton v-if="avatar" class="size-9 shrink-0 rounded-full" />
@@ -27,5 +30,5 @@ defineProps({
         <Skeleton class="h-9 w-24 shrink-0 rounded-lg" />
       </div>
     </div>
-  </Card>
+  </component>
 </template>

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { FileX2, Search, X } from '@lucide/vue';
+import { FileX2, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate, formatDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META } from '../lib/recordStatus';
@@ -8,11 +8,10 @@ import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Alert, AlertDescription } from '../components/ui/alert';
-import { Input } from '../components/ui/input';
-import { DatePicker } from '../components/ui/date-picker';
+import FilterBar from '../components/FilterBar.vue';
 import EmptyState from '../components/EmptyState.vue';
+import Pagination from '../components/Pagination.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 
 // 這頁回答的問題是「那份報告去哪了」。報告本身已經不存在，所以這裡的每一欄都來自
@@ -24,7 +23,7 @@ const dateTo = useSearchQueryParam('to');
 
 const entries = ref([]);
 const total = ref(0);
-const limit = ref(25);
+const limit = ref(10);
 const loading = ref(false);
 const error = ref('');
 const detail = ref(null);
@@ -34,6 +33,7 @@ let requestSequence = 0;
 
 const currentPage = computed(() => Math.max(Number.parseInt(page.value, 10) || 1, 1));
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
+const paddingRows = computed(() => Math.max(0, limit.value - entries.value.length));
 
 async function fetchEntries() {
   const currentRequest = ++requestSequence;
@@ -51,7 +51,7 @@ async function fetchEntries() {
     if (currentRequest !== requestSequence) return;
     entries.value = data.items ?? [];
     total.value = data.total ?? 0;
-    limit.value = data.limit ?? 25;
+    limit.value = data.limit ?? 10;
   } catch (err) {
     if (currentRequest !== requestSequence) return;
     error.value = '刪除紀錄暫時無法載入，請稍後重試';
@@ -76,13 +76,6 @@ async function openDetail(entry) {
 function applyFilters() {
   page.value = '1';
   fetchEntries();
-}
-
-function clearFilters() {
-  query.value = '';
-  dateFrom.value = '';
-  dateTo.value = '';
-  applyFilters();
 }
 
 function goToPage(next) {
@@ -127,33 +120,36 @@ function answerText(item) {
 }
 
 watch(page, fetchEntries, { immediate: true });
+
 </script>
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <div class="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-semibold text-foreground">已刪除的報告</h1>
-        <p class="mt-1 text-sm text-muted-foreground">報告刪除時留下的稽核快照，用來回溯「那份報告去哪了」。</p>
-      </div>
+    <div>
+      <h1 class="text-xl font-semibold text-foreground">已刪除的報告</h1>
+      <p class="mt-1 text-sm text-muted-foreground">報告刪除時留下的稽核快照，用來回溯「那份報告去哪了」。</p>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <FilterBar
+        id="deleted-search"
+        v-model="query"
+        label="搜尋刪除紀錄"
+        placeholder="寵物、飼主、獸醫師或報告編號"
+        with-date-range
+        :date-from="dateFrom"
+        :date-to="dateTo"
+        date-from-label="起始刪除日"
+        date-to-label="結束刪除日"
+        class="max-w-xl"
+        @update:date-from="dateFrom = $event"
+        @update:date-to="dateTo = $event"
+        @submit="applyFilters"
+      />
       <Button as-child variant="outline" size="sm">
         <router-link to="/records">回健檢紀錄</router-link>
       </Button>
     </div>
-
-    <form class="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:grid-cols-[minmax(220px,1fr)_170px_170px_auto_auto]" @submit.prevent="applyFilters">
-      <label class="space-y-1 text-xs font-medium text-muted-foreground">
-        <span>關鍵字</span>
-        <span class="relative block">
-          <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input id="deleted-search" v-model="query" type="search" class="pl-10" placeholder="寵物、飼主、獸醫師或報告編號" aria-label="搜尋刪除紀錄" />
-        </span>
-      </label>
-      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始刪除日</span><DatePicker v-model="dateFrom" aria-label="起始刪除日" /></label>
-      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束刪除日</span><DatePicker v-model="dateTo" aria-label="結束刪除日" /></label>
-      <Button type="submit" size="sm" class="self-end"><Search class="h-4 w-4" stroke-width="1.75" />搜尋</Button>
-      <Button type="button" variant="outline" size="sm" class="self-end" :disabled="!query && !dateFrom && !dateTo" @click="clearFilters"><X class="h-4 w-4" />清除</Button>
-    </form>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
@@ -164,40 +160,43 @@ watch(page, fetchEntries, { immediate: true });
     </Card>
 
     <template v-else>
-      <!-- 桌機：表格 -->
+      <!-- 桌機：清單卡 -->
       <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>寵物 / 飼主</TableHead>
-              <TableHead>報告編號</TableHead>
-              <TableHead>看診日</TableHead>
-              <TableHead>刪除時的狀態</TableHead>
-              <TableHead>刪除時間</TableHead>
-              <TableHead class="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-for="entry in entries" :key="entry._id">
-              <TableCell>
-                <span class="block truncate text-sm font-medium text-foreground">{{ entry.petName || '寵物未記錄' }}</span>
-                <span class="block truncate text-xs text-muted-foreground">{{ entry.ownerName || '飼主未記錄' }}</span>
-              </TableCell>
-              <TableCell class="text-sm tabular-nums text-foreground">
-                {{ entry.reportNumber || '—' }}
-                <span v-if="entry.reportVersion > 1" class="ml-1 text-xs text-muted-foreground">第 {{ entry.reportVersion }} 版</span>
-              </TableCell>
-              <TableCell class="text-sm tabular-nums text-foreground">{{ formatDate(entry.visitDate) }}</TableCell>
-              <TableCell>
-                <Badge variant="status" :class="statusMeta(entry).class">{{ statusMeta(entry).label }}</Badge>
-              </TableCell>
-              <TableCell class="text-sm tabular-nums text-muted-foreground">{{ formatDateTime(entry.deletedAt) }}</TableCell>
-              <TableCell class="text-right">
-                <Button type="button" variant="outline" size="sm" :disabled="detailLoading" @click="openDetail(entry)">查看內容</Button>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
+          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物 / 飼主</span>
+          <span class="w-40 text-xs font-semibold tracking-wide text-muted-foreground uppercase">報告編號</span>
+          <span class="w-28 text-xs font-semibold tracking-wide text-muted-foreground uppercase">看診日</span>
+          <span class="w-32 text-xs font-semibold tracking-wide text-muted-foreground uppercase">刪除時的狀態</span>
+          <span class="w-36 text-xs font-semibold tracking-wide text-muted-foreground uppercase">刪除時間</span>
+          <span class="w-28"></span>
+        </div>
+        <div v-for="entry in entries" :key="entry._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-sm font-medium text-foreground">{{ entry.petName || '寵物未記錄' }}</span>
+            <span class="block truncate text-xs text-muted-foreground">{{ entry.ownerName || '飼主未記錄' }}</span>
+          </span>
+          <span class="w-40 text-sm tabular-nums text-foreground">
+            {{ entry.reportNumber || '—' }}
+            <span v-if="entry.reportVersion > 1" class="text-xs text-muted-foreground">・{{ entry.reportVersion }}版</span>
+          </span>
+          <span class="w-28 text-sm tabular-nums text-foreground">{{ formatDate(entry.visitDate) }}</span>
+          <span class="w-32"><Badge variant="status" :class="statusMeta(entry).class">{{ statusMeta(entry).label }}</Badge></span>
+          <span class="w-36 text-sm tabular-nums text-muted-foreground">{{ formatDateTime(entry.deletedAt) }}</span>
+          <span class="w-28 shrink-0 text-right">
+            <Button type="button" variant="outline" size="sm" :disabled="detailLoading" @click="openDetail(entry)">查看內容</Button>
+          </span>
+        </div>
+        <div
+          v-for="n in paddingRows"
+          :key="`pad-${n}`"
+          class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0"
+          aria-hidden="true"
+        >
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-medium text-transparent">.</span>
+            <span class="block text-xs text-transparent">.</span>
+          </span>
+        </div>
       </Card>
 
       <!-- 手機：卡片 -->
@@ -218,15 +217,7 @@ watch(page, fetchEntries, { immediate: true });
         </Card>
       </div>
 
-      <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
-        <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 筆・第 {{ currentPage }} / {{ totalPages }} 頁</p>
-        <div class="flex gap-2">
-          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage <= 1" @click="goToPage(1)">第一頁</Button>
-          <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
-          <Button type="button" variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
-          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage >= totalPages" @click="goToPage(totalPages)">最後頁</Button>
-        </div>
-      </div>
+      <Pagination :page="currentPage" :total-pages="totalPages" @update:page="goToPage" />
     </template>
 
     <!-- 快照內容就地展開，不換路由：這是稽核用的一次性查看，不需要自己的網址。 -->

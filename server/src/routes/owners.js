@@ -22,7 +22,7 @@ router.get('/', async (req, res, next) => {
     const filter = keyword
       ? { $or: [{ name: keyword }, { phone: keyword }] }
       : {};
-    const pagination = paginationOptions(req.query);
+    const pagination = paginationOptions(req.query, { defaultLimit: 10 });
     const [owners, total] = await Promise.all([
       Owner.find(filter).sort({ createdAt: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit),
       Owner.countDocuments(filter),

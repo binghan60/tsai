@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
 import { Copy, FileText, Pencil, Plus, Search, SearchX, Trash2 } from '@lucide/vue';
+import FilterBar from '../components/FilterBar.vue';
+import SegmentedControl from '../components/SegmentedControl.vue';
 import { useRoute, useRouter } from 'vue-router';
 import { http } from '../api/http';
 import { useTextTemplates } from '../composables/useTextTemplates';
@@ -18,7 +20,6 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Textarea } from '../components/ui/textarea';
 
 const route = useRoute();
@@ -29,8 +30,14 @@ const { templates, loadTemplates, createTemplate, updateTemplate, deleteTemplate
 const fields = ref([]);
 const loading = ref(true);
 const error = ref('');
+const queryInput = ref('');
 const query = ref('');
 const status = ref('all');
+const STATUS_FILTERS = [
+  { value: 'all', label: '全部' },
+  { value: 'enabled', label: '使用中' },
+  { value: 'disabled', label: '已停用' },
+];
 const editorOpen = ref(false);
 const editingId = ref('');
 const saving = ref(false);
@@ -59,6 +66,19 @@ const filteredFields = computed(() => {
     return !keyword || `${field.label} ${field.key}`.toLowerCase().includes(keyword);
   });
 });
+// 關鍵字選好、按下搜尋才查——全站搜尋一律走提交式，不做即時（狀態是切換按鈕組，本來就該即時）。
+function applyFilters() {
+  query.value = queryInput.value;
+}
+
+function clearFilters() {
+  queryInput.value = '';
+  query.value = '';
+  status.value = 'all';
+}
+
+const hasFilters = computed(() => Boolean(query.value.trim() || status.value !== 'all'));
+
 const visibleTemplates = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   return templates.value.filter((template) => {
@@ -191,43 +211,44 @@ onMounted(load);
 
 <template>
   <SettingsLayout title="文字模板" description="集中管理可插入健檢文字欄位的長篇內容；填表時不會自動跳出提示。">
-    <template #actions><Button type="button" @click="openCreate"><Plus class="h-4 w-4" />新增文字模板</Button></template>
-
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-if="loading" :rows="5" />
 
     <template v-else>
-      <Card class="p-3 shadow-sm dark:shadow-none">
-        <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <div class="space-y-1">
-            <Label for="text-template-search">搜尋文字模板</Label>
-            <span class="relative block">
-              <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-              <Input id="text-template-search" v-model="query" type="search" autocomplete="off" class="w-full pl-10" placeholder="搜尋模板名稱或內容" aria-label="搜尋文字模板" />
-            </span>
-          </div>
-          <div class="space-y-1">
-            <Label>模板狀態</Label>
-            <span class="flex gap-2">
-              <Select v-model="status"><SelectTrigger class="w-full" aria-label="模板狀態"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">全部狀態</SelectItem><SelectItem value="enabled">使用中</SelectItem><SelectItem value="disabled">已停用</SelectItem></SelectContent></Select>
-              <Button v-if="query || status !== 'all'" type="button" variant="ghost" class="shrink-0" @click="query = ''; status = 'all'">清除篩選</Button>
-            </span>
-          </div>
+      <div class="space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <FilterBar id="text-template-search" v-model="queryInput" label="搜尋文字模板" placeholder="搜尋模板名稱或內容" class="max-w-lg" @submit="applyFilters" />
+          <Button type="button" @click="openCreate"><Plus class="h-4 w-4" />新增文字模板</Button>
         </div>
-      </Card>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="text-xs font-medium text-muted-foreground">狀態</span>
+          <SegmentedControl v-model="status" size="sm" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
+        </div>
+      </div>
 
       <p class="text-sm text-muted-foreground">顯示 {{ visibleTemplates.length }} 份，共 {{ templates.length }} 份模板</p>
       <EmptyState v-if="!visibleTemplates.length" :icon="templates.length ? SearchX : FileText" :title="templates.length ? '找不到符合條件的文字模板' : '尚未建立文字模板'" description="建立後，填寫健檢的文字欄位便能從模板介面插入。"><Button type="button" class="mt-4" @click="openCreate">新增第一份模板</Button></EmptyState>
 
-      <Card v-if="visibleTemplates.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm xl:block">
-        <Table><TableHeader><TableRow><TableHead>模板名稱</TableHead><TableHead>適用欄位</TableHead><TableHead>啟用</TableHead><TableHead class="text-right">操作</TableHead></TableRow></TableHeader>
-          <TableBody><TableRow v-for="template in visibleTemplates" :key="template._id">
-            <TableCell class="max-w-md"><button type="button" class="block w-full text-left" @click="openEdit(template)"><span class="block font-medium text-primary">{{ template.name }}</span><span class="block truncate text-xs text-muted-foreground">{{ template.content }}</span></button></TableCell>
-            <TableCell class="max-w-64 truncate text-sm text-foreground" :title="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</TableCell>
-            <TableCell><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></TableCell>
-            <TableCell><div class="flex justify-end gap-1"><Button type="button" variant="ghost" size="icon" :aria-label="`編輯${template.name}`" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="ghost" size="icon" :aria-label="`複製${template.name}`" @click="duplicate(template)"><Copy class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" :aria-label="`刪除${template.name}`" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button></div></TableCell>
-          </TableRow></TableBody>
-        </Table>
+      <Card v-if="visibleTemplates.length" class="hidden overflow-hidden p-0 shadow-sm xl:block">
+        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
+          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">模板名稱</span>
+          <span class="w-56 text-xs font-semibold tracking-wide text-muted-foreground uppercase">適用欄位</span>
+          <span class="w-16 text-xs font-semibold tracking-wide text-muted-foreground uppercase">啟用</span>
+          <span class="w-32"></span>
+        </div>
+        <div v-for="template in visibleTemplates" :key="template._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
+          <button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)">
+            <span class="block truncate text-sm font-semibold text-primary">{{ template.name }}</span>
+            <span class="block truncate text-xs text-muted-foreground">{{ template.content }}</span>
+          </button>
+          <span class="w-56 truncate text-sm text-foreground" :title="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
+          <span class="w-16"><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></span>
+          <span class="flex w-32 shrink-0 justify-end gap-1">
+            <Button type="button" variant="ghost" size="icon-sm" :aria-label="`編輯${template.name}`" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button>
+            <Button type="button" variant="ghost" size="icon-sm" :aria-label="`複製${template.name}`" @click="duplicate(template)"><Copy class="h-4 w-4" /></Button>
+            <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${template.name}`" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button>
+          </span>
+        </div>
       </Card>
 
       <div v-if="visibleTemplates.length" class="space-y-3 xl:hidden">

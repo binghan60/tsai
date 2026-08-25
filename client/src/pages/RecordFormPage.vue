@@ -6,6 +6,7 @@ import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, formatDate } from '../lib/datetime';
 import { collectPreviewIssues } from '../lib/recordFormValidation';
+import ListSkeleton from '../components/ListSkeleton.vue';
 import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomId, sectionKeyForItem } from '../lib/formTemplate';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useTextTemplates } from '../composables/useTextTemplates';
@@ -782,7 +783,7 @@ function handleBeforeUnload(event) {
     </div>
 
     <Alert v-if="loadError" variant="destructive"><AlertDescription>{{ loadError }}</AlertDescription></Alert>
-    <p v-else-if="loading" class="text-sm text-muted-foreground" role="status">載入健檢資料…</p>
+    <ListSkeleton v-else-if="loading" :rows="6" />
 
     <!-- 建立報告的第一步：選健檢類型，決定要套用哪一份表單 -->
     <div v-else-if="needsTypeChoice" class="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">

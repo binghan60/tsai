@@ -7,11 +7,11 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { http } from '../api/http';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import FilterBar from '../components/FilterBar.vue';
 import EmptyState from '../components/EmptyState.vue';
+import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
-import SearchPanel from '../components/SearchPanel.vue';
 import { emptyOwnerDraft } from '../lib/formDrafts';
 
 import { useToast } from '../composables/useToast';
@@ -24,7 +24,7 @@ const owners = ref([]);
 const page = useSearchQueryParam('page', '1');
 const query = useSearchQueryParam('q');
 const total = ref(0);
-const limit = ref(25);
+const limit = ref(10);
 const loading = ref(false);
 const error = ref('');
 const showCreate = ref(false);
@@ -40,7 +40,6 @@ const editSaving = ref(false);
 const editError = ref('');
 
 let requestSequence = 0;
-let searchTimer;
 
 async function fetchOwners() {
   const currentRequest = ++requestSequence;
@@ -56,7 +55,7 @@ async function fetchOwners() {
     if (currentRequest === requestSequence) {
       owners.value = data.items ?? [];
       total.value = data.total ?? 0;
-      limit.value = data.limit ?? 25;
+      limit.value = data.limit ?? 10;
       if (!owners.value.length && total.value > 0 && currentPage.value > data.totalPages) {
         page.value = String(data.totalPages);
       }
@@ -160,17 +159,16 @@ function goManagePets() {
   router.push(`/owners/${id}`);
 }
 
+// 關鍵字選好、按下搜尋才查——邊打邊查在每個系統打字習慣不一樣的情況下容易誤觸，
+// 全站搜尋一律走提交式，不做即時。
+function applyFilters() {
+  if (page.value !== '1') page.value = '1';
+  else fetchOwners();
+}
+
 watch(page, fetchOwners, { immediate: true });
-watch(query, () => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => {
-    if (page.value !== '1') page.value = '1';
-    else fetchOwners();
-  }, 250);
-});
 
 onBeforeUnmount(() => {
-  clearTimeout(searchTimer);
   requestSequence += 1;
 });
 
@@ -180,6 +178,7 @@ onMounted(() => {
 
 const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
+const paddingRows = computed(() => Math.max(0, limit.value - owners.value.length));
 
 function goToPage(next) {
   const target = Math.min(Math.max(next, 1), totalPages.value);
@@ -189,42 +188,50 @@ function goToPage(next) {
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <div class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-semibold text-foreground">飼主資料</h1>
-        <p class="mt-1 text-sm text-muted-foreground">管理聯絡資訊與名下寵物。</p>
-      </div>
-      <Button type="button" @click="openCreate">+ 新增飼主</Button>
+    <div>
+      <h1 class="text-xl font-semibold text-foreground">飼主資料</h1>
+      <p class="mt-1 text-sm text-muted-foreground">管理聯絡資訊與名下寵物。</p>
     </div>
 
-    <SearchPanel
-      id="owner-list-search"
-      v-model="query"
-      label="搜尋飼主"
-      placeholder="搜尋姓名或電話"
-      :loading="loading && Boolean(query.trim())"
-    />
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <FilterBar id="owner-list-search" v-model="query" label="搜尋飼主" placeholder="搜尋姓名或電話" class="max-w-lg" @submit="applyFilters" />
+      <Button type="button" @click="openCreate">+ 新增飼主</Button>
+    </div>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <p class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 位飼主</p>
-
-      <Card v-if="owners.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm xl:block">
-        <Table>
-          <TableHeader>
-            <TableRow class="border-border text-muted-foreground"><TableHead class="font-medium">姓名</TableHead><TableHead class="font-medium">電話</TableHead><TableHead class="font-medium">Email</TableHead><TableHead class="text-right font-medium">操作</TableHead></TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-for="owner in owners" :key="owner._id" class="border-border">
-              <TableCell><router-link :to="`/owners/${owner._id}`" class="group flex items-center gap-3"><span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span><span class="font-medium text-primary">{{ owner.name }}</span></router-link></TableCell>
-              <TableCell class="tabular-nums text-foreground"><span class="flex items-center gap-2"><Phone class="h-4 w-4 text-muted-foreground" />{{ owner.phone }}</span></TableCell>
-              <TableCell class="text-foreground">{{ owner.email || '—' }}</TableCell>
-              <TableCell><div class="flex justify-end gap-1"><Button type="button" variant="ghost" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div></TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+      <Card v-if="owners.length" class="hidden overflow-hidden p-0 shadow-sm xl:block">
+        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
+          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">姓名</span>
+          <span class="w-52 text-xs font-semibold tracking-wide text-muted-foreground uppercase">電話</span>
+          <span class="w-56 text-xs font-semibold tracking-wide text-muted-foreground uppercase">Email</span>
+          <span class="w-24"></span>
+        </div>
+        <div v-for="owner in owners" :key="owner._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
+          <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3.5">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span>
+            <span class="truncate text-sm font-semibold text-primary">{{ owner.name }}</span>
+          </router-link>
+          <span class="flex w-52 items-center gap-2 text-sm tabular-nums text-foreground"><Phone class="h-4 w-4 shrink-0 text-muted-foreground" />{{ owner.phone }}</span>
+          <span class="w-56 truncate text-sm text-foreground">{{ owner.email || '—' }}</span>
+          <span class="flex w-24 shrink-0 justify-end gap-1">
+            <Button type="button" variant="ghost" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button>
+            <Button type="button" variant="destructive" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button>
+          </span>
+        </div>
+        <div
+          v-for="n in paddingRows"
+          :key="`pad-${n}`"
+          class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0"
+          aria-hidden="true"
+        >
+          <span class="flex min-w-0 flex-1 items-center gap-3.5">
+            <span class="h-10 w-10 shrink-0 rounded-full"></span>
+            <span class="text-sm text-transparent">.</span>
+          </span>
+        </div>
       </Card>
 
       <div v-if="owners.length" class="space-y-3 xl:hidden">
@@ -238,15 +245,7 @@ function goToPage(next) {
 
       <EmptyState v-if="owners.length === 0" :icon="Users" :title="query ? '找不到符合條件的飼主' : '尚未建立飼主資料'" />
 
-      <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
-        <p class="text-xs tabular-nums text-muted-foreground">第 {{ currentPage }} / {{ totalPages }} 頁</p>
-        <div class="flex gap-2">
-          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage <= 1" @click="goToPage(1)">第一頁</Button>
-          <Button type="button" variant="outline" size="sm" :disabled="currentPage <= 1" @click="goToPage(currentPage - 1)">上一頁</Button>
-          <Button type="button" variant="outline" size="sm" :disabled="currentPage >= totalPages" @click="goToPage(currentPage + 1)">下一頁</Button>
-          <Button type="button" variant="outline" size="sm" class="hidden sm:inline-flex" :disabled="currentPage >= totalPages" @click="goToPage(totalPages)">最後頁</Button>
-        </div>
-      </div>
+      <Pagination :page="currentPage" :total-pages="totalPages" @update:page="goToPage" />
     </template>
 
     <OwnerFormDialog v-if="editTarget" title="編輯飼主資料" submit-label="儲存" :initial-value="{ name: editTarget.name, phone: editTarget.phone, email: editTarget.email ?? '' }" :submitting="editSaving" :error-message="editError" @submit="submitEdit" @close="editTarget = null" />

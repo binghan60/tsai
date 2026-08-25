@@ -10,15 +10,15 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ModalDialog from '../components/ModalDialog.vue';
-import SearchPanel from '../components/SearchPanel.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
+import SegmentedControl from '../components/SegmentedControl.vue';
+import FilterBar from '../components/FilterBar.vue';
 import EmptyState from '../components/EmptyState.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
@@ -41,6 +41,7 @@ const copyFromId = ref('');
 const creating = ref(false);
 const createError = ref('');
 
+const queryInput = ref('');
 const query = ref('');
 const speciesFilter = ref('');
 const statusFilter = ref('');
@@ -80,7 +81,13 @@ const visibleTemplates = computed(() => {
   });
 });
 
+// 關鍵字選好、按下搜尋才查——全站搜尋一律走提交式，不做即時。
+function applyFilters() {
+  query.value = queryInput.value;
+}
+
 function clearFilters() {
+  queryInput.value = '';
   query.value = '';
   speciesFilter.value = '';
   statusFilter.value = '';
@@ -204,53 +211,27 @@ onMounted(load);
 
 <template>
   <SettingsLayout title="表單管理" description="醫師建立健檢時可選用的表單。每份表單都能設定適用物種與檢查內容。">
-    <template #actions>
-      <Button type="button" @click="openCreate"><Plus class="h-4 w-4" stroke-width="1.75" />新增健檢表單</Button>
-    </template>
-
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-if="loading" :rows="4" />
 
     <template v-else-if="templates.length">
-      <SearchPanel id="template-search" v-model="query" label="搜尋健檢表單" placeholder="輸入表單名稱或說明">
-        <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-3 px-1">
-          <div class="flex flex-wrap items-center gap-2">
-            <span id="filter-species-label" class="text-xs font-medium text-muted-foreground">適用物種</span>
-            <div class="flex flex-wrap gap-1" role="group" aria-labelledby="filter-species-label">
-              <button
-                v-for="option in SPECIES_FILTERS"
-                :key="option.value"
-                type="button"
-                class="inline-flex min-h-11 w-24 items-center justify-center rounded-lg border px-3 text-sm font-medium transition-colors"
-                :class="speciesFilter === option.value
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border text-foreground hover:bg-muted/40   '"
-                :aria-pressed="speciesFilter === option.value"
-                @click="speciesFilter = option.value"
-              >{{ option.label }}</button>
-            </div>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <span id="filter-status-label" class="text-xs font-medium text-muted-foreground">狀態</span>
-            <div class="flex flex-wrap gap-1" role="group" aria-labelledby="filter-status-label">
-              <button
-                v-for="option in STATUS_FILTERS"
-                :key="option.value"
-                type="button"
-                class="inline-flex min-h-11 w-24 items-center justify-center rounded-lg border px-3 text-sm font-medium transition-colors"
-                :class="statusFilter === option.value
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border text-foreground hover:bg-muted/40   '"
-                :aria-pressed="statusFilter === option.value"
-                @click="statusFilter = option.value"
-              >{{ option.label }}</button>
-            </div>
-          </div>
-
-          <Button v-if="hasFilters" type="button" variant="ghost" size="sm" class="ml-auto" @click="clearFilters">清除篩選</Button>
+      <div class="space-y-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <FilterBar id="template-search" v-model="queryInput" label="搜尋健檢表單" placeholder="輸入表單名稱或說明" class="max-w-lg" @submit="applyFilters" />
+          <Button type="button" @click="openCreate"><Plus class="h-4 w-4" stroke-width="1.75" />新增健檢表單</Button>
         </div>
-      </SearchPanel>
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-medium text-muted-foreground">適用物種</span>
+            <SegmentedControl v-model="speciesFilter" size="sm" aria-label="依適用物種篩選" :options="SPECIES_FILTERS" />
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-medium text-muted-foreground">狀態</span>
+            <SegmentedControl v-model="statusFilter" size="sm" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
+          </div>
+        </div>
+      </div>
 
       <div class="flex flex-wrap items-center justify-between gap-2">
         <p class="text-sm text-muted-foreground">
@@ -269,68 +250,53 @@ onMounted(load);
         <Button type="button" variant="outline" class="mt-4" @click="clearFilters">清除篩選</Button>
       </EmptyState>
 
-      <!-- 桌機：一列一份表單，與飼主／寵物列表同一套表格版式 -->
-      <Card v-if="visibleTemplates.length" class="hidden gap-0 overflow-hidden py-0 shadow-sm xl:block">
-        <Table>
-          <TableHeader>
-            <TableRow class="border-border text-muted-foreground">
-              <TableHead class="font-medium">表單名稱</TableHead>
-              <TableHead class="font-medium">適用物種</TableHead>
-              <TableHead class="font-medium">內容</TableHead>
-              <TableHead class="font-medium">啟用</TableHead>
-              <TableHead class="text-right font-medium">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <TableRow v-for="template in visibleTemplates" :key="template._id" class="border-border">
-              <TableCell>
-                <router-link :to="`/settings/forms/${template._id}`" class="group flex flex-col justify-center">
-                  <span class="font-medium text-primary">{{ template.name }}</span>
-                  <span class="text-xs" :class="template.description ? 'text-muted-foreground ' : 'text-muted-foreground '">
-                    {{ template.description || '尚未填寫表單說明' }}
-                  </span>
-                </router-link>
-              </TableCell>
-              <TableCell class="text-foreground">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</TableCell>
-              <TableCell class="text-foreground">{{ template.sectionCount }} 個區塊・{{ template.itemCount }} 個項目</TableCell>
-              <TableCell>
-                <div class="flex items-center gap-2">
-                  <Switch
-                    :id="`enabled-${template._id}`"
-                    :model-value="template.enabled"
-                    :disabled="busyId === template._id"
-                    @update:model-value="toggleEnabled(template, $event)"
-                  />
-                  <Label :for="`enabled-${template._id}`" class="text-xs" :class="getAvailabilityStatusMeta(template.enabled).textClass">
-                    {{ getAvailabilityStatusMeta(template.enabled).label }}
-                  </Label>
-                </div>
-              </TableCell>
-              <TableCell>
-                <div class="flex justify-end gap-1">
-                  <Button type="button" variant="ghost" size="icon" :aria-label="`編輯表單 ${template.name}`" @click="router.push(`/settings/forms/${template._id}`)">
-                    <Pencil class="h-4 w-4" stroke-width="1.75" />
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon" :disabled="Boolean(busyId)" :aria-label="`以「${template.name}」建立新表單`" @click="openDuplicate(template)">
-                    <Copy class="h-4 w-4" stroke-width="1.75" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="destructive"
-                    size="icon"
-                    class="h-11 w-11"
-                    :disabled="Boolean(busyId) || !canDelete"
-                    :title="canDelete ? '刪除這份表單' : '至少要保留一份表單'"
-                    :aria-label="`刪除表單 ${template.name}`"
-                    @click="templateToDelete = template"
-                  >
-                    <Trash2 class="h-4 w-4" stroke-width="1.75" />
-                  </Button>
-                </div>
-              </TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
+      <!-- 桌機：清單卡，與其他列表頁同一套版式 -->
+      <Card v-if="visibleTemplates.length" class="hidden overflow-hidden p-0 shadow-sm xl:block">
+        <div class="flex h-11 items-center border-b border-border bg-muted/40 px-6">
+          <span class="flex-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">表單名稱</span>
+          <span class="w-24 text-xs font-semibold tracking-wide text-muted-foreground uppercase">適用物種</span>
+          <span class="w-40 text-xs font-semibold tracking-wide text-muted-foreground uppercase">內容</span>
+          <span class="w-28 text-xs font-semibold tracking-wide text-muted-foreground uppercase">啟用</span>
+          <span class="w-32"></span>
+        </div>
+        <div v-for="template in visibleTemplates" :key="template._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
+          <router-link :to="`/settings/forms/${template._id}`" class="min-w-0 flex-1">
+            <span class="block truncate text-sm font-semibold text-primary">{{ template.name }}</span>
+            <span class="block truncate text-xs text-muted-foreground">{{ template.description || '尚未填寫表單說明' }}</span>
+          </router-link>
+          <span class="w-24 text-sm text-foreground">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</span>
+          <span class="w-40 text-sm text-foreground">{{ template.sectionCount }} 區塊・{{ template.itemCount }} 項目</span>
+          <span class="w-28 flex items-center gap-2">
+            <Switch
+              :id="`enabled-${template._id}`"
+              :model-value="template.enabled"
+              :disabled="busyId === template._id"
+              @update:model-value="toggleEnabled(template, $event)"
+            />
+            <Label :for="`enabled-${template._id}`" class="text-xs" :class="getAvailabilityStatusMeta(template.enabled).textClass">
+              {{ getAvailabilityStatusMeta(template.enabled).label }}
+            </Label>
+          </span>
+          <span class="flex w-32 shrink-0 justify-end gap-1">
+            <Button type="button" variant="ghost" size="icon-sm" :aria-label="`編輯表單 ${template.name}`" @click="router.push(`/settings/forms/${template._id}`)">
+              <Pencil class="h-4 w-4" stroke-width="1.75" />
+            </Button>
+            <Button type="button" variant="ghost" size="icon-sm" :disabled="Boolean(busyId)" :aria-label="`以「${template.name}」建立新表單`" @click="openDuplicate(template)">
+              <Copy class="h-4 w-4" stroke-width="1.75" />
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon-sm"
+              :disabled="Boolean(busyId) || !canDelete"
+              :title="canDelete ? '刪除這份表單' : '至少要保留一份表單'"
+              :aria-label="`刪除表單 ${template.name}`"
+              @click="templateToDelete = template"
+            >
+              <Trash2 class="h-4 w-4" stroke-width="1.75" />
+            </Button>
+          </span>
+        </div>
       </Card>
 
       <!-- 手機：表格擠不下，改回一份一張卡 -->

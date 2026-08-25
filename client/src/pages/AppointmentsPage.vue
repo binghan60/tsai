@@ -1,13 +1,14 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { CalendarPlus, CalendarX, Search, X } from '@lucide/vue';
+import { CalendarPlus, CalendarX } from '@lucide/vue';
 import { http } from '../api/http';
 import { clinicDateInput } from '../lib/datetime';
 import { APPOINTMENT_STATUS_META, APPOINTMENT_VIEWS } from '../lib/appointmentStatus';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { useToast } from '../composables/useToast';
 import FilterTabs from '../components/FilterTabs.vue';
+import FilterBar from '../components/FilterBar.vue';
 import AppointmentScheduleRow from '../components/AppointmentScheduleRow.vue';
 import AppointmentQueuePanel from '../components/AppointmentQueuePanel.vue';
 import AppointmentFormDialog from '../components/AppointmentFormDialog.vue';
@@ -17,8 +18,6 @@ import CheckinAppointmentDialog from '../components/CheckinAppointmentDialog.vue
 import EmptyState from '../components/EmptyState.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { Button } from '../components/ui/button';
-import { DatePicker } from '../components/ui/date-picker';
-import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 
 const router = useRouter();
@@ -160,13 +159,6 @@ function selectView(key) {
   if ((view.value || 'all') !== key) view.value = key;
 }
 
-function clearSearchFilters() {
-  query.value = '';
-  dateFrom.value = '';
-  dateTo.value = '';
-  applyFilters();
-}
-
 function goToPage(next) {
   const target = Math.min(Math.max(next, 1), totalPages.value);
   if (target !== currentPage.value) page.value = String(target);
@@ -283,35 +275,38 @@ async function onAppointmentCreated() {
 
 watch(view, applyFilters);
 watch(page, fetchAppointments, { immediate: true });
+
 </script>
 
 <template>
   <section class="mx-auto max-w-7xl space-y-3">
-    <div class="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 class="text-xl font-semibold text-foreground">預約與候診</h1>
-        <p class="mt-1 text-sm text-muted-foreground">管理門診時段、病患報到與候診順序。</p>
-      </div>
-      <Button type="button" @click="formDialogOpen = true">
-        <CalendarPlus class="h-4 w-4" stroke-width="1.75" />新增預約
-      </Button>
+    <div>
+      <h1 class="text-xl font-semibold text-foreground">預約與候診</h1>
+      <p class="mt-1 text-sm text-muted-foreground">管理門診時段、病患報到與候診順序。</p>
     </div>
 
     <FilterTabs :model-value="view || 'all'" :items="APPOINTMENT_VIEWS" :counts="counts" aria-label="預約狀態" @update:model-value="selectView" />
 
-    <form class="grid gap-3 rounded-xl border border-border bg-card p-3 shadow-sm sm:grid-cols-[minmax(220px,1fr)_170px_170px_auto_auto]" @submit.prevent="applyFilters">
-      <label class="space-y-1 text-xs font-medium text-muted-foreground">
-        <span>關鍵字</span>
-        <span class="relative block">
-          <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-          <Input id="appointments-search" v-model="query" type="search" class="pl-10" placeholder="病患、飼主或電話" aria-label="搜尋預約" />
-        </span>
-      </label>
-      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>起始日期</span><DatePicker v-model="dateFrom" aria-label="預約起始日期" /></label>
-      <label class="space-y-1 text-xs font-medium text-muted-foreground"><span>結束日期</span><DatePicker v-model="dateTo" aria-label="預約結束日期" /></label>
-      <Button type="submit" size="sm" class="self-end"><Search class="h-4 w-4" stroke-width="1.75" />搜尋</Button>
-      <Button type="button" variant="outline" size="sm" class="self-end" :disabled="!query && !dateFrom && !dateTo" @click="clearSearchFilters"><X class="h-4 w-4" />清除</Button>
-    </form>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <FilterBar
+        id="appointments-search"
+        v-model="query"
+        label="搜尋預約"
+        placeholder="病患、飼主或電話"
+        with-date-range
+        :date-from="dateFrom"
+        :date-to="dateTo"
+        date-from-label="起始日期"
+        date-to-label="結束日期"
+        class="max-w-xl"
+        @update:date-from="dateFrom = $event"
+        @update:date-to="dateTo = $event"
+        @submit="applyFilters"
+      />
+      <Button type="button" @click="formDialogOpen = true">
+        <CalendarPlus class="h-4 w-4" stroke-width="1.75" />新增預約
+      </Button>
+    </div>
 
     <div v-if="error" class="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{{ error }}</div>
 

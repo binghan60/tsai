@@ -36,7 +36,7 @@ router.get('/', async (req, res, next) => {
       if (to) filter.deletedAt.$lt = clinicDayStart(to, 1);
     }
 
-    const pagination = paginationOptions(req.query);
+    const pagination = paginationOptions(req.query, { defaultLimit: 10 });
     const [items, total] = await Promise.all([
       DeletedMedicalRecord.find(filter)
         .select(LIST_FIELDS)

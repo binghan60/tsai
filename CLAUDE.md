@@ -270,12 +270,16 @@ GET    /api/health
   | 狀態徽章 | `<Badge variant="status">` | 不要覆寫 padding／圓角 |
   | 刪除等危險操作確認 | `<ConfirmDialog>` | **禁止用瀏覽器原生 `confirm()`／`alert()`**——樣式跳出主題、行動裝置體驗差、也擋不住連點 |
   | 操作結果提示（成功／失敗） | `useToast()`（`success`／`error`） | 同上，不要用 `alert()` |
+  | 清單分頁 | `<Pagination :page :total-pages>` | 不要手刻分頁列。只有分頁膠囊本身，置中顯示，不顯示「共 N 筆」。分頁列永遠顯示（含只有一頁的情況），邊界按鈕用 disabled 表達到頭了，不是整列消失；四顆按鈕收進一顆膠囊軌道，首頁／末頁降級成最小的圓形圖示鈕退到兩側（資料量小很少用到跳頁到底），下一頁比上一頁更常按所以用實心主色、上一頁只浮起一階。清單一筆資料都沒有時走 `EmptyState`，不會走到這裡。 |
+  | 單選切換鈕（無描述文字、無計數） | `<SegmentedControl v-model :options :aria-label>` | 不要手刻——同一個「選取中」概念原本有四種顏色語彙（實心填色、白色浮動晶片、純色實心、淡色調底面）。選取態統一用 `bg-accent text-accent-foreground`（跟文字顏色規則的「選取／啟用中狀態」同一個記號）。要計數徽章、色點或橫向捲動時用 `FilterTabs`，不要塞進 `SegmentedControl`——那樣兩個元件遲早又會分裂成不同外觀。 |
+  | 篩選面板（關鍵字，選配日期範圍） | `<FilterBar id label placeholder v-model with-date-range :date-from :date-to @submit>` | 不要再手刻「一張固定佔版面的表單」。收成一條搜尋膠囊：關鍵字輸入框＋（選配）「篩選日期」次要按鈕點了才展開日期範圍＋圓形送出鈕。全站搜尋一律走提交式（按 Enter／送出鈕／彈出層裡的套用才查），不做即時——邊打邊查在每個系統打字習慣不一樣的情況下容易誤觸，這是特地從即時搜尋改回來的決定；表單管理／文字模板頁的關鍵字雖然是純前端過濾（不打 API），還是統一走提交式，物種／狀態那類切換按鈕組才維持即時。 |
+  | 清單頁的資料表格 | 沒有共用元件，照這個版式手刻：`<Card class="overflow-hidden p-0">` 裡放一列 `text-xs uppercase tracking-wide text-muted-foreground` 的標籤列（`h-10 border-b border-border px-6`），下面每列是 `flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0` | 不要用舊的 `<Table>`／`<TableCell>` 網格表格——那個元件已經刪掉了。每列的身分欄（大多是主體，如寵物／飼主／表單名稱）用圓形頭像＋主色連結名稱＋灰字副標；狀態放 `Badge`；操作欄靠右放一顆主要按鈕（能收斂成一顆就不要放兩顆）。「有事要處理」的列（例如寄送失敗）用 `border-l-3 border-l-danger bg-danger-surface/40` 在左側加一條色條標出來，不要另外加圖示搶注意力。 |
 
-  按鈕高度由 `size` 決定（`xs` 36 / `sm` 40 / `default` 44 / `lg` 48），**不要用 `min-h-11` 覆寫**——那會讓高度與 padding 對不上。`ghost` 平時完全透明、hover 才上色，只用在中性、低風險的操作（編輯、展開、關閉…）。**危險操作（取消、刪除、捨棄草稿等）一律用 `variant="destructive"`**——它本身就是常駐可見的淡紅底＋紅字，不需要 hover 才看得出來是危險操作。**禁止**用 `ghost` 再手刻 `class="text-destructive hover:bg-destructive/10"` 這種只有滑鼠移過去才現形的寫法：危險操作被做成視覺上跟中性操作沒有分別，使用者掃過列表時完全看不出哪個會出事。
+  按鈕拿掉外框，靠實色／淡色填底分層級（`default` 實色、`outline`／`secondary` 淡色填底、`ghost` 透明、`destructive` 淡紅底、`destructive-solid` 實心紅）；唯一還留邊框的是 `destructive-outline`，用在比 `destructive-solid` 輕、又不想跟 `destructive` 混淆的場合（例如撤銷分享）。純圖示按鈕（`icon`／`icon-xs`／`icon-sm`／`icon-lg`）是圓形 `rounded-full`，跟一般按鈕的方形 `rounded-lg` 刻意做出區隔——圓形留給「只有一個動作、佔最小空間」的場合（分頁按鈕、篩選送出鈕）。按鈕高度由 `size` 決定（`xs` 36 / `sm` 40 / `default` 44 / `lg` 48），**不要用 `min-h-11` 覆寫**——那會讓高度與 padding 對不上。`ghost` 平時完全透明、hover 才上色，只用在中性、低風險的操作（編輯、展開、關閉…）。**危險操作（取消、刪除、捨棄草稿等）一律用 `variant="destructive"`**——它本身就是常駐可見的淡紅底＋紅字，不需要 hover 才看得出來是危險操作。**禁止**用 `ghost` 再手刻 `class="text-destructive hover:bg-destructive/10"` 這種只有滑鼠移過去才現形的寫法：危險操作被做成視覺上跟中性操作沒有分別，使用者掃過列表時完全看不出哪個會出事。**按鈕不要加漸層或光澤效果**——試過直向明暗漸層（太像 Bootstrap 的立體感）跟仿側邊欄的暖色澤高光（太花），最後定案是純色；只有側邊欄本身保留那個手法，不要往按鈕上套。
 
-  表格的 padding、表頭底色、sticky、hover 都在 `ui/table/*` 裡，頁面只放內容。桌機表格與手機卡片的切換斷點統一是 `xl`(1280px)，跟 `max-w-7xl` 對齊。
+  桌機表格與手機卡片的切換斷點統一是 `xl`(1280px)，跟 `max-w-7xl` 對齊。
 
-  圓角三檔：控制項 `rounded-lg`、卡片 `rounded-xl`、對話框 `rounded-2xl`。
+  圓角三檔：控制項 `rounded-lg`（圖示按鈕例外，見上）、卡片 `rounded-xl`、對話框 `rounded-2xl`。
 
 更完整的視覺規範見 [docs/STYLE_GUIDE.md](docs/STYLE_GUIDE.md)。
 
