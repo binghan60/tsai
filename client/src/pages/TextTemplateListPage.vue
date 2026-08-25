@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { Copy, FileText, Pencil, Plus, Search, SearchX, Trash2 } from '@lucide/vue';
 import FilterBar from '../components/FilterBar.vue';
+import Pagination from '../components/Pagination.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
 import { useRoute, useRouter } from 'vue-router';
 import { http } from '../api/http';
@@ -69,12 +70,14 @@ const filteredFields = computed(() => {
 // 關鍵字選好、按下搜尋才查——全站搜尋一律走提交式，不做即時（狀態是切換按鈕組，本來就該即時）。
 function applyFilters() {
   query.value = queryInput.value;
+  page.value = 1;
 }
 
 function clearFilters() {
   queryInput.value = '';
   query.value = '';
   status.value = 'all';
+  page.value = 1;
 }
 
 const hasFilters = computed(() => Boolean(query.value.trim() || status.value !== 'all'));
@@ -86,6 +89,18 @@ const visibleTemplates = computed(() => {
     if (status.value === 'disabled' && template.enabled !== false) return false;
     return !keyword || `${template.name} ${template.content}`.toLowerCase().includes(keyword);
   });
+});
+
+// 這頁清單是前端過濾，分頁也跟著在前端切，不另外打 API。
+const PAGE_SIZE = 10;
+const page = ref(1);
+const totalPages = computed(() => Math.max(Math.ceil(visibleTemplates.value.length / PAGE_SIZE), 1));
+const pagedTemplates = computed(() => visibleTemplates.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
+const paddingRows = computed(() => Math.max(0, PAGE_SIZE - pagedTemplates.value.length));
+
+// 狀態切換鈕組是即時篩選，不經過 applyFilters，換條件時單獨重置頁碼。
+watch(status, () => {
+  page.value = 1;
 });
 
 function resetForm(template = null) {
@@ -236,7 +251,7 @@ onMounted(load);
           <span class="w-16 text-xs font-semibold tracking-wide text-muted-foreground uppercase">啟用</span>
           <span class="w-32"></span>
         </div>
-        <div v-for="template in visibleTemplates" :key="template._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
+        <div v-for="template in pagedTemplates" :key="template._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
           <button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)">
             <span class="block truncate text-sm font-semibold text-primary">{{ template.name }}</span>
             <span class="block truncate text-xs text-muted-foreground">{{ template.content }}</span>
@@ -249,11 +264,24 @@ onMounted(load);
             <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${template.name}`" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button>
           </span>
         </div>
+        <div
+          v-for="n in paddingRows"
+          :key="`pad-${n}`"
+          class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0"
+          aria-hidden="true"
+        >
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-semibold text-transparent">.</span>
+            <span class="block text-xs text-transparent">.</span>
+          </span>
+        </div>
       </Card>
 
       <div v-if="visibleTemplates.length" class="space-y-3 xl:hidden">
-        <Card v-for="template in visibleTemplates" :key="template._id" class="p-4"><div class="flex items-start justify-between gap-3"><button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)"><span class="font-semibold text-foreground">{{ template.name }}</span><span class="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{{ template.content }}</span></button><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></div><div class="mt-3 flex items-center gap-2 border-t border-border pt-3"><span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ applicabilityLabel(template) }}</span><Button type="button" variant="ghost" size="icon" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button></div></Card>
+        <Card v-for="template in pagedTemplates" :key="template._id" class="p-4"><div class="flex items-start justify-between gap-3"><button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)"><span class="font-semibold text-foreground">{{ template.name }}</span><span class="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{{ template.content }}</span></button><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></div><div class="mt-3 flex items-center gap-2 border-t border-border pt-3"><span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ applicabilityLabel(template) }}</span><Button type="button" variant="ghost" size="icon" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button></div></Card>
       </div>
+
+      <Pagination v-if="visibleTemplates.length" :page="page" :total-pages="totalPages" @update:page="page = $event" />
     </template>
 
     <ModalDialog v-if="editorOpen" size="lg" @close="editorOpen = false">

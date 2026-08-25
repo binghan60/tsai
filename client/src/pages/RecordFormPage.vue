@@ -13,6 +13,7 @@ import { useTextTemplates } from '../composables/useTextTemplates';
 import { useBackTarget } from '../composables/useBackTarget';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import FormSection from '../components/formfields/FormSection.vue';
@@ -806,15 +807,14 @@ function handleBeforeUnload(event) {
         </div>
         <div v-if="startMode === 'previous'" class="mt-3">
           <Label for="copy-from-record">選擇要帶入的報告</Label>
-          <select
-            id="copy-from-record"
-            v-model="copyFromId"
-            class="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            <option v-for="source in finalizedSources" :key="source._id" :value="String(source._id)">
-              {{ formatDate(source.visitDate) }} · {{ source.examType || '健檢報告' }} · 第 {{ source.reportVersion || 1 }} 版
-            </option>
-          </select>
+          <Select v-model="copyFromId">
+            <SelectTrigger id="copy-from-record" class="mt-1 w-full"><SelectValue placeholder="請選擇一份報告" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="source in finalizedSources" :key="source._id" :value="String(source._id)">
+                {{ formatDate(source.visitDate) }} · {{ source.examType || '健檢報告' }} · 第 {{ source.reportVersion || 1 }} 版
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
       <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -979,7 +979,7 @@ function handleBeforeUnload(event) {
         </SheetContent>
       </Sheet>
 
-      <div id="form-errors" v-if="!isLocked && validationErrors.length" class="rounded-2xl border border-danger/35 bg-danger-surface p-4 text-sm text-danger" role="alert"><p class="font-semibold">正式報告尚缺少以下內容：</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="issue in validationErrors" :key="`${issue.targetId}-${issue.message}`"><button type="button" class="text-left font-medium underline decoration-red-300 underline-offset-2 hover:text-danger" @click="goToValidationIssue(issue)">{{ issue.message }}</button></li></ul><p class="mt-3 text-xs">點擊任一項可前往對應欄位。</p></div>
+      <div id="form-errors" v-if="!isLocked && validationErrors.length" class="rounded-2xl border border-danger/35 bg-danger-surface p-4 text-sm text-danger" role="alert"><p class="font-semibold">正式報告尚缺少以下內容：</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="issue in validationErrors" :key="`${issue.targetId}-${issue.message}`"><button type="button" class="text-left font-medium underline decoration-danger/40 underline-offset-2 hover:decoration-danger" @click="goToValidationIssue(issue)">{{ issue.message }}</button></li></ul><p class="mt-3 text-xs">點擊任一項可前往對應欄位。</p></div>
 
       <form v-if="!isLocked" class="space-y-5" @submit.prevent>
         <section

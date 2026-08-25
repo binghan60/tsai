@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { Copy, LayoutList, Pencil, Plus, SearchX, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
@@ -19,6 +19,7 @@ import ModalDialog from '../components/ModalDialog.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
 import FilterBar from '../components/FilterBar.vue';
+import Pagination from '../components/Pagination.vue';
 import EmptyState from '../components/EmptyState.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
@@ -81,9 +82,17 @@ const visibleTemplates = computed(() => {
   });
 });
 
+// 這頁清單是前端過濾（見上面 visibleTemplates），分頁也跟著在前端切，不另外打 API。
+const PAGE_SIZE = 10;
+const page = ref(1);
+const totalPages = computed(() => Math.max(Math.ceil(visibleTemplates.value.length / PAGE_SIZE), 1));
+const pagedTemplates = computed(() => visibleTemplates.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
+const paddingRows = computed(() => Math.max(0, PAGE_SIZE - pagedTemplates.value.length));
+
 // 關鍵字選好、按下搜尋才查——全站搜尋一律走提交式，不做即時。
 function applyFilters() {
   query.value = queryInput.value;
+  page.value = 1;
 }
 
 function clearFilters() {
@@ -91,7 +100,13 @@ function clearFilters() {
   query.value = '';
   speciesFilter.value = '';
   statusFilter.value = '';
+  page.value = 1;
 }
+
+// 物種／狀態切換鈕組是即時篩選，不經過 applyFilters，換條件時單獨重置頁碼。
+watch([speciesFilter, statusFilter], () => {
+  page.value = 1;
+});
 const selectedSource = computed(() => templates.value.find((template) => template._id === copyFromId.value) ?? null);
 
 async function load() {
@@ -259,7 +274,7 @@ onMounted(load);
           <span class="w-28 text-xs font-semibold tracking-wide text-muted-foreground uppercase">啟用</span>
           <span class="w-32"></span>
         </div>
-        <div v-for="template in visibleTemplates" :key="template._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
+        <div v-for="template in pagedTemplates" :key="template._id" class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0">
           <router-link :to="`/settings/forms/${template._id}`" class="min-w-0 flex-1">
             <span class="block truncate text-sm font-semibold text-primary">{{ template.name }}</span>
             <span class="block truncate text-xs text-muted-foreground">{{ template.description || '尚未填寫表單說明' }}</span>
@@ -297,15 +312,26 @@ onMounted(load);
             </Button>
           </span>
         </div>
+        <div
+          v-for="n in paddingRows"
+          :key="`pad-${n}`"
+          class="flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0"
+          aria-hidden="true"
+        >
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-semibold text-transparent">.</span>
+            <span class="block text-xs text-transparent">.</span>
+          </span>
+        </div>
       </Card>
 
       <!-- 手機：表格擠不下，改回一份一張卡 -->
       <div v-if="visibleTemplates.length" class="space-y-3 xl:hidden">
-        <Card v-for="template in visibleTemplates" :key="template._id" class="gap-3 p-4 shadow-sm">
+        <Card v-for="template in pagedTemplates" :key="template._id" class="gap-3 p-4 shadow-sm">
           <div class="flex items-start justify-between gap-3">
             <router-link :to="`/settings/forms/${template._id}`" class="min-w-0">
               <span class="block font-semibold text-primary">{{ template.name }}</span>
-              <span class="mt-0.5 block text-xs" :class="template.description ? 'text-muted-foreground ' : 'text-muted-foreground '">
+              <span class="mt-0.5 block text-xs text-muted-foreground">
                 {{ template.description || '尚未填寫表單說明' }}
               </span>
             </router-link>
@@ -329,10 +355,10 @@ onMounted(load);
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-        <Button type="button" size="sm" @click="router.push(`/settings/forms/${template._id}`)">
+            <Button type="button" size="sm" @click="router.push(`/settings/forms/${template._id}`)">
               <Pencil class="h-4 w-4" stroke-width="1.75" />編輯表單
             </Button>
-        <Button type="button" variant="outline" size="sm" :disabled="Boolean(busyId)" @click="openDuplicate(template)">
+            <Button type="button" variant="outline" size="sm" :disabled="Boolean(busyId)" @click="openDuplicate(template)">
               <Copy class="h-4 w-4" stroke-width="1.75" />以此建立
             </Button>
             <Button
@@ -349,6 +375,8 @@ onMounted(load);
           </div>
         </Card>
       </div>
+
+      <Pagination v-if="visibleTemplates.length" :page="page" :total-pages="totalPages" @update:page="page = $event" />
     </template>
 
     <EmptyState
