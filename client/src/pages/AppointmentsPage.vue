@@ -349,7 +349,6 @@ onBeforeUnmount(() => {
         <div class="flex items-start justify-between gap-3 p-5 pb-3">
           <div>
             <h2 class="text-base font-semibold text-foreground">今日看診時間軸</h2>
-            <p class="mt-0.5 max-w-md text-xs text-muted-foreground">號碼可直接點擊修改看診順序；沿時間軸找到對應時段即可報到。</p>
           </div>
           <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-foreground">{{ activeAppointments.length }}</span>
         </div>
@@ -517,7 +516,7 @@ onBeforeUnmount(() => {
                       <p class="flex min-w-0 items-center gap-1.5">
                         <span class="truncate">飼主 {{ appointment.ownerName || '未填' }}</span>
                         <span aria-hidden="true">·</span>
-                        <span class="shrink-0 tabular-nums">原訂 {{ appointment.time || '現場' }}</span>
+                        <span class="shrink-0 tabular-nums">原訂 {{ appointment.time }}</span>
                       </p>
                       <p
                         v-if="group.key === 'cancelled'"

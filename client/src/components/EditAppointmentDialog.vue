@@ -19,6 +19,7 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'close']);
 
 const requiredRule = (value) => (value && String(value).trim() !== '') || '必填';
+const requiredTime = (value) => (value && String(value).trim() !== '') || '請選擇預約時段';
 const { handleSubmit } = useForm({
   initialValues: {
     ownerName: props.appointment.ownerName ?? '',
@@ -33,7 +34,7 @@ const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName',
 const { value: ownerPhone } = useField('ownerPhone');
 const { value: petName, errorMessage: petNameError } = useField('petName', requiredRule);
 const { value: species } = useField('species');
-const { value: time } = useField('time');
+const { value: time, errorMessage: timeError } = useField('time', requiredTime);
 const { value: reason } = useField('reason');
 
 const onSubmit = handleSubmit((values) => emit('submit', {
@@ -85,9 +86,9 @@ const onSubmit = handleSubmit((values) => emit('submit', {
         </div>
 
         <div class="space-y-1.5">
-          <Label for="edit-apt-time" class="text-xs font-medium text-foreground">預約時段（選填）</Label>
+          <Label for="edit-apt-time" class="text-xs font-medium text-foreground">預約時段<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <TimePicker id="edit-apt-time" v-model="time" placeholder="選擇預約時段" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" />
-          <p class="text-xs text-muted-foreground">可選 10:00–11:30、14:00–19:30，每 5 分鐘一格；留空會改為現場候位。</p>
+          <p v-if="timeError" class="text-xs font-medium text-destructive">{{ timeError }}</p>
         </div>
 
         <div class="space-y-1.5">

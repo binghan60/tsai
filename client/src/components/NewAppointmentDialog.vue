@@ -35,12 +35,13 @@ const requiredForNewPatient = (value) => {
   if (mode.value !== 'new') return true;
   return (value && String(value).trim() !== '') || '必填';
 };
+const requiredTime = (value) => (value && String(value).trim() !== '') || '請選擇預約時段';
 
 const { handleSubmit } = useForm({ initialValues: { petName: '', ownerName: '', ownerPhone: '', time: '', reason: '' } });
 const { value: petName, errorMessage: petNameError } = useField('petName', requiredForNewPatient);
 const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName', requiredForNewPatient);
 const { value: ownerPhone } = useField('ownerPhone');
-const { value: time } = useField('time');
+const { value: time, errorMessage: timeError } = useField('time', requiredTime);
 const { value: reason } = useField('reason');
 
 function selectPet(pet) {
@@ -121,9 +122,9 @@ const onSubmit = handleSubmit((values) => {
         </template>
 
         <div class="space-y-1.5">
-          <Label for="apt-time" class="text-xs font-medium text-foreground">預約時段（選填）</Label>
+          <Label for="apt-time" class="text-xs font-medium text-foreground">預約時段<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <TimePicker id="apt-time" v-model="time" placeholder="選擇預約時段" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" />
-          <p class="text-xs text-muted-foreground">可選 10:00–11:30、14:00–19:30，每 5 分鐘一格；留空表示現在就在現場。</p>
+          <p v-if="timeError" class="text-xs font-medium text-destructive">{{ timeError }}</p>
         </div>
 
         <div class="space-y-1.5">
