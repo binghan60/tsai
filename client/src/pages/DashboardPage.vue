@@ -224,7 +224,7 @@ onMounted(fetchDashboard)
       <!-- ── 第 3 層：明細 ────────────────────────────────────── -->
       <div class="grid gap-4 xl:grid-cols-2">
         <Card class="gap-0 overflow-hidden py-0 shadow-sm dark:shadow-none">
-          <CardHeader class="flex-row items-center justify-between gap-3 border-b border-border px-5 py-3">
+          <CardHeader class="flex flex-row items-center justify-between gap-3 border-b border-border px-5 py-3">
             <div>
               <CardTitle class="text-sm">待辦工作</CardTitle>
               <CardDescription class="mt-0.5 text-xs">寄送異常優先，其次是待寄送報告與草稿</CardDescription>
