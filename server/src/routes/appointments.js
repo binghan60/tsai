@@ -132,8 +132,9 @@ router.post('/', async (req, res, next) => {
     // 回診的 petName 抄自 Pet.name、必定有值，所以這一條實際上只會擋到初診。
     if (!petName) return res.status(422).json({ message: '請填寫寵物姓名' });
 
-    // 目前只做單日時間軸，不開放選日期，一律掛在今天。
-    const date = clinicToday();
+    // 電話掛號時客人常常是說「我明天帶來」，所以日期可以指定；沒帶就是今天。
+    // 這頁仍然一次只看一天（時間軸與候診佇列都以 date 為界），不做跨日排班。
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body.date || '')) ? req.body.date : clinicToday();
     const scheduledAt = time ? combineClinicDateTime(date, time) : new Date();
 
     const appointment = await Appointment.create({

@@ -1,7 +1,7 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { CalendarX2, Check, ChevronDown, ChevronUp, Clock, Lock, Pencil, Phone, Plus, User, UserPlus, UserX } from '@lucide/vue';
+import { CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Lock, Pencil, Phone, Plus, User, UserPlus, UserX } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
 import {
@@ -13,7 +13,9 @@ import {
   nowIndexInSession,
   splitAppointmentsByQueueState,
 } from '../lib/appointmentTimeline';
-import { formatDateTime } from '../lib/datetime';
+import { clinicDateInput, formatDate, formatDateTime, shiftDateInput, weekdayLabel } from '../lib/datetime';
+import { useSearchQueryParam } from '../composables/useSearchQueryParam';
+import { DatePicker } from '../components/ui/date-picker';
 import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
@@ -29,6 +31,12 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 
 const router = useRouter();
 const toast = useToast();
+
+// 看哪一天。同步進網址（?date=），等於今天時參數會被省略——
+// 這樣返回、重整、把網址貼給別人都還在同一天上，跟其他列表頁的做法一致。
+const today = clinicDateInput();
+const selectedDate = useSearchQueryParam('date', today);
+const isToday = computed(() => selectedDate.value === today);
 
 const appointments = ref([]);
 const loading = ref(false);
@@ -62,20 +70,38 @@ const ROW_ACTIONS = [
   { key: 'cancel', label: '取消掛號', danger: true },
 ];
 
+// 快速連按前後一天時，先發的請求可能後回來。用送出當下的日期比對，
+// 對不上就整包丟掉——不然畫面會停在別天的資料上。
+let dateRequestToken = 0;
+
 async function fetchAppointments({ silent = false } = {}) {
+  const requestedDate = selectedDate.value;
+  const token = ++dateRequestToken;
   if (!silent) {
     loading.value = true;
     error.value = '';
   }
   try {
-    const { data } = await http.get('/appointments');
+    const { data } = await http.get('/appointments', { params: { date: requestedDate } });
+    if (token !== dateRequestToken) return;
     appointments.value = data.items ?? [];
   } catch {
-    if (!silent) error.value = '今日掛號暫時無法載入，請稍後重試';
+    if (token !== dateRequestToken) return;
+    if (!silent) error.value = '掛號資料暫時無法載入，請稍後重試';
   } finally {
-    if (!silent) loading.value = false;
+    if (token === dateRequestToken && !silent) loading.value = false;
   }
 }
+
+watch(selectedDate, (value) => {
+  // DatePicker 的清除鈕會送出空字串，但這頁一定得停在某一天。
+  if (!value) {
+    selectedDate.value = today;
+    return;
+  }
+  expandedIds.value = new Set();
+  fetchAppointments();
+});
 
 const appointmentGroups = computed(() => splitAppointmentsByQueueState(appointments.value));
 // 候診佇列＝已報到還沒看完的人，由上而下就是看診順序。清單長度是「往後排」的上限。
@@ -312,7 +338,10 @@ onMounted(() => {
   nowTimer = setInterval(() => {
     now.value = new Date();
   }, 30_000);
-  refreshTimer = setInterval(() => fetchAppointments({ silent: true }), 60_000);
+  // 只有今天的清單會自己變動（有人報到、看完診）；停在別天時不必一直重抓。
+  refreshTimer = setInterval(() => {
+    if (isToday.value) fetchAppointments({ silent: true });
+  }, 60_000);
 });
 onBeforeUnmount(() => {
   clearInterval(nowTimer);
@@ -327,6 +356,24 @@ onBeforeUnmount(() => {
         <Button type="button" @click="newAppointmentOpen = true"><UserPlus class="h-4 w-4" stroke-width="1.75" />掛號</Button>
       </template>
     </PageHeader>
+
+    <!-- ── 日期面板 ──
+         看的是哪一天由這裡決定，時間軸與候診佇列都跟著它走。 -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-2">
+        <Button type="button" variant="secondary" size="icon-sm" aria-label="前一天" @click="selectedDate = shiftDateInput(selectedDate, -1)">
+          <ChevronLeft class="h-4 w-4" stroke-width="1.75" />
+        </Button>
+        <DatePicker v-model="selectedDate" :clearable="false" class="w-40" aria-label="選擇要查看的日期" />
+        <Button type="button" variant="secondary" size="icon-sm" aria-label="後一天" @click="selectedDate = shiftDateInput(selectedDate, 1)">
+          <ChevronRight class="h-4 w-4" stroke-width="1.75" />
+        </Button>
+        <span class="text-sm font-medium" :class="isToday ? 'text-primary' : 'text-muted-foreground'">
+          {{ weekdayLabel(selectedDate) }}<template v-if="isToday"> · 今天</template>
+        </span>
+      </div>
+      <Button v-if="!isToday" type="button" variant="secondary" size="sm" @click="selectedDate = today">回到今天</Button>
+    </div>
 
     <ListSkeleton v-if="loading" :rows="4" />
     <Alert v-else-if="error" variant="destructive">
@@ -430,19 +477,25 @@ onBeforeUnmount(() => {
       <Card class="overflow-hidden p-0">
         <div class="flex items-start justify-between gap-3 p-5 pb-3">
           <div>
-            <h2 class="text-base font-semibold text-foreground">今日看診時間軸</h2>
+            <h2 class="text-base font-semibold text-foreground">{{ isToday ? '今日看診時間軸' : '看診時間軸' }}</h2>
             <p class="mt-0.5 text-xs text-muted-foreground">尚未報到的掛號，依預約時段排列</p>
           </div>
           <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-foreground">{{ upcomingAppointments.length }}</span>
         </div>
 
-        <EmptyState v-if="!hasAnyAppointment" inset :icon="UserPlus" title="今天還沒有任何掛號" description="按右上角「掛號」開始。" />
+        <EmptyState
+          v-if="!hasAnyAppointment"
+          inset
+          :icon="UserPlus"
+          :title="isToday ? '今天還沒有任何掛號' : `${formatDate(selectedDate)} 沒有任何掛號`"
+          description="按右上角「掛號」開始。"
+        />
 
         <div v-else class="px-5 pb-5">
           <!-- 時間軸空掉不代表今天沒事——人可能都報到了，也可能都取消了。
                這兩種情況下面的「已取消／未到」仍要看得到，所以空訊息只換掉時段清單。 -->
           <p v-if="!upcomingAppointments.length" class="rounded-xl border border-dashed border-border bg-muted px-3.5 py-4 text-center text-sm text-muted-foreground">
-            沒有等待報到的掛號，今天的掛號都已經報到或結束了。
+            沒有等待報到的掛號，{{ isToday ? '今天' : formatDate(selectedDate) }}的掛號都已經報到或結束了。
           </p>
 
           <template v-else>
@@ -460,7 +513,7 @@ onBeforeUnmount(() => {
             <div class="border-l-2 border-border pl-4 sm:ml-28 sm:pl-7">
               <template v-for="(appointment, itemIndex) in group.items" :key="appointment._id">
                 <div
-                  v-if="groupIndex === nowSessionIndex && itemIndex === nowIndexInSession(group.items, now)"
+                  v-if="isToday && groupIndex === nowSessionIndex && itemIndex === nowIndexInSession(group.items, now)"
                   class="my-1 flex items-center gap-2.5"
                 >
                   <span class="h-0 flex-1 border-t-2 border-dashed border-primary"></span>
@@ -511,7 +564,7 @@ onBeforeUnmount(() => {
 
               <!-- 「現在」晚於這個時段全部項目時，指示線要落在最後面，不是插在某一列前面。 -->
               <div
-                v-if="groupIndex === nowSessionIndex && nowIndexInSession(group.items, now) === group.items.length"
+                v-if="isToday && groupIndex === nowSessionIndex && nowIndexInSession(group.items, now) === group.items.length"
                 class="my-1 flex items-center gap-2.5"
               >
                 <span class="h-0 flex-1 border-t-2 border-dashed border-primary"></span>
@@ -583,6 +636,8 @@ onBeforeUnmount(() => {
 
     <NewAppointmentDialog
       v-if="newAppointmentOpen"
+      :date="selectedDate"
+      :is-today="isToday"
       :submitting="newAppointmentSubmitting"
       :error-message="newAppointmentError"
       @submit="submitNewAppointment"

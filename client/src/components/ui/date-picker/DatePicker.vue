@@ -15,6 +15,8 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   placeholder: { type: String, default: '選擇日期' },
   ariaLabel: { type: String, default: undefined },
+  // 篩選用的日期可以清空（＝不限日期）；有些地方一定要停在某一天，那裡設 false。
+  clearable: { type: Boolean, default: true },
   id: { type: String, default: undefined },
   class: { type: [Boolean, null, String, Object, Array], required: false, skipCheck: true },
 });
@@ -62,7 +64,7 @@ function clearDate(event) {
         <span :class="label ? 'text-foreground' : 'text-muted-foreground'">{{ label || placeholder }}</span>
         <span class="flex shrink-0 items-center gap-1">
           <X
-            v-if="label"
+            v-if="label && clearable"
             class="h-3.5 w-3.5 text-muted-foreground transition-colors hover:text-foreground"
             stroke-width="1.75"
             @click="clearDate"

@@ -13,8 +13,12 @@ import { TimePicker } from './ui/time-picker';
 import SegmentedControl from './SegmentedControl.vue';
 import PetPickerDialog from './PetPickerDialog.vue';
 import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/appointmentTime';
+import { formatDate, weekdayLabel } from '../lib/datetime';
 
 const props = defineProps({
+  // 要掛在哪一天（YYYY-MM-DD）。跟著頁面上的日期面板走，不是永遠今天。
+  date: { type: String, required: true },
+  isToday: { type: Boolean, default: true },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
 });
@@ -59,10 +63,11 @@ const onSubmit = handleSubmit((values) => {
       pickPetError.value = '請先選擇寵物';
       return;
     }
-    emit('submit', { petId: selectedPet.value._id, time: values.time, reason: values.reason });
+    emit('submit', { date: props.date, petId: selectedPet.value._id, time: values.time, reason: values.reason });
     return;
   }
   emit('submit', {
+    date: props.date,
     ownerName: values.ownerName,
     ownerPhone: values.ownerPhone,
     petName: values.petName,
@@ -80,6 +85,10 @@ const onSubmit = handleSubmit((values) => {
       </div>
       <div>
         <DialogTitle>掛號</DialogTitle>
+        <!-- 日期跟著頁面上的面板走。看的是別天卻掛到今天，是最容易發生也最難發現的錯。 -->
+        <DialogDescription class="mt-0.5 text-xs">
+          掛在 {{ formatDate(props.date) }}（{{ weekdayLabel(props.date) }}）<template v-if="props.isToday"> · 今天</template>
+        </DialogDescription>
       </div>
     </div>
 
