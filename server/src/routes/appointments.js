@@ -9,7 +9,7 @@ import { canTransitionAppointmentStatus, describeAppointmentTransition } from '.
 
 const router = Router();
 
-const EDITABLE_SCHEDULED_FIELDS = ['date', 'time', 'reason', 'petName', 'ownerPhone', 'species'];
+const EDITABLE_SCHEDULED_FIELDS = ['date', 'time', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species'];
 
 // GET /api/appointments?date=YYYY-MM-DD（預設今天）
 // 目前畫面只做單日時間軸，量不大，直接回傳當天全部，不分頁。
@@ -99,9 +99,21 @@ router.put('/:id', async (req, res, next) => {
       if (updates.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(updates.date))) {
         return res.status(422).json({ message: '請填寫預約日期' });
       }
+      if (updates.ownerName !== undefined && !String(updates.ownerName).trim()) {
+        return res.status(422).json({ message: '請填寫飼主姓名' });
+      }
+      if (updates.petName !== undefined && !String(updates.petName).trim()) {
+        return res.status(422).json({ message: '請填寫寵物姓名' });
+      }
       Object.assign(appointment, updates);
       const nextTime = updates.time ?? appointment.time;
-      appointment.scheduledAt = nextTime ? combineClinicDateTime(appointment.date, nextTime) : appointment.scheduledAt;
+      if (updates.time !== undefined || updates.date !== undefined) {
+        appointment.scheduledAt = nextTime
+          ? combineClinicDateTime(appointment.date, nextTime)
+          : appointment.date === clinicToday()
+            ? new Date()
+            : combineClinicDateTime(appointment.date, '');
+      }
     }
 
     if (req.body.checkinNumber !== undefined) {
@@ -249,6 +261,23 @@ router.post('/:id/no-show', async (req, res, next) => {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'no_show') });
     }
     appointment.status = 'no_show';
+    await appointment.save();
+    res.json(appointment);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/:id/restore', async (req, res, next) => {
+  try {
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) return res.status(404).json({ message: '找不到掛號' });
+    if (!canTransitionAppointmentStatus(appointment.status, 'scheduled')) {
+      return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'scheduled') });
+    }
+    appointment.status = 'scheduled';
+    appointment.cancelReason = '';
+    appointment.checkinNumber = null;
     await appointment.save();
     res.json(appointment);
   } catch (err) {

@@ -127,6 +127,48 @@ describe('appointments routes', () => {
     }
   });
 
+  it('尚未報到的掛號可以編輯身分快照、時段與來院原因', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-edit',
+      status: 'scheduled',
+      date: '2026-08-26',
+      time: '10:00',
+      ownerName: '王小姐',
+      ownerPhone: '0912-000-000',
+      petName: '妞妞',
+      species: '貓',
+      reason: '',
+      scheduledAt: new Date('2026-08-26T02:00:00.000Z'),
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-edit`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ownerName: '林小姐',
+          ownerPhone: '0955-888-777',
+          petName: '奶茶',
+          species: '犬',
+          time: '15:30',
+          reason: '回診拿藥',
+        }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.ownerName, '林小姐');
+      assert.equal(appointment.ownerPhone, '0955-888-777');
+      assert.equal(appointment.petName, '奶茶');
+      assert.equal(appointment.species, '犬');
+      assert.equal(appointment.time, '15:30');
+      assert.equal(appointment.reason, '回診拿藥');
+      assert.equal(appointment.scheduledAt.toISOString(), '2026-08-26T07:30:00.000Z');
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
   it('完成看診時狀態機擋掉還沒報到就想結束的請求', async () => {
     const originalFindById = Appointment.findById;
     Appointment.findById = async () => ({ _id: 'apt-4', status: 'scheduled' });
@@ -138,6 +180,71 @@ describe('appointments routes', () => {
       });
       assert.equal(response.status, 422);
       assert.deepEqual(await response.json(), { message: '無法從「已預約」改為「已完成」' });
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('取消掛號會保存去除前後空白的取消原因', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-5',
+      status: 'scheduled',
+      checkinNumber: null,
+      cancelReason: '',
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-5/cancel`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ cancelReason: '  飼主臨時改期  ' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.status, 'cancelled');
+      assert.equal(appointment.cancelReason, '飼主臨時改期');
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('已取消掛號可恢復，且會清除取消原因', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-6',
+      status: 'cancelled',
+      checkinNumber: null,
+      cancelReason: '飼主臨時改期',
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-6/restore`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.status, 'scheduled');
+      assert.equal(appointment.cancelReason, '');
+      assert.equal(appointment.checkinNumber, null);
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('已完成掛號不可恢復', async () => {
+    const originalFindById = Appointment.findById;
+    Appointment.findById = async () => ({ _id: 'apt-7', status: 'completed' });
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-7/restore`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(response.status, 422);
+      assert.deepEqual(await response.json(), { message: '無法從「已完成」改為「已預約」' });
     } finally {
       Appointment.findById = originalFindById;
     }

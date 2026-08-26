@@ -139,6 +139,7 @@ POST   /api/appointments/:id/check-in   報到；初診同時建立飼主與寵�
 POST   /api/appointments/:id/complete   完成看診並保存候診量測
 POST   /api/appointments/:id/cancel     取消掛號
 POST   /api/appointments/:id/no-show    標記未到診
+POST   /api/appointments/:id/restore    恢復已取消或未到診的掛號
 
 寄送紀錄
 GET    /api/delivery-logs               流水帳（?recordId= / ?event= / 分頁）

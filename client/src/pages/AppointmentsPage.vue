@@ -19,6 +19,8 @@ import ListSkeleton from '../components/ListSkeleton.vue';
 import RowActions from '../components/RowActions.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import NewAppointmentDialog from '../components/NewAppointmentDialog.vue';
+import EditAppointmentDialog from '../components/EditAppointmentDialog.vue';
+import CancelAppointmentDialog from '../components/CancelAppointmentDialog.vue';
 import CheckInDialog from '../components/CheckInDialog.vue';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -46,8 +48,15 @@ const checkInTarget = ref(null);
 const checkInSubmitting = ref(false);
 const checkInError = ref('');
 const actionToConfirm = ref(null);
+const editTarget = ref(null);
+const editSubmitting = ref(false);
+const editError = ref('');
+const cancelTarget = ref(null);
+const cancelSubmitting = ref(false);
+const cancelError = ref('');
 
 const ROW_ACTIONS = [
+  { key: 'edit', label: '編輯掛號' },
   { key: 'no_show', label: '標記未到' },
   { key: 'cancel', label: '取消掛號', danger: true },
 ];
@@ -178,7 +187,52 @@ async function completeVisit(appointment) {
 
 function requestRowAction(appointment, key) {
   if (isBusy(appointment._id)) return;
+  if (key === 'edit') {
+    editError.value = '';
+    editTarget.value = appointment;
+    return;
+  }
+  if (key === 'cancel') {
+    cancelError.value = '';
+    cancelTarget.value = appointment;
+    return;
+  }
   actionToConfirm.value = { appointment, key };
+}
+
+async function submitEditAppointment(payload) {
+  if (!editTarget.value) return;
+  editSubmitting.value = true;
+  editError.value = '';
+  try {
+    await http.put(`/appointments/${editTarget.value._id}`, payload);
+    toast.success('掛號資料已更新', '儲存完成');
+    editTarget.value = null;
+    await fetchAppointments({ silent: true });
+  } catch (err) {
+    editError.value = err.response?.data?.message || '掛號資料更新失敗，請稍後再試';
+  } finally {
+    editSubmitting.value = false;
+  }
+}
+
+async function submitCancelAppointment(cancelReason) {
+  if (!cancelTarget.value) return;
+  const appointment = cancelTarget.value;
+  cancelSubmitting.value = true;
+  cancelError.value = '';
+  setBusy(appointment._id, true);
+  try {
+    await http.post(`/appointments/${appointment._id}/cancel`, { cancelReason });
+    toast.info('已取消這筆掛號', '已更新');
+    cancelTarget.value = null;
+    await fetchAppointments({ silent: true });
+  } catch (err) {
+    cancelError.value = err.response?.data?.message || '取消掛號失敗，請稍後再試';
+  } finally {
+    cancelSubmitting.value = false;
+    setBusy(appointment._id, false);
+  }
 }
 
 async function confirmRowAction() {
@@ -190,9 +244,9 @@ async function confirmRowAction() {
     if (key === 'no_show') {
       await http.post(`/appointments/${appointment._id}/no-show`, {});
       toast.info('已標記未到診', '已更新');
-    } else if (key === 'cancel') {
-      await http.post(`/appointments/${appointment._id}/cancel`, {});
-      toast.info('已取消這筆掛號', '已更新');
+    } else if (key === 'restore') {
+      await http.post(`/appointments/${appointment._id}/restore`, {});
+      toast.success('掛號已恢復至今日候診流程', '恢復完成');
     }
     actionToConfirm.value = null;
     await fetchAppointments({ silent: true });
@@ -386,13 +440,25 @@ onBeforeUnmount(() => {
               已取消／未到
               <span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-semibold text-foreground">{{ closedAppointments.length }}</span>
             </div>
-            <div v-for="appointment in closedAppointments" :key="appointment._id" class="flex flex-wrap items-center gap-3 py-1.5 opacity-70">
+            <div v-for="appointment in closedAppointments" :key="appointment._id" class="flex flex-wrap items-center gap-3 py-1.5">
               <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <User class="h-4 w-4" stroke-width="1.75" />
               </span>
-              <span class="min-w-0 flex-1 truncate text-sm text-foreground line-through decoration-muted-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
+              <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground line-through decoration-muted-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
               <span class="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground sm:max-w-none">{{ appointment.ownerName }} · 原訂 {{ appointment.time || '現場' }}</span>
               <span class="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">{{ appointment.status === 'cancelled' ? '已取消' : '未到' }}</span>
+              <span
+                v-if="appointment.status === 'cancelled' && appointment.cancelReason"
+                class="max-w-48 truncate text-xs text-muted-foreground"
+                :title="`取消原因：${appointment.cancelReason}`"
+              >原因：{{ appointment.cancelReason }}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                :disabled="isBusy(appointment._id)"
+                @click="actionToConfirm = { appointment, key: 'restore' }"
+              >恢復掛號</Button>
             </div>
           </div>
         </div>
@@ -407,6 +473,24 @@ onBeforeUnmount(() => {
       @close="newAppointmentOpen = false"
     />
 
+    <EditAppointmentDialog
+      v-if="editTarget"
+      :appointment="editTarget"
+      :submitting="editSubmitting"
+      :error-message="editError"
+      @submit="submitEditAppointment"
+      @close="editTarget = null"
+    />
+
+    <CancelAppointmentDialog
+      v-if="cancelTarget"
+      :appointment="cancelTarget"
+      :submitting="cancelSubmitting"
+      :error-message="cancelError"
+      @submit="submitCancelAppointment"
+      @close="cancelTarget = null"
+    />
+
     <CheckInDialog
       v-if="checkInTarget"
       :appointment="checkInTarget"
@@ -417,11 +501,12 @@ onBeforeUnmount(() => {
     />
     <ConfirmDialog
       :open="Boolean(actionToConfirm)"
-      :title="actionToConfirm?.key === 'cancel' ? '取消這筆掛號？' : '標記為未到診？'"
-      :description="actionToConfirm?.key === 'cancel'
-        ? `確定要取消「${actionToConfirm?.appointment?.petName || '這筆'}」的掛號嗎？取消後會移出今日候診流程。`
+      :title="actionToConfirm?.key === 'restore' ? '恢復這筆掛號？' : '標記為未到診？'"
+      :description="actionToConfirm?.key === 'restore'
+        ? `確定要將「${actionToConfirm?.appointment?.petName || '這筆'}」恢復至今日候診流程嗎？`
         : `確定要將「${actionToConfirm?.appointment?.petName || '這筆'}」標記為未到診嗎？`"
-      :confirm-label="actionToConfirm?.key === 'cancel' ? '確認取消' : '標記未到'"
+      :confirm-label="actionToConfirm?.key === 'restore' ? '恢復掛號' : '標記未到'"
+      :destructive="actionToConfirm?.key !== 'restore'"
       :loading="Boolean(actionToConfirm && isBusy(actionToConfirm.appointment._id))"
       @update:open="(value) => !value && (actionToConfirm = null)"
       @confirm="confirmRowAction"

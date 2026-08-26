@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { emptyPetDraft } from '../lib/formDrafts';
+import { formatDateTime } from '../lib/datetime';
 
 const pets = ref([]);
 const page = useSearchQueryParam('page', '1');
@@ -75,6 +76,15 @@ onBeforeUnmount(() => {
 const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
 
+const createdAtOptions = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+};
+
 function goToPage(next) {
   const target = Math.min(Math.max(next, 1), totalPages.value);
   if (target !== currentPage.value) page.value = String(target);
@@ -120,10 +130,11 @@ async function createPet(values) {
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <Card v-if="pets.length" class="hidden overflow-hidden p-0 shadow-sm dark:shadow-none xl:block" style="--data-columns: minmax(16rem, 1.2fr) minmax(14rem, 1fr) 9rem">
+      <Card v-if="pets.length" class="hidden overflow-hidden p-0 shadow-sm dark:shadow-none xl:block" style="--data-columns: minmax(15rem, 1.2fr) minmax(13rem, 1fr) 10.5rem 9rem">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">飼主</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">新增時間</span>
           <span class="desktop-data-cell"></span>
         </div>
         <div v-for="pet in pets" :key="pet._id" class="desktop-data-row">
@@ -141,6 +152,7 @@ async function createPet(values) {
               <span class="min-w-0 truncate text-sm">{{ pet.ownerId.name }}<span class="text-xs text-muted-foreground"> · {{ pet.ownerId.phone || '未填電話' }}</span></span>
             </router-link>
           </span>
+          <span class="desktop-data-cell whitespace-nowrap text-xs tabular-nums text-muted-foreground">{{ formatDateTime(pet.createdAt, createdAtOptions) }}</span>
           <span class="desktop-data-cell text-right">
             <Button as-child size="sm"><router-link :to="`/pets/${pet._id}/records/new`">
               <ClipboardPlus class="h-4 w-4" />新增健檢
@@ -159,7 +171,10 @@ async function createPet(values) {
             </span>
           </router-link>
           <div class="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
-            <span class="min-w-0 text-sm text-foreground">飼主：{{ pet.ownerId?.name || '—' }}</span>
+            <span class="min-w-0">
+              <span class="block truncate text-sm text-foreground">飼主：{{ pet.ownerId?.name || '—' }}</span>
+              <span class="mt-0.5 block whitespace-nowrap text-xs tabular-nums text-muted-foreground">新增於 {{ formatDateTime(pet.createdAt, createdAtOptions) }}</span>
+            </span>
             <Button as-child size="sm" class="shrink-0"><router-link :to="`/pets/${pet._id}/records/new`">
               <ClipboardPlus class="h-4 w-4" />新增健檢
             </router-link></Button>

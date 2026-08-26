@@ -27,7 +27,7 @@ const appointmentSchema = new mongoose.Schema(
       enum: ['scheduled', 'arrived', 'completed', 'cancelled', 'no_show'],
       default: 'scheduled',
     },
-    cancelReason: { type: String, default: '', trim: true },
+    cancelReason: { type: String, default: '', trim: true, maxlength: 300 },
     // 報到當下配的當日看診序，從 1 開始、依報到先後排，前台可手動調整決定看診順序。
     checkinNumber: { type: Number, default: null },
 

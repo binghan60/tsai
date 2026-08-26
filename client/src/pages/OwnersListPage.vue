@@ -14,6 +14,7 @@ import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { emptyOwnerDraft } from '../lib/formDrafts';
+import { formatDateTime } from '../lib/datetime';
 
 import { useToast } from '../composables/useToast';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
@@ -180,6 +181,15 @@ onMounted(() => {
 const currentPage = computed(() => Number(page.value) || 1);
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
 
+const createdAtOptions = {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+};
+
 function goToPage(next) {
   const target = Math.min(Math.max(next, 1), totalPages.value);
   if (target !== currentPage.value) page.value = String(target);
@@ -199,11 +209,12 @@ function goToPage(next) {
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <Card v-if="owners.length" class="hidden overflow-hidden p-0 shadow-sm xl:block" style="--data-columns: minmax(15rem, 1.2fr) 12rem minmax(14rem, 1fr) 6rem">
+      <Card v-if="owners.length" class="hidden overflow-hidden p-0 shadow-sm xl:block" style="--data-columns: minmax(14rem, 1.2fr) 11rem minmax(12rem, 1fr) 10.5rem 6rem">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">姓名</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">電話</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">Email</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">新增時間</span>
           <span class="desktop-data-cell"></span>
         </div>
         <div v-for="owner in owners" :key="owner._id" class="desktop-data-row">
@@ -213,6 +224,7 @@ function goToPage(next) {
           </router-link>
           <span class="desktop-data-cell flex items-center gap-2 text-sm tabular-nums text-foreground"><Phone class="h-4 w-4 shrink-0 text-muted-foreground" /><span class="truncate">{{ owner.phone }}</span></span>
           <span class="desktop-data-cell truncate text-sm text-foreground" :title="owner.email || '—'">{{ owner.email || '—' }}</span>
+          <span class="desktop-data-cell whitespace-nowrap text-xs tabular-nums text-muted-foreground">{{ formatDateTime(owner.createdAt, createdAtOptions) }}</span>
           <span class="desktop-data-cell flex justify-end gap-1">
             <Button type="button" variant="ghost" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button>
             <Button type="button" variant="destructive" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button>
@@ -223,7 +235,7 @@ function goToPage(next) {
       <div v-if="owners.length" class="space-y-3 xl:hidden">
         <Card v-for="owner in owners" :key="owner._id" class="p-4">
           <div class="flex items-start gap-3">
-            <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span><span class="min-w-0"><span class="block font-semibold text-primary">{{ owner.name }}</span><span class="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground"><Phone class="h-3.5 w-3.5" />{{ owner.phone }}</span><span v-if="owner.email" class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground"><Mail class="h-3.5 w-3.5" />{{ owner.email }}</span></span></router-link>
+            <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span><span class="min-w-0"><span class="block font-semibold text-primary">{{ owner.name }}</span><span class="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground"><Phone class="h-3.5 w-3.5" />{{ owner.phone }}</span><span v-if="owner.email" class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground"><Mail class="h-3.5 w-3.5" />{{ owner.email }}</span><span class="mt-0.5 block text-xs tabular-nums text-muted-foreground">新增於 {{ formatDateTime(owner.createdAt, createdAtOptions) }}</span></span></router-link>
             <div class="flex shrink-0"><Button type="button" variant="ghost" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div>
           </div>
         </Card>
