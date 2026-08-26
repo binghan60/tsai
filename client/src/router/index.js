@@ -28,7 +28,7 @@ const router = createRouter({
   },
   routes: [
     { path: '/', component: DashboardPage, meta: { title: '工作台' } },
-    { path: '/appointments', component: AppointmentsPage, meta: { title: '電話預約' } },
+    { path: '/appointments', component: AppointmentsPage, meta: { title: '掛號與候診' } },
     { path: '/owners', component: OwnersListPage, meta: { title: '飼主' } },
     { path: '/owners/:id', component: OwnerDetailPage, meta: { title: '飼主資料' } },
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },

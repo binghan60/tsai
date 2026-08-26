@@ -120,6 +120,9 @@ const pendingTemplateId = ref('');
 const startMode = ref('blank');
 const finalizedSources = ref([]);
 const copyFromId = ref(String(route.query.copyFrom ?? ''));
+// 從掛號「完成看診」導過來時，帶入報到候診時量測的體重/體溫——
+// 那筆掛號本身不記健檢表單類型，所以只能等這裡選完類型之後才補進來。
+const fromAppointmentId = ref(String(route.query.fromAppointment ?? ''));
 const selectedFinalizedSource = computed(() => finalizedSources.value.find((record) => String(record._id) === copyFromId.value) ?? null);
 const needsTypeChoice = computed(() => !recordId.value && !chosenTemplateId.value);
 const confirmingExamType = ref(false);
@@ -204,6 +207,11 @@ async function confirmExamType() {
           : '來源報告沒有可帶入的相同文字欄位，因此保持空白。',
         '已帶入上次報告',
       );
+    }
+    if (fromAppointmentId.value) {
+      const { data: appointment } = await http.get(`/appointments/${fromAppointmentId.value}`);
+      if (appointment.weightKg != null) record.weightKg = appointment.weightKg;
+      if (appointment.temperatureC != null) record.temperatureC = appointment.temperatureC;
     }
     await nextTick();
     isDirty.value = false;
