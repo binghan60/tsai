@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { hasContent, labValueLabel, previousDateLabel, previousLabValueLabel, referenceLabel, statusText } from './reportItem';
+import { hasContent, labValueLabel, previousDateLabel, previousLabValueLabel, statusText } from './reportItem';
 import ReportField from './ReportField.vue';
 import { sectionRuns } from '../../lib/sectionRuns';
 
@@ -53,13 +53,11 @@ function groupsOf(run) {
                 :class="finding.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'"
               >
                 {{ statusText(finding.status) }}
-                <small v-if="finding.statusSource === 'auto'" class="mt-0.5 block text-xs text-stone-500">自動</small>
               </span>
               <span v-else class="min-w-0 border-l border-stone-100 pl-2"></span>
               <!-- 3. 本次數值 -->
               <span class="min-w-0 border-l border-stone-100 pl-2 text-stone-700">
                 <strong class="font-medium">{{ labValueLabel(finding) }}</strong>
-                <small v-if="referenceLabel(finding)" class="mt-0.5 block text-xs text-stone-500">參考 {{ referenceLabel(finding) }}</small>
               </span>
               <!-- 4. 上次數值（獨立欄位，沒有歷史數值時保持空白） -->
               <span class="min-w-0 border-l border-stone-100 pl-2 text-stone-700">
