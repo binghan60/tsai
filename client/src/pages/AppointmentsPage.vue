@@ -330,7 +330,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <PageHeader title="掛號與候診" description="依門診時段掌握報到順序，候診中可直接完成量測與看診。">
+    <PageHeader title="掛號" description="依門診時段掌握報到順序，候診中可直接完成量測與看診。">
       <template #actions>
         <Button type="button" @click="newAppointmentOpen = true"><UserPlus class="h-4 w-4" stroke-width="1.75" />掛號</Button>
       </template>
