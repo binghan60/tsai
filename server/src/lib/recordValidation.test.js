@@ -87,33 +87,17 @@ describe('validateFinalRecord', () => {
     });
   });
 
-  describe('異常項目必須寫說明', () => {
-    it('理學檢查標記異常卻沒寫說明會被擋', () => {
+  describe('異常項目不強制寫說明', () => {
+    it('標記異常但沒寫備註也能放行——備註是給獸醫參考用，不是結案門檻', () => {
       const sections = validSections();
       sections[0].items.push({ key: 'skin', label: '皮膚', type: 'finding', status: 'abnormal', note: '' });
-      assert.ok(validateFinalRecord(sections).some((m) => m.includes('皮膚')));
-    });
-
-    it('寫了說明就放行', () => {
-      const sections = validSections();
-      sections[0].items.push({ key: 'skin', label: '皮膚', type: 'finding', status: 'abnormal', note: '背部有局部脫毛' });
       assert.deepEqual(validateFinalRecord(sections), []);
     });
 
-    it('說明只有空白字元不算數', () => {
+    it('檢驗異常同樣不強制備註', () => {
       const sections = validSections();
-      sections[0].items.push({ key: 'skin', label: '皮膚', type: 'finding', status: 'abnormal', note: '   ' });
-      assert.ok(validateFinalRecord(sections).some((m) => m.includes('皮膚')));
-    });
-
-    it('多個異常項目會一起列出來', () => {
-      const sections = validSections();
-      sections[0].items.push(
-        { key: 'skin', label: '皮膚', type: 'finding', status: 'abnormal', note: '' },
-        { key: 'alt', label: 'ALT', type: 'lab', status: 'abnormal', value: '120', note: '' }
-      );
-      const message = validateFinalRecord(sections).find((m) => m.includes('異常說明'));
-      assert.ok(message.includes('皮膚') && message.includes('ALT'), `實際：${message}`);
+      sections[0].items.push({ key: 'alt', label: 'ALT', type: 'lab', status: 'abnormal', value: '120', note: '' });
+      assert.deepEqual(validateFinalRecord(sections), []);
     });
   });
 

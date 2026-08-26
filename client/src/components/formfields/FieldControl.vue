@@ -5,6 +5,7 @@ import StatusToggle from './StatusToggle.vue';
 import FieldShell from './FieldShell.vue';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { useRecordForm } from './context';
 import { familyOf } from '../../lib/fieldFamily';
 
@@ -41,15 +42,13 @@ const referenceText = computed(() => labRangeLabel(props.item));
     <FieldShell v-if="entry" :item="item" :input-id="`record-exam-note-${item.key}`">
       <div :id="`record-exam-row-${item.key}`" class="scroll-mt-40 space-y-2">
         <StatusToggle :finding="entry" :aria-label="`${item.label}檢查結果`" @select="entry.status = $event" />
-        <input
+        <Textarea
           :id="`record-exam-note-${item.key}`"
           v-model="entry.note"
-          type="text"
           :aria-label="`${item.label}備註`"
-          :required="entry.status === 'abnormal'"
-          :placeholder="entry.status === 'abnormal' ? '請描述異常' : '備註（選填）'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-          :class="entry.status === 'abnormal' && !entry.note.trim() ? 'border-danger/35' : 'border-border '"
+          rows="2"
+          :placeholder="entry.status === 'abnormal' ? '請描述異常（選填）' : '備註（選填）'"
+          class="min-h-16 resize-y scroll-mt-40 border-border bg-field text-foreground focus-visible:border-belle-500"
         />
         <TextTemplateTrigger v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" :input-id="`record-exam-note-${item.key}`" />
       </div>
@@ -61,7 +60,7 @@ const referenceText = computed(() => labRangeLabel(props.item));
     <FieldShell v-if="entry" :item="item" :input-id="`record-lab-value-${item.key}`">
       <div :id="`record-lab-row-${item.key}`" class="scroll-mt-40 space-y-2">
         <StatusToggle :finding="entry" :aria-label="`${item.label}檢驗結果`" show-auto-badge @select="setLabStatus(entry, $event)" />
-        <input
+        <Textarea
           :id="`record-lab-value-${item.key}`"
           v-model="entry.value"
           type="text"
@@ -81,12 +80,10 @@ const referenceText = computed(() => labRangeLabel(props.item));
         <input
           :id="`record-lab-note-${item.key}`"
           v-model="entry.note"
-          type="text"
           :aria-label="`${item.label}備註`"
-          :required="entry.status === 'abnormal'"
-          :placeholder="entry.status === 'abnormal' ? '請描述異常' : '備註（選填）'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-          :class="entry.status === 'abnormal' && !entry.note.trim() ? 'border-danger/35' : 'border-border '"
+          rows="2"
+          :placeholder="entry.status === 'abnormal' ? '請描述異常（選填）' : '備註（選填）'"
+          class="min-h-16 resize-y scroll-mt-40 border-border bg-field text-foreground focus-visible:border-belle-500"
         />
         <TextTemplateTrigger v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" :input-id="`record-lab-note-${item.key}`" />
         <p v-if="referenceText" class="text-xs text-success">參考 {{ referenceText }}</p>

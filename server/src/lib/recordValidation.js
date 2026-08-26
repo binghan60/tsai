@@ -46,10 +46,5 @@ export function validateFinalRecord(sections) {
     missing.push([conclusion?.label, treatmentPlan?.label].filter(Boolean).join('或'));
   }
 
-  const abnormalWithoutNote = items
-    .filter((item) => (item.type === 'finding' || item.type === 'lab') && item.status === 'abnormal' && !item.note?.trim())
-    .map((item) => item.label);
-  if (abnormalWithoutNote.length) missing.push(`異常說明（${abnormalWithoutNote.join('、')}）`);
-
   return missing;
 }
