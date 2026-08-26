@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { Check, ChevronDown, ChevronUp, Clock, Lock, Phone, Plus, User, UserPlus } from '@lucide/vue';
+import { CalendarX2, Check, ChevronDown, ChevronUp, Clock, Lock, Pencil, Phone, Plus, User, UserPlus, UserX } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
 import {
@@ -11,8 +11,9 @@ import {
   groupBySession,
   isIdentityConfirmed,
   nowIndexInSession,
-  splitActiveAndClosed,
+  splitAppointmentsByQueueState,
 } from '../lib/appointmentTimeline';
+import { formatDateTime } from '../lib/datetime';
 import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
@@ -76,13 +77,52 @@ async function fetchAppointments({ silent = false } = {}) {
   }
 }
 
-const activeAppointments = computed(() => splitActiveAndClosed(appointments.value).active);
-const closedAppointments = computed(() => splitActiveAndClosed(appointments.value).closed);
+const appointmentGroups = computed(() => splitAppointmentsByQueueState(appointments.value));
+const activeAppointments = computed(() => appointmentGroups.value.active);
+const closedGroups = computed(() => [
+  { key: 'cancelled', label: '已取消', icon: CalendarX2, items: appointmentGroups.value.cancelled },
+  { key: 'no_show', label: '未到', icon: UserX, items: appointmentGroups.value.noShow },
+].filter((group) => group.items.length));
+const actionConfirmation = computed(() => {
+  const pending = actionToConfirm.value;
+  const petName = pending?.appointment?.petName || '這筆';
+  if (pending?.key === 'delete') {
+    return {
+      title: '永久刪除這筆掛號？',
+      description: `確定要永久刪除「${petName}」的掛號嗎？刪除後無法復原。`,
+      confirmLabel: '刪除掛號',
+      destructive: true,
+    };
+  }
+  if (pending?.key === 'restore') {
+    return {
+      title: '恢復這筆掛號？',
+      description: `確定要將「${petName}」恢復至今日候診流程嗎？`,
+      confirmLabel: '恢復掛號',
+      destructive: false,
+    };
+  }
+  if (pending?.key === 'undo_check_in') {
+    return {
+      title: '取消這筆報到？',
+      description: `確定要取消「${petName}」的報到嗎？這筆掛號會回到尚未報到，並清除目前的看診序號。`,
+      confirmLabel: '取消報到',
+      destructive: true,
+    };
+  }
+  return {
+    title: '標記為未到診？',
+    description: `確定要將「${petName}」標記為未到診嗎？`,
+    confirmLabel: '標記未到',
+    destructive: true,
+  };
+});
 const sessionGroups = computed(() => groupBySession(activeAppointments.value, SESSIONS));
 const nowSessionIndex = computed(() => assignSessionIndex(now.value.getHours() * 60 + now.value.getMinutes(), SESSIONS));
 const nowLabel = computed(() =>
   `${String(now.value.getHours()).padStart(2, '0')}:${String(now.value.getMinutes()).padStart(2, '0')}`
 );
+const checkinTimeOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
 
 function isExpanded(id) {
   return expandedIds.value.has(id);
@@ -163,7 +203,7 @@ async function submitNewAppointment(payload) {
     newAppointmentOpen.value = false;
     await fetchAppointments({ silent: true });
   } catch (err) {
-    newAppointmentError.value = err.response?.data?.message || '新增掛號失敗，請稍後再試';
+    newAppointmentError.value = err.response?.data?.message || '掛號失敗，請稍後再試';
   } finally {
     newAppointmentSubmitting.value = false;
   }
@@ -247,6 +287,12 @@ async function confirmRowAction() {
     } else if (key === 'restore') {
       await http.post(`/appointments/${appointment._id}/restore`, {});
       toast.success('掛號已恢復至今日候診流程', '恢復完成');
+    } else if (key === 'undo_check_in') {
+      await http.post(`/appointments/${appointment._id}/restore`, {});
+      toast.info('已恢復為尚未報到', '報到已取消');
+    } else if (key === 'delete') {
+      await http.delete(`/appointments/${appointment._id}`);
+      toast.success('掛號已永久刪除', '刪除完成');
     }
     actionToConfirm.value = null;
     await fetchAppointments({ silent: true });
@@ -286,7 +332,7 @@ onBeforeUnmount(() => {
   <section class="mx-auto max-w-7xl space-y-5">
     <PageHeader title="掛號與候診" description="依門診時段掌握報到順序，候診中可直接完成量測與看診。">
       <template #actions>
-        <Button type="button" @click="newAppointmentOpen = true"><UserPlus class="h-4 w-4" stroke-width="1.75" />新增掛號</Button>
+        <Button type="button" @click="newAppointmentOpen = true"><UserPlus class="h-4 w-4" stroke-width="1.75" />掛號</Button>
       </template>
     </PageHeader>
 
@@ -308,7 +354,7 @@ onBeforeUnmount(() => {
           <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-foreground">{{ activeAppointments.length }}</span>
         </div>
 
-        <EmptyState v-if="!activeAppointments.length && !closedAppointments.length" inset :icon="UserPlus" title="今天還沒有任何掛號" description="按右上角「新增掛號」開始。" />
+        <EmptyState v-if="!activeAppointments.length && !closedGroups.length" inset :icon="UserPlus" title="今天還沒有任何掛號" description="按右上角「掛號」開始。" />
 
         <div v-else class="px-5 pb-5">
           <template v-for="(group, groupIndex) in sessionGroups" :key="group.session.id">
@@ -376,13 +422,25 @@ onBeforeUnmount(() => {
                             <span class="text-border">·</span>
                             <Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}
                           </template>
+                          <template v-if="appointment.status === 'arrived' && appointment.checkedInAt">
+                            <span class="text-border">·</span>
+                            <Clock class="h-3 w-3 shrink-0" stroke-width="1.75" />報到 {{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }}
+                          </template>
                         </span>
                       </div>
 
                       <template v-if="appointment.status === 'arrived'">
-                        <Button type="button" variant="secondary" size="icon-sm" :aria-label="isExpanded(appointment._id) ? '收合' : '展開'" @click="toggleExpanded(appointment)">
-                          <component :is="isExpanded(appointment._id) ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
-                        </Button>
+                        <div class="flex shrink-0 items-center gap-1.5">
+                          <Button type="button" variant="destructive" size="sm" :disabled="isBusy(appointment._id)" @click="actionToConfirm = { appointment, key: 'undo_check_in' }">
+                            取消報到
+                          </Button>
+                          <Button type="button" variant="secondary" size="icon-sm" :aria-label="`編輯 ${appointment.petName || '這筆'} 的掛號`" @click="editTarget = appointment">
+                            <Pencil class="h-4 w-4" stroke-width="1.75" />
+                          </Button>
+                          <Button type="button" variant="secondary" size="icon-sm" :aria-label="isExpanded(appointment._id) ? '收合' : '展開'" @click="toggleExpanded(appointment)">
+                            <component :is="isExpanded(appointment._id) ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
+                          </Button>
+                        </div>
                       </template>
                       <div v-else class="ml-auto flex shrink-0 items-center gap-1.5 max-sm:w-full max-sm:justify-end">
                         <Button type="button" size="sm" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
@@ -435,31 +493,61 @@ onBeforeUnmount(() => {
             </div>
           </template>
 
-          <div v-if="closedAppointments.length" class="mt-4 space-y-2 border-t border-border pt-4">
-            <div class="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
-              已取消／未到
-              <span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-semibold text-foreground">{{ closedAppointments.length }}</span>
-            </div>
-            <div v-for="appointment in closedAppointments" :key="appointment._id" class="flex flex-wrap items-center gap-3 py-1.5">
-              <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <User class="h-4 w-4" stroke-width="1.75" />
-              </span>
-              <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground line-through decoration-muted-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
-              <span class="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground sm:max-w-none">{{ appointment.ownerName }} · 原訂 {{ appointment.time || '現場' }}</span>
-              <span class="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">{{ appointment.status === 'cancelled' ? '已取消' : '未到' }}</span>
-              <span
-                v-if="appointment.status === 'cancelled' && appointment.cancelReason"
-                class="max-w-48 truncate text-xs text-muted-foreground"
-                :title="`取消原因：${appointment.cancelReason}`"
-              >原因：{{ appointment.cancelReason }}</span>
-              <Button
-                type="button"
-                variant="outline"
-                size="xs"
-                :disabled="isBusy(appointment._id)"
-                @click="actionToConfirm = { appointment, key: 'restore' }"
-              >恢復掛號</Button>
-            </div>
+          <div v-if="closedGroups.length" class="mt-4 grid gap-3 sm:grid-cols-2">
+            <section v-for="group in closedGroups" :key="group.key" class="min-w-0 rounded-xl bg-muted/50 p-3">
+              <div class="mb-2 flex items-center justify-between gap-3">
+                <h3 class="text-sm font-semibold text-foreground">{{ group.label }}</h3>
+                <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-card px-2 text-xs font-semibold tabular-nums text-foreground">{{ group.items.length }}</span>
+              </div>
+              <div class="space-y-2">
+                <article
+                  v-for="appointment in group.items"
+                  :key="appointment._id"
+                  class="grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-card px-3 py-2.5"
+                >
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                    <component :is="group.icon" class="h-4.5 w-4.5" stroke-width="1.75" />
+                  </span>
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</p>
+                    <div
+                      class="mt-0.5 grid min-w-0 gap-3 text-xs text-muted-foreground"
+                      :class="group.key === 'cancelled' ? 'grid-cols-2' : 'grid-cols-1'"
+                    >
+                      <p class="flex min-w-0 items-center gap-1.5">
+                        <span class="truncate">飼主 {{ appointment.ownerName || '未填' }}</span>
+                        <span aria-hidden="true">·</span>
+                        <span class="shrink-0 tabular-nums">原訂 {{ appointment.time || '現場' }}</span>
+                      </p>
+                      <p
+                        v-if="group.key === 'cancelled'"
+                        class="truncate"
+                        :class="{ 'italic text-muted-foreground/70': !appointment.cancelReason }"
+                        :title="appointment.cancelReason ? `取消原因：${appointment.cancelReason}` : '未填寫取消原因'"
+                      >{{ appointment.cancelReason ? `取消原因：${appointment.cancelReason}` : '未填寫取消原因' }}</p>
+                    </div>
+                  </div>
+                  <div class="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="xs"
+                      :disabled="isBusy(appointment._id)"
+                      :aria-label="`恢復 ${appointment.petName || '這筆'} 的掛號`"
+                      @click="actionToConfirm = { appointment, key: 'restore' }"
+                    >恢復</Button>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="xs"
+                      :disabled="isBusy(appointment._id)"
+                      :aria-label="`刪除 ${appointment.petName || '這筆'} 的掛號`"
+                      @click="actionToConfirm = { appointment, key: 'delete' }"
+                    >刪除</Button>
+                  </div>
+                </article>
+              </div>
+            </section>
           </div>
         </div>
       </Card>
@@ -501,12 +589,10 @@ onBeforeUnmount(() => {
     />
     <ConfirmDialog
       :open="Boolean(actionToConfirm)"
-      :title="actionToConfirm?.key === 'restore' ? '恢復這筆掛號？' : '標記為未到診？'"
-      :description="actionToConfirm?.key === 'restore'
-        ? `確定要將「${actionToConfirm?.appointment?.petName || '這筆'}」恢復至今日候診流程嗎？`
-        : `確定要將「${actionToConfirm?.appointment?.petName || '這筆'}」標記為未到診嗎？`"
-      :confirm-label="actionToConfirm?.key === 'restore' ? '恢復掛號' : '標記未到'"
-      :destructive="actionToConfirm?.key !== 'restore'"
+      :title="actionConfirmation.title"
+      :description="actionConfirmation.description"
+      :confirm-label="actionConfirmation.confirmLabel"
+      :destructive="actionConfirmation.destructive"
       :loading="Boolean(actionToConfirm && isBusy(actionToConfirm.appointment._id))"
       @update:open="(value) => !value && (actionToConfirm = null)"
       @confirm="confirmRowAction"

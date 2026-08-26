@@ -73,8 +73,7 @@ const onSubmit = handleSubmit((values) => {
         <UserPlus class="h-5.5 w-5.5" stroke-width="1.8" />
       </div>
       <div>
-        <DialogTitle>新增掛號</DialogTitle>
-        <DialogDescription class="mt-0.5 text-xs">回診請先找到既有資料；初診先留基本資訊，報到時再核對身分</DialogDescription>
+        <DialogTitle>掛號</DialogTitle>
       </div>
     </div>
 
@@ -137,7 +136,7 @@ const onSubmit = handleSubmit((values) => {
 
       <DialogFooter>
         <Button type="button" variant="outline" class="px-5 border-border hover:bg-muted/60" @click="$emit('close')">取消</Button>
-        <Button type="submit" class="px-5" :disabled="submitting">{{ submitting ? '處理中…' : '新增掛號' }}</Button>
+        <Button type="submit" class="px-5" :disabled="submitting">{{ submitting ? '處理中…' : '確認' }}</Button>
       </DialogFooter>
     </form>
 

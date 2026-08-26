@@ -9,7 +9,8 @@ import { canTransitionAppointmentStatus, describeAppointmentTransition } from '.
 
 const router = Router();
 
-const EDITABLE_SCHEDULED_FIELDS = ['date', 'time', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species'];
+const EDITABLE_APPOINTMENT_FIELDS = ['date', 'time', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species'];
+const EDITABLE_APPOINTMENT_STATUSES = new Set(['scheduled', 'arrived']);
 
 // GET /api/appointments?date=YYYY-MM-DD（預設今天）
 // 目前畫面只做單日時間軸，量不大，直接回傳當天全部，不分頁。
@@ -84,16 +85,16 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// 編輯：scheduled 才能改時段/來院原因/身分快照；checkinNumber 任何狀態都能改
+// 編輯：scheduled、arrived 可改時段/來院原因/身分快照；checkinNumber 任何狀態都能改
 // （前台調整看診順序用），照樣要做當天衝突檢查。
 router.put('/:id', async (req, res, next) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
     if (!appointment) return res.status(404).json({ message: '找不到掛號' });
 
-    if (appointment.status === 'scheduled') {
+    if (EDITABLE_APPOINTMENT_STATUSES.has(appointment.status)) {
       const updates = {};
-      for (const field of EDITABLE_SCHEDULED_FIELDS) {
+      for (const field of EDITABLE_APPOINTMENT_FIELDS) {
         if (req.body[field] !== undefined) updates[field] = req.body[field];
       }
       if (updates.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(updates.date))) {
@@ -202,6 +203,7 @@ router.post('/:id/check-in', async (req, res, next) => {
       }
 
       appointment.status = 'arrived';
+      appointment.checkedInAt = new Date();
       await appointment.save({ session });
     });
 
@@ -246,6 +248,7 @@ router.post('/:id/cancel', async (req, res, next) => {
     appointment.status = 'cancelled';
     appointment.cancelReason = String(req.body?.cancelReason || '').trim();
     appointment.checkinNumber = null;
+    appointment.checkedInAt = null;
     await appointment.save();
     res.json(appointment);
   } catch (err) {
@@ -261,6 +264,7 @@ router.post('/:id/no-show', async (req, res, next) => {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'no_show') });
     }
     appointment.status = 'no_show';
+    appointment.checkedInAt = null;
     await appointment.save();
     res.json(appointment);
   } catch (err) {
@@ -278,8 +282,24 @@ router.post('/:id/restore', async (req, res, next) => {
     appointment.status = 'scheduled';
     appointment.cancelReason = '';
     appointment.checkinNumber = null;
+    appointment.checkedInAt = null;
     await appointment.save();
     res.json(appointment);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 永久刪除只開放給已離開候診流程的掛號，避免誤刪尚待處理或已完成的看診資料。
+router.delete('/:id', async (req, res, next) => {
+  try {
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) return res.status(404).json({ message: '找不到掛號' });
+    if (!['cancelled', 'no_show'].includes(appointment.status)) {
+      return res.status(422).json({ message: '只有已取消或未到的掛號可以刪除' });
+    }
+    await appointment.deleteOne();
+    res.status(204).end();
   } catch (err) {
     next(err);
   }

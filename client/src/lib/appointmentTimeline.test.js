@@ -6,28 +6,30 @@ import {
   groupBySession,
   isIdentityConfirmed,
   nowIndexInSession,
-  splitActiveAndClosed,
+  splitAppointmentsByQueueState,
 } from './appointmentTimeline.js';
 
 function apt(overrides) {
   return { _id: 'x', status: 'scheduled', petId: null, scheduledAt: '2026-08-26T10:00:00.000Z', ...overrides };
 }
 
-describe('splitActiveAndClosed', () => {
-  it('已取消／未到獨立分開，尚未報到與候診中維持原樣、不特別集中，已完成的直接消失', () => {
+describe('splitAppointmentsByQueueState', () => {
+  it('已取消與未到分組計算，尚未報到與候診中維持原樣，已完成的直接消失', () => {
     const scheduled = apt({ _id: 'a', status: 'scheduled' });
     const arrived = apt({ _id: 'b', status: 'arrived' });
     const cancelled = apt({ _id: 'c', status: 'cancelled' });
     const noShow = apt({ _id: 'd', status: 'no_show' });
     const completed = apt({ _id: 'e', status: 'completed' });
-    const { active, closed } = splitActiveAndClosed([scheduled, arrived, cancelled, noShow, completed]);
-    assert.deepEqual(active.map((item) => item._id), ['a', 'b']);
-    assert.deepEqual(closed.map((item) => item._id), ['c', 'd']);
+    const result = splitAppointmentsByQueueState([scheduled, arrived, cancelled, noShow, completed]);
+    assert.deepEqual(result.active.map((item) => item._id), ['a', 'b']);
+    assert.deepEqual(result.cancelled.map((item) => item._id), ['c']);
+    assert.deepEqual(result.noShow.map((item) => item._id), ['d']);
   });
 
   it('空陣列或缺少 status 不會炸掉', () => {
-    assert.deepEqual(splitActiveAndClosed([]), { active: [], closed: [] });
-    assert.deepEqual(splitActiveAndClosed(undefined), { active: [], closed: [] });
+    const emptyResult = { active: [], cancelled: [], noShow: [] };
+    assert.deepEqual(splitAppointmentsByQueueState([]), emptyResult);
+    assert.deepEqual(splitAppointmentsByQueueState(undefined), emptyResult);
   });
 });
 

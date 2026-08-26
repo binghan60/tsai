@@ -1,6 +1,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import mongoose from 'mongoose';
 import { app } from '../app.js';
 import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
@@ -169,6 +170,83 @@ describe('appointments routes', () => {
     }
   });
 
+  it('成功報到時會記錄報到時間', async () => {
+    const originalFindById = Appointment.findById;
+    const originalExists = Appointment.exists;
+    const originalStartSession = mongoose.startSession;
+    const appointment = {
+      _id: 'apt-checkin-time',
+      status: 'scheduled',
+      petId: 'pet-1',
+      date: '2026-08-26',
+      checkinNumber: null,
+      checkedInAt: null,
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    Appointment.exists = () => ({ session: async () => false });
+    mongoose.startSession = async () => ({
+      withTransaction: async (callback) => callback(),
+      endSession: async () => {},
+    });
+    try {
+      const beforeCheckin = Date.now();
+      const response = await fetch(`${origin}/api/appointments/apt-checkin-time/check-in`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ checkinNumber: 2 }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.status, 'arrived');
+      assert.equal(appointment.checkinNumber, 2);
+      assert.ok(appointment.checkedInAt instanceof Date);
+      assert.ok(appointment.checkedInAt.getTime() >= beforeCheckin);
+    } finally {
+      Appointment.findById = originalFindById;
+      Appointment.exists = originalExists;
+      mongoose.startSession = originalStartSession;
+    }
+  });
+
+  it('已報到的掛號仍可編輯身分快照、時段與來院原因', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-arrived-edit',
+      status: 'arrived',
+      date: '2026-08-26',
+      time: '10:00',
+      ownerName: '王小姐',
+      ownerPhone: '0912-345-678',
+      petName: '小白',
+      species: '犬',
+      reason: '例行檢查',
+      scheduledAt: new Date('2026-08-26T02:00:00.000Z'),
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-arrived-edit`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ownerName: '林小姐',
+          ownerPhone: '0955-888-777',
+          petName: '小黑',
+          species: '貓',
+          time: '10:30',
+          reason: '臨時不適',
+        }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.ownerName, '林小姐');
+      assert.equal(appointment.petName, '小黑');
+      assert.equal(appointment.time, '10:30');
+      assert.equal(appointment.reason, '臨時不適');
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
   it('完成看診時狀態機擋掉還沒報到就想結束的請求', async () => {
     const originalFindById = Appointment.findById;
     Appointment.findById = async () => ({ _id: 'apt-4', status: 'scheduled' });
@@ -234,6 +312,32 @@ describe('appointments routes', () => {
     }
   });
 
+  it('已報到掛號可取消報到，並清除看診序號', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-arrived-restore',
+      status: 'arrived',
+      checkinNumber: 3,
+      checkedInAt: new Date('2026-08-26T02:15:00.000Z'),
+      cancelReason: '',
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-arrived-restore/restore`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.status, 'scheduled');
+      assert.equal(appointment.checkinNumber, null);
+      assert.equal(appointment.checkedInAt, null);
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
   it('已完成掛號不可恢復', async () => {
     const originalFindById = Appointment.findById;
     Appointment.findById = async () => ({ _id: 'apt-7', status: 'completed' });
@@ -245,6 +349,35 @@ describe('appointments routes', () => {
       });
       assert.equal(response.status, 422);
       assert.deepEqual(await response.json(), { message: '無法從「已完成」改為「已預約」' });
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('已取消或未到的掛號可以永久刪除', async () => {
+    const originalFindById = Appointment.findById;
+    let deleted = false;
+    Appointment.findById = async () => ({
+      _id: 'apt-8',
+      status: 'cancelled',
+      deleteOne: async () => { deleted = true; },
+    });
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-8`, { method: 'DELETE' });
+      assert.equal(response.status, 204);
+      assert.equal(deleted, true);
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('尚在候診流程中的掛號不可刪除', async () => {
+    const originalFindById = Appointment.findById;
+    Appointment.findById = async () => ({ _id: 'apt-9', status: 'scheduled' });
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-9`, { method: 'DELETE' });
+      assert.equal(response.status, 422);
+      assert.deepEqual(await response.json(), { message: '只有已取消或未到的掛號可以刪除' });
     } finally {
       Appointment.findById = originalFindById;
     }

@@ -13,7 +13,6 @@ export const SESSIONS = [
 export const SURGERY_BLOCK = { label: '手術時間', start: '11:30', end: '14:00' };
 
 const ACTIVE_STATUSES = new Set(['scheduled', 'arrived']);
-const CLOSED_STATUSES = new Set(['cancelled', 'no_show']);
 
 function parseTimeToMinutes(value) {
   const [hour, minute] = String(value).split(':').map(Number);
@@ -24,16 +23,18 @@ function timeOfDayMinutes(date) {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-// 已取消／未到獨立集中到最下面；尚未報到＋候診中維持原本依時間排序、混在一起。
+// 已取消與未到各自集中到最下面；尚未報到＋候診中維持原本依時間排序、混在一起。
 // 已完成的看診直接從這頁消失（不是留著變灰）——保持佇列乾淨，這頁只服務「今天還要處理的事」。
-export function splitActiveAndClosed(appointments) {
+export function splitAppointmentsByQueueState(appointments) {
   const active = [];
-  const closed = [];
+  const cancelled = [];
+  const noShow = [];
   for (const appointment of appointments ?? []) {
     if (ACTIVE_STATUSES.has(appointment.status)) active.push(appointment);
-    else if (CLOSED_STATUSES.has(appointment.status)) closed.push(appointment);
+    else if (appointment.status === 'cancelled') cancelled.push(appointment);
+    else if (appointment.status === 'no_show') noShow.push(appointment);
   }
-  return { active, closed };
+  return { active, cancelled, noShow };
 }
 
 // 身分是否已經確定（回診＝已知道是哪隻寵物；初診＝petId 還是空的）。
