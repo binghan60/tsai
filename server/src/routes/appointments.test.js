@@ -128,6 +128,20 @@ describe('appointments routes', () => {
     }
   });
 
+  it('掛號時段只接受診所時段內的五分鐘刻度', async () => {
+    for (const time of ['09:55', '11:35', '12:00', '14:02', '19:35']) {
+      const response = await fetch(`${origin}/api/appointments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ time }),
+      });
+      assert.equal(response.status, 422, time);
+      assert.deepEqual(await response.json(), {
+        message: '預約時段僅限 10:00–11:30、14:00–19:30，且每 5 分鐘一格',
+      });
+    }
+  });
+
   it('尚未報到的掛號可以編輯身分快照、時段與來院原因', async () => {
     const originalFindById = Appointment.findById;
     const appointment = {

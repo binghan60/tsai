@@ -9,8 +9,10 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
+import { TimePicker } from './ui/time-picker';
 import SegmentedControl from './SegmentedControl.vue';
 import PetPickerDialog from './PetPickerDialog.vue';
+import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/appointmentTime';
 
 const props = defineProps({
   submitting: { type: Boolean, default: false },
@@ -120,8 +122,8 @@ const onSubmit = handleSubmit((values) => {
 
         <div class="space-y-1.5">
           <Label for="apt-time" class="text-xs font-medium text-foreground">預約時段（選填）</Label>
-          <Input id="apt-time" v-model="time" type="time" class="border-border" />
-          <p class="text-xs text-muted-foreground">留空表示現在就在現場，將以登記時間顯示在時間軸上。</p>
+          <TimePicker id="apt-time" v-model="time" placeholder="選擇預約時段" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" />
+          <p class="text-xs text-muted-foreground">可選 10:00–11:30、14:00–19:30，每 5 分鐘一格；留空表示現在就在現場。</p>
         </div>
 
         <div class="space-y-1.5">

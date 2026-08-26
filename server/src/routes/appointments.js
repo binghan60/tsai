@@ -11,6 +11,31 @@ const router = Router();
 
 const EDITABLE_APPOINTMENT_FIELDS = ['date', 'time', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species'];
 const EDITABLE_APPOINTMENT_STATUSES = new Set(['scheduled', 'arrived']);
+const APPOINTMENT_TIME_RANGES = [
+  ['10:00', '11:30'],
+  ['14:00', '19:30'],
+];
+const APPOINTMENT_TIME_ERROR = '預約時段僅限 10:00–11:30、14:00–19:30，且每 5 分鐘一格';
+
+function minutesOfTime(value) {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function isValidAppointmentTime(value) {
+  if (!value) return true;
+  const minutes = minutesOfTime(value);
+  if (minutes == null || minutes % 5 !== 0) return false;
+  return APPOINTMENT_TIME_RANGES.some(([start, end]) => {
+    const startMinutes = minutesOfTime(start);
+    const endMinutes = minutesOfTime(end);
+    return minutes >= startMinutes && minutes <= endMinutes;
+  });
+}
 
 // GET /api/appointments?date=YYYY-MM-DD（預設今天）
 // 目前畫面只做單日時間軸，量不大，直接回傳當天全部，不分頁。
@@ -26,7 +51,9 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { time, reason, petId } = req.body;
+    const { reason, petId } = req.body;
+    const time = String(req.body.time || '').trim();
+    if (!isValidAppointmentTime(time)) return res.status(422).json({ message: APPOINTMENT_TIME_ERROR });
     let ownerId = null;
     let ownerName;
     let ownerPhone;
@@ -96,6 +123,10 @@ router.put('/:id', async (req, res, next) => {
       const updates = {};
       for (const field of EDITABLE_APPOINTMENT_FIELDS) {
         if (req.body[field] !== undefined) updates[field] = req.body[field];
+      }
+      if (updates.time !== undefined) {
+        updates.time = String(updates.time || '').trim();
+        if (!isValidAppointmentTime(updates.time)) return res.status(422).json({ message: APPOINTMENT_TIME_ERROR });
       }
       if (updates.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(updates.date))) {
         return res.status(422).json({ message: '請填寫預約日期' });
