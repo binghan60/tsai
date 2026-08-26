@@ -1,10 +1,9 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, ArrowRight, CalendarClock, Check, ClipboardPlus, PawPrint, Trash2 } from '@lucide/vue'
+import { AlertTriangle, ArrowRight, Check, ClipboardPlus, PawPrint, Trash2 } from '@lucide/vue'
 import { http } from '../api/http'
-import { clinicDateInput, formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime'
-import { APPOINTMENT_STATUS_META } from '../lib/appointmentStatus'
+import { formatDate as formatClinicDate, formatDateTime as formatClinicDateTime } from '../lib/datetime'
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
@@ -36,24 +35,6 @@ async function fetchDashboard() {
     loading.value = false
   }
 }
-
-// 預約清單改成日期區間查詢後不再預設今天，這裡把當天日期一起帶過去，數字才對得上清單。
-const todayLink = computed(() => `/appointments?from=${clinicDateInput()}&to=${clinicDateInput()}`)
-
-// 今日門診依狀態拆開。每一格都連進預約頁的對應篩選，數字點得進去才算數。
-const todayBreakdown = computed(() => {
-  const today = dashboard.value?.todayAppointments ?? {}
-  return [
-    { key: 'scheduled', label: '待報到', count: today.scheduled ?? 0 },
-    { key: 'arrived', label: '已報到', count: today.arrived ?? 0 },
-    { key: 'completed', label: '已完成', count: today.completed ?? 0 },
-    { key: 'no_show', label: '未到診', count: today.no_show ?? 0 },
-  ].map((item) => ({
-    ...item,
-    dot: APPOINTMENT_STATUS_META[item.key]?.dotClass ?? 'bg-muted-foreground',
-    to: `${todayLink.value}&view=${item.key}`,
-  }))
-})
 
 // 報告流程分佈。數字一律用後端算好的 finalizedPendingCount／failedCount，不要在這裡從
 // statusBreakdown 重算：那份加總必須跟 records.js 的 view 篩選條件逐字對齊（pending 含
@@ -133,7 +114,7 @@ onMounted(fetchDashboard)
 <template>
   <!--
     三層閱讀順序，由粗到細：
-      1 現在   今日門診、異常警示
+      1 現在   異常警示
       2 分佈與趨勢   報告流程、近 6 週健檢量、本月概況
       3 明細   待辦清單、最近完成
     同一個數字只在其中一層出現一次。之前草稿數同時出現在優先處理卡、workStage 卡、
@@ -143,7 +124,7 @@ onMounted(fetchDashboard)
     <div class="flex flex-wrap items-end justify-between gap-4">
       <div>
         <h1 class="text-xl font-semibold text-foreground">健檢工作台</h1>
-        <p class="mt-1 text-sm text-muted-foreground">今日門診、報告流程與最近的健檢量一覽。</p>
+        <p class="mt-1 text-sm text-muted-foreground">報告流程與最近的健檢量一覽。</p>
       </div>
       <Button type="button" @click="petPickerOpen = true"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
     </div>
@@ -168,41 +149,6 @@ onMounted(fetchDashboard)
         </span>
         <ArrowRight class="h-4 w-4 shrink-0 text-danger" stroke-width="1.75" />
       </router-link>
-
-      <Card class="p-5 shadow-sm dark:shadow-none">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="flex items-center gap-3">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-              <CalendarClock class="h-5 w-5" stroke-width="1.75" />
-            </span>
-            <div>
-              <CardTitle class="text-sm">今日門診</CardTitle>
-              <p class="mt-0.5 text-xs text-muted-foreground">
-                共 <strong class="text-sm font-semibold tabular-nums text-foreground">{{ dashboard.todayAppointments?.total ?? 0 }}</strong> 診次
-                <template v-if="dashboard.todayAppointments?.cancelled"> · 已取消 {{ dashboard.todayAppointments.cancelled }}</template>
-              </p>
-            </div>
-          </div>
-          <Button as-child variant="outline" size="sm">
-            <router-link :to="todayLink">查看預約<ArrowRight class="h-4 w-4" /></router-link>
-          </Button>
-        </div>
-
-        <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <router-link
-            v-for="item in todayBreakdown"
-            :key="item.key"
-            :to="item.to"
-            class="rounded-lg border border-border bg-field px-3 py-2.5 transition-colors hover:border-primary/45 hover:bg-accent"
-          >
-            <span class="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <span class="h-1.5 w-1.5 shrink-0 rounded-full" :class="item.count ? item.dot : 'bg-muted-foreground/40'" aria-hidden="true"></span>
-              {{ item.label }}
-            </span>
-            <span class="mt-1 block text-xl font-semibold leading-none tabular-nums text-foreground">{{ item.count }}</span>
-          </router-link>
-        </div>
-      </Card>
 
       <!-- ── 第 2 層：分佈與趨勢 ──────────────────────────────── -->
       <Card class="p-5 shadow-sm dark:shadow-none">

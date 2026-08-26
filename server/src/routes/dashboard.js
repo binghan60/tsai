@@ -2,8 +2,6 @@ import { Router } from 'express';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import MedicalRecord from '../models/MedicalRecord.js';
-import Appointment from '../models/Appointment.js';
-import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
 
 const router = Router();
 
@@ -23,16 +21,6 @@ export function fillWeeklyTrend(boundaries, buckets) {
     weekEnd: boundaries[index + 1],
     count: counts.get(weekStart.getTime()) ?? 0,
   }));
-}
-
-// 今日門診依狀態分組。total 刻意不含 cancelled——取消掉的診次不佔今天的工作量，
-// 這跟原本 todayAppointmentCount 的語意一致（那支查詢也排除了 cancelled）。
-export function summarizeTodayAppointments(buckets = []) {
-  const summary = { scheduled: 0, arrived: 0, completed: 0, cancelled: 0, no_show: 0 };
-  buckets.forEach(({ _id, count }) => {
-    if (_id in summary) summary[_id] += count;
-  });
-  return { ...summary, total: summary.scheduled + summary.arrived + summary.completed + summary.no_show };
 }
 
 export function prioritizeActionRecords(attentionRecords = [], pendingRecords = [], draftRecords = [], limit = 8) {
@@ -65,8 +53,6 @@ router.get('/', async (req, res, next) => {
     const weekBoundaries = buildWeekBoundaries(trendStart);
     const trendEnd = weekBoundaries.at(-1);
 
-    const today = clinicToday(now);
-
     const monthRange = { $gte: startOfMonth, $lt: startOfNextMonth };
 
     const [
@@ -74,7 +60,6 @@ router.get('/', async (req, res, next) => {
       petCount,
       monthlyNewOwnerCount,
       monthlyNewPetCount,
-      todayAppointmentBuckets,
       [summary],
       recentRecords,
       draftRecords,
@@ -85,10 +70,6 @@ router.get('/', async (req, res, next) => {
         Pet.countDocuments(),
         Owner.countDocuments({ createdAt: monthRange }),
         Pet.countDocuments({ createdAt: monthRange }),
-        Appointment.aggregate([
-          { $match: { scheduledAt: { $gte: clinicDayStart(today), $lt: clinicDayStart(today, 1) } } },
-          { $group: { _id: '$status', count: { $sum: 1 } } },
-        ]),
         MedicalRecord.aggregate([
           { $match: CURRENT_VERSION },
           {
@@ -159,15 +140,11 @@ router.get('/', async (req, res, next) => {
     // 每類查詢各自限量，再去重截斷，避免某一類大量資料把其他需要處理的狀態完全擠掉。
     const actionRecords = prioritizeActionRecords(attentionRecords, pendingRecords, draftRecords);
 
-    const todayAppointments = summarizeTodayAppointments(todayAppointmentBuckets);
-
     res.json({
       ownerCount,
       petCount,
       monthlyNewOwnerCount,
       monthlyNewPetCount,
-      todayAppointmentCount: todayAppointments.total,
-      todayAppointments,
       monthlyReportCount,
       draftCount,
       finalizedPendingCount: statusBreakdown.finalized + statusBreakdown.sending + statusBreakdown.uncertain,

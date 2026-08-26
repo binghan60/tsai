@@ -45,21 +45,3 @@ export function clinicDayStart(dateInput, dayOffset = 0) {
   const instant = new Date(utcMidnight - zoneOffsetMs(new Date(utcMidnight), CLINIC_TIMEZONE));
   return Number.isNaN(instant.getTime()) ? null : instant;
 }
-
-const TIME_ONLY = /^(\d{2}):(\d{2})$/;
-
-// 把使用者選的日期＋時間換算成診所時區對應的實際時刻，供預約排序/查詢使用。
-// 台北沒有日光節約時間，同一天內加分鐘數不會跨過偏移量變化，直接在
-// clinicDayStart 算出的午夜上加分鐘即可。
-export function combineClinicDateTime(dateInput, timeInput) {
-  const dayStart = clinicDayStart(dateInput);
-  if (!dayStart) return null;
-  const match = TIME_ONLY.exec(String(timeInput ?? '').trim());
-  const minutes = match ? Number(match[1]) * 60 + Number(match[2]) : 0;
-  return new Date(dayStart.getTime() + minutes * 60_000);
-}
-
-// 診所時區「今天」的 YYYY-MM-DD，給預約清單的預設日期與儀錶板的今日統計共用。
-export function clinicToday(now = new Date()) {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: CLINIC_TIMEZONE }).format(now);
-}

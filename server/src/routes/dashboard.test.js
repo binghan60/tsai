@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWeekBoundaries, fillWeeklyTrend, prioritizeActionRecords, summarizeTodayAppointments } from './dashboard.js';
+import { buildWeekBoundaries, fillWeeklyTrend, prioritizeActionRecords } from './dashboard.js';
 
 describe('dashboard visit-date trend', () => {
   it('builds contiguous weekly buckets and fills missing weeks', () => {
@@ -39,28 +39,5 @@ describe('dashboard action queue', () => {
         .map((record) => record._id),
       ['failed', 'pending']
     );
-  });
-});
-
-describe('dashboard today appointments', () => {
-  it('fills missing statuses and keeps cancelled out of the total', () => {
-    const summary = summarizeTodayAppointments([
-      { _id: 'scheduled', count: 3 },
-      { _id: 'completed', count: 4 },
-      { _id: 'cancelled', count: 2 },
-    ]);
-
-    assert.deepEqual(summary, {
-      scheduled: 3,
-      arrived: 0,
-      completed: 4,
-      cancelled: 2,
-      no_show: 0,
-      total: 7,
-    });
-  });
-
-  it('ignores unknown statuses', () => {
-    assert.equal(summarizeTodayAppointments([{ _id: 'bogus', count: 9 }]).total, 0);
   });
 });
