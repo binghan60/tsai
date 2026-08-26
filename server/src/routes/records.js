@@ -15,7 +15,7 @@ import { escapeRegExp } from '../lib/regex.js';
 import { validateFinalRecord } from '../lib/recordValidation.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
-import { enrichSectionsWithPreviousValues, getPetPreviousValues } from '../lib/historyValues.js';
+import { enrichSectionsWithPreviousValues, getPetPreviousValues, plainSections } from '../lib/historyValues.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -56,6 +56,24 @@ function isFinalizedRecord(record) {
 
 function effectiveDeliveryStatus(record) {
   return record?.deliveryStatus ?? 'not_sent';
+}
+
+// 報告檢視要看的那份區塊結構。
+//
+// 已結案的一律直接用自己的快照，不再回頭補「上次數值」——快照的意義就是「結案當下的樣子」。
+// 補登一份日期更早的報告會讓歷史往回長，那時再回頭加工，已經寄給飼主的報告重新開啟
+// 就會多出當初 PDF 上沒有的對照欄，而 PDF 是每次重繪的，附件與線上版會對不起來。
+// 順帶省下兩支查詢：補對照值要撈最多 20 份帶完整 sections 的報告，而公開報告頁
+// 正是 Puppeteer 產 PDF 的來源，結案與寄信路徑上各會走一次。
+//
+// 草稿還沒凍結結構，仍要即時用目前範本組合並補上對照值。
+async function sectionsForView(record) {
+  if (isFinalizedRecord(record) && record.sections?.length) return plainSections(record.sections);
+  const rawSections = record.sections?.length
+    ? record.sections
+    : composeReportSections(record, await templateForRecord(record));
+  const previousValues = await getPetPreviousValues(record.petId, record._id, record);
+  return enrichSectionsWithPreviousValues(rawSections, previousValues);
 }
 
 function recordSnapshot(record) {
@@ -359,9 +377,7 @@ recordsRouter.get('/:id', async (req, res, next) => {
     });
     if (!record) return res.status(404).json({ message: '找不到報告' });
     // 預覽模式與報告頁共用同一套渲染，草稿也要能拿到區塊結構與歷史對照數值。
-    const rawSections = record.sections?.length ? record.sections : composeReportSections(record, await templateForRecord(record));
-    const previousValues = await getPetPreviousValues(record.petId, record._id, record);
-    const sections = enrichSectionsWithPreviousValues(rawSections, previousValues);
+    const sections = await sectionsForView(record);
     // 一定要用 toJSON()：toObject() 預設不 flatten Map，展開後 customValues 會變成 {}，
     // 自訂項目的作答一開啟編輯頁就空白，接著自動儲存把 {} 寫回資料庫。
     res.json({ ...record.toJSON(), sections, deliveryStatus: effectiveDeliveryStatus(record) });
@@ -1074,10 +1090,7 @@ publicReportsRouter.get('/:token', async (req, res, next) => {
       return res.status(410).json({ message: '這份報告的分享連結已失效' });
     }
 
-    // 已結案報告用自己的快照；草稿還沒凍結結構，即時用目前範本組合。
-    const rawSections = record.sections?.length ? record.sections : composeReportSections(record, await templateForRecord(record));
-    const previousValues = await getPetPreviousValues(record.petId, record._id, record);
-    const sections = enrichSectionsWithPreviousValues(rawSections, previousValues);
+    const sections = await sectionsForView(record);
     res.set('Cache-Control', 'private, no-store');
     res.json(reportPayload(record, sections));
   } catch (err) {

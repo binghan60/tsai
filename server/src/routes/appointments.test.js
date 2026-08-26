@@ -6,6 +6,42 @@ import { app } from '../app.js';
 import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
 
+// 佇列相關的路由會走 Appointment.find(...).session(...)（報到那條再接 .where(...)），
+// 最後用 bulkWrite 兩階段寫回號碼。這裡把整條鏈假掉，並收下寫入的內容供斷言。
+function stubQueue(rows) {
+  const chain = {
+    session: () => chain,
+    where: () => chain,
+    then: (resolve, reject) => Promise.resolve(rows).then(resolve, reject),
+  };
+  return chain;
+}
+
+function captureQueueWrites() {
+  const calls = [];
+  const original = { find: Appointment.find, bulkWrite: Appointment.bulkWrite, startSession: mongoose.startSession };
+  Appointment.bulkWrite = async (operations) => {
+    calls.push(operations.map((op) => ({
+      _id: op.updateOne.filter._id,
+      checkinNumber: op.updateOne.update.$set.checkinNumber,
+    })));
+  };
+  mongoose.startSession = async () => ({
+    withTransaction: async (callback) => callback(),
+    endSession: async () => {},
+  });
+  return {
+    // 兩階段寫入的第二批才是正式號碼，第一批是為了讓開唯一索引的負數。
+    get positions() { return calls.at(-1) ?? []; },
+    get phases() { return calls.length; },
+    restore() {
+      Appointment.find = original.find;
+      Appointment.bulkWrite = original.bulkWrite;
+      mongoose.startSession = original.startSession;
+    },
+  };
+}
+
 describe('appointments routes', () => {
   let server;
   let origin;
@@ -20,14 +56,34 @@ describe('appointments routes', () => {
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 
-  it('建立掛號時，初診沒填飼主姓名要回 422', async () => {
+  // 飼主姓名選填，但一筆掛號至少要指得出是誰要來。
+  it('建立掛號時，初診沒填寵物姓名要回 422', async () => {
     const response = await fetch(`${origin}/api/appointments`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ ownerName: '王小姐' }),
     });
     assert.equal(response.status, 422);
-    assert.deepEqual(await response.json(), { message: '請填寫飼主姓名' });
+    assert.deepEqual(await response.json(), { message: '請填寫寵物姓名' });
+  });
+
+  it('初診只填寵物姓名就能掛號，飼主姓名可以留空', async () => {
+    const originalCreate = Appointment.create;
+    Appointment.create = async (doc) => doc;
+    try {
+      const response = await fetch(`${origin}/api/appointments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ petName: '妞妞', ownerPhone: '0912-345-678', time: '10:00' }),
+      });
+      assert.equal(response.status, 201);
+      const body = await response.json();
+      assert.equal(body.petName, '妞妞');
+      assert.equal(body.ownerName, '');
+      assert.equal(body.ownerPhone, '0912-345-678');
+    } finally {
+      Appointment.create = originalCreate;
+    }
   });
 
   it('建立掛號時，petId 格式不正確要回 422', async () => {
@@ -104,30 +160,6 @@ describe('appointments routes', () => {
     }
   });
 
-  it('手動調整看診序號時，同一天號碼衝突要回 409', async () => {
-    const originalFindById = Appointment.findById;
-    const originalExists = Appointment.exists;
-    Appointment.findById = async () => ({
-      _id: 'apt-3',
-      status: 'arrived',
-      date: '2026-08-26',
-      save: async () => {},
-    });
-    Appointment.exists = async () => true;
-    try {
-      const response = await fetch(`${origin}/api/appointments/apt-3`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ checkinNumber: 3 }),
-      });
-      assert.equal(response.status, 409);
-      assert.deepEqual(await response.json(), { message: '這個看診序號已被使用' });
-    } finally {
-      Appointment.findById = originalFindById;
-      Appointment.exists = originalExists;
-    }
-  });
-
   it('掛號時段只接受診所時段內的五分鐘刻度', async () => {
     for (const time of ['09:55', '11:35', '12:00', '14:02', '19:35']) {
       const response = await fetch(`${origin}/api/appointments`, {
@@ -184,10 +216,8 @@ describe('appointments routes', () => {
     }
   });
 
-  it('成功報到時會記錄報到時間', async () => {
+  it('報到時自動接到隊尾', async () => {
     const originalFindById = Appointment.findById;
-    const originalExists = Appointment.exists;
-    const originalStartSession = mongoose.startSession;
     const appointment = {
       _id: 'apt-checkin-time',
       status: 'scheduled',
@@ -198,27 +228,59 @@ describe('appointments routes', () => {
       save: async () => {},
     };
     Appointment.findById = async () => appointment;
-    Appointment.exists = () => ({ session: async () => false });
-    mongoose.startSession = async () => ({
-      withTransaction: async (callback) => callback(),
-      endSession: async () => {},
-    });
+    const queue = captureQueueWrites();
+    // 佇列裡已經有兩個人在等，所以這位是第 3 個。
+    Appointment.find = () => stubQueue([{ _id: 'a', checkinNumber: 1 }, { _id: 'b', checkinNumber: 2 }]);
     try {
       const beforeCheckin = Date.now();
       const response = await fetch(`${origin}/api/appointments/apt-checkin-time/check-in`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ checkinNumber: 2 }),
+        // 位置由佇列決定，body 帶什麼號碼都不影響。
+        body: JSON.stringify({ checkinNumber: 1 }),
       });
       assert.equal(response.status, 200);
       assert.equal(appointment.status, 'arrived');
-      assert.equal(appointment.checkinNumber, 2);
+      assert.equal(appointment.checkinNumber, 3);
+      // 前面兩個人的位置沒變，就不該被寫入。
+      assert.deepEqual(queue.positions, [{ _id: 'apt-checkin-time', checkinNumber: 3 }]);
       assert.ok(appointment.checkedInAt instanceof Date);
       assert.ok(appointment.checkedInAt.getTime() >= beforeCheckin);
     } finally {
       Appointment.findById = originalFindById;
-      Appointment.exists = originalExists;
-      mongoose.startSession = originalStartSession;
+      queue.restore();
+    }
+  });
+
+  it('完成看診後離開佇列，後面的人往前遞補', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-done',
+      status: 'arrived',
+      date: '2026-08-26',
+      checkinNumber: 1,
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    const queue = captureQueueWrites();
+    // 自己的號碼先清掉，剩下的兩位重新編號成 1、2。
+    Appointment.find = () => stubQueue([{ _id: 'b', checkinNumber: 2 }, { _id: 'c', checkinNumber: 3 }]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-done/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.status, 'completed');
+      assert.equal(appointment.checkinNumber, null);
+      assert.deepEqual(queue.positions, [
+        { _id: 'b', checkinNumber: 1 },
+        { _id: 'c', checkinNumber: 2 },
+      ]);
+    } finally {
+      Appointment.findById = originalFindById;
+      queue.restore();
     }
   });
 
@@ -331,12 +393,15 @@ describe('appointments routes', () => {
     const appointment = {
       _id: 'apt-arrived-restore',
       status: 'arrived',
+      date: '2026-08-26',
       checkinNumber: 3,
       checkedInAt: new Date('2026-08-26T02:15:00.000Z'),
       cancelReason: '',
       save: async () => {},
     };
     Appointment.findById = async () => appointment;
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([{ _id: 'a', checkinNumber: 1 }, { _id: 'b', checkinNumber: 2 }]);
     try {
       const response = await fetch(`${origin}/api/appointments/apt-arrived-restore/restore`, {
         method: 'POST',
@@ -347,8 +412,11 @@ describe('appointments routes', () => {
       assert.equal(appointment.status, 'scheduled');
       assert.equal(appointment.checkinNumber, null);
       assert.equal(appointment.checkedInAt, null);
+      // 前面兩位的位置沒受影響，不必重寫。
+      assert.deepEqual(queue.positions, []);
     } finally {
       Appointment.findById = originalFindById;
+      queue.restore();
     }
   });
 

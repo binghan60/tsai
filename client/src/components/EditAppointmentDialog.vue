@@ -30,7 +30,8 @@ const { handleSubmit } = useForm({
     reason: props.appointment.reason ?? '',
   },
 });
-const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName', requiredRule);
+// 飼主姓名選填（跟掛號對話框一致）——不然沒填飼主的初診掛號一打開編輯就存不回去。
+const { value: ownerName } = useField('ownerName');
 const { value: ownerPhone } = useField('ownerPhone');
 const { value: petName, errorMessage: petNameError } = useField('petName', requiredRule);
 const { value: species } = useField('species');
@@ -38,7 +39,7 @@ const { value: time, errorMessage: timeError } = useField('time', requiredTime);
 const { value: reason } = useField('reason');
 
 const onSubmit = handleSubmit((values) => emit('submit', {
-  ownerName: values.ownerName.trim(),
+  ownerName: values.ownerName?.trim() ?? '',
   ownerPhone: values.ownerPhone?.trim() ?? '',
   petName: values.petName.trim(),
   species: values.species?.trim() ?? '',
@@ -75,9 +76,8 @@ const onSubmit = handleSubmit((values) => emit('submit', {
 
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
-            <Label for="edit-apt-owner-name" class="text-xs font-medium text-foreground">飼主姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+            <Label for="edit-apt-owner-name" class="text-xs font-medium text-foreground">飼主姓名<span class="ml-1 font-normal text-muted-foreground">（選填）</span></Label>
             <Input id="edit-apt-owner-name" v-model="ownerName" class="border-border" />
-            <p v-if="ownerNameError" class="text-xs font-medium text-destructive">{{ ownerNameError }}</p>
           </div>
           <div class="space-y-1.5">
             <Label for="edit-apt-owner-phone" class="text-xs font-medium text-foreground">聯絡電話</Label>

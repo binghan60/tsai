@@ -70,37 +70,45 @@ export async function getPetPreviousValues(petId, excludeRecordId = null, histor
   return { byKey, byLabel };
 }
 
-export function enrichSectionsWithPreviousValues(sections, previousValues) {
-  if (!Array.isArray(sections) || !previousValues) return sections ?? [];
-  const { byKey = {}, byLabel = {} } = previousValues;
-
+// `record.sections` contains Mongoose subdocuments after a report is read from
+// the database. Spreading one exposes Mongoose internals instead of the section
+// fields, so every path that hands sections to the API normalizes them first.
+export function plainSections(sections) {
+  if (!Array.isArray(sections)) return [];
   return sections.map((section) => {
-    // `record.sections` contains Mongoose subdocuments after a report is read
-    // from the database. Spreading one exposes Mongoose internals instead of
-    // the section fields, so normalize it before constructing the API payload.
     const sectionData = section?.toObject?.() ?? section;
-
     return {
       ...sectionData,
-      items: (sectionData.items ?? []).map((item) => {
-        const itemData = item?.toObject?.() ?? item;
-      // 已經存在上次數值快照的直接保留
-        if (itemData.previousValue !== undefined) return itemData;
-        if (!HISTORY_ITEM_TYPES.has(itemData.type)) return itemData;
-
-        const labelKey = `${itemData.type}:${String(itemData.label ?? '').trim()}`;
-        const prev = byKey[itemData.key] ?? (itemData.label ? byLabel[labelKey] : null);
-
-        if (!prev || prev.value == null || String(prev.value).trim() === '') return itemData;
-
-        return {
-          ...itemData,
-          previousValue: prev.value,
-          previousUnit: prev.unit ?? '',
-          previousStatus: prev.status ?? null,
-          previousVisitDate: prev.visitDate ?? null,
-        };
-      }),
+      items: (sectionData.items ?? []).map((item) => item?.toObject?.() ?? item),
     };
   });
+}
+
+export function enrichSectionsWithPreviousValues(sections, previousValues) {
+  if (!Array.isArray(sections)) return [];
+  const normalized = plainSections(sections);
+  if (!previousValues) return normalized;
+  const { byKey = {}, byLabel = {} } = previousValues;
+
+  return normalized.map((section) => ({
+    ...section,
+    items: (section.items ?? []).map((itemData) => {
+      // 已經存在上次數值快照的直接保留
+      if (itemData.previousValue !== undefined) return itemData;
+      if (!HISTORY_ITEM_TYPES.has(itemData.type)) return itemData;
+
+      const labelKey = `${itemData.type}:${String(itemData.label ?? '').trim()}`;
+      const prev = byKey[itemData.key] ?? (itemData.label ? byLabel[labelKey] : null);
+
+      if (!prev || prev.value == null || String(prev.value).trim() === '') return itemData;
+
+      return {
+        ...itemData,
+        previousValue: prev.value,
+        previousUnit: prev.unit ?? '',
+        previousStatus: prev.status ?? null,
+        previousVisitDate: prev.visitDate ?? null,
+      };
+    }),
+  }));
 }

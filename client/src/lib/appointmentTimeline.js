@@ -12,8 +12,6 @@ export const SESSIONS = [
 
 export const SURGERY_BLOCK = { label: '手術時間', start: '11:30', end: '14:00' };
 
-const ACTIVE_STATUSES = new Set(['scheduled', 'arrived']);
-
 function parseTimeToMinutes(value) {
   const [hour, minute] = String(value).split(':').map(Number);
   return hour * 60 + minute;
@@ -23,18 +21,30 @@ function timeOfDayMinutes(date) {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-// 已取消與未到各自集中到最下面；尚未報到＋候診中維持原本依時間排序、混在一起。
-// 已完成的看診直接從這頁消失（不是留著變灰）——保持佇列乾淨，這頁只服務「今天還要處理的事」。
+// 這頁上有兩種順序，必須分開呈現，否則同一份清單會同時想表達兩件事。
+//
+// 報到之後，預約時間就不再決定任何事——人已經在診所裡，決定誰先看的是候診序號。
+// 所以 waiting 從時間軸抽出來自成一區、依 checkinNumber 排；時間軸只留還沒到的人，
+// 它的軸就純粹是時間。混在一起時，候診中的人會被釘在自己的預約時間上，
+// 旁邊卻掛著一個跟那個位置無關的號碼，連調整順序的按鈕都會被讀成在拖時間。
+//
+// 已取消與未到各自集中到最下面。已完成的看診直接從這頁消失（不是留著變灰）——
+// 保持佇列乾淨，這頁只服務「今天還要處理的事」。
 export function splitAppointmentsByQueueState(appointments) {
-  const active = [];
+  const waiting = [];
+  const scheduled = [];
   const cancelled = [];
   const noShow = [];
   for (const appointment of appointments ?? []) {
-    if (ACTIVE_STATUSES.has(appointment.status)) active.push(appointment);
+    if (appointment.status === 'arrived') waiting.push(appointment);
+    else if (appointment.status === 'scheduled') scheduled.push(appointment);
     else if (appointment.status === 'cancelled') cancelled.push(appointment);
     else if (appointment.status === 'no_show') noShow.push(appointment);
   }
-  return { active, cancelled, noShow };
+  // 佇列位置就是看診順序，跟預約時間無關。還沒配到號碼的排最後。
+  const position = (item) => (Number.isInteger(item.checkinNumber) ? item.checkinNumber : Number.MAX_SAFE_INTEGER);
+  waiting.sort((a, b) => position(a) - position(b));
+  return { waiting, scheduled, cancelled, noShow };
 }
 
 // 身分是否已經確定（回診＝已知道是哪隻寵物；初診＝petId 還是空的）。

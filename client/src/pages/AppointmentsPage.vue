@@ -78,7 +78,11 @@ async function fetchAppointments({ silent = false } = {}) {
 }
 
 const appointmentGroups = computed(() => splitAppointmentsByQueueState(appointments.value));
-const activeAppointments = computed(() => appointmentGroups.value.active);
+// 候診佇列＝已報到還沒看完的人，由上而下就是看診順序。清單長度是「往後排」的上限。
+const waitingQueue = computed(() => appointmentGroups.value.waiting);
+// 時間軸只剩還沒報到的人，它的軸就純粹是時間。
+const upcomingAppointments = computed(() => appointmentGroups.value.scheduled);
+const hasAnyAppointment = computed(() => appointments.value.length > 0);
 const closedGroups = computed(() => [
   { key: 'cancelled', label: '已取消', icon: CalendarX2, items: appointmentGroups.value.cancelled },
   { key: 'no_show', label: '未到', icon: UserX, items: appointmentGroups.value.noShow },
@@ -117,7 +121,7 @@ const actionConfirmation = computed(() => {
     destructive: true,
   };
 });
-const sessionGroups = computed(() => groupBySession(activeAppointments.value, SESSIONS));
+const sessionGroups = computed(() => groupBySession(upcomingAppointments.value, SESSIONS));
 const nowSessionIndex = computed(() => assignSessionIndex(now.value.getHours() * 60 + now.value.getMinutes(), SESSIONS));
 const nowLabel = computed(() =>
   `${String(now.value.getHours()).padStart(2, '0')}:${String(now.value.getMinutes()).padStart(2, '0')}`
@@ -303,18 +307,6 @@ async function confirmRowAction() {
   }
 }
 
-async function updateCheckinNumber(appointment, rawValue) {
-  const checkinNumber = Number(rawValue);
-  if (!Number.isInteger(checkinNumber) || checkinNumber < 1 || checkinNumber === appointment.checkinNumber) return;
-  try {
-    await http.put(`/appointments/${appointment._id}`, { checkinNumber });
-    await fetchAppointments({ silent: true });
-  } catch (err) {
-    reportApiError(err, '看診序號調整失敗');
-    await fetchAppointments({ silent: true });
-  }
-}
-
 onMounted(() => {
   fetchAppointments();
   nowTimer = setInterval(() => {
@@ -345,17 +337,115 @@ onBeforeUnmount(() => {
     </Alert>
 
     <template v-else>
+      <!-- ── 候診佇列 ──
+           報到之後預約時間就不再決定任何事，人已經在診所裡；決定誰先看的是這份順序。
+           所以候診中的人從時間軸抽出來自成一區：這份清單由上而下就是看診順序，
+           上下鍵移動的意思才不會跟時間軸的「幾點」混在一起。 -->
+      <Card v-if="waitingQueue.length" class="overflow-hidden p-0">
+        <div class="flex items-start justify-between gap-3 p-5 pb-3">
+          <div>
+            <h2 class="text-base font-semibold text-foreground">候診中</h2>
+            <p class="mt-0.5 text-xs text-muted-foreground">依報到先後排；看完診離開後，後面的人往前遞補</p>
+          </div>
+          <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-accent px-2 text-xs font-semibold text-accent-foreground">{{ waitingQueue.length }}</span>
+        </div>
+
+        <ul class="divide-y divide-border border-t border-border">
+          <li v-for="appointment in waitingQueue" :key="appointment._id" class="px-5 py-3.5">
+            <div class="flex flex-wrap items-center gap-3.5">
+              <span
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold tabular-nums text-accent-foreground"
+                :aria-label="`目前排第 ${appointment.checkinNumber} 位`"
+              >{{ appointment.checkinNumber }}</span>
+
+              <span
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
+                :class="isIdentityConfirmed(appointment) ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'"
+              >
+                <User class="h-4.5 w-4.5" stroke-width="1.75" />
+              </span>
+
+              <div class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
+                <span class="flex items-center gap-1 truncate text-xs text-muted-foreground">
+                  {{ appointment.ownerName || '飼主未填' }}
+                  <template v-if="appointment.ownerPhone">
+                    <span class="text-border">·</span>
+                    <Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}
+                  </template>
+                  <template v-if="appointment.checkedInAt">
+                    <span class="text-border">·</span>
+                    <Clock class="h-3 w-3 shrink-0" stroke-width="1.75" />報到 {{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }}
+                  </template>
+                </span>
+              </div>
+
+              <div class="flex shrink-0 items-center gap-1.5">
+                <Button type="button" variant="destructive" size="sm" :disabled="isBusy(appointment._id)" @click="actionToConfirm = { appointment, key: 'undo_check_in' }">
+                  取消報到
+                </Button>
+                <Button type="button" variant="secondary" size="icon-sm" :aria-label="`編輯 ${appointment.petName || '這筆'} 的掛號`" @click="editTarget = appointment">
+                  <Pencil class="h-4 w-4" stroke-width="1.75" />
+                </Button>
+                <Button type="button" variant="secondary" size="icon-sm" :aria-label="isExpanded(appointment._id) ? '收合' : '展開量測與完成看診'" @click="toggleExpanded(appointment)">
+                  <component :is="isExpanded(appointment._id) ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
+                </Button>
+              </div>
+            </div>
+
+            <div v-if="isExpanded(appointment._id)" class="mt-3.5 space-y-3.5 border-t border-border pt-3.5">
+              <div class="grid gap-3.5 sm:grid-cols-2">
+                <label class="space-y-1.5 text-xs font-medium text-foreground">
+                  體重
+                  <div class="relative">
+                    <input v-model="simpleForms[appointment._id].weightKg" type="number" min="0" step="0.1" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">kg</span>
+                  </div>
+                </label>
+                <label class="space-y-1.5 text-xs font-medium text-foreground">
+                  體溫
+                  <div class="relative">
+                    <input v-model="simpleForms[appointment._id].temperatureC" type="number" min="0" step="0.1" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">°C</span>
+                  </div>
+                </label>
+              </div>
+              <label class="block space-y-1.5 text-xs font-medium text-foreground">
+                備註
+                <textarea v-model="simpleForms[appointment._id].visitNote" rows="2" class="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"></textarea>
+                <span class="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                  <Lock class="h-3.5 w-3.5 shrink-0" stroke-width="1.75" />僅供內部使用（藥品／費用等），不會出現在健檢報告中
+                </span>
+              </label>
+              <div class="flex justify-end">
+                <Button type="button" size="sm" :disabled="isBusy(appointment._id)" @click="completeVisit(appointment)">
+                  <Check class="h-4 w-4" stroke-width="2" />完成看診
+                </Button>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </Card>
+
       <Card class="overflow-hidden p-0">
         <div class="flex items-start justify-between gap-3 p-5 pb-3">
           <div>
             <h2 class="text-base font-semibold text-foreground">今日看診時間軸</h2>
+            <p class="mt-0.5 text-xs text-muted-foreground">尚未報到的掛號，依預約時段排列</p>
           </div>
-          <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-foreground">{{ activeAppointments.length }}</span>
+          <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-foreground">{{ upcomingAppointments.length }}</span>
         </div>
 
-        <EmptyState v-if="!activeAppointments.length && !closedGroups.length" inset :icon="UserPlus" title="今天還沒有任何掛號" description="按右上角「掛號」開始。" />
+        <EmptyState v-if="!hasAnyAppointment" inset :icon="UserPlus" title="今天還沒有任何掛號" description="按右上角「掛號」開始。" />
 
         <div v-else class="px-5 pb-5">
+          <!-- 時間軸空掉不代表今天沒事——人可能都報到了，也可能都取消了。
+               這兩種情況下面的「已取消／未到」仍要看得到，所以空訊息只換掉時段清單。 -->
+          <p v-if="!upcomingAppointments.length" class="rounded-xl border border-dashed border-border bg-muted px-3.5 py-4 text-center text-sm text-muted-foreground">
+            沒有等待報到的掛號，今天的掛號都已經報到或結束了。
+          </p>
+
+          <template v-else>
           <template v-for="(group, groupIndex) in sessionGroups" :key="group.session.id">
             <div v-if="groupIndex === 1" class="my-2 flex items-center gap-2 rounded-xl border border-dashed border-border bg-muted px-3.5 py-3 text-sm font-medium text-muted-foreground">
               <Plus class="h-4 w-4 shrink-0" stroke-width="1.75" />
@@ -381,26 +471,12 @@ onBeforeUnmount(() => {
                   <span class="mb-1.5 block text-xs font-semibold text-muted-foreground sm:absolute sm:left-[-46px] sm:top-4 sm:mb-0 sm:w-18 sm:-translate-x-full sm:text-right sm:text-sm">
                     {{ new Date(appointment.scheduledAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }) }}
                   </span>
-                  <span
-                    class="absolute left-[-17px] top-6 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 bg-card sm:left-[-30px] sm:top-5.5"
-                    :class="appointment.status === 'arrived' ? 'border-primary' : 'border-dashed border-muted-foreground'"
-                  ></span>
+                  <span class="absolute left-[-17px] top-6 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-dashed border-muted-foreground bg-card sm:left-[-30px] sm:top-5.5"></span>
 
-                  <div class="rounded-xl" :class="isExpanded(appointment._id) ? 'border border-border bg-accent/40 p-3.5' : ''">
+                  <div>
                     <div class="flex flex-wrap items-center gap-3.5">
-                      <!-- 候診中：看診序號，可直接點擊修改 -->
-                      <div v-if="appointment.status === 'arrived'" class="relative h-10 w-10 shrink-0">
-                        <input
-                          type="number"
-                          min="1"
-                          class="h-10 w-10 rounded-full border border-input bg-field text-center text-base font-bold text-primary outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                          :value="appointment.checkinNumber"
-                          :aria-label="`調整 ${appointment.petName || '這筆掛號'} 的看診序號`"
-                          @change="updateCheckinNumber(appointment, $event.target.value)"
-                        />
-                      </div>
-                      <!-- 尚未報到：佔位，還沒排進候診順序 -->
-                      <div v-else class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border text-muted-foreground">
+                      <!-- 時間軸上只會有還沒報到的列；看診序號要報到之後才配。 -->
+                      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border text-muted-foreground">
                         <Clock class="h-4.5 w-4.5" stroke-width="1.75" />
                       </div>
 
@@ -416,65 +492,17 @@ onBeforeUnmount(() => {
                           class="block truncate text-sm font-semibold text-foreground"
                         >{{ appointment.petName || '寵物姓名未填' }}</span>
                         <span class="flex items-center gap-1 truncate text-xs text-muted-foreground">
-                          {{ appointment.ownerName }}
+                          {{ appointment.ownerName || '飼主未填' }}
                           <template v-if="appointment.ownerPhone">
                             <span class="text-border">·</span>
                             <Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}
                           </template>
-                          <template v-if="appointment.status === 'arrived' && appointment.checkedInAt">
-                            <span class="text-border">·</span>
-                            <Clock class="h-3 w-3 shrink-0" stroke-width="1.75" />報到 {{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }}
-                          </template>
                         </span>
                       </div>
 
-                      <template v-if="appointment.status === 'arrived'">
-                        <div class="flex shrink-0 items-center gap-1.5">
-                          <Button type="button" variant="destructive" size="sm" :disabled="isBusy(appointment._id)" @click="actionToConfirm = { appointment, key: 'undo_check_in' }">
-                            取消報到
-                          </Button>
-                          <Button type="button" variant="secondary" size="icon-sm" :aria-label="`編輯 ${appointment.petName || '這筆'} 的掛號`" @click="editTarget = appointment">
-                            <Pencil class="h-4 w-4" stroke-width="1.75" />
-                          </Button>
-                          <Button type="button" variant="secondary" size="icon-sm" :aria-label="isExpanded(appointment._id) ? '收合' : '展開'" @click="toggleExpanded(appointment)">
-                            <component :is="isExpanded(appointment._id) ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
-                          </Button>
-                        </div>
-                      </template>
-                      <div v-else class="ml-auto flex shrink-0 items-center gap-1.5 max-sm:w-full max-sm:justify-end">
+                      <div class="ml-auto flex shrink-0 items-center gap-1.5 max-sm:w-full max-sm:justify-end">
                         <Button type="button" size="sm" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
                         <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
-                      </div>
-                    </div>
-
-                    <div v-if="appointment.status === 'arrived' && isExpanded(appointment._id)" class="mt-3.5 space-y-3.5 border-t border-border pt-3.5">
-                      <div class="grid gap-3.5 sm:grid-cols-2">
-                        <label class="space-y-1.5 text-xs font-medium text-foreground">
-                          體重
-                          <div class="relative">
-                            <input v-model="simpleForms[appointment._id].weightKg" type="number" min="0" step="0.1" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
-                            <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">kg</span>
-                          </div>
-                        </label>
-                        <label class="space-y-1.5 text-xs font-medium text-foreground">
-                          體溫
-                          <div class="relative">
-                            <input v-model="simpleForms[appointment._id].temperatureC" type="number" min="0" step="0.1" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
-                            <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">°C</span>
-                          </div>
-                        </label>
-                      </div>
-                      <label class="block space-y-1.5 text-xs font-medium text-foreground">
-                        備註
-                        <textarea v-model="simpleForms[appointment._id].visitNote" rows="2" class="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"></textarea>
-                        <span class="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
-                          <Lock class="h-3.5 w-3.5 shrink-0" stroke-width="1.75" />僅供內部使用（藥品／費用等），不會出現在健檢報告中
-                        </span>
-                      </label>
-                      <div class="flex justify-end">
-                        <Button type="button" size="sm" :disabled="isBusy(appointment._id)" @click="completeVisit(appointment)">
-                          <Check class="h-4 w-4" stroke-width="2" />完成看診
-                        </Button>
                       </div>
                     </div>
                   </div>
@@ -490,6 +518,7 @@ onBeforeUnmount(() => {
                 <span class="shrink-0 rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground">現在 · {{ nowLabel }}</span>
               </div>
             </div>
+          </template>
           </template>
 
           <div v-if="closedGroups.length" class="mt-4 grid gap-3 sm:grid-cols-2">

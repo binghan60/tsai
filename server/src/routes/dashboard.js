@@ -2,17 +2,20 @@ import { Router } from 'express';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
 
 const router = Router();
 
 const WEEKS = 6;
 
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+// 邊界是「診所時區的某天 00:00」對應的實際時刻，所以往後推是加整整七天的毫秒數，
+// 不是 setDate()——後者算的是伺服器本地日期，伺服器落在有日光節約的時區時會偏一小時。
+// 台北本身沒有日光節約，加固定毫秒數不會讓邊界離開當地午夜。
 export function buildWeekBoundaries(trendStart, weeks = WEEKS) {
-  return Array.from({ length: weeks + 1 }, (_, index) => {
-    const boundary = new Date(trendStart);
-    boundary.setDate(boundary.getDate() + index * 7);
-    return boundary;
-  });
+  const startMs = new Date(trendStart).getTime();
+  return Array.from({ length: weeks + 1 }, (_, index) => new Date(startMs + index * WEEK_MS));
 }
 
 export function fillWeeklyTrend(boundaries, buckets) {
@@ -44,12 +47,17 @@ const CURRENT_VERSION = { supersededBy: null };
 
 router.get('/', async (req, res, next) => {
   try {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-    const trendStart = new Date(now);
-    trendStart.setDate(trendStart.getDate() - (WEEKS - 1) * 7 - 6);
-    trendStart.setHours(0, 0, 0, 0);
+    // 「本月」與「近六週」指的是診所的月份與日期，不是伺服器所在時區的。
+    // 正式環境跑 UTC，用 new Date(年, 月, 1) 會讓區間整段偏移八小時，
+    // 月初與月底那幾個小時的數字會跟寄送紀錄頁（已改用 clinicDayStart）對不起來。
+    const today = clinicToday();
+    const [year, month] = today.split('-');
+    const startOfMonth = clinicDayStart(`${year}-${month}-01`);
+    const startOfNextMonth = clinicDayStart(
+      month === '12' ? `${Number(year) + 1}-01-01` : `${year}-${String(Number(month) + 1).padStart(2, '0')}-01`
+    );
+    // 趨勢的最後一週要含今天，所以往前推 (WEEKS-1) 個整週再退到那一週的週首。
+    const trendStart = clinicDayStart(today, -((WEEKS - 1) * 7 + 6));
     const weekBoundaries = buildWeekBoundaries(trendStart);
     const trendEnd = weekBoundaries.at(-1);
 

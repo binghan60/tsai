@@ -29,8 +29,11 @@ const selectedPet = ref(null);
 const petPickerOpen = ref(false);
 const pickPetError = ref('');
 
-// 回診跟初診共用同一份表單，只是要不要驗證寵物/飼主姓名視 mode 而定——
+// 回診跟初診共用同一份表單，只是要不要驗證寵物姓名視 mode 而定——
 // 切成兩份表單反而讓「預約時段」「來院原因」這兩個共用欄位要維護兩次。
+//
+// 飼主姓名不在這裡驗：接電話掛號時常常只問得到寵物名跟電話。
+// 它要到報到那一步才必填，因為那時要真的建立飼主資料（見 CheckInDialog）。
 const requiredForNewPatient = (value) => {
   if (mode.value !== 'new') return true;
   return (value && String(value).trim() !== '') || '必填';
@@ -39,7 +42,7 @@ const requiredTime = (value) => (value && String(value).trim() !== '') || '請�
 
 const { handleSubmit } = useForm({ initialValues: { petName: '', ownerName: '', ownerPhone: '', time: '', reason: '' } });
 const { value: petName, errorMessage: petNameError } = useField('petName', requiredForNewPatient);
-const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName', requiredForNewPatient);
+const { value: ownerName } = useField('ownerName');
 const { value: ownerPhone } = useField('ownerPhone');
 const { value: time, errorMessage: timeError } = useField('time', requiredTime);
 const { value: reason } = useField('reason');
@@ -117,9 +120,8 @@ const onSubmit = handleSubmit((values) => {
               <p v-if="petNameError" class="text-xs font-medium text-destructive">{{ petNameError }}</p>
             </div>
             <div class="space-y-1.5">
-              <Label for="apt-owner-name" class="text-xs font-medium text-foreground">飼主姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Label for="apt-owner-name" class="text-xs font-medium text-foreground">飼主姓名<span class="ml-1 font-normal text-muted-foreground">（選填）</span></Label>
               <Input id="apt-owner-name" v-model="ownerName" class="border-border" placeholder="例：王小姐" />
-              <p v-if="ownerNameError" class="text-xs font-medium text-destructive">{{ ownerNameError }}</p>
             </div>
           </div>
           <div class="space-y-1.5">

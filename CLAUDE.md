@@ -60,11 +60,13 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 **刻意不設 `ref`、改冗餘存報告編號與姓名**——報告可以被刪除，而這筆紀錄的價值正是在報告消失後還查得到寄給了誰。同理它是獨立 collection 而不是內嵌陣列。medicalRecords 上的 `sentTo`/`sentAt` 只留得住最後一次，重寄就覆蓋。
 
 ### appointments 掛號與候診
-只服務當日門診時間軸。`date`／`time` 是登記來源，`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。
+只服務當日門診時間軸。`date`／`time` 是登記來源，`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。
 
-`status` 為 `scheduled`／`arrived`／`completed`／`cancelled`／`no_show`。報到時配置可手動調整的 `checkinNumber`；候診中可填 `weightKg`、`temperatureC` 與內部用 `visitNote`。完成看診後才導向建立健檢報告，這些候診量測不會自動寫進 MedicalRecord。
+`status` 為 `scheduled`／`arrived`／`completed`／`cancelled`／`no_show`。候診中可填 `weightKg`、`temperatureC` 與內部用 `visitNote`。完成看診後才導向建立健檢報告，這些候診量測不會自動寫進 MedicalRecord。
 
-索引 `{scheduledAt: 1}` 與 `{status: 1, scheduledAt: 1}`，對應時間軸排序、狀態分組與當日看診序號檢查。
+**`checkinNumber` 是候診佇列裡的位置，不是報到時發的票號，而且完全自動——沒有手動指定的入口。** 同一天所有 `arrived` 的掛號，號碼是連續的 1..N；報到接到隊尾，離開佇列（完成／取消／未到／取消報到）就清成 null 並讓後面的人遞補。因此「這個號碼已經被用掉」在結構上不存在，不需要靠衝突檢查去擋——檢查本來也擋不住併發。代價是排在後面的人號碼會隨著前面的人看完而變小，那正是即時位置該有的行為。排序與編號規則在 `lib/appointmentQueue.js`（純邏輯，可測）。
+
+索引 `{scheduledAt: 1}` 與 `{status: 1, scheduledAt: 1}` 對應時間軸排序、狀態分組與讀取當日佇列。另有 partial unique index `{date, checkinNumber}`（限 `status: 'arrived'` 且號碼為數字）：重排是在 transaction 裡整批改寫佇列的，併發重排會因為改到同一批文件而互相衝突，唯一擋不住的是「兩個人同時報到各自算出同一個隊尾號碼」——那由這個索引接住，路由收到 E11000 後自行重試。**寫回號碼一定要兩階段**（先整批挪到負數再寫回正式號碼）：唯一索引是逐筆檢查的，直接把 B 寫成 1 會撞到還沒讓位的 A。
 
 ## 三、技術棧
 
@@ -134,12 +136,13 @@ POST   /api/records/:id/send-email      寄送 PDF + 連結給飼主
 GET    /api/appointments                當日掛號時間軸（?date=YYYY-MM-DD，預設今天）
 POST   /api/appointments                新增當日掛號
 GET    /api/appointments/:id
-PUT    /api/appointments/:id            更新掛號資料或看診序號
-POST   /api/appointments/:id/check-in   報到；初診同時建立飼主與寵物
+PUT    /api/appointments/:id            更新掛號資料（時段／來院原因／身分快照）
+POST   /api/appointments/:id/check-in   報到；初診同時建立飼主與寵物（自動接到候診佇列尾端）
 POST   /api/appointments/:id/complete   完成看診並保存候診量測
 POST   /api/appointments/:id/cancel     取消掛號
 POST   /api/appointments/:id/no-show    標記未到診
 POST   /api/appointments/:id/restore    恢復已取消或未到診的掛號
+DELETE /api/appointments/:id            永久刪除（僅限已取消或未到）
 
 寄送紀錄
 GET    /api/delivery-logs               流水帳（?recordId= / ?event= / 分頁）
@@ -177,7 +180,7 @@ GET    /api/health
 | 路由 | 頁面 | 說明 |
 |---|---|---|
 | `/` | 工作台 | 全站綜覽儀表板，由粗到細三層：**現在**（寄送異常橫幅）→ **分佈與趨勢**（報告流程四格、近 6 週健檢量長條、本月與累計數字）→ **明細**（待辦清單、最近完成）。**同一個數字只在其中一層出現一次**——之前草稿數同時出現在優先處理卡、workStage 卡、待辦清單與狀態長條四個地方，那是這頁最主要的雜訊來源。每一格數字都要能點進對應清單 |
-| `/appointments` | 掛號與候診 | 當日時間軸；電話掛號、初診建檔、報到排序、候診量測與完成看診 |
+| `/appointments` | 掛號與候診 | **兩個區塊，因為這頁上有兩種順序**：上方「候診中」依看診序號排，由上而下就是看診順序；下方「今日看診時間軸」只放尚未報到的人，軸就純粹是時間。報到＝從時間軸移到佇列。混在同一份清單時，候診中的人會被釘在自己的預約時間上、旁邊卻掛著跟那個位置無關的號碼，連調整順序的控制項都會被讀成在拖時間。號碼是唯讀的，看診順序完全由報到先後決定，沒有手動調整的入口 |
 | `/owners`、`/owners/:id` | 飼主列表／詳情 | |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含歷次報告 |
 | `/records` | 就診紀錄清單 | 跨寵物，佇列切換 |

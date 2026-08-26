@@ -6,6 +6,7 @@ import Owner from '../models/Owner.js';
 import { withTransaction } from '../lib/transaction.js';
 import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition } from '../lib/appointmentStatus.js';
+import { positionUpdates, queueOrder } from '../lib/appointmentQueue.js';
 
 const router = Router();
 
@@ -35,6 +36,55 @@ function isValidAppointmentTime(value) {
     const endMinutes = minutesOfTime(end);
     return minutes >= startMinutes && minutes <= endMinutes;
   });
+}
+
+// 讀出當日候診佇列。離開佇列的人（完成／取消／未到）號碼是 null，不在這裡面。
+function waitingQueue(date, session) {
+  return Appointment.find({ date, status: 'arrived' }).session(session);
+}
+
+// 把算好的順序寫回資料庫，回傳「這次真的換了號碼」的對照表。
+async function applyQueueOrder(session, ordered) {
+  const updates = positionUpdates(ordered);
+  if (!updates.length) return new Map();
+  // 唯一索引是一筆一筆檢查的，直接把 B 寫成 1 會撞到還沒讓位的 A。
+  // 先整批挪到負數（跟正數不可能相撞，彼此之間也仍然互異），再寫回正式號碼。
+  for (const sign of [-1, 1]) {
+    await Appointment.bulkWrite(
+      updates.map(({ _id, checkinNumber }) => ({
+        updateOne: { filter: { _id }, update: { $set: { checkinNumber: sign * checkinNumber } } },
+      })),
+      { session }
+    );
+  }
+  return new Map(updates.map(({ _id, checkinNumber }) => [String(_id), checkinNumber]));
+}
+
+// 讓一筆掛號離開佇列並存檔：先清掉自己的號碼，再讓後面的人遞補。
+// 順序不能反過來——後面的人往前補位時會撞到自己還佔著的那個號碼。
+// 沒排進佇列過的（還沒報到就取消）不會動到別人，直接存就好。
+async function saveLeavingQueue(appointment, wasQueued) {
+  appointment.checkinNumber = null;
+  if (!wasQueued) {
+    await appointment.save();
+    return;
+  }
+  await withTransaction(async (session) => {
+    await appointment.save({ session });
+    await applyQueueOrder(session, queueOrder(await waitingQueue(appointment.date, session)));
+  });
+}
+
+// 兩個人同時報到會各自算出同一個隊尾號碼，被唯一索引擋下。那不是使用者做錯什麼，
+// 重算一次就會拿到正確的下一個位置，所以在這裡自行重試，不要把錯誤丟到前台。
+async function withQueueRetry(operation, attempts = 3) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (err) {
+      if (err?.code !== 11000 || attempt >= attempts) throw err;
+    }
+  }
 }
 
 // GET /api/appointments?date=YYYY-MM-DD（預設今天）
@@ -78,7 +128,9 @@ router.post('/', async (req, res, next) => {
       species = String(req.body.species || '').trim();
     }
 
-    if (!ownerName) return res.status(422).json({ message: '請填寫飼主姓名' });
+    // 飼主姓名選填（電話掛號時常常只問得到寵物名），但一筆掛號至少要指得出是誰要來。
+    // 回診的 petName 抄自 Pet.name、必定有值，所以這一條實際上只會擋到初診。
+    if (!petName) return res.status(422).json({ message: '請填寫寵物姓名' });
 
     // 目前只做單日時間軸，不開放選日期，一律掛在今天。
     const date = clinicToday();
@@ -112,8 +164,8 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-// 編輯：scheduled、arrived 可改時段/來院原因/身分快照；checkinNumber 任何狀態都能改
-// （前台調整看診順序用），照樣要做當天衝突檢查。
+// 編輯：scheduled、arrived 可改時段／來院原因／身分快照。
+// 看診順序不在這裡也不對外開放——它是佇列位置，由報到與離隊自動維護。
 router.put('/:id', async (req, res, next) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
@@ -131,9 +183,6 @@ router.put('/:id', async (req, res, next) => {
       if (updates.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(updates.date))) {
         return res.status(422).json({ message: '請填寫預約日期' });
       }
-      if (updates.ownerName !== undefined && !String(updates.ownerName).trim()) {
-        return res.status(422).json({ message: '請填寫飼主姓名' });
-      }
       if (updates.petName !== undefined && !String(updates.petName).trim()) {
         return res.status(422).json({ message: '請填寫寵物姓名' });
       }
@@ -146,20 +195,6 @@ router.put('/:id', async (req, res, next) => {
             ? new Date()
             : combineClinicDateTime(appointment.date, '');
       }
-    }
-
-    if (req.body.checkinNumber !== undefined) {
-      const checkinNumber = Number(req.body.checkinNumber);
-      if (!Number.isInteger(checkinNumber) || checkinNumber < 1) {
-        return res.status(422).json({ message: '看診序號須為正整數' });
-      }
-      const conflictExists = await Appointment.exists({
-        date: appointment.date,
-        checkinNumber,
-        _id: { $ne: appointment._id },
-      });
-      if (conflictExists) return res.status(409).json({ message: '這個看診序號已被使用' });
-      appointment.checkinNumber = checkinNumber;
     }
 
     await appointment.save();
@@ -186,16 +221,7 @@ router.post('/:id/check-in', async (req, res, next) => {
       if (!String(req.body.petName || '').trim()) return res.status(422).json({ message: '請填寫寵物姓名' });
     }
 
-    const hasRequestedNumber = req.body.checkinNumber !== undefined && String(req.body.checkinNumber).trim() !== '';
-    let requestedNumber = null;
-    if (hasRequestedNumber) {
-      requestedNumber = Number(req.body.checkinNumber);
-      if (!Number.isInteger(requestedNumber) || requestedNumber < 1) {
-        return res.status(422).json({ message: '看診序號須為正整數' });
-      }
-    }
-
-    await withTransaction(async (session) => {
+    await withQueueRetry(() => withTransaction(async (session) => {
       if (needsNewPatient) {
         const species = String(req.body.species || '').trim();
         const [owner] = await Owner.create(
@@ -214,29 +240,16 @@ router.post('/:id/check-in', async (req, res, next) => {
         appointment.species = pet.species;
       }
 
-      if (hasRequestedNumber) {
-        const conflictExists = await Appointment.exists({
-          date: appointment.date,
-          checkinNumber: requestedNumber,
-          _id: { $ne: appointment._id },
-        }).session(session);
-        if (conflictExists) {
-          const error = new Error('這個看診序號已被使用');
-          error.status = 409;
-          throw error;
-        }
-        appointment.checkinNumber = requestedNumber;
-      } else {
-        const latest = await Appointment.findOne({ date: appointment.date, checkinNumber: { $ne: null } })
-          .sort({ checkinNumber: -1 })
-          .session(session);
-        appointment.checkinNumber = (latest?.checkinNumber ?? 0) + 1;
-      }
+      // 報到＝接到隊尾。號碼是佇列位置，由佇列決定，呼叫端指定不了。
+      const waiting = await waitingQueue(appointment.date, session).where({ _id: { $ne: appointment._id } });
+      const ordered = [...queueOrder(waiting), appointment];
+      const positions = await applyQueueOrder(session, ordered);
 
       appointment.status = 'arrived';
       appointment.checkedInAt = new Date();
+      appointment.checkinNumber = positions.get(String(appointment._id)) ?? ordered.length;
       await appointment.save({ session });
-    });
+    }));
 
     res.json(appointment);
   } catch (err) {
@@ -260,9 +273,11 @@ router.post('/:id/complete', async (req, res, next) => {
       appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
     }
     if (visitNote !== undefined) appointment.visitNote = visitNote;
+    const wasQueued = appointment.status === 'arrived';
     appointment.status = 'completed';
     appointment.completedAt = new Date();
-    await appointment.save();
+    // 看完診就離開佇列，後面的人往前遞補——序號講的是「現在排第幾個」。
+    await saveLeavingQueue(appointment, wasQueued);
     res.json(appointment);
   } catch (err) {
     next(err);
@@ -276,11 +291,11 @@ router.post('/:id/cancel', async (req, res, next) => {
     if (!canTransitionAppointmentStatus(appointment.status, 'cancelled')) {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'cancelled') });
     }
+    const wasQueued = appointment.status === 'arrived';
     appointment.status = 'cancelled';
     appointment.cancelReason = String(req.body?.cancelReason || '').trim();
-    appointment.checkinNumber = null;
     appointment.checkedInAt = null;
-    await appointment.save();
+    await saveLeavingQueue(appointment, wasQueued);
     res.json(appointment);
   } catch (err) {
     next(err);
@@ -294,9 +309,10 @@ router.post('/:id/no-show', async (req, res, next) => {
     if (!canTransitionAppointmentStatus(appointment.status, 'no_show')) {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'no_show') });
     }
+    const wasQueued = appointment.status === 'arrived';
     appointment.status = 'no_show';
     appointment.checkedInAt = null;
-    await appointment.save();
+    await saveLeavingQueue(appointment, wasQueued);
     res.json(appointment);
   } catch (err) {
     next(err);
@@ -310,11 +326,11 @@ router.post('/:id/restore', async (req, res, next) => {
     if (!canTransitionAppointmentStatus(appointment.status, 'scheduled')) {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'scheduled') });
     }
+    const wasQueued = appointment.status === 'arrived';
     appointment.status = 'scheduled';
     appointment.cancelReason = '';
-    appointment.checkinNumber = null;
     appointment.checkedInAt = null;
-    await appointment.save();
+    await saveLeavingQueue(appointment, wasQueued);
     res.json(appointment);
   } catch (err) {
     next(err);

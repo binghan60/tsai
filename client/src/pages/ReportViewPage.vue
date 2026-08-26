@@ -40,10 +40,18 @@ const shareIsActive = computed(() => Boolean(
 ));
 const shareActionLabel = computed(() => {
   if (sharing.value) return '處理中…';
-  if (shareIsActive.value) return '取得飼主分享連結';
+  if (shareIsActive.value) return '複製飼主分享連結';
   return '建立飼主分享連結';
 });
 const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
+
+// 分享連結是有期限的（後端預設 30 天，過期後公開頁直接回 410，寄出的信裡也寫著
+// 「連結有效至 X」）。這行以前寫「連結無使用期限」，會讓院方照著它跟飼主保證錯的事。
+const shareExpiryNote = computed(() => {
+  const expiresAt = record.value?.shareExpiresAt;
+  if (!expiresAt) return '這個連結尚未設定有效期限，請重新建立分享連結';
+  return `連結有效至 ${formatDate(expiresAt)}，到期或手動撤銷後即無法開啟`;
+});
 
 // ── 寄送歷程 ──
 // record.sentTo／sentAt 只留得住最後一次，重寄一次就覆蓋。飼主改過 Email 之後重寄，
@@ -190,17 +198,16 @@ async function createShareLink() {
   sharing.value = true;
   error.value = '';
   try {
-    let url;
-    if (shareIsActive.value && record.value.shareToken) {
-      url = `${window.location.origin}/report/${record.value.shareToken}`;
-    } else {
-      const { data } = await http.post(`/records/${route.params.id}/share`);
-      ({ url } = data);
-      record.value.shareEnabled = true;
-      record.value.shareExpiresAt = data.expiresAt;
-    }
-    const copied = await copyText(url);
-    shareNotice.value = { url, copied };
+    // 網址一律問伺服器，不用 window.location.origin 自己組。
+    // 見 server/src/config/publicUrl.js：對外連結的網域是伺服器知道的事實，
+    // 由開啟頁面的人決定的話，複製給飼主的連結會指到當下這個分頁的網域。
+    // 連結還在有效期內時再按一次也照樣送出，順便把期限往後延——
+    // 會按這顆鈕就是正要把連結交給飼主。
+    const { data } = await http.post(`/records/${route.params.id}/share`);
+    record.value.shareEnabled = true;
+    record.value.shareExpiresAt = data.expiresAt;
+    const copied = await copyText(data.url);
+    shareNotice.value = { url: data.url, copied };
   } catch (err) {
     error.value = err.response?.data?.message ?? '建立分享連結失敗';
   } finally {
@@ -382,7 +389,7 @@ watch(
       <div v-if="shareNotice" class="rounded-xl border border-emerald-200 bg-white px-4 py-4 text-sm text-stone-700 print:hidden">
         <p class="font-semibold text-emerald-800">{{ shareNotice.emailed ? `郵件伺服器已接受寄送至 ${record.sentTo}` : shareNotice.copied ? '分享連結已建立並複製' : '分享連結已建立' }}</p>
         <p class="mt-2 break-all rounded-lg bg-stone-100 px-3 py-2 font-mono text-xs">{{ shareNotice.url }}</p>
-        <p class="mt-2 text-xs text-stone-500">連結無使用期限，手動撤銷前皆可開啟</p>
+        <p class="mt-2 text-xs text-stone-500">{{ shareExpiryNote }}</p>
         <div class="mt-3 flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" class="border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</Button>
         </div>

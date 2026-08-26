@@ -14,20 +14,30 @@ function apt(overrides) {
 }
 
 describe('splitAppointmentsByQueueState', () => {
-  it('已取消與未到分組計算，尚未報到與候診中維持原樣，已完成的直接消失', () => {
+  it('候診中自成一區、時間軸只剩尚未報到，已完成的直接消失', () => {
     const scheduled = apt({ _id: 'a', status: 'scheduled' });
-    const arrived = apt({ _id: 'b', status: 'arrived' });
+    const arrived = apt({ _id: 'b', status: 'arrived', checkinNumber: 1 });
     const cancelled = apt({ _id: 'c', status: 'cancelled' });
     const noShow = apt({ _id: 'd', status: 'no_show' });
     const completed = apt({ _id: 'e', status: 'completed' });
     const result = splitAppointmentsByQueueState([scheduled, arrived, cancelled, noShow, completed]);
-    assert.deepEqual(result.active.map((item) => item._id), ['a', 'b']);
+    assert.deepEqual(result.waiting.map((item) => item._id), ['b']);
+    assert.deepEqual(result.scheduled.map((item) => item._id), ['a']);
     assert.deepEqual(result.cancelled.map((item) => item._id), ['c']);
     assert.deepEqual(result.noShow.map((item) => item._id), ['d']);
   });
 
+  // 候診佇列依看診序號排，不看預約時間——報到之後預約時間就不決定任何事了。
+  it('候診中依看診序號排序，而不是預約時間', () => {
+    const late = apt({ _id: 'late', status: 'arrived', checkinNumber: 1, scheduledAt: '2026-08-26T11:00:00.000Z' });
+    const early = apt({ _id: 'early', status: 'arrived', checkinNumber: 2, scheduledAt: '2026-08-26T10:00:00.000Z' });
+    const unnumbered = apt({ _id: 'none', status: 'arrived', checkinNumber: null });
+    const result = splitAppointmentsByQueueState([early, unnumbered, late]);
+    assert.deepEqual(result.waiting.map((item) => item._id), ['late', 'early', 'none']);
+  });
+
   it('空陣列或缺少 status 不會炸掉', () => {
-    const emptyResult = { active: [], cancelled: [], noShow: [] };
+    const emptyResult = { waiting: [], scheduled: [], cancelled: [], noShow: [] };
     assert.deepEqual(splitAppointmentsByQueueState([]), emptyResult);
     assert.deepEqual(splitAppointmentsByQueueState(undefined), emptyResult);
   });
