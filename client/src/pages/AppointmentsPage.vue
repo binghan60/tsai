@@ -250,7 +250,7 @@ onBeforeUnmount(() => {
               {{ group.session.label }} · {{ group.session.start }}–{{ group.session.end }}
             </div>
 
-            <div class="ml-[4.5rem] border-l-2 border-border pl-5">
+            <div class="ml-28 border-l-2 border-border pl-7">
               <template v-for="(appointment, itemIndex) in group.items" :key="appointment._id">
                 <div
                   v-if="groupIndex === nowSessionIndex && itemIndex === nowIndexInSession(group.items, now)"
@@ -261,11 +261,11 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="relative py-2.5">
-                  <span class="absolute -left-[1.65rem] top-4 w-16 -translate-x-full text-right text-sm font-semibold text-muted-foreground">
+                  <span class="absolute left-[-46px] top-4 w-18 -translate-x-full text-right text-sm font-semibold text-muted-foreground">
                     {{ new Date(appointment.scheduledAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }) }}
                   </span>
                   <span
-                    class="absolute -left-[1.65rem] top-5.5 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 bg-card"
+                    class="absolute left-[-30px] top-5.5 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 bg-card"
                     :class="appointment.status === 'arrived' ? 'border-primary' : 'border-dashed border-muted-foreground'"
                   ></span>
 
@@ -352,6 +352,15 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </template>
+
+              <!-- 「現在」晚於這個時段全部項目時，指示線要落在最後面，不是插在某一列前面。 -->
+              <div
+                v-if="groupIndex === nowSessionIndex && nowIndexInSession(group.items, now) === group.items.length"
+                class="my-1 flex items-center gap-2.5"
+              >
+                <span class="h-0 flex-1 border-t-2 border-dashed border-primary"></span>
+                <span class="shrink-0 rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground">現在 · {{ nowLabel }}</span>
+              </div>
             </div>
           </template>
 
