@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { hasContent, measurementLabel, previousDateLabel, previousMeasurementLabel, referenceLabel } from './reportItem';
+import { hasContent, measurementLabel, previousDateLabel, previousMeasurementLabel } from './reportItem';
 import { spanClass } from '../../lib/fieldSpan';
 import ReportField from './ReportField.vue';
 import { familyOf } from '../../lib/fieldFamily';
@@ -36,7 +36,6 @@ const others = computed(() => (props.section.items ?? []).filter((item) => famil
         <span class="min-w-0 pr-2 font-medium text-stone-800">{{ item.label }}</span>
         <span class="min-w-0 border-l border-stone-100 pl-2 text-stone-700">
           <strong class="font-medium">{{ item.display }}</strong>
-          <small v-if="referenceLabel(item)" class="mt-0.5 block text-xs text-stone-500">參考 {{ referenceLabel(item) }}</small>
         </span>
         <span class="min-w-0 border-l border-stone-100 pl-2 text-stone-700">
           <template v-if="previousMeasurementLabel(item)">

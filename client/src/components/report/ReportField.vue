@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue';
-import { labValueLabel, measurementLabel, referenceLabel, statusText, valueText } from './reportItem';
+import { labValueLabel, measurementLabel, statusText, valueText } from './reportItem';
 import { familyOf } from '../../lib/fieldFamily';
 
 // 任何欄位型別都可能出現在任何版式的區塊裡。這是「不在原生版式裡」時的通用呈現：
@@ -30,7 +30,6 @@ const abnormal = computed(() => props.item.status === 'abnormal');
       class="mt-1 whitespace-pre-wrap text-sm leading-relaxed"
       :class="abnormal ? 'text-red-700' : 'text-stone-700'"
     >{{ text }}</p>
-    <p v-if="referenceLabel(item)" class="mt-0.5 text-xs text-stone-500">參考 {{ referenceLabel(item) }}</p>
     <p v-if="item.note" class="mt-0.5 whitespace-pre-wrap text-xs text-stone-600">{{ item.note }}</p>
   </div>
 </template>

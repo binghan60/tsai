@@ -36,18 +36,6 @@ export function labValueLabel(item) {
   return `${item.value}${item.unit ? ` ${item.unit}` : ''}`;
 }
 
-export function referenceLabel(item) {
-  const hasMin = item?.referenceMin != null;
-  const hasMax = item?.referenceMax != null;
-  if (!hasMin && !hasMax) return '';
-  const bounds = hasMin && hasMax
-    ? `${item.referenceMin}–${item.referenceMax}`
-    : hasMin
-      ? `≥ ${item.referenceMin}`
-      : `≤ ${item.referenceMax}`;
-  return `${bounds}${item.unit ? ` ${item.unit}` : ''}`;
-}
-
 export function statusText(status) {
   if (status === 'abnormal') return '異常';
   if (status === 'normal') return '正常';
