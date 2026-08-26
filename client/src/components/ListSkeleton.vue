@@ -5,8 +5,8 @@ import { Skeleton } from './ui/skeleton';
 // 清單頁的載入骨架。原本各頁都是一行「載入中…」，切頁時版面先塌成一行、
 // 資料到了再撐開，那一下跳動是廉價感最主要的來源。
 //
-// 骨架的重點不是「好看的動畫」，是先把版面的高度佔住——所以列高刻意對齊
-// 真正的表格列（py-3 + 內容約 40px），資料進來時位置幾乎不動。
+// 骨架的重點不是「好看的動畫」，是先把版面的高度佔住——所以列高固定 56px，
+// 對齊桌機密集資料列；資料進來時位置幾乎不動。
 defineProps({
   rows: { type: Number, default: 5 },
   // 有頭像／圖示欄的清單（飼主、寵物、報告）留一個圓形佔位
@@ -20,7 +20,7 @@ defineProps({
 <template>
   <component :is="inset ? 'div' : Card" :class="inset ? '' : 'overflow-hidden p-0'" role="status" aria-label="載入中">
     <div class="divide-y divide-border">
-      <div v-for="row in rows" :key="row" class="flex items-center gap-4 px-5 py-3">
+      <div v-for="row in rows" :key="row" class="flex h-14 items-center gap-4 px-4 py-2.5">
         <Skeleton v-if="avatar" class="size-9 shrink-0 rounded-full" />
         <div class="min-w-0 flex-1 space-y-2">
           <Skeleton class="h-4 w-40 max-w-full" />

@@ -64,7 +64,7 @@ function applyDates() {
     role="search"
     @submit.prevent="emit('submit')"
   >
-    <label class="flex min-w-0 flex-1 items-center gap-2.5 pl-3.5">
+    <label class="flex min-w-0 flex-1 self-stretch items-center gap-2.5 pl-3.5">
       <span class="sr-only">{{ label }}</span>
       <Search class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.9" aria-hidden="true" />
       <input
@@ -74,7 +74,7 @@ function applyDates() {
         :placeholder="placeholder"
         :value="modelValue"
         :aria-label="label"
-        class="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+        class="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
         @input="emit('update:modelValue', $event.target.value)"
       />
     </label>

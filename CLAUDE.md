@@ -8,7 +8,7 @@
 
 單人使用的健檢報告產生 + 分發系統（不是看診紀錄／排班系統）。核心流程：
 
-（預約與候診功能正在重做中，`/appointments` 目前是空白路由，見第九節。）
+系統另外提供一份輕量的當日掛號與候診時間軸；它負責電話掛號、報到順序與完成看診，不做跨日排班或診間容量管理。
 
 ```
 選健檢表單 → 填寫報告 → 結案（產生 PDF 快照並鎖定）→ 寄送 Email／分享連結給飼主
@@ -59,14 +59,12 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 
 **刻意不設 `ref`、改冗餘存報告編號與姓名**——報告可以被刪除，而這筆紀錄的價值正是在報告消失後還查得到寄給了誰。同理它是獨立 collection 而不是內嵌陣列。medicalRecords 上的 `sentTo`/`sentAt` 只留得住最後一次，重寄就覆蓋。
 
-### deletedMedicalRecords 刪除稽核快照
-報告刪除時存一份完整快照，append-only。`recordId`（原報告的 _id）、`reportNumber`、`petId`、`petName`、`ownerName`、`vet`、`visitDate`、`examType`、`status`、`deliveryStatus`、`reportVersion`、`snapshot`、`deletedAt`。
+### appointments 掛號與候診
+只服務當日門診時間軸。`date`／`time` 是登記來源，`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。
 
-**跟 `deliveryLogs` 同一套哲學**：刻意不設 `ref`、把姓名與報告編號冗餘存下來——這筆紀錄的價值正是在原始資料消失之後還查得到，而寵物本身之後也可能被刪，populate 一個不存在的文件是查不出東西的。`snapshot` 型別是 `Mixed`：表單結構由使用者自訂，快照的意義是「當時原封不動的樣子」，不是「符合今天 schema 的樣子」。
+`status` 為 `scheduled`／`arrived`／`completed`／`cancelled`／`no_show`。報到時配置可手動調整的 `checkinNumber`；候診中可填 `weightKg`、`temperatureC` 與內部用 `visitNote`。完成看診後才導向建立健檢報告，這些候診量測不會自動寫進 MedicalRecord。
 
-寫入在 `DELETE /api/records/:id` 的同一個 transaction 內，跟修訂鏈回復與刪除一起成功或一起回滾。索引 `{deletedAt: -1, _id: -1}`（清單排序）與 `{recordId: 1}`（回查某份報告是不是被刪了）。
-
-查詢走 `GET /api/deleted-records`，前端頁面是 `/records/deleted`。**列表不回傳 `snapshot`**——那是整份報告的完整內容，一頁全帶會是好幾百 KB，要看內容再打 `/:id`。
+索引 `{scheduledAt: 1}` 與 `{status: 1, scheduledAt: 1}`，對應時間軸排序、狀態分組與當日看診序號檢查。
 
 ## 三、技術棧
 
@@ -132,12 +130,18 @@ POST   /api/records/:id/share           建立分享連結
 POST   /api/records/:id/revoke-share    撤銷分享
 POST   /api/records/:id/send-email      寄送 PDF + 連結給飼主
 
+掛號與候診
+GET    /api/appointments                當日掛號時間軸（?date=YYYY-MM-DD，預設今天）
+POST   /api/appointments                新增當日掛號
+GET    /api/appointments/:id
+PUT    /api/appointments/:id            更新掛號資料或看診序號
+POST   /api/appointments/:id/check-in   報到；初診同時建立飼主與寵物
+POST   /api/appointments/:id/complete   完成看診並保存候診量測
+POST   /api/appointments/:id/cancel     取消掛號
+POST   /api/appointments/:id/no-show    標記未到診
+
 寄送紀錄
 GET    /api/delivery-logs               流水帳（?recordId= / ?event= / 分頁）
-
-刪除稽核
-GET    /api/deleted-records             已刪除報告的快照清單（?q= 寵物／飼主／獸醫師／報告編號 / ?from=&to= 刪除日區間 / 分頁；不含 snapshot）
-GET    /api/deleted-records/:id         單筆完整快照
 
 健檢表單設定
 GET    /api/settings/form-templates
@@ -172,12 +176,11 @@ GET    /api/health
 | 路由 | 頁面 | 說明 |
 |---|---|---|
 | `/` | 工作台 | 全站綜覽儀表板，由粗到細三層：**現在**（寄送異常橫幅）→ **分佈與趨勢**（報告流程四格、近 6 週健檢量長條、本月與累計數字）→ **明細**（待辦清單、最近完成）。**同一個數字只在其中一層出現一次**——之前草稿數同時出現在優先處理卡、workStage 卡、待辦清單與狀態長條四個地方，那是這頁最主要的雜訊來源。每一格數字都要能點進對應清單 |
-| `/appointments` | 電話預約與候診 | **空白路由，功能重做中**——舊版的預約清單、候診佇列與相關 API 已整批移除（見第九節），頁面元件目前只是佔位、側邊欄連結仍在 |
+| `/appointments` | 掛號與候診 | 當日時間軸；電話掛號、初診建檔、報到排序、候診量測與完成看診 |
 | `/owners`、`/owners/:id` | 飼主列表／詳情 | |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含歷次報告 |
 | `/records` | 就診紀錄清單 | 跨寵物，佇列切換 |
 | `/records/deliveries` | 寄送紀錄 | 流水帳，含已刪除報告的紀錄 |
-| `/records/deleted` | 已刪除的報告 | 刪除稽核快照，可搜尋與看當時的作答內容。稽核用、頻率很低，**不進側邊欄**，入口在就診紀錄清單頁；`meta.nav` 歸在 `/records` 底下 |
 | `/pets/:petId/records/new`、`/records/:id/edit` | 報告填寫表單 | 自動存草稿、離開前攔截未儲存變更 |
 | `/records/:id/preview` | 報告預覽 | `meta.bare`，後台用，有結案／寄送／分享操作 |
 | `/report/:token` | 報告檢視頁 | `meta.bare`，**公開**，飼主查看用 + PDF 截圖來源 |
@@ -249,7 +252,7 @@ GET    /api/health
   | 清單分頁 | `<Pagination :page :total-pages>` | 不要手刻分頁列。只有分頁膠囊本身，置中顯示，不顯示「共 N 筆」。分頁列永遠顯示（含只有一頁的情況），邊界按鈕用 disabled 表達到頭了，不是整列消失；四顆按鈕收進一顆膠囊軌道，首頁／末頁降級成最小的圓形圖示鈕退到兩側（資料量小很少用到跳頁到底），下一頁比上一頁更常按所以用實心主色、上一頁只浮起一階。清單一筆資料都沒有時走 `EmptyState`，不會走到這裡。 |
   | 單選切換鈕（無描述文字、無計數） | `<SegmentedControl v-model :options :aria-label>` | 不要手刻——同一個「選取中」概念原本有四種顏色語彙（實心填色、白色浮動晶片、純色實心、淡色調底面）。選取態統一用 `bg-accent text-accent-foreground`（跟文字顏色規則的「選取／啟用中狀態」同一個記號）。要計數徽章、色點或橫向捲動時用 `FilterTabs`，不要塞進 `SegmentedControl`——那樣兩個元件遲早又會分裂成不同外觀。 |
   | 篩選面板（關鍵字，選配日期範圍） | `<FilterBar id label placeholder v-model with-date-range :date-from :date-to @submit>` | 不要再手刻「一張固定佔版面的表單」。收成一條搜尋膠囊：關鍵字輸入框＋（選配）「篩選日期」次要按鈕點了才展開日期範圍＋圓形送出鈕。全站搜尋一律走提交式（按 Enter／送出鈕／彈出層裡的套用才查），不做即時——邊打邊查在每個系統打字習慣不一樣的情況下容易誤觸，這是特地從即時搜尋改回來的決定；表單管理／文字模板頁的關鍵字雖然是純前端過濾（不打 API），還是統一走提交式，物種／狀態那類切換按鈕組才維持即時；這兩頁的分頁（`Pagination`）也是在前端切 10 筆一頁，不是後端 API 分頁，切換篩選或切換頁籤時要記得把頁碼重置回第一頁。 |
-  | 清單頁的資料表格 | 沒有共用元件，照這個版式手刻：`<Card class="overflow-hidden p-0">` 裡放一列 `text-xs uppercase tracking-wide text-muted-foreground` 的標籤列（`h-10 border-b border-border px-6`），下面每列是 `flex items-center gap-3 border-b border-border/60 px-6 py-3.5 last:border-b-0` | 不要用舊的 `<Table>`／`<TableCell>` 網格表格——那個元件已經刪掉了。每列的身分欄（大多是主體，如寵物／飼主／表單名稱）用圓形頭像＋主色連結名稱＋灰字副標；狀態放 `Badge`；操作欄靠右放一顆主要按鈕（能收斂成一顆就不要放兩顆）。「有事要處理」的列（例如寄送失敗）用 `border-l-3 border-l-danger bg-danger-surface/40` 在左側加一條色條標出來，不要另外加圖示搶注意力。 |
+  | 清單頁的資料表格 | `<Card class="overflow-hidden p-0">` 搭配 `.desktop-data-header`／`.desktop-data-row`／`.desktop-data-cell`，在 Card 上用 `--data-columns` 定義欄寬 | 桌機表頭固定 44px、資料列固定 56px；內容維持單行並對長文字使用 `truncate`，只有使用者主動展開詳情時才套 `.desktop-data-row--expanded` 增高。不要用舊的 `<Table>`／`<TableCell>` 網格表格，也不要補空白列湊高度。身分欄用 36px 圓形圖示＋主色連結；狀態放 `Badge`；操作欄收斂成一個主要按鈕。 |
 
   按鈕拿掉外框，靠實色／淡色填底分層級（`default` 實色、`outline`／`secondary` 淡色填底、`ghost` 透明、`destructive` 淡紅底、`destructive-solid` 實心紅）；唯一還留邊框的是 `destructive-outline`，用在比 `destructive-solid` 輕、又不想跟 `destructive` 混淆的場合（例如撤銷分享）。純圖示按鈕（`icon`／`icon-xs`／`icon-sm`／`icon-lg`）是圓形 `rounded-full`，跟一般按鈕的方形 `rounded-lg` 刻意做出區隔——圓形留給「只有一個動作、佔最小空間」的場合（分頁按鈕、篩選送出鈕）。按鈕高度由 `size` 決定（`xs` 36 / `sm` 40 / `default` 44 / `lg` 48），**不要用 `min-h-11` 覆寫**——那會讓高度與 padding 對不上。`ghost` 平時完全透明、hover 才上色，只用在中性、低風險的操作（編輯、展開、關閉…）。**危險操作（取消、刪除、捨棄草稿等）一律用 `variant="destructive"`**——它本身就是常駐可見的淡紅底＋紅字，不需要 hover 才看得出來是危險操作。**禁止**用 `ghost` 再手刻 `class="text-destructive hover:bg-destructive/10"` 這種只有滑鼠移過去才現形的寫法：危險操作被做成視覺上跟中性操作沒有分別，使用者掃過列表時完全看不出哪個會出事。**按鈕不要加漸層或光澤效果**——試過直向明暗漸層（太像 Bootstrap 的立體感）跟仿側邊欄的暖色澤高光（太花），最後定案是純色；只有側邊欄本身保留那個手法，不要往按鈕上套。
 
@@ -284,19 +287,13 @@ npm run dev            # 使用者自己開
 
 ## 九、現況與待辦
 
-已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋。
-
-**預約與候診功能已整批移除，準備重做**：`appointments` collection／model、`server/src/routes/appointments.js`、`server/src/lib/appointmentStatus.js`、前端 `AppointmentsPage.vue` 原本的內容與相關元件（`AppointmentScheduleRow`／`AppointmentQueuePanel`／`AppointmentFormDialog`／`AppointmentCreatePatientDialog`／`CheckinAppointmentDialog`／`CancelAppointmentDialog`）、`client/src/lib/appointmentStatus.js` 都已刪除。工作台的「今日門診」卡片與 `GET /api/dashboard` 的 `todayAppointments`／`todayAppointmentCount` 欄位也一併拿掉。`clinicTime.js` 只留下 `clinicDayStart`（`deliveryLogs.js` 還在用），`combineClinicDateTime`／`clinicToday` 因為只有舊版 appointments 在用，已隨之刪除。`/appointments` 路由與側邊欄「預約」連結刻意保留，頁面目前是空白佔位，等新版設計出來再實作；重做時記得補回這裡列出的檔案與 API 端點清單（原本的欄位與規則設計可以參考 git 歷史）。
+已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋，以及當日掛號與候診流程。
 
 待處理（依急迫性）：
 
 1. **認證機制** — 目前 `/api/*` 完全沒有保護。部署後任何人都能讀寫全部資料，並用 `POST /api/records/:id/send-email` 借你的 Gmail 發信（被濫用時 Google 封的是帳號本身）。單人使用不需要 JWT，一組環境變數密碼 + signed cookie 即可，但要放行 `/api/public/reports/:token` 與 PDF 存取。同時值得替寄信單獨加頻率限制。
    （已處理一半：對外連結的網域改由 `config/publicUrl.js` 決定，正式環境必須設定 `PUBLIC_APP_URL`，否則啟動失敗。濫用寄信至少不會再寄出指向他人網域的連結，但寄信本身仍然沒有任何門檻。）
-2. ~~**前端 `validateForPreview()` 沒有測試**~~ — 已完成。判準抽到 `client/src/lib/recordFormValidation.js`（與後端 `recordValidation.js` 是同一套規則的兩個實作），`recordFormValidation.test.js` 有 21 個案例釘住。改任一邊時兩邊的測試都要一起看。
-3. ~~**`deletedMedicalRecords` 沒有查詢介面**~~ — 已完成，但發現的問題比原本記載的嚴重：**那個 collection 根本沒有被實作過**，刪除交易裡只有 `deleteOne`，沒有寫任何快照。現在 model、寫入、查詢 API 與 `/records/deleted` 頁面都補上了。
-4. ~~**寄送失敗（`failed`）的報告仍可刪除**~~ — 查證後這不是缺陷，項目取消。`DELETE /api/records/:id` 實際擋的是 `sent`／`sending`／`uncertain`（`uncertain` 早就補上了，這條待辦的描述是舊的）。`failed` 刻意不擋：寄送失敗代表飼主手上什麼都沒有，刪掉重來是安全的；擋住反而會讓失敗的報告永遠卡在系統裡。判準是「飼主收到了嗎」，不是「寄送有沒有出過事」。
-5. `/owners`、`/pets` 的**搜尋**走不到索引 —— 分頁部分這條記載是舊的，前後端早就都做好了（`paginationOptions`／`paginatedPayload` + 前端的 `totalPages` 與分頁列）。真正剩下的是搜尋：`new RegExp(q, 'i')` 不區分大小寫又不錨定在開頭，即使 Owner 已有 `name`／`phone` 索引也用不上，Pet 更是連 `name` 索引都沒有。要處理得換 text index 或 collation。目前資料量還撐得住。
-6. **預約與候診重做** — 見上方說明，舊版已整批移除，`/appointments` 現在是空白路由。
+2. `/owners`、`/pets` 的**搜尋**走不到索引 —— 目前使用不區分大小寫、未錨定開頭的正規表示式；資料量大後要改用 text index 或 collation。目前資料量仍可接受。
 
 部署見 [docs/ZEABUR_DEPLOY.md](docs/ZEABUR_DEPLOY.md)。
 

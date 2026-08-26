@@ -17,6 +17,7 @@ import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import RowActions from '../components/RowActions.vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
 import NewAppointmentDialog from '../components/NewAppointmentDialog.vue';
 import CheckInDialog from '../components/CheckInDialog.vue';
 import { Card } from '../components/ui/card';
@@ -44,22 +45,25 @@ const newAppointmentError = ref('');
 const checkInTarget = ref(null);
 const checkInSubmitting = ref(false);
 const checkInError = ref('');
+const actionToConfirm = ref(null);
 
 const ROW_ACTIONS = [
   { key: 'no_show', label: '標記未到' },
   { key: 'cancel', label: '取消掛號', danger: true },
 ];
 
-async function fetchAppointments() {
-  loading.value = true;
-  error.value = '';
+async function fetchAppointments({ silent = false } = {}) {
+  if (!silent) {
+    loading.value = true;
+    error.value = '';
+  }
   try {
     const { data } = await http.get('/appointments');
     appointments.value = data.items ?? [];
   } catch {
-    error.value = '今日掛號暫時無法載入，請稍後重試';
+    if (!silent) error.value = '今日掛號暫時無法載入，請稍後重試';
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 }
 
@@ -113,7 +117,7 @@ async function checkIn(appointment) {
     try {
       await http.post(`/appointments/${appointment._id}/check-in`, {});
       toast.success(`${appointment.petName || '這隻寵物'}已報到`, '報到完成');
-      await fetchAppointments();
+      await fetchAppointments({ silent: true });
     } catch (err) {
       reportApiError(err, '報到失敗，請稍後再試');
     } finally {
@@ -133,7 +137,7 @@ async function submitCheckIn(values) {
     await http.post(`/appointments/${checkInTarget.value._id}/check-in`, values);
     toast.success('已建立正式病歷並報到', '報到完成');
     checkInTarget.value = null;
-    await fetchAppointments();
+    await fetchAppointments({ silent: true });
   } catch (err) {
     checkInError.value = err.response?.data?.message || '報到失敗，請稍後再試';
   } finally {
@@ -148,7 +152,7 @@ async function submitNewAppointment(payload) {
     await http.post('/appointments', payload);
     toast.success('已加入今日掛號', '新增成功');
     newAppointmentOpen.value = false;
-    await fetchAppointments();
+    await fetchAppointments({ silent: true });
   } catch (err) {
     newAppointmentError.value = err.response?.data?.message || '新增掛號失敗，請稍後再試';
   } finally {
@@ -172,7 +176,15 @@ async function completeVisit(appointment) {
   }
 }
 
-async function handleRowAction(appointment, key) {
+function requestRowAction(appointment, key) {
+  if (isBusy(appointment._id)) return;
+  actionToConfirm.value = { appointment, key };
+}
+
+async function confirmRowAction() {
+  const pending = actionToConfirm.value;
+  if (!pending) return;
+  const { appointment, key } = pending;
   setBusy(appointment._id, true);
   try {
     if (key === 'no_show') {
@@ -182,7 +194,8 @@ async function handleRowAction(appointment, key) {
       await http.post(`/appointments/${appointment._id}/cancel`, {});
       toast.info('已取消這筆掛號', '已更新');
     }
-    await fetchAppointments();
+    actionToConfirm.value = null;
+    await fetchAppointments({ silent: true });
   } catch (err) {
     reportApiError(err, '操作失敗，請稍後再試');
   } finally {
@@ -195,10 +208,10 @@ async function updateCheckinNumber(appointment, rawValue) {
   if (!Number.isInteger(checkinNumber) || checkinNumber < 1 || checkinNumber === appointment.checkinNumber) return;
   try {
     await http.put(`/appointments/${appointment._id}`, { checkinNumber });
-    await fetchAppointments();
+    await fetchAppointments({ silent: true });
   } catch (err) {
     reportApiError(err, '看診序號調整失敗');
-    await fetchAppointments();
+    await fetchAppointments({ silent: true });
   }
 }
 
@@ -207,7 +220,7 @@ onMounted(() => {
   nowTimer = setInterval(() => {
     now.value = new Date();
   }, 30_000);
-  refreshTimer = setInterval(fetchAppointments, 60_000);
+  refreshTimer = setInterval(() => fetchAppointments({ silent: true }), 60_000);
 });
 onBeforeUnmount(() => {
   clearInterval(nowTimer);
@@ -217,14 +230,19 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="mx-auto max-w-4xl space-y-5">
-    <PageHeader title="掛號與候診">
+    <PageHeader title="掛號與候診" description="依門診時段掌握報到順序，候診中可直接完成量測與看診。">
       <template #actions>
         <Button type="button" @click="newAppointmentOpen = true"><UserPlus class="h-4 w-4" stroke-width="1.75" />新增掛號</Button>
       </template>
     </PageHeader>
 
     <ListSkeleton v-if="loading" :rows="4" />
-    <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+    <Alert v-else-if="error" variant="destructive">
+      <AlertDescription class="flex items-center justify-between gap-3">
+        <span>{{ error }}</span>
+        <Button type="button" variant="outline" size="sm" class="shrink-0" @click="fetchAppointments">重新載入</Button>
+      </AlertDescription>
+    </Alert>
 
     <template v-else>
       <Card class="overflow-hidden p-0">
@@ -250,7 +268,7 @@ onBeforeUnmount(() => {
               {{ group.session.label }} · {{ group.session.start }}–{{ group.session.end }}
             </div>
 
-            <div class="ml-28 border-l-2 border-border pl-7">
+            <div class="border-l-2 border-border pl-4 sm:ml-28 sm:pl-7">
               <template v-for="(appointment, itemIndex) in group.items" :key="appointment._id">
                 <div
                   v-if="groupIndex === nowSessionIndex && itemIndex === nowIndexInSession(group.items, now)"
@@ -261,16 +279,16 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="relative py-2.5">
-                  <span class="absolute left-[-46px] top-4 w-18 -translate-x-full text-right text-sm font-semibold text-muted-foreground">
+                  <span class="mb-1.5 block text-xs font-semibold text-muted-foreground sm:absolute sm:left-[-46px] sm:top-4 sm:mb-0 sm:w-18 sm:-translate-x-full sm:text-right sm:text-sm">
                     {{ new Date(appointment.scheduledAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }) }}
                   </span>
                   <span
-                    class="absolute left-[-30px] top-5.5 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 bg-card"
+                    class="absolute left-[-17px] top-6 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 bg-card sm:left-[-30px] sm:top-5.5"
                     :class="appointment.status === 'arrived' ? 'border-primary' : 'border-dashed border-muted-foreground'"
                   ></span>
 
                   <div class="rounded-xl" :class="isExpanded(appointment._id) ? 'border border-border bg-accent/40 p-3.5' : ''">
-                    <div class="flex items-center gap-3.5">
+                    <div class="flex flex-wrap items-center gap-3.5">
                       <!-- 候診中：看診序號，可直接點擊修改 -->
                       <div v-if="appointment.status === 'arrived'" class="relative h-10 w-10 shrink-0">
                         <input
@@ -296,8 +314,7 @@ onBeforeUnmount(() => {
 
                       <div class="min-w-0 flex-1">
                         <span
-                          class="block truncate text-sm font-semibold"
-                          :class="isIdentityConfirmed(appointment) ? 'text-primary' : 'text-foreground'"
+                          class="block truncate text-sm font-semibold text-foreground"
                         >{{ appointment.petName || '寵物姓名未填' }}</span>
                         <span class="flex items-center gap-1 truncate text-xs text-muted-foreground">
                           {{ appointment.ownerName }}
@@ -313,10 +330,10 @@ onBeforeUnmount(() => {
                           <component :is="isExpanded(appointment._id) ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
                         </Button>
                       </template>
-                      <template v-else>
+                      <div v-else class="ml-auto flex shrink-0 items-center gap-1.5 max-sm:w-full max-sm:justify-end">
                         <Button type="button" size="sm" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
-                        <RowActions :actions="ROW_ACTIONS" @select="(key) => handleRowAction(appointment, key)" />
-                      </template>
+                        <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                      </div>
                     </div>
 
                     <div v-if="appointment.status === 'arrived' && isExpanded(appointment._id)" class="mt-3.5 space-y-3.5 border-t border-border pt-3.5">
@@ -369,12 +386,12 @@ onBeforeUnmount(() => {
               已取消／未到
               <span class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-muted px-1.5 text-xs font-semibold text-foreground">{{ closedAppointments.length }}</span>
             </div>
-            <div v-for="appointment in closedAppointments" :key="appointment._id" class="flex items-center gap-3 py-1.5 opacity-70">
+            <div v-for="appointment in closedAppointments" :key="appointment._id" class="flex flex-wrap items-center gap-3 py-1.5 opacity-70">
               <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <User class="h-4 w-4" stroke-width="1.75" />
               </span>
               <span class="min-w-0 flex-1 truncate text-sm text-foreground line-through decoration-muted-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
-              <span class="shrink-0 truncate text-xs text-muted-foreground">{{ appointment.ownerName }} · 原訂 {{ appointment.time || '現場' }}</span>
+              <span class="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground sm:max-w-none">{{ appointment.ownerName }} · 原訂 {{ appointment.time || '現場' }}</span>
               <span class="shrink-0 rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-muted-foreground">{{ appointment.status === 'cancelled' ? '已取消' : '未到' }}</span>
             </div>
           </div>
@@ -397,6 +414,17 @@ onBeforeUnmount(() => {
       :error-message="checkInError"
       @submit="submitCheckIn"
       @close="checkInTarget = null"
+    />
+    <ConfirmDialog
+      :open="Boolean(actionToConfirm)"
+      :title="actionToConfirm?.key === 'cancel' ? '取消這筆掛號？' : '標記為未到診？'"
+      :description="actionToConfirm?.key === 'cancel'
+        ? `確定要取消「${actionToConfirm?.appointment?.petName || '這筆'}」的掛號嗎？取消後會移出今日候診流程。`
+        : `確定要將「${actionToConfirm?.appointment?.petName || '這筆'}」標記為未到診嗎？`"
+      :confirm-label="actionToConfirm?.key === 'cancel' ? '確認取消' : '標記未到'"
+      :loading="Boolean(actionToConfirm && isBusy(actionToConfirm.appointment._id))"
+      @update:open="(value) => !value && (actionToConfirm = null)"
+      @confirm="confirmRowAction"
     />
   </section>
 </template>

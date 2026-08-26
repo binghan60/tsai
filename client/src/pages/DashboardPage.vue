@@ -13,6 +13,7 @@ import EmptyState from '../components/EmptyState.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import PetPickerDialog from '../components/PetPickerDialog.vue'
 import TrendBars from '../components/TrendBars.vue'
+import PageHeader from '../components/PageHeader.vue'
 import { Alert, AlertDescription } from '../components/ui/alert'
 
 const router = useRouter()
@@ -121,19 +122,24 @@ onMounted(fetchDashboard)
     待辦清單與狀態長條四個地方，那是這頁最主要的雜訊來源。
   -->
   <section class="mx-auto max-w-7xl space-y-4">
-    <div class="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 class="text-xl font-semibold text-foreground">健檢工作台</h1>
-        <p class="mt-1 text-sm text-muted-foreground">報告流程與最近的健檢量一覽。</p>
-      </div>
-      <Button type="button" @click="petPickerOpen = true"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
-    </div>
+    <PageHeader title="健檢工作台" description="報告流程與最近的健檢量一覽。">
+      <template #actions>
+        <Button type="button" @click="petPickerOpen = true"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
+      </template>
+    </PageHeader>
 
-    <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+    <Alert v-if="error" variant="destructive">
+      <AlertDescription class="flex items-center justify-between gap-3">
+        <span>{{ error }}</span>
+        <Button v-if="!dashboard" type="button" variant="outline" size="sm" class="shrink-0" :disabled="loading" @click="fetchDashboard">
+          {{ loading ? '重新載入中…' : '重新載入' }}
+        </Button>
+      </AlertDescription>
+    </Alert>
 
-    <ListSkeleton v-if="loading" :rows="6" />
+    <ListSkeleton v-if="loading && !dashboard" :rows="6" />
 
-    <template v-else>
+    <template v-else-if="dashboard">
       <!-- ── 第 1 層：現在 ────────────────────────────────────── -->
       <router-link
         v-if="attentionCount"
