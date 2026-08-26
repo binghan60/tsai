@@ -170,7 +170,7 @@ async function openRemovePet(pet) {
       petToRemove.value = pet;
     }
   } catch (err) {
-    toast.error('檢查寵物健檢紀錄失敗，請稍後再試', '無法刪除');
+    toast.error('檢查寵物就診紀錄失敗，請稍後再試', '無法刪除');
   } finally {
     checkingPetId.value = null;
   }
@@ -306,7 +306,7 @@ watch(
           </div>
         </Card>
       </div>
-      <EmptyState v-else :icon="Cat" title="尚無寵物資料" description="點上方「新增寵物」建立第一隻，之後就能開始健檢紀錄。" />
+      <EmptyState v-else :icon="Cat" title="尚無寵物資料" description="點上方「新增寵物」建立第一隻，之後就能開始就診紀錄。" />
 
       <Pagination v-if="owner.pets.length" :page="petPage" :total-pages="totalPetPages" @update:page="goToPetPage" />
     </div>
@@ -368,8 +368,8 @@ watch(
     <ConfirmDialog
       :open="Boolean(petRecordBlock)"
       title="無法刪除寵物"
-      :description="`「${petRecordBlock?.pet?.name || ''}」底下還有 ${petRecordBlock?.total || 0} 筆健檢紀錄，請先刪除這些紀錄，才能刪除寵物。`"
-      confirm-label="前往管理健檢紀錄"
+      :description="`「${petRecordBlock?.pet?.name || ''}」底下還有 ${petRecordBlock?.total || 0} 筆就診紀錄，請先刪除這些紀錄，才能刪除寵物。`"
+      confirm-label="前往管理就診紀錄"
       cancel-label="關閉"
       :destructive="false"
       @update:open="(value) => !value && (petRecordBlock = null)"

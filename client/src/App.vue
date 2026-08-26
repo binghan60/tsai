@@ -37,7 +37,7 @@ const navItems = [
   { to: '/appointments', label: '預約', exact: false, icon: CalendarClock },
   { to: '/owners', label: '飼主', exact: false, icon: Users },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
-  { to: '/records', label: '健檢紀錄', exact: false, icon: FileText },
+  { to: '/records', label: '就診紀錄', exact: false, icon: FileText },
   { to: '/records/deliveries', label: '寄送歷程', exact: false, icon: Mail },
   { to: '/settings/forms', label: '表單管理', exact: false, icon: ClipboardList },
   { to: '/settings/text-templates', label: '文字模板', exact: false, icon: FileText },
@@ -54,7 +54,7 @@ function matchesPrefix(path, prefix) {
 
 function isNavActive(item) {
   // 路由自己指定了歸屬就聽它的——網址前綴猜錯的情況（/pets/:petId/records/new
-  // 其實屬於健檢紀錄）只有路由自己知道。
+  // 其實屬於就診紀錄）只有路由自己知道。
   if (route.meta.nav) return route.meta.nav === item.to;
   if (item.exact) return route.path === item.to || (item.match ?? []).some((prefix) => matchesPrefix(route.path, prefix));
   return matchesPrefix(route.path, item.to) || (item.match ?? []).some((prefix) => matchesPrefix(route.path, prefix));

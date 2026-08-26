@@ -155,7 +155,7 @@ onMounted(fetchDashboard)
         <div class="flex items-center justify-between gap-3">
           <div>
             <CardTitle class="text-sm">報告流程</CardTitle>
-            <CardDescription class="mt-0.5 text-xs">每一格都能點進對應的健檢紀錄佇列</CardDescription>
+            <CardDescription class="mt-0.5 text-xs">每一格都能點進對應的就診紀錄佇列</CardDescription>
           </div>
         </div>
         <div class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">

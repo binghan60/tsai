@@ -109,7 +109,7 @@ async function createPet(values) {
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <PageHeader title="寵物資料" description="先確認寵物與飼主身分，再建立健檢紀錄。">
+    <PageHeader title="寵物資料" description="先確認寵物與飼主身分，再建立就診紀錄。">
       <template #actions>
         <FilterBar id="pet-list-search" v-model="query" label="搜尋寵物" placeholder="搜尋寵物、飼主或電話" class="w-full min-w-0 md:w-96 xl:w-[28rem]" @submit="applyFilters" />
         <Button type="button" @click="openCreatePet">+ 新增寵物</Button>

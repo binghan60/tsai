@@ -33,7 +33,7 @@ const router = createRouter({
     { path: '/owners/:id', component: OwnerDetailPage, meta: { title: '飼主資料' } },
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },
     { path: '/pets/:id', component: PetDetailPage, meta: { title: '寵物資料' } },
-    { path: '/records', component: RecordsListPage, meta: { title: '健檢紀錄' } },
+    { path: '/records', component: RecordsListPage, meta: { title: '就診紀錄' } },
     // 寄送流水帳。掛在 /records 底下是因為它講的是報告的事，但它不依附任何一份報告——
     // 報告被刪除後，這裡仍然查得到當初寄給了誰。
     { path: '/records/deliveries', component: DeliveryLogsPage, meta: { title: '寄送歷程', nav: '/records/deliveries' } },
@@ -46,7 +46,7 @@ const router = createRouter({
     { path: '/settings/text-templates', component: TextTemplateListPage, meta: { title: '文字模板' } },
     // transient：不列入「使用者從哪來」的紀錄。存檔後這頁會 replace 成 /records/:id/edit，
     // 之後再回到這個 new 網址只會又開一份新草稿。
-    // nav：這頁的網址掛在 /pets 底下，但它做的是健檢紀錄，側邊欄該亮的是那一項。
+    // nav：這頁的網址掛在 /pets 底下，但它做的是就診紀錄，側邊欄該亮的是那一項。
     { path: '/pets/:petId/records/new', component: RecordFormPage, meta: { title: '新增健檢', transient: true, nav: '/records' } },
     { path: '/records/:id/edit', component: RecordFormPage, meta: { title: '編輯健檢' } },
     { path: '/records/:id/preview', name: 'record-preview', component: ReportViewPage, meta: { bare: true, title: '報告預覽' } },

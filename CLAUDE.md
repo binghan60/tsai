@@ -175,9 +175,9 @@ GET    /api/health
 | `/appointments` | 電話預約與候診 | **空白路由，功能重做中**——舊版的預約清單、候診佇列與相關 API 已整批移除（見第九節），頁面元件目前只是佔位、側邊欄連結仍在 |
 | `/owners`、`/owners/:id` | 飼主列表／詳情 | |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含歷次報告 |
-| `/records` | 健檢紀錄清單 | 跨寵物，佇列切換 |
+| `/records` | 就診紀錄清單 | 跨寵物，佇列切換 |
 | `/records/deliveries` | 寄送紀錄 | 流水帳，含已刪除報告的紀錄 |
-| `/records/deleted` | 已刪除的報告 | 刪除稽核快照，可搜尋與看當時的作答內容。稽核用、頻率很低，**不進側邊欄**，入口在健檢紀錄清單頁；`meta.nav` 歸在 `/records` 底下 |
+| `/records/deleted` | 已刪除的報告 | 刪除稽核快照，可搜尋與看當時的作答內容。稽核用、頻率很低，**不進側邊欄**，入口在就診紀錄清單頁；`meta.nav` 歸在 `/records` 底下 |
 | `/pets/:petId/records/new`、`/records/:id/edit` | 報告填寫表單 | 自動存草稿、離開前攔截未儲存變更 |
 | `/records/:id/preview` | 報告預覽 | `meta.bare`，後台用，有結案／寄送／分享操作 |
 | `/report/:token` | 報告檢視頁 | `meta.bare`，**公開**，飼主查看用 + PDF 截圖來源 |

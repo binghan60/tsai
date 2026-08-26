@@ -195,10 +195,10 @@ async function removeRecord(confirmText) {
   try {
     await http.delete(`/records/${record._id}`, { data: { confirmText } });
     recordToRemove.value = null;
-    toast.success(`已成功刪除「${formatDate(record.visitDate)}」的健檢紀錄`, '刪除紀錄成功');
+    toast.success(`已成功刪除「${formatDate(record.visitDate)}」的就診紀錄`, '刪除紀錄成功');
     await fetchPet();
   } catch (err) {
-    const msg = err.response?.data?.message ?? '刪除健檢紀錄失敗';
+    const msg = err.response?.data?.message ?? '刪除就診紀錄失敗';
     removeError.value = msg;
     toast.error(msg, '刪除失敗');
   } finally {
@@ -291,7 +291,7 @@ watch(
           </Card>
         </li>
       </ul>
-      <EmptyState v-else :icon="PawPrint" title="尚無健檢紀錄" description="點右上角「新增健檢」建立第一份報告。" />
+      <EmptyState v-else :icon="PawPrint" title="尚無就診紀錄" description="點右上角「新增健檢」建立第一份報告。" />
 
       <Pagination v-if="pet.medicalRecords.length" :page="recordPage" :total-pages="totalRecordPages" @update:page="goToRecordPage" />
     </div>

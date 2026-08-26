@@ -747,7 +747,7 @@ async function confirmDiscard() {
     if (recordId.value) {
       await http.delete(`/records/${recordId.value}`);
     }
-    toast.success('已成功捨棄健檢紀錄草稿', '已捨棄草稿');
+    toast.success('已成功捨棄就診紀錄草稿', '已捨棄草稿');
     leavingAfterAction.value = true;
     showDiscardConfirm.value = false;
     await router.push(petId.value ? `/pets/${petId.value}` : '/pets');
@@ -779,7 +779,7 @@ function handleBeforeUnload(event) {
 <template>
   <section class="mx-auto max-w-6xl space-y-5 pb-28">
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><router-link :to="backTo" class="mb-1 inline-flex min-h-11 items-center text-sm font-medium text-accent-foreground">← {{ backLabel }}</router-link><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案健檢紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢紀錄' : '新增健檢紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
+      <div><router-link :to="backTo" class="mb-1 inline-flex min-h-11 items-center text-sm font-medium text-accent-foreground">← {{ backLabel }}</router-link><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案就診紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯就診紀錄' : '新增就診紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-danger' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
     </div>
 
@@ -1027,7 +1027,7 @@ function handleBeforeUnload(event) {
     <ConfirmDialog
       :open="showDiscardConfirm"
       title="捨棄健檢草稿"
-      description="確定要捨棄此筆健檢紀錄草稿嗎？此操作將刪除此草稿且無法復原。"
+      description="確定要捨棄此筆就診紀錄草稿嗎？此操作將刪除此草稿且無法復原。"
       confirm-label="捨棄草稿"
       cancel-label="取消"
       :loading="discarding"

@@ -82,7 +82,7 @@ async function fetchRecords() {
       page.value = String(returnedTotalPages);
     }
   } catch (err) {
-    if (currentRequest === requestSequence) error.value = '健檢紀錄暫時無法載入，請稍後重試';
+    if (currentRequest === requestSequence) error.value = '就診紀錄暫時無法載入，請稍後重試';
   } finally {
     if (currentRequest === requestSequence) loading.value = false;
   }
@@ -164,18 +164,18 @@ function actionLabel(record) {
 
 <template>
   <section class="mx-auto max-w-7xl space-y-5">
-    <PageHeader title="健檢紀錄" description="依處理狀態篩選與追蹤每筆健檢紀錄。">
+    <PageHeader title="就診紀錄" description="依處理狀態篩選與追蹤每筆就診紀錄。">
       <template #actions>
         <Button type="button" @click="openPetPicker"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
       </template>
     </PageHeader>
 
     <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,24rem)] xl:items-center">
-      <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="健檢紀錄佇列" @update:model-value="selectView" />
+      <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="就診紀錄佇列" @update:model-value="selectView" />
       <FilterBar
         id="records-search"
         v-model="query"
-        label="搜尋健檢紀錄"
+        label="搜尋就診紀錄"
         placeholder="寵物、飼主或報告編號"
         with-date-range
         :date-from="dateFrom"
@@ -192,7 +192,7 @@ function actionLabel(record) {
     <ListSkeleton v-if="loading" :rows="6" />
 
     <Card v-else-if="!error && !records.length">
-      <EmptyState inset :icon="FileText" title="這個佇列目前是空的" description="換一個佇列，或直接建立新的健檢紀錄。" />
+      <EmptyState inset :icon="FileText" title="這個佇列目前是空的" description="換一個佇列，或直接建立新的就診紀錄。" />
     </Card>
 
     <template v-else-if="records.length">

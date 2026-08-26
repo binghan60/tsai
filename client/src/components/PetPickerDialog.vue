@@ -106,7 +106,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
   <ModalDialog v-if="open" size="md" @close="close">
     <div class="p-6 pb-3 sm:p-7 sm:pb-3">
       <DialogTitle>選擇要做健檢的寵物</DialogTitle>
-      <DialogDescription class="mt-1">選定寵物後會直接開始新增健檢紀錄。</DialogDescription>
+      <DialogDescription class="mt-1">選定寵物後會直接開始新增就診紀錄。</DialogDescription>
     </div>
 
     <div class="space-y-3 px-6 pb-6 sm:px-7 sm:pb-7">

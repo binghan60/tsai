@@ -173,7 +173,7 @@ petsRouter.delete('/:id', async (req, res, next) => {
         throw error;
       }
       if (await MedicalRecord.exists({ petId: pet._id }).session(session)) {
-        const error = new Error('此寵物仍有健檢紀錄，無法刪除');
+        const error = new Error('此寵物仍有就診紀錄，無法刪除');
         error.status = 409;
         throw error;
       }
