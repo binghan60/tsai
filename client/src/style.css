@@ -343,6 +343,33 @@ html {
   background-clip: content-box;
 }
 
+/* 可操作元件使用一致的游標提示；文字輸入仍保留原生 text cursor。 */
+:where(
+  button:not(:disabled),
+  a[href],
+  label[for],
+  select:not(:disabled),
+  summary,
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  [role='button']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']),
+  [role='menuitem']:not([aria-disabled='true']),
+  [role='option']:not([aria-disabled='true']),
+  [role='switch']:not([aria-disabled='true'])
+) {
+  cursor: pointer;
+}
+
+:where(
+  button:disabled,
+  select:disabled,
+  input[type='checkbox']:disabled,
+  input[type='radio']:disabled,
+  [aria-disabled='true']
+) {
+  cursor: not-allowed;
+}
 
 :where(button, a, input, textarea, select):not(:where([data-slot], [class*='ring-'])):focus-visible {
   @apply outline-2 outline-offset-2 outline-ring;

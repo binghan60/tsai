@@ -12,7 +12,7 @@
 // 遲早又會分裂成不同外觀。
 const props = defineProps({
   modelValue: { type: [String, null], required: true },
-  // [{ value, label }]
+  // [{ value, label, icon? }]
   options: { type: Array, required: true },
   ariaLabel: { type: String, required: true },
   // sm 用於工具列等次要情境（例如表單編輯器的顯示模式切換）。
@@ -51,7 +51,7 @@ function onKeydown(event, index) {
       :key="option.value"
       type="button"
       role="tab"
-      class="rounded-md px-3 font-medium transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+      class="inline-flex items-center justify-center gap-2 rounded-md px-3 font-medium transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:translate-y-px"
       :class="[
         size === 'sm' ? 'min-h-9 text-sm' : 'min-h-11 text-sm',
         modelValue === option.value ? 'bg-accent text-accent-foreground shadow-sm' : 'bg-field/70 text-muted-foreground hover:bg-card hover:text-foreground',
@@ -60,6 +60,9 @@ function onKeydown(event, index) {
       :tabindex="modelValue === option.value ? 0 : -1"
       @click="emit('update:modelValue', option.value)"
       @keydown="onKeydown($event, index)"
-    >{{ option.label }}</button>
+    >
+      <component v-if="option.icon" :is="option.icon" class="h-4 w-4 shrink-0" stroke-width="1.75" aria-hidden="true" />
+      <span>{{ option.label }}</span>
+    </button>
   </div>
 </template>

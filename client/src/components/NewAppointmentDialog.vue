@@ -1,7 +1,7 @@
 <script setup>
 import { ref } from 'vue';
 import { useForm, useField } from 'vee-validate';
-import { ChevronRight, PawPrint, UserPlus } from '@lucide/vue';
+import { ChevronRight, History, PawPrint, UserPlus } from '@lucide/vue';
 import ModalDialog from './ModalDialog.vue';
 import { DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
 import { Label } from './ui/label';
@@ -21,8 +21,8 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'close']);
 
 const MODE_OPTIONS = [
-  { value: 'return', label: '回診' },
-  { value: 'new', label: '初診' },
+  { value: 'return', label: '回診', icon: History },
+  { value: 'new', label: '初診', icon: UserPlus },
 ];
 const mode = ref('return');
 const selectedPet = ref(null);
@@ -82,7 +82,10 @@ const onSubmit = handleSubmit((values) => {
 
     <form class="flex flex-col" @submit.prevent="onSubmit">
       <div class="space-y-4 p-6 pt-3 sm:p-7 sm:pt-3">
-        <SegmentedControl v-model="mode" :options="MODE_OPTIONS" aria-label="病歷類型" />
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">掛號類型</Label>
+          <SegmentedControl v-model="mode" :options="MODE_OPTIONS" aria-label="掛號類型" full-width />
+        </div>
 
         <template v-if="mode === 'return'">
           <div class="space-y-1.5">
