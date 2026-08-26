@@ -54,7 +54,7 @@ function clearDate(event) {
         :aria-label="ariaLabel"
         :class="
           cn(
-            'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-sm text-foreground transition-colors hover:bg-muted/40 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+            'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-field px-3 text-sm text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
             props.class,
           )
         "

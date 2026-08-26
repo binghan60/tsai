@@ -21,9 +21,6 @@ export const buttonVariants = cva(
         // 中性淡底，跟 outline 的主色調分開：這個是「可重複執行的支援操作」，不代表主色。
         secondary:
           "bg-secondary text-secondary-foreground hover:bg-muted aria-expanded:bg-muted",
-        // ghost 平時完全透明、hover 才上色，只用在中性、低風險的操作（編輯、展開、關閉…）。
-        ghost:
-          "bg-transparent text-muted-foreground shadow-none hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         "destructive-solid":
@@ -32,7 +29,7 @@ export const buttonVariants = cva(
         // 用在「撤銷」這類比 destructive-solid 輕、又不想跟 destructive 的淡底混淆的場合。
         "destructive-outline":
           "border-destructive/40 bg-card text-destructive hover:border-destructive/60 hover:bg-destructive/10 focus-visible:ring-destructive/20 dark:border-destructive/50 dark:hover:bg-destructive/15",
-        link: "bg-transparent text-primary shadow-none underline-offset-4 hover:underline",
+        link: "bg-accent/70 text-primary shadow-none underline-offset-4 hover:bg-accent hover:underline",
       },
       // 高度階層是真的分階，不是四個名字指向同一個 h-11。xs 只給桌機的密集表格用；
       // 觸控介面最低到 sm(40px)，一般操作用 default(44px)。

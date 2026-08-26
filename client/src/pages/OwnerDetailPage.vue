@@ -262,7 +262,7 @@ watch(
           <p class="text-xs opacity-80">可以直接建立第一份健檢，寵物資料會自動帶入。</p>
         </div>
         <Button as-child size="sm"><router-link :to="`/pets/${createdPet._id}/records/new`"><ClipboardPlus class="h-4 w-4" />建立第一份健檢</router-link></Button>
-        <Button type="button" variant="ghost" size="icon" :aria-label="`關閉 ${createdPet.name} 新增成功提示`" @click="createdPet = null"><X class="h-4 w-4" /></Button>
+        <Button type="button" variant="secondary" size="icon" :aria-label="`關閉 ${createdPet.name} 新增成功提示`" @click="createdPet = null"><X class="h-4 w-4" /></Button>
       </div>
 
       <div v-if="owner.pets.length" class="grid gap-3 sm:grid-cols-2">
@@ -283,7 +283,7 @@ watch(
           <div class="flex shrink-0 items-center gap-2">
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               size="icon"
               class="h-11 w-11"
               :disabled="deletingPetId === pet._id || checkingPetId === pet._id"

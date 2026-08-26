@@ -208,7 +208,7 @@ onBeforeUnmount(() => {
               <button
                 v-if="log.error.length > 40"
                 type="button"
-                class="inline-flex h-8 shrink-0 items-center gap-1 rounded-md px-1 font-medium text-danger hover:bg-danger-surface"
+                class="inline-flex h-8 shrink-0 items-center gap-1 rounded-md bg-danger-surface/70 px-2 font-medium text-danger hover:bg-danger-surface"
                 @click="toggleDetail(log)"
               >
                 <ChevronUp v-if="detailExpanded(log)" class="h-3.5 w-3.5" />

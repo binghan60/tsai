@@ -18,7 +18,7 @@ let resizeObserver;
 // 上一頁鈕同一個「raised chip on a muted pill」語彙），不再用主色調底面或色點
 // ——頁籤是導覽，不是狀態顯示，色彩份量交給徽章跟 badge 就好。
 const selectedClasses = 'bg-card text-primary font-semibold shadow-sm';
-const idleClasses = 'text-muted-foreground font-medium hover:text-foreground';
+const idleClasses = 'bg-field/70 text-muted-foreground font-medium hover:bg-card hover:text-foreground';
 
 function onTabKeydown(event, index, items, emit) {
   let next = null;

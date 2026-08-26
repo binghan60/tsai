@@ -30,7 +30,7 @@ function goTo(next) {
 <template>
   <nav class="flex max-w-full items-center justify-center overflow-x-auto" aria-label="分頁導覽">
     <div class="flex items-center gap-0.5 rounded-xl border border-border bg-muted p-1.5">
-      <Button type="button" variant="ghost" size="icon-xs" :disabled="page <= 1" aria-label="上一頁" @click="goTo(page - 1)">
+      <Button type="button" variant="secondary" size="icon-xs" :disabled="page <= 1" aria-label="上一頁" @click="goTo(page - 1)">
         <ChevronLeft class="h-4 w-4" stroke-width="2.2" />
       </Button>
 
@@ -38,7 +38,7 @@ function goTo(next) {
         <Button
           v-if="item.type === 'page'"
           type="button"
-          :variant="item.value === page ? 'default' : 'ghost'"
+          :variant="item.value === page ? 'default' : 'secondary'"
           size="icon-xs"
           class="tabular-nums"
           :aria-label="`第 ${item.value} 頁`"
@@ -48,7 +48,7 @@ function goTo(next) {
         <span v-else class="flex size-9 shrink-0 items-center justify-center text-xs text-muted-foreground" aria-hidden="true">…</span>
       </template>
 
-      <Button type="button" variant="ghost" size="icon-xs" :disabled="page >= totalPages" aria-label="下一頁" @click="goTo(page + 1)">
+      <Button type="button" variant="secondary" size="icon-xs" :disabled="page >= totalPages" aria-label="下一頁" @click="goTo(page + 1)">
         <ChevronRight class="h-4 w-4" stroke-width="2.2" />
       </Button>
     </div>

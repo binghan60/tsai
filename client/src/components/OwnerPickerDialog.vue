@@ -113,7 +113,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
       <div class="relative">
         <Search class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
         <Input v-model="query" type="search" class="h-11 pl-10 pr-10" placeholder="搜尋飼主姓名或電話" aria-label="搜尋飼主姓名或電話" />
-        <button v-if="query" type="button" class="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="清除搜尋" @click="clearQuery">
+        <button v-if="query" type="button" class="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="清除搜尋" @click="clearQuery">
           <X class="h-4 w-4" />
         </button>
       </div>
@@ -125,7 +125,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
           v-for="owner in owners"
           :key="owner._id"
           type="button"
-          class="flex min-h-16 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+          class="flex min-h-16 w-full items-center gap-3 bg-card px-4 py-3 text-left transition-colors hover:bg-muted/40"
           @click="selectOwner(owner)"
         >
           <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span>

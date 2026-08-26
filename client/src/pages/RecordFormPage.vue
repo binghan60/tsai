@@ -892,8 +892,8 @@ function handleBeforeUnload(event) {
               class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               :class="
                 activeSectionId === section.id
-                  ? 'font-semibold text-foreground '
-                  : 'font-medium text-muted-foreground hover:text-foreground  '
+                  ? 'bg-accent font-semibold text-foreground'
+                  : 'bg-muted/60 font-medium text-muted-foreground hover:bg-muted hover:text-foreground'
               "
               :aria-current="activeSectionId === section.id ? 'step' : undefined"
               @click="scrollToSection(section.id)"
@@ -925,7 +925,7 @@ function handleBeforeUnload(event) {
       >
         <Button
           type="button"
-          variant="ghost"
+          variant="secondary"
           size="icon"
           :disabled="activeSectionIndex <= 0"
           aria-label="上一段"
@@ -934,7 +934,7 @@ function handleBeforeUnload(event) {
         <button
           type="button"
           :aria-expanded="sectionListOpen"
-          class="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          class="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-muted/60 px-2 py-1.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           @click="sectionListOpen = !sectionListOpen"
         >
           <span
@@ -950,7 +950,7 @@ function handleBeforeUnload(event) {
         </button>
         <Button
           type="button"
-          variant="ghost"
+          variant="secondary"
           size="icon"
           :disabled="activeSectionIndex >= FORM_SECTIONS.length - 1"
           aria-label="下一段"
@@ -970,7 +970,7 @@ function handleBeforeUnload(event) {
               :class="
                 activeSectionId === section.id
                   ? 'bg-primary/10 font-semibold text-foreground'
-                  : 'font-medium text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                  : 'bg-muted/50 font-medium text-muted-foreground hover:bg-muted hover:text-foreground'
               "
               @click="scrollToSection(section.id); sectionListOpen = false"
             >

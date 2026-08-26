@@ -79,7 +79,7 @@ function applyDates() {
       />
     </label>
 
-    <Button v-if="hasActiveFilter" type="button" variant="ghost" size="icon-xs" :aria-label="`清除${label}`" @click="clearAll">
+    <Button v-if="hasActiveFilter" type="button" variant="secondary" size="icon-xs" :aria-label="`清除${label}`" @click="clearAll">
       <X class="h-3.5 w-3.5" stroke-width="1.9" />
     </Button>
 
@@ -87,7 +87,7 @@ function applyDates() {
       <span class="h-5.5 w-px shrink-0 bg-border"></span>
       <Popover v-model:open="dateOpen">
         <PopoverTrigger as-child>
-          <Button type="button" variant="ghost" size="sm" class="shrink-0 gap-1.5 rounded-full px-3.5 text-xs" :class="hasDateRange ? 'text-foreground' : ''">
+          <Button type="button" variant="secondary" size="sm" class="shrink-0 gap-1.5 rounded-full px-3.5 text-xs" :class="hasDateRange ? 'text-foreground' : ''">
             <CalendarClock class="h-3.5 w-3.5" stroke-width="1.75" />
             <span class="whitespace-nowrap">{{ dateRangeLabel }}</span>
           </Button>
@@ -104,7 +104,7 @@ function applyDates() {
             </label>
           </div>
           <div class="mt-3 flex justify-end gap-2">
-            <Button type="button" variant="ghost" size="sm" :disabled="!hasDateRange" @click="clearDates">清除</Button>
+            <Button type="button" variant="secondary" size="sm" :disabled="!hasDateRange" @click="clearDates">清除</Button>
             <Button type="button" variant="outline" size="sm" @click="applyDates">套用</Button>
           </div>
         </PopoverContent>

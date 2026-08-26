@@ -17,8 +17,6 @@ export const badgeVariants = cva(
           "bg-destructive/10 [a]:hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 text-destructive dark:bg-destructive/20",
         outline:
           "border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground",
-        ghost:
-          "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         // 狀態徽章。底色與文字色由 lib/recordStatus.js 的 meta 提供，
         // 這個 variant 只管形狀與留白、刻意不設任何顏色——不然兩邊會打架。
         // 之前是每個使用點各自寫一次 rounded-full px-3 py-1 text-xs font-medium，

@@ -23,7 +23,7 @@ const emit = defineEmits(['select']);
       class="relative min-h-10 rounded-lg px-2 text-xs font-medium"
       :class="finding.status === option.value
         ? (option.value === 'abnormal' ? 'bg-danger text-card' : option.value === 'normal' ? 'bg-success text-card' : 'bg-field text-foreground shadow-sm')
-        : 'text-muted-foreground hover:bg-field/70  '"
+        : 'bg-field/70 text-muted-foreground hover:bg-field'"
       @click="emit('select', option.value)"
     >
       {{ option.label }}

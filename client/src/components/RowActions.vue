@@ -30,7 +30,7 @@ function choose(action) {
 <template>
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
-      <Button type="button" variant="ghost" size="icon-sm" :aria-label="props.label">
+      <Button type="button" variant="secondary" size="icon-sm" :aria-label="props.label">
         <MoreHorizontal class="h-4 w-4" stroke-width="1.75" />
       </Button>
     </PopoverTrigger>
@@ -40,7 +40,7 @@ function choose(action) {
         :key="action.key"
         type="button"
         class="flex min-h-10 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
-        :class="action.danger ? 'text-destructive hover:bg-destructive/10' : 'text-foreground hover:bg-muted'"
+        :class="action.danger ? 'bg-destructive/10 text-destructive hover:bg-destructive/20' : 'bg-muted/60 text-foreground hover:bg-secondary'"
         :disabled="action.disabled"
         @click="choose(action)"
       >

@@ -92,7 +92,7 @@ function clearTime(event) {
         :aria-label="ariaLabel"
         :class="
           cn(
-            'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-transparent px-3 text-sm text-foreground transition-colors hover:bg-muted/40 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+            'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-field px-3 text-sm text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
             props.class,
           )
         "
@@ -113,7 +113,7 @@ function clearTime(event) {
             type="button"
             :class="
               cn(
-                'block w-full rounded-lg px-2 py-1.5 text-center text-sm text-foreground transition-colors hover:bg-muted/60',
+                'mb-0.5 block w-full rounded-lg bg-muted/40 px-2 py-1.5 text-center text-sm text-foreground transition-colors hover:bg-muted',
                 parts.hour === hour && 'bg-primary text-primary-foreground hover:bg-primary',
               )
             "
@@ -127,7 +127,7 @@ function clearTime(event) {
             type="button"
             :class="
               cn(
-                'block w-full rounded-lg px-2 py-1.5 text-center text-sm text-foreground transition-colors hover:bg-muted/60',
+                'mb-0.5 block w-full rounded-lg bg-muted/40 px-2 py-1.5 text-center text-sm text-foreground transition-colors hover:bg-muted',
                 parts.minute === minute && 'bg-primary text-primary-foreground hover:bg-primary',
               )
             "

@@ -498,7 +498,7 @@ function resolveLeave(confirmed) {
             <button
               type="button"
               class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
-              :class="activeView === 'design' ? 'bg-field text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+              :class="activeView === 'design' ? 'bg-field text-primary shadow-sm' : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'"
               @click="activeView = 'design'"
             >
               <LayoutList class="h-4 w-4" stroke-width="1.75" />設計
@@ -506,7 +506,7 @@ function resolveLeave(confirmed) {
             <button
               type="button"
               class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
-              :class="activeView === 'preview' ? 'bg-field text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'"
+              :class="activeView === 'preview' ? 'bg-field text-primary shadow-sm' : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'"
               @click="activeView = 'preview'"
             >
               <Eye class="h-4 w-4" stroke-width="1.75" />預覽
@@ -583,7 +583,7 @@ function resolveLeave(confirmed) {
                 class="flex items-center gap-0.5 rounded-xl border p-1 transition-colors"
                 :class="activeKey === section.key
                   ? 'border-primary/35 bg-accent'
-                  : 'border-transparent hover:bg-muted/40 '"
+                  : 'border-transparent bg-muted/30 hover:bg-muted'"
               >
                 <button type="button" class="min-h-11 min-w-0 flex-1 rounded-lg px-2 text-left" @click="focusSection(section.key)">
                   <span class="block truncate text-sm font-medium" :class="section.enabled === false ? 'text-muted-foreground ' : 'text-foreground '">
@@ -593,10 +593,10 @@ function resolveLeave(confirmed) {
                     {{ presentationMeta(section.presentation).title }} · {{ (section.items ?? []).length }} 項<span v-if="section.enabled === false"> · 已停用</span>
                   </span>
                 </button>
-                <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-25" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
+                <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
                   <ChevronUp class="h-4 w-4" stroke-width="1.75" />
                 </button>
-                <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-25" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
+                <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
                   <ChevronDown class="h-4 w-4" stroke-width="1.75" />
                 </button>
               </div>
@@ -621,7 +621,7 @@ function resolveLeave(confirmed) {
                     class="flex min-h-11 w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                     :class="type === featuredType
                       ? 'border-primary/35 bg-field hover:border-primary/35'
-                      : 'border-transparent hover:bg-muted/40 '"
+                      : 'border-transparent bg-muted/30 hover:bg-muted'"
                     :disabled="!activeSection"
                     @click="addItem(type)"
                   >
@@ -705,10 +705,10 @@ function resolveLeave(confirmed) {
                     <h2 class="truncate text-base font-semibold text-foreground">{{ selectedItem.label || '未命名項目' }}</h2>
                   </div>
                   <div class="flex shrink-0 items-center gap-0.5">
-                    <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-25" :disabled="selectedIndex <= 0" aria-label="上移項目" @click="move(activeSection.items, selectedIndex, -1)">
+                    <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25" :disabled="selectedIndex <= 0" aria-label="上移項目" @click="move(activeSection.items, selectedIndex, -1)">
                       <ChevronUp class="h-4 w-4" stroke-width="1.75" />
                     </button>
-                    <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/40 hover:text-foreground disabled:opacity-25" :disabled="selectedIndex < 0 || selectedIndex === activeSection.items.length - 1" aria-label="下移項目" @click="move(activeSection.items, selectedIndex, 1)">
+                    <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25" :disabled="selectedIndex < 0 || selectedIndex === activeSection.items.length - 1" aria-label="下移項目" @click="move(activeSection.items, selectedIndex, 1)">
                       <ChevronDown class="h-4 w-4" stroke-width="1.75" />
                     </button>
                   </div>
@@ -730,7 +730,7 @@ function resolveLeave(confirmed) {
                         class="flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                         :class="selectedItem.type === type
                           ? 'border-primary bg-accent text-accent-foreground'
-                          : 'border-border text-foreground hover:border-primary/35'"
+                          : 'border-border bg-field text-foreground hover:border-primary/35 hover:bg-muted'"
                         @click="selectedItem.type = type"
                       >
                         <component :is="typeMeta(type).icon" class="h-4 w-4 shrink-0" stroke-width="1.75" />
@@ -764,7 +764,7 @@ function resolveLeave(confirmed) {
                         class="flex min-h-11 items-center justify-center rounded-lg border px-2 text-sm font-medium transition-colors"
                         :class="(selectedItem.span ?? 'auto') === option.value
                           ? 'border-primary bg-accent text-accent-foreground'
-                          : 'border-border text-foreground hover:border-primary/35'"
+                          : 'border-border bg-field text-foreground hover:border-primary/35 hover:bg-muted'"
                         :title="option.hint"
                         @click="selectedItem.span = option.value"
                       >{{ option.title }}</button>
@@ -819,7 +819,7 @@ function resolveLeave(confirmed) {
                         />
                         <button
                           type="button"
-                          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/40 hover:text-danger"
+                          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
                           :aria-label="'刪除選項 ' + (index + 1)"
                           @click="removeOption(index)"
                         >

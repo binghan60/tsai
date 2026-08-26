@@ -380,7 +380,7 @@ onBeforeUnmount(() => {
                       </div>
 
                       <template v-if="appointment.status === 'arrived'">
-                        <Button type="button" variant="ghost" size="icon-sm" :aria-label="isExpanded(appointment._id) ? '收合' : '展開'" @click="toggleExpanded(appointment)">
+                        <Button type="button" variant="secondary" size="icon-sm" :aria-label="isExpanded(appointment._id) ? '收合' : '展開'" @click="toggleExpanded(appointment)">
                           <component :is="isExpanded(appointment._id) ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
                         </Button>
                       </template>

@@ -226,7 +226,7 @@ function goToPage(next) {
           <span class="desktop-data-cell truncate text-sm text-foreground" :title="owner.email || '—'">{{ owner.email || '—' }}</span>
           <span class="desktop-data-cell whitespace-nowrap text-xs tabular-nums text-muted-foreground">{{ formatDateTime(owner.createdAt, createdAtOptions) }}</span>
           <span class="desktop-data-cell flex justify-end gap-1">
-            <Button type="button" variant="ghost" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button>
+            <Button type="button" variant="secondary" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button>
             <Button type="button" variant="destructive" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button>
           </span>
         </div>
@@ -236,7 +236,7 @@ function goToPage(next) {
         <Card v-for="owner in owners" :key="owner._id" class="p-4">
           <div class="flex items-start gap-3">
             <router-link :to="`/owners/${owner._id}`" class="flex min-w-0 flex-1 items-center gap-3"><span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span><span class="min-w-0"><span class="block font-semibold text-primary">{{ owner.name }}</span><span class="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground"><Phone class="h-3.5 w-3.5" />{{ owner.phone }}</span><span v-if="owner.email" class="mt-0.5 flex items-center gap-1.5 truncate text-xs text-muted-foreground"><Mail class="h-3.5 w-3.5" />{{ owner.email }}</span><span class="mt-0.5 block text-xs tabular-nums text-muted-foreground">新增於 {{ formatDateTime(owner.createdAt, createdAtOptions) }}</span></span></router-link>
-            <div class="flex shrink-0"><Button type="button" variant="ghost" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div>
+            <div class="flex shrink-0"><Button type="button" variant="secondary" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`刪除飼主 ${owner.name}`" @click="openRemoveOwner(owner)"><Trash2 class="h-4 w-4" /></Button></div>
           </div>
         </Card>
       </div>

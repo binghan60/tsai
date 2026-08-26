@@ -109,7 +109,7 @@ async function saveTemplate() {
       <form v-if="creating" class="min-h-0 flex-1 space-y-5 border-y border-border p-6" @submit.prevent="saveTemplate">
         <p v-if="createError" class="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{{ createError }}</p>
         <div class="rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground"><p class="font-medium text-foreground">{{ picker?.label || '目前欄位' }}</p><p class="mt-2 line-clamp-4 whitespace-pre-wrap">{{ picker?.currentText }}</p></div>
-        <div class="space-y-1.5"><p class="text-sm font-medium text-foreground">適用範圍</p><div class="grid grid-cols-2 gap-2"><button type="button" class="min-h-11 rounded-lg border px-3 text-sm font-medium" :class="form.scope === 'field' ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:bg-muted/30'" @click="form.scope = 'field'">適用此欄位</button><button type="button" class="min-h-11 rounded-lg border px-3 text-sm font-medium" :class="form.scope === 'all' ? 'border-primary bg-primary/5 text-primary' : 'border-border text-muted-foreground hover:bg-muted/30'" @click="form.scope = 'all'">通用</button></div></div>
+        <div class="space-y-1.5"><p class="text-sm font-medium text-foreground">適用範圍</p><div class="grid grid-cols-2 gap-2"><button type="button" class="min-h-11 rounded-lg border px-3 text-sm font-medium" :class="form.scope === 'field' ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'" @click="form.scope = 'field'">適用此欄位</button><button type="button" class="min-h-11 rounded-lg border px-3 text-sm font-medium" :class="form.scope === 'all' ? 'border-primary bg-primary/5 text-primary' : 'border-border bg-muted/40 text-muted-foreground hover:bg-muted'" @click="form.scope = 'all'">通用</button></div></div>
       </form>
 
       <div v-else class="grid min-h-0 flex-1 border-y border-border md:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.1fr)]">
@@ -119,8 +119,8 @@ async function saveTemplate() {
             <Input v-model="query" type="search" class="pl-10" placeholder="搜尋模板名稱或內容" aria-label="搜尋文字模板" />
           </div>
           <div class="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-muted/30 p-1">
-            <button type="button" class="min-h-9 rounded-md px-2 text-sm font-medium" :class="scope === 'relevant' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'" @click="scope = 'relevant'">適用此欄位</button>
-            <button type="button" class="min-h-9 rounded-md px-2 text-sm font-medium" :class="scope === 'all' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground'" @click="scope = 'all'">全部模板</button>
+            <button type="button" class="min-h-9 rounded-md px-2 text-sm font-medium" :class="scope === 'relevant' ? 'bg-card text-foreground shadow-sm' : 'bg-field/70 text-muted-foreground'" @click="scope = 'relevant'">適用此欄位</button>
+            <button type="button" class="min-h-9 rounded-md px-2 text-sm font-medium" :class="scope === 'all' ? 'bg-card text-foreground shadow-sm' : 'bg-field/70 text-muted-foreground'" @click="scope = 'all'">全部模板</button>
           </div>
           <div class="mt-3 max-h-72 space-y-2 overflow-y-auto md:max-h-[46vh]">
             <div
@@ -135,7 +135,7 @@ async function saveTemplate() {
               </button>
               <button
                 type="button"
-                class="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                class="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
                 aria-label="刪除模板"
                 @click.stop="deleteTarget = template"
               >

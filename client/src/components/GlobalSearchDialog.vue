@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
             <button
               type="button"
               class="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left"
-              :class="index === activeIndex ? 'bg-muted/40 ' : 'hover:bg-muted/40 '"
+              :class="index === activeIndex ? 'bg-muted' : 'bg-card hover:bg-muted/60'"
               @mousemove="activeIndex = index"
               @click="go(item)"
             >

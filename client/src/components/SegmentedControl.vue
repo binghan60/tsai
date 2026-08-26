@@ -54,7 +54,7 @@ function onKeydown(event, index) {
       class="rounded-md px-3 font-medium transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
       :class="[
         size === 'sm' ? 'min-h-9 text-sm' : 'min-h-11 text-sm',
-        modelValue === option.value ? 'bg-accent text-accent-foreground shadow-sm' : 'text-muted-foreground hover:bg-card hover:text-foreground',
+        modelValue === option.value ? 'bg-accent text-accent-foreground shadow-sm' : 'bg-field/70 text-muted-foreground hover:bg-card hover:text-foreground',
       ]"
       :aria-selected="modelValue === option.value"
       :tabindex="modelValue === option.value ? 0 : -1"

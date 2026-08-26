@@ -296,10 +296,10 @@ onMounted(load);
             </Label>
           </span>
           <span class="desktop-data-cell flex justify-end gap-1">
-            <Button type="button" variant="ghost" size="icon-sm" :aria-label="`編輯表單 ${template.name}`" @click="router.push(`/settings/forms/${template._id}`)">
+            <Button type="button" variant="secondary" size="icon-sm" :aria-label="`編輯表單 ${template.name}`" @click="router.push(`/settings/forms/${template._id}`)">
               <Pencil class="h-4 w-4" stroke-width="1.75" />
             </Button>
-            <Button type="button" variant="ghost" size="icon-sm" :disabled="Boolean(busyId)" :aria-label="`以「${template.name}」建立新表單`" @click="openDuplicate(template)">
+            <Button type="button" variant="secondary" size="icon-sm" :disabled="Boolean(busyId)" :aria-label="`以「${template.name}」建立新表單`" @click="openDuplicate(template)">
               <Copy class="h-4 w-4" stroke-width="1.75" />
             </Button>
             <Button
@@ -355,9 +355,9 @@ onMounted(load);
             </Button>
             <Button
               type="button"
-              variant="ghost"
+              variant="destructive"
               size="sm"
-              class="ml-auto min-h-10 text-danger"
+              class="ml-auto min-h-10"
               :disabled="Boolean(busyId) || !canDelete"
               :title="canDelete ? '刪除這份表單' : '至少要保留一份表單'"
               @click="templateToDelete = template"

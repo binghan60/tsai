@@ -40,13 +40,13 @@ const emit = defineEmits(['update:modelValue', 'update:placeholder']);
   >
     <CalendarHeader class="flex items-center justify-between pb-3">
       <CalendarPrev
-        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-40"
+        class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
       >
         <ChevronLeft class="h-4 w-4" stroke-width="1.75" />
       </CalendarPrev>
       <CalendarHeading class="text-sm font-semibold text-foreground" />
       <CalendarNext
-        class="inline-flex h-8 w-8 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-muted/60 disabled:pointer-events-none disabled:opacity-40"
+        class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
       >
         <ChevronRight class="h-4 w-4" stroke-width="1.75" />
       </CalendarNext>
@@ -66,7 +66,7 @@ const emit = defineEmits(['update:modelValue', 'update:placeholder']);
               :month="month.value"
               :class="
                 cn(
-                  'mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-sm text-foreground transition-colors hover:bg-muted/60',
+                  'mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-muted/40 text-sm text-foreground transition-colors hover:bg-muted',
                   'data-[today]:font-semibold data-[today]:text-primary dark:data-[today]:text-primary',
                   'data-[outside-view]:text-muted-foreground/50',
                   'data-[selected]:bg-primary data-[selected]:text-primary-foreground data-[selected]:hover:bg-primary',
