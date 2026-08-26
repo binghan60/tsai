@@ -35,7 +35,7 @@ const TEMPLATE_SECTIONS = computed(() =>
 
 // 範本已刪除、但草稿仍留著作答的「孤兒項目」。後端 appendOrphans() 把它們補在最後一個
 // 同型別區塊，都沒有就另開「其他紀錄」；表單這邊必須一致 —— 不一致的話同一筆紀錄在
-// 表單與報告上會落在不同區塊，而完全渲染不出來時更糟：結案驗證仍會要求補異常說明，
+// 表單與報告上會落在不同區塊，而完全渲染不出來時更糟：結案驗證仍會要求填寫必填欄位，
 // 使用者卻在畫面上找不到那個欄位可以補，報告就此結不了案。
 // 兩種型別各自收容 —— 理學檢查與檢驗表格版式只畫得出自己的型別，混在同一個區塊
 // 會有一半渲染不出來。報告頁的容器沒有這個限制，不必跟著拆成兩個。
@@ -699,12 +699,6 @@ function validateForPreview() {
     if (item.max != null && numeric > item.max) addError(`${item.label}不可大於 ${item.max}`, anchorFor(item));
   }
 
-  for (const finding of record.examinationFindings.filter((f) => f.status === 'abnormal' && !f.note?.trim())) {
-    addError(`請補充理學檢查異常說明：${finding.label}`, `record-exam-row-${finding.key}`, `record-exam-note-${finding.key}`);
-  }
-  for (const finding of record.labFindings.filter((f) => f.status === 'abnormal' && !f.note?.trim())) {
-    addError(`請補充檢驗異常說明：${finding.label}`, `record-lab-row-${finding.key}`, `record-lab-note-${finding.key}`);
-  }
   validationErrors.value = errors;
   return errors.length === 0;
 }

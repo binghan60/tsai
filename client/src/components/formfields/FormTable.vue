@@ -86,18 +86,15 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                 </div>
                 <div class="space-y-1.5">
                   <Label :for="`record-lab-note-${finding.key}`" class="text-xs font-medium text-muted-foreground">
-                    備註<span v-if="finding.status === 'abnormal'" class="text-red-600 dark:text-red-400"> 異常說明 *</span>
+                    備註
                   </Label>
                   <input
                     :id="`record-lab-note-${finding.key}`"
                     v-model="finding.note"
                     type="text"
                     :aria-label="`${finding.label}備註`"
-                    :aria-invalid="finding.status === 'abnormal' && !finding.note.trim()"
-                    :required="finding.status === 'abnormal'"
-                    :placeholder="finding.status === 'abnormal' ? '請描述異常' : '選填'"
-                    class="min-h-11 w-full scroll-mt-40 rounded-xl border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
-                    :class="finding.status === 'abnormal' && !finding.note.trim() ? 'border-red-400 dark:border-red-700' : 'border-border '"
+                    :placeholder="finding.status === 'abnormal' ? '請描述異常（選填）' : '選填'"
+                    class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
                   />
                   <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-lab-note-${finding.key}`" />
                 </div>
