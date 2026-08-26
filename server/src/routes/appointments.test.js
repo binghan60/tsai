@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { app } from '../app.js';
 import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
+import { clinicToday } from '../lib/clinicTime.js';
 
 // 佇列相關的路由會走 Appointment.find(...).session(...)（報到那條再接 .where(...)），
 // 最後用 bulkWrite 兩階段寫回號碼。這裡把整條鏈假掉，並收下寫入的內容供斷言。
@@ -54,6 +55,78 @@ describe('appointments routes', () => {
 
   after(async () => {
     if (server) await new Promise((resolve) => server.close(resolve));
+  });
+
+  // 頁面上的日期面板選了哪一天，掛號就要掛在那一天。看著 8/29 卻掛到今天，
+  // 是這個功能最容易發生也最難發現的錯，所以直接釘住。
+  it('掛號會掛在 body 指定的日期，scheduledAt 也跟著那一天算', async () => {
+    const originalCreate = Appointment.create;
+    Appointment.create = async (doc) => doc;
+    try {
+      const response = await fetch(`${origin}/api/appointments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ petName: '妞妞', date: '2026-09-01', time: '10:00' }),
+      });
+      assert.equal(response.status, 201);
+      const body = await response.json();
+      assert.equal(body.date, '2026-09-01');
+      // 10:00 台北 = 02:00 UTC。時段換算要用掛號那一天，不是今天。
+      assert.equal(body.scheduledAt, '2026-09-01T02:00:00.000Z');
+    } finally {
+      Appointment.create = originalCreate;
+    }
+  });
+
+  it('沒帶日期就掛在今天', async () => {
+    const originalCreate = Appointment.create;
+    Appointment.create = async (doc) => doc;
+    try {
+      const response = await fetch(`${origin}/api/appointments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ petName: '妞妞', time: '10:00' }),
+      });
+      assert.equal(response.status, 201);
+      assert.equal((await response.json()).date, clinicToday());
+    } finally {
+      Appointment.create = originalCreate;
+    }
+  });
+
+  it('日期格式不對就退回今天，不會存進一個壞掉的 date', async () => {
+    const originalCreate = Appointment.create;
+    Appointment.create = async (doc) => doc;
+    try {
+      const response = await fetch(`${origin}/api/appointments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ petName: '妞妞', date: '2026/09/01', time: '10:00' }),
+      });
+      assert.equal(response.status, 201);
+      assert.equal((await response.json()).date, clinicToday());
+    } finally {
+      Appointment.create = originalCreate;
+    }
+  });
+
+  // 沒填時段時，排序基準要落在掛號的那一天。用「現在」的話，
+  // 掛在未來某天的那筆會排到那天清單的最前面。
+  it('未來日期沒填時段時，scheduledAt 落在那一天的開頭而不是現在', async () => {
+    const originalCreate = Appointment.create;
+    Appointment.create = async (doc) => doc;
+    try {
+      const response = await fetch(`${origin}/api/appointments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ petName: '妞妞', date: '2026-09-01' }),
+      });
+      assert.equal(response.status, 201);
+      // 2026-09-01 00:00 台北 = 2026-08-31T16:00:00.000Z
+      assert.equal((await response.json()).scheduledAt, '2026-08-31T16:00:00.000Z');
+    } finally {
+      Appointment.create = originalCreate;
+    }
   });
 
   // 飼主姓名選填，但一筆掛號至少要指得出是誰要來。

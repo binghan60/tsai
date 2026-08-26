@@ -135,7 +135,14 @@ router.post('/', async (req, res, next) => {
     // 電話掛號時客人常常是說「我明天帶來」，所以日期可以指定；沒帶就是今天。
     // 這頁仍然一次只看一天（時間軸與候診佇列都以 date 為界），不做跨日排班。
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.body.date || '')) ? req.body.date : clinicToday();
-    const scheduledAt = time ? combineClinicDateTime(date, time) : new Date();
+    // 沒指定時段時，排序基準要落在掛號的那一天，不是「現在」——
+    // 掛明天卻拿到今天的時刻，會讓那筆排到明天清單的最前面。只有掛今天才用當下時間，
+    // 那代表「現在打電話來、等一下就到」。跟 PUT 的處理保持一致。
+    const scheduledAt = time
+      ? combineClinicDateTime(date, time)
+      : date === clinicToday()
+        ? new Date()
+        : combineClinicDateTime(date, '');
 
     const appointment = await Appointment.create({
       date,

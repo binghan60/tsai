@@ -229,7 +229,7 @@ async function submitNewAppointment(payload) {
   newAppointmentError.value = '';
   try {
     await http.post('/appointments', payload);
-    toast.success('已加入今日掛號', '新增成功');
+    toast.success(isToday.value ? '已加入今日掛號' : `已加入 ${formatDate(selectedDate.value)} 的掛號`, '新增成功');
     newAppointmentOpen.value = false;
     await fetchAppointments({ silent: true });
   } catch (err) {
