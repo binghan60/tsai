@@ -250,7 +250,7 @@ GET    /api/health
   | 狀態徽章 | `<Badge variant="status">` | 不要覆寫 padding／圓角 |
   | 刪除等危險操作確認 | `<ConfirmDialog>` | **禁止用瀏覽器原生 `confirm()`／`alert()`**——樣式跳出主題、行動裝置體驗差、也擋不住連點 |
   | 操作結果提示（成功／失敗） | `useToast()`（`success`／`error`） | 同上，不要用 `alert()` |
-  | 清單分頁 | `<Pagination :page :total-pages>` | 不要手刻分頁列。只有分頁膠囊本身，置中顯示，不顯示「共 N 筆」。分頁列永遠顯示（含只有一頁的情況），邊界按鈕用 disabled 表達到頭了，不是整列消失；四顆按鈕收進一顆膠囊軌道，首頁／末頁降級成最小的圓形圖示鈕退到兩側（資料量小很少用到跳頁到底），下一頁比上一頁更常按所以用實心主色、上一頁只浮起一階。清單一筆資料都沒有時走 `EmptyState`，不會走到這裡。 |
+  | 清單分頁 | `<Pagination :page :total-pages>` | 不要手刻分頁列。頁碼七頁以內完整展開，更多頁時顯示第一頁、最後一頁、目前頁附近頁碼與省略號；目前頁使用實心主色並標記 `aria-current="page"`，兩側只保留上一頁／下一頁箭頭。分頁列永遠顯示（含只有一頁的情況），邊界按鈕用 disabled 表達到頭了。清單一筆資料都沒有時走 `EmptyState`，不會走到這裡。 |
   | 單選切換鈕（無描述文字、無計數） | `<SegmentedControl v-model :options :aria-label>` | 不要手刻——同一個「選取中」概念原本有四種顏色語彙（實心填色、白色浮動晶片、純色實心、淡色調底面）。選取態統一用 `bg-accent text-accent-foreground`（跟文字顏色規則的「選取／啟用中狀態」同一個記號）。要計數徽章、色點或橫向捲動時用 `FilterTabs`，不要塞進 `SegmentedControl`——那樣兩個元件遲早又會分裂成不同外觀。 |
   | 篩選面板（關鍵字，選配日期範圍） | `<FilterBar id label placeholder v-model with-date-range :date-from :date-to @submit>` | 不要再手刻「一張固定佔版面的表單」。收成一條搜尋膠囊：關鍵字輸入框＋（選配）「篩選日期」次要按鈕點了才展開日期範圍＋圓形送出鈕。全站搜尋一律走提交式（按 Enter／送出鈕／彈出層裡的套用才查），不做即時——邊打邊查在每個系統打字習慣不一樣的情況下容易誤觸，這是特地從即時搜尋改回來的決定；表單管理／文字模板頁的關鍵字雖然是純前端過濾（不打 API），還是統一走提交式，物種／狀態那類切換按鈕組才維持即時；這兩頁的分頁（`Pagination`）也是在前端切 10 筆一頁，不是後端 API 分頁，切換篩選或切換頁籤時要記得把頁碼重置回第一頁。 |
   | 清單頁的資料表格 | `<Card class="overflow-hidden p-0">` 搭配 `.desktop-data-header`／`.desktop-data-row`／`.desktop-data-cell`，在 Card 上用 `--data-columns` 定義欄寬 | 桌機表頭固定 44px、資料列固定 56px；內容維持單行並對長文字使用 `truncate`，只有使用者主動展開詳情時才套 `.desktop-data-row--expanded` 增高。不要用舊的 `<Table>`／`<TableCell>` 網格表格，也不要補空白列湊高度。身分欄用 36px 圓形圖示＋主色連結；狀態放 `Badge`；操作欄收斂成一個主要按鈕。 |
