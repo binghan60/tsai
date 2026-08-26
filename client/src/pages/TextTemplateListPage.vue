@@ -251,8 +251,8 @@ onMounted(load);
           <span class="desktop-data-cell"></span>
         </div>
         <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row">
-          <button type="button" class="desktop-data-cell flex items-center gap-2 text-left text-sm" :title="`${template.name} · ${template.content}`" @click="openEdit(template)">
-            <span class="max-w-[65%] shrink-0 truncate font-semibold text-primary">{{ template.name }}</span>
+          <button type="button" class="group desktop-data-cell flex items-center gap-2 text-left text-sm active:translate-y-px" :title="`${template.name} · ${template.content}`" @click="openEdit(template)">
+            <span class="max-w-[65%] shrink-0 truncate font-semibold text-primary underline-offset-4 group-hover:underline">{{ template.name }}</span>
             <span class="min-w-0 truncate text-xs text-muted-foreground">· {{ template.content }}</span>
           </button>
           <span class="desktop-data-cell truncate text-sm text-foreground" :title="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
@@ -266,7 +266,7 @@ onMounted(load);
       </Card>
 
       <div v-if="visibleTemplates.length" class="space-y-3 xl:hidden">
-        <Card v-for="template in pagedTemplates" :key="template._id" class="p-4"><div class="flex items-start justify-between gap-3"><button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)"><span class="font-semibold text-foreground">{{ template.name }}</span><span class="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{{ template.content }}</span></button><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></div><div class="mt-3 flex items-center gap-2 border-t border-border pt-3"><span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ applicabilityLabel(template) }}</span><Button type="button" variant="secondary" size="icon" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button></div></Card>
+        <Card v-for="template in pagedTemplates" :key="template._id" class="p-4"><div class="flex items-start justify-between gap-3"><button type="button" class="group min-w-0 flex-1 text-left active:translate-y-px" @click="openEdit(template)"><span class="font-semibold text-primary underline-offset-4 group-hover:underline">{{ template.name }}</span><span class="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{{ template.content }}</span></button><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></div><div class="mt-3 flex items-center gap-2 border-t border-border pt-3"><span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ applicabilityLabel(template) }}</span><Button type="button" variant="secondary" size="icon" :aria-label="`編輯${template.name}`" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" :aria-label="`刪除${template.name}`" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button></div></Card>
       </div>
 
       <Pagination v-if="visibleTemplates.length" :page="page" :total-pages="totalPages" @update:page="page = $event" />

@@ -8,6 +8,7 @@ import ListSkeleton from './ListSkeleton.vue';
 import { Alert, AlertDescription } from './ui/alert';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import PickerOptionRow from './PickerOptionRow.vue';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -120,21 +121,17 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
       <p v-if="!loading" class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 位飼主</p>
       <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
       <ListSkeleton v-if="loading" inset :rows="4" />
-      <div v-else-if="owners.length" class="divide-y divide-border overflow-hidden rounded-xl border border-border">
-        <button
+      <div v-else-if="owners.length" class="space-y-2">
+        <PickerOptionRow
           v-for="owner in owners"
           :key="owner._id"
-          type="button"
-          class="flex min-h-16 w-full items-center gap-3 bg-card px-4 py-3 text-left transition-colors hover:bg-muted/40"
-          @click="selectOwner(owner)"
+          :title="owner.name"
+          :aria-label="`選擇飼主 ${owner.name}`"
+          @select="selectOwner(owner)"
         >
-          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ owner.name?.[0] ?? '?' }}</span>
-          <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-medium text-foreground">{{ owner.name }}</span>
-            <span class="mt-0.5 block truncate text-xs text-muted-foreground">{{ owner.phone || '未填電話' }}</span>
-          </span>
-          <span class="shrink-0 text-sm font-medium text-primary">選擇</span>
-        </button>
+          <template #icon><span class="text-sm font-semibold">{{ owner.name?.[0] ?? '?' }}</span></template>
+          <template #description><span class="block truncate">{{ owner.phone || '未填電話' }}</span></template>
+        </PickerOptionRow>
       </div>
       <p v-else class="rounded-xl border border-border px-4 py-8 text-center text-sm text-muted-foreground">{{ query.trim() ? '找不到符合的飼主。' : '目前沒有飼主資料。' }}</p>
 

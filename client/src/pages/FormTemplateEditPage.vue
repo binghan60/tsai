@@ -580,25 +580,28 @@ function resolveLeave(confirmed) {
               <div
                 v-for="(section, index) in sections"
                 :key="section.key"
-                class="flex items-center gap-0.5 rounded-xl border p-1 transition-colors"
-                :class="activeKey === section.key
-                  ? 'border-primary/35 bg-accent'
-                  : 'border-transparent bg-muted/30 hover:bg-muted'"
+                class="flex items-center gap-1 rounded-xl border border-border bg-card p-1"
               >
-                <button type="button" class="min-h-11 min-w-0 flex-1 rounded-lg px-2 text-left" @click="focusSection(section.key)">
-                  <span class="block truncate text-sm font-medium" :class="section.enabled === false ? 'text-muted-foreground ' : 'text-foreground '">
+                <button
+                  type="button"
+                  class="min-h-11 min-w-0 flex-1 rounded-lg px-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:translate-y-px"
+                  :class="activeKey === section.key ? 'bg-accent' : 'bg-field/70'"
+                  :aria-pressed="activeKey === section.key"
+                  @click="focusSection(section.key)"
+                >
+                  <span class="block truncate text-sm font-medium" :class="section.enabled === false ? 'text-muted-foreground' : activeKey === section.key ? 'text-accent-foreground' : 'text-foreground'">
                     {{ section.title || '未命名區塊' }}
                   </span>
                   <span class="block text-xs text-muted-foreground">
                     {{ presentationMeta(section.presentation).title }} · {{ (section.items ?? []).length }} 項<span v-if="section.enabled === false"> · 已停用</span>
                   </span>
                 </button>
-                <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
+                <Button type="button" variant="secondary" size="icon" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
                   <ChevronUp class="h-4 w-4" stroke-width="1.75" />
-                </button>
-                <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
+                </Button>
+                <Button type="button" variant="secondary" size="icon" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
                   <ChevronDown class="h-4 w-4" stroke-width="1.75" />
-                </button>
+                </Button>
               </div>
               <Button type="button" variant="outline" size="sm" class="mt-2 w-full" @click="addSection">
                 <Plus class="h-4 w-4" stroke-width="1.75" />新增區塊
@@ -705,12 +708,12 @@ function resolveLeave(confirmed) {
                     <h2 class="truncate text-base font-semibold text-foreground">{{ selectedItem.label || '未命名項目' }}</h2>
                   </div>
                   <div class="flex shrink-0 items-center gap-0.5">
-                    <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25" :disabled="selectedIndex <= 0" aria-label="上移項目" @click="move(activeSection.items, selectedIndex, -1)">
+                    <Button type="button" variant="secondary" size="icon" :disabled="selectedIndex <= 0" aria-label="上移項目" @click="move(activeSection.items, selectedIndex, -1)">
                       <ChevronUp class="h-4 w-4" stroke-width="1.75" />
-                    </button>
-                    <button type="button" class="flex h-11 w-11 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-25" :disabled="selectedIndex < 0 || selectedIndex === activeSection.items.length - 1" aria-label="下移項目" @click="move(activeSection.items, selectedIndex, 1)">
+                    </Button>
+                    <Button type="button" variant="secondary" size="icon" :disabled="selectedIndex < 0 || selectedIndex === activeSection.items.length - 1" aria-label="下移項目" @click="move(activeSection.items, selectedIndex, 1)">
                       <ChevronDown class="h-4 w-4" stroke-width="1.75" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
 

@@ -8,6 +8,7 @@ import ListSkeleton from './ListSkeleton.vue';
 import { Alert, AlertDescription } from './ui/alert';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import PickerOptionRow from './PickerOptionRow.vue';
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -120,25 +121,23 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
       <p v-if="!loading" class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 隻寵物</p>
       <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
       <ListSkeleton v-if="loading" inset :rows="4" />
-      <div v-else-if="pets.length" class="divide-y divide-border overflow-hidden rounded-xl border border-border">
-        <button
+      <div v-else-if="pets.length" class="space-y-2">
+        <PickerOptionRow
           v-for="pet in pets"
           :key="pet._id"
-          type="button"
-          class="flex min-h-16 w-full items-center gap-3 bg-card px-4 py-3 text-left transition-colors hover:bg-muted/40"
-          @click="selectPet(pet)"
+          :title="pet.name"
+          :aria-label="`選擇寵物 ${pet.name}`"
+          @select="selectPet(pet)"
         >
-          <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
+          <template #icon>
             <Cat class="h-5 w-5" stroke-width="1.75" />
-          </span>
-          <span class="min-w-0 flex-1">
-            <span class="block truncate text-sm font-medium text-foreground">{{ pet.name }}</span>
-            <span class="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+          </template>
+          <template #description>
+            <span class="flex items-center gap-1 truncate">
               <User class="h-3.5 w-3.5 shrink-0" />{{ pet.ownerId?.name || '未指定飼主' }}
             </span>
-          </span>
-          <span class="shrink-0 text-sm font-medium text-primary">選擇</span>
-        </button>
+          </template>
+        </PickerOptionRow>
       </div>
       <p v-else class="rounded-xl border border-border px-4 py-8 text-center text-sm text-muted-foreground">{{ query.trim() ? '找不到符合的寵物。' : '目前沒有可選擇的寵物。' }}</p>
 
