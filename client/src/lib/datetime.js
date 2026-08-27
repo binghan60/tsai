@@ -51,6 +51,22 @@ export function weekdayLabel(value, fallback = '') {
   return new Intl.DateTimeFormat('zh-TW', { timeZone: 'UTC', weekday: 'short' }).format(date);
 }
 
+// 該週的週一（ISO 週制）。全程用 Date.UTC 整數天運算，避免時區問題。
+// weekStartsOn: 1=週一（ISO），0=週日（美式）。
+export function startOfWeek(value, weekStartsOn = 1) {
+  const match = DATE_ONLY.exec(String(value ?? '').trim());
+  if (!match) return '';
+  const [, year, month, day] = match;
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (Number.isNaN(date.getTime())) return '';
+  // UTC 下 getUTCDay() 在 0（週日）到 6（週六）。ISO 週一是 1，週日是 0；美式週日是 0，週一是 1。
+  const utcDay = date.getUTCDay();
+  const iso = weekStartsOn === 1 ? (utcDay === 0 ? 6 : utcDay - 1) : utcDay;
+  const diff = iso;
+  const monday = new Date(date.getTime() - diff * 24 * 60 * 60 * 1000);
+  return monday.toISOString().slice(0, 10);
+}
+
 // 取出指定時區下的年／月／日，避免用 getFullYear() 這類隱含本地時區的方法。
 function dateParts(date) {
   const [year, month, day] = clinicDateInput(date).split('-').map(Number);

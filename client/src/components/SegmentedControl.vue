@@ -12,7 +12,7 @@
 // 遲早又會分裂成不同外觀。
 const props = defineProps({
   modelValue: { type: [String, null], required: true },
-  // [{ value, label, icon? }]
+  // [{ value, label, icon?, tabId?, panelId? }]。作為真正的頁籤時傳入 id，讓頁籤和內容區建立關聯。
   options: { type: Array, required: true },
   ariaLabel: { type: String, required: true },
   // sm 用於工具列等次要情境（例如表單編輯器的顯示模式切換）。
@@ -57,6 +57,8 @@ function onKeydown(event, index) {
         modelValue === option.value ? 'bg-accent text-accent-foreground shadow-sm' : 'bg-field/70 text-muted-foreground hover:bg-card hover:text-foreground',
       ]"
       :aria-selected="modelValue === option.value"
+      :aria-controls="option.panelId"
+      :id="option.tabId"
       :tabindex="modelValue === option.value ? 0 : -1"
       @click="emit('update:modelValue', option.value)"
       @keydown="onKeydown($event, index)"

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SESSIONS,
+  appointmentsForTimeline,
   assignSessionIndex,
   groupBySession,
   isIdentityConfirmed,
@@ -14,7 +15,7 @@ function apt(overrides) {
 }
 
 describe('splitAppointmentsByQueueState', () => {
-  it('候診中自成一區、時間軸只剩尚未報到，已完成的直接消失', () => {
+  it('依流程狀態拆出候診、待報到與關閉項目', () => {
     const scheduled = apt({ _id: 'a', status: 'scheduled' });
     const arrived = apt({ _id: 'b', status: 'arrived', checkinNumber: 1 });
     const cancelled = apt({ _id: 'c', status: 'cancelled' });
@@ -27,19 +28,33 @@ describe('splitAppointmentsByQueueState', () => {
     assert.deepEqual(result.noShow.map((item) => item._id), ['d']);
   });
 
-  // 候診佇列依看診序號排，不看預約時間——報到之後預約時間就不決定任何事了。
-  it('候診中依看診序號排序，而不是預約時間', () => {
-    const late = apt({ _id: 'late', status: 'arrived', checkinNumber: 1, scheduledAt: '2026-08-26T11:00:00.000Z' });
-    const early = apt({ _id: 'early', status: 'arrived', checkinNumber: 2, scheduledAt: '2026-08-26T10:00:00.000Z' });
-    const unnumbered = apt({ _id: 'none', status: 'arrived', checkinNumber: null });
-    const result = splitAppointmentsByQueueState([early, unnumbered, late]);
-    assert.deepEqual(result.waiting.map((item) => item._id), ['late', 'early', 'none']);
+  // 紙本牌號只是現場識別碼，改牌不能改變候診先後；真正順序依報到時間。
+  it('候診中依報到時間排序，不受實體號碼牌影響', () => {
+    const late = apt({ _id: 'late', status: 'arrived', checkinNumber: 1, checkedInAt: '2026-08-26T02:10:00.000Z' });
+    const early = apt({ _id: 'early', status: 'arrived', checkinNumber: 8, checkedInAt: '2026-08-26T02:00:00.000Z' });
+    const unreported = apt({ _id: 'none', status: 'arrived', checkinNumber: null, checkedInAt: null });
+    const result = splitAppointmentsByQueueState([late, unreported, early]);
+    assert.deepEqual(result.waiting.map((item) => item._id), ['early', 'late', 'none']);
   });
 
   it('空陣列或缺少 status 不會炸掉', () => {
     const emptyResult = { waiting: [], scheduled: [], cancelled: [], noShow: [] };
     assert.deepEqual(splitAppointmentsByQueueState([]), emptyResult);
     assert.deepEqual(splitAppointmentsByQueueState(undefined), emptyResult);
+  });
+});
+
+describe('appointmentsForTimeline', () => {
+  it('已報到仍保留在時間軸，並和待報到項目一起依預約時間排列', () => {
+    const arrived = apt({ _id: 'arrived', status: 'arrived', scheduledAt: '2026-08-26T10:30:00.000Z' });
+    const scheduled = apt({ _id: 'scheduled', status: 'scheduled', scheduledAt: '2026-08-26T10:00:00.000Z' });
+    const completed = apt({ _id: 'completed', status: 'completed', scheduledAt: '2026-08-26T09:30:00.000Z' });
+    const result = appointmentsForTimeline([arrived, completed, scheduled]);
+    assert.deepEqual(result.map((item) => item._id), ['scheduled', 'arrived']);
+  });
+
+  it('空資料安全回傳空陣列', () => {
+    assert.deepEqual(appointmentsForTimeline(), []);
   });
 });
 

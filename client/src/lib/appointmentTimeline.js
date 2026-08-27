@@ -23,13 +23,13 @@ function timeOfDayMinutes(date) {
 
 // 這頁上有兩種順序，必須分開呈現，否則同一份清單會同時想表達兩件事。
 //
-// 報到之後，預約時間就不再決定任何事——人已經在診所裡，決定誰先看的是候診序號。
-// 所以 waiting 從時間軸抽出來自成一區、依 checkinNumber 排；時間軸只留還沒到的人，
-// 它的軸就純粹是時間。混在一起時，候診中的人會被釘在自己的預約時間上，
-// 旁邊卻掛著一個跟那個位置無關的號碼，連調整順序的按鈕都會被讀成在拖時間。
+// 報到之後，預約時間就不再決定任何事——人已經在診所裡，候診順序依實際報到時間。
+// checkinNumber 是發給病患的實體號碼牌，不是陣列位置。時間軸則保留 scheduled 與 arrived，
+// 繼續依原預約時間排列。同一筆已報到掛號會出現在兩處，但各自回答不同問題：
+// 候診區回答「下一位是誰」，時間軸回答「原本約在幾點、目前進行到哪裡」。
 //
-// 已取消與未到各自集中到最下面。已完成的看診直接從這頁消失（不是留著變灰）——
-// 保持佇列乾淨，這頁只服務「今天還要處理的事」。
+// 已取消與未到各自集中到最下面；已完成另由頁面收進可展開的完成紀錄，
+// 不混進仍待處理的候診佇列與時間軸。
 export function splitAppointmentsByQueueState(appointments) {
   const waiting = [];
   const scheduled = [];
@@ -41,10 +41,22 @@ export function splitAppointmentsByQueueState(appointments) {
     else if (appointment.status === 'cancelled') cancelled.push(appointment);
     else if (appointment.status === 'no_show') noShow.push(appointment);
   }
-  // 佇列位置就是看診順序，跟預約時間無關。還沒配到號碼的排最後。
-  const position = (item) => (Number.isInteger(item.checkinNumber) ? item.checkinNumber : Number.MAX_SAFE_INTEGER);
-  waiting.sort((a, b) => position(a) - position(b));
+  // 實體牌號可以由櫃台修改，不得藉此插隊；候診先後只看報到時間，平手再用 id 固定順序。
+  waiting.sort((a, b) => {
+    const left = a.checkedInAt ? new Date(a.checkedInAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const right = b.checkedInAt ? new Date(b.checkedInAt).getTime() : Number.MAX_SAFE_INTEGER;
+    if (left !== right) return left - right;
+    return String(a._id).localeCompare(String(b._id));
+  });
   return { waiting, scheduled, cancelled, noShow };
+}
+
+// 報到不是從日程消失，而是多了一個候診狀態。時間軸保留兩種進行中狀態，
+// 並重新依預約時間排序，避免候診佇列的報到時間排序污染時間軸順序。
+export function appointmentsForTimeline(appointments) {
+  return (appointments ?? [])
+    .filter((appointment) => appointment.status === 'scheduled' || appointment.status === 'arrived')
+    .sort((a, b) => new Date(a.scheduledAt || 0) - new Date(b.scheduledAt || 0));
 }
 
 // 身分是否已經確定（回診＝已知道是哪隻寵物；初診＝petId 還是空的）。

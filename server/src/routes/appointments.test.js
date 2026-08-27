@@ -6,9 +6,10 @@ import { app } from '../app.js';
 import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
 import { clinicToday } from '../lib/clinicTime.js';
+import { enumerateDates, fillDailyCounts } from './appointments.js';
 
-// 佇列相關的路由會走 Appointment.find(...).session(...)（報到那條再接 .where(...)），
-// 最後用 bulkWrite 兩階段寫回號碼。這裡把整條鏈假掉，並收下寫入的內容供斷言。
+// 號碼牌相關路由會走 Appointment.find(...).session(...)（報到那條再接 .where(...)）。
+// 這裡把查詢鏈與 transaction 假掉，並監看是否誤用 bulkWrite 改到其他人的牌號。
 function stubQueue(rows) {
   const chain = {
     session: () => chain,
@@ -32,7 +33,7 @@ function captureQueueWrites() {
     endSession: async () => {},
   });
   return {
-    // 兩階段寫入的第二批才是正式號碼，第一批是為了讓開唯一索引的負數。
+    // 實體牌號不該整批重排；保留這些資訊是為了讓測試能明確釘住「沒有 bulkWrite」。
     get positions() { return calls.at(-1) ?? []; },
     get phases() { return calls.length; },
     restore() {
@@ -147,13 +148,15 @@ describe('appointments routes', () => {
       const response = await fetch(`${origin}/api/appointments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ petName: '妞妞', ownerPhone: '0912-345-678', time: '10:00' }),
+        // 即使呼叫端亂報成回診，後端仍要依有沒有既有 petId 判斷。
+        body: JSON.stringify({ petName: '妞妞', ownerPhone: '0912-345-678', time: '10:00', visitType: 'return' }),
       });
       assert.equal(response.status, 201);
       const body = await response.json();
       assert.equal(body.petName, '妞妞');
       assert.equal(body.ownerName, '');
       assert.equal(body.ownerPhone, '0912-345-678');
+      assert.equal(body.visitType, 'new');
     } finally {
       Appointment.create = originalCreate;
     }
@@ -186,7 +189,7 @@ describe('appointments routes', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         // 故意帶跟資料庫不一致的假快照，驗證後端不會採信它們。
-        body: JSON.stringify({ petId: '507f1f77bcf86cd799439011', ownerName: '假名字', petName: '假寵物名' }),
+        body: JSON.stringify({ petId: '507f1f77bcf86cd799439011', visitType: 'new', ownerName: '假名字', petName: '假寵物名' }),
       });
       assert.equal(response.status, 201);
       const body = await response.json();
@@ -195,6 +198,7 @@ describe('appointments routes', () => {
       assert.equal(body.petName, '妞妞');
       assert.equal(body.species, '貓');
       assert.equal(body.ownerId, 'owner-1');
+      assert.equal(body.visitType, 'return');
     } finally {
       Pet.findById = originalFindById;
       Appointment.create = originalCreate;
@@ -289,7 +293,7 @@ describe('appointments routes', () => {
     }
   });
 
-  it('報到時自動接到隊尾', async () => {
+  it('報到時自動配發目前可用的實體號碼牌', async () => {
     const originalFindById = Appointment.findById;
     const appointment = {
       _id: 'apt-checkin-time',
@@ -302,21 +306,26 @@ describe('appointments routes', () => {
     };
     Appointment.findById = async () => appointment;
     const queue = captureQueueWrites();
-    // 佇列裡已經有兩個人在等，所以這位是第 3 個。
-    Appointment.find = () => stubQueue([{ _id: 'a', checkinNumber: 1 }, { _id: 'b', checkinNumber: 2 }]);
+    // 1 號已歸還、2 號仍在使用；1 號今天不能重發，所以新報到要拿 3 號。
+    Appointment.find = () => stubQueue([
+      { _id: 'a', checkinNumber: null, checkinNumberHistory: [1] },
+      { _id: 'b', checkinNumber: 2, checkinNumberHistory: [2] },
+    ]);
     try {
       const beforeCheckin = Date.now();
       const response = await fetch(`${origin}/api/appointments/apt-checkin-time/check-in`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        // 位置由佇列決定，body 帶什麼號碼都不影響。
+        // 初次牌號由後端配發，body 偷帶號碼不影響。
         body: JSON.stringify({ checkinNumber: 1 }),
       });
       assert.equal(response.status, 200);
       assert.equal(appointment.status, 'arrived');
+      assert.equal(appointment.visitType, 'return');
       assert.equal(appointment.checkinNumber, 3);
-      // 前面兩個人的位置沒變，就不該被寫入。
-      assert.deepEqual(queue.positions, [{ _id: 'apt-checkin-time', checkinNumber: 3 }]);
+      assert.deepEqual(appointment.checkinNumberHistory, [3]);
+      // 實體牌號只寫在剛報到的人身上，不重編前面兩人的牌。
+      assert.equal(queue.phases, 0);
       assert.ok(appointment.checkedInAt instanceof Date);
       assert.ok(appointment.checkedInAt.getTime() >= beforeCheckin);
     } finally {
@@ -325,7 +334,63 @@ describe('appointments routes', () => {
     }
   });
 
-  it('完成看診後離開佇列，後面的人往前遞補', async () => {
+  it('可修改已報到掛號的實體號碼牌，不改動其他人的牌號', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'b',
+      status: 'arrived',
+      date: '2026-08-26',
+      checkinNumber: 2,
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([
+      { _id: 'a', checkinNumber: 1 },
+      appointment,
+      { _id: 'c', checkinNumber: null, checkinNumberHistory: [3] },
+    ]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/b/check-in-number`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ checkinNumber: 7 }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.checkinNumber, 7);
+      assert.deepEqual(appointment.checkinNumberHistory, [2, 7]);
+      assert.equal(queue.phases, 0);
+    } finally {
+      Appointment.findById = originalFindById;
+      queue.restore();
+    }
+  });
+
+  it('不能把仍有人持有的實體號碼牌發給另一位候診者', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = { _id: 'b', status: 'arrived', date: '2026-08-26', checkinNumber: 2 };
+    Appointment.findById = async () => appointment;
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([
+      { _id: 'a', checkinNumber: 1 },
+      appointment,
+      { _id: 'c', checkinNumber: 3 },
+    ]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/b/check-in-number`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ checkinNumber: 3 }),
+      });
+      assert.equal(response.status, 409);
+      assert.equal(queue.phases, 0);
+    } finally {
+      Appointment.findById = originalFindById;
+      queue.restore();
+    }
+  });
+
+  it('完成看診後歸還自己的實體號碼牌，其他人的牌號不變', async () => {
     const originalFindById = Appointment.findById;
     const appointment = {
       _id: 'apt-done',
@@ -336,8 +401,8 @@ describe('appointments routes', () => {
     };
     Appointment.findById = async () => appointment;
     const queue = captureQueueWrites();
-    // 自己的號碼先清掉，剩下的兩位重新編號成 1、2。
-    Appointment.find = () => stubQueue([{ _id: 'b', checkinNumber: 2 }, { _id: 'c', checkinNumber: 3 }]);
+    const others = [{ _id: 'b', checkinNumber: 2 }, { _id: 'c', checkinNumber: 3 }];
+    Appointment.find = () => stubQueue(others);
     try {
       const response = await fetch(`${origin}/api/appointments/apt-done/complete`, {
         method: 'POST',
@@ -347,10 +412,9 @@ describe('appointments routes', () => {
       assert.equal(response.status, 200);
       assert.equal(appointment.status, 'completed');
       assert.equal(appointment.checkinNumber, null);
-      assert.deepEqual(queue.positions, [
-        { _id: 'b', checkinNumber: 1 },
-        { _id: 'c', checkinNumber: 2 },
-      ]);
+      assert.deepEqual(appointment.checkinNumberHistory, [1]);
+      assert.deepEqual(others.map((item) => item.checkinNumber), [2, 3]);
+      assert.equal(queue.phases, 0);
     } finally {
       Appointment.findById = originalFindById;
       queue.restore();
@@ -461,7 +525,7 @@ describe('appointments routes', () => {
     }
   });
 
-  it('已報到掛號可取消報到，並清除看診序號', async () => {
+  it('已報到掛號可取消報到並歸還號碼牌，不改動其他人的牌號', async () => {
     const originalFindById = Appointment.findById;
     const appointment = {
       _id: 'apt-arrived-restore',
@@ -484,9 +548,9 @@ describe('appointments routes', () => {
       assert.equal(response.status, 200);
       assert.equal(appointment.status, 'scheduled');
       assert.equal(appointment.checkinNumber, null);
+      assert.deepEqual(appointment.checkinNumberHistory, [3]);
       assert.equal(appointment.checkedInAt, null);
-      // 前面兩位的位置沒受影響，不必重寫。
-      assert.deepEqual(queue.positions, []);
+      assert.equal(queue.phases, 0);
     } finally {
       Appointment.findById = originalFindById;
       queue.restore();
@@ -536,5 +600,79 @@ describe('appointments routes', () => {
     } finally {
       Appointment.findById = originalFindById;
     }
+  });
+});
+
+describe('appointments summary', () => {
+  it('enumerateDates 產生日期陣列', () => {
+    const dates = enumerateDates('2026-08-26', '2026-08-28');
+    assert.deepEqual(dates, ['2026-08-26', '2026-08-27', '2026-08-28']);
+  });
+
+  it('fillDailyCounts 補零並排序', () => {
+    const dates = ['2026-08-26', '2026-08-27', '2026-08-28'];
+    const buckets = [{ _id: '2026-08-27', count: 3 }];
+    const result = fillDailyCounts(dates, buckets);
+    assert.deepEqual(result, [
+      { date: '2026-08-26', count: 0 },
+      { date: '2026-08-27', count: 3 },
+      { date: '2026-08-28', count: 0 },
+    ]);
+  });
+
+  describe('GET /appointments/summary', () => {
+    let server;
+    let origin;
+
+    before(async () => {
+      server = app.listen(0, '127.0.0.1');
+      if (!server.listening) await once(server, 'listening');
+      origin = `http://127.0.0.1:${server.address().port}`;
+    });
+
+    after(async () => {
+      if (server) await new Promise((resolve) => server.close(resolve));
+    });
+
+    it('需要 start 與 end 參數', async () => {
+      const response = await fetch(`${origin}/api/appointments/summary`);
+      assert.equal(response.status, 422);
+      assert.match((await response.json()).message, /日期/);
+    });
+
+    it('格式不正確回 422', async () => {
+      const response = await fetch(`${origin}/api/appointments/summary?start=2026/08/26&end=2026/08/28`);
+      assert.equal(response.status, 422);
+      assert.match((await response.json()).message, /日期/);
+    });
+
+    it('start > end 回 422', async () => {
+      const response = await fetch(`${origin}/api/appointments/summary?start=2026-08-28&end=2026-08-26`);
+      assert.equal(response.status, 422);
+      assert.match((await response.json()).message, /不可晚於/);
+    });
+
+    it('超過 31 天回 422', async () => {
+      const response = await fetch(`${origin}/api/appointments/summary?start=2026-08-01&end=2026-09-02`);
+      assert.equal(response.status, 422);
+      assert.match((await response.json()).message, /最多 31 天/);
+    });
+
+    it('正常查詢回傳每日計數', async () => {
+      const originalAggregate = Appointment.aggregate;
+      Appointment.aggregate = async () => [{ _id: '2026-08-27', count: 3 }];
+      try {
+        const response = await fetch(`${origin}/api/appointments/summary?start=2026-08-26&end=2026-08-28`);
+        assert.equal(response.status, 200);
+        const body = await response.json();
+        assert.deepEqual(body.items, [
+          { date: '2026-08-26', count: 0 },
+          { date: '2026-08-27', count: 3 },
+          { date: '2026-08-28', count: 0 },
+        ]);
+      } finally {
+        Appointment.aggregate = originalAggregate;
+      }
+    });
   });
 });

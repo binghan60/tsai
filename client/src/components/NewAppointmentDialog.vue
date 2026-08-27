@@ -63,11 +63,12 @@ const onSubmit = handleSubmit((values) => {
       pickPetError.value = '請先選擇寵物';
       return;
     }
-    emit('submit', { date: props.date, petId: selectedPet.value._id, time: values.time, reason: values.reason });
+    emit('submit', { date: props.date, visitType: 'return', petId: selectedPet.value._id, time: values.time, reason: values.reason });
     return;
   }
   emit('submit', {
     date: props.date,
+    visitType: 'new',
     ownerName: values.ownerName,
     ownerPhone: values.ownerPhone,
     petName: values.petName,

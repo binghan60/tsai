@@ -15,6 +15,8 @@ const props = defineProps({
   // [{ key, label, icon?, danger?, disabled? }]
   actions: { type: Array, required: true },
   label: { type: String, default: '更多操作' },
+  // 觸發鈕圖示，預設「更多操作」的刪節號。
+  icon: { type: [Function, Object], default: null },
 });
 
 const emit = defineEmits(['select']);
@@ -31,7 +33,7 @@ function choose(action) {
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
       <Button type="button" variant="secondary" size="icon-sm" :aria-label="props.label">
-        <MoreHorizontal class="h-4 w-4" stroke-width="1.75" />
+        <component :is="props.icon || MoreHorizontal" class="h-4 w-4" stroke-width="1.75" />
       </Button>
     </PopoverTrigger>
     <PopoverContent align="end" class="w-48 p-1">

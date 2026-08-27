@@ -1,19 +1,20 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Lock, Pencil, Phone, Plus, User, UserPlus, UserX } from '@lucide/vue';
+import { CalendarClock, CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Lock, Pencil, Phone, User, UserPlus, UserX, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
 import {
   SESSIONS,
   SURGERY_BLOCK,
+  appointmentsForTimeline,
   assignSessionIndex,
   groupBySession,
   isIdentityConfirmed,
   nowIndexInSession,
   splitAppointmentsByQueueState,
 } from '../lib/appointmentTimeline';
-import { clinicDateInput, formatDate, formatDateTime, shiftDateInput, weekdayLabel } from '../lib/datetime';
+import { clinicDateInput, formatDate, formatDateTime, shiftDateInput, startOfWeek, weekdayLabel } from '../lib/datetime';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { DatePicker } from '../components/ui/date-picker';
 import PageHeader from '../components/PageHeader.vue';
@@ -28,6 +29,7 @@ import CheckInDialog from '../components/CheckInDialog.vue';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import SegmentedControl from '../components/SegmentedControl.vue';
 
 const router = useRouter();
 const toast = useToast();
@@ -38,6 +40,10 @@ const today = clinicDateInput();
 const selectedDate = useSearchQueryParam('date', today);
 const isToday = computed(() => selectedDate.value === today);
 
+// 這是整頁層級的檢視切換，放進網址才能在重新整理、返回或分享連結後保留目前視圖。
+const viewMode = useSearchQueryParam('view', 'day'); // 'day' | 'week'
+if (!['day', 'week'].includes(viewMode.value)) viewMode.value = 'day';
+
 const appointments = ref([]);
 const loading = ref(false);
 const error = ref('');
@@ -46,6 +52,9 @@ let nowTimer;
 let refreshTimer;
 
 const expandedIds = ref(new Set());
+const collapsedSessionIds = ref(new Set());
+const editingCardNumberId = ref(null);
+const cardNumberDraft = ref('');
 const simpleForms = reactive({});
 const busyIds = ref(new Set());
 
@@ -70,6 +79,20 @@ const ROW_ACTIONS = [
   { key: 'cancel', label: '取消掛號', danger: true },
 ];
 
+const VISIT_TYPE_META = {
+  new: { label: '初診', classes: 'bg-info text-info-surface ring-info' },
+  return: { label: '回診', classes: 'bg-accent text-accent-foreground ring-primary/25' },
+  unknown: { label: '類型未記錄', classes: 'bg-muted text-muted-foreground ring-border' },
+};
+
+function visitTypeMeta(appointment) {
+  if (VISIT_TYPE_META[appointment?.visitType]) return VISIT_TYPE_META[appointment.visitType];
+  // 舊資料在尚未報到時，petId 仍能代表掛號當下是否選了既有病患；報到後 petId
+  // 可能是初診現場才建立的，這時不能再猜，明確標示未記錄。
+  if (appointment?.status === 'scheduled') return appointment.petId ? VISIT_TYPE_META.return : VISIT_TYPE_META.new;
+  return VISIT_TYPE_META.unknown;
+}
+
 // 快速連按前後一天時，先發的請求可能後回來。用送出當下的日期比對，
 // 對不上就整包丟掉——不然畫面會停在別天的資料上。
 let dateRequestToken = 0;
@@ -93,26 +116,78 @@ async function fetchAppointments({ silent = false } = {}) {
   }
 }
 
-watch(selectedDate, (value) => {
-  // DatePicker 的清除鈕會送出空字串，但這頁一定得停在某一天。
-  if (!value) {
-    selectedDate.value = today;
-    return;
-  }
-  expandedIds.value = new Set();
-  fetchAppointments();
-});
-
 const appointmentGroups = computed(() => splitAppointmentsByQueueState(appointments.value));
-// 候診佇列＝已報到還沒看完的人，由上而下就是看診順序。清單長度是「往後排」的上限。
+// 候診佇列＝已報到還沒看完的人，由上而下依報到時間排列；牌號只供現場辨識。
 const waitingQueue = computed(() => appointmentGroups.value.waiting);
-// 時間軸只剩還沒報到的人，它的軸就純粹是時間。
+// 尚未報到數量獨立用於流程摘要；時間軸本身會連同已報到項目一起顯示。
 const upcomingAppointments = computed(() => appointmentGroups.value.scheduled);
+// 時間軸保留預約當下的脈絡：報到後另外進入候診佇列，但仍留在原預約時間上。
+const timelineAppointments = computed(() => appointmentsForTimeline(appointments.value));
+const completedAppointments = computed(() =>
+  appointments.value
+    .filter((appointment) => appointment.status === 'completed')
+    .sort((a, b) => new Date(b.completedAt || b.updatedAt || 0) - new Date(a.completedAt || a.updatedAt || 0))
+);
 const hasAnyAppointment = computed(() => appointments.value.length > 0);
 const closedGroups = computed(() => [
   { key: 'cancelled', label: '已取消', icon: CalendarX2, items: appointmentGroups.value.cancelled },
   { key: 'no_show', label: '未到', icon: UserX, items: appointmentGroups.value.noShow },
 ].filter((group) => group.items.length));
+
+// 統計摘要
+const dayStats = computed(() => [
+  { key: 'total', label: '今日掛號', icon: CalendarClock, value: appointments.value.length },
+  { key: 'scheduled', label: '待報到', icon: UserPlus, value: upcomingAppointments.value.length },
+  { key: 'waiting', label: '候診中', icon: Clock, value: waitingQueue.value.length },
+  { key: 'completed', label: '已完成', icon: Check, value: completedAppointments.value.length },
+]);
+
+// 週檢視相關
+const weekStart = computed(() => startOfWeek(selectedDate.value));
+const weekDates = computed(() => Array.from({ length: 7 }, (_, i) => shiftDateInput(weekStart.value, i)));
+const weekEnd = computed(() => shiftDateInput(weekStart.value, 6));
+const weekRangeLabel = computed(() => `${formatDate(weekStart.value)}–${formatDate(weekEnd.value)}`);
+const weekSummary = ref(new Map()); // date -> count
+const weekTotal = computed(() => Array.from(weekSummary.value.values()).reduce((sum, count) => sum + count, 0));
+const weekSummaryLoading = ref(false);
+const weekSummaryError = ref('');
+let weekSummaryRequestToken = 0;
+
+async function fetchWeekSummary() {
+  if (viewMode.value !== 'week') return;
+  const start = weekStart.value;
+  const end = shiftDateInput(start, 6);
+  const token = ++weekSummaryRequestToken;
+  weekSummaryLoading.value = true;
+  weekSummaryError.value = '';
+  try {
+    const { data } = await http.get('/appointments/summary', { params: { start, end } });
+    if (token !== weekSummaryRequestToken) return;
+    const map = new Map(data.items.map((item) => [item.date, item.count]));
+    weekSummary.value = map;
+  } catch {
+    if (token === weekSummaryRequestToken) {
+      weekSummaryError.value = '無法載入週掛號統計，請稍後重試';
+    }
+  } finally {
+    if (token === weekSummaryRequestToken) weekSummaryLoading.value = false;
+  }
+}
+
+watch([selectedDate, viewMode], ([date, mode]) => {
+  // DatePicker 的清除鈕會送出空字串，但這頁一定得停在某一天。
+  if (!date) {
+    selectedDate.value = today;
+    return;
+  }
+  expandedIds.value = new Set();
+  collapsedSessionIds.value = new Set();
+  editingCardNumberId.value = null;
+  cardNumberDraft.value = '';
+  if (mode === 'week') fetchWeekSummary();
+  else fetchAppointments();
+});
+
 const actionConfirmation = computed(() => {
   const pending = actionToConfirm.value;
   const petName = pending?.appointment?.petName || '這筆';
@@ -135,7 +210,7 @@ const actionConfirmation = computed(() => {
   if (pending?.key === 'undo_check_in') {
     return {
       title: '取消這筆報到？',
-      description: `確定要取消「${petName}」的報到嗎？這筆掛號會回到尚未報到，並清除目前的看診序號。`,
+      description: `確定要取消「${petName}」的報到嗎？這筆掛號會回到尚未報到並歸還實體號碼牌；此牌號今天不再配發。`,
       confirmLabel: '取消報到',
       destructive: true,
     };
@@ -147,7 +222,12 @@ const actionConfirmation = computed(() => {
     destructive: true,
   };
 });
-const sessionGroups = computed(() => groupBySession(upcomingAppointments.value, SESSIONS));
+const sessionGroups = computed(() => groupBySession(timelineAppointments.value, SESSIONS));
+const visibleSessionGroups = computed(() =>
+  sessionGroups.value
+    .map((group, sessionIndex) => ({ ...group, sessionIndex }))
+    .filter((group) => group.items.length)
+);
 const nowSessionIndex = computed(() => assignSessionIndex(now.value.getHours() * 60 + now.value.getMinutes(), SESSIONS));
 const nowLabel = computed(() =>
   `${String(now.value.getHours()).padStart(2, '0')}:${String(now.value.getMinutes()).padStart(2, '0')}`
@@ -156,6 +236,17 @@ const checkinTimeOptions = { hour: '2-digit', minute: '2-digit', hour12: false }
 
 function isExpanded(id) {
   return expandedIds.value.has(id);
+}
+
+function isSessionCollapsed(id) {
+  return collapsedSessionIds.value.has(id);
+}
+
+function toggleSession(id) {
+  const next = new Set(collapsedSessionIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  collapsedSessionIds.value = next;
 }
 
 function toggleExpanded(appointment) {
@@ -184,6 +275,41 @@ function setBusy(id, busy) {
   if (busy) next.add(id);
   else next.delete(id);
   busyIds.value = next;
+}
+
+function beginCardNumberEdit(appointment) {
+  if (isBusy(appointment._id)) return;
+  editingCardNumberId.value = appointment._id;
+  cardNumberDraft.value = String(appointment.checkinNumber ?? '');
+}
+
+function cancelCardNumberEdit() {
+  editingCardNumberId.value = null;
+  cardNumberDraft.value = '';
+}
+
+async function submitCardNumber(appointment) {
+  if (editingCardNumberId.value !== appointment._id) return;
+  const nextNumber = Number(cardNumberDraft.value);
+  cancelCardNumberEdit();
+
+  if (!Number.isSafeInteger(nextNumber) || nextNumber < 1) {
+    toast.error('請輸入從 1 開始的整數', '號碼牌不正確');
+    return;
+  }
+  if (nextNumber === appointment.checkinNumber) return;
+
+  setBusy(appointment._id, true);
+  try {
+    await http.patch(`/appointments/${appointment._id}/check-in-number`, { checkinNumber: nextNumber });
+    toast.success(`${appointment.petName || '這隻寵物'}已改拿 ${nextNumber} 號牌`, '號碼牌已更新');
+    await fetchAppointments({ silent: true });
+  } catch (err) {
+    reportApiError(err, '號碼牌更新失敗，請稍後再試');
+    await fetchAppointments({ silent: true });
+  } finally {
+    setBusy(appointment._id, false);
+  }
 }
 
 function reportApiError(err, fallback) {
@@ -334,13 +460,15 @@ async function confirmRowAction() {
 }
 
 onMounted(() => {
-  fetchAppointments();
+  if (viewMode.value === 'week') fetchWeekSummary();
+  else fetchAppointments();
   nowTimer = setInterval(() => {
     now.value = new Date();
   }, 30_000);
   // 只有今天的清單會自己變動（有人報到、看完診）；停在別天時不必一直重抓。
   refreshTimer = setInterval(() => {
-    if (isToday.value) fetchAppointments({ silent: true });
+    if (viewMode.value === 'week') fetchWeekSummary();
+    else if (isToday.value) fetchAppointments({ silent: true });
   }, 60_000);
 });
 onBeforeUnmount(() => {
@@ -350,33 +478,111 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="mx-auto max-w-7xl space-y-5">
+  <section class="mx-auto max-w-[90rem] space-y-4">
     <PageHeader title="掛號" description="依門診時段掌握報到順序，候診中可直接完成量測與看診。">
       <template #actions>
         <Button type="button" @click="newAppointmentOpen = true"><UserPlus class="h-4 w-4" stroke-width="1.75" />掛號</Button>
       </template>
     </PageHeader>
 
-    <!-- ── 日期面板 ──
-         看的是哪一天由這裡決定，時間軸與候診佇列都跟著它走。 -->
-    <div class="flex flex-wrap items-center justify-between gap-3">
-      <div class="flex items-center gap-2">
-        <Button type="button" variant="secondary" size="icon-sm" aria-label="前一天" @click="selectedDate = shiftDateInput(selectedDate, -1)">
-          <ChevronLeft class="h-4 w-4" stroke-width="1.75" />
-        </Button>
-        <DatePicker v-model="selectedDate" :clearable="false" class="w-40" aria-label="選擇要查看的日期" />
-        <Button type="button" variant="secondary" size="icon-sm" aria-label="後一天" @click="selectedDate = shiftDateInput(selectedDate, 1)">
-          <ChevronRight class="h-4 w-4" stroke-width="1.75" />
-        </Button>
-        <span class="text-sm font-medium" :class="isToday ? 'text-primary' : 'text-muted-foreground'">
-          {{ weekdayLabel(selectedDate) }}<template v-if="isToday"> · 今天</template>
-        </span>
-      </div>
-      <Button v-if="!isToday" type="button" variant="secondary" size="sm" @click="selectedDate = today">回到今天</Button>
-    </div>
+    <!-- 主視圖切換與日期導覽共用一張緊湊控制面板，避免操作內容開始前先堆三層卡片。 -->
+    <Card class="overflow-hidden p-0 shadow-sm dark:shadow-none">
+      <div class="grid gap-3 p-3 sm:p-4 lg:grid-cols-[14rem_minmax(0,1fr)] lg:items-center">
+        <div class="w-full">
+          <SegmentedControl
+            v-model="viewMode"
+            :options="[
+              { value: 'day', label: '單日', tabId: 'appointments-day-tab', panelId: 'appointments-day-panel' },
+              { value: 'week', label: '本週', tabId: 'appointments-week-tab', panelId: 'appointments-week-panel' },
+            ]"
+            aria-label="掛號檢視模式"
+            size="sm"
+            full-width
+          />
+        </div>
 
-    <ListSkeleton v-if="loading" :rows="4" />
-    <Alert v-else-if="error" variant="destructive">
+        <div class="flex flex-wrap items-center gap-2 lg:justify-end">
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-sm"
+            :aria-label="viewMode === 'week' ? '上一週' : '前一天'"
+            @click="selectedDate = shiftDateInput(selectedDate, viewMode === 'week' ? -7 : -1)"
+          >
+            <ChevronLeft class="h-4 w-4" stroke-width="1.75" />
+          </Button>
+          <DatePicker v-model="selectedDate" :clearable="false" class="w-40" aria-label="選擇要查看的日期" />
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-sm"
+            :aria-label="viewMode === 'week' ? '下一週' : '後一天'"
+            @click="selectedDate = shiftDateInput(selectedDate, viewMode === 'week' ? 7 : 1)"
+          >
+            <ChevronRight class="h-4 w-4" stroke-width="1.75" />
+          </Button>
+          <span class="text-sm font-medium" :class="isToday ? 'text-primary' : 'text-muted-foreground'">
+            {{ weekdayLabel(selectedDate) }}<template v-if="isToday"> · 今天</template>
+          </span>
+          <Button v-if="!isToday" type="button" variant="outline" size="sm" @click="selectedDate = today">回到今天</Button>
+          <RowActions
+            :actions="[
+              { key: 'tomorrow', label: '明天' },
+              { key: 'day_after_tomorrow', label: '後天' },
+              { key: 'next_weekday', label: `下一個${weekdayLabel(selectedDate)}` },
+              { key: 'prev_weekday', label: `上一個${weekdayLabel(selectedDate)}` },
+            ]"
+            :icon="CalendarClock"
+            label="快速跳轉日期"
+            @select="(key) => {
+              if (key === 'tomorrow') selectedDate = shiftDateInput(today, 1);
+              else if (key === 'day_after_tomorrow') selectedDate = shiftDateInput(today, 2);
+              else if (key === 'next_weekday') selectedDate = shiftDateInput(selectedDate, 7);
+              else if (key === 'prev_weekday') selectedDate = shiftDateInput(selectedDate, -7);
+            }"
+          />
+        </div>
+      </div>
+
+      <dl v-if="viewMode === 'day'" class="grid grid-cols-4 border-t border-border bg-field/45" :aria-busy="loading || undefined">
+        <div
+          v-for="stat in dayStats"
+          :key="stat.key"
+          class="flex min-w-0 flex-col items-center justify-center gap-0.5 px-1.5 py-2.5 sm:flex-row sm:gap-2 sm:px-3 [&:not(:last-child)]:border-r [&:not(:last-child)]:border-border"
+          :class="{
+            'bg-accent/20': stat.key === 'total',
+            'bg-info-surface/25': stat.key === 'scheduled',
+            'bg-warning-surface/25': stat.key === 'waiting',
+            'bg-success-surface/25': stat.key === 'completed',
+          }"
+        >
+          <span
+            class="hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:flex"
+            :class="{
+              'bg-accent text-accent-foreground': stat.key === 'total',
+              'bg-info-surface text-info': stat.key === 'scheduled',
+              'bg-warning-surface text-warning': stat.key === 'waiting',
+              'bg-success-surface text-success': stat.key === 'completed',
+            }"
+            aria-hidden="true"
+          >
+            <component :is="stat.icon" class="h-3.5 w-3.5" stroke-width="1.9" />
+          </span>
+          <dt class="truncate text-xs font-medium text-muted-foreground">{{ stat.label }}</dt>
+          <dd class="text-lg font-bold leading-none tabular-nums text-foreground">{{ loading || error ? '—' : stat.value }}</dd>
+        </div>
+      </dl>
+
+      <div v-else class="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-field/45 px-3 py-2.5 sm:px-4">
+        <p class="text-xs font-medium text-muted-foreground">{{ weekRangeLabel }}</p>
+        <p class="text-xs text-muted-foreground">
+          本週共 <span class="font-bold tabular-nums text-foreground">{{ weekTotal }}</span> 筆掛號<template v-if="weekSummaryLoading"> · 更新中…</template>
+        </p>
+      </div>
+    </Card>
+
+    <ListSkeleton v-if="viewMode === 'day' && loading" :rows="4" />
+    <Alert v-else-if="viewMode === 'day' && error" variant="destructive">
       <AlertDescription class="flex items-center justify-between gap-3">
         <span>{{ error }}</span>
         <Button type="button" variant="outline" size="sm" class="shrink-0" @click="fetchAppointments">重新載入</Button>
@@ -384,63 +590,106 @@ onBeforeUnmount(() => {
     </Alert>
 
     <template v-else>
+      <!-- ── 單日檢視 ── -->
+      <div v-if="viewMode === 'day'" id="appointments-day-panel" role="tabpanel" aria-labelledby="appointments-day-tab" class="space-y-4">
       <!-- ── 候診佇列 ──
            報到之後預約時間就不再決定任何事，人已經在診所裡；決定誰先看的是這份順序。
-           所以候診中的人從時間軸抽出來自成一區：這份清單由上而下就是看診順序，
-           上下鍵移動的意思才不會跟時間軸的「幾點」混在一起。 -->
-      <Card v-if="waitingQueue.length" class="overflow-hidden p-0">
-        <div class="flex items-start justify-between gap-3 p-5 pb-3">
+           候診區依報到時間排列；時間軸仍保留原預約位置。紙本牌號只供辨識，不影響順序。 -->
+      <div
+        class="grid items-start gap-4 xl:grid-cols-[minmax(21rem,0.82fr)_minmax(0,1.7fr)]"
+      >
+      <Card class="overflow-hidden p-0">
+        <div class="flex items-start justify-between gap-3 p-4 pb-3">
           <div>
             <h2 class="text-base font-semibold text-foreground">候診中</h2>
-            <p class="mt-0.5 text-xs text-muted-foreground">依報到先後排；看完診離開後，後面的人往前遞補</p>
+            <p class="mt-0.5 text-xs text-muted-foreground">依報到時間排列；牌號可點擊修改，當日不重複發號</p>
           </div>
-          <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-accent px-2 text-xs font-semibold text-accent-foreground">{{ waitingQueue.length }}</span>
+          <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-warning-surface px-2 text-xs font-bold text-warning ring-1 ring-warning/25">{{ waitingQueue.length }}</span>
         </div>
 
-        <ul class="divide-y divide-border border-t border-border">
-          <li v-for="appointment in waitingQueue" :key="appointment._id" class="px-5 py-3.5">
-            <div class="flex flex-wrap items-center gap-3.5">
-              <span
-                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-base font-bold tabular-nums text-accent-foreground"
-                :aria-label="`目前排第 ${appointment.checkinNumber} 位`"
-              >{{ appointment.checkinNumber }}</span>
-
-              <span
-                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                :class="isIdentityConfirmed(appointment) ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'"
+        <ul v-if="waitingQueue.length" class="space-y-2 border-t border-border bg-muted/20 p-3">
+          <li
+            v-for="appointment in waitingQueue"
+            :key="appointment._id"
+            class="rounded-xl border border-warning/25 bg-warning-surface/30 p-3 shadow-sm transition-colors hover:border-warning/40"
+          >
+            <div class="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3">
+              <input
+                v-if="editingCardNumberId === appointment._id"
+                v-model="cardNumberDraft"
+                autofocus
+                type="number"
+                inputmode="numeric"
+                min="1"
+                class="h-9 w-9 appearance-none rounded-lg border-2 border-warning bg-card text-center text-sm font-bold tabular-nums text-foreground outline-none focus-visible:ring-3 focus-visible:ring-warning/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                aria-label="輸入新的實體號碼牌編號"
+                :disabled="isBusy(appointment._id)"
+                @focus="$event.currentTarget.select()"
+                @keydown.enter.prevent="$event.currentTarget.blur()"
+                @keydown.esc.prevent="cancelCardNumberEdit"
+                @blur="submitCardNumber(appointment)"
+              />
+              <button
+                v-else
+                type="button"
+                class="group/number relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-warning text-sm font-bold tabular-nums text-warning-surface shadow-sm transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-warning/35"
+                :aria-label="`目前持有 ${appointment.checkinNumber} 號牌，點擊修改`"
+                title="修改實體號碼牌"
+                :disabled="isBusy(appointment._id)"
+                @click="beginCardNumberEdit(appointment)"
               >
-                <User class="h-4.5 w-4.5" stroke-width="1.75" />
-              </span>
+                {{ appointment.checkinNumber }}
+                <span class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-card text-warning ring-1 ring-warning/30" aria-hidden="true">
+                  <Pencil class="h-2.5 w-2.5" stroke-width="2" />
+                </span>
+              </button>
 
               <div class="min-w-0 flex-1">
-                <span class="block truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
-                <span class="flex items-center gap-1 truncate text-xs text-muted-foreground">
-                  {{ appointment.ownerName || '飼主未填' }}
-                  <template v-if="appointment.ownerPhone">
-                    <span class="text-border">·</span>
+                <div class="flex min-w-0 items-center gap-1.5">
+                  <span
+                    v-if="visitTypeMeta(appointment)"
+                    class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-bold ring-1 shadow-sm"
+                    :class="visitTypeMeta(appointment).classes"
+                  >{{ visitTypeMeta(appointment).label }}</span>
+                  <span class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
+                </div>
+                <div class="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <span class="truncate">{{ appointment.ownerName || '飼主未填' }}</span>
+                  <span v-if="appointment.ownerPhone" class="inline-flex items-center gap-1">
                     <Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}
-                  </template>
-                  <template v-if="appointment.checkedInAt">
-                    <span class="text-border">·</span>
-                    <Clock class="h-3 w-3 shrink-0" stroke-width="1.75" />報到 {{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }}
-                  </template>
-                </span>
+                  </span>
+                  <span v-if="appointment.checkedInAt" class="inline-flex items-center gap-1 font-medium text-warning">
+                    <Clock class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }} 報到
+                  </span>
+                </div>
               </div>
 
-              <div class="flex shrink-0 items-center gap-1.5">
-                <Button type="button" variant="destructive" size="sm" :disabled="isBusy(appointment._id)" @click="actionToConfirm = { appointment, key: 'undo_check_in' }">
-                  取消報到
-                </Button>
-                <Button type="button" variant="secondary" size="icon-sm" :aria-label="`編輯 ${appointment.petName || '這筆'} 的掛號`" @click="editTarget = appointment">
-                  <Pencil class="h-4 w-4" stroke-width="1.75" />
-                </Button>
-                <Button type="button" variant="secondary" size="icon-sm" :aria-label="isExpanded(appointment._id) ? '收合' : '展開量測與完成看診'" @click="toggleExpanded(appointment)">
-                  <component :is="isExpanded(appointment._id) ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
-                </Button>
-              </div>
+              <span class="inline-flex h-7 shrink-0 items-center rounded-md bg-warning px-2 text-xs font-bold text-warning-surface shadow-sm">已報到</span>
             </div>
 
-            <div v-if="isExpanded(appointment._id)" class="mt-3.5 space-y-3.5 border-t border-border pt-3.5">
+            <div class="mt-2.5 flex flex-wrap items-center justify-end gap-1.5 border-t border-warning/20 pt-2.5">
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                class="mr-auto"
+                :aria-expanded="isExpanded(appointment._id)"
+                :aria-label="isExpanded(appointment._id) ? '收合看診資料' : '展開看診資料'"
+                @click="toggleExpanded(appointment)"
+              >
+                <component :is="isExpanded(appointment._id) ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
+                {{ isExpanded(appointment._id) ? '收合資料' : '看診資料' }}
+              </Button>
+              <Button type="button" variant="secondary" size="xs" :aria-label="`編輯 ${appointment.petName || '這筆'} 的掛號`" @click="editTarget = appointment">
+                <Pencil class="h-4 w-4" stroke-width="1.75" />編輯
+              </Button>
+              <Button type="button" variant="destructive" size="xs" :disabled="isBusy(appointment._id)" @click="actionToConfirm = { appointment, key: 'undo_check_in' }">
+                <X class="h-4 w-4" stroke-width="1.9" />
+                取消
+              </Button>
+            </div>
+
+            <div v-if="isExpanded(appointment._id)" class="mt-3.5 space-y-3.5 border-t border-warning/20 pt-3.5">
               <div class="grid gap-3.5 sm:grid-cols-2">
                 <label class="space-y-1.5 text-xs font-medium text-foreground">
                   體重
@@ -472,15 +721,19 @@ onBeforeUnmount(() => {
             </div>
           </li>
         </ul>
+        <div v-else class="border-t border-border bg-muted/20 px-4 py-8 text-center">
+          <p class="text-sm font-medium text-foreground">目前沒有候診中的病患</p>
+          <p class="mt-1 text-xs text-muted-foreground">病患完成報到後會顯示在這裡</p>
+        </div>
       </Card>
 
       <Card class="overflow-hidden p-0">
-        <div class="flex items-start justify-between gap-3 p-5 pb-3">
+        <div class="flex items-start justify-between gap-3 p-4 pb-3">
           <div>
             <h2 class="text-base font-semibold text-foreground">{{ isToday ? '今日看診時間軸' : '看診時間軸' }}</h2>
-            <p class="mt-0.5 text-xs text-muted-foreground">尚未報到的掛號，依預約時段排列</p>
+            <p class="mt-0.5 text-xs text-muted-foreground">依預約時段排列；報到後仍保留原位置</p>
           </div>
-          <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-foreground">{{ upcomingAppointments.length }}</span>
+          <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-foreground">{{ timelineAppointments.length }}</span>
         </div>
 
         <EmptyState
@@ -488,74 +741,136 @@ onBeforeUnmount(() => {
           inset
           :icon="UserPlus"
           :title="isToday ? '今天還沒有任何掛號' : `${formatDate(selectedDate)} 沒有任何掛號`"
-          description="按右上角「掛號」開始。"
+          description="選擇「掛號」開始。"
         />
 
-        <div v-else class="px-5 pb-5">
-          <!-- 時間軸空掉不代表今天沒事——人可能都報到了，也可能都取消了。
-               這兩種情況下面的「已取消／未到」仍要看得到，所以空訊息只換掉時段清單。 -->
-          <p v-if="!upcomingAppointments.length" class="rounded-xl border border-dashed border-border bg-muted px-3.5 py-4 text-center text-sm text-muted-foreground">
-            沒有等待報到的掛號，{{ isToday ? '今天' : formatDate(selectedDate) }}的掛號都已經報到或結束了。
+        <div v-else class="px-4 pb-4">
+          <!-- 已取消、未到與已完成仍在下方各自保留；這裡只描述進行中的時間軸。 -->
+          <p v-if="!timelineAppointments.length" class="rounded-xl border border-dashed border-border bg-muted px-3.5 py-4 text-center text-sm text-muted-foreground">
+            {{ isToday ? '今天' : formatDate(selectedDate) }}沒有待報到或候診中的掛號。
           </p>
 
           <template v-else>
-          <template v-for="(group, groupIndex) in sessionGroups" :key="group.session.id">
-            <div v-if="groupIndex === 1" class="my-2 flex items-center gap-2 rounded-xl border border-dashed border-border bg-muted px-3.5 py-3 text-sm font-medium text-muted-foreground">
-              <Plus class="h-4 w-4 shrink-0" stroke-width="1.75" />
-              {{ SURGERY_BLOCK.label }} · {{ SURGERY_BLOCK.start }}–{{ SURGERY_BLOCK.end }}（不排診）
+          <template v-for="group in visibleSessionGroups" :key="group.session.id">
+            <div
+              v-if="group.sessionIndex === 1 && sessionGroups[0]?.items.length"
+              class="my-2 flex items-center gap-2.5"
+              :aria-label="`${SURGERY_BLOCK.label} ${SURGERY_BLOCK.start} 到 ${SURGERY_BLOCK.end}，不排診`"
+            >
+              <span class="h-px flex-1 bg-border" aria-hidden="true"></span>
+              <span class="shrink-0 text-xs font-medium text-muted-foreground">
+                {{ SURGERY_BLOCK.label }} {{ SURGERY_BLOCK.start }}–{{ SURGERY_BLOCK.end }}
+              </span>
+              <span class="h-px flex-1 bg-border" aria-hidden="true"></span>
             </div>
 
-            <div class="flex items-center gap-2 py-2.5 text-sm font-bold text-foreground">
-              <Clock class="h-4 w-4 text-muted-foreground" stroke-width="1.75" />
-              {{ group.session.label }} · {{ group.session.start }}–{{ group.session.end }}
-            </div>
+            <button
+              type="button"
+              class="group/session flex w-full cursor-pointer items-center gap-2 rounded-lg border border-border/70 bg-muted/35 px-3 py-2 text-left text-sm font-bold text-foreground shadow-sm transition-all hover:border-primary/35 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :aria-expanded="!isSessionCollapsed(group.session.id)"
+              :aria-controls="`appointment-session-${group.session.id}`"
+              @click="toggleSession(group.session.id)"
+            >
+              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-card text-muted-foreground ring-1 ring-border">
+                <Clock class="h-4 w-4" stroke-width="1.75" />
+              </span>
+              <span>{{ group.session.label }} · {{ group.session.start }}–{{ group.session.end }}</span>
+              <span class="ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums text-muted-foreground">
+                {{ group.items.length }}
+              </span>
+              <span class="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-card px-2 text-xs font-semibold text-primary ring-1 ring-border transition-colors group-hover/session:ring-primary/40">
+                {{ isSessionCollapsed(group.session.id) ? '展開' : '收合' }}
+                <ChevronDown
+                  class="h-4 w-4 transition-transform duration-200 motion-reduce:transition-none"
+                  :class="{ 'rotate-180': !isSessionCollapsed(group.session.id) }"
+                  stroke-width="1.9"
+                />
+              </span>
+            </button>
 
-            <div class="border-l-2 border-border pl-4 sm:ml-28 sm:pl-7">
+            <div
+              :id="`appointment-session-${group.session.id}`"
+              class="grid overflow-hidden transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none"
+              :class="isSessionCollapsed(group.session.id) ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'"
+              :aria-hidden="isSessionCollapsed(group.session.id)"
+              :inert="isSessionCollapsed(group.session.id)"
+            >
+              <div class="ml-2 min-h-0 border-l-2 border-border pl-2 sm:ml-20 sm:pl-5">
               <template v-for="(appointment, itemIndex) in group.items" :key="appointment._id">
                 <div
-                  v-if="isToday && groupIndex === nowSessionIndex && itemIndex === nowIndexInSession(group.items, now)"
+                  v-if="isToday && group.sessionIndex === nowSessionIndex && itemIndex === nowIndexInSession(group.items, now)"
                   class="my-1 flex items-center gap-2.5"
                 >
                   <span class="h-0 flex-1 border-t-2 border-dashed border-primary"></span>
                   <span class="shrink-0 rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground">現在 · {{ nowLabel }}</span>
                 </div>
 
-                <div class="relative py-2.5">
-                  <span class="mb-1.5 block text-xs font-semibold text-muted-foreground sm:absolute sm:left-[-46px] sm:top-4 sm:mb-0 sm:w-18 sm:-translate-x-full sm:text-right sm:text-sm">
+                <div class="relative py-1">
+                  <span class="mb-1 block text-xs font-semibold text-muted-foreground sm:absolute sm:left-[-36px] sm:top-3 sm:mb-0 sm:w-14 sm:-translate-x-full sm:text-right sm:text-sm">
                     {{ new Date(appointment.scheduledAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false }) }}
                   </span>
-                  <span class="absolute left-[-17px] top-6 h-2.5 w-2.5 -translate-x-1/2 rounded-full border-2 border-dashed border-muted-foreground bg-card sm:left-[-30px] sm:top-5.5"></span>
+                  <span
+                    class="absolute left-[-9px] top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card sm:left-[-21px]"
+                    :class="appointment.status === 'arrived'
+                      ? 'bg-warning ring-2 ring-warning/35'
+                      : 'bg-muted-foreground ring-1 ring-border'"
+                    aria-hidden="true"
+                  ></span>
+                  <span
+                    v-if="appointment.status === 'arrived'"
+                    class="absolute left-[-9px] top-1/2 h-0.5 w-[9px] -translate-y-1/2 bg-warning/70 sm:left-[-21px] sm:w-[21px]"
+                    aria-hidden="true"
+                  ></span>
 
-                  <div>
-                    <div class="flex flex-wrap items-center gap-3.5">
-                      <!-- 時間軸上只會有還沒報到的列；看診序號要報到之後才配。 -->
-                      <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border text-muted-foreground">
-                        <Clock class="h-4.5 w-4.5" stroke-width="1.75" />
-                      </div>
-
+                  <div
+                    class="rounded-lg border px-2.5 py-1.5 transition-colors"
+                    :class="appointment.status === 'arrived' ? 'border-warning/35 bg-warning-surface/55 shadow-sm' : 'border-transparent'"
+                  >
+                    <div class="flex flex-wrap items-center gap-2.5">
                       <span
                         class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                        :class="isIdentityConfirmed(appointment) ? 'bg-accent text-accent-foreground' : 'bg-muted text-muted-foreground'"
+                        :class="appointment.status === 'arrived'
+                          ? 'bg-warning-surface text-warning ring-1 ring-warning/25'
+                          : isIdentityConfirmed(appointment)
+                            ? 'bg-accent text-accent-foreground'
+                            : 'bg-muted text-muted-foreground'"
                       >
-                        <User class="h-4.5 w-4.5" stroke-width="1.75" />
+                        <User class="h-4 w-4" stroke-width="1.75" />
                       </span>
 
                       <div class="min-w-0 flex-1">
-                        <span
-                          class="block truncate text-sm font-semibold text-foreground"
-                        >{{ appointment.petName || '寵物姓名未填' }}</span>
+                        <div class="flex min-w-0 items-center gap-1.5">
+                          <span
+                            v-if="visitTypeMeta(appointment)"
+                            class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-bold ring-1 shadow-sm"
+                            :class="visitTypeMeta(appointment).classes"
+                          >{{ visitTypeMeta(appointment).label }}</span>
+                          <span class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
+                        </div>
                         <span class="flex items-center gap-1 truncate text-xs text-muted-foreground">
                           {{ appointment.ownerName || '飼主未填' }}
                           <template v-if="appointment.ownerPhone">
                             <span class="text-border">·</span>
                             <Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}
                           </template>
+                          <template v-if="appointment.status === 'arrived' && appointment.checkedInAt">
+                            <span class="text-border">·</span>
+                            <Clock class="h-3 w-3 shrink-0 text-warning" stroke-width="1.9" />
+                            <span class="font-medium text-warning">{{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }} 報到</span>
+                          </template>
                         </span>
                       </div>
 
-                      <div class="ml-auto flex shrink-0 items-center gap-1.5 max-sm:w-full max-sm:justify-end">
-                        <Button type="button" size="sm" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
-                        <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                      <div class="ml-auto flex shrink-0 items-center gap-1.5">
+                        <template v-if="appointment.status === 'arrived'">
+                          <span class="inline-flex min-h-8 items-center rounded-md bg-warning px-2.5 text-xs font-bold text-warning-surface shadow-sm">
+                            已報到<template v-if="appointment.checkinNumber"> · 號碼牌 {{ appointment.checkinNumber }} 號</template>
+                          </span>
+                        </template>
+                        <template v-else>
+                          <Button type="button" size="sm" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
+                          <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                        </template>
                       </div>
                     </div>
                   </div>
@@ -564,11 +879,12 @@ onBeforeUnmount(() => {
 
               <!-- 「現在」晚於這個時段全部項目時，指示線要落在最後面，不是插在某一列前面。 -->
               <div
-                v-if="isToday && groupIndex === nowSessionIndex && nowIndexInSession(group.items, now) === group.items.length"
+                v-if="isToday && group.sessionIndex === nowSessionIndex && nowIndexInSession(group.items, now) === group.items.length"
                 class="my-1 flex items-center gap-2.5"
               >
                 <span class="h-0 flex-1 border-t-2 border-dashed border-primary"></span>
                 <span class="shrink-0 rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground">現在 · {{ nowLabel }}</span>
+              </div>
               </div>
             </div>
           </template>
@@ -632,6 +948,72 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </Card>
+      </div>
+
+      <details v-if="completedAppointments.length" class="group overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
+        <summary class="flex min-h-12 list-none items-center gap-3 px-4 py-2.5 text-sm font-semibold marker:content-none hover:bg-muted/60">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success-surface text-success">
+            <Check class="h-4 w-4" stroke-width="2" />
+          </span>
+          <span>已完成</span>
+          <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-success-surface px-2 text-xs font-semibold tabular-nums text-success">{{ completedAppointments.length }}</span>
+          <span class="ml-auto text-xs font-normal text-muted-foreground">查看今日完成紀錄</span>
+          <ChevronDown class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" stroke-width="1.75" />
+        </summary>
+        <div class="grid gap-px border-t border-border bg-border sm:grid-cols-2 xl:grid-cols-3">
+          <article v-for="appointment in completedAppointments" :key="appointment._id" class="min-w-0 bg-card px-4 py-3">
+            <p class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</p>
+            <p class="mt-0.5 truncate text-xs text-muted-foreground">
+              {{ appointment.ownerName || '飼主未填' }}
+              <template v-if="appointment.completedAt"> · {{ formatDateTime(appointment.completedAt, checkinTimeOptions) }} 完成</template>
+            </p>
+          </article>
+        </div>
+      </details>
+      </div>
+
+      <!-- ── 週檢視 ── -->
+      <div v-if="viewMode === 'week'" id="appointments-week-panel" role="tabpanel" aria-labelledby="appointments-week-tab">
+      <ListSkeleton v-if="weekSummaryLoading" :rows="2" />
+      <Alert v-else-if="weekSummaryError" variant="destructive">
+        <AlertDescription class="flex items-center justify-between gap-3">
+          <span>{{ weekSummaryError }}</span>
+          <Button type="button" variant="outline" size="sm" class="shrink-0" @click="fetchWeekSummary">重新載入</Button>
+        </AlertDescription>
+      </Alert>
+      <Card v-else class="overflow-hidden p-0">
+        <div class="flex items-start justify-between gap-3 px-4 pt-4 pb-2">
+          <div>
+            <h2 class="text-base font-semibold text-foreground">本週掛號</h2>
+            <p class="mt-0.5 text-xs text-muted-foreground">{{ weekRangeLabel }} · 選擇日期查看單日掛號</p>
+          </div>
+        </div>
+        <div class="overflow-x-auto px-4 pt-2 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div class="flex min-w-max snap-x snap-mandatory gap-2 sm:grid sm:min-w-0 sm:grid-cols-4 lg:grid-cols-7">
+            <button
+              v-for="date in weekDates"
+              :key="date"
+              type="button"
+              class="flex w-24 snap-start flex-col items-center gap-1 rounded-lg border-2 px-2 py-3 text-center transition-colors sm:w-auto"
+              :class="
+                date === selectedDate
+                  ? 'border-primary bg-accent text-accent-foreground shadow-sm'
+                  : date === today
+                    ? 'border-primary bg-card text-foreground'
+                    : 'border-border bg-card text-foreground hover:bg-muted'
+              "
+              @click="selectedDate = date; viewMode = 'day'"
+            >
+              <span class="text-xs font-medium">{{ weekdayLabel(date) }}</span>
+              <span class="text-sm font-semibold">{{ date.split('-')[2] }}</span>
+              <span class="text-xs text-muted-foreground">
+                {{ weekSummary.get(date) ?? 0 }} 筆
+              </span>
+            </button>
+          </div>
+        </div>
+      </Card>
+      </div>
     </template>
 
     <NewAppointmentDialog
