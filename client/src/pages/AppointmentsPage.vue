@@ -1008,9 +1008,9 @@ onBeforeUnmount(() => {
                     : 'border-border/70 bg-card text-foreground hover:border-primary/30 hover:bg-field/50'
               "
             >
-              <span class="text-xs font-medium" :class="date === today ? 'text-primary-foreground/90' : date === selectedDate ? 'text-primary' : 'text-muted-foreground'">{{ weekdayLabel(date) }}</span>
-              <span class="text-sm font-bold" :class="date === today ? 'text-primary-foreground' : 'text-foreground'">{{ date.split('-')[2] }}</span>
-              <span class="text-xs" :class="date === today ? 'font-medium text-primary-foreground/85' : date === selectedDate ? 'font-medium text-primary' : 'text-muted-foreground'">
+              <span class="text-xs font-medium" :class="date === selectedDate || date === today ? 'text-primary' : 'text-muted-foreground'">{{ weekdayLabel(date) }}</span>
+              <span class="text-sm font-bold" :class="date === today ? 'text-primary' : 'text-foreground'">{{ date.split('-')[2] }}</span>
+              <span class="text-xs" :class="date === selectedDate || date === today ? 'font-medium text-primary' : 'text-muted-foreground'">
                 {{ weekSummary.get(date) ?? 0 }} 筆
               </span>
               <div class="mt-2 w-full space-y-1 border-t border-border/60 pt-2 text-left">
