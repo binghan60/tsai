@@ -80,8 +80,8 @@ const ROW_ACTIONS = [
 ];
 
 const VISIT_TYPE_META = {
-  new: { label: '初診', classes: 'bg-info text-info-surface ring-info' },
-  return: { label: '回診', classes: 'bg-accent text-accent-foreground ring-primary/25' },
+  new: { label: '初診', classes: 'bg-brand-50 text-brand-700 ring-brand-300/80 dark:bg-brand-950/60 dark:text-brand-200 dark:ring-brand-500/40' },
+  return: { label: '回診', classes: 'bg-petrol-50 text-petrol-700 ring-petrol-300/80 dark:bg-petrol-950/60 dark:text-petrol-300 dark:ring-petrol-500/40' },
   unknown: { label: '類型未記錄', classes: 'bg-muted text-muted-foreground ring-border' },
 };
 
@@ -136,10 +136,10 @@ const closedGroups = computed(() => [
 
 // 統計摘要
 const dayStats = computed(() => [
-  { key: 'total', label: '今日掛號', icon: CalendarClock, value: appointments.value.length },
-  { key: 'scheduled', label: '待報到', icon: UserPlus, value: upcomingAppointments.value.length },
-  { key: 'waiting', label: '候診中', icon: Clock, value: waitingQueue.value.length },
-  { key: 'completed', label: '已完成', icon: Check, value: completedAppointments.value.length },
+  { key: 'total', label: '今日掛號', icon: CalendarClock, value: appointments.value.length, iconBg: 'bg-primary/10 text-primary ring-1 ring-primary/20' },
+  { key: 'scheduled', label: '待報到', icon: UserPlus, value: upcomingAppointments.value.length, iconBg: 'bg-info-surface text-info ring-1 ring-info/20' },
+  { key: 'waiting', label: '候診中', icon: Clock, value: waitingQueue.value.length, iconBg: 'bg-petrol-100 text-petrol-700 dark:bg-petrol-900/50 dark:text-petrol-300 ring-1 ring-petrol-300/40' },
+  { key: 'completed', label: '已完成', icon: Check, value: completedAppointments.value.length, iconBg: 'bg-success-surface text-success ring-1 ring-success/20' },
 ]);
 
 // 週檢視相關
@@ -544,26 +544,15 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <dl v-if="viewMode === 'day'" class="grid grid-cols-4 border-t border-border bg-field/45" :aria-busy="loading || undefined">
+      <dl v-if="viewMode === 'day'" class="grid grid-cols-4 border-t border-border bg-field/30" :aria-busy="loading || undefined">
         <div
           v-for="stat in dayStats"
           :key="stat.key"
-          class="flex min-w-0 flex-col items-center justify-center gap-0.5 px-1.5 py-2.5 sm:flex-row sm:gap-2 sm:px-3 [&:not(:last-child)]:border-r [&:not(:last-child)]:border-border"
-          :class="{
-            'bg-accent/20': stat.key === 'total',
-            'bg-info-surface/25': stat.key === 'scheduled',
-            'bg-warning-surface/25': stat.key === 'waiting',
-            'bg-success-surface/25': stat.key === 'completed',
-          }"
+          class="flex min-w-0 flex-col items-center justify-center gap-0.5 px-1.5 py-2.5 transition-colors sm:flex-row sm:gap-2.5 sm:px-3 hover:bg-card/50 [&:not(:last-child)]:border-r [&:not(:last-child)]:border-border"
         >
           <span
             class="hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:flex"
-            :class="{
-              'bg-accent text-accent-foreground': stat.key === 'total',
-              'bg-info-surface text-info': stat.key === 'scheduled',
-              'bg-warning-surface text-warning': stat.key === 'waiting',
-              'bg-success-surface text-success': stat.key === 'completed',
-            }"
+            :class="stat.iconBg"
             aria-hidden="true"
           >
             <component :is="stat.icon" class="h-3.5 w-3.5" stroke-width="1.9" />
@@ -573,7 +562,7 @@ onBeforeUnmount(() => {
         </div>
       </dl>
 
-      <div v-else class="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-field/45 px-3 py-2.5 sm:px-4">
+      <div v-else class="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-field/30 px-3 py-2.5 sm:px-4">
         <p class="text-xs font-medium text-muted-foreground">{{ weekRangeLabel }}</p>
         <p class="text-xs text-muted-foreground">
           本週共 <span class="font-bold tabular-nums text-foreground">{{ weekTotal }}</span> 筆掛號<template v-if="weekSummaryLoading"> · 更新中…</template>
@@ -598,20 +587,20 @@ onBeforeUnmount(() => {
       <div
         class="grid items-start gap-4 xl:grid-cols-[minmax(21rem,0.82fr)_minmax(0,1.7fr)]"
       >
-      <Card class="overflow-hidden p-0">
+      <Card class="overflow-hidden p-0 shadow-sm dark:shadow-none">
         <div class="flex items-start justify-between gap-3 p-4 pb-3">
           <div>
             <h2 class="text-base font-semibold text-foreground">候診中</h2>
             <p class="mt-0.5 text-xs text-muted-foreground">依報到時間排列；牌號可點擊修改，當日不重複發號</p>
           </div>
-          <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-warning-surface px-2 text-xs font-bold text-warning ring-1 ring-warning/25">{{ waitingQueue.length }}</span>
+          <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-accent px-2 text-xs font-bold text-accent-foreground ring-1 ring-primary/20">{{ waitingQueue.length }}</span>
         </div>
 
-        <ul v-if="waitingQueue.length" class="space-y-2 border-t border-border bg-muted/20 p-3">
+        <ul v-if="waitingQueue.length" class="space-y-2.5 border-t border-border bg-field/30 p-3">
           <li
             v-for="appointment in waitingQueue"
             :key="appointment._id"
-            class="rounded-xl border border-warning/25 bg-warning-surface/30 p-3 shadow-sm transition-colors hover:border-warning/40"
+            class="rounded-xl border border-border/80 bg-card p-3 shadow-xs transition-all duration-150 hover:border-primary/40 hover:shadow-sm"
           >
             <div class="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3">
               <input
@@ -621,7 +610,7 @@ onBeforeUnmount(() => {
                 type="number"
                 inputmode="numeric"
                 min="1"
-                class="h-9 w-9 appearance-none rounded-lg border-2 border-warning bg-card text-center text-sm font-bold tabular-nums text-foreground outline-none focus-visible:ring-3 focus-visible:ring-warning/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                class="h-9 w-9 appearance-none rounded-lg border-2 border-primary bg-card text-center text-sm font-bold tabular-nums text-foreground outline-none focus-visible:ring-3 focus-visible:ring-primary/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 aria-label="輸入新的實體號碼牌編號"
                 :disabled="isBusy(appointment._id)"
                 @focus="$event.currentTarget.select()"
@@ -632,14 +621,14 @@ onBeforeUnmount(() => {
               <button
                 v-else
                 type="button"
-                class="group/number relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-warning text-sm font-bold tabular-nums text-warning-surface shadow-sm transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-warning/35"
+                class="group/number relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-primary text-sm font-bold tabular-nums text-primary-foreground shadow-xs transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring"
                 :aria-label="`目前持有 ${appointment.checkinNumber} 號牌，點擊修改`"
                 title="修改實體號碼牌"
                 :disabled="isBusy(appointment._id)"
                 @click="beginCardNumberEdit(appointment)"
               >
                 {{ appointment.checkinNumber }}
-                <span class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-card text-warning ring-1 ring-warning/30" aria-hidden="true">
+                <span class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-card text-primary ring-1 ring-border shadow-xs" aria-hidden="true">
                   <Pencil class="h-2.5 w-2.5" stroke-width="2" />
                 </span>
               </button>
@@ -648,7 +637,7 @@ onBeforeUnmount(() => {
                 <div class="flex min-w-0 items-center gap-1.5">
                   <span
                     v-if="visitTypeMeta(appointment)"
-                    class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-bold ring-1 shadow-sm"
+                    class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-semibold ring-1 shadow-2xs"
                     :class="visitTypeMeta(appointment).classes"
                   >{{ visitTypeMeta(appointment).label }}</span>
                   <span class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
@@ -658,16 +647,16 @@ onBeforeUnmount(() => {
                   <span v-if="appointment.ownerPhone" class="inline-flex items-center gap-1">
                     <Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}
                   </span>
-                  <span v-if="appointment.checkedInAt" class="inline-flex items-center gap-1 font-medium text-warning">
+                  <span v-if="appointment.checkedInAt" class="inline-flex items-center gap-1 font-medium text-primary">
                     <Clock class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }} 報到
                   </span>
                 </div>
               </div>
 
-              <span class="inline-flex h-7 shrink-0 items-center rounded-md bg-warning px-2 text-xs font-bold text-warning-surface shadow-sm">已報到</span>
+              <span class="inline-flex h-7 shrink-0 items-center rounded-md bg-accent px-2 text-xs font-semibold text-accent-foreground ring-1 ring-primary/20">已報到</span>
             </div>
 
-            <div class="mt-2.5 flex flex-wrap items-center justify-end gap-1.5 border-t border-warning/20 pt-2.5">
+            <div class="mt-2.5 flex flex-wrap items-center justify-end gap-1.5 border-t border-border/60 pt-2.5">
               <Button
                 type="button"
                 variant="outline"
@@ -689,7 +678,7 @@ onBeforeUnmount(() => {
               </Button>
             </div>
 
-            <div v-if="isExpanded(appointment._id)" class="mt-3.5 space-y-3.5 border-t border-warning/20 pt-3.5">
+            <div v-if="isExpanded(appointment._id)" class="mt-3.5 space-y-3.5 border-t border-border/60 pt-3.5">
               <div class="grid gap-3.5 sm:grid-cols-2">
                 <label class="space-y-1.5 text-xs font-medium text-foreground">
                   體重
@@ -721,13 +710,13 @@ onBeforeUnmount(() => {
             </div>
           </li>
         </ul>
-        <div v-else class="border-t border-border bg-muted/20 px-4 py-8 text-center">
+        <div v-else class="border-t border-border bg-field/20 px-4 py-8 text-center">
           <p class="text-sm font-medium text-foreground">目前沒有候診中的病患</p>
           <p class="mt-1 text-xs text-muted-foreground">病患完成報到後會顯示在這裡</p>
         </div>
       </Card>
 
-      <Card class="overflow-hidden p-0">
+      <Card class="overflow-hidden p-0 shadow-sm dark:shadow-none">
         <div class="flex items-start justify-between gap-3 p-4 pb-3">
           <div>
             <h2 class="text-base font-semibold text-foreground">{{ isToday ? '今日看診時間軸' : '看診時間軸' }}</h2>
@@ -766,19 +755,19 @@ onBeforeUnmount(() => {
 
             <button
               type="button"
-              class="group/session flex w-full cursor-pointer items-center gap-2 rounded-lg border border-border/70 bg-muted/35 px-3 py-2 text-left text-sm font-bold text-foreground shadow-sm transition-all hover:border-primary/35 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              class="group/session flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-border/70 bg-field/50 px-3.5 py-2.5 text-left text-sm font-semibold text-foreground shadow-2xs transition-all hover:border-primary/40 hover:bg-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               :aria-expanded="!isSessionCollapsed(group.session.id)"
               :aria-controls="`appointment-session-${group.session.id}`"
               @click="toggleSession(group.session.id)"
             >
-              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-card text-muted-foreground ring-1 ring-border">
+              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-card text-muted-foreground ring-1 ring-border/80">
                 <Clock class="h-4 w-4" stroke-width="1.75" />
               </span>
               <span>{{ group.session.label }} · {{ group.session.start }}–{{ group.session.end }}</span>
               <span class="ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums text-muted-foreground">
                 {{ group.items.length }}
               </span>
-              <span class="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-card px-2 text-xs font-semibold text-primary ring-1 ring-border transition-colors group-hover/session:ring-primary/40">
+              <span class="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg bg-card px-2.5 text-xs font-semibold text-primary ring-1 ring-border/80 transition-colors group-hover/session:ring-primary/40">
                 {{ isSessionCollapsed(group.session.id) ? '展開' : '收合' }}
                 <ChevronDown
                   class="h-4 w-4 transition-transform duration-200 motion-reduce:transition-none"
@@ -795,14 +784,14 @@ onBeforeUnmount(() => {
               :aria-hidden="isSessionCollapsed(group.session.id)"
               :inert="isSessionCollapsed(group.session.id)"
             >
-              <div class="ml-2 min-h-0 border-l-2 border-border pl-2 sm:ml-20 sm:pl-5">
+              <div class="ml-2 min-h-0 border-l-2 border-border/80 pl-2 sm:ml-20 sm:pl-5">
               <template v-for="(appointment, itemIndex) in group.items" :key="appointment._id">
                 <div
                   v-if="isToday && group.sessionIndex === nowSessionIndex && itemIndex === nowIndexInSession(group.items, now)"
-                  class="my-1 flex items-center gap-2.5"
+                  class="my-1.5 flex items-center gap-2.5"
                 >
                   <span class="h-0 flex-1 border-t-2 border-dashed border-primary"></span>
-                  <span class="shrink-0 rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground">現在 · {{ nowLabel }}</span>
+                  <span class="shrink-0 rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground shadow-2xs">現在 · {{ nowLabel }}</span>
                 </div>
 
                 <div class="relative py-1">
@@ -812,25 +801,25 @@ onBeforeUnmount(() => {
                   <span
                     class="absolute left-[-9px] top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card sm:left-[-21px]"
                     :class="appointment.status === 'arrived'
-                      ? 'bg-warning ring-2 ring-warning/35'
-                      : 'bg-muted-foreground ring-1 ring-border'"
+                      ? 'bg-primary ring-4 ring-primary/20'
+                      : 'bg-muted-foreground/60 ring-1 ring-border'"
                     aria-hidden="true"
                   ></span>
                   <span
                     v-if="appointment.status === 'arrived'"
-                    class="absolute left-[-9px] top-1/2 h-0.5 w-[9px] -translate-y-1/2 bg-warning/70 sm:left-[-21px] sm:w-[21px]"
+                    class="absolute left-[-9px] top-1/2 h-0.5 w-[9px] -translate-y-1/2 bg-primary/60 sm:left-[-21px] sm:w-[21px]"
                     aria-hidden="true"
                   ></span>
 
                   <div
-                    class="rounded-lg border px-2.5 py-1.5 transition-colors"
-                    :class="appointment.status === 'arrived' ? 'border-warning/35 bg-warning-surface/55 shadow-sm' : 'border-transparent'"
+                    class="rounded-xl border px-3 py-2 transition-colors"
+                    :class="appointment.status === 'arrived' ? 'border-primary/25 bg-accent/35 shadow-2xs' : 'border-transparent hover:bg-field/30'"
                   >
                     <div class="flex flex-wrap items-center gap-2.5">
                       <span
                         class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
                         :class="appointment.status === 'arrived'
-                          ? 'bg-warning-surface text-warning ring-1 ring-warning/25'
+                          ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
                           : isIdentityConfirmed(appointment)
                             ? 'bg-accent text-accent-foreground'
                             : 'bg-muted text-muted-foreground'"
@@ -842,7 +831,7 @@ onBeforeUnmount(() => {
                         <div class="flex min-w-0 items-center gap-1.5">
                           <span
                             v-if="visitTypeMeta(appointment)"
-                            class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-bold ring-1 shadow-sm"
+                            class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-semibold ring-1 shadow-2xs"
                             :class="visitTypeMeta(appointment).classes"
                           >{{ visitTypeMeta(appointment).label }}</span>
                           <span class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
@@ -855,15 +844,15 @@ onBeforeUnmount(() => {
                           </template>
                           <template v-if="appointment.status === 'arrived' && appointment.checkedInAt">
                             <span class="text-border">·</span>
-                            <Clock class="h-3 w-3 shrink-0 text-warning" stroke-width="1.9" />
-                            <span class="font-medium text-warning">{{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }} 報到</span>
+                            <Clock class="h-3 w-3 shrink-0 text-primary" stroke-width="1.9" />
+                            <span class="font-medium text-primary">{{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }} 報到</span>
                           </template>
                         </span>
                       </div>
 
                       <div class="ml-auto flex shrink-0 items-center gap-1.5">
                         <template v-if="appointment.status === 'arrived'">
-                          <span class="inline-flex min-h-8 items-center rounded-md bg-warning px-2.5 text-xs font-bold text-warning-surface shadow-sm">
+                          <span class="inline-flex min-h-7 items-center rounded-md bg-accent px-2.5 text-xs font-semibold text-accent-foreground ring-1 ring-primary/20">
                             已報到<template v-if="appointment.checkinNumber"> · 號碼牌 {{ appointment.checkinNumber }} 號</template>
                           </span>
                         </template>
@@ -880,10 +869,10 @@ onBeforeUnmount(() => {
               <!-- 「現在」晚於這個時段全部項目時，指示線要落在最後面，不是插在某一列前面。 -->
               <div
                 v-if="isToday && group.sessionIndex === nowSessionIndex && nowIndexInSession(group.items, now) === group.items.length"
-                class="my-1 flex items-center gap-2.5"
+                class="my-1.5 flex items-center gap-2.5"
               >
                 <span class="h-0 flex-1 border-t-2 border-dashed border-primary"></span>
-                <span class="shrink-0 rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground">現在 · {{ nowLabel }}</span>
+                <span class="shrink-0 rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground shadow-2xs">現在 · {{ nowLabel }}</span>
               </div>
               </div>
             </div>
@@ -891,16 +880,16 @@ onBeforeUnmount(() => {
           </template>
 
           <div v-if="closedGroups.length" class="mt-4 grid gap-3 sm:grid-cols-2">
-            <section v-for="group in closedGroups" :key="group.key" class="min-w-0 rounded-xl bg-muted/50 p-3">
+            <section v-for="group in closedGroups" :key="group.key" class="min-w-0 rounded-xl bg-muted/40 p-3">
               <div class="mb-2 flex items-center justify-between gap-3">
                 <h3 class="text-sm font-semibold text-foreground">{{ group.label }}</h3>
-                <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-card px-2 text-xs font-semibold tabular-nums text-foreground">{{ group.items.length }}</span>
+                <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-card px-2 text-xs font-semibold tabular-nums text-foreground shadow-2xs">{{ group.items.length }}</span>
               </div>
               <div class="space-y-2">
                 <article
                   v-for="appointment in group.items"
                   :key="appointment._id"
-                  class="grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-card px-3 py-2.5"
+                  class="grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2.5 shadow-2xs"
                 >
                   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                     <component :is="group.icon" class="h-4.5 w-4.5" stroke-width="1.75" />
@@ -950,13 +939,13 @@ onBeforeUnmount(() => {
       </Card>
       </div>
 
-      <details v-if="completedAppointments.length" class="group overflow-hidden rounded-xl border border-border bg-card text-card-foreground">
-        <summary class="flex min-h-12 list-none items-center gap-3 px-4 py-2.5 text-sm font-semibold marker:content-none hover:bg-muted/60">
-          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success-surface text-success">
+      <details v-if="completedAppointments.length" class="group overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm dark:shadow-none">
+        <summary class="flex min-h-12 list-none items-center gap-3 px-4 py-2.5 text-sm font-semibold marker:content-none hover:bg-muted/50">
+          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success-surface text-success ring-1 ring-success/20">
             <Check class="h-4 w-4" stroke-width="2" />
           </span>
           <span>已完成</span>
-          <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-success-surface px-2 text-xs font-semibold tabular-nums text-success">{{ completedAppointments.length }}</span>
+          <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-success-surface px-2 text-xs font-semibold tabular-nums text-success ring-1 ring-success/20">{{ completedAppointments.length }}</span>
           <span class="ml-auto text-xs font-normal text-muted-foreground">查看今日完成紀錄</span>
           <ChevronDown class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" stroke-width="1.75" />
         </summary>
@@ -981,7 +970,7 @@ onBeforeUnmount(() => {
           <Button type="button" variant="outline" size="sm" class="shrink-0" @click="fetchWeekSummary">重新載入</Button>
         </AlertDescription>
       </Alert>
-      <Card v-else class="overflow-hidden p-0">
+      <Card v-else class="overflow-hidden p-0 shadow-sm dark:shadow-none">
         <div class="flex items-start justify-between gap-3 px-4 pt-4 pb-2">
           <div>
             <h2 class="text-base font-semibold text-foreground">本週掛號</h2>
@@ -994,19 +983,19 @@ onBeforeUnmount(() => {
               v-for="date in weekDates"
               :key="date"
               type="button"
-              class="flex w-24 snap-start flex-col items-center gap-1 rounded-lg border-2 px-2 py-3 text-center transition-colors sm:w-auto"
+              class="flex w-24 snap-start flex-col items-center gap-1 rounded-xl border-2 px-2 py-3 text-center transition-all duration-150 sm:w-auto"
               :class="
                 date === selectedDate
-                  ? 'border-primary bg-accent text-accent-foreground shadow-sm'
+                  ? 'border-primary bg-primary text-primary-foreground shadow-sm'
                   : date === today
-                    ? 'border-primary bg-card text-foreground'
-                    : 'border-border bg-card text-foreground hover:bg-muted'
+                    ? 'border-primary/50 bg-accent/40 text-foreground hover:bg-accent/70'
+                    : 'border-border/70 bg-card text-foreground hover:border-primary/30 hover:bg-field/50'
               "
               @click="selectedDate = date; viewMode = 'day'"
             >
-              <span class="text-xs font-medium">{{ weekdayLabel(date) }}</span>
-              <span class="text-sm font-semibold">{{ date.split('-')[2] }}</span>
-              <span class="text-xs text-muted-foreground">
+              <span class="text-xs font-medium" :class="date === selectedDate ? 'text-primary-foreground/90' : 'text-muted-foreground'">{{ weekdayLabel(date) }}</span>
+              <span class="text-sm font-bold">{{ date.split('-')[2] }}</span>
+              <span class="text-xs" :class="date === selectedDate ? 'text-primary-foreground/85 font-medium' : 'text-muted-foreground'">
                 {{ weekSummary.get(date) ?? 0 }} 筆
               </span>
             </button>
