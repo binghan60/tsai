@@ -141,8 +141,6 @@ const ROLE_HINTS = {
   vet: '這裡填的醫師姓名會印在報告最上方。',
   visitDate: '這個日期會印在報告最上方，報告列表也依它排序。',
   weight: '結案時會把這裡的數值存回寵物資料的最近體重。',
-  conclusion: '結案前，這欄和「照護與追蹤建議」至少要填一個。',
-  treatmentPlan: '結案前，這欄和「結論」至少要填一個。',
 };
 
 const activeSection = computed(() =>

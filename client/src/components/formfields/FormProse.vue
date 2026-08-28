@@ -10,20 +10,12 @@ import { sectionRuns } from '../../lib/sectionRuns';
 import { spanClass } from '../../lib/fieldSpan';
 
 const props = defineProps({ section: { type: Object, required: true } });
-const { valueFor, setValue, eitherOrPending } = useRecordForm();
+const { valueFor, setValue } = useRecordForm();
 
 const items = computed(() => props.section.items ?? []);
 // 長文字一行一個、其餘欄位兩欄一排，但照使用者排定的順序切段落。
 const runs = computed(() => sectionRuns(items.value, (item) => item.type === 'textarea'));
 
-// 結論與照護建議是「擇一必填」，兩邊都空的時候各自標示提醒。
-const EITHER_OR = { conclusion: 'treatmentPlan', treatmentPlan: 'conclusion' };
-function eitherOrHint(item) {
-  const counterpartRole = EITHER_OR[item.role];
-  if (!counterpartRole || !eitherOrPending()) return '';
-  const counterpart = items.value.find((entry) => entry.role === counterpartRole);
-  return counterpart ? `*（與${counterpart.label}擇一必填）` : '';
-}
 </script>
 
 <template>
@@ -35,7 +27,6 @@ function eitherOrHint(item) {
             <Label :for="`record-${item.key}`" class="text-xs font-medium text-muted-foreground">
               {{ item.label }}
               <span v-if="item.required" class="text-red-600 dark:text-red-400" aria-hidden="true">*</span>
-              <span v-else-if="eitherOrHint(item)" class="text-red-600 dark:text-red-400"> {{ eitherOrHint(item) }}</span>
             </Label>
             <Textarea
               :id="`record-${item.key}`"

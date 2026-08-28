@@ -10,8 +10,7 @@ import { itemHasAnswer, validateFinalRecord } from './recordValidation.js';
 
 const section = (...items) => [{ key: 's1', title: '區塊', items }];
 
-// 一份剛好過關的最小報告，各個測試在這上面做單點變動，
-// 才看得出「是這個改動造成失敗」而不是本來就一堆問題。
+// 一份有內容的報告，各個測試在這上面做單點變動。
 const validSections = () =>
   section(
     { key: 'visitDate', label: '看診日期', type: 'date', role: 'visitDate', value: '2026-08-20' },
@@ -25,20 +24,13 @@ describe('validateFinalRecord', () => {
     assert.deepEqual(validateFinalRecord(validSections()), []);
   });
 
-  it('完全空白的報告會被擋下來', () => {
-    const missing = validateFinalRecord(section());
-    assert.ok(missing.some((m) => m.includes('基本量測')), `應提示缺臨床內容，實際：${missing}`);
-  });
-
-  it('只填了看診日期與獸醫師不算有臨床內容', () => {
-    // 這兩個欄位有預設值／屬行政資訊，拿它們當「有填」的訊號會讓空報告過關。
-    const missing = validateFinalRecord(
-      section(
-        { key: 'visitDate', label: '看診日期', type: 'date', role: 'visitDate', value: '2026-08-20' },
-        { key: 'vet', label: '獸醫師', type: 'text', role: 'vet', value: '王醫師' }
-      )
-    );
-    assert.ok(missing.some((m) => m.includes('基本量測')), `應提示缺臨床內容，實際：${missing}`);
+  it('所有欄位都設為非必填時，空白報告可以結案', () => {
+    assert.deepEqual(validateFinalRecord(section(
+      { key: 'visitDate', label: '看診日期', type: 'date', role: 'visitDate', required: false, value: '' },
+      { key: 'weight', label: '體重', type: 'measurement', required: false, value: '' },
+      { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', required: false, value: '' },
+      { key: 'plan', label: '照護建議', type: 'textarea', role: 'treatmentPlan', required: false, value: '' }
+    )), []);
   });
 
   it('必填項目沒作答會列出該項名稱', () => {
@@ -54,36 +46,19 @@ describe('validateFinalRecord', () => {
   });
 
   describe('結論與照護建議', () => {
-    it('兩個都空白時會提示', () => {
-      const sections = section(
-        { key: 'weight', label: '體重', type: 'measurement', value: '4.2' },
-        { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', value: '' },
-        { key: 'plan', label: '照護建議', type: 'textarea', role: 'treatmentPlan', value: '' }
-      );
-      assert.ok(validateFinalRecord(sections).includes('結論或照護建議'));
+    it('不再有寫死的擇一必填規則', () => {
+      assert.deepEqual(validateFinalRecord(section(
+        { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', required: false, value: '' },
+        { key: 'plan', label: '照護建議', type: 'textarea', role: 'treatmentPlan', required: false, value: '' }
+      )), []);
     });
 
-    it('只填其中一個就放行', () => {
-      const sections = section(
-        { key: 'weight', label: '體重', type: 'measurement', value: '4.2' },
-        { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', value: '' },
-        { key: 'plan', label: '照護建議', type: 'textarea', role: 'treatmentPlan', value: '每日餵藥一次' }
-      );
-      assert.deepEqual(validateFinalRecord(sections), []);
-    });
-
-    it('只有空白字元不算填了', () => {
-      const sections = section(
-        { key: 'weight', label: '體重', type: 'measurement', value: '4.2' },
-        { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', value: '   ' }
-      );
-      assert.ok(validateFinalRecord(sections).includes('結論'));
-    });
-
-    it('兩個欄位都被停用時完全不檢查這條', () => {
-      // 使用者可以在表單設計頁把這兩個欄位拿掉，那就不該再要求它們。
-      const sections = section({ key: 'weight', label: '體重', type: 'measurement', value: '4.2' });
-      assert.deepEqual(validateFinalRecord(sections), []);
+    it('各欄位可分別設定為必填', () => {
+      const missing = validateFinalRecord(section(
+        { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', required: true, value: '   ' },
+        { key: 'plan', label: '照護建議', type: 'textarea', role: 'treatmentPlan', required: false, value: '' }
+      ));
+      assert.deepEqual(missing, ['結論']);
     });
   });
 
@@ -117,8 +92,7 @@ describe('validateFinalRecord', () => {
   });
 });
 
-// itemHasAnswer 的分支是整份檢查的地基：臨床內容與必填兩條規則都建立在它上面，
-// 判斷錯一種型別就會同時影響兩處，所以逐型別釘住。
+// itemHasAnswer 是必填檢查的判準，所以逐型別釘住。
 describe('itemHasAnswer', () => {
   it('理學檢查看的是有沒有標記過，不是有沒有值', () => {
     assert.equal(itemHasAnswer({ type: 'finding', status: 'not_checked' }), false);

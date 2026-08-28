@@ -390,18 +390,6 @@ function entriesFor(section, entries, type) {
 const findingsFor = (section) => entriesFor(section, record.examinationFindings, 'finding');
 const labsFor = (section) => entriesFor(section, record.labFindings, 'lab');
 
-function itemByRoleInTemplate(role) {
-  return FORM_SECTIONS.value.flatMap((section) => section.items ?? []).find((item) => item.role === role) ?? null;
-}
-
-// 結論與照護建議「擇一必填」：兩邊都空時要顯示提醒。
-function eitherOrPending() {
-  const conclusion = itemByRoleInTemplate('conclusion');
-  const treatmentPlan = itemByRoleInTemplate('treatmentPlan');
-  if (!conclusion && !treatmentPlan) return false;
-  return !String(valueFor(conclusion ?? {}) ?? '').trim() && !String(valueFor(treatmentPlan ?? {}) ?? '').trim();
-}
-
 // 分段導覽的圓圈有三種狀態：目前所在、已有內容、尚未填寫。
 function stepBadgeClass(index, sectionId) {
   if (activeSectionId.value === sectionId) return 'bg-primary text-primary-foreground';
@@ -571,7 +559,6 @@ provideRecordForm({
   previousFor,
   findingsFor,
   labsFor,
-  eitherOrPending,
   labRanges,
   labRangeLabel,
   measurementAssessment,
@@ -653,7 +640,6 @@ function validateForPreview() {
   const errors = [];
   const addError = (message, targetId, focusId = targetId) => errors.push({ message, targetId, focusId });
   const items = FORM_SECTIONS.value.flatMap((section) => section.items ?? []);
-  const byRole = (role) => items.find((item) => item.role === role) ?? null;
 
   // 錨點要用實際渲染出來的 DOM id，不同型別的版式元件命名規則不同。
   const anchorFor = (item) => {
@@ -671,19 +657,6 @@ function validateForPreview() {
 
   for (const item of items.filter((entry) => entry.required)) {
     if (!filled(item)) addError(`請填寫${item.label}`, anchorFor(item));
-  }
-
-  // 與後端相同：visitDate 有預設值、vet 是行政欄位，都不算臨床內容。
-  const ADMIN_ROLES = new Set(['visitDate', 'vet']);
-  if (!items.some((item) => !ADMIN_ROLES.has(item.role) && filled(item))) {
-    addError('請至少填寫一個區塊的檢查內容', FORM_SECTIONS.value[0]?.id ?? '');
-  }
-
-  const conclusion = byRole('conclusion');
-  const treatmentPlan = byRole('treatmentPlan');
-  if ((conclusion || treatmentPlan) && !filled(conclusion) && !filled(treatmentPlan)) {
-    const label = [conclusion?.label, treatmentPlan?.label].filter(Boolean).join('或');
-    addError(`請填寫${label}`, anchorFor(conclusion ?? treatmentPlan));
   }
 
   // 數值範圍取自範本項目，不再寫死「體態評分 1–9」。
