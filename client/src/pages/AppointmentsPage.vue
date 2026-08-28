@@ -148,6 +148,7 @@ const weekDates = computed(() => Array.from({ length: 7 }, (_, i) => shiftDateIn
 const weekEnd = computed(() => shiftDateInput(weekStart.value, 6));
 const weekRangeLabel = computed(() => `${formatDate(weekStart.value)}–${formatDate(weekEnd.value)}`);
 const weekSummary = ref(new Map()); // date -> count
+const weekAppointments = ref(new Map()); // date -> appointments
 const weekTotal = computed(() => Array.from(weekSummary.value.values()).reduce((sum, count) => sum + count, 0));
 const weekSummaryLoading = ref(false);
 const weekSummaryError = ref('');
@@ -161,10 +162,16 @@ async function fetchWeekSummary() {
   weekSummaryLoading.value = true;
   weekSummaryError.value = '';
   try {
-    const { data } = await http.get('/appointments/summary', { params: { start, end } });
+    const [{ data }, ...dailyResponses] = await Promise.all([
+      http.get('/appointments/summary', { params: { start, end } }),
+      ...weekDates.value.map((date) => http.get('/appointments', { params: { date } })),
+    ]);
     if (token !== weekSummaryRequestToken) return;
     const map = new Map(data.items.map((item) => [item.date, item.count]));
     weekSummary.value = map;
+    weekAppointments.value = new Map(
+      weekDates.value.map((date, index) => [date, dailyResponses[index].data.items ?? []])
+    );
   } catch {
     if (token === weekSummaryRequestToken) {
       weekSummaryError.value = '無法載入週掛號統計，請稍後重試';
@@ -585,9 +592,9 @@ onBeforeUnmount(() => {
            報到之後預約時間就不再決定任何事，人已經在診所裡；決定誰先看的是這份順序。
            候診區依報到時間排列；時間軸仍保留原預約位置。紙本牌號只供辨識，不影響順序。 -->
       <div
-        class="grid items-start gap-4 xl:grid-cols-[minmax(21rem,0.82fr)_minmax(0,1.7fr)]"
+         class="grid items-stretch gap-4 xl:grid-cols-[minmax(21rem,0.82fr)_minmax(0,1.7fr)]"
       >
-      <Card class="overflow-hidden p-0 shadow-sm dark:shadow-none">
+       <Card class="h-full overflow-hidden p-0 shadow-sm dark:shadow-none">
         <div class="flex items-start justify-between gap-3 p-4 pb-3">
           <div>
             <h2 class="text-base font-semibold text-foreground">候診中</h2>
@@ -716,7 +723,7 @@ onBeforeUnmount(() => {
         </div>
       </Card>
 
-      <Card class="overflow-hidden p-0 shadow-sm dark:shadow-none">
+       <Card class="h-full overflow-hidden p-0 shadow-sm dark:shadow-none">
         <div class="flex items-start justify-between gap-3 p-4 pb-3">
           <div>
             <h2 class="text-base font-semibold text-foreground">{{ isToday ? '今日看診時間軸' : '看診時間軸' }}</h2>
@@ -979,26 +986,32 @@ onBeforeUnmount(() => {
         </div>
         <div class="overflow-x-auto px-4 pt-2 pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div class="flex min-w-max snap-x snap-mandatory gap-2 sm:grid sm:min-w-0 sm:grid-cols-4 lg:grid-cols-7">
-            <button
+            <article
               v-for="date in weekDates"
               :key="date"
-              type="button"
-              class="flex w-24 snap-start flex-col items-center gap-1 rounded-xl border-2 px-2 py-3 text-center transition-all duration-150 sm:w-auto"
+              class="flex w-72 snap-start flex-col rounded-xl border-2 px-2 py-3 text-center transition-all duration-150 sm:w-auto"
               :class="
                 date === selectedDate
-                  ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                  ? 'border-primary bg-card text-foreground shadow-sm'
                   : date === today
                     ? 'border-primary/50 bg-accent/40 text-foreground hover:bg-accent/70'
                     : 'border-border/70 bg-card text-foreground hover:border-primary/30 hover:bg-field/50'
               "
-              @click="selectedDate = date; viewMode = 'day'"
             >
-              <span class="text-xs font-medium" :class="date === selectedDate ? 'text-primary-foreground/90' : 'text-muted-foreground'">{{ weekdayLabel(date) }}</span>
-              <span class="text-sm font-bold">{{ date.split('-')[2] }}</span>
-              <span class="text-xs" :class="date === selectedDate ? 'text-primary-foreground/85 font-medium' : 'text-muted-foreground'">
+              <span class="text-xs font-medium" :class="date === today ? 'text-primary-foreground/90' : date === selectedDate ? 'text-primary' : 'text-muted-foreground'">{{ weekdayLabel(date) }}</span>
+              <span class="text-sm font-bold" :class="date === today ? 'text-primary-foreground' : 'text-foreground'">{{ date.split('-')[2] }}</span>
+              <span class="text-xs" :class="date === today ? 'font-medium text-primary-foreground/85' : date === selectedDate ? 'font-medium text-primary' : 'text-muted-foreground'">
                 {{ weekSummary.get(date) ?? 0 }} 筆
               </span>
-            </button>
+              <div class="mt-2 w-full space-y-1 border-t border-border/60 pt-2 text-left">
+                <p v-if="!(weekAppointments.get(date) ?? []).length" class="py-3 text-center text-xs text-muted-foreground">當天沒有掛號</p>
+                <button v-for="appointment in (weekAppointments.get(date) ?? [])" :key="appointment._id" type="button" class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-field/60" @click="selectedDate = date; viewMode = 'day'">
+                  <span class="w-10 shrink-0 font-medium tabular-nums text-muted-foreground">{{ appointment.time || formatDateTime(appointment.scheduledAt, checkinTimeOptions, '—') }}</span>
+                  <span class="min-w-0 flex-1 truncate font-medium text-foreground">{{ appointment.petName || '未填寵物名' }}</span>
+                  <span class="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{{ appointment.status === 'completed' ? '完成' : appointment.status === 'arrived' ? '候診' : appointment.status === 'cancelled' ? '取消' : appointment.status === 'no_show' ? '未到' : '預約' }}</span>
+                </button>
+              </div>
+            </article>
           </div>
         </div>
       </Card>
