@@ -93,6 +93,16 @@ function visitTypeMeta(appointment) {
   return VISIT_TYPE_META.unknown;
 }
 
+function appointmentStatusClasses(status) {
+  return {
+    scheduled: 'bg-info-surface text-info',
+    arrived: 'bg-accent text-accent-foreground',
+    completed: 'bg-success-surface text-success',
+    cancelled: 'bg-destructive/10 text-destructive',
+    no_show: 'bg-muted text-muted-foreground',
+  }[status] ?? 'bg-muted text-muted-foreground';
+}
+
 // 快速連按前後一天時，先發的請求可能後回來。用送出當下的日期比對，
 // 對不上就整包丟掉——不然畫面會停在別天的資料上。
 let dateRequestToken = 0;
@@ -1008,7 +1018,7 @@ onBeforeUnmount(() => {
                 <button v-for="appointment in (weekAppointments.get(date) ?? [])" :key="appointment._id" type="button" class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-field/60" @click="selectedDate = date; viewMode = 'day'">
                   <span class="w-10 shrink-0 font-medium tabular-nums text-muted-foreground">{{ appointment.time || formatDateTime(appointment.scheduledAt, checkinTimeOptions, '—') }}</span>
                   <span class="min-w-0 flex-1 truncate font-medium text-foreground">{{ appointment.petName || '未填寵物名' }}</span>
-                  <span class="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{{ appointment.status === 'completed' ? '完成' : appointment.status === 'arrived' ? '候診' : appointment.status === 'cancelled' ? '取消' : appointment.status === 'no_show' ? '未到' : '預約' }}</span>
+                  <span class="shrink-0 rounded-full px-1.5 py-0.5 text-sm" :class="appointmentStatusClasses(appointment.status)">{{ appointment.status === 'completed' ? '完成' : appointment.status === 'arrived' ? '候診' : appointment.status === 'cancelled' ? '取消' : appointment.status === 'no_show' ? '未到' : '預約' }}</span>
                 </button>
               </div>
             </article>
