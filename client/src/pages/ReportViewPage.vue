@@ -1,7 +1,7 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AlertTriangle, ArrowLeft, CheckCircle2, ClipboardPlus, Copy, Download, FilePenLine, Mail, Printer, Share2 } from '@lucide/vue';
+import { AlertTriangle, ArrowLeft, ArrowUp, CheckCircle2, ClipboardPlus, Copy, Download, FilePenLine, Mail, Printer, Share2 } from '@lucide/vue';
 import { PDF_TIMEOUT_MS, http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { ageLabel, formatDate, formatDateTime } from '../lib/datetime';
@@ -25,6 +25,7 @@ const shareNotice = ref(null);
 const showFinalizeConfirm = ref(false);
 const showEmailConfirm = ref(false);
 const showRevisionDialog = ref(false);
+const showBackToTop = ref(false);
 const isPreview = computed(() => route.name === 'record-preview');
 const isDraft = computed(() => record.value?.status === 'draft');
 const isFinalized = computed(() => isFinalizedRecord(record.value));
@@ -317,6 +318,23 @@ function printReport() {
   window.print();
 }
 
+function updateBackToTopVisibility() {
+  showBackToTop.value = window.scrollY >= 600;
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+onMounted(() => {
+  updateBackToTopVisibility();
+  window.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', updateBackToTopVisibility);
+});
+
 watch(
   reportIdentity,
   async () => {
@@ -448,6 +466,17 @@ watch(
 
     <p v-else-if="error" class="mx-auto max-w-3xl rounded-xl border border-red-200 bg-red-50 px-6 py-4 text-center text-sm text-red-700">{{ error }}</p>
     <p v-else class="mx-auto max-w-3xl px-6 text-center text-sm text-stone-500" role="status">載入健檢報告…</p>
+
+    <Button
+      v-if="showBackToTop"
+      type="button"
+      class="fixed bottom-6 right-4 z-30 rounded-full bg-stone-800 px-4 text-white shadow-lg hover:bg-stone-700 print:hidden sm:right-6"
+      aria-label="回到報告最上方"
+      @click="scrollToTop"
+    >
+      <ArrowUp class="h-4 w-4" />
+      回到最上方
+    </Button>
 
     <ConfirmDialog
       :open="showFinalizeConfirm"
