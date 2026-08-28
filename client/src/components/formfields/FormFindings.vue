@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import StatusToggle from './StatusToggle.vue';
 import FieldControl from './FieldControl.vue';
 import { Label } from '../ui/label';
+import { Textarea } from '../ui/textarea';
 import SelectableItem from './SelectableItem.vue';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import { useRecordForm } from './context';
@@ -43,13 +44,13 @@ const findingsOf = (run) => run.items.map((item) => entryByKey.value.get(item.ke
               <Label :for="`record-exam-note-${finding.key}`" class="text-xs font-medium text-muted-foreground">
                 備註
               </Label>
-              <input
+              <Textarea
                 :id="`record-exam-note-${finding.key}`"
                 v-model="finding.note"
-                type="text"
+                rows="2"
                 :aria-label="`${finding.label}備註`"
                 :placeholder="finding.status === 'abnormal' ? '請描述異常，例如：輕微牙齦紅（選填）' : '選填'"
-                class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none focus:ring-2 focus:ring-belle-100 dark:focus:ring-brand-500/20"
+                class="min-h-16 resize-y scroll-mt-40 rounded-xl border-border bg-field text-foreground focus-visible:border-belle-500 focus-visible:ring-belle-100 dark:focus-visible:ring-brand-500/20"
               />
               <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-exam-note-${finding.key}`" />
             </div>

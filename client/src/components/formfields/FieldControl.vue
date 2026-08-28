@@ -5,6 +5,7 @@ import StatusToggle from './StatusToggle.vue';
 import FieldShell from './FieldShell.vue';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import { Input } from '../ui/input';
+import { Textarea } from '../ui/textarea';
 import { useRecordForm } from './context';
 import { familyOf } from '../../lib/fieldFamily';
 
@@ -41,13 +42,13 @@ const referenceText = computed(() => labRangeLabel(props.item));
     <FieldShell v-if="entry" :item="item" :input-id="`record-exam-note-${item.key}`">
       <div :id="`record-exam-row-${item.key}`" class="scroll-mt-40 space-y-2">
         <StatusToggle :finding="entry" :aria-label="`${item.label}檢查結果`" @select="entry.status = $event" />
-        <input
+        <Textarea
           :id="`record-exam-note-${item.key}`"
           v-model="entry.note"
-          type="text"
+          rows="2"
           :aria-label="`${item.label}備註`"
           :placeholder="entry.status === 'abnormal' ? '請描述異常（選填）' : '備註（選填）'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+          class="min-h-16 resize-y scroll-mt-40 rounded-xl border-border bg-field text-foreground focus-visible:border-belle-500"
         />
         <TextTemplateTrigger v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" :input-id="`record-exam-note-${item.key}`" />
       </div>
@@ -76,13 +77,13 @@ const referenceText = computed(() => labRangeLabel(props.item));
           :label="`${item.label}結果描述`"
           :input-id="`record-lab-value-${item.key}`"
         />
-        <input
+        <Textarea
           :id="`record-lab-note-${item.key}`"
           v-model="entry.note"
-          type="text"
+          rows="2"
           :aria-label="`${item.label}備註`"
           :placeholder="entry.status === 'abnormal' ? '請描述異常（選填）' : '備註（選填）'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+          class="min-h-16 resize-y scroll-mt-40 rounded-xl border-border bg-field text-foreground focus-visible:border-belle-500"
         />
         <TextTemplateTrigger v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" :input-id="`record-lab-note-${item.key}`" />
         <p v-if="referenceText" class="text-xs text-emerald-700 dark:text-emerald-300">參考 {{ referenceText }}</p>

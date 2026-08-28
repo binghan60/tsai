@@ -4,6 +4,7 @@ import StatusToggle from './StatusToggle.vue';
 import FieldControl from './FieldControl.vue';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
+import { Textarea } from '../ui/textarea';
 import SelectableItem from './SelectableItem.vue';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import PreviousValue from './PreviousValue.vue';
@@ -88,13 +89,13 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                   <Label :for="`record-lab-note-${finding.key}`" class="text-xs font-medium text-muted-foreground">
                     備註
                   </Label>
-                  <input
+                  <Textarea
                     :id="`record-lab-note-${finding.key}`"
                     v-model="finding.note"
-                    type="text"
+                    rows="2"
                     :aria-label="`${finding.label}備註`"
                     :placeholder="finding.status === 'abnormal' ? '請描述異常（選填）' : '選填'"
-                    class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-belle-500 focus:outline-none"
+                    class="min-h-16 resize-y scroll-mt-40 rounded-xl border-border bg-field text-foreground focus-visible:border-belle-500"
                   />
                   <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-lab-note-${finding.key}`" />
                 </div>
