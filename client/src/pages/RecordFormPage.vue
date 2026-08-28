@@ -399,18 +399,6 @@ function entriesFor(section, entries, type) {
 const findingsFor = (section) => entriesFor(section, record.examinationFindings, 'finding');
 const labsFor = (section) => entriesFor(section, record.labFindings, 'lab');
 
-function itemByRoleInTemplate(role) {
-  return FORM_SECTIONS.value.flatMap((section) => section.items ?? []).find((item) => item.role === role) ?? null;
-}
-
-// 結論與照護建議「擇一必填」：兩邊都空時要顯示提醒。
-function eitherOrPending() {
-  const conclusion = itemByRoleInTemplate('conclusion');
-  const treatmentPlan = itemByRoleInTemplate('treatmentPlan');
-  if (!conclusion && !treatmentPlan) return false;
-  return !String(valueFor(conclusion ?? {}) ?? '').trim() && !String(valueFor(treatmentPlan ?? {}) ?? '').trim();
-}
-
 // 分段導覽的圓圈有三種狀態：目前所在、已有內容、尚未填寫。
 function stepBadgeClass(index, sectionId) {
   if (activeSectionId.value === sectionId) return 'bg-primary text-primary-foreground';
@@ -580,7 +568,6 @@ provideRecordForm({
   previousFor,
   findingsFor,
   labsFor,
-  eitherOrPending,
   labRanges,
   labRangeLabel,
   measurementAssessment,

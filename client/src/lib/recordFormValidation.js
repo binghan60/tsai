@@ -11,8 +11,6 @@
 
 // 「有預設值或屬於行政欄位」的角色，不能當作「這份報告有臨床內容」的訊號。
 // 與後端 PREFILLED_ROLES 對應。
-export const ADMIN_ROLES = new Set(['visitDate', 'vet']);
-
 // 錨點要用實際渲染出來的 DOM id，不同型別的版式元件命名規則不同。
 export function anchorFor(item, fallbackId = '') {
   if (!item) return fallbackId;
@@ -40,24 +38,11 @@ export function collectPreviewIssues({ sections = [], getValue = () => null, fin
   const issues = [];
   const addIssue = (message, targetId, focusId = targetId) => issues.push({ message, targetId, focusId });
   const items = sections.flatMap((section) => section.items ?? []);
-  const byRole = (role) => items.find((item) => item.role === role) ?? null;
   const fallbackId = sections[0]?.id ?? '';
   const filled = createIsFilled({ getValue, findings, labFindings });
 
   for (const item of items.filter((entry) => entry.required)) {
     if (!filled(item)) addIssue(`請填寫${item.label}`, anchorFor(item, fallbackId));
-  }
-
-  if (!items.some((item) => !ADMIN_ROLES.has(item.role) && filled(item))) {
-    addIssue('請至少填寫一個區塊的檢查內容', fallbackId);
-  }
-
-  // 結論與照護建議至少要有一項；兩個欄位都被停用時就不檢查。
-  const conclusion = byRole('conclusion');
-  const treatmentPlan = byRole('treatmentPlan');
-  if ((conclusion || treatmentPlan) && !filled(conclusion) && !filled(treatmentPlan)) {
-    const label = [conclusion?.label, treatmentPlan?.label].filter(Boolean).join('或');
-    addIssue(`請填寫${label}`, anchorFor(conclusion ?? treatmentPlan, fallbackId));
   }
 
   // 數值範圍取自範本項目，不寫死任何一個欄位的上下限。
@@ -71,14 +56,6 @@ export function collectPreviewIssues({ sections = [], getValue = () => null, fin
     }
     if (item.min != null && numeric < item.min) addIssue(`${item.label}不可小於 ${item.min}`, anchorFor(item, fallbackId));
     if (item.max != null && numeric > item.max) addIssue(`${item.label}不可大於 ${item.max}`, anchorFor(item, fallbackId));
-  }
-
-  // 標成異常卻沒寫說明，等於報告上出現一個沒有解釋的紅字。
-  for (const finding of findings.filter((entry) => entry.status === 'abnormal' && !entry.note?.trim())) {
-    addIssue(`請補充理學檢查異常說明：${finding.label}`, `record-exam-row-${finding.key}`, `record-exam-note-${finding.key}`);
-  }
-  for (const finding of labFindings.filter((entry) => entry.status === 'abnormal' && !entry.note?.trim())) {
-    addIssue(`請補充檢驗異常說明：${finding.label}`, `record-lab-row-${finding.key}`, `record-lab-note-${finding.key}`);
   }
 
   return issues;

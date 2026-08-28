@@ -78,68 +78,6 @@ describe('collectPreviewIssues 必填', () => {
   });
 });
 
-describe('collectPreviewIssues 臨床內容', () => {
-  it('只填了看診日與獸醫師不算有臨床內容', () => {
-    const issues = collectPreviewIssues({
-      sections: section([
-        { key: 'visitDate', role: 'visitDate', label: '看診日', type: 'date', value: '2026-08-25' },
-        { key: 'vet', role: 'vet', label: '獸醫師', type: 'text', value: '王醫師' },
-      ]),
-      getValue,
-    });
-    assert.ok(messages(issues).includes('請至少填寫一個區塊的檢查內容'));
-  });
-
-  it('任何一個非行政欄位有作答就通過', () => {
-    const issues = collectPreviewIssues({
-      sections: section([
-        { key: 'visitDate', role: 'visitDate', label: '看診日', type: 'date', value: '2026-08-25' },
-        { key: 'weight', label: '體重', type: 'measurement', value: '5.2' },
-      ]),
-      getValue,
-    });
-    assert.deepEqual(messages(issues), []);
-  });
-
-  it('只標記了理學檢查也算有臨床內容', () => {
-    const issues = collectPreviewIssues({
-      sections: section([{ key: 'skin', label: '皮膚', type: 'finding' }]),
-      getValue,
-      findings: [{ key: 'skin', label: '皮膚', status: 'normal' }],
-    });
-    assert.deepEqual(messages(issues), []);
-  });
-});
-
-describe('collectPreviewIssues 結論與照護建議', () => {
-  const withBoth = (conclusionValue, planValue) =>
-    collectPreviewIssues({
-      sections: section([
-        { key: 'weight', label: '體重', type: 'measurement', value: '5' },
-        { key: 'conclusion', role: 'conclusion', label: '結論', type: 'prose', value: conclusionValue },
-        { key: 'plan', role: 'treatmentPlan', label: '照護建議', type: 'prose', value: planValue },
-      ]),
-      getValue,
-    });
-
-  it('兩個都空就報錯，訊息把兩個標籤串起來', () => {
-    assert.ok(messages(withBoth('', '')).includes('請填寫結論或照護建議'));
-  });
-
-  it('任一個有值就通過', () => {
-    assert.deepEqual(messages(withBoth('一切正常', '')), []);
-    assert.deepEqual(messages(withBoth('', '兩週後回診')), []);
-  });
-
-  it('兩個欄位都不在範本裡就不檢查', () => {
-    const issues = collectPreviewIssues({
-      sections: section([{ key: 'weight', label: '體重', type: 'measurement', value: '5' }]),
-      getValue,
-    });
-    assert.deepEqual(messages(issues), []);
-  });
-});
-
 describe('collectPreviewIssues 數值範圍', () => {
   const bcs = (value) =>
     collectPreviewIssues({
@@ -172,35 +110,15 @@ describe('collectPreviewIssues 數值範圍', () => {
   });
 });
 
-describe('collectPreviewIssues 異常說明', () => {
-  it('標成異常卻沒寫說明就報錯，並把焦點指到說明欄', () => {
+describe('collectPreviewIssues 非必填欄位', () => {
+  it('空白的非必填欄位、結論與異常說明都不阻擋預覽', () => {
     const issues = collectPreviewIssues({
-      sections: section([{ key: 'skin', label: '皮膚', type: 'finding' }]),
+      sections: section([
+        { key: 'conclusion', role: 'conclusion', label: '結論', type: 'prose', value: '' },
+        { key: 'skin', label: '皮膚', type: 'finding' },
+      ]),
       getValue,
-      findings: [{ key: 'skin', label: '皮膚', status: 'abnormal', note: '  ' }],
-    });
-    assert.ok(messages(issues).includes('請補充理學檢查異常說明：皮膚'));
-    const issue = issues.find((entry) => entry.message.includes('皮膚'));
-    assert.equal(issue.targetId, 'record-exam-row-skin');
-    assert.equal(issue.focusId, 'record-exam-note-skin');
-  });
-
-  it('檢驗異常走自己的訊息與錨點', () => {
-    const issues = collectPreviewIssues({
-      sections: section([{ key: 'alt', label: 'ALT', type: 'lab' }]),
-      getValue,
-      labFindings: [{ key: 'alt', label: 'ALT', status: 'abnormal', value: '120', note: '' }],
-    });
-    const issue = issues.find((entry) => entry.message.includes('ALT'));
-    assert.equal(issue.message, '請補充檢驗異常說明：ALT');
-    assert.equal(issue.focusId, 'record-lab-note-alt');
-  });
-
-  it('寫了說明就通過', () => {
-    const issues = collectPreviewIssues({
-      sections: section([{ key: 'skin', label: '皮膚', type: 'finding' }]),
-      getValue,
-      findings: [{ key: 'skin', label: '皮膚', status: 'abnormal', note: '左後肢紅疹' }],
+      findings: [{ key: 'skin', label: '皮膚', status: 'abnormal', note: '' }],
     });
     assert.deepEqual(messages(issues), []);
   });

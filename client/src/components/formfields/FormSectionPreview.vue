@@ -71,7 +71,6 @@ provideRecordForm({
   setValue: noop,
   findingsFor: () => answers.findings,
   labsFor: () => answers.labs,
-  eitherOrPending: () => false,
   labRanges,
   labRangeLabel,
   // 回傳 not_checked 而不是 null —— 版式元件是用 `?.status !== 'not_checked'`
