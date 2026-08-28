@@ -25,6 +25,13 @@ const inputMode = computed(() => (props.item.type === 'number' ? 'decimal' : und
 // 空字串在 Select 裡是保留值（代表「沒有選取」），拿它當選項會直接拋錯 ——
 // 表單設計器新增選項時會先產生一列空白，這裡要擋住。
 const options = computed(() => (props.item.options ?? []).filter(Boolean));
+// SelectItem 禁止使用空字串當 value，但非必填欄位必須能清回未選取狀態。
+// 用只存在於選單內的物件當清除代理值，對外仍一律讀寫空字串，不會存進病歷資料。
+const EMPTY_SELECT_VALUE = Object.freeze({ empty: true });
+const selectValue = computed({
+  get: () => props.modelValue ?? '',
+  set: (next) => emit('update:modelValue', next === EMPTY_SELECT_VALUE ? '' : next),
+});
 
 // 文字模板只掛在真正需要打字的欄位；日期、數字與選項類欄位不需要插入長文。
 const isTextual = computed(() => props.item.type === 'text' || props.item.type === 'textarea');
@@ -57,9 +64,10 @@ function toggle(option, checked) {
       :rows="item.rows || 3"
       :placeholder="item.placeholder"
     />
-    <Select v-else-if="item.type === 'select'" v-model="value">
-      <SelectTrigger :id="inputId" class="w-full"><SelectValue /></SelectTrigger>
+    <Select v-else-if="item.type === 'select'" v-model="selectValue">
+      <SelectTrigger :id="inputId" class="w-full"><SelectValue placeholder="請選擇" /></SelectTrigger>
       <SelectContent>
+        <SelectItem :value="EMPTY_SELECT_VALUE" class="text-muted-foreground">請選擇</SelectItem>
         <SelectItem v-for="(option, index) in options" :key="index" :value="option">{{ option }}</SelectItem>
       </SelectContent>
     </Select>
