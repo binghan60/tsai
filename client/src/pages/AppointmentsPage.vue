@@ -703,9 +703,7 @@ onBeforeUnmount(() => {
                 v-if="editingCardNumberId === appointment._id"
                 v-model="cardNumberDraft"
                 autofocus
-                type="number"
-                inputmode="numeric"
-                min="1"
+                type="text"
                 class="h-9 w-9 appearance-none rounded-lg border-2 border-primary bg-card text-center text-sm font-bold tabular-nums text-foreground outline-none focus-visible:ring-3 focus-visible:ring-primary/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 aria-label="輸入新的實體號碼牌編號"
                 :disabled="isBusy(appointment._id)"
@@ -779,14 +777,14 @@ onBeforeUnmount(() => {
                 <label class="space-y-1.5 text-xs font-medium text-foreground">
                   體重
                   <div class="relative">
-                    <input v-model="simpleForms[appointment._id].weightKg" type="number" min="0" step="0.1" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                    <input v-model="simpleForms[appointment._id].weightKg" type="text" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
                     <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">kg</span>
                   </div>
                 </label>
                 <label class="space-y-1.5 text-xs font-medium text-foreground">
                   體溫
                   <div class="relative">
-                    <input v-model="simpleForms[appointment._id].temperatureC" type="number" min="0" step="0.1" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                    <input v-model="simpleForms[appointment._id].temperatureC" type="text" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
                     <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">°C</span>
                   </div>
                 </label>
@@ -1174,8 +1172,8 @@ onBeforeUnmount(() => {
       <form class="flex flex-col" @submit.prevent="saveCompletedVisit">
         <div class="space-y-4 p-6 pt-2 sm:p-7 sm:pt-2">
           <div class="grid gap-4 sm:grid-cols-2">
-            <label class="space-y-1.5 text-sm font-medium text-foreground">體重（kg）<input v-model="completedVisitForm.weightKg" type="number" min="0" step="0.1" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" /></label>
-            <label class="space-y-1.5 text-sm font-medium text-foreground">體溫（°C）<input v-model="completedVisitForm.temperatureC" type="number" min="0" step="0.1" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" /></label>
+            <label class="space-y-1.5 text-sm font-medium text-foreground">體重（kg）<input v-model="completedVisitForm.weightKg" type="text" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" /></label>
+            <label class="space-y-1.5 text-sm font-medium text-foreground">體溫（°C）<input v-model="completedVisitForm.temperatureC" type="text" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" /></label>
           </div>
           <label class="block space-y-1.5 text-sm font-medium text-foreground">看診備註<textarea v-model="completedVisitForm.visitNote" rows="4" class="w-full rounded-lg border border-input bg-field px-3 py-2 text-sm font-normal text-foreground"></textarea></label>
           <Alert v-if="completedVisitError" variant="destructive"><AlertDescription>{{ completedVisitError }}</AlertDescription></Alert>

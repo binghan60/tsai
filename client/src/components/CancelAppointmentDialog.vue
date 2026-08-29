@@ -41,7 +41,6 @@ function submit() {
             id="cancel-appointment-reason"
             v-model="cancelReason"
             rows="3"
-            maxlength="300"
             class="border-border"
             placeholder="例：飼主改期、症狀改善、聯絡不上"
           />

@@ -114,7 +114,7 @@ const onSubmit = handleSubmit((formValues) => {
             </div>
             <div class="space-y-1.5">
               <Label for="pet-weight" class="text-xs font-medium text-foreground">目前體重（kg）</Label>
-              <Input id="pet-weight" v-model="weightKg" type="number" min="0" step="0.1" class="border-border" placeholder="例：4.5" />
+              <Input id="pet-weight" v-model="weightKg" type="text" class="border-border" placeholder="例：4.5" />
             </div>
           </div>
         </div>
