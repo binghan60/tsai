@@ -26,6 +26,10 @@ const appointmentSchema = new mongoose.Schema(
     species: { type: String, default: '', trim: true },
 
     reason: { type: String, default: '', trim: true },
+    // 掛號時指定、看診完成時用來直接建立草稿的表單。保留在掛號上，
+    // 才不會因日後變更預設表單而讓已掛號病患用錯表單。
+    templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'FormTemplate', default: null },
+    recordId: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicalRecord', default: null },
 
     status: {
       type: String,

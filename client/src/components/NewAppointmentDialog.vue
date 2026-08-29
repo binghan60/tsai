@@ -10,6 +10,7 @@ import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { TimePicker } from './ui/time-picker';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import SegmentedControl from './SegmentedControl.vue';
 import PetPickerDialog from './PetPickerDialog.vue';
 import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/appointmentTime';
@@ -21,6 +22,8 @@ const props = defineProps({
   isToday: { type: Boolean, default: true },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
+  templates: { type: Array, default: () => [] },
+  defaultTemplateId: { type: String, default: '' },
 });
 const emit = defineEmits(['submit', 'close']);
 
@@ -32,6 +35,8 @@ const mode = ref('return');
 const selectedPet = ref(null);
 const petPickerOpen = ref(false);
 const pickPetError = ref('');
+const templateId = ref(props.defaultTemplateId || '');
+const templateError = ref('');
 
 // 回診跟初診共用同一份表單，只是要不要驗證寵物姓名視 mode 而定——
 // 切成兩份表單反而讓「預約時段」「來院原因」這兩個共用欄位要維護兩次。
@@ -58,12 +63,16 @@ function selectPet(pet) {
 }
 
 const onSubmit = handleSubmit((values) => {
+  if (!templateId.value) {
+    templateError.value = '請選擇要開啟的表單';
+    return;
+  }
   if (mode.value === 'return') {
     if (!selectedPet.value) {
       pickPetError.value = '請先選擇寵物';
       return;
     }
-    emit('submit', { date: props.date, visitType: 'return', petId: selectedPet.value._id, time: values.time, reason: values.reason });
+    emit('submit', { date: props.date, visitType: 'return', petId: selectedPet.value._id, time: values.time, reason: values.reason, templateId: templateId.value });
     return;
   }
   emit('submit', {
@@ -74,6 +83,7 @@ const onSubmit = handleSubmit((values) => {
     petName: values.petName,
     time: values.time,
     reason: values.reason,
+    templateId: templateId.value,
   });
 });
 </script>
@@ -144,6 +154,17 @@ const onSubmit = handleSubmit((values) => {
           <Label for="apt-time" class="text-xs font-medium text-foreground">預約時段<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <TimePicker id="apt-time" v-model="time" placeholder="選擇預約時段" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" />
           <p v-if="timeError" class="text-xs font-medium text-destructive">{{ timeError }}</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <Label for="apt-template" class="text-xs font-medium text-foreground">看診表單<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+          <Select v-model="templateId" @update:model-value="templateError = ''">
+            <SelectTrigger id="apt-template" class="w-full"><SelectValue placeholder="選擇看診完成後要開啟的表單" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="template in templates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
+            </SelectContent>
+          </Select>
+          <p v-if="templateError" class="text-xs font-medium text-destructive">{{ templateError }}</p>
         </div>
 
         <div class="space-y-1.5">

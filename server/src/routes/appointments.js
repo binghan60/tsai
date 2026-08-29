@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
+import FormTemplate from '../models/FormTemplate.js';
+import MedicalRecord from '../models/MedicalRecord.js';
+import ClinicSettings from '../models/ClinicSettings.js';
 import { withTransaction } from '../lib/transaction.js';
 import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition } from '../lib/appointmentStatus.js';
@@ -10,7 +13,7 @@ import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 
 const router = Router();
 
-const EDITABLE_APPOINTMENT_FIELDS = ['date', 'time', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species'];
+const EDITABLE_APPOINTMENT_FIELDS = ['date', 'time', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species', 'templateId'];
 const EDITABLE_APPOINTMENT_STATUSES = new Set(['scheduled', 'arrived']);
 const APPOINTMENT_TIME_RANGES = [
   ['10:00', '11:30'],
@@ -36,6 +39,27 @@ function isValidAppointmentTime(value) {
     const endMinutes = minutesOfTime(end);
     return minutes >= startMinutes && minutes <= endMinutes;
   });
+}
+
+async function resolveAppointmentTemplate(templateId) {
+  const selectedId = templateId || (await ClinicSettings.findOne().lean())?.defaultAppointmentTemplateId;
+  if (!selectedId) {
+    const error = new Error('請先在表單管理設定預設表單，或在掛號時選擇表單');
+    error.status = 422;
+    throw error;
+  }
+  if (!mongoose.isValidObjectId(selectedId)) {
+    const error = new Error('表單格式不正確');
+    error.status = 422;
+    throw error;
+  }
+  const template = await FormTemplate.findOne({ _id: selectedId, enabled: { $ne: false } });
+  if (!template) {
+    const error = new Error('找不到指定表單，或該表單已停用');
+    error.status = 422;
+    throw error;
+  }
+  return template;
 }
 
 // 當日曾經發出去的牌號都算已使用，包含仍在候診的 current number 與已歸還／改號的 history。
@@ -197,6 +221,7 @@ router.post('/', async (req, res, next) => {
         ? new Date()
         : combineClinicDateTime(date, '');
 
+    const template = await resolveAppointmentTemplate(req.body.templateId);
     const appointment = await Appointment.create({
       date,
       time: time || '',
@@ -210,6 +235,7 @@ router.post('/', async (req, res, next) => {
       petName,
       species,
       reason: reason || '',
+      templateId: template._id,
     });
     res.status(201).json(appointment);
   } catch (err) {
@@ -248,6 +274,10 @@ router.put('/:id', async (req, res, next) => {
       }
       if (updates.petName !== undefined && !String(updates.petName).trim()) {
         return res.status(422).json({ message: '請填寫寵物姓名' });
+      }
+      if (updates.templateId !== undefined) {
+        const template = await resolveAppointmentTemplate(updates.templateId);
+        updates.templateId = template._id;
       }
       Object.assign(appointment, updates);
       const nextTime = updates.time ?? appointment.time;
@@ -365,9 +395,7 @@ router.post('/:id/check-in', async (req, res, next) => {
   }
 });
 
-// arrived → completed。只更新這筆掛號本身，不建立也不觸碰任何 MedicalRecord——
-// 健檢報告的表單類型只能在建立當下選一次，這裡先自己保管量測值，
-// 之後從 /pets/:petId/records/new?fromAppointment= 轉過去。
+// arrived → completed。完成時立刻用掛號選定的表單建立草稿，讓看診人員不必再選一次。
 router.post('/:id/complete', async (req, res, next) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
@@ -376,6 +404,7 @@ router.post('/:id/complete', async (req, res, next) => {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'completed') });
     }
     const { weightKg, temperatureC, visitNote } = req.body;
+    const template = await resolveAppointmentTemplate(req.body.templateId || appointment.templateId);
     if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
     if (temperatureC !== undefined) {
       appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
@@ -384,8 +413,52 @@ router.post('/:id/complete', async (req, res, next) => {
     const wasQueued = appointment.status === 'arrived';
     appointment.status = 'completed';
     appointment.completedAt = new Date();
+    appointment.templateId = template._id;
+    const [record] = await MedicalRecord.create([{
+      petId: appointment.petId,
+      visitDate: combineClinicDateTime(appointment.date, '10:00'),
+      weightKg: appointment.weightKg,
+      temperatureC: appointment.temperatureC,
+      chiefComplaint: appointment.reason,
+      other: appointment.visitNote,
+      templateId: template._id,
+      templateVersion: template.version,
+      examType: template.name,
+    }]);
+    appointment.recordId = record._id;
     // 看完診就歸還自己的實體號碼牌；其他候診者手上的牌號完全不變。
     await saveLeavingQueue(appointment, wasQueued);
+    res.json({ ...(appointment.toObject?.() ?? appointment), record });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 已完成後仍可修正候診時記下的量測與內部備註；若剛建立的草稿還沒結案，
+// 同步更新草稿，避免掛號列表和接著打開的就診紀錄出現兩套資料。
+router.patch('/:id/visit-data', async (req, res, next) => {
+  try {
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) return res.status(404).json({ message: '找不到掛號' });
+    if (appointment.status !== 'completed') return res.status(422).json({ message: '只有已完成的掛號可以編輯看診資料' });
+
+    const weightKg = req.body?.weightKg;
+    const temperatureC = req.body?.temperatureC;
+    const visitNote = req.body?.visitNote;
+    if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
+    if (temperatureC !== undefined) appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
+    if (visitNote !== undefined) appointment.visitNote = String(visitNote ?? '').trim();
+    await appointment.save();
+
+    if (appointment.recordId) {
+      const record = await MedicalRecord.findById(appointment.recordId);
+      if (record?.status === 'draft') {
+        record.weightKg = appointment.weightKg;
+        record.temperatureC = appointment.temperatureC;
+        record.other = appointment.visitNote;
+        await record.save();
+      }
+    }
     res.json(appointment);
   } catch (err) {
     next(err);

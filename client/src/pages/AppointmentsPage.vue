@@ -1,7 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
-import { CalendarClock, CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Lock, Pencil, Phone, User, UserPlus, UserX, X } from '@lucide/vue';
+import { CalendarClock, CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Lock, Pencil, Phone, Settings, User, UserPlus, UserX, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
 import {
@@ -26,12 +25,14 @@ import NewAppointmentDialog from '../components/NewAppointmentDialog.vue';
 import EditAppointmentDialog from '../components/EditAppointmentDialog.vue';
 import CancelAppointmentDialog from '../components/CancelAppointmentDialog.vue';
 import CheckInDialog from '../components/CheckInDialog.vue';
+import ModalDialog from '../components/ModalDialog.vue';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Alert, AlertDescription } from '../components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
 import SegmentedControl from '../components/SegmentedControl.vue';
 
-const router = useRouter();
 const toast = useToast();
 
 // 看哪一天。同步進網址（?date=），等於今天時參數會被省略——
@@ -45,6 +46,10 @@ const viewMode = useSearchQueryParam('view', 'day'); // 'day' | 'week'
 if (!['day', 'week'].includes(viewMode.value)) viewMode.value = 'day';
 
 const appointments = ref([]);
+const formTemplates = ref([]);
+const defaultTemplateId = ref('');
+const savingDefaultTemplate = ref(false);
+const defaultTemplateDialogOpen = ref(false);
 const loading = ref(false);
 const error = ref('');
 const now = ref(new Date());
@@ -72,6 +77,10 @@ const editError = ref('');
 const cancelTarget = ref(null);
 const cancelSubmitting = ref(false);
 const cancelError = ref('');
+const completedVisitTarget = ref(null);
+const completedVisitSaving = ref(false);
+const completedVisitError = ref('');
+const completedVisitForm = reactive({ weightKg: '', temperatureC: '', visitNote: '' });
 
 const ROW_ACTIONS = [
   { key: 'edit', label: '編輯掛號' },
@@ -123,6 +132,36 @@ async function fetchAppointments({ silent = false } = {}) {
     if (!silent) error.value = '掛號資料暫時無法載入，請稍後重試';
   } finally {
     if (token === dateRequestToken && !silent) loading.value = false;
+  }
+}
+
+async function fetchFormChoices() {
+  try {
+    const [{ data: templates }, { data: settings }] = await Promise.all([
+      http.get('/settings/form-templates'),
+      http.get('/settings/appointment-settings'),
+    ]);
+    formTemplates.value = templates ?? [];
+    defaultTemplateId.value = settings?.defaultAppointmentTemplateId ? String(settings.defaultAppointmentTemplateId) : '';
+  } catch {
+    toast.error('表單選項暫時無法載入，請重新整理後再掛號', '無法載入表單');
+  }
+}
+
+async function saveDefaultTemplate() {
+  if (!defaultTemplateId.value) return;
+  savingDefaultTemplate.value = true;
+  try {
+    const { data } = await http.put('/settings/appointment-settings', {
+      defaultAppointmentTemplateId: defaultTemplateId.value,
+    });
+    defaultTemplateId.value = String(data.defaultAppointmentTemplateId);
+    toast.success('新掛號會自動帶入這份表單，個別看診仍可改選', '預設表單已更新');
+    defaultTemplateDialogOpen.value = false;
+  } catch (err) {
+    reportApiError(err, '預設表單更新失敗');
+  } finally {
+    savingDefaultTemplate.value = false;
   }
 }
 
@@ -277,6 +316,7 @@ function toggleExpanded(appointment) {
         weightKg: appointment.weightKg ?? '',
         temperatureC: appointment.temperatureC ?? '',
         visitNote: appointment.visitNote ?? '',
+        templateId: String(appointment.templateId || defaultTemplateId.value || ''),
       };
     }
   }
@@ -386,15 +426,50 @@ async function completeVisit(appointment) {
   const draft = simpleForms[appointment._id] || {};
   setBusy(appointment._id, true);
   try {
-    const { data } = await http.post(`/appointments/${appointment._id}/complete`, {
+    await http.post(`/appointments/${appointment._id}/complete`, {
       weightKg: draft.weightKg === '' || draft.weightKg == null ? null : Number(draft.weightKg),
       temperatureC: draft.temperatureC === '' || draft.temperatureC == null ? null : Number(draft.temperatureC),
       visitNote: draft.visitNote || '',
+      templateId: draft.templateId || undefined,
     });
-    await router.push(`/pets/${data.petId}/records/new?fromAppointment=${data._id}`);
+    toast.success('已在背景建立就診草稿', '看診完成');
+    await fetchAppointments({ silent: true });
   } catch (err) {
     reportApiError(err, '完成看診失敗，請稍後再試');
+  } finally {
     setBusy(appointment._id, false);
+  }
+}
+
+function templateName(templateId) {
+  return formTemplates.value.find((template) => String(template._id) === String(templateId))?.name ?? '未選擇表單';
+}
+
+function openCompletedVisitEditor(appointment) {
+  completedVisitTarget.value = appointment;
+  completedVisitError.value = '';
+  completedVisitForm.weightKg = appointment.weightKg ?? '';
+  completedVisitForm.temperatureC = appointment.temperatureC ?? '';
+  completedVisitForm.visitNote = appointment.visitNote ?? '';
+}
+
+async function saveCompletedVisit() {
+  if (!completedVisitTarget.value) return;
+  completedVisitSaving.value = true;
+  completedVisitError.value = '';
+  try {
+    await http.patch(`/appointments/${completedVisitTarget.value._id}/visit-data`, {
+      weightKg: completedVisitForm.weightKg === '' ? null : Number(completedVisitForm.weightKg),
+      temperatureC: completedVisitForm.temperatureC === '' ? null : Number(completedVisitForm.temperatureC),
+      visitNote: completedVisitForm.visitNote,
+    });
+    toast.success('已更新看診資料', '儲存完成');
+    completedVisitTarget.value = null;
+    await fetchAppointments({ silent: true });
+  } catch (err) {
+    completedVisitError.value = err.response?.data?.message || '看診資料更新失敗';
+  } finally {
+    completedVisitSaving.value = false;
   }
 }
 
@@ -477,6 +552,7 @@ async function confirmRowAction() {
 }
 
 onMounted(() => {
+  fetchFormChoices();
   if (viewMode.value === 'week') fetchWeekSummary();
   else fetchAppointments();
   nowTimer = setInterval(() => {
@@ -607,10 +683,13 @@ onBeforeUnmount(() => {
        <Card class="h-full overflow-hidden p-0 shadow-sm dark:shadow-none">
         <div class="flex items-start justify-between gap-3 p-4 pb-3">
           <div>
-            <h2 class="text-base font-semibold text-foreground">候診中</h2>
+            <h2 class="text-base font-semibold text-foreground">候診 <span class="inline-flex h-6.5 min-w-6.5 items-center justify-center rounded-full bg-accent px-2 text-xs font-bold text-accent-foreground ring-1 ring-primary/20">{{ waitingQueue.length }}</span> 位</h2>
             <p class="mt-0.5 text-xs text-muted-foreground">依報到時間排列；牌號可點擊修改，當日不重複發號</p>
           </div>
-          <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-accent px-2 text-xs font-bold text-accent-foreground ring-1 ring-primary/20">{{ waitingQueue.length }}</span>
+          <div class="flex shrink-0 items-center gap-1.5">
+            <Button type="button" variant="ghost" size="icon-sm" aria-label="設定掛號預設表單" title="設定掛號預設表單" @click="defaultTemplateDialogOpen = true"><Settings class="h-4 w-4" stroke-width="1.75" /></Button>
+            
+          </div>
         </div>
 
         <ul v-if="waitingQueue.length" class="space-y-2.5 border-t border-border bg-field/30 p-3">
@@ -719,8 +798,18 @@ onBeforeUnmount(() => {
                   <Lock class="h-3.5 w-3.5 shrink-0" stroke-width="1.75" />僅供內部使用（藥品／費用等），不會出現在健檢報告中
                 </span>
               </label>
+              <div class="space-y-1.5">
+                <label :for="`visit-template-${appointment._id}`" class="block text-xs font-medium text-foreground">建立草稿的表單</label>
+                <Select v-model="simpleForms[appointment._id].templateId">
+                  <SelectTrigger :id="`visit-template-${appointment._id}`" class="w-full"><SelectValue placeholder="選擇表單" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem v-for="template in formTemplates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p class="text-xs text-muted-foreground">完成看診後會立即建立並開啟這份表單的草稿。</p>
+              </div>
               <div class="flex justify-end">
-                <Button type="button" size="sm" :disabled="isBusy(appointment._id)" @click="completeVisit(appointment)">
+                <Button type="button" size="sm" :disabled="isBusy(appointment._id) || !simpleForms[appointment._id].templateId" @click="completeVisit(appointment)">
                   <Check class="h-4 w-4" stroke-width="2" />完成看診
                 </Button>
               </div>
@@ -966,14 +1055,31 @@ onBeforeUnmount(() => {
           <span class="ml-auto text-xs font-normal text-muted-foreground">查看今日完成紀錄</span>
           <ChevronDown class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" stroke-width="1.75" />
         </summary>
-        <div class="grid gap-px border-t border-border bg-border sm:grid-cols-2 xl:grid-cols-3">
-          <article v-for="appointment in completedAppointments" :key="appointment._id" class="min-w-0 bg-card px-4 py-3">
-            <p class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</p>
-            <p class="mt-0.5 truncate text-xs text-muted-foreground">
-              {{ appointment.ownerName || '飼主未填' }}
-              <template v-if="appointment.completedAt"> · {{ formatDateTime(appointment.completedAt, checkinTimeOptions) }} 完成</template>
-            </p>
-          </article>
+        <div class="overflow-x-auto border-t border-border">
+          <table class="w-full min-w-[52rem] text-left text-sm">
+            <thead class="bg-muted/50 text-xs font-semibold text-muted-foreground">
+              <tr>
+                <th class="px-4 py-3">病患</th>
+                <th class="px-4 py-3">完成時間</th>
+                <th class="px-4 py-3">體重</th>
+                <th class="px-4 py-3">體溫</th>
+                <th class="px-4 py-3">看診備註</th>
+                <th class="px-4 py-3">草稿表單</th>
+                <th class="px-4 py-3"><span class="sr-only">操作</span></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border">
+              <tr v-for="appointment in completedAppointments" :key="appointment._id" class="bg-card hover:bg-muted/20">
+                <td class="px-4 py-3"><p class="font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</p><p class="mt-0.5 text-xs text-muted-foreground">{{ appointment.ownerName || '飼主未填' }}</p></td>
+                <td class="whitespace-nowrap px-4 py-3 text-muted-foreground">{{ appointment.completedAt ? formatDateTime(appointment.completedAt, checkinTimeOptions) : '—' }}</td>
+                <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }}</td>
+                <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }}</td>
+                <td class="max-w-64 px-4 py-3 text-muted-foreground"><p class="line-clamp-2 whitespace-pre-wrap">{{ appointment.visitNote || '—' }}</p></td>
+                <td class="px-4 py-3 text-muted-foreground">{{ templateName(appointment.templateId) }}</td>
+                <td class="px-4 py-3 text-right"><Button type="button" variant="outline" size="sm" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </details>
       </div>
@@ -1034,15 +1140,57 @@ onBeforeUnmount(() => {
       :is-today="isToday"
       :submitting="newAppointmentSubmitting"
       :error-message="newAppointmentError"
+      :templates="formTemplates"
+      :default-template-id="defaultTemplateId"
       @submit="submitNewAppointment"
       @close="newAppointmentOpen = false"
     />
+
+    <ModalDialog v-if="defaultTemplateDialogOpen" @close="defaultTemplateDialogOpen = false">
+      <div class="p-6 pb-3 sm:p-7 sm:pb-3">
+        <DialogTitle>掛號預設表單</DialogTitle>
+        <DialogDescription class="mt-1">新掛號會自動帶入此表單；在看診欄位仍可個別改選。</DialogDescription>
+      </div>
+      <div class="space-y-1.5 p-6 pt-2 sm:p-7 sm:pt-2">
+        <label for="default-appointment-template" class="text-sm font-medium text-foreground">預設表單</label>
+        <Select v-model="defaultTemplateId">
+          <SelectTrigger id="default-appointment-template" class="w-full"><SelectValue placeholder="選擇預設表單" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem v-for="template in formTemplates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <DialogFooter>
+        <Button type="button" variant="outline" :disabled="savingDefaultTemplate" @click="defaultTemplateDialogOpen = false">取消</Button>
+        <Button type="button" :disabled="savingDefaultTemplate || !defaultTemplateId" @click="saveDefaultTemplate">{{ savingDefaultTemplate ? '儲存中…' : '儲存' }}</Button>
+      </DialogFooter>
+    </ModalDialog>
+
+    <ModalDialog v-if="completedVisitTarget" @close="!completedVisitSaving && (completedVisitTarget = null)">
+      <div class="p-6 pb-3 sm:p-7 sm:pb-3">
+        <DialogTitle>編輯看診資料</DialogTitle>
+        <DialogDescription class="mt-1">{{ completedVisitTarget.petName || '這筆掛號' }}的量測與內部備註；若草稿尚未結案，也會同步更新。</DialogDescription>
+      </div>
+      <form class="flex flex-col" @submit.prevent="saveCompletedVisit">
+        <div class="space-y-4 p-6 pt-2 sm:p-7 sm:pt-2">
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="space-y-1.5 text-sm font-medium text-foreground">體重（kg）<input v-model="completedVisitForm.weightKg" type="number" min="0" step="0.1" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" /></label>
+            <label class="space-y-1.5 text-sm font-medium text-foreground">體溫（°C）<input v-model="completedVisitForm.temperatureC" type="number" min="0" step="0.1" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" /></label>
+          </div>
+          <label class="block space-y-1.5 text-sm font-medium text-foreground">看診備註<textarea v-model="completedVisitForm.visitNote" rows="4" class="w-full rounded-lg border border-input bg-field px-3 py-2 text-sm font-normal text-foreground"></textarea></label>
+          <Alert v-if="completedVisitError" variant="destructive"><AlertDescription>{{ completedVisitError }}</AlertDescription></Alert>
+        </div>
+        <DialogFooter><Button type="button" variant="outline" :disabled="completedVisitSaving" @click="completedVisitTarget = null">取消</Button><Button type="submit" :disabled="completedVisitSaving">{{ completedVisitSaving ? '儲存中…' : '儲存變更' }}</Button></DialogFooter>
+      </form>
+    </ModalDialog>
 
     <EditAppointmentDialog
       v-if="editTarget"
       :appointment="editTarget"
       :submitting="editSubmitting"
       :error-message="editError"
+      :templates="formTemplates"
+      :default-template-id="defaultTemplateId"
       @submit="submitEditAppointment"
       @close="editTarget = null"
     />

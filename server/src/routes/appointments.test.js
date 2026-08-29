@@ -5,6 +5,9 @@ import mongoose from 'mongoose';
 import { app } from '../app.js';
 import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
+import FormTemplate from '../models/FormTemplate.js';
+import MedicalRecord from '../models/MedicalRecord.js';
+import ClinicSettings from '../models/ClinicSettings.js';
 import { clinicToday } from '../lib/clinicTime.js';
 import { enumerateDates, fillDailyCounts } from './appointments.js';
 
@@ -47,14 +50,26 @@ function captureQueueWrites() {
 describe('appointments routes', () => {
   let server;
   let origin;
+  let originalTemplateFindOne;
+  let originalSettingsFindOne;
+  let originalRecordCreate;
 
   before(async () => {
+    originalTemplateFindOne = FormTemplate.findOne;
+    originalSettingsFindOne = ClinicSettings.findOne;
+    originalRecordCreate = MedicalRecord.create;
+    FormTemplate.findOne = async () => ({ _id: '507f1f77bcf86cd799439011', name: '預設表單', version: 1 });
+    ClinicSettings.findOne = () => ({ lean: async () => ({ defaultAppointmentTemplateId: '507f1f77bcf86cd799439011' }) });
+    MedicalRecord.create = async ([record]) => [{ _id: 'record-1', ...record }];
     server = app.listen(0, '127.0.0.1');
     if (!server.listening) await once(server, 'listening');
     origin = `http://127.0.0.1:${server.address().port}`;
   });
 
   after(async () => {
+    FormTemplate.findOne = originalTemplateFindOne;
+    ClinicSettings.findOne = originalSettingsFindOne;
+    MedicalRecord.create = originalRecordCreate;
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 

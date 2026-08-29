@@ -2,6 +2,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import ClinicSettings from '../models/ClinicSettings.js';
 import { buildDefaultSections } from '../config/formTemplateSeed.js';
 import {
   listTemplates, missingRoles, sanitizeSections, serializeTemplate, serializeTemplateSummary,
@@ -16,6 +17,32 @@ const ROLE_LABELS = {
   vet: '看診醫師', visitDate: '健檢日期', weight: '體重',
   conclusion: '結論', treatmentPlan: '照護與追蹤建議',
 };
+
+router.get('/appointment-settings', async (req, res, next) => {
+  try {
+    const settings = await ClinicSettings.findOne().lean();
+    res.json({ defaultAppointmentTemplateId: settings?.defaultAppointmentTemplateId ?? null });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/appointment-settings', async (req, res, next) => {
+  try {
+    const templateId = req.body?.defaultAppointmentTemplateId;
+    if (!mongoose.isValidObjectId(templateId)) return res.status(422).json({ message: '請選擇預設表單' });
+    const template = await FormTemplate.findOne({ _id: templateId, enabled: { $ne: false } });
+    if (!template) return res.status(422).json({ message: '找不到預設表單，或該表單已停用' });
+    const settings = await ClinicSettings.findOneAndUpdate(
+      {},
+      { $set: { defaultAppointmentTemplateId: template._id } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    res.json({ defaultAppointmentTemplateId: settings.defaultAppointmentTemplateId });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // 健檢類型清單。一份範本 = 一種健檢類型。
 router.get('/form-templates', async (req, res, next) => {
