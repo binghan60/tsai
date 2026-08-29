@@ -27,7 +27,7 @@ const router = createRouter({
     return { top: 0 };
   },
   routes: [
-    { path: '/', component: DashboardPage, meta: { title: '工作台' } },
+    { path: '/', component: DashboardPage, meta: { title: '儀表板' } },
     { path: '/appointments', component: AppointmentsPage, meta: { title: '掛號與候診' } },
     { path: '/owners', component: OwnersListPage, meta: { title: '飼主' } },
     { path: '/owners/:id', component: OwnerDetailPage, meta: { title: '飼主資料' } },
@@ -87,7 +87,7 @@ router.afterEach((to, from) => {
     window.history.replaceState({ ...window.history.state, chFrom: returnPath.value }, '');
   }
 
-  document.title = `${to.meta.title || '工作台'}｜謙華動物醫院`;
+  document.title = `${to.meta.title || '儀表板'}｜謙華動物醫院`;
 });
 
 export default router;

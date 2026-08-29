@@ -33,7 +33,7 @@ const routeViewKey = computed(() => {
 // 但 /records 這種「有自己的頂層網址、心理上卻屬於別項」的路由隨時會再出現，
 // 沒有這層的話一進那些頁面側邊欄會全暗，等於在系統裡失去座標。
 const navItems = [
-  { to: '/', label: '工作台', exact: true, icon: LayoutDashboard },
+  { to: '/', label: '儀表板', exact: true, icon: LayoutDashboard },
   { to: '/appointments', label: '掛號', exact: false, icon: CalendarClock },
   { to: '/owners', label: '飼主', exact: false, icon: Users },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
@@ -43,7 +43,7 @@ const navItems = [
   { to: '/settings/text-templates', label: '文字模板', exact: false, icon: FileText },
 ];
 
-const activeTitle = computed(() => route.meta.title ?? navItems.find(isNavActive)?.label ?? '工作台');
+const activeTitle = computed(() => route.meta.title ?? navItems.find(isNavActive)?.label ?? '儀表板');
 
 // router-link 內建的 active-class 是靠比對路由「記錄」（route.matched），不是比對網址字串——
 // /settings、/settings/forms、/settings/forms/:id 各自是獨立註冊的路由，不是巢狀父子關係，

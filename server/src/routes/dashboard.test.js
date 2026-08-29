@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildWeekBoundaries, fillWeeklyTrend, prioritizeActionRecords } from './dashboard.js';
+import { appointmentStatusCounts, buildWeekBoundaries, deliveryRate, fillWeeklyTrend, prioritizeActionRecords } from './dashboard.js';
 
 describe('dashboard visit-date trend', () => {
   it('builds contiguous weekly buckets and fills missing weeks', () => {
@@ -39,5 +39,22 @@ describe('dashboard action queue', () => {
         .map((record) => record._id),
       ['failed', 'pending']
     );
+  });
+});
+
+describe('dashboard operating metrics', () => {
+  it('fills missing appointment statuses with zero', () => {
+    assert.deepEqual(appointmentStatusCounts([{ _id: 'arrived', count: 3 }, { _id: 'completed', count: 2 }]), {
+      scheduled: 0,
+      arrived: 3,
+      completed: 2,
+      cancelled: 0,
+      no_show: 0,
+    });
+  });
+
+  it('calculates delivery success only when there are delivery outcomes', () => {
+    assert.equal(deliveryRate({ sent: 8, pending: 1, failed: 1 }), 80);
+    assert.equal(deliveryRate(), null);
   });
 });
