@@ -70,6 +70,7 @@ const emit = defineEmits(['update:modelValue', 'update:placeholder']);
                   'data-[today]:font-semibold data-[today]:text-primary dark:data-[today]:text-primary',
                   'data-[outside-view]:text-muted-foreground/50',
                   'data-[selected]:bg-primary data-[selected]:text-primary-foreground data-[selected]:hover:bg-primary',
+                  'data-[today]:data-[selected]:text-primary-foreground',
                   'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
                   'data-[unavailable]:pointer-events-none data-[unavailable]:text-muted-foreground/40 data-[unavailable]:line-through',
                 )
