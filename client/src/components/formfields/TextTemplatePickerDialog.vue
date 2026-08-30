@@ -186,7 +186,7 @@ async function saveTemplate() {
           <Button type="button" :disabled="saving" @click="saveTemplate">{{ saving ? '新增中…' : '新增模板' }}</Button>
         </template>
         <template v-else>
-          <Button v-if="picker?.currentText" type="button" variant="ghost" class="mr-auto" @click="creating = true">
+          <Button v-if="picker?.currentText" type="button" class="mr-auto" @click="creating = true">
             <FilePlus2 class="h-4 w-4" stroke-width="1.75" />
             將目前內容存成模板
           </Button>

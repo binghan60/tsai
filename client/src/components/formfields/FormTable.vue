@@ -45,7 +45,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 v-if="group" class="text-sm font-semibold text-primary">{{ group }}</h3>
             <span v-else />
-            <Button type="button" variant="secondary" size="sm" class="text-xs" @click="markEmptyLabGroupNormal(section, group)">空白項目全部正常</Button>
+            <Button type="button" variant="outline" size="sm" @click="markEmptyLabGroupNormal(section, group)">未標示項目全部正常</Button>
           </div>
           <div class="divide-y divide-border rounded-xl border border-border">
             <SelectableItem v-for="finding in labsOfGroup(run, group)" :key="finding.key" :item-key="finding.key">

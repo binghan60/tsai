@@ -27,7 +27,17 @@ const emit = defineEmits(['select']);
       @click="emit('select', option.value)"
     >
       {{ option.label }}
-      <span v-if="showAutoBadge && finding.status === option.value && finding.statusSource === 'auto'" class="ml-1 text-xs opacity-80">自動</span>
+      <span
+        v-if="showAutoBadge && finding.status === option.value && finding.statusSource === 'auto'"
+        class="absolute right-1.5 top-1.5 inline-flex opacity-80"
+        title="依參考範圍判讀"
+      >
+        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m12 3-1.9 5.1L5 10l5.1 1.9L12 17l1.9-5.1L19 10l-5.1-1.9L12 3Z" />
+          <path d="m19 16-.8 2.2L16 19l2.2.8L19 22l.8-2.2L22 19l-2.2-.8L19 16Z" />
+        </svg>
+        <span class="sr-only">依參考範圍判讀</span>
+      </span>
     </button>
   </div>
 </template>

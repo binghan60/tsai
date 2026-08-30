@@ -993,10 +993,6 @@ function handleBeforeUnload(event) {
               </div>
             </div>
             <Button v-if="section.presentation === 'findings'" type="button" variant="outline" size="sm" @click="markUncheckedFindingsNormal(section)">未標示項目全部正常</Button>
-            <!-- 參考範圍現在存在表單項目上，直接連到這份報告所用的表單 -->
-            <Button v-else-if="section.presentation === 'table' && template?._id" as-child variant="secondary" size="sm">
-              <router-link :to="`/settings/forms/${template._id}`">設定參考範圍</router-link>
-            </Button>
           </div>
           <FormSection :section="section" />
         </section>
