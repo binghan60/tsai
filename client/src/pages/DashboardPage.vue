@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { AlertTriangle, ArrowRight, CalendarCheck, ClipboardCheck, Clock3, MailWarning, PawPrint, UserRoundPlus, UsersRound } from '@lucide/vue'
+import { AlertTriangle, ArrowRight, CalendarCheck, ClipboardCheck, Clock3, MailWarning, PawPrint, UsersRound } from '@lucide/vue'
 import { http } from '../api/http'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from '../components/ui/alert'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import PageHeader from '../components/PageHeader.vue'
 import TechLineChart from '../components/charts/TechLineChart.vue'
-import TechDonutChart from '../components/charts/TechDonutChart.vue'
+import TechFunnelChart from '../components/charts/TechFunnelChart.vue'
 
 const loading = ref(true)
 const error = ref('')
@@ -79,14 +79,35 @@ onMounted(fetchDashboard)
         <CardContent class="grid gap-3 p-4 md:grid-cols-3 xl:gap-2 xl:p-2.5"><router-link v-for="item in alerts" :key="item.label" :to="item.to" class="flex items-center gap-3 rounded-lg px-2 py-1 transition-colors hover:bg-card/60"><span class="text-2xl font-semibold tabular-nums xl:text-lg" :class="item.tone">{{ item.value }}</span><span class="min-w-0 flex-1"><span class="block text-sm font-medium text-foreground">{{ item.label }}</span><span class="block truncate text-xs text-muted-foreground xl:hidden">{{ item.detail }}</span></span><ArrowRight class="h-4 w-4 shrink-0 text-muted-foreground" /></router-link></CardContent>
       </Card>
 
-      <div class="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)] xl:flex-[2] xl:gap-3">
+      <div class="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:flex-1 xl:gap-3">
         <Card class="shadow-sm dark:shadow-none xl:gap-2 xl:py-3"><CardHeader class="xl:px-4"><CardTitle>本月服務量</CardTitle><CardDescription class="xl:hidden">近 8 週健檢／就診紀錄趨勢。</CardDescription></CardHeader><CardContent class="xl:flex xl:flex-1 xl:flex-col xl:px-4"><div class="mb-2 flex items-end justify-between gap-4 xl:mb-1 xl:shrink-0"><div><p class="text-3xl font-semibold tabular-nums text-foreground xl:text-xl">{{ dashboard.monthlyReportCount }}</p><p class="mt-1 text-sm text-muted-foreground">本月健檢／就診紀錄</p></div><span class="rounded-full bg-accent px-3 py-1 text-xs text-accent-foreground">{{ changeLabel(dashboard.monthlyReportCount, dashboard.previousMonthlyReportCount) }}</span></div><div class="h-[260px] w-full xl:h-auto xl:flex-1"><TechLineChart :data="dashboard.weeklyTrend ?? []" label="每週健檢／就診紀錄" /></div></CardContent></Card>
-        <Card class="shadow-sm dark:shadow-none xl:gap-2 xl:py-3"><CardHeader class="xl:px-4"><CardTitle>預約轉換</CardTitle><CardDescription class="xl:hidden">從預約到完成看診的本月漏斗。</CardDescription></CardHeader><CardContent class="xl:flex xl:flex-1 xl:flex-col xl:px-4"><div v-if="funnelData.length" class="h-[240px] w-full xl:h-auto xl:flex-1"><TechDonutChart :data="funnelData" name="預約轉換" /></div><p v-else class="flex h-[240px] items-center justify-center text-sm text-muted-foreground xl:h-auto xl:flex-1">本月尚無預約資料</p><p class="mt-3 border-t border-border pt-3 text-sm text-muted-foreground xl:mt-1 xl:shrink-0 xl:pt-1">取消／未到：<span class="font-medium tabular-nums text-warning">{{ month.cancelledOrNoShow ?? 0 }}</span> 筆</p></CardContent></Card>
-      </div>
 
-      <div class="grid gap-4 lg:grid-cols-2 xl:flex-1 xl:gap-3">
-        <Card class="shadow-sm dark:shadow-none xl:gap-2 xl:py-3"><CardHeader class="xl:px-4"><CardTitle>客戶成長</CardTitle><CardDescription class="xl:hidden">本月新增與目前累計客戶基礎。</CardDescription></CardHeader><CardContent class="grid grid-cols-2 gap-4 xl:flex-1 xl:content-center xl:gap-2 xl:px-4"><div class="rounded-lg bg-field p-4 xl:p-2"><UserRoundPlus class="h-4 w-4 text-primary" /><p class="mt-5 text-2xl font-semibold tabular-nums xl:mt-1 xl:text-lg">{{ dashboard.monthlyNewOwnerCount }}</p><p class="mt-1 text-sm text-muted-foreground xl:text-xs">本月新增飼主</p></div><div class="rounded-lg bg-field p-4 xl:p-2"><PawPrint class="h-4 w-4 text-primary" /><p class="mt-5 text-2xl font-semibold tabular-nums xl:mt-1 xl:text-lg">{{ dashboard.monthlyNewPetCount }}</p><p class="mt-1 text-sm text-muted-foreground xl:text-xs">本月新增寵物</p></div><router-link to="/owners" class="flex items-center gap-2 text-sm text-primary hover:underline"><UsersRound class="h-4 w-4" />累計 {{ dashboard.ownerCount }} 位飼主</router-link><router-link to="/pets" class="flex items-center gap-2 text-sm text-primary hover:underline"><PawPrint class="h-4 w-4" />累計 {{ dashboard.petCount }} 隻寵物</router-link></CardContent></Card>
-        <Card class="shadow-sm dark:shadow-none xl:gap-2 xl:py-3"><CardHeader class="xl:px-4"><CardTitle>服務交付</CardTitle><CardDescription class="xl:hidden">已結案報告是否順利送達飼主。</CardDescription></CardHeader><CardContent class="grid grid-cols-3 gap-3 xl:flex-1 xl:content-center xl:gap-2 xl:px-4"><div><p class="text-2xl font-semibold tabular-nums text-success xl:text-lg">{{ delivery.sent ?? 0 }}</p><p class="mt-1 text-xs text-muted-foreground">已寄送</p></div><div><p class="text-2xl font-semibold tabular-nums text-warning xl:text-lg">{{ delivery.pending ?? 0 }}</p><p class="mt-1 text-xs text-muted-foreground">待完成交付</p></div><div><p class="text-2xl font-semibold tabular-nums xl:text-lg" :class="delivery.failed ? 'text-danger' : 'text-foreground'">{{ delivery.successRate === null ? '—' : `${delivery.successRate}%` }}</p><p class="mt-1 text-xs text-muted-foreground">寄送成功率</p></div><router-link to="/records?view=pending" class="col-span-3 mt-2 flex items-center justify-between border-t border-border pt-3 text-sm text-primary hover:underline xl:mt-1 xl:pt-2"><span><MailWarning class="mr-1 inline h-4 w-4" />前往處理報告交付</span><ArrowRight class="h-4 w-4" /></router-link></CardContent></Card>
+        <Card class="shadow-sm dark:shadow-none xl:gap-2 xl:py-3">
+          <CardHeader class="xl:px-4"><CardTitle>本月概況</CardTitle><CardDescription class="xl:hidden">轉換漏斗、客戶成長與服務交付。</CardDescription></CardHeader>
+          <CardContent class="space-y-4 xl:flex xl:flex-1 xl:flex-col xl:space-y-3 xl:px-4">
+            <div class="xl:flex xl:flex-1 xl:flex-col">
+              <p class="text-xs font-medium text-muted-foreground xl:shrink-0">預約轉換</p>
+              <div v-if="funnelData.length" class="mt-1 h-[120px] w-full xl:mt-1 xl:h-auto xl:flex-1">
+                <TechFunnelChart :data="funnelData" />
+                <ul class="sr-only"><li v-for="item in funnelData" :key="item.label">{{ item.label }}：{{ item.value }} 筆</li></ul>
+              </div>
+              <p v-else class="mt-1 flex h-[120px] items-center text-sm text-muted-foreground xl:h-auto xl:flex-1">本月尚無預約資料</p>
+              <p class="mt-1 text-xs text-muted-foreground xl:shrink-0">取消／未到：<span class="font-medium tabular-nums text-warning">{{ month.cancelledOrNoShow ?? 0 }}</span> 筆</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm xl:shrink-0">
+              <div><p class="text-lg font-semibold tabular-nums">{{ dashboard.monthlyNewOwnerCount }}</p><p class="text-xs text-muted-foreground">本月新增飼主</p></div>
+              <div><p class="text-lg font-semibold tabular-nums">{{ dashboard.monthlyNewPetCount }}</p><p class="text-xs text-muted-foreground">本月新增寵物</p></div>
+              <router-link to="/owners" class="flex items-center gap-1.5 text-xs text-primary hover:underline"><UsersRound class="h-3.5 w-3.5" />累計 {{ dashboard.ownerCount }} 位飼主</router-link>
+              <router-link to="/pets" class="flex items-center gap-1.5 text-xs text-primary hover:underline"><PawPrint class="h-3.5 w-3.5" />累計 {{ dashboard.petCount }} 隻寵物</router-link>
+            </div>
+            <div class="grid grid-cols-3 gap-2 border-t border-border pt-3 text-sm xl:shrink-0">
+              <div><p class="text-lg font-semibold tabular-nums text-success">{{ delivery.sent ?? 0 }}</p><p class="text-xs text-muted-foreground">已寄送</p></div>
+              <div><p class="text-lg font-semibold tabular-nums text-warning">{{ delivery.pending ?? 0 }}</p><p class="text-xs text-muted-foreground">待完成交付</p></div>
+              <div><p class="text-lg font-semibold tabular-nums" :class="delivery.failed ? 'text-danger' : 'text-foreground'">{{ delivery.successRate === null ? '—' : `${delivery.successRate}%` }}</p><p class="text-xs text-muted-foreground">寄送成功率</p></div>
+            </div>
+            <router-link to="/records?view=pending" class="flex shrink-0 items-center justify-between border-t border-border pt-3 text-sm text-primary hover:underline"><span><MailWarning class="mr-1 inline h-4 w-4" />前往處理報告交付</span><ArrowRight class="h-4 w-4" /></router-link>
+          </CardContent>
+        </Card>
       </div>
     </template>
   </section>
