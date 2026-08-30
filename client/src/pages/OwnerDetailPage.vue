@@ -23,6 +23,9 @@ const router = useRouter();
 const toast = useToast();
 const owner = ref(null);
 const petPage = ref(1);
+function petSexLabel(sex) {
+  return { male: '公', female: '母' }[sex] ?? '';
+}
 const petPagination = ref({ total: 0, page: 1, limit: 12, totalPages: 1 });
 const error = ref('');
 const editOwnerOpen = ref(false);
@@ -275,10 +278,12 @@ watch(
         <Button type="button" variant="secondary" size="icon" :aria-label="`關閉 ${createdPet.name} 新增成功提示`" @click="createdPet = null"><X class="h-4 w-4" /></Button>
       </div>
 
-      <Card v-if="owner.pets.length" class="hidden overflow-hidden p-0 shadow-sm lg:block dark:shadow-none" style="--data-columns: minmax(12rem, 1.2fr) minmax(10rem, 1fr) 7rem">
+      <Card v-if="owner.pets.length" class="hidden overflow-hidden p-0 shadow-sm lg:block dark:shadow-none" style="--data-columns: minmax(12rem, 1.2fr) minmax(8rem, 0.9fr) minmax(9rem, 1fr) 6rem 7rem">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">基本資料</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">物種</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">品種</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">性別</span>
           <span class="desktop-data-cell"></span>
         </div>
         <div v-for="pet in owner.pets" :key="pet._id" class="desktop-data-row">
@@ -286,7 +291,9 @@ watch(
             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="h-4 w-4" stroke-width="1.75" /></span>
             <span class="truncate text-sm font-semibold text-primary">{{ pet.name }}</span>
           </router-link>
-          <span class="desktop-data-cell truncate text-sm text-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template></span>
+          <span class="desktop-data-cell truncate text-sm text-foreground">{{ pet.species || '' }}</span>
+          <span class="desktop-data-cell truncate text-sm text-foreground">{{ pet.breed || '' }}</span>
+          <span class="desktop-data-cell text-sm text-foreground">{{ petSexLabel(pet.sex) }}</span>
           <span class="desktop-data-cell flex justify-end gap-1">
             <Button type="button" variant="secondary" size="icon-sm" :disabled="deletingPetId === pet._id || checkingPetId === pet._id" :aria-label="`編輯寵物 ${pet.name}`" @click="openEditPet(pet)"><Pencil class="h-4 w-4" /></Button>
             <Button type="button" variant="destructive" size="icon-sm" :disabled="deletingPetId === pet._id || checkingPetId === pet._id" :aria-label="`刪除寵物 ${pet.name}`" @click="openRemovePet(pet)"><Trash2 class="h-4 w-4" /></Button>
@@ -298,18 +305,14 @@ watch(
         <Card
           v-for="pet in owner.pets"
           :key="pet._id"
-          class="flex-row items-center gap-3 border-border p-4 shadow-sm hover:border-primary/35 hover:bg-accent/40 dark:shadow-none"
+          class="p-4 shadow-sm hover:border-primary/35 hover:bg-accent/40 dark:shadow-none"
         >
-          <router-link :to="`/pets/${pet._id}`" class="flex min-w-0 flex-1 items-center gap-3">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="h-5 w-5" stroke-width="1.75" /></span>
-            <span class="min-w-0">
-              <span class="block truncate font-medium text-primary">{{ pet.name }}</span>
-              <span class="block truncate text-xs text-muted-foreground">
-                {{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template>
-              </span>
-            </span>
-          </router-link>
-          <div class="flex shrink-0 items-center gap-2">
+          <div class="flex items-center justify-between gap-3">
+            <router-link :to="`/pets/${pet._id}`" class="flex min-w-0 flex-1 items-center gap-3">
+              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="h-5 w-5" stroke-width="1.75" /></span>
+              <span class="min-w-0"><span class="block truncate font-medium text-primary">{{ pet.name }}</span></span>
+            </router-link>
+            <div class="flex shrink-0 items-center gap-2">
             <Button
               type="button"
               variant="secondary"
@@ -332,7 +335,13 @@ watch(
             >
               <Trash2 class="h-4 w-4" stroke-width="1.75" />
             </Button>
+            </div>
           </div>
+          <dl class="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3 text-sm">
+            <div><dt class="text-xs text-muted-foreground">物種</dt><dd class="mt-0.5 truncate text-foreground">{{ pet.species || '' }}</dd></div>
+            <div><dt class="text-xs text-muted-foreground">品種</dt><dd class="mt-0.5 truncate text-foreground">{{ pet.breed || '' }}</dd></div>
+            <div><dt class="text-xs text-muted-foreground">性別</dt><dd class="mt-0.5 text-foreground">{{ petSexLabel(pet.sex) }}</dd></div>
+          </dl>
         </Card>
       </div>
       <EmptyState v-else :icon="Cat" title="尚無寵物資料" description="點上方「新增寵物」建立第一隻，之後就能開始就診紀錄。" />
