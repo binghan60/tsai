@@ -36,5 +36,5 @@ const option = computed(() => {
 </script>
 
 <template>
-  <v-chart class="h-full min-h-[220px] w-full" :option="option" autoresize />
+  <v-chart class="h-full min-h-[120px] w-full" :option="option" autoresize />
 </template>
