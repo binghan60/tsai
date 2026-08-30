@@ -147,9 +147,9 @@ async function createPet(values) {
             </span>
           </router-link>
           <span class="desktop-data-cell">
-            <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="flex min-w-0 items-center gap-2 text-primary" :title="`${pet.ownerId.name} · ${pet.ownerId.phone || '未填電話'}`">
+            <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="flex min-w-0 items-center gap-2 text-primary" :title="pet.ownerId.phone ? `${pet.ownerId.name} · ${pet.ownerId.phone}` : pet.ownerId.name">
               <User class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.75" />
-              <span class="min-w-0 truncate text-sm">{{ pet.ownerId.name }}<span class="text-xs text-muted-foreground"> · {{ pet.ownerId.phone || '未填電話' }}</span></span>
+              <span class="min-w-0 truncate text-sm">{{ pet.ownerId.name }}<span v-if="pet.ownerId.phone" class="text-xs text-muted-foreground"> · {{ pet.ownerId.phone }}</span></span>
             </router-link>
           </span>
           <span class="desktop-data-cell whitespace-nowrap text-xs tabular-nums text-muted-foreground">{{ formatDateTime(pet.createdAt, createdAtOptions) }}</span>

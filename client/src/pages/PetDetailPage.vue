@@ -75,7 +75,7 @@ function handleRowAction(record, action) {
   if (action === 'delete') return openRemoveRecord(record);
 }
 function formatDate(value) {
-  return formatClinicDate(value, '日期未填');
+  return formatClinicDate(value, '—');
 }
 
 function isShareActive(record) {

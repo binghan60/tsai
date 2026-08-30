@@ -130,7 +130,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
           @select="selectOwner(owner)"
         >
           <template #icon><span class="text-sm font-semibold">{{ owner.name?.[0] ?? '?' }}</span></template>
-          <template #description><span class="block truncate">{{ owner.phone || '未填電話' }}</span></template>
+          <template #description><span v-if="owner.phone" class="block truncate">{{ owner.phone }}</span></template>
         </PickerOptionRow>
       </div>
       <p v-else class="rounded-xl border border-border px-4 py-8 text-center text-sm text-muted-foreground">{{ query.trim() ? '找不到符合的飼主。' : '目前沒有飼主資料。' }}</p>

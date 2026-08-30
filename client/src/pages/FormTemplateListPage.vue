@@ -277,10 +277,10 @@ onMounted(load);
           <router-link
             :to="`/settings/forms/${template._id}`"
             class="desktop-data-cell flex items-center gap-2 text-sm"
-            :title="`${template.name} · ${template.description || '尚未填寫表單說明'}`"
+            :title="template.description ? `${template.name} · ${template.description}` : template.name"
           >
             <span class="max-w-[65%] shrink-0 truncate font-semibold text-primary">{{ template.name }}</span>
-            <span class="min-w-0 truncate text-xs text-muted-foreground">· {{ template.description || '尚未填寫表單說明' }}</span>
+            <span v-if="template.description" class="min-w-0 truncate text-xs text-muted-foreground">· {{ template.description }}</span>
           </router-link>
           <span class="desktop-data-cell text-sm text-foreground">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</span>
           <span class="desktop-data-cell whitespace-nowrap text-sm text-foreground">{{ template.sectionCount }} 區塊・{{ template.itemCount }} 項目</span>
@@ -323,9 +323,7 @@ onMounted(load);
           <div class="flex items-start justify-between gap-3">
             <router-link :to="`/settings/forms/${template._id}`" class="min-w-0">
               <span class="block font-semibold text-primary">{{ template.name }}</span>
-              <span class="mt-0.5 block text-xs text-muted-foreground">
-                {{ template.description || '尚未填寫表單說明' }}
-              </span>
+              <span v-if="template.description" class="mt-0.5 block text-xs text-muted-foreground">{{ template.description }}</span>
             </router-link>
             <div class="flex shrink-0 items-center gap-2">
               <Switch

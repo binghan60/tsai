@@ -149,7 +149,7 @@ watch(() => route.query.new, (value) => {
 }, { immediate: true });
 
 function formatDate(value) {
-  return formatClinicDate(value, '日期未填');
+  return formatClinicDate(value, '—');
 }
 
 function recordLink(record) {
@@ -263,7 +263,7 @@ function actionLabel(record) {
           </div>
 
           <p class="text-xs text-muted-foreground">
-            {{ record.examType || '健檢' }} · {{ formatDate(record.visitDate) }} · {{ record.vet || '獸醫師未填' }}
+            {{ record.examType || '健檢' }} · {{ formatDate(record.visitDate) }}<template v-if="record.vet"> · {{ record.vet }}</template>
           </p>
           <p v-if="record.deliveryError" class="flex items-start gap-1 text-xs text-danger">
             <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />

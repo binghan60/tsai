@@ -32,7 +32,7 @@ const canSubmit = computed(() => Boolean(expected.value) && input.value.trim() =
 
 // 這份報告是哪一份，用看得懂的方式描述——日期與健檢類型比編號好認。
 const recordLabel = computed(() => {
-  const parts = [formatDate(props.record?.visitDate, '日期未填'), props.record?.examType].filter(Boolean);
+  const parts = [formatDate(props.record?.visitDate, '—'), props.record?.examType].filter(Boolean);
   if ((props.record?.reportVersion ?? 1) > 1) parts.push(`第 ${props.record.reportVersion} 版`);
   return parts.join(' · ');
 });

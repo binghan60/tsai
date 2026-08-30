@@ -733,10 +733,10 @@ onBeforeUnmount(() => {
                     class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-semibold ring-1 shadow-2xs"
                     :class="visitTypeMeta(appointment).classes"
                   >{{ visitTypeMeta(appointment).label }}</span>
-                  <span class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
+                  <span class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '—' }}</span>
                 </div>
                 <div class="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                  <span class="truncate">{{ appointment.ownerName || '飼主未填' }}</span>
+                  <span class="truncate">{{ appointment.ownerName || '—' }}</span>
                   <span v-if="appointment.ownerPhone" class="inline-flex items-center gap-1">
                     <Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}
                   </span>
@@ -937,10 +937,10 @@ onBeforeUnmount(() => {
                             class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-semibold ring-1 shadow-2xs"
                             :class="visitTypeMeta(appointment).classes"
                           >{{ visitTypeMeta(appointment).label }}</span>
-                          <span class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</span>
+                          <span class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '—' }}</span>
                         </div>
                         <span class="flex items-center gap-1 truncate text-xs text-muted-foreground">
-                          {{ appointment.ownerName || '飼主未填' }}
+                          {{ appointment.ownerName || '—' }}
                           <template v-if="appointment.ownerPhone">
                             <span class="text-border">·</span>
                             <Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}
@@ -998,7 +998,7 @@ onBeforeUnmount(() => {
                     <component :is="group.icon" class="h-4.5 w-4.5" stroke-width="1.75" />
                   </span>
                   <div class="min-w-0">
-                    <p class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</p>
+                    <p class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '—' }}</p>
                     <div
                       class="mt-0.5 grid min-w-0 gap-3 text-xs text-muted-foreground"
                       :class="group.key === 'cancelled' ? 'grid-cols-2' : 'grid-cols-1'"
@@ -1012,8 +1012,8 @@ onBeforeUnmount(() => {
                         v-if="group.key === 'cancelled'"
                         class="truncate"
                         :class="{ 'italic text-muted-foreground/70': !appointment.cancelReason }"
-                        :title="appointment.cancelReason ? `取消原因：${appointment.cancelReason}` : '未填寫取消原因'"
-                      >{{ appointment.cancelReason ? `取消原因：${appointment.cancelReason}` : '未填寫取消原因' }}</p>
+                        :title="appointment.cancelReason ? `取消原因：${appointment.cancelReason}` : ''"
+                      >{{ appointment.cancelReason ? `取消原因：${appointment.cancelReason}` : '—' }}</p>
                     </div>
                   </div>
                   <div class="flex shrink-0 items-center gap-1.5">
@@ -1067,7 +1067,7 @@ onBeforeUnmount(() => {
             </thead>
             <tbody class="divide-y divide-border">
               <tr v-for="appointment in completedAppointments" :key="appointment._id" class="bg-card hover:bg-muted/20">
-                <td class="px-4 py-3"><p class="font-semibold text-foreground">{{ appointment.petName || '寵物姓名未填' }}</p><p class="mt-0.5 text-xs text-muted-foreground">{{ appointment.ownerName || '飼主未填' }}</p></td>
+                <td class="px-4 py-3"><p class="font-semibold text-foreground">{{ appointment.petName || '—' }}</p><p class="mt-0.5 text-xs text-muted-foreground">{{ appointment.ownerName || '—' }}</p></td>
                 <td class="whitespace-nowrap px-4 py-3 text-muted-foreground">{{ appointment.completedAt ? formatDateTime(appointment.completedAt, checkinTimeOptions) : '—' }}</td>
                 <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }}</td>
                 <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }}</td>
@@ -1120,7 +1120,7 @@ onBeforeUnmount(() => {
                 <p v-if="!(weekAppointments.get(date) ?? []).length" class="py-3 text-center text-xs text-muted-foreground">當天沒有掛號</p>
                 <button v-for="appointment in (weekAppointments.get(date) ?? [])" :key="appointment._id" type="button" class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-field/60" @click="selectedDate = date; viewMode = 'day'">
                   <span class="w-10 shrink-0 font-medium tabular-nums text-muted-foreground">{{ appointment.time || formatDateTime(appointment.scheduledAt, checkinTimeOptions, '—') }}</span>
-                  <span class="min-w-0 flex-1 truncate font-medium text-foreground">{{ appointment.petName || '未填寵物名' }}</span>
+                  <span class="min-w-0 flex-1 truncate font-medium text-foreground">{{ appointment.petName || '—' }}</span>
                   <span class="shrink-0 rounded-full px-1.5 py-0.5 text-sm" :class="appointmentStatusClasses(appointment.status)">{{ appointment.status === 'completed' ? '完成' : appointment.status === 'arrived' ? '候診' : appointment.status === 'cancelled' ? '取消' : appointment.status === 'no_show' ? '未到' : '預約' }}</span>
                 </button>
               </div>
