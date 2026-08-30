@@ -366,10 +366,10 @@ watch(
           <Button type="button" variant="outline" class="w-full border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900 sm:w-auto" @click="router.push('/records')"><List class="h-4 w-4" />回就診紀錄</Button>
         </div>
         <div v-else></div>
-        <div class="flex flex-wrap justify-start gap-2 sm:justify-end">
-          <Button v-if="isPreview && isDraft" type="button" :disabled="finalizing" @click="showFinalizeConfirm = true"><CheckCircle2 class="h-4 w-4" />{{ finalizing ? '結案中…' : '確認結案' }}</Button>
-          <Button v-else-if="isPreview" type="button" :disabled="downloading" @click="downloadPdf"><Download class="h-4 w-4" />{{ downloading ? '產生中…' : '下載正式 PDF' }}</Button>
-          <Button v-else type="button" @click="printReport"><Printer class="h-4 w-4" />列印／下載 PDF</Button>
+        <div class="flex w-full flex-wrap justify-start gap-2 sm:w-auto sm:justify-end">
+          <Button v-if="isPreview && isDraft" type="button" class="w-full sm:w-auto" :disabled="finalizing" @click="showFinalizeConfirm = true"><CheckCircle2 class="h-4 w-4" />{{ finalizing ? '結案中…' : '確認結案' }}</Button>
+          <Button v-else-if="isPreview" type="button" class="w-full sm:w-auto" :disabled="downloading" @click="downloadPdf"><Download class="h-4 w-4" />{{ downloading ? '產生中…' : '下載正式 PDF' }}</Button>
+          <Button v-else type="button" class="w-full sm:w-auto" @click="printReport"><Printer class="h-4 w-4" />列印／下載 PDF</Button>
         </div>
       </div>
 
@@ -382,18 +382,21 @@ watch(
         :class="deliveryFailed ? 'border-red-200 bg-red-50 text-red-800' : isSent ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : deliverySending ? 'border-sky-200 bg-sky-50 text-sky-800' : 'border-brand-200 bg-brand-50 text-brand-800'"
       >
         <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案 · 第 {{ record.reportVersion || 1 }} 版</strong><span class="block">{{ isSent ? `已寄送至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
-        <div class="flex flex-wrap items-center gap-2">
-          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" :disabled="emailing || deliverySending" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</Button>
-          <Button v-else-if="record.owner?._id" as-child variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white"><router-link :to="`/owners/${record.owner._id}?edit=1`">補填 Email</router-link></Button>
-          <Button type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</Button>
+        <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
+          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-white/85 text-xs text-current hover:border-current/40 hover:bg-white sm:w-auto sm:text-sm" :disabled="emailing || deliverySending" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
+          <Button v-else-if="record.owner?._id" as-child variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-white/85 text-xs text-current hover:border-current/40 hover:bg-white sm:w-auto sm:text-sm"><router-link :to="`/owners/${record.owner._id}?edit=1`">補填 Email</router-link></Button>
+          <Button type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-white/85 text-xs text-current hover:border-current/40 hover:bg-white sm:w-auto sm:text-sm" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" /><span class="sm:hidden">{{ sharing ? '處理中…' : shareIsActive ? '複製連結' : '建立連結' }}</span><span class="hidden sm:inline">{{ shareActionLabel }}</span></Button>
+          <div class="col-span-2 sm:col-auto">
           <RowActions
             :actions="[
               { key: 'new-record', label: '以此開始新健檢', icon: ClipboardPlus },
               ...(!record.supersededBy ? [{ key: 'revision', label: '建立修訂版', icon: FilePenLine }] : []),
             ]"
             label="更多報告操作"
+            trigger-text="更多操作"
             @select="handleMoreReportAction"
           />
+          </div>
         </div>
       </div>
       <!-- 寄送歷程。只在後台預覽出現：收件信箱與失敗原因是內部資訊，
