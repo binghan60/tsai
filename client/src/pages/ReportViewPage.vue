@@ -9,6 +9,7 @@ import { getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import RevisionDialog from '../components/RevisionDialog.vue';
 import ReportSection from '../components/report/ReportSection.vue';
+import RowActions from '../components/RowActions.vue';
 import { Button } from '../components/ui/button';
 
 const route = useRoute();
@@ -318,6 +319,11 @@ function printReport() {
   window.print();
 }
 
+function handleMoreReportAction(action) {
+  if (action === 'new-record') return router.push(`/pets/${record.value?.pet?._id}/records/new?copyFrom=${record.value?._id}`);
+  if (action === 'revision') showRevisionDialog.value = true;
+}
+
 function updateBackToTopVisibility() {
   showBackToTop.value = window.scrollY > 0;
 }
@@ -354,13 +360,13 @@ watch(
 <template>
   <div class="min-h-screen bg-stone-100 px-4 py-6 print:bg-white print:p-0 sm:px-6 sm:py-10">
     <section v-if="record" class="mx-auto max-w-[210mm] space-y-4 print:max-w-none print:space-y-0">
-      <div class="sticky top-16 z-20 -mx-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-100/95 px-2 py-2 shadow-sm print:hidden lg:top-2">
-        <div v-if="isPreview" class="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" class="border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
-          <Button type="button" variant="outline" class="border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900" @click="router.push('/records')"><List class="h-4 w-4" />回就診紀錄</Button>
+      <div class="sticky top-2 z-20 -mx-2 flex flex-col gap-2 rounded-xl border border-stone-200 bg-stone-100/95 px-2 py-2 shadow-sm print:hidden sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+        <div v-if="isPreview" class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+          <Button type="button" variant="outline" class="w-full border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900 sm:w-auto" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
+          <Button type="button" variant="outline" class="w-full border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900 sm:w-auto" @click="router.push('/records')"><List class="h-4 w-4" />回就診紀錄</Button>
         </div>
         <div v-else></div>
-        <div class="flex flex-wrap justify-end gap-2">
+        <div class="flex flex-wrap justify-start gap-2 sm:justify-end">
           <Button v-if="isPreview && isDraft" type="button" :disabled="finalizing" @click="showFinalizeConfirm = true"><CheckCircle2 class="h-4 w-4" />{{ finalizing ? '結案中…' : '確認結案' }}</Button>
           <Button v-else-if="isPreview" type="button" :disabled="downloading" @click="downloadPdf"><Download class="h-4 w-4" />{{ downloading ? '產生中…' : '下載正式 PDF' }}</Button>
           <Button v-else type="button" @click="printReport"><Printer class="h-4 w-4" />列印／下載 PDF</Button>
@@ -380,8 +386,14 @@ watch(
           <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" :disabled="emailing || deliverySending" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</Button>
           <Button v-else-if="record.owner?._id" as-child variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white"><router-link :to="`/owners/${record.owner._id}?edit=1`">補填 Email</router-link></Button>
           <Button type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" />{{ shareActionLabel }}</Button>
-          <Button type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" @click="router.push(`/pets/${record.pet?._id}/records/new?copyFrom=${record._id}`)"><ClipboardPlus class="h-4 w-4" />以此開始新健檢</Button>
-          <Button v-if="!record.supersededBy" type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" @click="showRevisionDialog = true"><FilePenLine class="h-4 w-4" />建立修訂版</Button>
+          <RowActions
+            :actions="[
+              { key: 'new-record', label: '以此開始新健檢', icon: ClipboardPlus },
+              ...(!record.supersededBy ? [{ key: 'revision', label: '建立修訂版', icon: FilePenLine }] : []),
+            ]"
+            label="更多報告操作"
+            @select="handleMoreReportAction"
+          />
         </div>
       </div>
       <!-- 寄送歷程。只在後台預覽出現：收件信箱與失敗原因是內部資訊，
