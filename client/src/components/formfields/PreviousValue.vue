@@ -13,11 +13,12 @@ const props = defineProps({
   item: { type: Object, required: true },
   type: { type: String, default: '' },
   showLabel: { type: Boolean, default: true },
+  compact: { type: Boolean, default: false },
 });
 
 const { previousFor } = useRecordForm();
 // 只有真的量到數值（或填了結果描述）才值得顯示。上次只是打勾「正常」、沒有留下數字的項目
-// 拿不出可以比較的東西，整張卡片跳過，免得每個項目下面都掛一張沒有資訊量的「正常」卡片。
+// 拿不出可以比較的東西就不顯示，避免每個項目下面都出現沒有資訊量的「正常」紀錄。
 const entry = computed(() => {
   const found = previousFor?.(props.item, props.type || props.item.type) ?? null;
   return found && String(found.value ?? '').trim() ? found : null;
@@ -40,32 +41,41 @@ const tooltip = computed(() => {
 </script>
 
 <template>
-  <!-- 整張卡片就是連往那份報告的連結。一律開新分頁 —— 填到一半的草稿不該因為
-       「想看一下上次的報告」被迫離開頁面，跳出未儲存提醒。 -->
+  <!-- 前次紀錄是本次輸入的比較資料，不另做巢狀卡片。桌機表格使用獨立欄位，
+       窄版與量測欄位則收成輸入框下方的一行；連結一律開新分頁，保留未儲存草稿。 -->
   <router-link
     v-if="entry"
     :to="{ name: 'record-preview', params: { id: entry.recordId } }"
     target="_blank"
     rel="noopener"
     :title="tooltip"
-    class="group mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-md border px-2.5 py-1.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-    :class="isAbnormal
-      ? 'border-danger/35 bg-danger-surface/70 hover:border-danger/55 hover:bg-danger-surface'
-      : 'border-border/80 bg-muted/30 hover:border-primary hover:bg-accent'"
+    class="group min-w-0 text-xs transition-colors focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+    :class="[
+      compact ? 'mt-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5' : 'block',
+      isAbnormal ? 'text-danger' : 'text-muted-foreground hover:text-primary',
+    ]"
   >
-    <span v-if="showLabel" class="shrink-0 font-medium text-muted-foreground">上次</span>
-    <span class="flex min-w-0 items-baseline gap-1">
-      <span
-        class="truncate text-sm font-semibold tabular-nums"
-        :class="isAbnormal ? 'text-danger' : 'text-foreground '"
-      >{{ valueText }}</span>
-      <span v-if="unitText" class="shrink-0 text-xs text-muted-foreground">{{ unitText }}</span>
-    </span>
-    <span v-if="isAbnormal" class="shrink-0 rounded-full bg-danger-surface px-1.5 py-0.5 font-medium text-danger">異常</span>
-    <span v-if="dateText" class="shrink-0 tabular-nums text-muted-foreground">{{ dateText }}</span>
-    <span v-if="examTypeText" class="min-w-0 truncate text-muted-foreground">{{ examTypeText }}</span>
-    <span v-if="noteText" class="min-w-0 truncate text-muted-foreground">· {{ noteText }}</span>
-    <ExternalLink class="ml-auto size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" stroke-width="1.75" aria-hidden="true" />
+    <template v-if="compact">
+      <span v-if="showLabel" class="shrink-0 font-medium text-muted-foreground">前次</span>
+      <strong class="min-w-0 truncate text-sm font-semibold tabular-nums" :class="isAbnormal ? 'text-danger' : 'text-foreground group-hover:text-primary'">{{ valueText }}</strong>
+      <span v-if="unitText" class="shrink-0 text-muted-foreground">{{ unitText }}</span>
+      <span v-if="dateText" class="shrink-0 tabular-nums text-muted-foreground">· {{ dateText }}</span>
+      <span v-if="isAbnormal" class="shrink-0 font-medium text-danger">異常</span>
+      <ExternalLink class="size-3 shrink-0 self-center text-muted-foreground/70" stroke-width="1.75" aria-hidden="true" />
+    </template>
+
+    <template v-else>
+      <span v-if="showLabel" class="block font-medium text-muted-foreground">前次數值</span>
+      <span class="mt-1 flex min-w-0 items-baseline gap-1.5">
+        <strong class="truncate text-sm font-semibold tabular-nums" :class="isAbnormal ? 'text-danger' : 'text-foreground group-hover:text-primary'">{{ valueText }}</strong>
+        <span v-if="unitText" class="shrink-0 text-muted-foreground">{{ unitText }}</span>
+        <span v-if="isAbnormal" class="shrink-0 font-medium text-danger">異常</span>
+      </span>
+      <span v-if="dateText" class="mt-0.5 flex items-center gap-1 tabular-nums text-muted-foreground">
+        {{ dateText }}
+        <ExternalLink class="size-3 shrink-0 text-muted-foreground/70" stroke-width="1.75" aria-hidden="true" />
+      </span>
+    </template>
     <span class="sr-only">開新分頁查看這份報告</span>
   </router-link>
 </template>

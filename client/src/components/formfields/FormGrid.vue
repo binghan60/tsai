@@ -42,7 +42,7 @@ const runs = computed(() => sectionRuns(props.section.items, (item) => item.type
                 :class="measurementAssessment(metric)?.status === 'abnormal' ? 'bg-danger-surface text-danger' : 'bg-success-surface text-success'"
               >{{ measurementAssessment(metric)?.status === 'abnormal' ? '異常' : '正常' }}・自動</span>
             </div>
-            <PreviousValue :item="metric" class="mt-1" />
+            <PreviousValue :item="metric" compact />
           </div>
           </SelectableItem>
         </div>

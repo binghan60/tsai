@@ -51,12 +51,11 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
             <SelectableItem v-for="finding in labsOfGroup(run, group)" :key="finding.key" :item-key="finding.key">
               <div
                 :id="`record-lab-row-${finding.key}`"
-                class="scroll-mt-40 grid gap-3 p-4 @5xl:grid-cols-[220px_260px_170px_1fr] @5xl:items-start"
+                class="scroll-mt-40 grid gap-3 p-4 @5xl:grid-cols-[200px_240px_160px_145px_minmax(11rem,1fr)] @5xl:items-start"
               >
                 <div class="min-w-0">
                   <p class="text-sm font-medium text-foreground">{{ finding.label }}</p>
                   <p v-if="labRangeLabel(finding)" class="mt-0.5 text-xs text-success">參考 {{ labRangeLabel(finding) }}</p>
-                  <PreviousValue :item="finding" type="lab" class="mt-0.5" />
                 </div>
                 <!-- 三個控制項都有標題列，橫向才對得齊；沒有標題的欄位會比隔壁高出一截。 -->
                 <div class="space-y-1.5">
@@ -84,6 +83,11 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                     :label="`${finding.label}結果描述`"
                     :input-id="`record-lab-value-${finding.key}`"
                   />
+                  <PreviousValue :item="finding" type="lab" compact class="@5xl:hidden" />
+                </div>
+                <div class="hidden min-w-0 space-y-1.5 @5xl:block">
+                  <p class="text-xs font-medium text-muted-foreground">前次數值</p>
+                  <PreviousValue :item="finding" type="lab" :show-label="false" />
                 </div>
                 <div class="space-y-1.5">
                   <Label :for="`record-lab-note-${finding.key}`" class="text-xs font-medium text-muted-foreground">

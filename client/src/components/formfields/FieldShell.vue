@@ -18,6 +18,6 @@ defineProps({
       </template>
     </Label>
     <slot />
-    <PreviousValue :item="item" />
+    <PreviousValue :item="item" compact />
   </div>
 </template>
