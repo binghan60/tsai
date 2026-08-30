@@ -319,7 +319,7 @@ function printReport() {
 }
 
 function updateBackToTopVisibility() {
-  showBackToTop.value = window.scrollY >= 600;
+  showBackToTop.value = window.scrollY > 0;
 }
 
 function scrollToTop() {

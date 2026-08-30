@@ -59,6 +59,12 @@ const router = createRouter({
 });
 
 router.beforeEach(async (to) => {
+  // 登入後不應再停留在登入頁；避免重新整理或手動輸入網址時看到無法使用的登入表單。
+  if (to.path === '/login') {
+    const auth = useAuthStore();
+    await auth.initialize();
+    return auth.isAuthenticated ? { path: '/' } : true;
+  }
   if (to.meta.public) return true;
   const auth = useAuthStore();
   await auth.initialize();
