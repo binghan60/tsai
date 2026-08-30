@@ -39,10 +39,15 @@ const deletingRecordId = ref(null);
 const removeError = ref('');
 let fetchSequence = 0;
 
-const sexLabel = computed(() => ({ male: '公', female: '母', unknown: '未記錄' })[pet.value?.sex] ?? '未記錄');
-const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育', unknown: '未記錄' })[pet.value?.neutered] ?? '未記錄');
-const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), '年齡未記錄'));
+const sexLabel = computed(() => ({ male: '公', female: '母' })[pet.value?.sex] ?? '');
+const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育' })[pet.value?.neutered] ?? '');
+const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), ''));
 const petInfoFields = computed(() => [
+  { label: '物種', value: pet.value?.species ?? '' },
+  { label: '品種', value: pet.value?.breed ?? '' },
+  { label: '性別', value: sexLabel.value },
+  { label: '絕育狀態', value: neuteredLabel.value },
+  { label: '年齡', value: ageLabel.value },
   { label: '最近體重', value: pet.value?.weightKg != null ? `${pet.value.weightKg} kg` : '' },
   { label: '過敏紀錄', value: pet.value?.allergies ?? '' },
   { label: '慢性病／重要病史', value: pet.value?.chronicConditions ?? '' },
@@ -246,15 +251,14 @@ watch(
           <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><PawPrint class="h-7 w-7" stroke-width="1.75" /></div>
           <div class="min-w-0">
             <h1 class="text-xl font-semibold text-foreground">{{ pet.name }}</h1>
-            <p class="mt-1 text-sm text-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel }} · {{ neuteredLabel }} · {{ ageLabel }}</p>
-            <p class="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground"><User class="h-4 w-4" />飼主：{{ pet.ownerId?.name || '—' }}<template v-if="pet.ownerId?.phone"> · {{ pet.ownerId.phone }}</template></p>
+            <p class="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground"><User class="h-4 w-4" />飼主：{{ pet.ownerId?.name || '' }}<template v-if="pet.ownerId?.phone"> · {{ pet.ownerId.phone }}</template></p>
           </div>
         </div>
         <Button variant="outline" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
       </div>
 
       <dl v-if="filledPetInfoFields.length" class="mt-5 grid gap-3 border-t border-border pt-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
-        <div v-for="field in filledPetInfoFields" :key="field.label">
+        <div v-for="field in filledPetInfoFields" :key="field.label" class="rounded-lg border border-border bg-muted/20 px-3 py-2.5">
           <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
           <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ field.value }}</dd>
         </div>

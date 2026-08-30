@@ -57,7 +57,7 @@ async function fetchPets() {
 }
 
 function sexLabel(sex) {
-  return { male: '公', female: '母', unknown: '性別未記錄' }[sex] ?? '性別未記錄';
+  return { male: '公', female: '母' }[sex] ?? '';
 }
 
 // 關鍵字選好、按下搜尋才查——邊打邊查在每個系統打字習慣不一樣的情況下容易誤觸，
@@ -130,9 +130,12 @@ async function createPet(values) {
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <Card v-if="pets.length" class="hidden overflow-hidden p-0 shadow-sm dark:shadow-none xl:block" style="--data-columns: minmax(15rem, 1.2fr) minmax(13rem, 1fr) 10.5rem 9rem">
+      <Card v-if="pets.length" class="hidden overflow-hidden p-0 shadow-sm dark:shadow-none xl:block" style="--data-columns: minmax(9rem, 1fr) minmax(7rem, 0.8fr) minmax(8rem, 0.9fr) 6rem minmax(11rem, 1fr) 10.5rem 9rem">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">物種</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">品種</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">性別</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">飼主</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">新增時間</span>
           <span class="desktop-data-cell"></span>
@@ -142,10 +145,11 @@ async function createPet(values) {
             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
               <Cat class="h-4 w-4" stroke-width="1.75" />
             </span>
-            <span class="min-w-0 truncate text-sm font-semibold text-primary" :title="`${pet.name} · ${pet.species || '寵物'}${pet.breed ? ` · ${pet.breed}` : ''} · ${sexLabel(pet.sex)}`">
-              {{ pet.name }}<span class="font-normal text-muted-foreground"> · {{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
-            </span>
+            <span class="min-w-0 truncate text-sm font-semibold text-primary">{{ pet.name }}</span>
           </router-link>
+          <span class="desktop-data-cell truncate text-sm text-foreground" :title="pet.species || ''">{{ pet.species || '' }}</span>
+          <span class="desktop-data-cell truncate text-sm text-foreground" :title="pet.breed || ''">{{ pet.breed || '' }}</span>
+          <span class="desktop-data-cell text-sm text-foreground">{{ sexLabel(pet.sex) }}</span>
           <span class="desktop-data-cell">
             <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="flex min-w-0 items-center gap-2 text-primary" :title="pet.ownerId.phone ? `${pet.ownerId.name} · ${pet.ownerId.phone}` : pet.ownerId.name">
               <User class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.75" />
@@ -167,14 +171,16 @@ async function createPet(values) {
             <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="h-5 w-5" /></span>
             <span class="min-w-0 flex-1">
               <span class="block text-base font-semibold text-primary">{{ pet.name }}</span>
-              <span class="block text-sm text-muted-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template> · {{ sexLabel(pet.sex) }}</span>
             </span>
           </router-link>
-          <div class="mt-4 flex items-center justify-between gap-3 border-t border-border pt-3">
-            <span class="min-w-0">
-              <span class="block truncate text-sm text-foreground">飼主：{{ pet.ownerId?.name || '—' }}</span>
-              <span class="mt-0.5 block whitespace-nowrap text-xs tabular-nums text-muted-foreground">新增於 {{ formatDateTime(pet.createdAt, createdAtOptions) }}</span>
-            </span>
+          <dl class="mt-4 grid grid-cols-2 gap-2 border-t border-border pt-3 text-sm sm:grid-cols-3">
+            <div class="rounded-lg bg-muted/35 px-3 py-2"><dt class="text-xs text-muted-foreground">物種</dt><dd class="mt-0.5 truncate text-foreground">{{ pet.species || '' }}</dd></div>
+            <div class="rounded-lg bg-muted/35 px-3 py-2"><dt class="text-xs text-muted-foreground">品種</dt><dd class="mt-0.5 truncate text-foreground">{{ pet.breed || '' }}</dd></div>
+            <div class="rounded-lg bg-muted/35 px-3 py-2"><dt class="text-xs text-muted-foreground">性別</dt><dd class="mt-0.5 text-foreground">{{ sexLabel(pet.sex) }}</dd></div>
+            <div class="rounded-lg bg-muted/35 px-3 py-2"><dt class="text-xs text-muted-foreground">飼主</dt><dd class="mt-0.5 truncate text-foreground">{{ pet.ownerId?.name || '' }}</dd></div>
+            <div class="rounded-lg bg-muted/35 px-3 py-2"><dt class="text-xs text-muted-foreground">新增時間</dt><dd class="mt-0.5 whitespace-nowrap text-xs tabular-nums text-foreground">{{ formatDateTime(pet.createdAt, createdAtOptions) }}</dd></div>
+          </dl>
+          <div class="mt-3 flex justify-end">
             <Button as-child size="sm" class="shrink-0"><router-link :to="`/pets/${pet._id}/records/new`">
               <ClipboardPlus class="h-4 w-4" />新增健檢
             </router-link></Button>
