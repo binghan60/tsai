@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { CalendarDays, ClipboardPlus, Copy, FileText, Link2Off, PawPrint, Pencil, Share2, Trash2, User } from '@lucide/vue';
+import { AlertTriangle, CalendarDays, ClipboardPlus, Copy, FileText, Link2Off, PawPrint, Pencil, Share2, Trash2 } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
@@ -42,19 +42,31 @@ let fetchSequence = 0;
 const sexLabel = computed(() => ({ male: '公', female: '母' })[pet.value?.sex] ?? '');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育' })[pet.value?.neutered] ?? '');
 const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), ''));
-const petInfoFields = computed(() => [
+
+function filledFields(fields) {
+  return fields.filter((field) => String(field.value).trim());
+}
+
+// 身分類欄位（物種／品種／性別／絕育／年齡）一句話就能唸完，用一行 chip 呈現比逐格 dt/dd 更好掃視。
+const identityFields = computed(() => filledFields([
   { label: '物種', value: pet.value?.species ?? '' },
   { label: '品種', value: pet.value?.breed ?? '' },
   { label: '性別', value: sexLabel.value },
   { label: '絕育狀態', value: neuteredLabel.value },
   { label: '年齡', value: ageLabel.value },
+]));
+const secondaryFields = computed(() => filledFields([
   { label: '最近體重', value: pet.value?.weightKg != null ? `${pet.value.weightKg} kg` : '' },
+]));
+// 過敏／慢性病／用藥是看診前必須先看到的臨床提醒，獨立成一塊警示樣式，不跟品種、體重這類一般資料混在同一個灰階列表裡。
+const alertFields = computed(() => filledFields([
   { label: '過敏紀錄', value: pet.value?.allergies ?? '' },
   { label: '慢性病／重要病史', value: pet.value?.chronicConditions ?? '' },
   { label: '目前用藥', value: pet.value?.currentMedications ?? '' },
-  { label: '其他備註', value: pet.value?.notes ?? '' },
-]);
-const filledPetInfoFields = computed(() => petInfoFields.value.filter((field) => String(field.value).trim()));
+]));
+const hasAnyPetDetail = computed(() => Boolean(
+  identityFields.value.length || pet.value?.ownerId?.name || secondaryFields.value.length || alertFields.value.length || pet.value?.notes
+));
 
 // 列上只留一個主要操作，其餘走「更多」選單。這裡集中決定「這一列現在有哪些次要操作」，
 // 條件跟原本並排按鈕的 v-if 完全一樣，只是換成資料而不是模板分支。
@@ -245,24 +257,59 @@ watch(
       { label: pet.name },
     ]" />
 
-    <Card class="p-5 shadow-sm dark:shadow-none">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="flex min-w-0 items-start gap-4">
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><PawPrint class="h-7 w-7" stroke-width="1.75" /></div>
+    <Card class="p-4 shadow-sm dark:shadow-none sm:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-3">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><PawPrint class="h-5 w-5" stroke-width="1.75" /></div>
           <div class="min-w-0">
-            <h1 class="text-xl font-semibold text-foreground">{{ pet.name }}</h1>
-            <p class="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground"><User class="h-4 w-4" />飼主：{{ pet.ownerId?.name || '' }}<template v-if="pet.ownerId?.phone"> · {{ pet.ownerId.phone }}</template></p>
+            <div class="flex flex-wrap items-center gap-2">
+              <h1 class="text-xl font-semibold text-foreground">{{ pet.name }}</h1>
+              <span v-if="pet.medicalRecordNumber" class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">{{ pet.medicalRecordNumber }}</span>
+            </div>
+            <p class="mt-0.5 text-xs text-muted-foreground">寵物資料</p>
           </div>
         </div>
         <Button variant="outline" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
       </div>
 
-      <dl v-if="filledPetInfoFields.length" class="mt-5 grid gap-3 border-t border-border pt-5 text-sm sm:grid-cols-2 lg:grid-cols-3">
-        <div v-for="field in filledPetInfoFields" :key="field.label" class="rounded-lg border border-border bg-muted/20 px-3 py-2.5">
-          <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
-          <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ field.value }}</dd>
+      <div v-if="hasAnyPetDetail" class="mt-4 space-y-4 border-t border-border pt-3 text-sm">
+        <dl v-if="identityFields.length || pet.ownerId?.name || secondaryFields.length" class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div v-for="field in identityFields" :key="field.label" class="min-w-0">
+            <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
+            <dd class="mt-1 text-foreground">{{ field.value }}</dd>
+          </div>
+          <div v-if="pet.ownerId?.name" class="min-w-0">
+            <dt class="text-xs font-medium text-muted-foreground">飼主</dt>
+            <dd class="mt-1 truncate">
+              <router-link v-if="pet.ownerId._id" :to="`/owners/${pet.ownerId._id}`" class="font-medium text-primary">{{ pet.ownerId.name }}</router-link>
+              <span v-else class="text-foreground">{{ pet.ownerId.name }}</span>
+            </dd>
+          </div>
+          <div v-if="pet.ownerId?.phone" class="min-w-0">
+            <dt class="text-xs font-medium text-muted-foreground">飼主電話</dt>
+            <dd class="mt-1 tabular-nums text-foreground">{{ pet.ownerId.phone }}</dd>
+          </div>
+          <div v-for="field in secondaryFields" :key="field.label" class="min-w-0">
+            <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
+            <dd class="mt-1 text-foreground">{{ field.value }}</dd>
+          </div>
+        </dl>
+
+        <div v-if="alertFields.length" class="rounded-xl bg-warning-surface px-3 py-2.5 text-warning">
+          <div class="flex items-center gap-1.5 text-xs font-semibold"><AlertTriangle class="h-3.5 w-3.5 shrink-0" />臨床提醒</div>
+          <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-3">
+            <div v-for="field in alertFields" :key="field.label" class="min-w-0">
+              <dt class="text-xs font-medium opacity-80">{{ field.label }}</dt>
+              <dd class="mt-0.5 whitespace-pre-wrap text-xs text-warning">{{ field.value }}</dd>
+            </div>
+          </dl>
         </div>
-      </dl>
+
+        <dl v-if="pet.notes">
+          <dt class="text-xs font-medium text-muted-foreground">其他備註</dt>
+          <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ pet.notes }}</dd>
+        </dl>
+      </div>
     </Card>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>

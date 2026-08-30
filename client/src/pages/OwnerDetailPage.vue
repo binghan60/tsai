@@ -229,20 +229,33 @@ watch(
   <section v-if="owner" class="space-y-6">
     <Breadcrumbs :items="[{ label: '飼主', to: '/owners' }, { label: owner.name }]" />
 
-    <Card class="p-5 shadow-sm dark:shadow-none">
-      <div class="flex flex-wrap items-start justify-between gap-4">
-        <div class="flex items-center gap-4">
-          <div class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-            <User class="h-7 w-7" stroke-width="1.75" />
+    <Card class="p-4 shadow-sm dark:shadow-none sm:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+            <User class="h-5 w-5" stroke-width="1.75" />
           </div>
           <div>
             <h1 class="text-xl font-semibold text-foreground">{{ owner.name }}</h1>
-            <p class="mt-1 text-sm text-muted-foreground"><span class="tabular-nums">電話：{{ owner.phone }}</span></p>
-            <p v-if="owner.email" class="text-sm text-muted-foreground">Email：{{ owner.email }}</p>
+            <p class="mt-0.5 text-xs text-muted-foreground">飼主資料</p>
           </div>
         </div>
         <Button type="button" variant="outline" @click="editOwnerOpen = true"><Pencil class="h-4 w-4" />編輯飼主資料</Button>
       </div>
+      <dl v-if="owner.phone || owner.email || petPagination.total" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
+        <div v-if="owner.phone" class="min-w-0">
+          <dt class="text-xs font-medium text-muted-foreground">電話</dt>
+          <dd class="mt-1 tabular-nums text-foreground">{{ owner.phone }}</dd>
+        </div>
+        <div v-if="owner.email" class="min-w-0">
+          <dt class="text-xs font-medium text-muted-foreground">Email</dt>
+          <dd class="mt-1 break-all text-foreground">{{ owner.email }}</dd>
+        </div>
+        <div v-if="petPagination.total" class="min-w-0">
+          <dt class="text-xs font-medium text-muted-foreground">寵物數</dt>
+          <dd class="mt-1 text-foreground">{{ petPagination.total }} 隻</dd>
+        </div>
+      </dl>
     </Card>
 
     <div class="space-y-4">

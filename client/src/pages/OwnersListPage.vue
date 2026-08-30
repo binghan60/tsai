@@ -223,7 +223,7 @@ function goToPage(next) {
             <span class="truncate text-sm font-semibold text-primary">{{ owner.name }}</span>
           </router-link>
           <span class="desktop-data-cell flex items-center gap-2 text-sm tabular-nums text-foreground"><Phone class="h-4 w-4 shrink-0 text-muted-foreground" /><span class="truncate">{{ owner.phone }}</span></span>
-          <span class="desktop-data-cell truncate text-sm text-foreground" :title="owner.email || '—'">{{ owner.email || '—' }}</span>
+          <span class="desktop-data-cell truncate text-sm text-foreground" :title="owner.email || undefined">{{ owner.email }}</span>
           <span class="desktop-data-cell whitespace-nowrap text-xs tabular-nums text-muted-foreground">{{ formatDateTime(owner.createdAt, createdAtOptions) }}</span>
           <span class="desktop-data-cell flex justify-end gap-1">
             <Button type="button" variant="secondary" size="icon-sm" :disabled="deletingId === owner._id || checkingOwnerId === owner._id" :aria-label="`編輯飼主 ${owner.name}`" @click="openEdit(owner)"><Pencil class="h-4 w-4" /></Button>
