@@ -457,27 +457,40 @@ router.post('/:id/complete', async (req, res, next) => {
 // 同步更新草稿，避免掛號列表和接著打開的就診紀錄出現兩套資料。
 router.patch('/:id/visit-data', async (req, res, next) => {
   try {
-    const appointment = await Appointment.findById(req.params.id);
-    if (!appointment) return res.status(404).json({ message: '找不到掛號' });
-    if (appointment.status !== 'completed') return res.status(422).json({ message: '只有已完成的掛號可以編輯看診資料' });
-
     const weightKg = req.body?.weightKg;
     const temperatureC = req.body?.temperatureC;
     const visitNote = req.body?.visitNote;
-    if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
-    if (temperatureC !== undefined) appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
-    if (visitNote !== undefined) appointment.visitNote = String(visitNote ?? '').trim();
-    await appointment.save();
+    let appointment;
 
-    if (appointment.recordId) {
-      const record = await MedicalRecord.findById(appointment.recordId);
-      if (record?.status === 'draft') {
-        record.weightKg = appointment.weightKg;
-        record.temperatureC = appointment.temperatureC;
-        record.other = appointment.visitNote;
-        await record.save();
+    await withTransaction(async (session) => {
+      appointment = await Appointment.findById(req.params.id).session(session);
+      if (!appointment) {
+        const error = new Error('找不到掛號');
+        error.status = 404;
+        throw error;
       }
-    }
+      if (appointment.status !== 'completed') {
+        const error = new Error('只有已完成的掛號可以編輯看診資料');
+        error.status = 422;
+        throw error;
+      }
+
+      if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
+      if (temperatureC !== undefined) appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
+      if (visitNote !== undefined) appointment.visitNote = String(visitNote ?? '').trim();
+
+      if (appointment.recordId) {
+        const record = await MedicalRecord.findById(appointment.recordId).session(session);
+        if (record?.status === 'draft') {
+          record.weightKg = appointment.weightKg;
+          record.temperatureC = appointment.temperatureC;
+          record.other = appointment.visitNote;
+          await record.save({ session });
+        }
+      }
+
+      await appointment.save({ session });
+    });
     res.json(appointment);
   } catch (err) {
     next(err);

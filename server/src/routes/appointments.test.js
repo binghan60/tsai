@@ -439,6 +439,51 @@ describe('appointments routes', () => {
     }
   });
 
+  it('修正看診資料時，掛號與草稿病歷使用同一個 transaction', async () => {
+    const originalAppointmentFindById = Appointment.findById;
+    const originalRecordFindById = MedicalRecord.findById;
+    const saves = [];
+    const appointment = {
+      _id: 'apt-visit-data',
+      status: 'completed',
+      recordId: 'record-visit-data',
+      weightKg: 3,
+      temperatureC: 38,
+      visitNote: '原始備註',
+      save: async (options) => { saves.push(['appointment', options]); },
+    };
+    const record = {
+      _id: 'record-visit-data',
+      status: 'draft',
+      weightKg: 3,
+      temperatureC: 38,
+      other: '原始備註',
+      save: async (options) => { saves.push(['record', options]); },
+    };
+    Appointment.findById = () => ({ session: async () => appointment });
+    MedicalRecord.findById = () => ({ session: async () => record });
+    const queue = captureQueueWrites();
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-visit-data/visit-data`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ weightKg: 4.2, temperatureC: 39.1, visitNote: '更新備註' }),
+      });
+
+      assert.equal(response.status, 200);
+      assert.equal(appointment.weightKg, 4.2);
+      assert.equal(record.weightKg, 4.2);
+      assert.equal(record.temperatureC, 39.1);
+      assert.equal(record.other, '更新備註');
+      assert.equal(saves.length, 2);
+      assert.ok(saves.every(([, options]) => options?.session));
+    } finally {
+      Appointment.findById = originalAppointmentFindById;
+      MedicalRecord.findById = originalRecordFindById;
+      queue.restore();
+    }
+  });
+
   it('已報到的掛號仍可編輯身分快照、時段與來院原因', async () => {
     const originalFindById = Appointment.findById;
     const appointment = {
