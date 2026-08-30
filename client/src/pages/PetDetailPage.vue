@@ -275,7 +275,7 @@ watch(
         <Button as-child><router-link :to="`/pets/${pet._id}/records/new`"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button>
       </div>
 
-      <Card v-if="pet.medicalRecords.length" class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(15rem, 1.15fr) minmax(12rem, 1fr) minmax(13rem, 1fr) 10rem">
+      <Card v-if="pet.medicalRecords.length" class="hidden overflow-hidden p-0 shadow-sm lg:block dark:shadow-none" style="--data-columns: minmax(9rem, 1.15fr) minmax(8rem, 1fr) minmax(10rem, 1fr) 8rem">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">看診日期</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型</span>
@@ -290,7 +290,7 @@ watch(
         </div>
       </Card>
 
-      <ul v-if="pet.medicalRecords.length" class="space-y-3 xl:hidden">
+      <ul v-if="pet.medicalRecords.length" class="space-y-3 lg:hidden">
         <li v-for="record in pet.medicalRecords" :key="record._id">
           <Card class="p-4 shadow-sm dark:shadow-none">
           <div class="flex flex-wrap items-start justify-between gap-3">

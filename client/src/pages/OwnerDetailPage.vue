@@ -238,7 +238,7 @@ watch(
           <div>
             <h1 class="text-xl font-semibold text-foreground">{{ owner.name }}</h1>
             <p class="mt-1 text-sm text-muted-foreground"><span class="tabular-nums">電話：{{ owner.phone }}</span></p>
-            <p class="text-sm text-muted-foreground">Email：{{ owner.email || '' }}</p>
+            <p v-if="owner.email" class="text-sm text-muted-foreground">Email：{{ owner.email }}</p>
           </div>
         </div>
         <Button type="button" variant="outline" @click="editOwnerOpen = true"><Pencil class="h-4 w-4" />編輯飼主資料</Button>
@@ -262,7 +262,7 @@ watch(
         <Button type="button" variant="secondary" size="icon" :aria-label="`關閉 ${createdPet.name} 新增成功提示`" @click="createdPet = null"><X class="h-4 w-4" /></Button>
       </div>
 
-      <Card v-if="owner.pets.length" class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(16rem, 1.2fr) minmax(14rem, 1fr) 7rem">
+      <Card v-if="owner.pets.length" class="hidden overflow-hidden p-0 shadow-sm lg:block dark:shadow-none" style="--data-columns: minmax(12rem, 1.2fr) minmax(10rem, 1fr) 7rem">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">基本資料</span>
@@ -281,7 +281,7 @@ watch(
         </div>
       </Card>
 
-      <div v-if="owner.pets.length" class="grid gap-3 sm:grid-cols-2 xl:hidden">
+      <div v-if="owner.pets.length" class="grid gap-3 sm:grid-cols-2 lg:hidden">
         <Card
           v-for="pet in owner.pets"
           :key="pet._id"
