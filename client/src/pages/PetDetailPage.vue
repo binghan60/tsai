@@ -10,7 +10,7 @@ import { ageLabel as calcAgeLabel, clinicDateInput, formatDate as formatClinicDa
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { useBackTarget } from '../composables/useBackTarget';
+import Breadcrumbs from '../components/Breadcrumbs.vue';
 import { Badge } from '../components/ui/badge';
 import EmptyState from '../components/EmptyState.vue';
 import RowActions from '../components/RowActions.vue';
@@ -25,7 +25,6 @@ const toast = useToast();
 const pet = ref(null);
 const recordPage = ref(1);
 const recordPagination = ref({ total: 0, page: 1, limit: 10, totalPages: 1 });
-const { to: backTo, label: backLabel } = useBackTarget(() => (pet.value?.ownerId?._id ? `/owners/${pet.value.ownerId._id}` : '/owners'), '回飼主資料');
 const error = ref('');
 const sharingId = ref(null);
 const revokingId = ref(null);
@@ -235,7 +234,11 @@ watch(
 <template>
   <div class="mx-auto max-w-7xl">
   <section v-if="pet" class="space-y-5">
-    <router-link :to="backTo" class="inline-flex items-center text-sm font-medium text-primary hover:underline hover:underline-offset-4">← {{ backLabel }}</router-link>
+    <Breadcrumbs :items="[
+      { label: '飼主', to: '/owners' },
+      ...(pet.ownerId?._id ? [{ label: pet.ownerId.name || '飼主資料', to: `/owners/${pet.ownerId._id}` }] : []),
+      { label: pet.name },
+    ]" />
 
     <Card class="p-5 shadow-sm dark:shadow-none">
       <div class="flex flex-wrap items-start justify-between gap-4">

@@ -14,9 +14,9 @@ import EmptyState from '../components/EmptyState.vue';
 import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
+import Breadcrumbs from '../components/Breadcrumbs.vue';
 
 import { useToast } from '../composables/useToast';
-import { useBackTarget } from '../composables/useBackTarget';
 
 const route = useRoute();
 const router = useRouter();
@@ -24,7 +24,6 @@ const toast = useToast();
 const owner = ref(null);
 const petPage = ref(1);
 const petPagination = ref({ total: 0, page: 1, limit: 12, totalPages: 1 });
-const { to: backTo, label: backLabel } = useBackTarget('/owners', '回飼主列表');
 const error = ref('');
 const editOwnerOpen = ref(false);
 const editOwnerSaving = ref(false);
@@ -228,9 +227,7 @@ watch(
 <template>
   <div class="mx-auto max-w-7xl">
   <section v-if="owner" class="space-y-6">
-    <router-link :to="backTo" class="text-sm font-medium text-primary hover:underline hover:underline-offset-4">
-      ← {{ backLabel }}
-    </router-link>
+    <Breadcrumbs :items="[{ label: '飼主', to: '/owners' }, { label: owner.name }]" />
 
     <Card class="p-5 shadow-sm dark:shadow-none">
       <div class="flex flex-wrap items-start justify-between gap-4">
@@ -241,7 +238,7 @@ watch(
           <div>
             <h1 class="text-xl font-semibold text-foreground">{{ owner.name }}</h1>
             <p class="mt-1 text-sm text-muted-foreground"><span class="tabular-nums">電話：{{ owner.phone }}</span></p>
-            <p class="text-sm text-muted-foreground">Email：{{ owner.email || '未填寫' }}</p>
+            <p class="text-sm text-muted-foreground">Email：{{ owner.email || '' }}</p>
           </div>
         </div>
         <Button type="button" variant="outline" @click="editOwnerOpen = true"><Pencil class="h-4 w-4" />編輯飼主資料</Button>

@@ -24,7 +24,7 @@ import {
   X,
 } from '@lucide/vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router';
-import { useBackTarget } from '../composables/useBackTarget';
+import Breadcrumbs from '../components/Breadcrumbs.vue';
 import { http } from '../api/http';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useToast } from '../composables/useToast';
@@ -41,7 +41,6 @@ import ListSkeleton from '../components/ListSkeleton.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
 
 const route = useRoute();
-const { to: backTo, label: backLabel } = useBackTarget('/settings/forms', '回健檢表單');
 const toast = useToast();
 const { clearTemplateCache } = useFormTemplate();
 
@@ -481,15 +480,14 @@ function resolveLeave(confirmed) {
     <!-- 不透明底色，不用 backdrop-blur：捲動時每一幀重算模糊是長表單最主要的掉幀來源。 -->
     <header class="sticky top-16 z-10 lg:top-0 -mx-4 border-b border-border bg-muted/40 px-4 py-3 sm:-mx-6 sm:px-6">
       <div class="mx-auto flex max-w-350 flex-wrap items-center justify-between gap-3">
-        <div class="flex min-w-0 items-center gap-3">
-          <router-link :to="backTo" class="inline-flex min-h-11 shrink-0 items-center text-sm font-medium text-primary hover:underline hover:underline-offset-4">
-            ← {{ backLabel }}
-          </router-link>
-          <span class="h-4 w-px shrink-0 bg-muted" />
-          <h1 class="truncate text-xl font-semibold text-foreground">{{ currentName || '健檢表單' }}</h1>
-          <Badge v-if="!loading" :variant="isDirty ? 'secondary' : 'outline'" :class="isDirty ? 'shrink-0 text-warning' : 'shrink-0 text-muted-foreground '">
-            {{ isDirty ? '尚未儲存' : '已儲存' }}
-          </Badge>
+        <div class="min-w-0">
+          <Breadcrumbs class="mb-1" :items="[{ label: '設定', to: '/settings/forms' }, { label: '健檢表單', to: '/settings/forms' }, { label: currentName || '健檢表單' }]" />
+          <div class="flex min-w-0 items-center gap-3">
+            <h1 class="truncate text-xl font-semibold text-foreground">{{ currentName || '健檢表單' }}</h1>
+            <Badge v-if="!loading" :variant="isDirty ? 'secondary' : 'outline'" :class="isDirty ? 'shrink-0 text-warning' : 'shrink-0 text-muted-foreground '">
+              {{ isDirty ? '尚未儲存' : '已儲存' }}
+            </Badge>
+          </div>
         </div>
         <div class="flex items-center gap-2">
           <nav class="inline-flex rounded-xl border border-border bg-card p-1" aria-label="編輯模式">
