@@ -234,9 +234,11 @@ onMounted(load);
     <template v-else>
       <div class="grid gap-3 xl:grid-cols-[minmax(22rem,1fr)_auto] xl:items-center">
         <FilterBar id="text-template-search" v-model="queryInput" label="搜尋文字模板" placeholder="搜尋模板名稱或內容" class="w-full min-w-0 xl:max-w-xl" @submit="applyFilters" />
-        <div class="flex flex-wrap items-center gap-2 xl:justify-end">
-          <span class="text-xs font-medium text-muted-foreground">狀態</span>
-          <SegmentedControl v-model="status" size="sm" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
+        <div class="flex flex-wrap items-center gap-2 rounded-xl bg-muted/55 p-2 xl:justify-end">
+          <div class="flex items-center gap-2 rounded-lg bg-card px-2.5 py-1.5 shadow-sm">
+            <span class="whitespace-nowrap text-xs font-medium text-muted-foreground">狀態</span>
+            <SegmentedControl v-model="status" size="sm" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
+          </div>
         </div>
       </div>
 

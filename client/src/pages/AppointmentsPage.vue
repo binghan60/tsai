@@ -687,8 +687,7 @@ onBeforeUnmount(() => {
             <p class="mt-0.5 text-xs text-muted-foreground">依報到時間排列；牌號可點擊修改，當日不重複發號</p>
           </div>
           <div class="flex shrink-0 items-center gap-1.5">
-            <Button type="button" variant="ghost" size="icon-sm" aria-label="設定掛號預設表單" title="設定掛號預設表單" @click="defaultTemplateDialogOpen = true"><Settings class="h-4 w-4" stroke-width="1.75" /></Button>
-            
+            <Button type="button" variant="secondary" size="icon-sm" aria-label="設定掛號預設表單" title="設定掛號預設表單" @click="defaultTemplateDialogOpen = true"><Settings class="h-4 w-4" stroke-width="1.75" /></Button>
           </div>
         </div>
 

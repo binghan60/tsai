@@ -44,8 +44,8 @@ const createError = ref('');
 
 const queryInput = ref('');
 const query = ref('');
-const speciesFilter = ref('');
-const statusFilter = ref('');
+const speciesFilter = ref('any');
+const statusFilter = ref('any');
 
 const SPECIES_LABELS = { cat: '貓', dog: '犬', all: '不限物種' };
 
@@ -53,12 +53,12 @@ const SPECIES_LABELS = { cat: '貓', dog: '犬', all: '不限物種' };
 // 「不限物種」是不篩選，選「貓」時連不限物種的表單一起列出 ——
 // 跟後端 listTemplates 的 $in: [species, 'all'] 同一套語意，看到的就是這隻能用的表單。
 const SPECIES_FILTERS = [
-  { value: '', label: '不限物種' },
+  { value: 'any', label: '全部物種' },
   { value: 'cat', label: '貓' },
   { value: 'dog', label: '犬' },
 ];
 const STATUS_FILTERS = [
-  { value: '', label: '全部' },
+  { value: 'any', label: '全部狀態' },
   { value: 'enabled', label: '使用中' },
   { value: 'disabled', label: '已停用' },
 ];
@@ -70,13 +70,13 @@ const START_MODES = [
 // 「至少保留一份表單」看的是總數，不是篩選後的結果 ——
 // 篩掉剩一筆並不代表刪掉它之後就沒表單了。
 const canDelete = computed(() => templates.value.length > 1);
-const hasFilters = computed(() => Boolean(query.value.trim() || speciesFilter.value || statusFilter.value));
+const hasFilters = computed(() => Boolean(query.value.trim() || speciesFilter.value !== 'any' || statusFilter.value !== 'any'));
 const visibleTemplates = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   return templates.value.filter((template) => {
     const species = template.species ?? 'all';
-    if (speciesFilter.value && species !== 'all' && species !== speciesFilter.value) return false;
-    if (statusFilter.value && (statusFilter.value === 'enabled') !== Boolean(template.enabled)) return false;
+    if (speciesFilter.value !== 'any' && species !== 'all' && species !== speciesFilter.value) return false;
+    if (statusFilter.value !== 'any' && (statusFilter.value === 'enabled') !== Boolean(template.enabled)) return false;
     if (!keyword) return true;
     return `${template.name} ${template.description ?? ''}`.toLowerCase().includes(keyword);
   });
@@ -97,8 +97,8 @@ function applyFilters() {
 function clearFilters() {
   queryInput.value = '';
   query.value = '';
-  speciesFilter.value = '';
-  statusFilter.value = '';
+  speciesFilter.value = 'any';
+  statusFilter.value = 'any';
   page.value = 1;
 }
 
@@ -234,14 +234,14 @@ onMounted(load);
     <template v-else-if="templates.length">
       <div class="grid gap-3 xl:grid-cols-[minmax(22rem,1fr)_auto] xl:items-center">
         <FilterBar id="template-search" v-model="queryInput" label="搜尋健檢表單" placeholder="輸入表單名稱或說明" class="w-full min-w-0 xl:max-w-xl" @submit="applyFilters" />
-        <div class="flex flex-wrap items-center gap-x-5 gap-y-3 xl:justify-end">
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-xs font-medium text-muted-foreground">適用物種</span>
+        <div class="flex flex-wrap items-center gap-2 rounded-xl bg-muted/55 p-2 xl:justify-end">
+          <div class="flex items-center gap-2 rounded-lg bg-card px-2.5 py-1.5 shadow-sm">
+            <span class="whitespace-nowrap text-xs font-medium text-muted-foreground">適用物種</span>
             <SegmentedControl v-model="speciesFilter" size="sm" aria-label="依適用物種篩選" :options="SPECIES_FILTERS" />
           </div>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <span class="text-xs font-medium text-muted-foreground">狀態</span>
+          <div class="flex items-center gap-2 rounded-lg bg-card px-2.5 py-1.5 shadow-sm">
+            <span class="whitespace-nowrap text-xs font-medium text-muted-foreground">狀態</span>
             <SegmentedControl v-model="statusFilter" size="sm" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
           </div>
         </div>
