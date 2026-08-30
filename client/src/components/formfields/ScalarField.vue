@@ -57,13 +57,16 @@ function toggle(option, checked) {
 
 <template>
   <FieldShell :item="item" :input-id="inputId">
-    <Textarea
-      v-if="item.type === 'textarea'"
-      :id="inputId"
-      v-model="value"
-      :rows="item.rows || 3"
-      :placeholder="item.placeholder"
-    />
+    <div v-if="item.type === 'textarea'" class="relative">
+      <Textarea
+        :id="inputId"
+        v-model="value"
+        :rows="item.rows || 3"
+        :placeholder="item.placeholder"
+        class="pr-20"
+      />
+      <TextTemplateTrigger v-model="value" :item-key="item.key" :label="item.label" :input-id="inputId" />
+    </div>
     <Select v-else-if="item.type === 'select'" v-model="selectValue">
       <SelectTrigger :id="inputId" class="w-full"><SelectValue placeholder="請選擇" /></SelectTrigger>
       <SelectContent>
@@ -95,6 +98,16 @@ function toggle(option, checked) {
         {{ option }}
       </label>
     </div>
+    <div v-else-if="item.type === 'text'" class="relative">
+      <Input
+        :id="inputId"
+        v-model="value"
+        type="text"
+        :placeholder="item.placeholder"
+        class="pr-20"
+      />
+      <TextTemplateTrigger v-model="value" :item-key="item.key" :label="item.label" :input-id="inputId" centered />
+    </div>
     <Input
       v-else
       :id="inputId"
@@ -103,6 +116,5 @@ function toggle(option, checked) {
       :inputmode="inputMode"
       :placeholder="item.placeholder"
     />
-    <TextTemplateTrigger v-if="isTextual" v-model="value" :item-key="item.key" :label="item.label" />
   </FieldShell>
 </template>

@@ -64,25 +64,27 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                 </div>
                 <div class="space-y-1.5">
                   <Label :for="`record-lab-value-${finding.key}`" class="text-xs font-medium text-muted-foreground">{{ finding.numeric === false ? '結果描述' : '檢驗數值' }}</Label>
-                  <input
-                    :id="`record-lab-value-${finding.key}`"
-                    v-model="finding.value"
-                    type="text"
-                    inputmode="decimal"
-                    :aria-label="`${finding.label}數值`"
-                    :placeholder="finding.numeric === false ? '選填' : labRanges[finding.key]?.unit ? `輸入數值（${labRanges[finding.key].unit}）` : '選填'"
-                    class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-                    @input="finding.numeric !== false && autoJudgeLab(finding, $event.target.value)"
-                  />
-                  <!-- 數值型欄位打的是數字，不需要文字模板；只有文字結果才掛。
-                       key 加上 :value 後綴自成一組，讓結果描述與備註能指定不同模板。 -->
-                  <TextTemplateTrigger
-                    v-if="finding.numeric === false"
-                    v-model="finding.value"
-                    :item-key="`${finding.key}:value`"
-                    :label="`${finding.label}結果描述`"
-                    :input-id="`record-lab-value-${finding.key}`"
-                  />
+                  <div class="relative">
+                    <input
+                      :id="`record-lab-value-${finding.key}`"
+                      v-model="finding.value"
+                      type="text"
+                      inputmode="decimal"
+                      :aria-label="`${finding.label}數值`"
+                      :placeholder="finding.numeric === false ? '選填' : labRanges[finding.key]?.unit ? `輸入數值（${labRanges[finding.key].unit}）` : '選填'"
+                      class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                      :class="finding.numeric === false ? 'pr-20' : ''"
+                      @input="finding.numeric !== false && autoJudgeLab(finding, $event.target.value)"
+                    />
+                    <!-- 數值型欄位打的是數字，不需要文字模板；只有文字結果才顯示入口。 -->
+                    <TextTemplateTrigger
+                      v-if="finding.numeric === false"
+                      v-model="finding.value"
+                      :item-key="`${finding.key}:value`"
+                      :label="`${finding.label}結果描述`"
+                      :input-id="`record-lab-value-${finding.key}`"
+                    />
+                  </div>
                   <PreviousValue :item="finding" type="lab" compact class="@5xl:hidden" />
                 </div>
                 <div class="hidden min-w-0 space-y-1.5 @5xl:block">
@@ -93,15 +95,17 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                   <Label :for="`record-lab-note-${finding.key}`" class="text-xs font-medium text-muted-foreground">
                     備註
                   </Label>
-                  <Textarea
-                    :id="`record-lab-note-${finding.key}`"
-                    v-model="finding.note"
-                    :aria-label="`${finding.label}備註`"
-                    rows="2"
-                    :placeholder="finding.status === 'abnormal' ? '請描述異常（選填）' : '選填'"
-                    class="min-h-16 resize-y scroll-mt-40 border-border bg-field text-foreground focus-visible:border-belle-500"
-                  />
-                  <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-lab-note-${finding.key}`" />
+                  <div class="relative">
+                    <Textarea
+                      :id="`record-lab-note-${finding.key}`"
+                      v-model="finding.note"
+                      :aria-label="`${finding.label}備註`"
+                      rows="2"
+                      :placeholder="finding.status === 'abnormal' ? '請描述異常（選填）' : '選填'"
+                      class="min-h-16 resize-y scroll-mt-40 border-border bg-field pr-20 text-foreground focus-visible:border-belle-500"
+                    />
+                    <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-lab-note-${finding.key}`" />
+                  </div>
                 </div>
               </div>
             </SelectableItem>

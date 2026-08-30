@@ -36,23 +36,25 @@ const findingsOf = (run) => run.items.map((item) => entryByKey.value.get(item.ke
         <SelectableItem v-for="finding in findingsOf(run)" :key="finding.key" :item-key="finding.key">
           <div
             :id="`record-exam-row-${finding.key}`"
-            class="scroll-mt-40 grid gap-3 py-4 first:pt-0 last:pb-0 @3xl:grid-cols-[190px_280px_1fr] @3xl:items-center"
+            class="scroll-mt-40 grid gap-3 py-4 first:pt-0 last:pb-0 @3xl:grid-cols-[190px_280px_minmax(0,1fr)] @3xl:items-center"
           >
             <p class="text-sm font-medium text-foreground">{{ finding.label }}</p>
             <StatusToggle :finding="finding" :aria-label="`${finding.label}檢查結果`" @select="finding.status = $event" />
-            <div class="space-y-1.5">
+            <div class="min-w-0 space-y-1.5">
               <Label :for="`record-exam-note-${finding.key}`" class="text-xs font-medium text-muted-foreground">
                 備註
               </Label>
+              <div class="relative">
               <Textarea
                 :id="`record-exam-note-${finding.key}`"
                 v-model="finding.note"
                 :aria-label="`${finding.label}備註`"
                 rows="2"
                 :placeholder="finding.status === 'abnormal' ? '請描述異常，例如：輕微牙齦紅（選填）' : '選填'"
-                class="min-h-16 resize-y scroll-mt-40 border-border bg-field text-foreground focus-visible:border-belle-500 focus-visible:ring-belle-100 dark:focus-visible:ring-brand-500/20"
+                class="min-h-16 resize-y scroll-mt-40 border-border pr-20 bg-field text-foreground focus-visible:border-belle-500 focus-visible:ring-belle-100 dark:focus-visible:ring-brand-500/20"
               />
               <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-exam-note-${finding.key}`" />
+            </div>
             </div>
           </div>
         </SelectableItem>

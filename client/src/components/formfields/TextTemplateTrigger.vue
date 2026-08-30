@@ -1,5 +1,5 @@
 <script setup>
-import { FilePlus2 } from '@lucide/vue';
+import { FileText } from '@lucide/vue';
 import { useRecordForm } from './context';
 import { useTextTemplates } from '../../composables/useTextTemplates';
 
@@ -8,6 +8,7 @@ const props = defineProps({
   modelValue: { type: [String, null], default: '' },
   label: { type: String, default: '' },
   inputId: { type: String, default: '' },
+  centered: { type: Boolean, default: false },
 });
 const emit = defineEmits(['update:modelValue']);
 
@@ -43,37 +44,20 @@ function open() {
   });
 }
 
-function saveAsTemplate() {
-  openPicker({
-    itemKey: props.itemKey,
-    label: props.label,
-    currentText: String(props.modelValue ?? ''),
-    quickCreate: true,
-  });
-}
+
 </script>
 
 <template>
-  <div v-if="!preview" class="mt-1 flex min-h-9 items-center">
-    <button
-      type="button"
-      class="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-accent/70 px-2 text-xs font-medium text-primary transition-colors hover:bg-accent"
-      :aria-label="label ? `插入${label}的文字模板` : '插入文字模板'"
-      @pointerdown="captureSelection"
-      @click="open"
-    >
-      <FilePlus2 class="h-3.5 w-3.5" stroke-width="1.75" />
-      插入模板
-    </button>
-    <button
-      v-if="modelValue"
-      type="button"
-      class="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-accent/70 px-2 text-xs font-medium text-primary transition-colors hover:bg-accent"
-      :aria-label="label ? `將${label}內容儲存為文字模板` : '儲存為文字模板'"
-      @click="saveAsTemplate"
-    >
-      <FilePlus2 class="h-3.5 w-3.5" stroke-width="1.75" />
-      儲存為模板
-    </button>
-  </div>
+  <button
+    v-if="!preview"
+    type="button"
+    class="absolute right-2 z-10 inline-flex h-8 items-center gap-1.5 rounded-md border border-border/80 bg-background/90 px-2 text-xs font-medium text-primary shadow-sm backdrop-blur-sm transition-colors hover:border-primary/30 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+    :class="centered ? 'top-1/2 -translate-y-1/2' : 'top-2'"
+    :aria-label="label ? `開啟${label}的文字模板` : '開啟文字模板'"
+    @pointerdown="captureSelection"
+    @click="open"
+  >
+    <FileText class="h-3.5 w-3.5" stroke-width="1.75" />
+    模板
+  </button>
 </template>

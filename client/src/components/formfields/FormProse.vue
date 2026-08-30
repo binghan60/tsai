@@ -29,11 +29,13 @@ const runs = computed(() => sectionRuns(items.value, (item) => item.type === 'te
               {{ item.label }}
               <span v-if="item.required" class="text-danger" aria-hidden="true">*</span>
             </Label>
-            <Textarea
+            <div class="relative">
+              <Textarea
               :id="`record-${item.key}`"
               :model-value="valueFor(item)"
               :rows="item.rows || 4"
               :placeholder="item.placeholder"
+              class="pr-20"
               @update:model-value="setValue(item, $event)"
             />
             <TextTemplateTrigger
@@ -42,6 +44,7 @@ const runs = computed(() => sectionRuns(items.value, (item) => item.type === 'te
               :model-value="valueFor(item)"
               @update:model-value="setValue(item, $event)"
             />
+            </div>
           </div>
         </SelectableItem>
       </div>

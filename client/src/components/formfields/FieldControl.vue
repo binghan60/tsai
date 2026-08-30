@@ -42,15 +42,17 @@ const referenceText = computed(() => labRangeLabel(props.item));
     <FieldShell v-if="entry" :item="item" :input-id="`record-exam-note-${item.key}`">
       <div :id="`record-exam-row-${item.key}`" class="scroll-mt-40 space-y-2">
         <StatusToggle :finding="entry" :aria-label="`${item.label}檢查結果`" @select="entry.status = $event" />
-        <Textarea
-          :id="`record-exam-note-${item.key}`"
-          v-model="entry.note"
-          :aria-label="`${item.label}備註`"
-          rows="2"
-          :placeholder="entry.status === 'abnormal' ? '請描述異常（選填）' : '備註（選填）'"
-          class="min-h-16 resize-y scroll-mt-40 border-border bg-field text-foreground focus-visible:border-belle-500"
-        />
-        <TextTemplateTrigger v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" :input-id="`record-exam-note-${item.key}`" />
+        <div class="relative">
+          <Textarea
+            :id="`record-exam-note-${item.key}`"
+            v-model="entry.note"
+            :aria-label="`${item.label}備註`"
+            rows="2"
+            :placeholder="entry.status === 'abnormal' ? '請描述異常（選填）' : '備註（選填）'"
+            class="min-h-16 resize-y scroll-mt-40 border-border bg-field pr-20 text-foreground focus-visible:border-belle-500"
+          />
+          <TextTemplateTrigger v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" :input-id="`record-exam-note-${item.key}`" />
+        </div>
       </div>
     </FieldShell>
   </div>
@@ -60,32 +62,37 @@ const referenceText = computed(() => labRangeLabel(props.item));
     <FieldShell v-if="entry" :item="item" :input-id="`record-lab-value-${item.key}`">
       <div :id="`record-lab-row-${item.key}`" class="scroll-mt-40 space-y-2">
         <StatusToggle :finding="entry" :aria-label="`${item.label}檢驗結果`" show-auto-badge @select="setLabStatus(entry, $event)" />
-        <Textarea
-          :id="`record-lab-value-${item.key}`"
-          v-model="entry.value"
-          type="text"
-          inputmode="decimal"
-          :aria-label="`${item.label}數值`"
-          :placeholder="entry.numeric === false ? '結果描述（選填）' : '檢驗數值'"
-          class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
-          @input="entry.numeric !== false && autoJudgeLab(entry, $event.target.value)"
-        />
-        <TextTemplateTrigger
-          v-if="entry.numeric === false"
-          v-model="entry.value"
-          :item-key="`${item.key}:value`"
-          :label="`${item.label}結果描述`"
-          :input-id="`record-lab-value-${item.key}`"
-        />
-        <input
-          :id="`record-lab-note-${item.key}`"
-          v-model="entry.note"
-          :aria-label="`${item.label}備註`"
-          rows="2"
-          :placeholder="entry.status === 'abnormal' ? '請描述異常（選填）' : '備註（選填）'"
-          class="min-h-16 resize-y scroll-mt-40 border-border bg-field text-foreground focus-visible:border-belle-500"
-        />
-        <TextTemplateTrigger v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" :input-id="`record-lab-note-${item.key}`" />
+        <div class="relative">
+          <Textarea
+            :id="`record-lab-value-${item.key}`"
+            v-model="entry.value"
+            type="text"
+            inputmode="decimal"
+            :aria-label="`${item.label}數值`"
+            :placeholder="entry.numeric === false ? '結果描述（選填）' : '檢驗數值'"
+            class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            :class="entry.numeric === false ? 'pr-20' : ''"
+            @input="entry.numeric !== false && autoJudgeLab(entry, $event.target.value)"
+          />
+          <TextTemplateTrigger
+            v-if="entry.numeric === false"
+            v-model="entry.value"
+            :item-key="`${item.key}:value`"
+            :label="`${item.label}結果描述`"
+            :input-id="`record-lab-value-${item.key}`"
+          />
+        </div>
+        <div class="relative">
+          <Textarea
+            :id="`record-lab-note-${item.key}`"
+            v-model="entry.note"
+            :aria-label="`${item.label}備註`"
+            rows="2"
+            :placeholder="entry.status === 'abnormal' ? '請描述異常（選填）' : '備註（選填）'"
+            class="min-h-16 resize-y scroll-mt-40 border-border bg-field pr-20 text-foreground focus-visible:border-belle-500"
+          />
+          <TextTemplateTrigger v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" :input-id="`record-lab-note-${item.key}`" />
+        </div>
         <p v-if="referenceText" class="text-xs text-success">參考 {{ referenceText }}</p>
       </div>
     </FieldShell>

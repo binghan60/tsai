@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Check, FileText, Search, Trash2 } from '@lucide/vue';
+import { Check, FilePlus2, FileText, Search, Trash2 } from '@lucide/vue';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -186,6 +186,10 @@ async function saveTemplate() {
           <Button type="button" :disabled="saving" @click="saveTemplate">{{ saving ? '新增中…' : '新增模板' }}</Button>
         </template>
         <template v-else>
+          <Button v-if="picker?.currentText" type="button" variant="ghost" class="mr-auto" @click="creating = true">
+            <FilePlus2 class="h-4 w-4" stroke-width="1.75" />
+            將目前內容存成模板
+          </Button>
           <Button type="button" variant="outline" @click="closePicker">取消</Button>
           <Button v-if="picker?.currentText" type="button" variant="destructive-outline" :disabled="!selected" @click="insert('replace')">覆蓋</Button>
           <Button type="button" :disabled="!selected" @click="insert(picker?.currentText ? 'cursor' : 'replace')">插入</Button>
