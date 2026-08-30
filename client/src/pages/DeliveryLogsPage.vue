@@ -161,7 +161,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <!-- 桌機：清單卡。寄送失敗的列左側加一條警示色條，這裡「有事要處理」的判準是
            log.event === 'failed'，跟健檢紀錄頁用 deliveryStatus 是同一個道理、不同資料來源。 -->
-      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: 9rem 6.5rem minmax(10rem, 1fr) minmax(10rem, 1fr) minmax(11rem, 1.1fr)">
+      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: 12rem 6.5rem minmax(10rem, 1fr) minmax(10rem, 1fr) minmax(11rem, 1.1fr)">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">時間</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">事件</span>
