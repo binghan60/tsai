@@ -126,10 +126,17 @@ const medicalRecordSchema = new mongoose.Schema(
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'FormTemplate', default: null },
     templateVersion: { type: Number, default: null },
     sections: { type: [reportSectionSchema], default: [] },
-    // Short-lived lease used while a draft is being frozen and rendered to PDF.
+    // Short-lived lease used while a draft is being frozen.
     // It is operational state, so never return it in normal API responses.
     finalizeAttemptId: { type: String, default: null, select: false },
     finalizingAt: { type: Date, default: null, select: false },
+    // PDF is generated after the record is finalized.  Keeping this state on the
+    // record makes the job recoverable after a server restart and lets clients
+    // leave the preview page instead of waiting for Chromium.
+    pdfStatus: { type: String, enum: ['pending', 'generating', 'ready', 'failed'], default: 'pending' },
+    pdfError: { type: String, default: '' },
+    pdfAttemptedAt: { type: Date, default: null },
+    pdfFileId: { type: mongoose.Schema.Types.ObjectId, default: null, select: false },
 
     shareToken: { type: String, default: uuidv4, unique: true },
     shareEnabled: { type: Boolean, default: false },

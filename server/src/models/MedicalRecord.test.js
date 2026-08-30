@@ -7,6 +7,7 @@ describe('MedicalRecord workflow constraints', () => {
     assert.equal(MedicalRecord.schema.path('finalizeAttemptId').options.select, false);
     assert.equal(MedicalRecord.schema.path('deliveryAttemptId').options.select, false);
     assert.equal(MedicalRecord.schema.path('deliveryLeaseExpiresAt').options.select, false);
+    assert.equal(MedicalRecord.schema.path('pdfFileId').options.select, false);
   });
 
   it('declares unique constraints for draft revisions and revision versions', () => {
@@ -17,6 +18,7 @@ describe('MedicalRecord workflow constraints', () => {
 
   it('represents uncertain mail outcomes and rejects silent document overwrites', () => {
     assert.ok(MedicalRecord.schema.path('deliveryStatus').enumValues.includes('uncertain'));
+    assert.deepEqual(MedicalRecord.schema.path('pdfStatus').enumValues, ['pending', 'generating', 'ready', 'failed']);
     assert.equal(MedicalRecord.schema.options.optimisticConcurrency, true);
   });
 });

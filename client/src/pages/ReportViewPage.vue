@@ -30,6 +30,9 @@ const showBackToTop = ref(false);
 const isPreview = computed(() => route.name === 'record-preview');
 const isDraft = computed(() => record.value?.status === 'draft');
 const isFinalized = computed(() => isFinalizedRecord(record.value));
+const pdfStatus = computed(() => record.value?.pdfStatus || 'pending');
+const pdfReady = computed(() => pdfStatus.value === 'ready');
+const pdfFailed = computed(() => pdfStatus.value === 'failed');
 const deliveryStatus = computed(() => getDeliveryStatus(record.value));
 const isSent = computed(() => deliveryStatus.value === 'sent');
 const deliveryFailed = computed(() => deliveryStatus.value === 'failed');
@@ -165,13 +168,13 @@ async function finalizeReport() {
   try {
     const { data } = await http.post(
       `/records/${route.params.id}/finalize`,
-      { expectedVersion: record.value.__v },
-      { timeout: PDF_TIMEOUT_MS }
+      { expectedVersion: record.value.__v }
     );
     if (identity !== reportIdentity()) return;
     record.value.status = 'finalized';
     record.value.finalizedAt = data.finalizedAt;
     record.value.pdfGeneratedAt = data.pdfGeneratedAt;
+    record.value.pdfStatus = data.pdfStatus || 'pending';
     record.value.reportVersion = data.reportVersion;
     record.value.deliveryStatus = data.deliveryStatus || 'not_sent';
     record.value.__v = data.documentVersion ?? record.value.__v;
@@ -319,6 +322,18 @@ function printReport() {
   window.print();
 }
 
+async function retryPdf() {
+  if (!record.value || !isPreview.value || !pdfFailed.value) return;
+  error.value = '';
+  try {
+    const { data } = await http.post(`/records/${route.params.id}/pdf/retry`);
+    record.value.pdfStatus = data.pdfStatus || 'pending';
+    record.value.pdfError = '';
+  } catch (err) {
+    error.value = err.response?.data?.message ?? '無法重新產生 PDF，請稍後再試。';
+  }
+}
+
 function handleMoreReportAction(action) {
   if (action === 'new-record') return router.push(`/pets/${record.value?.pet?._id}/records/new?copyFrom=${record.value?._id}`);
   if (action === 'revision') showRevisionDialog.value = true;
@@ -339,7 +354,18 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', updateBackToTopVisibility);
+  window.clearInterval(pdfPollTimer);
 });
+
+let pdfPollTimer = null;
+function syncPdfPolling() {
+  window.clearInterval(pdfPollTimer);
+  pdfPollTimer = null;
+  if (!isPreview.value || !record.value || isDraft.value || !['pending', 'generating'].includes(pdfStatus.value)) return;
+  pdfPollTimer = window.setInterval(() => fetchReport(), 3000);
+}
+
+watch([isPreview, pdfStatus], syncPdfPolling, { immediate: true });
 
 watch(
   reportIdentity,
@@ -368,12 +394,18 @@ watch(
         <div v-else></div>
         <div class="flex w-full flex-wrap justify-start gap-2 sm:w-auto sm:justify-end">
           <Button v-if="isPreview && isDraft" type="button" class="w-full sm:w-auto" :disabled="finalizing" @click="showFinalizeConfirm = true"><CheckCircle2 class="h-4 w-4" />{{ finalizing ? '結案中…' : '確認結案' }}</Button>
-          <Button v-else-if="isPreview" type="button" class="w-full sm:w-auto" :disabled="downloading" @click="downloadPdf"><Download class="h-4 w-4" />{{ downloading ? '產生中…' : '下載正式 PDF' }}</Button>
+          <Button v-else-if="isPreview && pdfReady" type="button" class="w-full sm:w-auto" :disabled="downloading" @click="downloadPdf"><Download class="h-4 w-4" />{{ downloading ? '下載中…' : '下載正式 PDF' }}</Button>
+          <Button v-else-if="isPreview && pdfFailed" type="button" class="w-full sm:w-auto" @click="retryPdf"><AlertTriangle class="h-4 w-4" />重新產生 PDF</Button>
+          <Button v-else-if="isPreview" type="button" class="w-full sm:w-auto" disabled><Download class="h-4 w-4" />PDF 產生中…</Button>
           <Button v-else type="button" class="w-full sm:w-auto" @click="printReport"><Printer class="h-4 w-4" />列印／下載 PDF</Button>
         </div>
       </div>
 
       <div v-if="isDraft" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿。確認結案後會產生正式 PDF 並鎖定此版本；Email 可在結案後另外寄送。</p><p v-if="!ownerEmail" class="mt-2">飼主尚未填寫 Email，但不影響結案。<router-link v-if="record.owner?._id" :to="`/owners/${record.owner._id}?edit=1`" class="font-medium underline">前往補填飼主資料</router-link></p></div>
+      <div v-else-if="isPreview && !pdfReady" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm print:hidden" :class="pdfFailed ? 'border-red-200 bg-red-50 text-red-800' : 'border-sky-200 bg-sky-50 text-sky-800'">
+        <span class="flex items-start gap-2"><AlertTriangle v-if="pdfFailed" class="mt-0.5 h-5 w-5 shrink-0" /><Download v-else class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>{{ pdfFailed ? 'PDF 產生失敗' : 'PDF 產生中' }}</strong><span class="block">{{ pdfFailed ? (record.pdfError || '請重新產生 PDF。') : '報告已結案並鎖定，可先離開此頁；完成後會自動更新。' }}</span></span></span>
+        <Button v-if="pdfFailed" type="button" size="sm" variant="secondary" class="border-current/25 bg-white/85 text-current hover:bg-white" @click="retryPdf">重新產生 PDF</Button>
+      </div>
       <div v-if="isPreview && record.supersededBy" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><span><strong>此報告已有後續修訂版本</strong><span class="block">這份舊版仍完整保留，請以後續版本為準。</span></span><router-link :to="`/records/${record.supersededBy}/preview`" class="inline-flex min-h-10 items-center font-medium underline">查看下一版</router-link></div>
       <div v-else-if="!isPreview && record.hasNewerVersion" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><strong>此報告已有更新版本</strong><span class="mt-1 block">請聯絡院方取得最新版健檢報告。</span></div>
       <div
@@ -383,7 +415,7 @@ watch(
       >
         <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案 · 第 {{ record.reportVersion || 1 }} 版</strong><span class="block">{{ isSent ? `已寄送至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
-          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-white/85 text-xs text-current hover:border-current/40 hover:bg-white sm:w-auto sm:text-sm" :disabled="emailing || deliverySending" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
+          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-white/85 text-xs text-current hover:border-current/40 hover:bg-white sm:w-auto sm:text-sm" :disabled="emailing || deliverySending || !pdfReady" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
           <Button v-else-if="record.owner?._id" as-child variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-white/85 text-xs text-current hover:border-current/40 hover:bg-white sm:w-auto sm:text-sm"><router-link :to="`/owners/${record.owner._id}?edit=1`">補填 Email</router-link></Button>
           <Button type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-white/85 text-xs text-current hover:border-current/40 hover:bg-white sm:w-auto sm:text-sm" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" /><span class="sm:hidden">{{ sharing ? '處理中…' : shareIsActive ? '複製連結' : '建立連結' }}</span><span class="hidden sm:inline">{{ shareActionLabel }}</span></Button>
           <div class="col-span-2 sm:col-auto">

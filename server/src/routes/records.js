@@ -5,7 +5,7 @@ import MedicalRecord from '../models/MedicalRecord.js';
 import DeliveryLog from '../models/DeliveryLog.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
-import { renderReportPdf } from '../lib/pdf.js';
+import { enqueueReportPdf, readStoredPdf, streamStoredPdf } from '../lib/reportPdfJobs.js';
 import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from '../lib/mailer.js';
 import { hasPdfRenderAccess } from '../config/pdfAccess.js';
 import { publicAppOrigin } from '../config/publicUrl.js';
@@ -101,6 +101,8 @@ function reportPayload(record, sections) {
     status: record.status,
     finalizedAt: record.finalizedAt,
     pdfGeneratedAt: record.pdfGeneratedAt,
+    pdfStatus: record.pdfStatus || 'pending',
+    pdfError: record.pdfError || '',
     reportVersion: record.reportVersion || 1,
     revisionReason: record.revisionReason,
     hasNewerVersion: Boolean(record.supersededBy),
@@ -437,6 +439,8 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
         status: 'finalized',
         finalizedAt: record.finalizedAt,
         pdfGeneratedAt: record.pdfGeneratedAt,
+        pdfStatus: record.pdfStatus || 'pending',
+        pdfError: record.pdfError || '',
         reportVersion: record.reportVersion || 1,
         deliveryStatus: effectiveDeliveryStatus(record),
         documentVersion: record.__v,
@@ -499,22 +503,6 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
     }
     record = lockedRecord;
 
-    try {
-      await renderReportPdf(record.shareToken);
-    } catch (pdfError) {
-      // 只回滾「結案時才產生」的東西。templateId 是建立報告時就綁定的，
-      // 清掉它會讓這份草稿失去自己的健檢類型，之後連編輯頁都打不開。
-      await MedicalRecord.updateOne(
-        { _id: record._id, finalizeAttemptId },
-        {
-          $set: { status: 'draft', templateVersion: previousTemplateVersion, sections: [] },
-          $unset: { finalizeAttemptId: 1, finalizingAt: 1 },
-        }
-      );
-      pdfError.isFinalizePdfError = true;
-      throw pdfError;
-    }
-
     // 靠 role 找體重，不寫死欄位名稱；使用者若停用或刪除該欄位就不同步。
     const weightItem = composedSections.flatMap((section) => section.items ?? []).find((item) => item.role === 'weight');
     // Number(null) 與 Number('') 都是 0 —— 沒填體重時不能把寵物的體重蓋成 0。
@@ -528,7 +516,11 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
           $set: {
             status: 'finalized',
             finalizedAt,
-            pdfGeneratedAt: finalizedAt,
+            pdfGeneratedAt: null,
+            pdfStatus: 'pending',
+            pdfError: '',
+            pdfAttemptedAt: null,
+            pdfFileId: null,
             deliveryStatus: 'not_sent',
             deliveryError: '',
           },
@@ -571,11 +563,13 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       record = finalizedRecord;
     });
     didFinalize = true;
+    enqueueReportPdf();
 
     res.json({
       status: 'finalized',
       finalizedAt: record.finalizedAt,
-      pdfGeneratedAt: record.pdfGeneratedAt,
+      pdfGeneratedAt: null,
+      pdfStatus: 'pending',
       reportVersion: record.reportVersion || 1,
       deliveryStatus: effectiveDeliveryStatus(record),
       documentVersion: record.__v,
@@ -603,25 +597,37 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
   }
 });
 
+recordsRouter.post('/:id/pdf/retry', async (req, res, next) => {
+  try {
+    const record = await MedicalRecord.findOneAndUpdate(
+      { _id: req.params.id, status: 'finalized', pdfStatus: { $in: ['failed', 'pending'] } },
+      { $set: { pdfStatus: 'pending', pdfError: '', pdfAttemptedAt: null } },
+      { new: true }
+    );
+    if (!record) return res.status(409).json({ message: '這份報告目前無法重新產生 PDF。' });
+    enqueueReportPdf();
+    res.status(202).json({ pdfStatus: 'pending' });
+  } catch (err) {
+    next(err);
+  }
+});
+
 recordsRouter.get('/:id/pdf', async (req, res, next) => {
   try {
-    const record = await MedicalRecord.findById(req.params.id);
+    const record = await MedicalRecord.findById(req.params.id).select('+pdfFileId');
     if (!record) return res.status(404).json({ message: '找不到報告' });
     if (!isFinalizedRecord(record)) {
       return res.status(409).json({ message: '請先結案，再下載正式 PDF' });
     }
-    const pdfBuffer = await renderReportPdf(record.shareToken);
-    // 記下這次重繪的時間，但不要動 updatedAt —— 清單與工作台都照 updatedAt 排序，
-    // 用 record.save() 會讓「只是下載了一份 PDF」把一份早就結案的報告頂到待辦最上面。
-    // 下載不是對報告做了什麼，它的內容一個字都沒變。
-    await MedicalRecord.updateOne(
-      { _id: record._id },
-      { $set: { pdfGeneratedAt: new Date() } },
-      { timestamps: false }
-    );
+    if (record.pdfStatus !== 'ready') {
+      return res.status(409).json({ message: record.pdfStatus === 'failed' ? 'PDF 產生失敗，請重試。' : 'PDF 正在產生中，完成後即可下載。' });
+    }
+    // The finished PDF is immutable and streamed directly from GridFS.
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${safePdfFilename(record)}"`);
-    res.send(pdfBuffer);
+    if (!(await streamStoredPdf(record, res))) {
+      return res.status(409).json({ message: 'PDF 正在準備中，請稍後再試。' });
+    }
   } catch (err) {
     next(err);
   }
@@ -869,7 +875,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
   let smtpStarted = false;
   let activeShareExpiresAt = null;
   try {
-    record = await MedicalRecord.findById(req.params.id).populate({
+    record = await MedicalRecord.findById(req.params.id).select('+pdfFileId').populate({
       path: 'petId',
       populate: { path: 'ownerId', select: 'name email' },
     }).select('+deliveryAttemptId +deliveryLeaseExpiresAt');
@@ -917,6 +923,10 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       return res.status(422).json({ message: '飼主 Email 格式不正確，請先修正飼主資料' });
     }
 
+    if (record.pdfStatus !== 'ready') {
+      return res.status(409).json({ message: record.pdfStatus === 'failed' ? 'PDF 產生失敗，請先重試。' : 'PDF 正在產生中，完成後才能寄送。' });
+    }
+
     deliveryAttemptId = uuidv4();
     const claimedAt = new Date();
     const claimedDelivery = await MedicalRecord.findOneAndUpdate(
@@ -943,7 +953,12 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
     await logDelivery(record, 'queued', { recipient, attemptId: deliveryAttemptId });
 
     assertMailConfigured();
-    const pdfBuffer = await renderReportPdf(record.shareToken);
+    const pdfBuffer = await readStoredPdf(record);
+    if (!pdfBuffer) {
+      const pdfError = new Error('PDF 檔案暫時無法讀取，請重新產生。');
+      pdfError.status = 409;
+      throw pdfError;
+    }
     const reportUrl = `${publicAppOrigin(req)}/report/${record.shareToken}`;
 
     // 郵件寄出前先確保信內的分享連結已經可用，並把 lease 往後延長涵蓋 SMTP 階段。

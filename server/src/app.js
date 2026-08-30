@@ -18,6 +18,7 @@ import searchRouter from './routes/search.js';
 import settingsRouter from './routes/settings.js';
 import textTemplatesRouter from './routes/textTemplates.js';
 import { closeBrowser } from './lib/pdf.js';
+import { resumePdfJobs } from './lib/reportPdfJobs.js';
 
 const app = express();
 const clientDistPath = fileURLToPath(new URL('../../client/dist/', import.meta.url));
@@ -120,6 +121,7 @@ export async function startServer() {
   }
   await connectDB();
   await ensureBootstrapUser();
+  await resumePdfJobs();
   httpServer = app.listen(port, () => console.log(`[server] listening on http://localhost:${port}`));
   return httpServer;
 }
