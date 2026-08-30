@@ -771,7 +771,7 @@ function handleBeforeUnload(event) {
 </script>
 
 <template>
-  <section class="mx-auto max-w-6xl space-y-5 pb-28">
+  <section class="mx-auto max-w-6xl space-y-5 pb-48 sm:pb-32">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div><Breadcrumbs class="mb-2" :items="[{ label: '寵物', to: '/pets' }, { label: pet?.name || '寵物資料', to: petId ? `/pets/${petId}` : '/pets' }, { label: isEdit ? '編輯就診紀錄' : '新增就診紀錄' }]" /><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案就診紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯就診紀錄' : '新增就診紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-danger' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
@@ -1004,12 +1004,18 @@ function handleBeforeUnload(event) {
 
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
       <div v-if="!isLocked" id="record-action-bar" class="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] lg:left-64">
-        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
-          <p class="flex items-center gap-1.5 text-xs text-muted-foreground"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }}<span class="hidden sm:inline"> 個區段</span></p>
-          <div class="ml-auto flex flex-wrap items-center gap-2">
-            <Button type="button" variant="destructive-outline" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄草稿</Button>
-            <Button type="button" variant="outline" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
-            <Button type="button" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
+        <div class="mx-auto max-w-6xl">
+          <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
+          <div class="grid grid-cols-3 gap-2 sm:hidden">
+            <Button type="button" variant="destructive-outline" class="w-full px-2" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄</Button>
+            <Button type="button" variant="outline" class="w-full px-2" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中' : '儲存' }}</Button>
+            <Button type="button" class="w-full px-2" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽</Button>
+          </div>
+          <div class="hidden sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
+            <p class="hidden sm:mr-auto sm:flex sm:items-center sm:gap-1.5 sm:text-xs sm:text-muted-foreground"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
+            <Button type="button" variant="destructive-outline" class="w-full sm:w-auto" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄草稿</Button>
+            <Button type="button" variant="outline" class="w-full sm:w-auto" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
+            <Button type="button" class="col-span-2 w-full sm:col-auto sm:w-auto" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
           </div>
         </div>
       </div>
