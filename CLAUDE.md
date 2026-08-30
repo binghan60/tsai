@@ -59,6 +59,13 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 
 **刻意不設 `ref`、改冗餘存報告編號與姓名**——報告可以被刪除，而這筆紀錄的價值正是在報告消失後還查得到寄給了誰。同理它是獨立 collection 而不是內嵌陣列。medicalRecords 上的 `sentTo`/`sentAt` 只留得住最後一次，重寄就覆蓋。
 
+### users 帳號
+`username`（unique）、`passwordHash`（`scrypt$<salt>$<hash>`，`select: false`）、`active`、`tokenVersion`。單人診所共用一組帳號，不是多使用者系統。
+
+第一次啟動時若這個 collection 是空的，會用環境變數 `AUTH_USERNAME`／`AUTH_PASSWORD_HASH` 自動建立一筆（`config/auth.js` 的 `ensureBootstrapUser`）；建立後這兩個環境變數就不會再被讀取。之後要換密碼或撤銷登入用 `npm run auth:set-password -- <帳號> <新密碼>` / `npm run auth:revoke-sessions -- <帳號>`（見 `server/scripts/`），不是改環境變數重開機。
+
+**登入用的 JWT 是無狀態的，`tokenVersion` 是唯一的撤銷手段**：token 簽章與過期時間本身沒辦法中途作廢，所以每次請求都會多查一次這筆帳號文件，比對 `tokenVersion` 是否跟簽發當下相同、`active` 是否仍為真。改密碼／執行 revoke-sessions／停用帳號都會讓 `tokenVersion` +1，現有 cookie 立刻失效，不用等 30 天自然過期。
+
 ### appointments 掛號與候診
 只服務當日門診時間軸。`date`／`time` 是登記來源（`date` 由掛號時指定，預設今天），`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。
 
@@ -80,6 +87,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 | 表單驗證 | vee-validate | |
 | 後端 | Node.js + Express | 單人使用，不需要 Nest.js 的架構開銷 |
 | 資料庫 | MongoDB + Mongoose | |
+| 登入 | `jsonwebtoken` + Node 內建 `crypto.scrypt` | JWT 放在 HttpOnly cookie；密碼雜湊用內建 scrypt，不另外裝 bcrypt |
 | PDF | Puppeteer | 見下節 |
 | Email | Nodemailer | SMTP（Gmail 應用程式密碼） |
 | 測試 | Node 內建 `node --test` | 不裝額外框架 |
@@ -102,6 +110,11 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ## 五、API 設計
 
 ```
+帳號（唯一免登入的 /api/* 路由，連同 /api/public/reports/:token 與 GET /api/health）
+GET    /api/auth/me                     查詢目前登入狀態
+POST   /api/auth/login                  登入，成功後回 HttpOnly JWT cookie（30 天到期，有限流）
+POST   /api/auth/logout                 登出，清除 cookie
+
 飼主
 GET    /api/owners                      列表（?q= 搜尋姓名/電話）
 POST   /api/owners
@@ -169,6 +182,8 @@ GET    /api/dashboard                   儀表板彙總：報告狀態分佈（s
 GET    /api/public/reports/:token        公開，飼主查看報告用
 GET    /api/health
 ```
+
+`AUTH_ENABLED=true`（或 `NODE_ENV=production`）時，除了上面標注的三支免登入路由，其餘 `/api/*` 都會被 `requireAuthentication` 擋下（見 `app.js` 掛載順序），未登入回 401。本機開發預設不設 `AUTH_ENABLED`，這道關卡整個略過。
 
 `GET /api/records` 的 `view` 是預設工作佇列：`todo`（預設）/ `drafts` / `pending` / `failed` / `sent` / `all`。回傳帶 `counts` 給前端佇列徽章。**儀錶板卡片的數字必須跟對應佇列的筆數對得起來**——卡片可以點進清單，兩邊算法不同會直接讓人困惑。
 
@@ -289,16 +304,15 @@ npm run dev            # 使用者自己開
 - 產 PDF（`GET /api/records/:id/pdf`）不對外，可以放心呼叫。
 - 開發連的 MongoDB 是測試環境，寫入測試資料不必主動清除。
 - 純邏輯要能被測到就別留在路由檔裡——測試若 import `routes/records.js` 會連帶載入 puppeteer 與 nodemailer。結案驗證已抽到 `server/src/lib/recordValidation.js`。
+- 帳號密碼相關的維護動作一律走 `server/scripts/`（`auth:hash-password`／`auth:set-password`／`auth:revoke-sessions`），不要手動寫 MongoDB——這幾支腳本會同時處理密碼雜湊格式與 `tokenVersion` 撤銷，手動改容易漏掉其中一步。
 
 ## 九、現況與待辦
 
-已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋，以及當日掛號與候診流程。
+已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋、當日掛號與候診流程，以及共用帳號登入（JWT HttpOnly cookie、`tokenVersion` 可撤銷 session、登入限流、`/api/auth/login` 密碼驗證用固定時間比對防帳號列舉、前端 401 自動導回登入頁）。
 
 待處理（依急迫性）：
 
-1. **認證機制** — 目前 `/api/*` 完全沒有保護。部署後任何人都能讀寫全部資料，並用 `POST /api/records/:id/send-email` 借你的 Gmail 發信（被濫用時 Google 封的是帳號本身）。單人使用不需要 JWT，一組環境變數密碼 + signed cookie 即可，但要放行 `/api/public/reports/:token` 與 PDF 存取。同時值得替寄信單獨加頻率限制。
-   （已處理一半：對外連結的網域改由 `config/publicUrl.js` 決定，正式環境必須設定 `PUBLIC_APP_URL`，否則啟動失敗。濫用寄信至少不會再寄出指向他人網域的連結，但寄信本身仍然沒有任何門檻。）
-2. `/owners`、`/pets` 的**搜尋**走不到索引 —— 目前使用不區分大小寫、未錨定開頭的正規表示式；資料量大後要改用 text index 或 collation。目前資料量仍可接受。
+1. `/owners`、`/pets` 的**搜尋**走不到索引 —— 目前使用不區分大小寫、未錨定開頭的正規表示式；資料量大後要改用 text index 或 collation。目前資料量仍可接受。
 
 部署見 [docs/ZEABUR_DEPLOY.md](docs/ZEABUR_DEPLOY.md)。
 

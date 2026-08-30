@@ -1,5 +1,6 @@
 import { ref } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
 
 const DashboardPage = () => import('../pages/DashboardPage.vue');
 const AppointmentsPage = () => import('../pages/AppointmentsPage.vue');
@@ -14,6 +15,7 @@ const ReportViewPage = () => import('../pages/ReportViewPage.vue');
 const FormTemplateListPage = () => import('../pages/FormTemplateListPage.vue');
 const FormTemplateEditPage = () => import('../pages/FormTemplateEditPage.vue');
 const TextTemplateListPage = () => import('../pages/TextTemplateListPage.vue');
+const LoginPage = () => import('../pages/LoginPage.vue');
 
 const router = createRouter({
   history: createWebHistory(),
@@ -27,6 +29,7 @@ const router = createRouter({
     return { top: 0 };
   },
   routes: [
+    { path: '/login', component: LoginPage, meta: { bare: true, public: true, title: '登入' } },
     { path: '/', component: DashboardPage, meta: { title: '儀表板' } },
     { path: '/appointments', component: AppointmentsPage, meta: { title: '掛號與候診' } },
     { path: '/owners', component: OwnersListPage, meta: { title: '飼主' } },
@@ -51,8 +54,16 @@ const router = createRouter({
     { path: '/records/:id/edit', component: RecordFormPage, meta: { title: '編輯健檢' } },
     { path: '/records/:id/preview', name: 'record-preview', component: ReportViewPage, meta: { bare: true, title: '報告預覽' } },
     // 公開頁面：無後台導覽列，飼主查看用 + Puppeteer PDF 截圖來源
-    { path: '/report/:token', component: ReportViewPage, meta: { bare: true, title: '健檢報告' } },
+    { path: '/report/:token', component: ReportViewPage, meta: { bare: true, public: true, title: '健檢報告' } },
   ],
+});
+
+router.beforeEach(async (to) => {
+  if (to.meta.public) return true;
+  const auth = useAuthStore();
+  await auth.initialize();
+  if (auth.isAuthenticated) return true;
+  return { path: '/login', query: { redirect: to.fullPath } };
 });
 
 // 記住使用者是從哪一頁進到目前這頁的，讓各頁的返回鍵能回到真正的出發點，

@@ -8,13 +8,17 @@
     "dev": "nodemon src/app.js",
     "start": "node src/app.js",
     "lint": "eslint src test",
-    "test": "node --test",
+    "test": "node --env-file=.env.test --test --test-concurrency=1",
+    "auth:hash-password": "node scripts/hash-password.js",
+    "auth:set-password": "node scripts/set-password.js",
+    "auth:revoke-sessions": "node scripts/revoke-sessions.js",
     "test:integration": "node --test test/integration/records.transaction.test.js test/integration/external-delivery.test.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.5.1",
     "nodemailer": "^9.0.5",
     "puppeteer": "^25.6.0",

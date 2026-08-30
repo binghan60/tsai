@@ -23,6 +23,9 @@ PUBLIC_APP_URL=${ZEABUR_WEB_URL}
 CLIENT_ORIGIN=${ZEABUR_WEB_URL}
 PDF_RENDER_SECRET=${PASSWORD}
 SHARE_LINK_DAYS=30
+AUTH_USERNAME=<診所共用帳號>
+AUTH_PASSWORD_HASH=<執行 npm run auth:hash-password -- <密碼> 產生的值>
+JWT_SECRET=<至少 32 字元的隨機字串>
 
 SMTP_EMAIL=<寄件 Gmail>
 SMTP_PASSWORD=<Google 應用程式密碼>
@@ -41,6 +44,7 @@ MAIL_REPLY_TO=
 - 若在 Zeabur 加入 MongoDB Template，應使用 MongoDB Connections 頁面的 Internal／Private URI，速度較快且不耗用公開流量。
 - `PUBLIC_APP_URL` **在正式環境是必填**：沒設定（且 `CLIENT_ORIGIN`、`ZEABUR_WEB_URL` 也都空著）時容器會直接啟動失敗，log 印出 `[config] 正式環境必須設定 PUBLIC_APP_URL`。這是刻意的——退而用請求的 `Host` 推斷，等於讓呼叫端決定寄給飼主的信裡出現哪個網域。
 - `PUBLIC_APP_URL` 用於分享連結與 Email；分享連結預設 30 天到期，可用 `SHARE_LINK_DAYS` 設為 1–365 天，院方也能提前撤銷。
+- 正式環境首次啟動前必須設定 `AUTH_USERNAME`、`AUTH_PASSWORD_HASH` 與至少 32 字元的 `JWT_SECRET`。先在安全的本機終端執行 `npm --prefix server run auth:hash-password -- <密碼>`，只將輸出值存入 Zeabur Variables。這兩個環境變數只在資料庫還沒有任何帳號時、第一次啟動才會生效。JWT 儲存在 `HttpOnly` cookie，會在 30 天後到期；之後要換密碼或懷疑帳密外洩，連到正式環境的 `MONGODB_URI` 執行 `npm --prefix server run auth:set-password -- <帳號> <新密碼>`（換密碼）或 `npm --prefix server run auth:revoke-sessions -- <帳號>`（不換密碼、單純讓目前所有登入 session 立即失效），不需要重啟服務或重新部署。
 - 舊版建立、沒有到期日的分享連結會在部署後失效；院方重新按下分享即可產生帶期限的新連結。
 - PDF 預設從容器內部的 `127.0.0.1` 讀取報告，不必公開 `PDF_RENDER_BASE_URL`。
 
