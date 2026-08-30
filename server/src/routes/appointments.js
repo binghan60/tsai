@@ -82,10 +82,10 @@ function rememberCheckinNumber(appointment, number) {
 
 // 實體號碼牌只屬於持牌者；離開候診時歸還這張牌，不改動任何其他人的牌號。
 // 歸還前先寫入 history，確保同一天不會再次配發這個已叫過的號碼。
-async function saveLeavingQueue(appointment, wasQueued) {
+async function saveLeavingQueue(appointment, wasQueued, session = null) {
   if (wasQueued) rememberCheckinNumber(appointment, appointment.checkinNumber);
   if (wasQueued || appointment.checkinNumber != null) appointment.checkinNumber = null;
-  await appointment.save();
+  await appointment.save(session ? { session } : undefined);
 }
 
 // 兩個人同時報到可能各自算出同一張今日未發牌號，被唯一索引擋下。那不是使用者做錯什麼，
@@ -398,36 +398,55 @@ router.post('/:id/check-in', async (req, res, next) => {
 // arrived → completed。完成時立刻用掛號選定的表單建立草稿，讓看診人員不必再選一次。
 router.post('/:id/complete', async (req, res, next) => {
   try {
-    const appointment = await Appointment.findById(req.params.id);
-    if (!appointment) return res.status(404).json({ message: '找不到掛號' });
-    if (!canTransitionAppointmentStatus(appointment.status, 'completed')) {
-      return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'completed') });
+    const initialAppointment = await Appointment.findById(req.params.id);
+    if (!initialAppointment) return res.status(404).json({ message: '找不到掛號' });
+    if (!canTransitionAppointmentStatus(initialAppointment.status, 'completed')) {
+      return res.status(422).json({ message: describeAppointmentTransition(initialAppointment.status, 'completed') });
     }
+
     const { weightKg, temperatureC, visitNote } = req.body;
-    const template = await resolveAppointmentTemplate(req.body.templateId || appointment.templateId);
-    if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
-    if (temperatureC !== undefined) {
-      appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
-    }
-    if (visitNote !== undefined) appointment.visitNote = visitNote;
-    const wasQueued = appointment.status === 'arrived';
-    appointment.status = 'completed';
-    appointment.completedAt = new Date();
-    appointment.templateId = template._id;
-    const [record] = await MedicalRecord.create([{
-      petId: appointment.petId,
-      visitDate: combineClinicDateTime(appointment.date, '10:00'),
-      weightKg: appointment.weightKg,
-      temperatureC: appointment.temperatureC,
-      chiefComplaint: appointment.reason,
-      other: appointment.visitNote,
-      templateId: template._id,
-      templateVersion: template.version,
-      examType: template.name,
-    }]);
-    appointment.recordId = record._id;
-    // 看完診就歸還自己的實體號碼牌；其他候診者手上的牌號完全不變。
-    await saveLeavingQueue(appointment, wasQueued);
+    let appointment;
+    let record;
+
+    // The record and the completed appointment must commit together. A concurrent
+    // completion attempt loses optimistic concurrency and its transaction rolls back.
+    await withTransaction(async (session) => {
+      appointment = await Appointment.findById(req.params.id).session(session);
+      if (!appointment) {
+        const error = new Error('找不到掛號');
+        error.status = 404;
+        throw error;
+      }
+      if (!canTransitionAppointmentStatus(appointment.status, 'completed')) {
+        const error = new Error(describeAppointmentTransition(appointment.status, 'completed'));
+        error.status = 422;
+        throw error;
+      }
+
+      const template = await resolveAppointmentTemplate(req.body.templateId || appointment.templateId);
+      if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
+      if (temperatureC !== undefined) {
+        appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
+      }
+      if (visitNote !== undefined) appointment.visitNote = visitNote;
+      appointment.status = 'completed';
+      appointment.completedAt = new Date();
+      appointment.templateId = template._id;
+      [record] = await MedicalRecord.create([{
+        petId: appointment.petId,
+        visitDate: combineClinicDateTime(appointment.date, '10:00'),
+        weightKg: appointment.weightKg,
+        temperatureC: appointment.temperatureC,
+        chiefComplaint: appointment.reason,
+        other: appointment.visitNote,
+        templateId: template._id,
+        templateVersion: template.version,
+        examType: template.name,
+      }], { session });
+      appointment.recordId = record._id;
+      // 看完診就歸還自己的實體號碼牌；其他候診者手上的牌號完全不變。
+      await saveLeavingQueue(appointment, true, session);
+    });
     res.json({ ...(appointment.toObject?.() ?? appointment), record });
   } catch (err) {
     next(err);

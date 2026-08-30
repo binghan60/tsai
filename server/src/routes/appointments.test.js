@@ -414,7 +414,10 @@ describe('appointments routes', () => {
       checkinNumber: 1,
       save: async () => {},
     };
-    Appointment.findById = async () => appointment;
+    Appointment.findById = () => ({
+      session: async () => appointment,
+      then: (resolve, reject) => Promise.resolve(appointment).then(resolve, reject),
+    });
     const queue = captureQueueWrites();
     const others = [{ _id: 'b', checkinNumber: 2 }, { _id: 'c', checkinNumber: 3 }];
     Appointment.find = () => stubQueue(others);

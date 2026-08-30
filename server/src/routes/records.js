@@ -16,6 +16,7 @@ import { validateFinalRecord } from '../lib/recordValidation.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { enrichSectionsWithPreviousValues, getPetPreviousValues, plainSections } from '../lib/historyValues.js';
+import { clinicDayStart } from '../lib/clinicTime.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -296,6 +297,15 @@ async function petIdsMatching(pattern) {
   return pets.map((pet) => pet._id);
 }
 
+export function recordVisitDateRange(query = {}) {
+  const visitDate = {};
+  const from = clinicDayStart(query.from);
+  const to = clinicDayStart(query.to, 1);
+  if (from) visitDate.$gte = from;
+  if (to) visitDate.$lt = to;
+  return visitDate;
+}
+
 async function buildRecordListFilter(query) {
   const filter = {};
   const and = [];
@@ -311,15 +321,7 @@ async function buildRecordListFilter(query) {
   // 否則改過三次的報告會佔掉三行。要看修訂歷程請開個別報告。
   if (query.includeSuperseded !== '1') filter.supersededBy = null;
 
-  const visitDate = {};
-  const from = query.from ? new Date(query.from) : null;
-  const to = query.to ? new Date(query.to) : null;
-  if (from && !Number.isNaN(from.getTime())) visitDate.$gte = from;
-  if (to && !Number.isNaN(to.getTime())) {
-    // to 是使用者選的「那一天」，要包含整天，所以比到當天結束。
-    to.setHours(23, 59, 59, 999);
-    visitDate.$lte = to;
-  }
+  const visitDate = recordVisitDateRange(query);
   if (Object.keys(visitDate).length) filter.visitDate = visitDate;
 
   const keyword = String(query.q ?? '').trim();
