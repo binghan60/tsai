@@ -275,7 +275,22 @@ watch(
         <Button as-child><router-link :to="`/pets/${pet._id}/records/new`"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button>
       </div>
 
-      <ul v-if="pet.medicalRecords.length" class="space-y-3">
+      <Card v-if="pet.medicalRecords.length" class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(15rem, 1.15fr) minmax(12rem, 1fr) minmax(13rem, 1fr) 10rem">
+        <div class="desktop-data-header">
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">看診日期</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">狀態</span>
+          <span class="desktop-data-cell"></span>
+        </div>
+        <div v-for="record in pet.medicalRecords" :key="record._id" class="desktop-data-row">
+          <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ formatDate(record.visitDate) }}</span>
+          <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> · 第 {{ record.reportVersion }} 版</span></span>
+          <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap"><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge></span>
+          <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的就診紀錄`" @select="(action) => handleRowAction(record, action)" /></span>
+        </div>
+      </Card>
+
+      <ul v-if="pet.medicalRecords.length" class="space-y-3 xl:hidden">
         <li v-for="record in pet.medicalRecords" :key="record._id">
           <Card class="p-4 shadow-sm dark:shadow-none">
           <div class="flex flex-wrap items-start justify-between gap-3">

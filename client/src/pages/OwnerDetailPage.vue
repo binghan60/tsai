@@ -262,7 +262,26 @@ watch(
         <Button type="button" variant="secondary" size="icon" :aria-label="`關閉 ${createdPet.name} 新增成功提示`" @click="createdPet = null"><X class="h-4 w-4" /></Button>
       </div>
 
-      <div v-if="owner.pets.length" class="grid gap-3 sm:grid-cols-2">
+      <Card v-if="owner.pets.length" class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(16rem, 1.2fr) minmax(14rem, 1fr) 7rem">
+        <div class="desktop-data-header">
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">基本資料</span>
+          <span class="desktop-data-cell"></span>
+        </div>
+        <div v-for="pet in owner.pets" :key="pet._id" class="desktop-data-row">
+          <router-link :to="`/pets/${pet._id}`" class="desktop-data-cell flex min-w-0 items-center gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="h-4 w-4" stroke-width="1.75" /></span>
+            <span class="truncate text-sm font-semibold text-primary">{{ pet.name }}</span>
+          </router-link>
+          <span class="desktop-data-cell truncate text-sm text-foreground">{{ pet.species || '寵物' }}<template v-if="pet.breed"> · {{ pet.breed }}</template></span>
+          <span class="desktop-data-cell flex justify-end gap-1">
+            <Button type="button" variant="secondary" size="icon-sm" :disabled="deletingPetId === pet._id || checkingPetId === pet._id" :aria-label="`編輯寵物 ${pet.name}`" @click="openEditPet(pet)"><Pencil class="h-4 w-4" /></Button>
+            <Button type="button" variant="destructive" size="icon-sm" :disabled="deletingPetId === pet._id || checkingPetId === pet._id" :aria-label="`刪除寵物 ${pet.name}`" @click="openRemovePet(pet)"><Trash2 class="h-4 w-4" /></Button>
+          </span>
+        </div>
+      </Card>
+
+      <div v-if="owner.pets.length" class="grid gap-3 sm:grid-cols-2 xl:hidden">
         <Card
           v-for="pet in owner.pets"
           :key="pet._id"

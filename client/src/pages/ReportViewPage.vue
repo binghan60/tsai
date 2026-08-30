@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AlertTriangle, ArrowLeft, ArrowUp, CheckCircle2, ClipboardPlus, Copy, Download, FilePenLine, Mail, Printer, Share2 } from '@lucide/vue';
+import { AlertTriangle, ArrowLeft, ArrowUp, CheckCircle2, ClipboardPlus, Copy, Download, FilePenLine, List, Mail, Printer, Share2 } from '@lucide/vue';
 import { PDF_TIMEOUT_MS, http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { ageLabel, formatDate, formatDateTime } from '../lib/datetime';
@@ -355,7 +355,10 @@ watch(
   <div class="min-h-screen bg-stone-100 px-4 py-6 print:bg-white print:p-0 sm:px-6 sm:py-10">
     <section v-if="record" class="mx-auto max-w-[210mm] space-y-4 print:max-w-none print:space-y-0">
       <div class="sticky top-16 z-20 -mx-2 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-100/95 px-2 py-2 shadow-sm print:hidden lg:top-2">
-        <Button v-if="isPreview" type="button" variant="outline" class="border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
+        <div v-if="isPreview" class="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" class="border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
+          <Button type="button" variant="outline" class="border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900" @click="router.push('/records')"><List class="h-4 w-4" />回就診紀錄</Button>
+        </div>
         <div v-else></div>
         <div class="flex flex-wrap justify-end gap-2">
           <Button v-if="isPreview && isDraft" type="button" :disabled="finalizing" @click="showFinalizeConfirm = true"><CheckCircle2 class="h-4 w-4" />{{ finalizing ? '結案中…' : '確認結案' }}</Button>
