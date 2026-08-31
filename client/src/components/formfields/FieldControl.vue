@@ -5,6 +5,7 @@ import StatusToggle from './StatusToggle.vue';
 import FieldShell from './FieldShell.vue';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import DentalChart from './DentalChart.vue';
+import QuickSelectField from './QuickSelectField.vue';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { useRecordForm } from './context';
@@ -123,6 +124,8 @@ const referenceText = computed(() => labRangeLabel(props.item));
   <FieldShell v-else-if="family === 'dental'" :item="item" :input-id="inputId">
     <DentalChart :id="inputId" :model-value="valueFor(item)" :readonly="preview" @update:model-value="setValue(item, $event)" />
   </FieldShell>
+
+  <QuickSelectField v-else-if="item.type === 'quickSelect'" :item="item" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
 
   <ScalarField v-else :item="item" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
 </template>

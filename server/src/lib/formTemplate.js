@@ -10,6 +10,7 @@ const TYPE_VALUE_KIND = {
   date: 'date',
   text: 'string',
   textarea: 'string',
+  quickSelect: 'string',
   select: 'string',
   radio: 'string',
   // 複選的作答是字串陣列，塞不進任何具名欄位，一律收進 customValues。
@@ -143,6 +144,7 @@ function sanitizeItem(raw, key, index) {
     unit: String(raw.unit ?? '').trim(),
     placeholder: String(raw.placeholder ?? '').trim(),
     options: Array.isArray(raw.options) ? raw.options.map((option) => String(option).trim()).filter(Boolean) : [],
+    quickMenuId: String(raw.quickMenuId ?? '').trim(),
     span: ITEM_SPANS.includes(raw.span) ? raw.span : 'auto',
     order: index,
     enabled: raw.enabled !== false,

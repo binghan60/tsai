@@ -5,6 +5,7 @@ import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
+import QuickMenuTrigger from './QuickMenuTrigger.vue';
 
 // 文字／多行／日期／數字／下拉／單選／複選這幾種一般欄位共用同一個元件，
 // 差別只在控制項本身，標籤與必填標記由 FieldShell 統一處理。
@@ -65,7 +66,8 @@ function toggle(option, checked) {
         :placeholder="item.placeholder"
         class="pr-20"
       />
-      <TextTemplateTrigger v-model="value" :item-key="item.key" :label="item.label" :input-id="inputId" />
+      <TextTemplateTrigger v-model="value" :item-key="item.key" :label="item.label" :input-id="inputId" compact />
+      <QuickMenuTrigger v-model="value" :label="item.label" />
     </div>
     <Select v-else-if="item.type === 'select'" v-model="selectValue">
       <SelectTrigger :id="inputId" class="w-full"><SelectValue placeholder="請選擇" /></SelectTrigger>

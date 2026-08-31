@@ -223,7 +223,7 @@ async function confirmExamType() {
   }
 }
 
-const COPY_FORWARD_TYPES = new Set(['text', 'textarea']);
+const COPY_FORWARD_TYPES = new Set(['text', 'textarea', 'quickSelect']);
 
 function copyForwardTextValues(sourceRecord) {
   const sourceItems = (sourceRecord?.sections ?? []).flatMap((section) => section.items ?? []);

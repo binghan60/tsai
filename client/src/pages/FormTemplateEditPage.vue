@@ -50,6 +50,7 @@ const currentName = ref('');
 const currentDescription = ref('');
 const currentSpecies = ref('all');
 const sections = ref([]);
+const quickMenus = ref([]);
 const documentVersion = ref(0);
 const loading = ref(true);
 const saving = ref(false);
@@ -214,10 +215,11 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const { data } = await http.get('/settings/form-templates/' + currentId.value, {
+    const [templateResponse, menusResponse] = await Promise.all([http.get('/settings/form-templates/' + currentId.value, {
       params: { includeDisabled: 1 },
-    });
-    applyTemplate(data);
+    }), http.get('/quick-menus')]);
+    applyTemplate(templateResponse.data);
+    quickMenus.value = menusResponse.data ?? [];
     markSaved();
   } catch (err) {
     error.value = err.response?.status === 404
@@ -300,6 +302,7 @@ function addItem(type) {
     unit: '',
     placeholder: '',
     options: OPTION_TYPES.has(type) ? ['正常', '異常'] : [],
+    quickMenuId: '',
     span: 'auto',
     enabled: true,
     required: false,
@@ -836,7 +839,13 @@ function resolveLeave(confirmed) {
                     <p class="text-xs text-muted-foreground">按 Enter 可以直接接著加下一個；留空的選項會在儲存時移除。</p>
                   </div>
 
-                  <div v-if="['text', 'textarea', 'number', 'date'].includes(selectedItem.type)" class="space-y-1.5">
+                  <div v-if="selectedItem.type === 'quickSelect'" class="space-y-1.5">
+                    <Label for="item-quick-menu" class="text-xs font-medium">快捷選單</Label>
+                    <Select v-model="selectedItem.quickMenuId"><SelectTrigger id="item-quick-menu" class="w-full"><SelectValue placeholder="選擇快捷選單" /></SelectTrigger><SelectContent><SelectItem v-for="menu in quickMenus" :key="menu._id" :value="menu._id">{{ menu.name }}</SelectItem></SelectContent></Select>
+                    <p class="text-xs text-muted-foreground">選取項目後會直接帶入其文字內容。</p>
+                  </div>
+
+                  <div v-if="['text', 'textarea', 'number', 'date', 'quickSelect'].includes(selectedItem.type)" class="space-y-1.5">
                     <Label for="item-placeholder" class="text-xs font-medium">輸入提示</Label>
                     <Input id="item-placeholder" v-model="selectedItem.placeholder" placeholder="選填，顯示在空白欄位裡" />
                   </div>
