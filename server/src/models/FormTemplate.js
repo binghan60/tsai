@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 
 // 表單項目的欄位型別，決定表單控制項與報告呈現方式。
-export const ITEM_TYPES = ['text', 'textarea', 'date', 'number', 'select', 'radio', 'checkbox', 'quickSelect', 'measurement', 'finding', 'lab', 'dentalChart'];
+export const ITEM_TYPES = ['text', 'textarea', 'date', 'number', 'select', 'radio', 'checkbox', 'quickSelect', 'image', 'measurement', 'finding', 'lab', 'dentalChart'];
 
 // 語意角色：讓後端不必寫死欄位名稱也能找到特定資料（例如結案時要同步的體重）。
 // 帶 role 的項目可以停用或搬到別的區塊，但刪除前要提醒使用者會失去對應功能。

@@ -15,6 +15,7 @@ const TYPE_VALUE_KIND = {
   radio: 'string',
   // 複選的作答是字串陣列，塞不進任何具名欄位，一律收進 customValues。
   checkbox: 'list',
+  image: 'list',
   dentalChart: 'object',
 };
 const SCHEMA_VALUE_KIND = { Number: 'number', Date: 'date', Map: 'object' };

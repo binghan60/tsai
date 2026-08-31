@@ -12,6 +12,7 @@ import {
   Gauge,
   Hash,
   Info,
+  ImagePlus,
   LayoutList,
   List,
   MousePointerClick,
@@ -86,6 +87,7 @@ const TYPE_META = {
   dentalChart: { title: '牙科圖', icon: SmilePlus, hint: '逐顆記錄牙齒狀態與備註' },
   text: { title: '單行文字', icon: Type, hint: '姓名、編號這類短文字' },
   textarea: { title: '多行文字', icon: TextAlignStart, hint: '可換行的長段落' },
+  image: { title: '圖片上傳', icon: ImagePlus, hint: '可一次上傳多張圖片' },
   number: { title: '數字', icon: Hash, hint: '只接受數值' },
   date: { title: '日期', icon: Calendar, hint: '日期選擇器' },
   select: { title: '下拉選單', icon: List, hint: '收合成一列，選項多時用' },
@@ -98,7 +100,7 @@ const TYPE_META = {
 
 // 一般欄位到哪個版式都能用 —— 各版式的「非主型別」項目最後都是交給
 // ScalarField 渲染，沒有任何版式撐不住其中某一種的理由。
-const GENERAL_TYPES = ['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox'];
+const GENERAL_TYPES = ['text', 'textarea', 'image', 'number', 'date', 'select', 'radio', 'checkbox'];
 
 // 主型別則綁死在版式上：measurement／finding／lab 要靠各自的版式元件才畫得出
 // 狀態切換、參考範圍與分組表格，放進別種版式只會被當成普通文字框。
@@ -117,6 +119,7 @@ const ROW_PRESENTATIONS = new Set(['findings', 'table', 'prose']);
 
 function spanApplies(section, item) {
   if (!section || !item) return false;
+  if (item.type === 'image') return false;
   if (!ROW_PRESENTATIONS.has(section.presentation)) return true;
   return item.type !== LAYOUT_TYPE[section.presentation];
 }

@@ -6,6 +6,7 @@ import FieldShell from './FieldShell.vue';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import DentalChart from './DentalChart.vue';
 import QuickSelectField from './QuickSelectField.vue';
+import ImageUploadField from './ImageUploadField.vue';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { useRecordForm } from './context';
@@ -126,6 +127,8 @@ const referenceText = computed(() => labRangeLabel(props.item));
   </FieldShell>
 
   <QuickSelectField v-else-if="item.type === 'quickSelect'" :item="item" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
+
+  <ImageUploadField v-else-if="item.type === 'image'" :item="item" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
 
   <ScalarField v-else :item="item" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
 </template>

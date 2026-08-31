@@ -18,6 +18,7 @@ import searchRouter from './routes/search.js';
 import settingsRouter from './routes/settings.js';
 import textTemplatesRouter from './routes/textTemplates.js';
 import quickMenusRouter from './routes/quickMenus.js';
+import uploadsRouter from './routes/uploads.js';
 import { closeBrowser } from './lib/pdf.js';
 import { resumePdfJobs } from './lib/reportPdfJobs.js';
 
@@ -74,6 +75,7 @@ app.use('/api/search', searchRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/text-templates', textTemplatesRouter);
 app.use('/api/quick-menus', quickMenusRouter);
+app.use('/api/uploads', uploadsRouter);
 
 app.use('/api', (req, res) => {
   res.status(404).json({ message: '找不到 API 路由' });

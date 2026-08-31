@@ -13,7 +13,7 @@ const WIDE_CLASS = {
 
 export function spanClass(item, breakpoint) {
   // 牙齒圖需要的橫向空間遠超過一般欄位，不管範本作者有沒有設定 span 都強制整排。
-  if (item?.type === 'dentalChart' || item?.span === 'full') return 'col-span-full';
+  if (item?.type === 'dentalChart' || item?.type === 'image' || item?.span === 'full') return 'col-span-full';
   if (item?.span === 'wide') return WIDE_CLASS[breakpoint] ?? '';
   return '';
 }

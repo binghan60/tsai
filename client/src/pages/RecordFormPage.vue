@@ -267,6 +267,16 @@ const isDirty = ref(false);
 const leavingAfterAction = ref(false);
 const pendingLeavePath = ref('');
 let autosaveTimer;
+const imageUploaders = new Set();
+
+function registerImageUploader(uploader) {
+  imageUploaders.add(uploader);
+  return () => imageUploaders.delete(uploader);
+}
+
+async function uploadPendingImages() {
+  for (const uploader of imageUploaders) await uploader();
+}
 
 // 這兩個角色的欄位有預設值（日期帶今天、類型帶第一個選項），
 // 不能拿來當「使用者已填寫此區塊」的訊號。
@@ -574,6 +584,7 @@ provideRecordForm({
   autoJudgeLab,
   setLabStatus,
   markEmptyLabGroupNormal,
+  registerImageUploader,
 });
 
 function optionalNumber(value) {
@@ -584,8 +595,19 @@ function optionalNumber(value) {
 }
 
 function buildPayload() {
+  const customValues = Object.fromEntries(Object.entries(record.customValues ?? {}).map(([key, value]) => [
+    key,
+    Array.isArray(value)
+      ? value.filter((entry) => !entry?.pendingFile).map((entry) => {
+        if (!entry || typeof entry !== 'object') return entry;
+        const { pendingFile, ...serializable } = entry;
+        return serializable;
+      })
+      : value,
+  ]));
   return {
     ...record,
+    customValues,
     vet: vet.value,
     visitDate: visitDate.value || null,
     weightKg: optionalNumber(record.weightKg),
@@ -596,7 +618,7 @@ function buildPayload() {
   };
 }
 
-async function saveRecord({ silent = false } = {}) {
+async function saveRecord({ silent = false, uploadImages = false } = {}) {
   if (saving.value || !petId.value || isLocked.value) return false;
   saving.value = true;
   saveState.value = 'saving';
@@ -604,7 +626,7 @@ async function saveRecord({ silent = false } = {}) {
   clearTimeout(autosaveTimer);
   try {
     const payload = buildPayload();
-    const savedSnapshot = JSON.stringify(payload);
+    let savedSnapshot = JSON.stringify(payload);
     let saved;
     if (recordId.value) {
       ({ data: saved } = await http.put(`/records/${recordId.value}`, {
@@ -618,6 +640,15 @@ async function saveRecord({ silent = false } = {}) {
       leavingAfterAction.value = true;
       await router.replace(`/records/${saved._id}/edit`);
       leavingAfterAction.value = wasLeavingAfterAction;
+    }
+    if (uploadImages) {
+      await uploadPendingImages();
+      const imagePayload = buildPayload();
+      ({ data: saved } = await http.put(`/records/${recordId.value}`, {
+        ...imagePayload,
+        expectedVersion: saved.__v ?? documentVersion.value,
+      }));
+      savedSnapshot = JSON.stringify(imagePayload);
     }
     documentVersion.value = saved.__v ?? documentVersion.value;
     lastSavedAt.value = new Date();
@@ -688,7 +719,7 @@ async function goToValidationIssue(issue) {
 }
 
 async function submitDraft() {
-  const saved = await saveRecord();
+  const saved = await saveRecord({ uploadImages: true });
   if (saved) {
     leavingAfterAction.value = true;
     await router.push(`/pets/${petId.value}`);
@@ -701,7 +732,7 @@ async function openPreview() {
     document.getElementById('form-errors')?.scrollIntoView({ behavior: 'auto', block: 'center' });
     return;
   }
-  const saved = await saveRecord();
+  const saved = await saveRecord({ uploadImages: true });
   if (saved) {
     leavingAfterAction.value = true;
     await router.push(`/records/${recordId.value}/preview`);
