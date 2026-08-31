@@ -5,6 +5,7 @@ export function familyOf(item) {
   if (item?.type === 'finding') return 'finding';
   if (item?.type === 'lab') return 'lab';
   if (item?.type === 'measurement') return 'measurement';
+  if (item?.type === 'dentalChart') return 'dental';
   return 'scalar';
 }
 

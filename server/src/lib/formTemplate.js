@@ -14,8 +14,9 @@ const TYPE_VALUE_KIND = {
   radio: 'string',
   // 複選的作答是字串陣列，塞不進任何具名欄位，一律收進 customValues。
   checkbox: 'list',
+  dentalChart: 'object',
 };
-const SCHEMA_VALUE_KIND = { Number: 'number', Date: 'date' };
+const SCHEMA_VALUE_KIND = { Number: 'number', Date: 'date', Map: 'object' };
 const ITEM_SPANS = ['auto', 'wide', 'full'];
 
 // 每個項目的作答存在哪裡。由後端判定後隨範本一起回傳，

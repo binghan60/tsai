@@ -5,6 +5,7 @@ import {
   Calendar,
   ChevronDown,
   CircleDot,
+  SmilePlus,
   ChevronUp,
   Eye,
   FlaskConical,
@@ -81,6 +82,7 @@ const PRESENTATION_OPTIONS = [
 // 工具箱的每一格。型別不再藏在「進階設定」的下拉選單裡 —— 使用者是先挑欄位種類，
 // 再把它放進區塊，這才是實際的思考順序。
 const TYPE_META = {
+  dentalChart: { title: '牙科圖', icon: SmilePlus, hint: '逐顆記錄牙齒狀態與備註' },
   text: { title: '單行文字', icon: Type, hint: '姓名、編號這類短文字' },
   textarea: { title: '多行文字', icon: TextAlignStart, hint: '可換行的長段落' },
   number: { title: '數字', icon: Hash, hint: '只接受數值' },
@@ -131,6 +133,7 @@ const LAYOUT_TYPE = {
 // 每個區塊的工具箱內容完全相同 —— 任何型別都能放進任何區塊，
 // 版式只決定它「原生」的排法，非原生的型別由 FieldControl 用精簡控制項渲染。
 const TOOLBOX_GROUPS = [
+  { title: '牙科', types: ['dentalChart'] },
   { title: '檢查專用', types: ['measurement', 'finding', 'lab'] },
   { title: '一般欄位', types: GENERAL_TYPES },
 ];

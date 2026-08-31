@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { labValueLabel, measurementLabel, statusText, valueText } from './reportItem';
 import { familyOf } from '../../lib/fieldFamily';
+import DentalChart from '../formfields/DentalChart.vue';
 
 // 任何欄位型別都可能出現在任何版式的區塊裡。這是「不在原生版式裡」時的通用呈現：
 // 一個標籤加一段內容，塞得進報告的任何容器。
@@ -24,7 +25,11 @@ const abnormal = computed(() => props.item.status === 'abnormal');
 </script>
 
 <template>
-  <div class="break-inside-avoid">
+  <div v-if="family === 'dental'" class="break-inside-avoid sm:col-span-2">
+    <h3 class="text-xs font-semibold text-stone-500">{{ item.label }}</h3>
+    <DentalChart class="mt-2" :model-value="item.value" readonly />
+  </div>
+  <div v-else class="break-inside-avoid">
     <h3 class="text-xs font-semibold text-stone-500">{{ item.label }}</h3>
     <p
       class="mt-1 whitespace-pre-wrap text-sm leading-relaxed"

@@ -4,6 +4,7 @@ import ScalarField from './ScalarField.vue';
 import StatusToggle from './StatusToggle.vue';
 import FieldShell from './FieldShell.vue';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
+import DentalChart from './DentalChart.vue';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { useRecordForm } from './context';
@@ -20,6 +21,7 @@ const props = defineProps({
 const {
   valueFor, setValue, findingsFor, labsFor, labRangeLabel,
   setLabStatus, autoJudgeLab, measurementAssessment, autoJudgeMeasurement,
+  preview,
 } = useRecordForm();
 
 const family = computed(() => familyOf(props.item));
@@ -116,6 +118,10 @@ const referenceText = computed(() => labRangeLabel(props.item));
         :class="assessment.status === 'abnormal' ? 'bg-danger-surface text-danger' : 'bg-success-surface text-success'"
       >{{ assessment.status === 'abnormal' ? '異常' : '正常' }}・自動</span>
     </div>
+  </FieldShell>
+
+  <FieldShell v-else-if="family === 'dental'" :item="item" :input-id="inputId">
+    <DentalChart :id="inputId" :model-value="valueFor(item)" :readonly="preview" @update:model-value="setValue(item, $event)" />
   </FieldShell>
 
   <ScalarField v-else :item="item" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />

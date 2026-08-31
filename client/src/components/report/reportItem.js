@@ -14,6 +14,7 @@ export function hasValue(item) {
 // ReportField 會把它印出來，沒有理由因為狀態是「未檢查」就把它丟掉。
 export function hasContent(item) {
   const family = familyOf(item);
+  if (family === 'dental') return Object.keys(item.value?.teeth ?? {}).length > 0;
   if (family === 'finding' || family === 'lab') {
     return item.status !== 'not_checked' || hasValue(item) || String(item.note ?? '').trim() !== '';
   }
