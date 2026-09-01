@@ -21,6 +21,7 @@ const formItemSchema = new mongoose.Schema(
     group: { type: String, default: '', trim: true },
     unit: { type: String, default: '', trim: true },
     placeholder: { type: String, default: '', trim: true },
+    defaultValue: { type: String, default: '', trim: true },
     options: { type: [String], default: [] },
     quickMenuId: { type: String, default: '', trim: true },
     // 網格版式裡這個欄位要佔多寬：auto 跟著版式、wide 兩格、full 整排。

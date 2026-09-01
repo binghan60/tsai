@@ -144,6 +144,7 @@ function sanitizeItem(raw, key, index) {
     group: String(raw.group ?? '').trim(),
     unit: String(raw.unit ?? '').trim(),
     placeholder: String(raw.placeholder ?? '').trim(),
+    defaultValue: String(raw.defaultValue ?? '').trim(),
     options: Array.isArray(raw.options) ? raw.options.map((option) => String(option).trim()).filter(Boolean) : [],
     quickMenuId: String(raw.quickMenuId ?? '').trim(),
     span: ITEM_SPANS.includes(raw.span) ? raw.span : 'auto',

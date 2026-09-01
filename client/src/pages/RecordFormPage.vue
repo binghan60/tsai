@@ -154,11 +154,31 @@ const record = reactive({
   other: '',
 });
 
-// 以範本定義建立空白的作答結構；建立新報告與載入既有草稿前都會先跑這一段。
-function applyTemplateDefaults() {
+const DEFAULT_VALUE_TYPES = new Set(['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox', 'quickSelect']);
+
+function defaultValueFor(item) {
+  const value = String(item.defaultValue ?? '').trim();
+  if (!value || !DEFAULT_VALUE_TYPES.has(item.type) || item.role) return undefined;
+  if (item.type === 'checkbox') {
+    const options = new Set((item.options ?? []).filter(Boolean));
+    return value.split(',').map((option) => option.trim()).filter((option) => options.has(option));
+  }
+  if (['select', 'radio'].includes(item.type) && !(item.options ?? []).includes(value)) return undefined;
+  return value;
+}
+
+// 以範本定義建立空白的作答結構；只有新建立的表單才套用項目預設值，
+// 開啟既有草稿時必須忠實還原，不能把使用者曾清空的欄位又補回來。
+function applyTemplateDefaults({ includeItemDefaults = false } = {}) {
   record.measurementAssessments = BASIC_MEASUREMENTS.value.map((item) => ({ ...item, status: 'not_checked', statusSource: 'auto', referenceMin: null, referenceMax: null }));
   record.examinationFindings = EXAMINATION_ITEMS.value.map((item) => ({ ...item, status: 'not_checked', note: '' }));
   record.labFindings = LAB_TESTS.value.map((item) => ({ ...item, status: 'not_checked', statusSource: 'manual', value: '', unit: '', referenceMin: null, referenceMax: null, note: '' }));
+  if (includeItemDefaults) {
+    for (const item of TEMPLATE_SECTIONS.value.flatMap((section) => section.items ?? [])) {
+      const value = defaultValueFor(item);
+      if (value !== undefined) setValue(item, value);
+    }
+  }
   if (!activeSectionId.value) activeSectionId.value = FORM_SECTIONS.value[0]?.id ?? '';
 }
 
@@ -186,7 +206,7 @@ async function applyTemplate(templateId, fallback = {}) {
   chosenTemplateId.value = loadedTemplate._id ? String(loadedTemplate._id) : '';
   examTypeName.value = loadedTemplate.name || fallback.name || '';
   activeSectionId.value = '';
-  applyTemplateDefaults();
+  applyTemplateDefaults({ includeItemDefaults: !recordId.value });
   return loadedTemplate;
 }
 

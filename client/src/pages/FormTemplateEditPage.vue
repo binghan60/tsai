@@ -106,6 +106,7 @@ const GENERAL_TYPES = ['text', 'textarea', 'image', 'number', 'date', 'select', 
 // 狀態切換、參考範圍與分組表格，放進別種版式只會被當成普通文字框。
 // 這三種都是「從固定選項裡挑」，差別只在呈現方式，共用同一份選項設定。
 const OPTION_TYPES = new Set(['select', 'radio', 'checkbox']);
+const DEFAULT_VALUE_TYPES = new Set(['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox', 'quickSelect']);
 
 const SPAN_OPTIONS = [
   { value: 'auto', title: '自動', hint: '跟著版式的預設欄寬' },
@@ -304,6 +305,7 @@ function addItem(type) {
     group: type === 'lab' ? (sectionGroups.value.at(-1) ?? '') : '',
     unit: '',
     placeholder: '',
+    defaultValue: '',
     options: OPTION_TYPES.has(type) ? ['正常', '異常'] : [],
     quickMenuId: '',
     span: 'auto',
@@ -840,6 +842,13 @@ function resolveLeave(confirmed) {
                       <Plus class="h-4 w-4" stroke-width="1.75" />新增選項
                     </Button>
                     <p class="text-xs text-muted-foreground">按 Enter 可以直接接著加下一個；留空的選項會在儲存時移除。</p>
+                  </div>
+
+                  <div v-if="DEFAULT_VALUE_TYPES.has(selectedItem.type)" class="space-y-1.5">
+                    <Label for="item-default-value" class="text-xs font-medium">預設值</Label>
+                    <textarea v-if="selectedItem.type === 'textarea'" id="item-default-value" v-model="selectedItem.defaultValue" rows="3" class="flex min-h-20 w-full rounded-xl border border-input bg-field px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30" placeholder="建立新表單時自動帶入（選填）" />
+                    <Input v-else id="item-default-value" v-model="selectedItem.defaultValue" placeholder="建立新表單時自動帶入（選填）" />
+                    <p class="text-xs text-muted-foreground">{{ selectedItem.type === 'checkbox' ? '複選請用逗號分隔，例如：食慾正常、精神正常。' : '只會套用到新建立的表單，不會覆寫既有紀錄。' }}</p>
                   </div>
 
                   <div v-if="selectedItem.type === 'quickSelect'" class="space-y-1.5">
