@@ -35,6 +35,11 @@ SMTP_SECURE=true
 MAIL_FROM_NAME=謙華動物醫院
 MAIL_FROM=
 MAIL_REPLY_TO=
+CLOUDINARY_CLOUD_NAME=<Cloudinary cloud name>
+CLOUDINARY_API_KEY=<Cloudinary API key>
+CLOUDINARY_API_SECRET=<Cloudinary API secret>
+CLOUDINARY_IMAGE_UPLOAD_PRESET=tsai-medical-record-images
+CLOUDINARY_IMAGE_FOLDER=tsai-medical-records
 ```
 
 注意事項：
@@ -49,6 +54,10 @@ MAIL_REPLY_TO=
 - PDF 預設從容器內部的 `127.0.0.1` 讀取報告，不必公開 `PDF_RENDER_BASE_URL`。
 
 若剛建立服務時還沒有公開網址，可先部署、產生 Domain，再確認 `PUBLIC_APP_URL` 與 `CLIENT_ORIGIN` 已解析為完整的 `https://...` 網址並重新部署。
+
+### Cloudinary 圖片上傳
+
+建立名稱與 `CLOUDINARY_IMAGE_UPLOAD_PRESET` 相同的 **signed Upload Preset**，並在 Cloudinary 設定：允許 `webp,png,jpg,jpeg,gif`、資料夾 `tsai-medical-records`，以及 incoming transformation `c_limit,w_2048,h_2048`。10 MB 上限會由服務簽發的 Cloudinary 參數強制帶入；服務未設定此 preset 時不會簽發上傳請求。若測試機與正式機共用 Cloudinary 帳號，請用 `CLOUDINARY_IMAGE_FOLDER` 分流，例如測試機填 `tsai-medical-records-test`。
 
 ## 3. 驗證部署
 

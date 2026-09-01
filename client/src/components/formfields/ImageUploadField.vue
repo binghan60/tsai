@@ -80,6 +80,8 @@ async function uploadPending() {
       form.append('public_id', signature.public_id);
       form.append('overwrite', String(signature.overwrite));
       form.append('allowed_formats', signature.allowed_formats);
+      form.append('max_file_size', String(signature.max_file_size));
+      form.append('upload_preset', signature.upload_preset);
       form.append('signature', signature.signature);
       const response = await fetch(`https://api.cloudinary.com/v1_1/${signature.cloudName}/image/upload`, { method: 'POST', body: form });
       const data = await response.json();

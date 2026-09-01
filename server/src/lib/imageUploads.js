@@ -1,8 +1,17 @@
 import crypto from 'node:crypto';
 
-export const IMAGE_FOLDER = 'tsai-medical-records';
+export const DEFAULT_IMAGE_FOLDER = 'tsai-medical-records';
 export const MAX_IMAGES_PER_FIELD = 12;
+export const MAX_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const IMAGE_FORMATS = ['webp', 'png', 'jpg', 'jpeg', 'gif'];
+
+export function configuredImageFolder(value = process.env.CLOUDINARY_IMAGE_FOLDER) {
+  const folder = String(value ?? '').trim() || DEFAULT_IMAGE_FOLDER;
+  if (!/^[a-z0-9_-]+(?:\/[a-z0-9_-]+)*$/i.test(folder)) {
+    throw new Error('CLOUDINARY_IMAGE_FOLDER 格式不合法');
+  }
+  return folder;
+}
 
 function signatureFor(params, apiSecret) {
   const serialized = Object.entries(params)
@@ -13,15 +22,17 @@ function signatureFor(params, apiSecret) {
   return crypto.createHash('sha1').update(`${serialized}${apiSecret}`).digest('hex');
 }
 
-export function createImageUploadSignature({ cloudName, apiKey, apiSecret }) {
+export function createImageUploadSignature({ cloudName, apiKey, apiSecret, uploadPreset, folder = configuredImageFolder() }) {
   const timestamp = Math.floor(Date.now() / 1000);
   const publicId = `image-${crypto.randomUUID()}`;
   const params = {
     allowed_formats: IMAGE_FORMATS.join(','),
-    folder: IMAGE_FOLDER,
+    folder,
+    max_file_size: MAX_IMAGE_UPLOAD_BYTES,
     overwrite: false,
     public_id: publicId,
     timestamp,
+    upload_preset: uploadPreset,
   };
   return { cloudName, apiKey, ...params, signature: signatureFor(params, apiSecret) };
 }
@@ -32,28 +43,45 @@ function invalidImage(message) {
   return error;
 }
 
-function imageUrlIsAllowed(value, cloudName) {
+function imageUrlIsAllowed(value, cloudName, publicId) {
   try {
     const url = new URL(value);
-    const prefix = `/${cloudName}/image/upload/${IMAGE_FOLDER}/`;
-    return url.protocol === 'https:' && url.hostname === 'res.cloudinary.com' && url.pathname.startsWith(prefix);
+    const escapedCloudName = encodeURIComponent(cloudName);
+    const escapedPublicId = publicId.split('/').map(encodeURIComponent).join('/');
+    // Cloudinary 的 secure_url 預設會帶資產版本（/v123/...）；舊資料可能沒有版本，
+    // 所以兩種格式都接受，但 URL 必須剛好指向回傳的 public_id。
+    const prefix = `/${escapedCloudName}/image/upload/`;
+    if (!url.pathname.startsWith(prefix)) return false;
+    const assetPath = url.pathname.slice(prefix.length).replace(/^v\d+\//, '');
+    const extensionAt = assetPath.lastIndexOf('.');
+    return url.protocol === 'https:'
+      && url.hostname === 'res.cloudinary.com'
+      && !url.search
+      && !url.hash
+      && extensionAt > 0
+      && assetPath.slice(0, extensionAt) === escapedPublicId
+      && /^[a-z0-9]+$/i.test(assetPath.slice(extensionAt + 1));
   } catch {
     return false;
   }
 }
 
-export function sanitizeImageValue(value, { cloudName = process.env.CLOUDINARY_CLOUD_NAME } = {}) {
+export function sanitizeImageValue(value, {
+  cloudName = process.env.CLOUDINARY_CLOUD_NAME,
+  folder = configuredImageFolder(),
+} = {}) {
   if (!Array.isArray(value) || value.length > MAX_IMAGES_PER_FIELD) {
     throw invalidImage(`圖片欄位最多只能有 ${MAX_IMAGES_PER_FIELD} 張圖片`);
   }
   if (!cloudName) throw invalidImage('尚未設定 Cloudinary 圖片上傳服務');
 
   return value.map((image) => {
-    if (!image || typeof image !== 'object' || !imageUrlIsAllowed(image.url, cloudName)) {
-      throw invalidImage('圖片來源不合法');
-    }
+    if (!image || typeof image !== 'object') throw invalidImage('圖片來源不合法');
     const publicId = String(image.publicId ?? '');
-    if (!publicId.startsWith(`${IMAGE_FOLDER}/image-`)) throw invalidImage('圖片識別碼不合法');
+    if (!publicId.startsWith(`${folder}/image-`) || !/^image-[0-9a-f-]{36}$/i.test(publicId.slice(folder.length + 1))) {
+      throw invalidImage('圖片識別碼不合法');
+    }
+    if (!imageUrlIsAllowed(image.url, cloudName, publicId)) throw invalidImage('圖片來源不合法');
     const span = Number(image.span);
     return {
       url: image.url,
