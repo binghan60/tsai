@@ -23,8 +23,8 @@ const images = computed(() => (Array.isArray(props.modelValue) ? props.modelValu
 const spanClass = (image) => ({ 4: 'col-span-4', 6: 'col-span-6', 12: 'col-span-12' }[Number(image?.span)] ?? 'col-span-12');
 
 async function compressImage(file) {
-  // SVG 與 GIF 可能包含向量／動畫；轉 canvas 會破壞原始內容，因此保留原檔。
-  if (['image/svg+xml', 'image/gif'].includes(file.type)) return file;
+  // GIF 保留動畫；SVG 可能含有可執行內容，不接受上傳。
+  if (file.type === 'image/gif') return file;
   const source = URL.createObjectURL(file);
   try {
     const image = await new Promise((resolve, reject) => {
@@ -56,7 +56,7 @@ function stage(event) {
   const files = [...(event.target.files ?? [])];
   event.target.value = '';
   if (!files.length) return;
-  const invalid = files.find((file) => !file.type.startsWith('image/') || file.size > 10 * 1024 * 1024);
+  const invalid = files.find((file) => !['image/webp', 'image/png', 'image/jpeg', 'image/gif'].includes(file.type) || file.size > 10 * 1024 * 1024);
   if (invalid) { error.value = '請選擇 10 MB 以下的圖片檔案'; return; }
   if (images.value.length + files.length > 12) { error.value = '每個圖片欄位最多可上傳 12 張'; return; }
 
@@ -70,22 +70,25 @@ async function uploadPending() {
   error.value = '';
   try {
     const compressedFiles = await Promise.all(pending.map((image) => compressImage(image.pendingFile)));
-    const { data: signature } = await http.get('/uploads/image-signature');
-    const uploaded = [];
     for (const [index, file] of compressedFiles.entries()) {
+      const { data: signature } = await http.get('/uploads/image-signature');
       const form = new FormData();
       form.append('file', file);
       form.append('api_key', signature.apiKey);
       form.append('timestamp', String(signature.timestamp));
       form.append('folder', signature.folder);
+      form.append('public_id', signature.public_id);
+      form.append('overwrite', String(signature.overwrite));
+      form.append('allowed_formats', signature.allowed_formats);
       form.append('signature', signature.signature);
       const response = await fetch(`https://api.cloudinary.com/v1_1/${signature.cloudName}/image/upload`, { method: 'POST', body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.message ?? '圖片上傳失敗');
-      uploaded.push({ url: data.secure_url, publicId: data.public_id, width: data.width, height: data.height, format: data.format, span: pending[index].span ?? 12 });
+      const uploadedImage = { url: data.secure_url, publicId: data.public_id, width: data.width, height: data.height, format: data.format, span: pending[index].span ?? 12 };
+      const pendingImage = pending[index];
+      if (pendingImage.url?.startsWith('blob:')) URL.revokeObjectURL(pendingImage.url);
+      emit('update:modelValue', images.value.map((image) => image === pendingImage ? uploadedImage : image));
     }
-    pending.forEach((image) => { if (image.url?.startsWith('blob:')) URL.revokeObjectURL(image.url); });
-    emit('update:modelValue', [...images.value.filter((image) => !image?.pendingFile), ...uploaded]);
   } catch (err) {
     error.value = err.response?.data?.message ?? err.message ?? '圖片上傳失敗';
     throw err;
@@ -112,7 +115,7 @@ onBeforeUnmount(() => unregister?.());
           <span class="pl-2 text-xs text-muted-foreground">圖片大小</span>
           <button v-for="option in IMAGE_SIZE_OPTIONS" :key="option.span" type="button" class="min-h-8 rounded-md px-2 text-xs font-medium transition-colors" :class="uploadSpan === option.span ? 'bg-accent text-accent-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" :title="option.hint" @click="uploadSpan = option.span">{{ option.label }}</button>
         </div>
-        <input :id="inputId" ref="input" type="file" class="sr-only" accept="image/*" multiple :disabled="uploading" @change="stage" />
+        <input :id="inputId" ref="input" type="file" class="sr-only" accept="image/webp,image/png,image/jpeg,image/gif" multiple :disabled="uploading" @change="stage" />
         <Button type="button" variant="outline" :disabled="uploading" @click="input?.click()"><LoaderCircle v-if="uploading" class="h-4 w-4 animate-spin" /><ImagePlus v-else class="h-4 w-4" />{{ uploading ? '上傳中…' : '新增圖片' }}</Button>
         <span class="text-xs text-muted-foreground">選取後會先暫存，確認儲存時才上傳。每張最多 10 MB，最多 12 張</span>
       </div>

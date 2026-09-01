@@ -9,7 +9,8 @@ import { enqueueReportPdf, readStoredPdf, streamStoredPdf } from '../lib/reportP
 import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from '../lib/mailer.js';
 import { hasPdfRenderAccess } from '../config/pdfAccess.js';
 import { publicAppOrigin } from '../config/publicUrl.js';
-import { templateForRecord } from '../lib/formTemplate.js';
+import { storageFor, templateForRecord } from '../lib/formTemplate.js';
+import { sanitizeImageValue } from '../lib/imageUploads.js';
 import { composeReportSections } from '../lib/reportSections.js';
 import { escapeRegExp } from '../lib/regex.js';
 import { validateFinalRecord } from '../lib/recordValidation.js';
@@ -49,6 +50,20 @@ function pickRecordFields(body) {
     if (body[field] !== undefined) data[field] = body[field];
   }
   return data;
+}
+
+function sanitizeRecordImages(data, template) {
+  if (!data.customValues || typeof data.customValues !== 'object') return data;
+  const imageKeys = new Set(
+    (template?.sections ?? []).flatMap((section) => (section.items ?? [])
+      .filter((item) => item.type === 'image' && storageFor(item) === 'custom')
+      .map((item) => item.key))
+  );
+  const customValues = { ...data.customValues };
+  for (const key of imageKeys) {
+    if (customValues[key] !== undefined) customValues[key] = sanitizeImageValue(customValues[key]);
+  }
+  return { ...data, customValues };
 }
 
 function isFinalizedRecord(record) {
@@ -244,9 +259,10 @@ petRecordsRouter.post('/', async (req, res, next) => {
         throw error;
       }
 
+      const recordFields = sanitizeRecordImages(pickRecordFields(req.body), template);
       [record] = await MedicalRecord.create([{
         petId: pet._id,
-        ...pickRecordFields(req.body),
+        ...recordFields,
         templateId: template._id,
         templateVersion: template.version,
         examType: template.name,
@@ -396,6 +412,10 @@ recordsRouter.put('/:id', async (req, res, next) => {
     if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
       return res.status(428).json({ message: '缺少病歷版本資訊，請重新整理後再儲存' });
     }
+    const existingForValidation = await MedicalRecord.findById(req.params.id).select('templateId');
+    if (!existingForValidation) return res.status(404).json({ message: '找不到指定的健康報告' });
+    const template = await templateForRecord(existingForValidation);
+    const recordFields = sanitizeRecordImages(pickRecordFields(req.body), template);
     const record = await MedicalRecord.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -403,7 +423,7 @@ recordsRouter.put('/:id', async (req, res, next) => {
         __v: expectedVersion,
         $or: [{ finalizeAttemptId: null }, { finalizeAttemptId: { $exists: false } }],
       },
-      { $set: pickRecordFields(req.body), $inc: { __v: 1 } },
+      { $set: recordFields, $inc: { __v: 1 } },
       { new: true, runValidators: true }
     );
     if (!record) {

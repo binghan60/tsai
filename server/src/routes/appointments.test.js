@@ -135,11 +135,11 @@ describe('appointments routes', () => {
       const response = await fetch(`${origin}/api/appointments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ petName: '妞妞', date: '2026-09-01' }),
+        body: JSON.stringify({ petName: '妞妞', date: '2030-09-01' }),
       });
       assert.equal(response.status, 201);
-      // 2026-09-01 00:00 台北 = 2026-08-31T16:00:00.000Z
-      assert.equal((await response.json()).scheduledAt, '2026-08-31T16:00:00.000Z');
+      // 2030-09-01 00:00 台北 = 2030-08-31T16:00:00.000Z
+      assert.equal((await response.json()).scheduledAt, '2030-08-31T16:00:00.000Z');
     } finally {
       Appointment.create = originalCreate;
     }

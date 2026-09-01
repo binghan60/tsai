@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import crypto from 'node:crypto';
+import { createRateLimiter } from '../lib/rateLimit.js';
+import { createImageUploadSignature } from '../lib/imageUploads.js';
 
 const router = Router();
-const IMAGE_FOLDER = 'tsai-medical-records';
+const imageSignatureRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 24 });
 
-router.get('/image-signature', (req, res) => {
+router.get('/image-signature', imageSignatureRateLimiter, (req, res) => {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
   const apiKey = process.env.CLOUDINARY_API_KEY;
   const apiSecret = process.env.CLOUDINARY_API_SECRET;
@@ -12,12 +13,7 @@ router.get('/image-signature', (req, res) => {
     return res.status(503).json({ message: '尚未設定 Cloudinary 圖片上傳服務' });
   }
 
-  const timestamp = Math.floor(Date.now() / 1000);
-  const signature = crypto
-    .createHash('sha1')
-    .update(`folder=${IMAGE_FOLDER}&timestamp=${timestamp}${apiSecret}`)
-    .digest('hex');
-  return res.json({ cloudName, apiKey, timestamp, folder: IMAGE_FOLDER, signature });
+  return res.json(createImageUploadSignature({ cloudName, apiKey, apiSecret }));
 });
 
 export default router;
