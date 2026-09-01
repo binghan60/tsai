@@ -10,6 +10,7 @@ import { withTransaction } from '../lib/transaction.js';
 import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition } from '../lib/appointmentStatus.js';
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
+import { defaultRecordFields } from '../lib/formTemplate.js';
 
 const router = Router();
 
@@ -434,6 +435,7 @@ router.post('/:id/complete', async (req, res, next) => {
       appointment.templateId = template._id;
       [record] = await MedicalRecord.create([{
         petId: appointment.petId,
+        ...defaultRecordFields(template),
         visitDate: combineClinicDateTime(appointment.date, '10:00'),
         weightKg: appointment.weightKg,
         temperatureC: appointment.temperatureC,

@@ -9,7 +9,7 @@ import { enqueueReportPdf, readStoredPdf, streamStoredPdf } from '../lib/reportP
 import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from '../lib/mailer.js';
 import { hasPdfRenderAccess } from '../config/pdfAccess.js';
 import { publicAppOrigin } from '../config/publicUrl.js';
-import { storageFor, templateForRecord } from '../lib/formTemplate.js';
+import { defaultRecordFields, storageFor, templateForRecord } from '../lib/formTemplate.js';
 import { sanitizeImageValue } from '../lib/imageUploads.js';
 import { composeReportSections } from '../lib/reportSections.js';
 import { escapeRegExp } from '../lib/regex.js';
@@ -262,6 +262,7 @@ petRecordsRouter.post('/', async (req, res, next) => {
       const recordFields = sanitizeRecordImages(pickRecordFields(req.body), template);
       [record] = await MedicalRecord.create([{
         petId: pet._id,
+        ...defaultRecordFields(template),
         ...recordFields,
         templateId: template._id,
         templateVersion: template.version,

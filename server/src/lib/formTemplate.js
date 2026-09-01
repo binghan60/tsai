@@ -34,6 +34,33 @@ export function storageFor(item) {
   return TYPE_VALUE_KIND[item.type] === schemaKind ? 'field' : 'custom';
 }
 
+// 預設值是範本的一部分，建立草稿的入口不只表單頁：掛號完成也會在後端直接建草稿。
+// 因此必須在後端同樣套用，否則從掛號進入的新健檢會漏掉預設值。
+export function defaultRecordFields(template) {
+  const fields = {};
+  const customValues = {};
+  const supportedTypes = new Set(['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox', 'quickSelect']);
+
+  for (const item of flattenItems(template)) {
+    const text = String(item.defaultValue ?? '').trim();
+    if (!text || item.enabled === false || !supportedTypes.has(item.type)) continue;
+
+    let value = text;
+    if (item.type === 'checkbox') {
+      const options = new Set((item.options ?? []).filter(Boolean));
+      value = text.split(',').map((option) => option.trim()).filter((option) => options.has(option));
+      if (!value.length) continue;
+    } else if (['select', 'radio'].includes(item.type) && !(item.options ?? []).includes(value)) {
+      continue;
+    }
+
+    if (storageFor(item) === 'custom') customValues[item.key] = value;
+    else fields[item.key] = value;
+  }
+
+  return Object.keys(customValues).length ? { ...fields, customValues } : fields;
+}
+
 // 第一次執行時把預設的健檢類型建進資料庫。
 export async function ensureSeedTemplates() {
   if (await FormTemplate.exists({})) return;

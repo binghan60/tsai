@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { missingRoles, sanitizeSections, storageFor } from './formTemplate.js';
+import { defaultRecordFields, missingRoles, sanitizeSections, storageFor } from './formTemplate.js';
 
 // 這裡測的是表單範本的「身分制度」。
 //
@@ -189,6 +189,29 @@ describe('sanitizeSections：欄位正規化', () => {
     assert.equal(saved.enabled, true);
     assert.equal(saved.required, false);
     assert.equal(saved.numeric, true);
+  });
+});
+
+describe('defaultRecordFields', () => {
+  it('applies valid defaults to named fields and custom values', () => {
+    const template = {
+      sections: [section('basic', '基本資料', [
+        item('chiefComplaint', '主訴', 'textarea', { defaultValue: '例行追蹤' }),
+        item('custom_note', '提醒', 'text', { defaultValue: '空腹採血' }),
+        item('custom_choices', '狀態', 'checkbox', { defaultValue: '食慾正常, 精神正常, 不存在', options: ['食慾正常', '精神正常'] }),
+        item('custom_select', '結果', 'select', { defaultValue: '正常', options: ['正常', '異常'] }),
+        item('custom_invalid', '結果', 'radio', { defaultValue: '不存在', options: ['正常'] }),
+      ])],
+    };
+
+    assert.deepEqual(defaultRecordFields(template), {
+      chiefComplaint: '例行追蹤',
+      customValues: {
+        custom_note: '空腹採血',
+        custom_choices: ['食慾正常', '精神正常'],
+        custom_select: '正常',
+      },
+    });
   });
 });
 

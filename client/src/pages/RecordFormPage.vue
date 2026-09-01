@@ -158,7 +158,7 @@ const DEFAULT_VALUE_TYPES = new Set(['text', 'textarea', 'number', 'date', 'sele
 
 function defaultValueFor(item) {
   const value = String(item.defaultValue ?? '').trim();
-  if (!value || !DEFAULT_VALUE_TYPES.has(item.type) || item.role) return undefined;
+  if (!value || !DEFAULT_VALUE_TYPES.has(item.type)) return undefined;
   if (item.type === 'checkbox') {
     const options = new Set((item.options ?? []).filter(Boolean));
     return value.split(',').map((option) => option.trim()).filter((option) => options.has(option));
