@@ -32,8 +32,9 @@ const abnormal = computed(() => props.item.status === 'abnormal');
   <div v-if="item.type === 'image'" class="break-inside-avoid sm:col-span-2">
     <h3 class="text-xs font-semibold text-stone-500">{{ item.label }}</h3>
     <div v-if="images.length" class="mt-2 grid grid-cols-12 gap-4">
-      <a v-for="(image, index) in images" :key="image.publicId || image.url" :href="image.url" target="_blank" rel="noopener noreferrer" class="block overflow-hidden rounded-lg border border-stone-200 bg-stone-50" :class="imageSpanClass(image)">
-        <img :src="image.url" :alt="`${item.label}圖片 ${index + 1}`" class="block h-auto w-full" />
+      <a v-for="(image, index) in images" :key="image.publicId || image.url" :href="image.url" target="_blank" rel="noopener noreferrer" class="block" :class="imageSpanClass(image)">
+        <img :src="image.url" :alt="`${item.label}圖片 ${index + 1}`" class="block h-auto w-full bg-stone-50" />
+        <p v-if="image.caption" class="pt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ image.caption }}</p>
       </a>
     </div>
   </div>

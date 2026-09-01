@@ -25,16 +25,23 @@ function signatureFor(params, apiSecret) {
 export function createImageUploadSignature({ cloudName, apiKey, apiSecret, uploadPreset, folder = configuredImageFolder() }) {
   const timestamp = Math.floor(Date.now() / 1000);
   const publicId = `image-${crypto.randomUUID()}`;
+  // Cloudinary 不會把 max_file_size 納入 upload API 的簽章字串；把它放進去會造成
+  // 前端送出的簽章與 Cloudinary 重算結果不同。大小限制由前端及 upload preset 強制。
   const params = {
     allowed_formats: IMAGE_FORMATS.join(','),
     folder,
-    max_file_size: MAX_IMAGE_UPLOAD_BYTES,
     overwrite: false,
     public_id: publicId,
     timestamp,
     upload_preset: uploadPreset,
   };
-  return { cloudName, apiKey, ...params, signature: signatureFor(params, apiSecret) };
+  return {
+    cloudName,
+    apiKey,
+    ...params,
+    max_file_size: MAX_IMAGE_UPLOAD_BYTES,
+    signature: signatureFor(params, apiSecret),
+  };
 }
 
 function invalidImage(message) {
@@ -83,6 +90,7 @@ export function sanitizeImageValue(value, {
     }
     if (!imageUrlIsAllowed(image.url, cloudName, publicId)) throw invalidImage('圖片來源不合法');
     const span = Number(image.span);
+    const caption = typeof image.caption === 'string' ? image.caption.trim().slice(0, 500) : '';
     return {
       url: image.url,
       publicId,
@@ -90,6 +98,7 @@ export function sanitizeImageValue(value, {
       height: Number.isInteger(image.height) && image.height > 0 ? image.height : undefined,
       format: IMAGE_FORMATS.includes(String(image.format).toLowerCase()) ? String(image.format).toLowerCase() : undefined,
       span: [4, 6, 12].includes(span) ? span : 12,
+      ...(caption ? { caption } : {}),
     };
   });
 }
