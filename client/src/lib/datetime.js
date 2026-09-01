@@ -90,6 +90,7 @@ export function ageLabel(birthDate, referenceDate = new Date(), fallback = 'ๆช่
 
   const birth = dateParts(birthValue);
   const today = dateParts(referenceValue);
+  if (birth.year > today.year || (birth.year === today.year && (birth.month > today.month || (birth.month === today.month && birth.day > today.day)))) return fallback;
   let years = today.year - birth.year;
   let months = today.month - birth.month;
   if (today.day < birth.day) months -= 1;

@@ -213,6 +213,11 @@ describe('defaultRecordFields', () => {
       },
     });
   });
+
+  it('does not apply defaults from a disabled section', () => {
+    const template = { sections: [{ ...section('hidden', '隱藏', [item('chiefComplaint', '主訴', 'textarea', { defaultValue: '不應寫入' })]), enabled: false }] };
+    assert.deepEqual(defaultRecordFields(template), {});
+  });
 });
 
 describe('missingRoles', () => {

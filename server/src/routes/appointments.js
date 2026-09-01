@@ -433,14 +433,17 @@ router.post('/:id/complete', async (req, res, next) => {
       appointment.status = 'completed';
       appointment.completedAt = new Date();
       appointment.templateId = template._id;
+      const appointmentValues = {
+        ...(appointment.weightKg != null ? { weightKg: appointment.weightKg } : {}),
+        ...(appointment.temperatureC != null ? { temperatureC: appointment.temperatureC } : {}),
+        ...(String(appointment.reason ?? '').trim() ? { chiefComplaint: appointment.reason } : {}),
+        ...(String(appointment.visitNote ?? '').trim() ? { other: appointment.visitNote } : {}),
+      };
       [record] = await MedicalRecord.create([{
         petId: appointment.petId,
         ...defaultRecordFields(template),
         visitDate: combineClinicDateTime(appointment.date, '10:00'),
-        weightKg: appointment.weightKg,
-        temperatureC: appointment.temperatureC,
-        chiefComplaint: appointment.reason,
-        other: appointment.visitNote,
+        ...appointmentValues,
         templateId: template._id,
         templateVersion: template.version,
         examType: template.name,

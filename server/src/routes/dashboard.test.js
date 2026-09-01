@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { appointmentStatusCounts, buildWeekBoundaries, deliveryRate, fillWeeklyTrend, prioritizeActionRecords } from './dashboard.js';
+import { appointmentStatusCounts, buildWeekBoundaries, deliveryBreakdown, deliveryRate, fillWeeklyTrend, prioritizeActionRecords } from './dashboard.js';
 
 describe('dashboard visit-date trend', () => {
   it('builds contiguous weekly buckets and fills missing weeks', () => {
@@ -56,5 +56,15 @@ describe('dashboard operating metrics', () => {
   it('calculates delivery success only when there are delivery outcomes', () => {
     assert.equal(deliveryRate({ sent: 8, pending: 1, failed: 1 }), 80);
     assert.equal(deliveryRate(), null);
+  });
+
+  it('counts an uncertain record in both pending and failed without double-counting it in the success rate', () => {
+    // 10 筆已結案：1 sent、1 uncertain、8 not_sent（歸類為 finalized）。
+    const statusBreakdown = { finalized: 8, sending: 0, sent: 1, failed: 0, uncertain: 1 };
+    const result = deliveryBreakdown(statusBreakdown);
+    assert.equal(result.pending, 9, '寄送異常卡片文案與 /records?view=pending 都把 uncertain 算進去');
+    assert.equal(result.failed, 1, '寄送異常卡片文案與 /records?view=failed 都把 uncertain 算進去');
+    // 分母是 10（每筆報告只算一次），不是 sent(1)+pending(9)+failed(1)=11。
+    assert.equal(result.successRate, 10);
   });
 });

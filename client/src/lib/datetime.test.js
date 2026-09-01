@@ -10,6 +10,10 @@ describe('clinic date helpers', () => {
   it('calculates age against the visit date instead of the current clock', () => {
     assert.equal(ageLabel('2025-06-15T00:00:00.000Z', '2026-08-14T00:00:00.000Z'), '1 歲 1 個月');
   });
+
+  it('does not display a plausible age for a future birth date', () => {
+    assert.equal(ageLabel('2026-08-15T00:00:00.000Z', '2026-08-14T00:00:00.000Z', '—'), '—');
+  });
 });
 
 describe('shiftDateInput', () => {

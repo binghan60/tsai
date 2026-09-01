@@ -6,6 +6,7 @@ import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, formatDate } from '../lib/datetime';
 import { collectPreviewIssues } from '../lib/recordFormValidation';
+import { defaultValueForItem } from '../../../shared/formDefaults';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomId, sectionKeyForItem } from '../lib/formTemplate';
 import { useFormTemplate } from '../composables/useFormTemplate';
@@ -154,19 +155,6 @@ const record = reactive({
   other: '',
 });
 
-const DEFAULT_VALUE_TYPES = new Set(['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox', 'quickSelect']);
-
-function defaultValueFor(item) {
-  const value = String(item.defaultValue ?? '').trim();
-  if (!value || !DEFAULT_VALUE_TYPES.has(item.type)) return undefined;
-  if (item.type === 'checkbox') {
-    const options = new Set((item.options ?? []).filter(Boolean));
-    return value.split(',').map((option) => option.trim()).filter((option) => options.has(option));
-  }
-  if (['select', 'radio'].includes(item.type) && !(item.options ?? []).includes(value)) return undefined;
-  return value;
-}
-
 // 以範本定義建立空白的作答結構；只有新建立的表單才套用項目預設值，
 // 開啟既有草稿時必須忠實還原，不能把使用者曾清空的欄位又補回來。
 function applyTemplateDefaults({ includeItemDefaults = false } = {}) {
@@ -175,7 +163,7 @@ function applyTemplateDefaults({ includeItemDefaults = false } = {}) {
   record.labFindings = LAB_TESTS.value.map((item) => ({ ...item, status: 'not_checked', statusSource: 'manual', value: '', unit: '', referenceMin: null, referenceMax: null, note: '' }));
   if (includeItemDefaults) {
     for (const item of TEMPLATE_SECTIONS.value.flatMap((section) => section.items ?? [])) {
-      const value = defaultValueFor(item);
+      const value = defaultValueForItem(item);
       if (value !== undefined) setValue(item, value);
     }
   }

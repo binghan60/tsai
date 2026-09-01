@@ -62,12 +62,12 @@ function toggle(option, checked) {
       <Textarea
         :id="inputId"
         v-model="value"
-        :rows="item.rows || 3"
+        :rows="item.rows ?? 3"
         :placeholder="item.placeholder"
         class="pr-20"
       />
       <TextTemplateTrigger v-model="value" :item-key="item.key" :label="item.label" :input-id="inputId" compact />
-      <QuickMenuTrigger v-model="value" :label="item.label" />
+      <QuickMenuTrigger v-model="value" :label="item.label" :quick-menu-id="item.quickMenuId" />
     </div>
     <Select v-else-if="item.type === 'select'" v-model="selectValue">
       <SelectTrigger :id="inputId" class="w-full"><SelectValue placeholder="請選擇" /></SelectTrigger>

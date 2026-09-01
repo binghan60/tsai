@@ -122,7 +122,7 @@ function render() {
       Object.assign(textarea.style, {
         width: '100%', height: '100%', boxSizing: 'border-box', resize: 'none', outline: 'none',
         border: '1.5px solid #d4d4d8', borderLeftWidth: '4px', borderRadius: '6px', padding: '4px 6px',
-        fontSize: '18px', lineHeight: '1.3', fontFamily: 'inherit', color: '#27272a', background: '#fff',
+        fontSize: '18px', lineHeight: '1.3', fontFamily: 'inherit', color: 'var(--color-foreground)', background: 'var(--color-field)',
       });
       textarea.addEventListener('input', (event) => { if (!props.readonly) setNoteFor(d.code, event.target.value); });
       textarea.addEventListener('focus', () => { textarea.style.borderTopColor = textarea.style.borderRightColor = textarea.style.borderBottomColor = '#155e75'; });
@@ -134,7 +134,7 @@ function render() {
     }
     textarea.readOnly = props.readonly;
     textarea.placeholder = props.readonly ? '' : '備註…';
-    textarea.style.background = props.readonly ? 'transparent' : '#fff';
+    textarea.style.background = props.readonly ? 'transparent' : 'var(--color-field)';
     textarea.style.borderLeftColor = stateByValue[chart.value.teeth[d.code]?.status]?.color ?? '#d4d4d8';
     // 選中光環跟 focus 分開處理但選中時明顯加強：邊框也一起變成強調色（不只陰影環），選牙不一定會把游標移進方塊，
     // 兩者各自獨立才不會互相蓋掉，focus 中的方塊維持 focus 監聽器設的顏色，不被這裡覆寫。
@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-bind="$attrs" class="rounded-xl border border-border bg-white p-3 text-foreground">
+  <div v-bind="$attrs" class="rounded-xl border border-border bg-field p-3 text-foreground">
     <svg ref="svg" :viewBox="VIEW_BOX" class="mx-auto block w-full" :class="readonly ? '' : 'cursor-pointer'" />
     <div class="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span v-for="state in STATES" :key="state.value" class="inline-flex items-center gap-1"><i class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: state.color }" />{{ state.label }}</span></div>
   </div>

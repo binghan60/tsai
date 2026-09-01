@@ -70,7 +70,7 @@ async function save() {
   try {
     const items = form.items.filter((item) => item.content.trim()).map((item) => ({ label: item.content.trim(), content: item.content.trim(), enabled: true }));
     const data = { name: form.name, items };
-    if (editing.value) await http.put(`/quick-menus/${editing.value._id}`, data);
+    if (editing.value) await http.put(`/quick-menus/${editing.value._id}`, { ...data, expectedVersion: editing.value.__v ?? 0 });
     else await http.post('/quick-menus', data);
     toast.success('快捷選單已儲存');
     editor.value = false;
@@ -87,8 +87,8 @@ async function remove() {
     deleteTarget.value = null;
     await load();
     toast.success('快捷選單已刪除');
-  } catch {
-    toast.error('刪除失敗');
+  } catch (err) {
+    toast.error(err.response?.data?.message ?? '刪除失敗');
   }
 }
 onMounted(load);

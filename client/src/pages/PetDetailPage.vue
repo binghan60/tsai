@@ -150,7 +150,7 @@ async function shareRecord(record) {
   try {
     const { data } = await http.post(`/records/${record._id}/share`);
     const copied = await copyText(data.url);
-    shareNotice.value = { url: data.url, copied };
+    shareNotice.value = { url: data.url, copied, expiresAt: data.expiresAt };
     toast.success(
       copied ? '分享連結已產生並複製到剪貼簿' : '分享連結已產生',
       '建立分享成功'
@@ -171,7 +171,7 @@ async function copyExistingShare(record) {
   }
   const url = `${window.location.origin}/report/${record.shareToken}`;
   const copied = await copyText(url);
-  shareNotice.value = { url, copied };
+  shareNotice.value = { url, copied, expiresAt: record.shareExpiresAt };
   toast.success(copied ? '分享連結已複製到剪貼簿' : '已取得分享連結', '複製成功');
 }
 
@@ -317,7 +317,7 @@ watch(
     <Card v-if="shareNotice" class="border-success/35 bg-success-surface p-4 text-sm text-success shadow-none">
       <p class="font-medium">{{ shareNotice.copied ? '分享連結已複製' : '分享連結已建立' }}</p>
       <p class="mt-1 break-all">{{ shareNotice.url }}</p>
-      <p class="mt-1 text-xs opacity-80">無使用期限，手動撤銷前皆可開啟</p>
+      <p class="mt-1 text-xs opacity-80">連結有效至 {{ formatDate(shareNotice.expiresAt) }}，到期或手動撤銷後即無法開啟</p>
     </Card>
 
     <div class="space-y-4">

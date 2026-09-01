@@ -108,7 +108,7 @@ async function uploadPending() {
   error.value = '';
   try {
     const compressedFiles = await Promise.all(pending.map((image) => compressImage(image.pendingFile)));
-    for (const [index, file] of compressedFiles.entries()) {
+    const results = await Promise.allSettled(compressedFiles.map(async (file, index) => {
       const { data: signature } = await http.get('/uploads/image-signature');
       const form = new FormData();
       form.append('file', file);
@@ -124,11 +124,20 @@ async function uploadPending() {
       const response = await fetch(`https://api.cloudinary.com/v1_1/${signature.cloudName}/image/upload`, { method: 'POST', body: form });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error?.message ?? '圖片上傳失敗');
-      const uploadedImage = { url: data.secure_url, publicId: data.public_id, width: data.width, height: data.height, format: data.format, span: pending[index].span ?? 12, caption: pending[index].caption ?? '' };
-      const pendingImage = pending[index];
-      if (pendingImage.url?.startsWith('blob:')) URL.revokeObjectURL(pendingImage.url);
-      emit('update:modelValue', images.value.map((image) => image === pendingImage ? uploadedImage : image));
-    }
+      return { url: data.secure_url, publicId: data.public_id, width: data.width, height: data.height, format: data.format, span: pending[index].span ?? 12, caption: pending[index].caption ?? '' };
+    }));
+    // 先把成功上傳的替換進去，即使其中幾張失敗，已完成的也不會被丟掉——
+    // 使用者重試時只需要重新上傳失敗的那幾張，不會在 Cloudinary 留下重複的孤兒檔案。
+    const replacements = new Map();
+    pending.forEach((image, index) => {
+      const result = results[index];
+      if (result.status !== 'fulfilled') return;
+      if (image.url?.startsWith('blob:')) URL.revokeObjectURL(image.url);
+      replacements.set(image, result.value);
+    });
+    if (replacements.size) emit('update:modelValue', images.value.map((image) => replacements.get(image) ?? image));
+    const failure = results.find((result) => result.status === 'rejected');
+    if (failure) throw failure.reason;
   } catch (err) {
     error.value = err.response?.data?.message ?? err.message ?? '圖片上傳失敗';
     throw err;

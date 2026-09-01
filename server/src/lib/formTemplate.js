@@ -2,6 +2,7 @@ import FormTemplate, { ITEM_ROLES, ITEM_TYPES, PRESENTATIONS } from '../models/F
 import MedicalRecord from '../models/MedicalRecord.js';
 import { buildSeedTemplates } from '../config/formTemplateSeed.js';
 import { normalizeSpecies } from '../config/labTests.js';
+import { defaultValueForItem } from '../../../shared/formDefaults.js';
 
 // 這個型別填出來的值長什麼樣，以及 schema 欄位收的是什麼值。
 const TYPE_VALUE_KIND = {
@@ -39,23 +40,14 @@ export function storageFor(item) {
 export function defaultRecordFields(template) {
   const fields = {};
   const customValues = {};
-  const supportedTypes = new Set(['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox', 'quickSelect']);
-
-  for (const item of flattenItems(template)) {
-    const text = String(item.defaultValue ?? '').trim();
-    if (!text || item.enabled === false || !supportedTypes.has(item.type)) continue;
-
-    let value = text;
-    if (item.type === 'checkbox') {
-      const options = new Set((item.options ?? []).filter(Boolean));
-      value = text.split(',').map((option) => option.trim()).filter((option) => options.has(option));
-      if (!value.length) continue;
-    } else if (['select', 'radio'].includes(item.type) && !(item.options ?? []).includes(value)) {
-      continue;
+  for (const section of template.sections ?? []) {
+    if (section.enabled === false) continue;
+    for (const item of section.items ?? []) {
+      const value = defaultValueForItem(item);
+      if (value === undefined) continue;
+      if (storageFor(item) === 'custom') customValues[item.key] = value;
+      else fields[item.key] = value;
     }
-
-    if (storageFor(item) === 'custom') customValues[item.key] = value;
-    else fields[item.key] = value;
   }
 
   return Object.keys(customValues).length ? { ...fields, customValues } : fields;
@@ -179,7 +171,7 @@ function sanitizeItem(raw, key, index) {
     enabled: raw.enabled !== false,
     required: raw.required === true,
     numeric: raw.numeric !== false,
-    rows: Number.isFinite(Number(raw.rows)) && raw.rows ? Number(raw.rows) : null,
+    rows: Number.isFinite(Number(raw.rows)) ? Number(raw.rows) : null,
     // 跟 referenceMin／referenceMax 走同一個 numberOrNull。原本這三個只擋 ''，
     // 於是打幾個空白會被 Number('  ') 判成 0——max 變成 0 的話每個數值都會超出上限，
     // 那份報告就再也結不了案；打上非數字則是 NaN，存檔時直接 cast 失敗。

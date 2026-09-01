@@ -34,7 +34,7 @@ const runs = computed(() => sectionRuns(items.value, (item) => item.type === 'te
               <Textarea
               :id="`record-${item.key}`"
               :model-value="valueFor(item)"
-              :rows="item.rows || 4"
+              :rows="item.rows ?? 4"
               :placeholder="item.placeholder"
               class="pr-20"
               @update:model-value="setValue(item, $event)"
@@ -46,7 +46,7 @@ const runs = computed(() => sectionRuns(items.value, (item) => item.type === 'te
               compact
               @update:model-value="setValue(item, $event)"
             />
-            <QuickMenuTrigger :label="item.label" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
+            <QuickMenuTrigger :label="item.label" :quick-menu-id="item.quickMenuId" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
             </div>
           </div>
         </SelectableItem>

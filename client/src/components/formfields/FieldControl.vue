@@ -38,6 +38,10 @@ const entry = computed(() => {
 
 const assessment = computed(() => measurementAssessment(props.item));
 const referenceText = computed(() => labRangeLabel(props.item));
+const imageValue = computed(() => {
+  const value = valueFor(props.item);
+  return Array.isArray(value) ? value : [];
+});
 </script>
 
 <template>
@@ -128,7 +132,7 @@ const referenceText = computed(() => labRangeLabel(props.item));
 
   <QuickSelectField v-else-if="item.type === 'quickSelect'" :item="item" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
 
-  <ImageUploadField v-else-if="item.type === 'image'" :item="item" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
+  <ImageUploadField v-else-if="item.type === 'image'" :item="item" :model-value="imageValue" @update:model-value="setValue(item, $event)" />
 
   <ScalarField v-else :item="item" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
 </template>

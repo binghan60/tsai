@@ -49,6 +49,18 @@ export function deliveryRate({ sent = 0, pending = 0, failed = 0 } = {}) {
   return total ? Math.round((sent / total) * 100) : null;
 }
 
+// pending 跟顯示用的 failed 都刻意把 uncertain 算進去——這樣「寄送異常」卡片的
+// 文案（寄送失敗或結果待確認）與它連去的 /records?view=failed 才會對得起來
+// （那條查詢的 failed 也是 $in: ['failed', 'uncertain']）。但 uncertain 因此
+// 同時出現在 pending 與顯示用 failed 兩邊，拿這兩個數字相加當分母會把 uncertain
+// 算兩次，所以算成功率時分母的第三項改用 statusBreakdown.failed（不含 uncertain）。
+export function deliveryBreakdown(statusBreakdown = {}) {
+  const { sent = 0, finalized = 0, sending = 0, uncertain = 0, failed: failedOnly = 0 } = statusBreakdown;
+  const pending = finalized + sending + uncertain;
+  const failed = failedOnly + uncertain;
+  return { pending, failed, successRate: deliveryRate({ sent, pending, failed: failedOnly }) };
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const today = clinicToday();
@@ -100,8 +112,7 @@ router.get('/', async (req, res, next) => {
     const todayCounts = appointmentStatusCounts(todayAppointmentBuckets);
     const monthCounts = appointmentStatusCounts(monthAppointmentBuckets);
     const previousMonthCounts = appointmentStatusCounts(previousMonthAppointmentBuckets);
-    const pending = statusBreakdown.finalized + statusBreakdown.sending + statusBreakdown.uncertain;
-    const failed = statusBreakdown.failed + statusBreakdown.uncertain;
+    const { pending, failed, successRate } = deliveryBreakdown(statusBreakdown);
 
     res.json({
       ownerCount, petCount, monthlyNewOwnerCount, monthlyNewPetCount,
@@ -111,7 +122,7 @@ router.get('/', async (req, res, next) => {
       today: { total: Object.values(todayCounts).reduce((sum, count) => sum + count, 0), ...todayCounts },
       monthlyAppointments: { total: Object.values(monthCounts).reduce((sum, count) => sum + count, 0), checkedIn: monthCounts.arrived + monthCounts.completed, cancelledOrNoShow: monthCounts.cancelled + monthCounts.no_show, ...monthCounts },
       previousMonthlyAppointments: { total: Object.values(previousMonthCounts).reduce((sum, count) => sum + count, 0), completed: previousMonthCounts.completed },
-      delivery: { sent: statusBreakdown.sent, pending, failed, overdueDraftCount, successRate: deliveryRate({ sent: statusBreakdown.sent, pending, failed }) },
+      delivery: { sent: statusBreakdown.sent, pending, failed, overdueDraftCount, successRate },
       statusBreakdown,
       weeklyTrend: fillWeeklyTrend(weekBoundaries, recordSummary?.weekly ?? []),
     });

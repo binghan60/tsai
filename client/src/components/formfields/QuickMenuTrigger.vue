@@ -7,6 +7,7 @@ import { useRecordForm } from './context';
 const props = defineProps({
   modelValue: { type: [String, null], default: '' },
   label: { type: String, required: true },
+  quickMenuId: { type: String, default: '' },
 });
 const emit = defineEmits(['update:modelValue']);
 
@@ -15,7 +16,6 @@ const root = ref(null);
 const open = ref(false);
 const openUp = ref(false);
 const items = ref([]);
-const normalizedLabel = computed(() => props.label.trim().toLocaleLowerCase());
 const selectedContents = computed(() => new Set(
   String(props.modelValue ?? '').split('\n').map((entry) => entry.trim()).filter(Boolean)
 ));
@@ -46,7 +46,7 @@ function toggle(item) {
 onMounted(async () => {
   try {
     const { data } = await http.get('/quick-menus');
-    const menu = (data ?? []).find((entry) => entry.name.trim().toLocaleLowerCase() === normalizedLabel.value);
+    const menu = (data ?? []).find((entry) => entry._id === props.quickMenuId);
     items.value = (menu?.items ?? []).filter((item) => item.enabled !== false);
   } catch {
     items.value = [];
@@ -57,7 +57,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', closeWhenOutsi
 </script>
 
 <template>
-  <div v-if="!preview && items.length" ref="root" class="absolute right-2 top-11 z-10">
+  <div v-if="!preview && props.quickMenuId && items.length" ref="root" class="absolute right-2 top-11 z-10">
     <button
       type="button"
       class="inline-flex size-7 items-center justify-center rounded-md border border-border/80 bg-background/90 text-primary shadow-sm backdrop-blur-sm transition-colors hover:border-primary/30 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"

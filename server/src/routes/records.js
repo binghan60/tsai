@@ -52,7 +52,11 @@ function pickRecordFields(body) {
   return data;
 }
 
-function sanitizeRecordImages(data, template) {
+function sameImages(left, right) {
+  return JSON.stringify(left ?? []) === JSON.stringify(right ?? []);
+}
+
+function sanitizeRecordImages(data, template, existingRecord = null) {
   if (!data.customValues || typeof data.customValues !== 'object') return data;
   const imageKeys = new Set(
     (template?.sections ?? []).flatMap((section) => (section.items ?? [])
@@ -61,7 +65,9 @@ function sanitizeRecordImages(data, template) {
   );
   const customValues = { ...data.customValues };
   for (const key of imageKeys) {
-    if (customValues[key] !== undefined) customValues[key] = sanitizeImageValue(customValues[key]);
+    if (customValues[key] !== undefined && !sameImages(customValues[key], existingRecord?.customValues?.[key])) {
+      customValues[key] = sanitizeImageValue(customValues[key]);
+    }
   }
   return { ...data, customValues };
 }
@@ -260,10 +266,12 @@ petRecordsRouter.post('/', async (req, res, next) => {
       }
 
       const recordFields = sanitizeRecordImages(pickRecordFields(req.body), template);
+      const defaults = defaultRecordFields(template);
       [record] = await MedicalRecord.create([{
         petId: pet._id,
-        ...defaultRecordFields(template),
+        ...defaults,
         ...recordFields,
+        customValues: { ...(defaults.customValues ?? {}), ...(recordFields.customValues ?? {}) },
         templateId: template._id,
         templateVersion: template.version,
         examType: template.name,
@@ -413,10 +421,10 @@ recordsRouter.put('/:id', async (req, res, next) => {
     if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
       return res.status(428).json({ message: '缺少病歷版本資訊，請重新整理後再儲存' });
     }
-    const existingForValidation = await MedicalRecord.findById(req.params.id).select('templateId');
+    const existingForValidation = await MedicalRecord.findById(req.params.id).select('templateId customValues');
     if (!existingForValidation) return res.status(404).json({ message: '找不到指定的健康報告' });
     const template = await templateForRecord(existingForValidation);
-    const recordFields = sanitizeRecordImages(pickRecordFields(req.body), template);
+    const recordFields = sanitizeRecordImages(pickRecordFields(req.body), template, existingForValidation);
     const record = await MedicalRecord.findOneAndUpdate(
       {
         _id: req.params.id,

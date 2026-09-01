@@ -19,7 +19,7 @@ export const http = axios.create({
 http.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && !error.config?.url?.startsWith('/auth/')) {
+    if (error.response?.status === 401 && !error.config?.url?.startsWith('/auth/') && !error.config?.url?.startsWith('/public/')) {
       window.dispatchEvent(new CustomEvent('auth:unauthorized'));
     }
     return Promise.reject(error);

@@ -50,6 +50,10 @@ export function useSearchQueryParam(paramName = 'q', defaultValue = '') {
     const next = String(value ?? '').trim();
     scheduleQueryPatch(router, route, paramName, next && next !== defaultValue ? next : undefined);
   });
+  watch(() => route.query[paramName], (value) => {
+    const next = typeof value === 'string' ? value : defaultValue;
+    if (query.value !== next) query.value = next;
+  });
 
   return query;
 }
