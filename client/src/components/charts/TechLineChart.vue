@@ -15,9 +15,20 @@ const props = defineProps({
 })
 
 const { isDark } = useTheme()
-const palette = computed(() => isDark.value
-  ? { primary: '#3e93a6', text: '#9aa5ad', grid: '#2c3a44', tooltip: '#121b22', tooltipText: '#e9eef1', area: 'rgba(62, 147, 166, 0.22)' }
-  : { primary: '#0e5a6b', text: '#6d665d', grid: '#e0dad1', tooltip: '#ffffff', tooltipText: '#1f1b17', area: 'rgba(14, 90, 107, 0.15)' })
+const palette = computed(() => {
+  // Keep this dependency so ECharts refreshes after the root theme class changes.
+  void isDark.value
+  const styles = getComputedStyle(document.documentElement)
+  const color = (token) => styles.getPropertyValue(token).trim()
+  return {
+    primary: color('--chart-1'),
+    text: color('--muted-foreground'),
+    grid: color('--border'),
+    tooltip: color('--popover'),
+    tooltipText: color('--popover-foreground'),
+    area: color('--chart-area'),
+  }
+})
 
 function labelFor(item) {
   if (item.label) return item.label

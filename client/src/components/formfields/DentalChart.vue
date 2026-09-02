@@ -4,15 +4,21 @@ import * as d3 from 'd3';
 
 const props = defineProps({ modelValue: { type: [Object, String], default: () => ({ teeth: {} }) }, readonly: Boolean });
 const emit = defineEmits(['update:modelValue']);
+const DENTAL = {
+  normal: 'var(--dental-normal)', missing: 'var(--dental-missing)', calculus: 'var(--dental-calculus)',
+  periodontal: 'var(--dental-periodontal)', extracted: 'var(--dental-extracted)', other: 'var(--dental-other)',
+  right: 'var(--dental-right)', left: 'var(--dental-left)', outline: 'var(--dental-outline)',
+  guide: 'var(--dental-guide)', fieldBorder: 'var(--dental-field-border)', selected: 'var(--dental-selected)',
+};
 const STATES = [
-  { value: 'normal', label: '正常', color: '#ffffff' }, { value: 'missing', label: '缺牙', color: '#8b5e3c' },
-  { value: 'calculus', label: '牙結石', color: '#d49a18' }, { value: 'periodontal', label: '牙周病', color: '#71717a' },
-  { value: 'extracted', label: '拔除', color: '#d34b4b' }, { value: 'other', label: '其他', color: '#7c5ce0' },
+  { value: 'normal', label: '正常', color: DENTAL.normal }, { value: 'missing', label: '缺牙', color: DENTAL.missing },
+  { value: 'calculus', label: '牙結石', color: DENTAL.calculus }, { value: 'periodontal', label: '牙周病', color: DENTAL.periodontal },
+  { value: 'extracted', label: '拔除', color: DENTAL.extracted }, { value: 'other', label: '其他', color: DENTAL.other },
 ];
 const stateByValue = Object.fromEntries(STATES.map((state) => [state.value, state]));
 const swatchStyle = (state) => ({
   backgroundColor: state.color,
-  border: state.value === 'normal' ? '1px solid #a1a1aa' : '1px solid transparent',
+  border: state.value === 'normal' ? `1px solid ${DENTAL.fieldBorder}` : '1px solid transparent',
 });
 const svg = ref(null); const selectedCode = ref(null);
 const menuRef = ref(null); const menuPos = ref(null); // 點牙齒時打開的右鍵選單風格浮動選單，取代原本畫面下方常駐的狀態面板
@@ -23,7 +29,7 @@ const noteFor = (code) => chart.value.teeth[code]?.note ?? '';
 // 版面 100% 對照 public/tooth.jpg（貓 Modified Triadan 咬合面圖）取樣：座標直接用該影像的像素座標系。
 // 直式佈局，上顎與下顎的牙弓相對，編號放在牙齒外側（右側 1xx/4xx 紅字、左側 2xx/3xx 藍字）。
 // 只定義右側象限（1xx/4xx），左側（2xx/3xx）以各顎的中軸鏡射產生；影像本身左右略有手繪誤差，取右側為準。
-const RED = '#d81e1e'; const BLUE = '#2f3d9d';
+const RIGHT_COLOR = DENTAL.right; const LEFT_COLOR = DENTAL.left;
 const AXIS = { maxilla: 1046, mandible: 1074 }; // 鏡射軸 x 座標的兩倍（上顎軸 523、下顎軸 537）
 // x/y 牙齒中心、rx/ry 半徑、rot 傾斜角（度）、lx/ly 編號文字位置
 const rightTeethSampled = [
@@ -53,7 +59,7 @@ const mirrorTooth = (t) => {
   const axis = t.code[0] === '1' ? AXIS.maxilla : AXIS.mandible;
   return { ...t, code: (t.code[0] === '1' ? '2' : '3') + t.code.slice(1), x: axis - t.x, lx: axis - t.lx, rot: -t.rot };
 };
-const labelColor = (d) => (d.code[0] === '1' || d.code[0] === '4' ? RED : BLUE);
+const labelColor = (d) => (d.code[0] === '1' || d.code[0] === '4' ? RIGHT_COLOR : LEFT_COLOR);
 
 // 滿版備註欄：每顆牙延伸一條連接線到左右兩側的備註方塊，方塊依 rightTeeth 的順序排成兩欄（R 在左、L 在右，
 // 同一列互為鏡射牙位），欄位落在牙弓左右兩側的空白區。牙位代號貼在方塊外側（不再疊在方塊正上方），
@@ -90,7 +96,7 @@ function toothPath(d) {
 function render() {
   if (!svg.value) return;
   const root = d3.select(svg.value).selectAll('g.dental-root').data([null]).join('g').attr('class', 'dental-root');
-  root.selectAll('text.side').data([{ text: 'R', x: 258, fill: RED }, { text: 'L', x: 792, fill: BLUE }]).join('text').attr('class', 'side').attr('x', (d) => d.x).attr('y', 676).attr('text-anchor', 'middle').attr('fill', (d) => d.fill).attr('font-size', 54).attr('font-weight', 700).text((d) => d.text);
+  root.selectAll('text.side').data([{ text: 'R', x: 258, fill: RIGHT_COLOR }, { text: 'L', x: 792, fill: LEFT_COLOR }]).join('text').attr('class', 'side').attr('x', (d) => d.x).attr('y', 676).attr('text-anchor', 'middle').attr('fill', (d) => d.fill).attr('font-size', 54).attr('font-weight', 700).text((d) => d.text);
   // outline:none 直接用 d3 內聯樣式設定：這個 <g> 是 d3 動態建立的節點，Vue scoped CSS 的屬性選擇器套不到它，
   // 靠 <style scoped> 關不掉瀏覽器對可聚焦 SVG 元素的預設方形 focus outline。
   const group = root.selectAll('g.tooth').data(teeth, (d) => d.code).join('g').attr('class', 'tooth').attr('tabindex', props.readonly ? null : 0).attr('role', props.readonly ? null : 'button').attr('aria-label', (d) => `牙位 ${d.code}`).style('outline', 'none')
@@ -103,14 +109,14 @@ function render() {
     });
   group.selectAll('circle.hit').data((d) => [d]).join('circle').attr('class', 'hit').attr('cx', (d) => d.x).attr('cy', (d) => d.y).attr('r', (d) => Math.max(26, d.ry + 12)).attr('fill', 'transparent');
   group.selectAll('path.shape').data((d) => [d]).join('path').attr('class', 'shape').attr('d', toothPath).attr('transform', (d) => `rotate(${d.rot} ${d.x} ${d.y})`)
-    .attr('fill', (d) => stateByValue[chart.value.teeth[d.code]?.status]?.color ?? '#fff').attr('fill-opacity', (d) => chart.value.teeth[d.code] ? 0.82 : 1)
-    .attr('stroke', (d) => d.code === selectedCode.value ? '#155e75' : '#3f3f46').attr('stroke-width', (d) => d.code === selectedCode.value ? 6 : 3);
+    .attr('fill', (d) => stateByValue[chart.value.teeth[d.code]?.status]?.color ?? DENTAL.normal).attr('fill-opacity', (d) => chart.value.teeth[d.code] ? 0.82 : 1)
+    .attr('stroke', (d) => d.code === selectedCode.value ? DENTAL.selected : DENTAL.outline).attr('stroke-width', (d) => d.code === selectedCode.value ? 6 : 3);
   group.selectAll('text.label').data((d) => [d]).join('text').attr('class', 'label').attr('x', (d) => d.lx).attr('y', (d) => d.ly).attr('text-anchor', 'middle').attr('font-size', 30).attr('font-weight', 700).attr('fill', labelColor).text((d) => d.code);
 
   // 連接線：牙齒中心 → 側欄備註方塊內緣，選中時連同牙齒一起變成強調色，讓「這顆牙對應這個方塊」看得出來
   group.selectAll('line.leader').data((d) => [d]).join('line').attr('class', 'leader')
     .attr('x1', (d) => d.x).attr('y1', (d) => d.y).attr('x2', (d) => d.lineEndX).attr('y2', (d) => d.boxY)
-    .attr('stroke', (d) => d.code === selectedCode.value ? '#155e75' : '#c4c4cc').attr('stroke-width', (d) => d.code === selectedCode.value ? 2.5 : 1.5);
+    .attr('stroke', (d) => d.code === selectedCode.value ? DENTAL.selected : DENTAL.guide).attr('stroke-width', (d) => d.code === selectedCode.value ? 2.5 : 1.5);
   // 備註方塊外側（不是正上方）的牙位代號：貼著方塊同一列橫向排列，不佔額外的直排空間，ROW_GAP 才有辦法縮小
   group.selectAll('text.boxLabel').data((d) => [d]).join('text').attr('class', 'boxLabel')
     .attr('x', (d) => d.labelX).attr('y', (d) => d.boxY + 7).attr('text-anchor', (d) => d.labelAnchor)
@@ -125,13 +131,13 @@ function render() {
       textarea = document.createElement('textarea');
       Object.assign(textarea.style, {
         width: '100%', height: '100%', boxSizing: 'border-box', resize: 'none', outline: 'none',
-        border: '1.5px solid #d4d4d8', borderLeftWidth: '4px', borderRadius: '6px', padding: '4px 6px',
+        border: `1.5px solid ${DENTAL.fieldBorder}`, borderLeftWidth: '4px', borderRadius: '6px', padding: '4px 6px',
         fontSize: '18px', lineHeight: '1.3', fontFamily: 'inherit', color: 'var(--color-foreground)', background: 'var(--color-field)',
       });
       textarea.addEventListener('input', (event) => { if (!props.readonly) setNoteFor(d.code, event.target.value); });
-      textarea.addEventListener('focus', () => { textarea.style.borderTopColor = textarea.style.borderRightColor = textarea.style.borderBottomColor = '#155e75'; });
+      textarea.addEventListener('focus', () => { textarea.style.borderTopColor = textarea.style.borderRightColor = textarea.style.borderBottomColor = DENTAL.selected; });
       textarea.addEventListener('blur', () => {
-        const idle = d.code === selectedCode.value ? '#155e75' : '#d4d4d8';
+        const idle = d.code === selectedCode.value ? DENTAL.selected : DENTAL.fieldBorder;
         textarea.style.borderTopColor = textarea.style.borderRightColor = textarea.style.borderBottomColor = idle;
       });
       this.appendChild(textarea);
@@ -139,14 +145,14 @@ function render() {
     textarea.readOnly = props.readonly;
     textarea.placeholder = props.readonly ? '' : '備註…';
     textarea.style.background = props.readonly ? 'transparent' : 'var(--color-field)';
-    textarea.style.borderLeftColor = stateByValue[chart.value.teeth[d.code]?.status]?.color ?? '#d4d4d8';
+    textarea.style.borderLeftColor = stateByValue[chart.value.teeth[d.code]?.status]?.color ?? DENTAL.fieldBorder;
     // 選中光環跟 focus 分開處理但選中時明顯加強：邊框也一起變成強調色（不只陰影環），選牙不一定會把游標移進方塊，
     // 兩者各自獨立才不會互相蓋掉，focus 中的方塊維持 focus 監聽器設的顏色，不被這裡覆寫。
     if (document.activeElement !== textarea) {
-      const idle = d.code === selectedCode.value ? '#155e75' : '#d4d4d8';
+      const idle = d.code === selectedCode.value ? DENTAL.selected : DENTAL.fieldBorder;
       textarea.style.borderTopColor = textarea.style.borderRightColor = textarea.style.borderBottomColor = idle;
     }
-    textarea.style.boxShadow = d.code === selectedCode.value ? '0 0 0 3px rgba(21,94,117,0.5), 0 0 14px 2px rgba(21,94,117,0.45)' : 'none';
+    textarea.style.boxShadow = d.code === selectedCode.value ? '0 0 0 3px var(--dental-selected-ring), 0 0 14px 2px var(--dental-selected-glow)' : 'none';
     if (document.activeElement !== textarea) { const v = noteFor(d.code); if (textarea.value !== v) textarea.value = v; }
   });
 }
@@ -212,5 +218,5 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.tooth:not([tabindex]) { cursor: default; } .tooth[tabindex] { cursor: pointer; outline: none; } .tooth[tabindex]:focus path.shape { stroke: #155e75; stroke-width: 6; }
+.tooth:not([tabindex]) { cursor: default; } .tooth[tabindex] { cursor: pointer; outline: none; } .tooth[tabindex]:focus path.shape { stroke: var(--dental-selected); stroke-width: 6; }
 </style>

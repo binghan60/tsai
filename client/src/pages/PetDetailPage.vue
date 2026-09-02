@@ -453,7 +453,7 @@ watch(
             <p class="mt-0.5 text-xs text-muted-foreground">寵物資料<span v-if="pet.legacyMedicalRecordNumber"> · 舊病歷號：{{ pet.legacyMedicalRecordNumber }}</span></p>
           </div>
         </div>
-        <Button variant="outline" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
+        <Button variant="secondary" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
       </div>
 
       <div v-if="hasAnyPetDetail" class="mt-4 space-y-4 border-t border-border pt-3 text-sm">

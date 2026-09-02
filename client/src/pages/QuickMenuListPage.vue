@@ -119,7 +119,7 @@ onMounted(load);
       <div v-if="visibleMenus.length" class="space-y-3 xl:hidden">
         <Card v-for="menu in pagedMenus" :key="menu._id" class="gap-3 p-4 shadow-sm">
           <button type="button" class="min-w-0 text-left" @click="open(menu)"><span class="block font-semibold text-primary">{{ menu.name }}</span><span class="mt-1 block line-clamp-2 text-sm text-muted-foreground">{{ menu.items.length ? menu.items.map((item) => item.content).join('、') : '尚未加入快捷項目' }}</span></button>
-          <div class="flex items-center justify-between gap-2"><span class="text-xs text-muted-foreground">{{ menu.items.length }} 個項目</span><div class="flex gap-2"><Button type="button" size="sm" @click="open(menu)"><Pencil class="h-4 w-4" stroke-width="1.75" />編輯</Button><Button type="button" variant="destructive" size="sm" @click="deleteTarget = menu"><Trash2 class="h-4 w-4" stroke-width="1.75" />刪除</Button></div></div>
+          <div class="flex items-center justify-between gap-2"><span class="text-xs text-muted-foreground">{{ menu.items.length }} 個項目</span><div class="flex gap-2"><Button type="button" variant="secondary" size="sm" @click="open(menu)"><Pencil class="h-4 w-4" stroke-width="1.75" />編輯</Button><Button type="button" variant="destructive" size="sm" @click="deleteTarget = menu"><Trash2 class="h-4 w-4" stroke-width="1.75" />刪除</Button></div></div>
         </Card>
       </div>
       <Pagination v-if="visibleMenus.length" :page="page" :total-pages="totalPages" @update:page="page = $event" />

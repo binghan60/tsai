@@ -14,9 +14,19 @@ const props = defineProps({
 })
 
 const { isDark } = useTheme()
-const palette = computed(() => isDark.value
-  ? { steps: ['#88ccdd', '#56b9d2', '#30a3c0'], text: '#9aa5ad', tooltip: '#121b22', tooltipText: '#e9eef1', border: '#2c3a44' }
-  : { steps: ['#54bfd4', '#19abc8', '#057c94'], text: '#6d665d', tooltip: '#ffffff', tooltipText: '#1f1b17', border: '#e0dad1' })
+const palette = computed(() => {
+  // Keep this dependency so ECharts refreshes after the root theme class changes.
+  void isDark.value
+  const styles = getComputedStyle(document.documentElement)
+  const color = (token) => styles.getPropertyValue(token).trim()
+  return {
+    steps: [color('--chart-3'), color('--chart-2'), color('--chart-1')],
+    text: color('--muted-foreground'),
+    tooltip: color('--popover'),
+    tooltipText: color('--popover-foreground'),
+    border: color('--border'),
+  }
+})
 
 const option = computed(() => {
   const colors = palette.value

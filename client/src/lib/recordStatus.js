@@ -26,7 +26,7 @@ export const DELIVERY_STATUS_META = {
 // 寄送流水帳的事件。跟 DELIVERY_STATUS_META 分開是因為兩者回答的問題不同：
 // 那個是「這份報告現在的寄送狀態」，這個是「當時那一次嘗試發生了什麼」。
 export const DELIVERY_EVENT_META = {
-  queued: { label: '開始寄送', class: 'bg-info-surface text-info', dotClass: 'bg-info' },
+  queued: { label: '寄送中', class: 'bg-info-surface text-info', dotClass: 'bg-info' },
   sent: { label: '寄送成功', class: 'bg-success-surface text-success', dotClass: 'bg-success' },
   failed: { label: '寄送失敗', class: 'bg-danger-surface text-danger', dotClass: 'bg-danger' },
   uncertain: { label: '結果待確認', class: 'border-danger/45 text-danger', dotClass: 'bg-danger/60' },

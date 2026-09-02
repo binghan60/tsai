@@ -243,7 +243,7 @@ watch(
             <p class="mt-0.5 text-xs text-muted-foreground">飼主資料</p>
           </div>
         </div>
-        <Button type="button" variant="outline" @click="editOwnerOpen = true"><Pencil class="h-4 w-4" />編輯飼主資料</Button>
+        <Button type="button" variant="secondary" @click="editOwnerOpen = true"><Pencil class="h-4 w-4" />編輯飼主資料</Button>
       </div>
       <dl v-if="owner.phone || owner.email || petPagination.total" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
         <div v-if="owner.phone" class="min-w-0">

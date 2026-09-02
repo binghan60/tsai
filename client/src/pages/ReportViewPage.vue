@@ -76,10 +76,10 @@ function reportIdentity() {
 
 // 這頁固定淺色、不套 dark: variant（見 CLAUDE.md），所以不共用 DELIVERY_EVENT_META。
 const EVENT_STYLE = {
-  queued: { label: '開始寄送', class: 'bg-sky-50 text-sky-700' },
-  sent: { label: '寄送成功', class: 'bg-emerald-50 text-emerald-700' },
-  failed: { label: '寄送失敗', class: 'bg-red-50 text-red-700' },
-  uncertain: { label: '結果待確認', class: 'bg-amber-50 text-amber-800' },
+  queued: { label: '寄送中', class: 'bg-report-info-surface text-report-info' },
+  sent: { label: '寄送成功', class: 'bg-report-success-surface text-report-success' },
+  failed: { label: '寄送失敗', class: 'bg-report-danger-surface text-report-danger' },
+  uncertain: { label: '結果待確認', class: 'bg-report-warning-surface text-report-warning' },
 };
 
 async function fetchDeliveryLogs() {
@@ -384,12 +384,12 @@ watch(
 </script>
 
 <template>
-  <div class="min-h-screen bg-stone-100 px-4 py-6 print:bg-white print:p-0 sm:px-6 sm:py-10">
+  <div class="min-h-screen bg-report-canvas px-4 py-6 print:bg-report-surface print:p-0 sm:px-6 sm:py-10">
     <section v-if="record" class="mx-auto max-w-[210mm] space-y-4 print:max-w-none print:space-y-0">
-      <div class="sticky top-2 z-20 -mx-2 flex flex-col gap-2 rounded-xl border border-stone-200 bg-stone-100/95 px-2 py-2 shadow-sm print:hidden sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+      <div class="sticky top-2 z-20 -mx-2 flex flex-col gap-2 rounded-xl border border-report-border bg-report-canvas/95 px-2 py-2 shadow-sm print:hidden sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div v-if="isPreview" class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <Button type="button" variant="outline" class="w-full border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900 sm:w-auto" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
-          <Button type="button" variant="outline" class="w-full border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50 hover:text-stone-900 sm:w-auto" @click="router.push('/records')"><List class="h-4 w-4" />回就診紀錄</Button>
+          <Button type="button" variant="outline" class="w-full border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted hover:text-report-foreground sm:w-auto" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
+          <Button type="button" variant="outline" class="w-full border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted hover:text-report-foreground sm:w-auto" @click="router.push('/records')"><List class="h-4 w-4" />回就診紀錄</Button>
         </div>
         <div v-else></div>
         <div class="flex w-full flex-wrap justify-start gap-2 sm:w-auto sm:justify-end">
@@ -401,23 +401,23 @@ watch(
         </div>
       </div>
 
-      <div v-if="isDraft" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿。確認結案後會產生正式 PDF 並鎖定此版本；Email 可在結案後另外寄送。</p><p v-if="!ownerEmail" class="mt-2">飼主尚未填寫 Email，但不影響結案。<router-link v-if="record.owner?._id" :to="`/owners/${record.owner._id}?edit=1`" class="font-medium underline">前往補填飼主資料</router-link></p></div>
-      <div v-else-if="isPreview && !pdfReady" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm print:hidden" :class="pdfFailed ? 'border-red-200 bg-red-50 text-red-800' : 'border-sky-200 bg-sky-50 text-sky-800'">
+      <div v-if="isDraft" class="rounded-xl border border-report-warning-border bg-report-warning-surface px-4 py-3 text-sm text-report-warning-strong print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿。確認結案後會產生正式 PDF 並鎖定此版本；Email 可在結案後另外寄送。</p><p v-if="!ownerEmail" class="mt-2">飼主尚未填寫 Email，但不影響結案。<router-link v-if="record.owner?._id" :to="`/owners/${record.owner._id}?edit=1`" class="font-medium underline">前往補填飼主資料</router-link></p></div>
+      <div v-else-if="isPreview && !pdfReady" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm print:hidden" :class="pdfFailed ? 'border-report-danger-border bg-report-danger-surface text-report-danger-strong' : 'border-report-info-border bg-report-info-surface text-report-info'">
         <span class="flex items-start gap-2"><AlertTriangle v-if="pdfFailed" class="mt-0.5 h-5 w-5 shrink-0" /><Download v-else class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>{{ pdfFailed ? 'PDF 產生失敗' : 'PDF 產生中' }}</strong><span class="block">{{ pdfFailed ? (record.pdfError || '請重新產生 PDF。') : '報告已結案並鎖定，可先離開此頁；完成後會自動更新。' }}</span></span></span>
-        <Button v-if="pdfFailed" type="button" size="sm" variant="secondary" class="border-current/25 bg-white/85 text-current hover:bg-white" @click="retryPdf">重新產生 PDF</Button>
+        <Button v-if="pdfFailed" type="button" size="sm" variant="secondary" class="border-current/25 bg-report-surface/85 text-current hover:bg-report-surface" @click="retryPdf">重新產生 PDF</Button>
       </div>
-      <div v-if="isPreview && record.supersededBy" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><span><strong>此報告已有後續修訂版本</strong><span class="block">這份舊版仍完整保留，請以後續版本為準。</span></span><router-link :to="`/records/${record.supersededBy}/preview`" class="inline-flex min-h-10 items-center font-medium underline">查看下一版</router-link></div>
-      <div v-else-if="!isPreview && record.hasNewerVersion" class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950 print:hidden"><strong>此報告已有更新版本</strong><span class="mt-1 block">請聯絡院方取得最新版健檢報告。</span></div>
+      <div v-if="isPreview && record.supersededBy" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-report-warning-border bg-report-warning-surface px-4 py-3 text-sm text-report-warning-strong print:hidden"><span><strong>此報告已有後續修訂版本</strong><span class="block">這份舊版仍完整保留，請以後續版本為準。</span></span><router-link :to="`/records/${record.supersededBy}/preview`" class="inline-flex min-h-10 items-center font-medium underline">查看下一版</router-link></div>
+      <div v-else-if="!isPreview && record.hasNewerVersion" class="rounded-xl border border-report-warning-border bg-report-warning-surface px-4 py-3 text-sm text-report-warning-strong print:hidden"><strong>此報告已有更新版本</strong><span class="mt-1 block">請聯絡院方取得最新版健檢報告。</span></div>
       <div
         v-if="isPreview && isFinalized"
         class="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm print:hidden"
-        :class="deliveryFailed ? 'border-red-200 bg-red-50 text-red-800' : isSent ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : deliverySending ? 'border-sky-200 bg-sky-50 text-sky-800' : 'border-brand-200 bg-brand-50 text-brand-800'"
+        :class="deliveryFailed ? 'border-report-danger-border bg-report-danger-surface text-report-danger-strong' : isSent ? 'border-report-success-border bg-report-success-surface text-report-success-strong' : deliverySending ? 'border-report-info-border bg-report-info-surface text-report-info' : 'border-report-warning-border bg-report-warning-surface text-report-warning'"
       >
         <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案 · 第 {{ record.reportVersion || 1 }} 版</strong><span class="block">{{ isSent ? `已寄送至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
-          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-white/85 text-xs text-current hover:border-current/40 hover:bg-white sm:w-auto sm:text-sm" :disabled="emailing || deliverySending || !pdfReady" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
-          <Button v-else-if="record.owner?._id" as-child variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-white/85 text-xs text-current hover:border-current/40 hover:bg-white sm:w-auto sm:text-sm"><router-link :to="`/owners/${record.owner._id}?edit=1`">補填 Email</router-link></Button>
-          <Button type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-white/85 text-xs text-current hover:border-current/40 hover:bg-white sm:w-auto sm:text-sm" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" /><span class="sm:hidden">{{ sharing ? '處理中…' : shareIsActive ? '複製連結' : '建立連結' }}</span><span class="hidden sm:inline">{{ shareActionLabel }}</span></Button>
+          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="emailing || deliverySending || !pdfReady" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
+          <Button v-else-if="record.owner?._id" as-child variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm"><router-link :to="`/owners/${record.owner._id}?edit=1`">補填 Email</router-link></Button>
+          <Button type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" /><span class="sm:hidden">{{ sharing ? '處理中…' : shareIsActive ? '複製連結' : '建立連結' }}</span><span class="hidden sm:inline">{{ shareActionLabel }}</span></Button>
           <div class="col-span-2 sm:col-auto">
           <RowActions
             :actions="[
@@ -433,51 +433,51 @@ watch(
       </div>
       <!-- 寄送歷程。只在後台預覽出現：收件信箱與失敗原因是內部資訊，
            飼主端的 /report/:token 不該看到，print:hidden 也讓它不進 PDF。 -->
-      <details v-if="isPreview && deliveryLogs.length" class="rounded-xl border border-stone-300 bg-white px-4 py-3 text-sm text-stone-700 print:hidden">
-        <summary class="flex min-h-9 cursor-pointer list-none items-center gap-2 font-semibold text-stone-800">
-          <Mail class="h-4 w-4 shrink-0 text-stone-500" stroke-width="1.75" />
+      <details v-if="isPreview && deliveryLogs.length" class="rounded-xl border border-report-border-strong bg-report-surface px-4 py-3 text-sm text-report-text print:hidden">
+        <summary class="flex min-h-9 cursor-pointer list-none items-center gap-2 font-semibold text-report-foreground">
+          <Mail class="h-4 w-4 shrink-0 text-report-muted" stroke-width="1.75" />
           寄送歷程（{{ deliveryLogs.length }} 筆）
         </summary>
-        <ul class="mt-3 space-y-2 border-t border-stone-200 pt-3">
+        <ul class="mt-3 space-y-2 border-t border-report-border pt-3">
           <li v-for="log in deliveryLogs" :key="log._id" class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-medium" :class="EVENT_STYLE[log.event]?.class">{{ EVENT_STYLE[log.event]?.label || log.event }}</span>
-            <span class="shrink-0 text-xs tabular-nums text-stone-500">{{ formatDateTime(log.createdAt) }}</span>
-            <span v-if="log.recipient" class="min-w-0 text-xs text-stone-600">寄至 {{ log.recipient }}</span>
-            <span v-if="log.error" class="flex w-full items-start gap-1 text-xs text-red-700">
+            <span class="shrink-0 text-xs tabular-nums text-report-muted">{{ formatDateTime(log.createdAt) }}</span>
+            <span v-if="log.recipient" class="min-w-0 text-xs text-report-text">寄至 {{ log.recipient }}</span>
+            <span v-if="log.error" class="flex w-full items-start gap-1 text-xs text-report-danger">
               <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" /><span class="min-w-0">{{ log.error }}</span>
             </span>
           </li>
         </ul>
-        <p class="mt-3 border-t border-stone-200 pt-2 text-xs text-stone-500">
+        <p class="mt-3 border-t border-report-border pt-2 text-xs text-report-muted">
           完整寄送歷程（含已刪除報告）請見
           <router-link to="/records/deliveries" class="font-medium underline">寄送歷程</router-link>。
         </p>
       </details>
 
-      <div v-if="shareNotice" class="rounded-xl border border-emerald-200 bg-white px-4 py-4 text-sm text-stone-700 print:hidden">
-        <p class="font-semibold text-emerald-800">{{ shareNotice.emailed ? `郵件伺服器已接受寄送至 ${record.sentTo}` : shareNotice.copied ? '分享連結已建立並複製' : '分享連結已建立' }}</p>
-        <p class="mt-2 break-all rounded-lg bg-stone-100 px-3 py-2 font-mono text-xs">{{ shareNotice.url }}</p>
-        <p class="mt-2 text-xs text-stone-500">{{ shareExpiryNote }}</p>
+      <div v-if="shareNotice" class="rounded-xl border border-report-success-border bg-report-surface px-4 py-4 text-sm text-report-text print:hidden">
+        <p class="font-semibold text-report-success-strong">{{ shareNotice.emailed ? `郵件伺服器已接受寄送至 ${record.sentTo}` : shareNotice.copied ? '分享連結已建立並複製' : '分享連結已建立' }}</p>
+        <p class="mt-2 break-all rounded-lg bg-report-canvas px-3 py-2 font-mono text-xs">{{ shareNotice.url }}</p>
+        <p class="mt-2 text-xs text-report-muted">{{ shareExpiryNote }}</p>
         <div class="mt-3 flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" class="border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</Button>
+          <Button type="button" variant="outline" size="sm" class="border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</Button>
         </div>
-        <p v-if="!ownerEmail" class="mt-3 text-xs text-amber-700">這位飼主尚未填寫 Email，請先複製連結，再透過其他方式傳送。</p>
+        <p v-if="!ownerEmail" class="mt-3 text-xs text-report-warning">這位飼主尚未填寫 Email，請先複製連結，再透過其他方式傳送。</p>
       </div>
-      <p v-if="error" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 print:hidden">{{ error }}</p>
+      <p v-if="error" class="rounded-xl border border-report-danger-border bg-report-danger-surface px-4 py-3 text-sm text-report-danger print:hidden">{{ error }}</p>
 
-      <article class="report-sheet rounded-2xl border border-stone-200 bg-white p-6 shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none sm:p-[12mm]">
-        <div v-if="record.supersededBy || record.hasNewerVersion" class="mb-5 hidden border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950 print:block">此版本已有後續修訂報告，請以最新版為準。</div>
+      <article class="report-sheet rounded-2xl border border-report-border bg-report-surface p-6 text-report-foreground shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none sm:p-[12mm]">
+        <div v-if="record.supersededBy || record.hasNewerVersion" class="mb-5 hidden border border-report-warning-border bg-report-warning-surface px-4 py-3 text-sm font-semibold text-report-warning-strong print:block">此版本已有後續修訂報告，請以最新版為準。</div>
         <header class="flex flex-col gap-5 border-b border-brand-100 pb-6 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div class="flex items-center gap-3">
               <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-12 w-14 object-contain" />
               <div>
                 <div class="text-xl font-semibold text-brand-700">謙華動物醫院</div>
-                <div class="mt-0.5 text-sm font-medium text-stone-600">寵物健康檢查報告</div>
+                <div class="mt-0.5 text-sm font-medium text-report-text">寵物健康檢查報告</div>
               </div>
             </div>
           </div>
-          <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-stone-600 sm:text-right">
+          <dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm text-report-text sm:text-right">
             <template v-for="role in HEADER_ROLES" :key="role">
               <template v-if="itemByRole(role) && valueByRole(role)">
                 <dt class="font-medium">{{ itemByRole(role).label }}</dt>
@@ -492,16 +492,16 @@ watch(
           </dl>
         </header>
 
-        <section class="mt-6 rounded-xl bg-stone-50 p-5">
-          <h1 class="text-2xl font-semibold text-stone-900">{{ record.pet?.name || '寵物姓名未記錄' }}</h1>
+        <section class="mt-6 rounded-xl bg-report-surface-muted p-5">
+          <h1 class="text-2xl font-semibold text-report-foreground">{{ record.pet?.name || '寵物姓名未記錄' }}</h1>
           <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-            <div v-if="record.owner?.name"><dt class="text-xs font-medium text-stone-500">飼主</dt><dd class="mt-1 text-stone-800">{{ record.owner.name }}</dd></div>
-            <div v-if="record.pet?.species || record.pet?.breed"><dt class="text-xs font-medium text-stone-500">物種／品種</dt><dd class="mt-1 text-stone-800">{{ record.pet?.species || '' }}<template v-if="record.pet?.species && record.pet?.breed">／</template>{{ record.pet?.breed || '' }}</dd></div>
-            <div v-if="sexAndAgeLabel"><dt class="text-xs font-medium text-stone-500">性別／健檢時年齡</dt><dd class="mt-1 text-stone-800">{{ sexAndAgeLabel }}</dd></div>
+            <div v-if="record.owner?.name"><dt class="text-xs font-medium text-report-muted">飼主</dt><dd class="mt-1 text-report-foreground">{{ record.owner.name }}</dd></div>
+            <div v-if="record.pet?.species || record.pet?.breed"><dt class="text-xs font-medium text-report-muted">物種／品種</dt><dd class="mt-1 text-report-foreground">{{ record.pet?.species || '' }}<template v-if="record.pet?.species && record.pet?.breed">／</template>{{ record.pet?.breed || '' }}</dd></div>
+            <div v-if="sexAndAgeLabel"><dt class="text-xs font-medium text-report-muted">性別／健檢時年齡</dt><dd class="mt-1 text-report-foreground">{{ sexAndAgeLabel }}</dd></div>
           </dl>
         </section>
 
-        <section v-if="record.pet?.allergies || record.pet?.chronicConditions || record.pet?.currentMedications" class="mt-6 border-l-4 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+        <section v-if="record.pet?.allergies || record.pet?.chronicConditions || record.pet?.currentMedications" class="mt-6 border-l-4 border-report-warning-accent bg-report-warning-surface px-4 py-3 text-sm text-report-warning-strong">
           <p v-if="record.pet.allergies"><strong>過敏：</strong>{{ record.pet.allergies }}</p>
           <p v-if="record.pet.chronicConditions"><strong>慢性病／重要病史：</strong>{{ record.pet.chronicConditions }}</p>
           <p v-if="record.pet.currentMedications"><strong>目前用藥：</strong>{{ record.pet.currentMedications }}</p>
@@ -514,17 +514,17 @@ watch(
           :skip-roles="HEADER_ROLES"
         />
 
-        <footer class="mt-10 border-t border-brand-100 pt-4 text-center text-xs text-stone-500">本報告由謙華動物醫院製作 · 第 {{ record.reportVersion || 1 }} 版 · {{ isDraft ? '草稿更新時間' : 'PDF 產生時間' }} {{ formatDateTime(isDraft ? (record.updatedAt || record.createdAt) : (record.pdfGeneratedAt || record.finalizedAt || record.updatedAt || record.createdAt)) }}</footer>
+        <footer class="mt-10 border-t border-brand-100 pt-4 text-center text-xs text-report-muted">本報告由謙華動物醫院製作 · 第 {{ record.reportVersion || 1 }} 版 · {{ isDraft ? '草稿更新時間' : 'PDF 產生時間' }} {{ formatDateTime(isDraft ? (record.updatedAt || record.createdAt) : (record.pdfGeneratedAt || record.finalizedAt || record.updatedAt || record.createdAt)) }}</footer>
       </article>
     </section>
 
-    <p v-else-if="error" class="mx-auto max-w-3xl rounded-xl border border-red-200 bg-red-50 px-6 py-4 text-center text-sm text-red-700">{{ error }}</p>
-    <p v-else class="mx-auto max-w-3xl px-6 text-center text-sm text-stone-500" role="status">載入健檢報告…</p>
+    <p v-else-if="error" class="mx-auto max-w-3xl rounded-xl border border-report-danger-border bg-report-danger-surface px-6 py-4 text-center text-sm text-report-danger">{{ error }}</p>
+    <p v-else class="mx-auto max-w-3xl px-6 text-center text-sm text-report-muted" role="status">載入健檢報告…</p>
 
     <Button
       v-if="showBackToTop"
       type="button"
-      class="fixed bottom-6 right-4 z-30 rounded-full bg-stone-800 px-4 text-white shadow-lg hover:bg-stone-700 print:hidden sm:right-6"
+      class="fixed bottom-6 right-4 z-30 rounded-full bg-report-action px-4 text-white shadow-lg hover:bg-report-action-hover print:hidden sm:right-6"
       aria-label="回到報告最上方"
       @click="scrollToTop"
     >

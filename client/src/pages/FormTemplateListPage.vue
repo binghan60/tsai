@@ -345,7 +345,7 @@ onMounted(load);
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" @click="router.push(`/settings/forms/${template._id}`)">
+            <Button type="button" variant="secondary" size="sm" @click="router.push(`/settings/forms/${template._id}`)">
               <Pencil class="h-4 w-4" stroke-width="1.75" />編輯表單
             </Button>
             <Button type="button" variant="outline" size="sm" :disabled="Boolean(busyId)" @click="openDuplicate(template)">

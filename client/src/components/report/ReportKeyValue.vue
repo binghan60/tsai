@@ -13,7 +13,7 @@ const items = computed(() => (props.section.items ?? []).filter(hasContent));
 <template>
   <section v-if="items.length" class="mt-8 break-inside-avoid">
     <h2 class="mb-3 text-sm font-semibold text-brand-700">{{ section.title }}</h2>
-    <div class="grid gap-5 rounded-xl border border-stone-200 p-4 sm:grid-cols-2">
+    <div class="grid gap-5 rounded-xl border border-report-border p-4 sm:grid-cols-2">
       <ReportField v-for="item in items" :key="item.key" :item="item" :class="spanClass(item, 'report')" />
     </div>
   </section>

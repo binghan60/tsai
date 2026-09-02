@@ -159,6 +159,56 @@
   --danger-surface: var(--destructive-surface);
 
   --chart-1: #068ba6;
+  --chart-2: #19abc8;
+  --chart-3: #54bfd4;
+  --chart-area: rgb(14 90 107 / 0.15);
+
+  /* Data-visualization colors are centralized here because canvas/SVG cannot use
+     Tailwind utility classes. These tokens describe domain categories, not actions. */
+  --dental-normal: #ffffff;
+  --dental-missing: #8b5e3c;
+  --dental-calculus: #d49a18;
+  --dental-periodontal: #71717a;
+  --dental-extracted: #d34b4b;
+  --dental-other: #7c5ce0;
+  --dental-right: #d81e1e;
+  --dental-left: #2f3d9d;
+  --dental-outline: #3f3f46;
+  --dental-guide: #c4c4cc;
+  --dental-field-border: #d4d4d8;
+  --dental-selected: #155e75;
+  --dental-selected-ring: rgb(21 94 117 / 0.5);
+  --dental-selected-glow: rgb(21 94 117 / 0.45);
+
+  /* The exported/PDF report is intentionally a fixed light canvas in both app
+     themes. Use report-* tokens inside ReportView and report components. */
+  --report-canvas: #f5f5f4;
+  --report-surface: #ffffff;
+  --report-surface-muted: #fafaf9;
+  --report-border: #e7e5e4;
+  --report-border-strong: #d6d3d1;
+  --report-foreground: #1c1917;
+  --report-text: #44403c;
+  --report-muted: #78716c;
+  --report-subtle: #a8a29e;
+  --report-action: #292524;
+  --report-action-hover: #44403c;
+  --report-success: #047857;
+  --report-success-strong: #065f46;
+  --report-success-surface: #ecfdf5;
+  --report-success-border: #a7f3d0;
+  --report-warning: #92400e;
+  --report-warning-strong: #451a03;
+  --report-warning-surface: #fffbeb;
+  --report-warning-border: #fcd34d;
+  --report-warning-accent: #fbbf24;
+  --report-info: #075985;
+  --report-info-surface: #f0f9ff;
+  --report-info-border: #bae6fd;
+  --report-danger: #b91c1c;
+  --report-danger-strong: #991b1b;
+  --report-danger-surface: #fef2f2;
+  --report-danger-border: #fecaca;
 
   /* 側邊欄兩個主題都是深底，自成一套。不要在側邊欄裡用 text-muted-foreground——
      淺色主題下那是暖灰字，會整片糊在深色側邊欄上。 */
@@ -211,6 +261,17 @@
   --danger-surface: var(--destructive-surface);
 
   --chart-1: #2fa3bf;
+  --chart-2: #56b9d2;
+  --chart-3: #88ccdd;
+  --chart-area: rgb(62 147 166 / 0.22);
+
+  --dental-normal: #1c2831;
+  --dental-outline: #c4c4cc;
+  --dental-guide: #59656e;
+  --dental-field-border: #59656e;
+  --dental-selected: #72b4c3;
+  --dental-selected-ring: rgb(114 180 195 / 0.5);
+  --dental-selected-glow: rgb(114 180 195 / 0.45);
 
   --sidebar: #070d12;
   --sidebar-foreground: #d7c8a5;
@@ -254,6 +315,35 @@
   --color-danger: var(--danger);
   --color-danger-surface: var(--danger-surface);
   --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-report-canvas: var(--report-canvas);
+  --color-report-surface: var(--report-surface);
+  --color-report-surface-muted: var(--report-surface-muted);
+  --color-report-border: var(--report-border);
+  --color-report-border-strong: var(--report-border-strong);
+  --color-report-foreground: var(--report-foreground);
+  --color-report-text: var(--report-text);
+  --color-report-muted: var(--report-muted);
+  --color-report-subtle: var(--report-subtle);
+  --color-report-action: var(--report-action);
+  --color-report-action-hover: var(--report-action-hover);
+  --color-report-success: var(--report-success);
+  --color-report-success-strong: var(--report-success-strong);
+  --color-report-success-surface: var(--report-success-surface);
+  --color-report-success-border: var(--report-success-border);
+  --color-report-warning: var(--report-warning);
+  --color-report-warning-strong: var(--report-warning-strong);
+  --color-report-warning-surface: var(--report-warning-surface);
+  --color-report-warning-border: var(--report-warning-border);
+  --color-report-warning-accent: var(--report-warning-accent);
+  --color-report-info: var(--report-info);
+  --color-report-info-surface: var(--report-info-surface);
+  --color-report-info-border: var(--report-info-border);
+  --color-report-danger: var(--report-danger);
+  --color-report-danger-strong: var(--report-danger-strong);
+  --color-report-danger-surface: var(--report-danger-surface);
+  --color-report-danger-border: var(--report-danger-border);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

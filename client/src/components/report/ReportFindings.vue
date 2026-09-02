@@ -17,25 +17,25 @@ const runs = computed(() => sectionRuns(visible.value, (item) => item.type === '
   <section v-if="visible.length" class="mt-8 space-y-4">
     <h2 class="text-sm font-semibold text-brand-700">{{ section.title }}</h2>
     <template v-for="run in runs" :key="run.key">
-      <div v-if="run.kind === 'primary'" class="overflow-hidden rounded-xl border border-stone-200">
-        <div class="hidden border-b border-stone-200 bg-stone-50/80 px-4 py-2 text-xs font-semibold text-stone-500 sm:grid sm:grid-cols-[1fr_2.8rem_3.8fr]">
+      <div v-if="run.kind === 'primary'" class="overflow-hidden rounded-xl border border-report-border">
+        <div class="hidden border-b border-report-border bg-report-surface-muted/80 px-4 py-2 text-xs font-semibold text-report-muted sm:grid sm:grid-cols-[1fr_2.8rem_3.8fr]">
           <span>項目名稱</span>
-          <span class="border-l border-stone-200 pl-2">結果</span>
-          <span class="border-l border-stone-200 pl-2">備註</span>
+          <span class="border-l border-report-border pl-2">結果</span>
+          <span class="border-l border-report-border pl-2">備註</span>
         </div>
         <div
           v-for="finding in run.items"
           :key="finding.key"
-          class="grid break-inside-avoid grid-cols-[1fr_auto] gap-x-0 gap-y-2 border-b border-stone-200 px-4 py-3 text-sm last:border-0 sm:grid-cols-[1fr_2.8rem_3.8fr] sm:gap-y-0"
+          class="grid break-inside-avoid grid-cols-[1fr_auto] gap-x-0 gap-y-2 border-b border-report-border px-4 py-3 text-sm last:border-0 sm:grid-cols-[1fr_2.8rem_3.8fr] sm:gap-y-0"
         >
-          <span class="min-w-0 pr-2 font-medium text-stone-800">{{ finding.label }}</span>
+          <span class="min-w-0 pr-2 font-medium text-report-foreground">{{ finding.label }}</span>
           <span
             v-if="finding.status === 'abnormal' || finding.status === 'normal'"
-            class="min-w-0 pl-2 sm:border-l sm:border-stone-100"
-            :class="finding.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'"
+            class="min-w-0 pl-2 sm:border-l sm:border-report-canvas"
+            :class="finding.status === 'abnormal' ? 'text-report-danger' : 'text-report-success'"
           >{{ finding.status === 'abnormal' ? '異常' : '正常' }}</span>
-          <span v-else class="min-w-0 pl-2 sm:border-l sm:border-stone-100"></span>
-          <span class="col-span-2 min-w-0 whitespace-pre-wrap text-stone-600 sm:col-span-1 sm:border-l sm:border-stone-100 sm:pl-2">{{ finding.note || '' }}</span>
+          <span v-else class="min-w-0 pl-2 sm:border-l sm:border-report-canvas"></span>
+          <span class="col-span-2 min-w-0 whitespace-pre-wrap text-report-text sm:col-span-1 sm:border-l sm:border-report-canvas sm:pl-2">{{ finding.note || '' }}</span>
         </div>
       </div>
       <div v-else class="space-y-4">

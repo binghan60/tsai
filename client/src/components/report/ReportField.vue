@@ -30,24 +30,24 @@ const abnormal = computed(() => props.item.status === 'abnormal');
 
 <template>
   <div v-if="item.type === 'image'" class="break-inside-avoid sm:col-span-2">
-    <h3 class="text-xs font-semibold text-stone-500">{{ item.label }}</h3>
+    <h3 class="text-xs font-semibold text-report-muted">{{ item.label }}</h3>
     <div v-if="images.length" class="mt-2 grid grid-cols-12 gap-4">
       <a v-for="(image, index) in images" :key="image.publicId || image.url" :href="image.url" target="_blank" rel="noopener noreferrer" class="block" :class="imageSpanClass(image)">
-        <img :src="image.url" :alt="`${item.label}圖片 ${index + 1}`" class="block h-auto w-full bg-stone-50" />
-        <p v-if="image.caption" class="pt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{{ image.caption }}</p>
+        <img :src="image.url" :alt="`${item.label}圖片 ${index + 1}`" class="block h-auto w-full bg-report-surface-muted" />
+        <p v-if="image.caption" class="pt-2 whitespace-pre-wrap text-sm leading-relaxed text-report-text">{{ image.caption }}</p>
       </a>
     </div>
   </div>
   <div v-if="family === 'dental'" class="break-inside-avoid sm:col-span-2">
-    <h3 class="text-xs font-semibold text-stone-500">{{ item.label }}</h3>
+    <h3 class="text-xs font-semibold text-report-muted">{{ item.label }}</h3>
     <DentalChart class="mt-2" :model-value="item.value" readonly />
   </div>
   <div v-else-if="item.type !== 'image'" class="break-inside-avoid">
-    <h3 class="text-xs font-semibold text-stone-500">{{ item.label }}</h3>
+    <h3 class="text-xs font-semibold text-report-muted">{{ item.label }}</h3>
     <p
       class="mt-1 whitespace-pre-wrap text-sm leading-relaxed"
-      :class="abnormal ? 'text-red-700' : 'text-stone-700'"
+      :class="abnormal ? 'text-report-danger' : 'text-report-text'"
     >{{ text }}</p>
-    <p v-if="item.note" class="mt-0.5 whitespace-pre-wrap text-xs text-stone-600">{{ item.note }}</p>
+    <p v-if="item.note" class="mt-0.5 whitespace-pre-wrap text-xs text-report-text">{{ item.note }}</p>
   </div>
 </template>

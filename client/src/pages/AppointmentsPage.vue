@@ -1088,7 +1088,7 @@ onBeforeUnmount(() => {
                 <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ formatDate(appointment.followUpDate) }}</td>
                 <td class="max-w-64 px-4 py-3 text-muted-foreground"><p class="line-clamp-2 whitespace-pre-wrap">{{ appointment.visitNote || '—' }}</p></td>
                 <td class="px-4 py-3 text-muted-foreground">{{ templateName(appointment.templateId) }}</td>
-                <td class="px-4 py-3 text-right"><Button type="button" variant="outline" size="sm" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button></td>
+                <td class="px-4 py-3 text-right"><Button type="button" variant="secondary" size="sm" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button></td>
               </tr>
             </tbody>
           </table>
