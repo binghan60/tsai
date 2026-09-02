@@ -95,6 +95,7 @@ const medicalRecordSchema = new mongoose.Schema(
     reportNumber: { type: String, default: createReportNumber, trim: true },
     vet: { type: String, default: '', trim: true },
     visitDate: { type: Date, default: null },
+    followUpDate: { type: Date, default: null },
     examType: { type: String, default: '例行健檢', trim: true },
 
     // 基本量測

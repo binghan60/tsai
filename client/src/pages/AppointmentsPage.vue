@@ -80,7 +80,7 @@ const cancelError = ref('');
 const completedVisitTarget = ref(null);
 const completedVisitSaving = ref(false);
 const completedVisitError = ref('');
-const completedVisitForm = reactive({ weightKg: '', temperatureC: '', visitNote: '' });
+const completedVisitForm = reactive({ weightKg: '', temperatureC: '', followUpDate: '', visitNote: '' });
 
 const ROW_ACTIONS = [
   { key: 'edit', label: '編輯掛號' },
@@ -315,6 +315,7 @@ function toggleExpanded(appointment) {
       simpleForms[appointment._id] = {
         weightKg: appointment.weightKg ?? '',
         temperatureC: appointment.temperatureC ?? '',
+        followUpDate: appointment.followUpDate ?? '',
         visitNote: appointment.visitNote ?? '',
         templateId: String(appointment.templateId || defaultTemplateId.value || ''),
       };
@@ -429,6 +430,7 @@ async function completeVisit(appointment) {
     await http.post(`/appointments/${appointment._id}/complete`, {
       weightKg: draft.weightKg === '' || draft.weightKg == null ? null : Number(draft.weightKg),
       temperatureC: draft.temperatureC === '' || draft.temperatureC == null ? null : Number(draft.temperatureC),
+      followUpDate: draft.followUpDate || '',
       visitNote: draft.visitNote || '',
       templateId: draft.templateId || undefined,
     });
@@ -450,6 +452,7 @@ function openCompletedVisitEditor(appointment) {
   completedVisitError.value = '';
   completedVisitForm.weightKg = appointment.weightKg ?? '';
   completedVisitForm.temperatureC = appointment.temperatureC ?? '';
+  completedVisitForm.followUpDate = appointment.followUpDate ?? '';
   completedVisitForm.visitNote = appointment.visitNote ?? '';
 }
 
@@ -461,6 +464,7 @@ async function saveCompletedVisit() {
     await http.patch(`/appointments/${completedVisitTarget.value._id}/visit-data`, {
       weightKg: completedVisitForm.weightKg === '' ? null : Number(completedVisitForm.weightKg),
       temperatureC: completedVisitForm.temperatureC === '' ? null : Number(completedVisitForm.temperatureC),
+      followUpDate: completedVisitForm.followUpDate || '',
       visitNote: completedVisitForm.visitNote,
     });
     toast.success('已更新看診資料', '儲存完成');
@@ -789,6 +793,11 @@ onBeforeUnmount(() => {
                 </label>
               </div>
               <label class="block space-y-1.5 text-xs font-medium text-foreground">
+                回診日期
+                <DatePicker v-model="simpleForms[appointment._id].followUpDate" placeholder="選擇回診日期" aria-label="選擇回診日期" />
+                <span class="block text-xs font-normal text-muted-foreground">填寫後會顯示在提供給飼主的報告與 PDF。</span>
+              </label>
+              <label class="block space-y-1.5 text-xs font-medium text-foreground">
                 備註
                 <textarea v-model="simpleForms[appointment._id].visitNote" rows="2" class="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"></textarea>
                 <span class="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
@@ -1060,6 +1069,7 @@ onBeforeUnmount(() => {
                 <th class="px-4 py-3">完成時間</th>
                 <th class="px-4 py-3">體重</th>
                 <th class="px-4 py-3">體溫</th>
+                <th class="px-4 py-3">回診日期</th>
                 <th class="px-4 py-3">看診備註</th>
                 <th class="px-4 py-3">草稿表單</th>
                 <th class="px-4 py-3"><span class="sr-only">操作</span></th>
@@ -1071,6 +1081,7 @@ onBeforeUnmount(() => {
                 <td class="whitespace-nowrap px-4 py-3 text-muted-foreground">{{ appointment.completedAt ? formatDateTime(appointment.completedAt, checkinTimeOptions) : '—' }}</td>
                 <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }}</td>
                 <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }}</td>
+                <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ formatDate(appointment.followUpDate) }}</td>
                 <td class="max-w-64 px-4 py-3 text-muted-foreground"><p class="line-clamp-2 whitespace-pre-wrap">{{ appointment.visitNote || '—' }}</p></td>
                 <td class="px-4 py-3 text-muted-foreground">{{ templateName(appointment.templateId) }}</td>
                 <td class="px-4 py-3 text-right"><Button type="button" variant="outline" size="sm" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button></td>
@@ -1174,6 +1185,7 @@ onBeforeUnmount(() => {
             <label class="space-y-1.5 text-sm font-medium text-foreground">體重（kg）<input v-model="completedVisitForm.weightKg" type="text" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" /></label>
             <label class="space-y-1.5 text-sm font-medium text-foreground">體溫（°C）<input v-model="completedVisitForm.temperatureC" type="text" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" /></label>
           </div>
+          <label class="block space-y-1.5 text-sm font-medium text-foreground">回診日期<DatePicker v-model="completedVisitForm.followUpDate" placeholder="選擇回診日期" aria-label="選擇回診日期" /><span class="block text-xs font-normal text-muted-foreground">尚未結案的報告會同步更新，並顯示給飼主。</span></label>
           <label class="block space-y-1.5 text-sm font-medium text-foreground">看診備註<textarea v-model="completedVisitForm.visitNote" rows="4" class="w-full rounded-lg border border-input bg-field px-3 py-2 text-sm font-normal text-foreground"></textarea></label>
           <Alert v-if="completedVisitError" variant="destructive"><AlertDescription>{{ completedVisitError }}</AlertDescription></Alert>
         </div>

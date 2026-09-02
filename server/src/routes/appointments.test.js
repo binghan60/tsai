@@ -425,10 +425,13 @@ describe('appointments routes', () => {
       const response = await fetch(`${origin}/api/appointments/apt-done/complete`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ followUpDate: '2026-09-08' }),
       });
       assert.equal(response.status, 200);
+      const body = await response.json();
       assert.equal(appointment.status, 'completed');
+      assert.equal(appointment.followUpDate, '2026-09-08');
+      assert.equal(body.record.followUpDate, '2026-09-08T02:00:00.000Z');
       assert.equal(appointment.checkinNumber, null);
       assert.deepEqual(appointment.checkinNumberHistory, [1]);
       assert.deepEqual(others.map((item) => item.checkinNumber), [2, 3]);
@@ -449,6 +452,7 @@ describe('appointments routes', () => {
       recordId: 'record-visit-data',
       weightKg: 3,
       temperatureC: 38,
+      followUpDate: '2026-09-15',
       visitNote: '原始備註',
       save: async (options) => { saves.push(['appointment', options]); },
     };
@@ -457,6 +461,7 @@ describe('appointments routes', () => {
       status: 'draft',
       weightKg: 3,
       temperatureC: 38,
+      followUpDate: new Date('2026-09-15T02:00:00.000Z'),
       other: '原始備註',
       save: async (options) => { saves.push(['record', options]); },
     };
@@ -467,13 +472,15 @@ describe('appointments routes', () => {
       const response = await fetch(`${origin}/api/appointments/apt-visit-data/visit-data`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ weightKg: 4.2, temperatureC: 39.1, visitNote: '更新備註' }),
+        body: JSON.stringify({ weightKg: 4.2, temperatureC: 39.1, followUpDate: '2026-09-22', visitNote: '更新備註' }),
       });
 
       assert.equal(response.status, 200);
       assert.equal(appointment.weightKg, 4.2);
       assert.equal(record.weightKg, 4.2);
       assert.equal(record.temperatureC, 39.1);
+      assert.equal(appointment.followUpDate, '2026-09-22');
+      assert.equal(record.followUpDate.toISOString(), '2026-09-22T02:00:00.000Z');
       assert.equal(record.other, '更新備註');
       assert.equal(saves.length, 2);
       assert.ok(saves.every(([, options]) => options?.session));

@@ -50,6 +50,8 @@ const appointmentSchema = new mongoose.Schema(
     // 才透過 /pets/:petId/records/new?fromAppointment= 轉過去）。
     weightKg: { type: Number, min: 0, default: null },
     temperatureC: { type: Number, min: 0, default: null },
+    // 看診結束時約定的下次回診日。保留 date-only 字串，避免日期因伺服器時區偏移。
+    followUpDate: { type: String, default: '', match: /^$|^\d{4}-\d{2}-\d{2}$/ },
     // 內部用途（藥品/費用等），不會出現在健檢報告裡。
     visitNote: { type: String, default: '', trim: true },
     completedAt: { type: Date, default: null },

@@ -25,6 +25,7 @@ import { v4 as uuidv4 } from 'uuid';
 const RECORD_FIELDS = [
   'vet',
   'visitDate',
+  'followUpDate',
   'weightKg',
   'temperatureC',
   'heartRate',
@@ -127,6 +128,7 @@ function reportPayload(record, sections) {
     reportNumber: record.reportNumber || `HC-${record._id.toString().slice(-8).toUpperCase()}`,
     examType: record.examType,
     visitDate: record.visitDate,
+    followUpDate: record.followUpDate,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     status: record.status,

@@ -25,8 +25,6 @@ const loading = ref(false);
 const error = ref('');
 let requestSequence = 0;
 let searchTimer;
-let skipQuerySearch = false;
-let skipPageFetch = false;
 
 const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
 
@@ -67,23 +65,26 @@ function clearQuery() {
 }
 
 watch(() => props.open, (open) => {
-  if (open) {
-    skipQuerySearch = true;
+  clearTimeout(searchTimer);
+  if (!open) return;
+
+  // 只改真正需要重設的狀態，讓對應 watcher 負責送出唯一一次查詢。
+  // 舊做法預先留下「略過下一次」旗標；當值本來就是空字串／第 1 頁時 watcher
+  // 不會觸發，旗標卻會誤吃掉使用者下一次真正的搜尋或翻頁。
+  if (query.value !== '') {
     query.value = '';
-    skipPageFetch = true;
+  } else if (page.value !== 1) {
     page.value = 1;
-    clearTimeout(searchTimer);
+  } else {
     fetchPets();
   }
 });
 
 watch(query, () => {
-  if (skipQuerySearch) {
-    skipQuerySearch = false;
-    return;
-  }
+  if (!props.open) return;
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
+    if (!props.open) return;
     if (page.value !== 1) {
       page.value = 1;
       return;
@@ -93,10 +94,6 @@ watch(query, () => {
 });
 
 watch(page, () => {
-  if (skipPageFetch) {
-    skipPageFetch = false;
-    return;
-  }
   if (props.open) fetchPets();
 });
 
@@ -113,7 +110,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
     <div class="space-y-3 px-6 pb-6 sm:px-7 sm:pb-7">
       <div class="relative">
         <Search class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
-        <Input v-model="query" type="search" class="h-11 pl-10 pr-10" placeholder="搜尋寵物、飼主或電話" aria-label="搜尋寵物、飼主或電話" />
+        <Input v-model="query" type="text" inputmode="search" class="h-11 pl-10 pr-10" placeholder="搜尋寵物、飼主或電話" aria-label="搜尋寵物、飼主或電話" />
         <button v-if="query" type="button" class="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="清除搜尋" @click="clearQuery">
           <X class="h-4 w-4" />
         </button>

@@ -13,6 +13,7 @@ import { useFormTemplate } from '../composables/useFormTemplate';
 import { useTextTemplates } from '../composables/useTextTemplates';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
 import { Button } from '../components/ui/button';
+import { DatePicker } from '../components/ui/date-picker';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
@@ -134,6 +135,7 @@ const pet = ref(null);
 const labRanges = computed(() => referenceRanges(template.value));
 const vet = ref('');
 const visitDate = ref(clinicDateInput());
+const followUpDate = ref('');
 // 三個 findings 陣列在範本載入後才建立（見 applyTemplateDefaults）。
 const record = reactive({
   weightKg: null,
@@ -339,6 +341,7 @@ function applyRecord(data) {
   revisionReason.value = data.revisionReason ?? '';
   vet.value = data.vet ?? '';
   visitDate.value = clinicDateInput(data.visitDate);
+  followUpDate.value = clinicDateInput(data.followUpDate);
   for (const key of ['weightKg', 'temperatureC', 'heartRate', 'respiratoryRate', 'bodyConditionScore', 'chiefComplaint', 'history', 'conclusion', 'diagnosis', 'labSummary', 'treatmentPlan', 'other']) {
     if (data[key] !== undefined && data[key] !== null) record[key] = data[key];
   }
@@ -618,6 +621,7 @@ function buildPayload() {
     customValues,
     vet: vet.value,
     visitDate: visitDate.value || null,
+    followUpDate: followUpDate.value || null,
     weightKg: optionalNumber(record.weightKg),
     temperatureC: optionalNumber(record.temperatureC),
     heartRate: optionalNumber(record.heartRate),
@@ -748,7 +752,7 @@ async function openPreview() {
 }
 
 watch(
-  () => JSON.stringify({ vet: vet.value, visitDate: visitDate.value, record }),
+  () => JSON.stringify({ vet: vet.value, visitDate: visitDate.value, followUpDate: followUpDate.value, record }),
   () => {
     if (!hydrated.value) return;
     validationErrors.value = [];
@@ -897,8 +901,18 @@ function handleBeforeUnload(event) {
       </div>
 
       <div v-if="!isLocked" id="record-context-bar" class="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
-        <div class="flex flex-wrap items-center justify-between gap-3"><div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2"><div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-primary" /><span class="font-semibold text-foreground">{{ pet?.name ?? '—' }}</span></div><div class="flex items-center gap-2 text-sm text-foreground"><User class="h-4 w-4 text-muted-foreground" />{{ pet?.ownerId?.name ?? '—' }}</div></div></div>
+        <div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
+          <div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-primary" /><span class="truncate font-semibold text-foreground">{{ pet?.name ?? '—' }}</span></div>
+          <div class="flex min-w-0 items-center gap-2 text-sm text-foreground"><User class="h-4 w-4 shrink-0 text-muted-foreground" /><span class="truncate">{{ pet?.ownerId?.name ?? '—' }}</span></div>
+        </div>
         <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-warning-surface px-3 py-2 text-xs text-warning"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
+        <div class="mt-3 flex flex-col gap-2 border-t border-border/70 pt-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <Label for="record-follow-up-date">回診日期</Label>
+            <p class="mt-0.5 text-xs text-muted-foreground">選填，會顯示在提供給飼主的報告中</p>
+          </div>
+          <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="尚未安排" aria-label="選擇回診日期" class="w-full sm:w-56" />
+        </div>
       </div>
 
       <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序。

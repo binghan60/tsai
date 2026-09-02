@@ -484,6 +484,10 @@ watch(
                 <dd>{{ role === 'visitDate' ? formatDate(valueByRole(role), '') : valueByRole(role) }}</dd>
               </template>
             </template>
+            <template v-if="record.followUpDate">
+              <dt class="font-medium">回診日期</dt>
+              <dd>{{ formatDate(record.followUpDate, '') }}</dd>
+            </template>
             <dt class="font-medium">健檢類型</dt><dd>{{ record.examType || '' }}</dd>
           </dl>
         </header>

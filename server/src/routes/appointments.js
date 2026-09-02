@@ -405,7 +405,7 @@ router.post('/:id/complete', async (req, res, next) => {
       return res.status(422).json({ message: describeAppointmentTransition(initialAppointment.status, 'completed') });
     }
 
-    const { weightKg, temperatureC, visitNote } = req.body;
+    const { weightKg, temperatureC, followUpDate, visitNote } = req.body;
     let appointment;
     let record;
 
@@ -429,6 +429,7 @@ router.post('/:id/complete', async (req, res, next) => {
       if (temperatureC !== undefined) {
         appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
       }
+      if (followUpDate !== undefined) appointment.followUpDate = String(followUpDate ?? '').trim();
       if (visitNote !== undefined) appointment.visitNote = visitNote;
       appointment.status = 'completed';
       appointment.completedAt = new Date();
@@ -436,6 +437,7 @@ router.post('/:id/complete', async (req, res, next) => {
       const appointmentValues = {
         ...(appointment.weightKg != null ? { weightKg: appointment.weightKg } : {}),
         ...(appointment.temperatureC != null ? { temperatureC: appointment.temperatureC } : {}),
+        ...(appointment.followUpDate ? { followUpDate: combineClinicDateTime(appointment.followUpDate, '10:00') } : {}),
         ...(String(appointment.reason ?? '').trim() ? { chiefComplaint: appointment.reason } : {}),
         ...(String(appointment.visitNote ?? '').trim() ? { other: appointment.visitNote } : {}),
       };
@@ -464,6 +466,7 @@ router.patch('/:id/visit-data', async (req, res, next) => {
   try {
     const weightKg = req.body?.weightKg;
     const temperatureC = req.body?.temperatureC;
+    const followUpDate = req.body?.followUpDate;
     const visitNote = req.body?.visitNote;
     let appointment;
 
@@ -482,6 +485,7 @@ router.patch('/:id/visit-data', async (req, res, next) => {
 
       if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
       if (temperatureC !== undefined) appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
+      if (followUpDate !== undefined) appointment.followUpDate = String(followUpDate ?? '').trim();
       if (visitNote !== undefined) appointment.visitNote = String(visitNote ?? '').trim();
 
       if (appointment.recordId) {
@@ -489,6 +493,9 @@ router.patch('/:id/visit-data', async (req, res, next) => {
         if (record?.status === 'draft') {
           record.weightKg = appointment.weightKg;
           record.temperatureC = appointment.temperatureC;
+          record.followUpDate = appointment.followUpDate
+            ? combineClinicDateTime(appointment.followUpDate, '10:00')
+            : null;
           record.other = appointment.visitNote;
           await record.save({ session });
         }
