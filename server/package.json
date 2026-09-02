@@ -12,6 +12,7 @@
     "auth:hash-password": "node scripts/hash-password.js",
     "auth:set-password": "node scripts/set-password.js",
     "auth:revoke-sessions": "node scripts/revoke-sessions.js",
+    "migrate:legacy-pets": "node scripts/legacy-migration/import-legacy-pets.js",
     "test:integration": "node --test test/integration/records.transaction.test.js test/integration/external-delivery.test.js"
   },
   "dependencies": {

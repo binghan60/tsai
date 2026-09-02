@@ -2,6 +2,7 @@ import { Router } from 'express';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import ClinicalNote from '../models/ClinicalNote.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
 
@@ -119,7 +120,14 @@ petsRouter.get('/:id', async (req, res, next) => {
       limitParam: 'recordLimit',
     });
     const filter = { petId: pet._id };
-    const [medicalRecords, total] = await Promise.all([
+    const notePagination = paginationOptions(req.query, {
+      defaultLimit: 10,
+      maxLimit: 50,
+      pageParam: 'notePage',
+      limitParam: 'noteLimit',
+    });
+    const noteFilter = { petId: pet._id };
+    const [medicalRecords, total, clinicalNotes, noteTotal] = await Promise.all([
       MedicalRecord.find(filter)
         .sort({ visitDate: -1, reportVersion: -1, updatedAt: -1 })
         .skip(pagination.skip)
@@ -127,11 +135,19 @@ petsRouter.get('/:id', async (req, res, next) => {
         .select(MEDICAL_RECORD_SUMMARY_FIELDS)
         .lean(),
       MedicalRecord.countDocuments(filter),
+      ClinicalNote.find(noteFilter)
+        .sort({ entryDate: -1, _id: -1 })
+        .skip(notePagination.skip)
+        .limit(notePagination.limit)
+        .lean(),
+      ClinicalNote.countDocuments(noteFilter),
     ]);
     res.json({
       ...pet.toObject(),
       medicalRecords,
       recordPagination: paginationMeta(total, pagination),
+      clinicalNotes,
+      notePagination: paginationMeta(noteTotal, notePagination),
     });
   } catch (err) {
     next(err);
@@ -174,6 +190,11 @@ petsRouter.delete('/:id', async (req, res, next) => {
       }
       if (await MedicalRecord.exists({ petId: pet._id }).session(session)) {
         const error = new Error('此寵物仍有就診紀錄，無法刪除');
+        error.status = 409;
+        throw error;
+      }
+      if (await ClinicalNote.exists({ petId: pet._id }).session(session)) {
+        const error = new Error('此寵物仍有病歷日誌，無法刪除');
         error.status = 409;
         throw error;
       }

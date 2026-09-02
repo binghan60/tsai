@@ -10,6 +10,7 @@ const petSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Owner', required: true },
     medicalRecordNumber: { type: String, default: createMedicalRecordNumber, trim: true },
+    legacyMedicalRecordNumber: { type: String, trim: true, default: null },
     species: { type: String, default: '貓', trim: true },
     breed: { type: String, default: '', trim: true },
     sex: { type: String, enum: ['unknown', 'male', 'female'], default: 'unknown' },
@@ -27,6 +28,7 @@ const petSchema = new mongoose.Schema(
 
 petSchema.index({ ownerId: 1, createdAt: -1, _id: -1 });
 petSchema.index({ medicalRecordNumber: 1 }, { unique: true, sparse: true });
+petSchema.index({ legacyMedicalRecordNumber: 1 }, { unique: true, sparse: true });
 petSchema.index({ updatedAt: -1, _id: -1 });
 
 export default mongoose.model('Pet', petSchema);

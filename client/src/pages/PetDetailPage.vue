@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { AlertTriangle, CalendarDays, ClipboardPlus, Copy, FileText, Link2Off, PawPrint, Pencil, Share2, Trash2 } from '@lucide/vue';
+import { AlertTriangle, CalendarDays, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2 } from '@lucide/vue';
 import PetFormDialog from '../components/PetFormDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
@@ -12,6 +12,9 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
 import { Badge } from '../components/ui/badge';
+import { Textarea } from '../components/ui/textarea';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import EmptyState from '../components/EmptyState.vue';
 import RowActions from '../components/RowActions.vue';
 import Pagination from '../components/Pagination.vue';
@@ -38,6 +41,19 @@ const recordToRemove = ref(null);
 const deletingRecordId = ref(null);
 const removeError = ref('');
 let fetchSequence = 0;
+
+const clinicalNotes = ref([]);
+const notePage = ref(1);
+const notePagination = ref({ total: 0, page: 1, limit: 10, totalPages: 1 });
+const newNoteContent = ref('');
+const newNoteDate = ref(clinicDateInput());
+const noteSaving = ref(false);
+const noteError = ref('');
+const editingNoteId = ref(null);
+const editingNoteContent = ref('');
+const editingNoteDate = ref('');
+const noteToRemove = ref(null);
+const deletingNoteId = ref(null);
 
 const sexLabel = computed(() => ({ male: '公', female: '母' })[pet.value?.sex] ?? '');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育' })[pet.value?.neutered] ?? '');
@@ -103,12 +119,17 @@ async function fetchPet(petId = route.params.id) {
   const currentRequest = ++fetchSequence;
   error.value = '';
   try {
-    const { data } = await http.get(`/pets/${petId}`, { params: { recordPage: recordPage.value } });
+    const { data } = await http.get(`/pets/${petId}`, { params: { recordPage: recordPage.value, notePage: notePage.value } });
     if (currentRequest !== fetchSequence || String(route.params.id) !== String(petId)) return;
     pet.value = data;
     recordPagination.value = data.recordPagination ?? recordPagination.value;
     if (!data.medicalRecords?.length && data.recordPagination?.total > 0 && recordPage.value > data.recordPagination.totalPages) {
       recordPage.value = data.recordPagination.totalPages;
+    }
+    clinicalNotes.value = data.clinicalNotes ?? [];
+    notePagination.value = data.notePagination ?? notePagination.value;
+    if (!data.clinicalNotes?.length && data.notePagination?.total > 0 && notePage.value > data.notePagination.totalPages) {
+      notePage.value = data.notePagination.totalPages;
     }
   } catch (err) {
     if (currentRequest === fetchSequence) error.value = '寵物資料暫時無法載入，請稍後重試';
@@ -229,7 +250,85 @@ function goToRecordPage(next) {
   if (target !== recordPage.value) recordPage.value = target;
 }
 
+async function addNote() {
+  const content = newNoteContent.value.trim();
+  if (!content || !pet.value) return;
+  noteSaving.value = true;
+  noteError.value = '';
+  try {
+    await http.post(`/pets/${pet.value._id}/clinical-notes`, { content, entryDate: newNoteDate.value || undefined });
+    newNoteContent.value = '';
+    newNoteDate.value = clinicDateInput();
+    toast.success('已新增病歷日誌', '新增成功');
+    await fetchPet();
+  } catch (err) {
+    const msg = err.response?.data?.message ?? '新增病歷日誌失敗';
+    noteError.value = msg;
+    toast.error(msg, '新增失敗');
+  } finally {
+    noteSaving.value = false;
+  }
+}
+
+function startEditNote(note) {
+  editingNoteId.value = note._id;
+  editingNoteContent.value = note.content;
+  editingNoteDate.value = clinicDateInput(note.entryDate);
+}
+
+function cancelEditNote() {
+  editingNoteId.value = null;
+}
+
+async function saveEditNote(note) {
+  const content = editingNoteContent.value.trim();
+  if (!content) return;
+  noteSaving.value = true;
+  try {
+    await http.put(`/clinical-notes/${note._id}`, { content, entryDate: editingNoteDate.value || undefined });
+    editingNoteId.value = null;
+    toast.success('已更新病歷日誌', '更新成功');
+    await fetchPet();
+  } catch (err) {
+    toast.error(err.response?.data?.message ?? '更新病歷日誌失敗', '更新失敗');
+  } finally {
+    noteSaving.value = false;
+  }
+}
+
+function openRemoveNote(note) {
+  if (deletingNoteId.value) return;
+  noteToRemove.value = note;
+}
+
+async function removeNote() {
+  const note = noteToRemove.value;
+  if (!note) return;
+  deletingNoteId.value = note._id;
+  try {
+    await http.delete(`/clinical-notes/${note._id}`);
+    noteToRemove.value = null;
+    toast.success('已刪除病歷日誌', '刪除成功');
+    await fetchPet();
+  } catch (err) {
+    toast.error(err.response?.data?.message ?? '刪除病歷日誌失敗', '刪除失敗');
+  } finally {
+    deletingNoteId.value = null;
+  }
+}
+
+const totalNotePages = computed(() => notePagination.value.totalPages ?? 1);
+
+function goToNotePage(next) {
+  const target = Math.min(Math.max(next, 1), totalNotePages.value);
+  if (target !== notePage.value) notePage.value = target;
+}
+
 watch(recordPage, () => {
+  if (pet.value) fetchPet();
+});
+
+watch(notePage, () => {
   if (pet.value) fetchPet();
 });
 
@@ -238,10 +337,13 @@ watch(
   (petId) => {
     pet.value = null;
     recordPage.value = 1;
+    notePage.value = 1;
     editOpen.value = false;
     shareNotice.value = null;
     shareToRevoke.value = null;
     recordToRemove.value = null;
+    noteToRemove.value = null;
+    editingNoteId.value = null;
     fetchPet(petId);
   },
   { immediate: true }
@@ -266,7 +368,7 @@ watch(
               <h1 class="text-xl font-semibold text-foreground">{{ pet.name }}</h1>
               <span v-if="pet.medicalRecordNumber" class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">{{ pet.medicalRecordNumber }}</span>
             </div>
-            <p class="mt-0.5 text-xs text-muted-foreground">寵物資料</p>
+            <p class="mt-0.5 text-xs text-muted-foreground">寵物資料<span v-if="pet.legacyMedicalRecordNumber"> · 舊病歷號：{{ pet.legacyMedicalRecordNumber }}</span></p>
           </div>
         </div>
         <Button variant="outline" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
@@ -311,6 +413,59 @@ watch(
         </dl>
       </div>
     </Card>
+
+    <div class="space-y-4">
+      <div>
+        <h2 class="text-base font-semibold text-foreground">病歷日誌</h2>
+        <p class="mt-1 text-xs text-muted-foreground">看診或拿藥時的隨手記事，不需要結案即可直接新增。</p>
+      </div>
+
+      <Card class="space-y-3 p-4 shadow-sm dark:shadow-none">
+        <Textarea v-model="newNoteContent" rows="3" placeholder="輸入看診記事…" />
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <Label for="new-note-date" class="text-xs font-medium text-muted-foreground">日期</Label>
+            <Input id="new-note-date" v-model="newNoteDate" type="date" class="w-40 border-border" />
+          </div>
+          <Button :disabled="noteSaving || !newNoteContent.trim()" @click="addNote">新增紀錄</Button>
+        </div>
+        <Alert v-if="noteError" variant="destructive"><AlertDescription>{{ noteError }}</AlertDescription></Alert>
+      </Card>
+
+      <ul v-if="clinicalNotes.length" class="space-y-3">
+        <li v-for="note in clinicalNotes" :key="note._id">
+          <Card class="p-4 shadow-sm dark:shadow-none">
+            <template v-if="editingNoteId === note._id">
+              <Textarea v-model="editingNoteContent" rows="3" />
+              <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
+                <Input v-model="editingNoteDate" type="date" class="w-40 border-border" />
+                <div class="flex gap-2">
+                  <Button variant="outline" size="sm" @click="cancelEditNote">取消</Button>
+                  <Button size="sm" :disabled="noteSaving" @click="saveEditNote(note)">儲存</Button>
+                </div>
+              </div>
+            </template>
+            <template v-else>
+              <div class="flex items-start justify-between gap-3">
+                <div class="flex items-center gap-2 text-xs text-muted-foreground">
+                  <CalendarDays class="h-3.5 w-3.5 shrink-0" />
+                  {{ formatDate(note.entryDate) }}
+                  <Badge v-if="note.source === 'legacy_import'" class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">舊系統匯入</Badge>
+                </div>
+                <div class="flex shrink-0 gap-1">
+                  <Button variant="secondary" size="icon-sm" aria-label="編輯日誌" @click="startEditNote(note)"><Pencil class="h-3.5 w-3.5" /></Button>
+                  <Button variant="secondary" size="icon-sm" aria-label="刪除日誌" @click="openRemoveNote(note)"><Trash2 class="h-3.5 w-3.5" /></Button>
+                </div>
+              </div>
+              <p class="mt-2 whitespace-pre-wrap text-sm text-foreground">{{ note.content }}</p>
+            </template>
+          </Card>
+        </li>
+      </ul>
+      <EmptyState v-else :icon="NotebookPen" title="尚無病歷日誌" description="在上方輸入框新增第一則記事。" />
+
+      <Pagination v-if="clinicalNotes.length" :page="notePage" :total-pages="totalNotePages" @update:page="goToNotePage" />
+    </div>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
@@ -366,6 +521,15 @@ watch(
     </div>
 
     <PetFormDialog v-if="editOpen" title="編輯寵物資料" submit-label="儲存" :initial-value="{ ...pet, birthDate: clinicDateInput(pet.birthDate) }" :submitting="editSaving" :error-message="editError" @submit="savePet" @close="editOpen = false" />
+    <ConfirmDialog
+      :open="Boolean(noteToRemove)"
+      title="刪除病歷日誌"
+      description="確定要刪除這則記事嗎？此操作無法復原。"
+      confirm-label="刪除"
+      :loading="Boolean(deletingNoteId)"
+      @update:open="(value) => !value && (noteToRemove = null)"
+      @confirm="removeNote"
+    />
     <ConfirmDialog
       :open="Boolean(shareToRevoke)"
       title="撤銷分享連結"

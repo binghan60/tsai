@@ -7,4 +7,6 @@ dist/
 
 
 Data
+server/scripts/legacy-migration/*.jsonl
+server/scripts/legacy-migration/*.log
 

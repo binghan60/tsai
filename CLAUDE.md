@@ -27,7 +27,7 @@
 `name`、`phone`、`email`。一位飼主可養多隻寵物。
 
 ### pets 寵物
-`name`、`ownerId`、`medicalRecordNumber`（自動產生 `PET-XXXXXXXX`）、`species`、`breed`、`sex`、`neutered`、`birthDate`、`weightKg`、`allergies`、`chronicConditions`、`currentMedications`、`notes`。
+`name`、`ownerId`、`medicalRecordNumber`（自動產生 `PET-XXXXXXXX`）、`species`、`breed`、`sex`、`neutered`、`birthDate`、`weightKg`、`allergies`、`chronicConditions`、`currentMedications`、`notes`。`legacyMedicalRecordNumber`（選填，unique+sparse）是舊系統匯入時保留的舊病歷號，供追溯與匯入腳本判斷是否已匯過，非匯入資料一律是 `null`。
 
 ### medicalRecords 健檢報告
 欄位分成幾組：
@@ -53,6 +53,9 @@
 
 ### textTemplates 文字模板
 `name`、`content`、`availableForAllFields`、`applicableItemKeys`、`enabled`、`usageCount`。填表時可插入文字欄位的長篇內容，取代了早期的 quickPhrases 常用語（該 collection 與其路由已移除）。
+
+### clinicalNotes 病歷日誌
+`petId`、`entryDate`、`content`、`source`（`manual` / `legacy_import`）。醫師看診或拿藥時隨手記的自由文字記事，不用填表、不用結案，跟 `medicalRecords`（結案才鎖定的正式健檢報告）是兩條平行的軌道——日誌給日常記事用，健檢報告給需要 PDF／分享的正式場合用。`source: 'legacy_import'` 的記事來自舊系統資料遷移（見 `server/scripts/legacy-migration/`），內容是舊系統逐年累加的病歷全文，整段當一筆記事匯入，不逐筆拆分（舊資料格式不一致，拆分風險高於價值）；匯入記事跟一般記事一樣可編輯/刪除，沒有唯讀鎖定。索引 `{petId, entryDate, _id}`。刪除寵物前會檢查 `ClinicalNote.exists({petId})`，跟 `medicalRecords` 一樣擋刪除。
 
 ### deliveryLogs 寄送流水帳
 append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
@@ -126,9 +129,15 @@ DELETE /api/owners/:id
 GET    /api/owners/:ownerId/pets        該飼主的寵物
 POST   /api/owners/:ownerId/pets
 GET    /api/pets                        列表（?q= 搜尋）
-GET    /api/pets/:id                    詳情（含報告列表）
+GET    /api/pets/:id                    詳情（含報告列表、病歷日誌列表）
 PUT    /api/pets/:id
-DELETE /api/pets/:id
+DELETE /api/pets/:id                    刪除（寵物仍有報告或病歷日誌時擋刪）
+
+病歷日誌
+GET    /api/pets/:petId/clinical-notes  該寵物的日誌列表（分頁）
+POST   /api/pets/:petId/clinical-notes  新增一則日誌
+PUT    /api/clinical-notes/:id          編輯日誌內容／日期
+DELETE /api/clinical-notes/:id          刪除日誌
 
 報告
 GET    /api/pets/:petId/records         該寵物的報告
@@ -198,7 +207,7 @@ GET    /api/health
 | `/` | 工作台 | 全站綜覽儀表板，由粗到細三層：**現在**（寄送異常橫幅）→ **分佈與趨勢**（報告流程四格、近 6 週健檢量長條、本月與累計數字）→ **明細**（待辦清單、最近完成）。**同一個數字只在其中一層出現一次**——之前草稿數同時出現在優先處理卡、workStage 卡、待辦清單與狀態長條四個地方，那是這頁最主要的雜訊來源。每一格數字都要能點進對應清單 |
 | `/appointments` | 掛號與候診 | **兩個區塊，因為這頁上有兩種順序**：上方「候診中」依看診序號排，由上而下就是看診順序；下方「看診時間軸」只放尚未報到的人，軸就純粹是時間。報到＝從時間軸移到佇列。頁面最上方是日期面板，支援「單日／本週」Tab 切換。單日檢視有前後一天／日曆、快捷跳轉按鈕（明天／後天／上下一個相同星期幾），以及當日掛號統計摘要（總掛號數／候診中／已完成）；本週檢視是一排 7 天格子（週一到週日），點格子切換回單日並帶那天的資料。選的日期同步進網址 `?date=`，兩個區塊都跟著它走；只有今天才畫「現在」指示線、才自動重新整理。號碼是唯讀的，看診順序完全由報到先後決定，沒有手動調整的入口 |
 | `/owners`、`/owners/:id` | 飼主列表／詳情 | |
-| `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含歷次報告 |
+| `/pets`、`/pets/:id` | 寵物列表／詳情 | 詳情含病歷日誌（隨手記事，見第二節 `clinicalNotes`）與歷次報告 |
 | `/records` | 就診紀錄清單 | 跨寵物，佇列切換 |
 | `/records/deliveries` | 寄送紀錄 | 流水帳，含已刪除報告的紀錄 |
 | `/pets/:petId/records/new`、`/records/:id/edit` | 報告填寫表單 | 自動存草稿、離開前攔截未儲存變更 |
@@ -308,7 +317,9 @@ npm run dev            # 使用者自己開
 
 ## 九、現況與待辦
 
-已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋、當日掛號與候診流程，以及共用帳號登入（JWT HttpOnly cookie、`tokenVersion` 可撤銷 session、登入限流、`/api/auth/login` 密碼驗證用固定時間比對防帳號列舉、前端 401 自動導回登入頁）。
+已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋、當日掛號與候診流程、病歷日誌（隨手記事，見第二節 `clinicalNotes`），以及共用帳號登入（JWT HttpOnly cookie、`tokenVersion` 可撤銷 session、登入限流、`/api/auth/login` 密碼驗證用固定時間比對防帳號列舉、前端 401 自動導回登入頁）。
+
+舊系統資料遷移：盤點過 `Data/` 底下的舊 Access 資料庫（全套動物醫院管理系統），確認實際有在用的只有 `RegData.mdb::RecordData`（飼主/寵物主檔＋逐年累加的病歷全文），其餘（收費、庫存、藥局、診斷字典、疫苗提醒等）用量證據薄弱，不遷移。遷移腳本在 `server/scripts/legacy-migration/`（PowerShell 抽取 + Node 匯入，兩階段，見該資料夾 README）。
 
 待處理（依急迫性）：
 
