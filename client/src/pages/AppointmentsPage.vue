@@ -598,46 +598,50 @@ onBeforeUnmount(() => {
           />
         </div>
 
-        <div class="flex flex-wrap items-center gap-2 lg:justify-end">
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon-sm"
-            :aria-label="viewMode === 'week' ? '上一週' : '前一天'"
-            @click="selectedDate = shiftDateInput(selectedDate, viewMode === 'week' ? -7 : -1)"
-          >
-            <ChevronLeft class="h-4 w-4" stroke-width="1.75" />
-          </Button>
-          <DatePicker v-model="selectedDate" :clearable="false" class="w-40" aria-label="選擇要查看的日期" />
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon-sm"
-            :aria-label="viewMode === 'week' ? '下一週' : '後一天'"
-            @click="selectedDate = shiftDateInput(selectedDate, viewMode === 'week' ? 7 : 1)"
-          >
-            <ChevronRight class="h-4 w-4" stroke-width="1.75" />
-          </Button>
-          <span class="text-sm font-medium" :class="isToday ? 'text-primary' : 'text-muted-foreground'">
-            {{ weekdayLabel(selectedDate) }}<template v-if="isToday"> · 今天</template>
-          </span>
-          <Button v-if="!isToday" type="button" variant="outline" size="sm" @click="selectedDate = today">回到今天</Button>
-          <RowActions
-            :actions="[
-              { key: 'tomorrow', label: '明天' },
-              { key: 'day_after_tomorrow', label: '後天' },
-              { key: 'next_weekday', label: `下一個${weekdayLabel(selectedDate)}` },
-              { key: 'prev_weekday', label: `上一個${weekdayLabel(selectedDate)}` },
-            ]"
-            :icon="CalendarClock"
-            label="快速跳轉日期"
-            @select="(key) => {
-              if (key === 'tomorrow') selectedDate = shiftDateInput(today, 1);
-              else if (key === 'day_after_tomorrow') selectedDate = shiftDateInput(today, 2);
-              else if (key === 'next_weekday') selectedDate = shiftDateInput(selectedDate, 7);
-              else if (key === 'prev_weekday') selectedDate = shiftDateInput(selectedDate, -7);
-            }"
-          />
+        <div class="grid w-full gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center lg:flex lg:justify-end">
+          <div class="flex flex-wrap items-center gap-2 sm:justify-end">
+            <span class="text-sm font-medium" :class="isToday ? 'text-primary' : 'text-muted-foreground'">
+              {{ weekdayLabel(selectedDate) }}<template v-if="isToday"> · 今天</template>
+            </span>
+            <Button v-if="!isToday" type="button" variant="outline" size="sm" @click="selectedDate = today">回到今天</Button>
+            <RowActions
+              :actions="[
+                { key: 'tomorrow', label: '明天' },
+                { key: 'day_after_tomorrow', label: '後天' },
+                { key: 'next_weekday', label: `下一個${weekdayLabel(selectedDate)}` },
+                { key: 'prev_weekday', label: `上一個${weekdayLabel(selectedDate)}` },
+              ]"
+              :icon="CalendarClock"
+              label="快速跳轉日期"
+              @select="(key) => {
+                if (key === 'tomorrow') selectedDate = shiftDateInput(today, 1);
+                else if (key === 'day_after_tomorrow') selectedDate = shiftDateInput(today, 2);
+                else if (key === 'next_weekday') selectedDate = shiftDateInput(selectedDate, 7);
+                else if (key === 'prev_weekday') selectedDate = shiftDateInput(selectedDate, -7);
+              }"
+            />
+          </div>
+          <div class="flex w-full items-center gap-1 rounded-xl bg-muted/60 p-1 sm:w-auto">
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon-sm"
+              :aria-label="viewMode === 'week' ? '上一週' : '前一天'"
+              @click="selectedDate = shiftDateInput(selectedDate, viewMode === 'week' ? -7 : -1)"
+            >
+              <ChevronLeft class="h-4 w-4" stroke-width="1.75" />
+            </Button>
+            <DatePicker v-model="selectedDate" :clearable="false" class="min-w-0 flex-1 sm:w-40" aria-label="選擇要查看的日期" />
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon-sm"
+              :aria-label="viewMode === 'week' ? '下一週' : '後一天'"
+              @click="selectedDate = shiftDateInput(selectedDate, viewMode === 'week' ? 7 : 1)"
+            >
+              <ChevronRight class="h-4 w-4" stroke-width="1.75" />
+            </Button>
+          </div>
         </div>
       </div>
 
