@@ -40,7 +40,7 @@ async function login() {
         <p class="text-sm text-muted-foreground">請使用診所共用帳號登入。</p>
       </div>
 
-      <p v-if="error" class="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">{{ error }}</p>
+      <p v-if="error" class="rounded-md bg-destructive-surface px-3 py-2 text-sm text-destructive" role="alert">{{ error }}</p>
 
       <div class="space-y-2">
         <Label for="username">帳號</Label>

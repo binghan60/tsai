@@ -107,7 +107,7 @@ function appointmentStatusClasses(status) {
     scheduled: 'bg-info-surface text-info',
     arrived: 'bg-accent text-accent-foreground',
     completed: 'bg-success-surface text-success',
-    cancelled: 'bg-destructive/10 text-destructive',
+    cancelled: 'bg-destructive-surface text-destructive',
     no_show: 'bg-muted text-muted-foreground',
   }[status] ?? 'bg-muted text-muted-foreground';
 }

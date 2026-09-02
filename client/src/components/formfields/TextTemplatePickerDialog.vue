@@ -116,7 +116,7 @@ async function saveTemplate() {
       </div>
 
       <form v-if="creating" class="min-h-0 flex-1 space-y-5 border-y border-border p-6" @submit.prevent="saveTemplate">
-        <p v-if="createError" class="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{{ createError }}</p>
+        <p v-if="createError" class="rounded-lg border border-destructive/30 bg-destructive-surface px-3 py-2 text-sm text-destructive">{{ createError }}</p>
         <div class="rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground"><p class="font-medium text-foreground">{{ picker?.label || '目前欄位' }}</p><p class="mt-2 line-clamp-4 whitespace-pre-wrap">{{ picker?.currentText }}</p></div>
         <div class="space-y-1.5">
           <p class="text-sm font-medium text-foreground">適用範圍</p>
@@ -203,6 +203,7 @@ async function saveTemplate() {
     title="刪除文字模板"
     :description="`確定要刪除「${deleteTarget?.name || ''}」嗎？已插入報告的文字不受影響。`"
     confirm-label="刪除模板"
+    destructive
     :loading="deleting"
     @update:open="(value) => !value && (deleteTarget = null)"
     @confirm="confirmDelete"

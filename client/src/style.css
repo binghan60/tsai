@@ -133,6 +133,7 @@
   --accent: var(--color-petrol-50);
   --accent-foreground: var(--color-petrol-700);
   --destructive: #b3202d;
+  --destructive-surface: #fbe8e9;
   --destructive-solid: var(--destructive);
   --destructive-solid-foreground: #ffffff;
   --border: var(--color-paper-300);
@@ -153,8 +154,9 @@
   --warning-surface: #fbf0da;
   --info: #175e8e;
   --info-surface: #e2effa;
-  --danger: #a31f2b;
-  --danger-surface: #fbe8e9;
+  /* danger 是既有狀態 API 的相容名稱；錯誤、異常與刪除共用同一套紅色來源。 */
+  --danger: var(--destructive);
+  --danger-surface: var(--destructive-surface);
 
   --chart-1: #068ba6;
 
@@ -191,6 +193,7 @@
   --accent: #0e2830;
   --accent-foreground: var(--color-petrol-300);
   --destructive: #ff8f86;
+  --destructive-surface: #351c1f;
   --destructive-solid: #c0303c;
   --destructive-solid-foreground: #ffffff;
   --border: #2c3a44;
@@ -204,8 +207,8 @@
   --warning-surface: #2a2113;
   --info: #6fb6e8;
   --info-surface: #122430;
-  --danger: #ff9a93;
-  --danger-surface: #351c1f;
+  --danger: var(--destructive);
+  --danger-surface: var(--destructive-surface);
 
   --chart-1: #2fa3bf;
 
@@ -235,6 +238,7 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-surface: var(--destructive-surface);
   --color-destructive-solid: var(--destructive-solid);
   --color-destructive-solid-foreground: var(--destructive-solid-foreground);
   --color-border: var(--border);

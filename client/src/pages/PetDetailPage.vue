@@ -627,6 +627,7 @@ watch(
       title="刪除病歷日誌"
       description="確定要刪除這則記事嗎？此操作無法復原。"
       confirm-label="刪除"
+      destructive
       :loading="Boolean(deletingNoteId)"
       @update:open="(value) => !value && (noteToRemove = null)"
       @confirm="removeNote"
@@ -636,6 +637,7 @@ watch(
       title="撤銷分享連結"
       description="確定要撤銷這份報告的分享連結嗎？已取得連結的人將無法再開啟。"
       confirm-label="撤銷"
+      destructive
       :loading="Boolean(revokingId)"
       @update:open="(value) => !value && (shareToRevoke = null)"
       @confirm="revokeShare(shareToRevoke)"
@@ -647,6 +649,7 @@ watch(
       title="捨棄健檢草稿"
       :description="`確定要捨棄「${formatDate(recordToRemove?.visitDate)}」這筆草稿嗎？此操作無法復原。`"
       confirm-label="捨棄草稿"
+      destructive
       :loading="Boolean(deletingRecordId)"
       @update:open="(value) => !value && (recordToRemove = null)"
       @confirm="removeRecord()"

@@ -253,6 +253,7 @@ function goToPage(next) {
       title="刪除飼主"
       :description="`確定要刪除飼主「${ownerToRemove?.name || ''}」嗎？此操作無法復原。`"
       confirm-label="刪除"
+      destructive
       :loading="Boolean(deletingId)"
       @update:open="(value) => !value && (ownerToRemove = null)"
       @confirm="removeOwner(ownerToRemove)"

@@ -316,6 +316,6 @@ onMounted(load);
       </form>
     </ModalDialog>
 
-    <ConfirmDialog :open="Boolean(deleteTarget)" title="刪除文字模板" :description="`確定要刪除「${deleteTarget?.name || ''}」嗎？已插入報告的文字不受影響。`" confirm-label="刪除模板" :loading="deleting" @update:open="(value) => !value && (deleteTarget = null)" @confirm="confirmDelete" />
+    <ConfirmDialog :open="Boolean(deleteTarget)" title="刪除文字模板" :description="`確定要刪除「${deleteTarget?.name || ''}」嗎？已插入報告的文字不受影響。`" confirm-label="刪除模板" :loading="deleting" destructive @update:open="(value) => !value && (deleteTarget = null)" @confirm="confirmDelete" />
   </SettingsLayout>
 </template>

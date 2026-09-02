@@ -399,6 +399,7 @@ watch(
       title="刪除寵物"
       :description="`確定要刪除「${petToRemove?.name || ''}」嗎？此操作無法復原。`"
       confirm-label="刪除"
+      destructive
       :loading="Boolean(deletingPetId)"
       @update:open="(value) => !value && (petToRemove = null)"
       @confirm="removePet(petToRemove)"

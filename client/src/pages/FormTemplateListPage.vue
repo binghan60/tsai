@@ -458,6 +458,7 @@ onMounted(load);
       title="刪除健檢表單"
       :description="`確定刪除「${templateToDelete?.name ?? ''}」嗎？已完成的報告不受影響，但之後無法再用這份表單建立健檢。`"
       confirm-label="刪除表單"
+      destructive
       :loading="Boolean(busyId)"
       @update:open="(value) => !value && (templateToDelete = null)"
       @confirm="remove"

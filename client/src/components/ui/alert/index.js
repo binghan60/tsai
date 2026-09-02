@@ -18,7 +18,7 @@ export const alertVariants = cva(
         // 錯誤需要在掃視時就被看到，只靠文字色不夠。
         // 用 destructive token 而不是 red-50/red-200，深色主題才會跟著翻。
         destructive:
-          "border-destructive/30 bg-destructive/10 text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+          "border-destructive/30 bg-destructive-surface text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
       },
     },
     defaultVariants: {

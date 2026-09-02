@@ -44,7 +44,7 @@ function choose(action) {
         :key="action.key"
         type="button"
         class="flex min-h-10 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
-        :class="action.danger ? 'bg-destructive/10 text-destructive hover:bg-destructive/20' : 'bg-muted/60 text-foreground hover:bg-secondary'"
+        :class="action.danger ? 'bg-destructive-surface text-destructive hover:bg-destructive/20' : 'bg-muted/60 text-foreground hover:bg-secondary'"
         :disabled="action.disabled"
         @click="choose(action)"
       >

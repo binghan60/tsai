@@ -11,7 +11,8 @@ const props = defineProps({
   confirmLabel: { type: String, default: '確認' },
   cancelLabel: { type: String, default: '取消' },
   loading: { type: Boolean, default: false },
-  destructive: { type: Boolean, default: true },
+  // 一般確認預設使用主色；刪除、捨棄、撤銷等不可逆操作必須由呼叫端明確標記。
+  destructive: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:open', 'confirm', 'cancel']);
@@ -20,7 +21,7 @@ const tone = computed(() =>
   props.destructive
     ? {
         icon: AlertTriangle,
-        shell: 'border-destructive/30 bg-destructive/10 text-destructive dark:border-destructive/40 dark:bg-destructive/10',
+        shell: 'border-destructive/30 bg-destructive-surface text-destructive dark:border-destructive/40',
       }
     : {
         icon: CheckCircle2,

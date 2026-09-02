@@ -24,7 +24,7 @@ function submit() {
 <template>
   <ModalDialog size="sm" @close="$emit('close')">
     <div class="flex items-start gap-3.5 p-6 pb-2 sm:p-7 sm:pb-2">
-      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-destructive/30 bg-destructive/10 text-destructive">
+      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-destructive/30 bg-destructive-surface text-destructive">
         <CalendarX2 class="h-5 w-5" stroke-width="1.8" />
       </div>
       <div class="min-w-0">

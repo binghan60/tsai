@@ -830,7 +830,7 @@ function resolveLeave(confirmed) {
                         />
                         <button
                           type="button"
-                          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
+                          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive-surface text-destructive transition-colors hover:bg-destructive/20"
                           :aria-label="'刪除選項 ' + (index + 1)"
                           @click="removeOption(index)"
                         >
@@ -967,6 +967,7 @@ function resolveLeave(confirmed) {
       title="刪除這個區塊？"
       :description="'「' + (sectionToDelete?.title || '未命名區塊') + '」與其中 ' + (sectionToDelete?.items?.length ?? 0) + ' 個項目會在儲存後移除。'"
       confirm-label="刪除區塊"
+      destructive
       @update:open="(open) => !open && (sectionToDelete = null)"
       @confirm="confirmSectionDelete"
     />
@@ -975,6 +976,7 @@ function resolveLeave(confirmed) {
       title="確認停用系統連動欄位"
       :description="pendingRoleRemoval?.message ?? ''"
       confirm-label="仍要儲存"
+      destructive
       :loading="saving"
       @update:open="(open) => !open && (pendingRoleRemoval = null)"
       @confirm="save({ confirmRoleRemoval: true })"
@@ -985,6 +987,7 @@ function resolveLeave(confirmed) {
       description="離開這一頁會捨棄剛才的編輯內容，這個動作無法復原。"
       confirm-label="捨棄變更並離開"
       cancel-label="留在此頁"
+      destructive
       @update:open="(open) => !open && resolveLeave(false)"
       @confirm="resolveLeave(true)"
     />
