@@ -5,11 +5,15 @@ import * as d3 from 'd3';
 const props = defineProps({ modelValue: { type: [Object, String], default: () => ({ teeth: {} }) }, readonly: Boolean });
 const emit = defineEmits(['update:modelValue']);
 const STATES = [
-  { value: 'normal', label: '正常', color: '#34a853' }, { value: 'missing', label: '缺牙', color: '#8b5e3c' },
-  { value: 'calculus', label: '牙結石', color: '#d49a18' }, { value: 'periodontal', label: '牙周病', color: '#d34b4b' },
-  { value: 'extracted', label: '拔除', color: '#71717a' }, { value: 'other', label: '其他', color: '#7c5ce0' },
+  { value: 'normal', label: '正常', color: '#ffffff' }, { value: 'missing', label: '缺牙', color: '#8b5e3c' },
+  { value: 'calculus', label: '牙結石', color: '#d49a18' }, { value: 'periodontal', label: '牙周病', color: '#71717a' },
+  { value: 'extracted', label: '拔除', color: '#d34b4b' }, { value: 'other', label: '其他', color: '#7c5ce0' },
 ];
 const stateByValue = Object.fromEntries(STATES.map((state) => [state.value, state]));
+const swatchStyle = (state) => ({
+  backgroundColor: state.color,
+  border: state.value === 'normal' ? '1px solid #a1a1aa' : '1px solid transparent',
+});
 const svg = ref(null); const selectedCode = ref(null);
 const menuRef = ref(null); const menuPos = ref(null); // 點牙齒時打開的右鍵選單風格浮動選單，取代原本畫面下方常駐的狀態面板
 const chart = computed(() => props.modelValue && typeof props.modelValue === 'object' && !Array.isArray(props.modelValue) ? { teeth: props.modelValue.teeth ?? {} } : { teeth: {} });
@@ -189,7 +193,7 @@ onBeforeUnmount(() => {
 <template>
   <div v-bind="$attrs" class="rounded-xl border border-border bg-field p-3 text-foreground">
     <svg ref="svg" :viewBox="VIEW_BOX" class="mx-auto block w-full" :class="readonly ? '' : 'cursor-pointer'" />
-    <div class="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span v-for="state in STATES" :key="state.value" class="inline-flex items-center gap-1"><i class="h-2.5 w-2.5 rounded-full" :style="{ backgroundColor: state.color }" />{{ state.label }}</span></div>
+    <div class="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span v-for="state in STATES" :key="state.value" class="inline-flex items-center gap-1"><i class="h-2.5 w-2.5 rounded-full" :style="swatchStyle(state)" />{{ state.label }}</span></div>
   </div>
   <Teleport to="body">
     <div
@@ -200,7 +204,7 @@ onBeforeUnmount(() => {
     >
       <p class="px-2 py-1 text-xs font-medium text-muted-foreground">牙位 {{ selectedCode }}</p>
       <div class="border-t border-border pt-1">
-        <button v-for="state in STATES" :key="state.value" type="button" class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs" :class="selected?.status === state.value ? 'bg-muted font-medium text-foreground' : 'hover:bg-muted'" @click="pickState(state.value)"><i class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ backgroundColor: state.color }" />{{ state.label }}</button>
+        <button v-for="state in STATES" :key="state.value" type="button" class="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs" :class="selected?.status === state.value ? 'bg-muted font-medium text-foreground' : 'hover:bg-muted'" @click="pickState(state.value)"><i class="h-2.5 w-2.5 shrink-0 rounded-full" :style="swatchStyle(state)" />{{ state.label }}</button>
         <button v-if="selected" type="button" class="mt-1 w-full border-t border-border px-2 pt-2 pb-1.5 text-left text-xs text-danger hover:bg-danger-surface" @click="clearAndClose">清除</button>
       </div>
     </div>
