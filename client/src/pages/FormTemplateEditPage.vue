@@ -866,9 +866,9 @@ function resolveLeave(confirmed) {
                   <div class="border-t border-border pt-3">
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="destructive"
                       size="sm"
-                      class="min-h-10 w-full border-danger/35 text-danger hover:bg-danger-surface"
+                      class="min-h-10 w-full"
                       @click="removeItem(activeSection, selectedItem)"
                     >
                       <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除項目
@@ -913,9 +913,9 @@ function resolveLeave(confirmed) {
                   <div class="border-t border-border pt-3">
                     <Button
                       type="button"
-                      variant="outline"
+                      variant="destructive"
                       size="sm"
-                      class="min-h-10 w-full border-danger/35 text-danger hover:bg-danger-surface"
+                      class="min-h-10 w-full"
                       @click="requestSectionDelete(activeSection)"
                     >
                       <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除這個區塊

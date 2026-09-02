@@ -40,7 +40,7 @@ const removable = computed(() => Boolean(selection?.remove));
       v-if="removable"
       type="button"
       data-canvas-action
-      class="absolute -right-3 -top-3 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-field text-muted-foreground shadow-sm transition hover:border-danger/35 hover:bg-danger-surface hover:text-danger"
+      class="absolute -right-3 -top-3 z-20 flex h-7 w-7 items-center justify-center rounded-full bg-destructive/10 text-destructive shadow-sm transition hover:bg-destructive/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30"
       :class="active
         ? 'opacity-100'
         : 'invisible opacity-0 group-hover/canvas-item:visible group-hover/canvas-item:opacity-100 group-focus-within/canvas-item:visible group-focus-within/canvas-item:opacity-100'"

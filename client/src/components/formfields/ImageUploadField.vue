@@ -166,7 +166,7 @@ onBeforeUnmount(() => {
         <div v-for="(image, index) in images" :key="image.publicId || image.url" class="group relative overflow-hidden rounded-xl border border-border bg-muted" :class="spanClass(image)">
           <img :src="image.url" :alt="`${item.label}圖片 ${index + 1}`" class="block h-auto w-full" />
           <template v-if="!preview">
-            <Button type="button" variant="secondary" size="icon" class="absolute right-2 top-2 shadow-sm" :aria-label="`刪除圖片 ${index + 1}`" @click="remove(index)"><Trash2 class="h-4 w-4" /></Button>
+            <Button type="button" variant="destructive" size="icon" class="absolute right-2 top-2 shadow-sm" :aria-label="`刪除圖片 ${index + 1}`" @click="remove(index)"><Trash2 class="h-4 w-4" /></Button>
             <div class="absolute left-2 top-2 flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-sm backdrop-blur" :aria-label="`調整圖片 ${index + 1} 的版型`">
               <button v-for="option in IMAGE_SIZE_OPTIONS" :key="option.span" type="button" class="min-h-8 rounded-md px-2 text-xs font-medium transition-colors" :class="Number(image.span) === option.span ? 'bg-accent text-accent-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" :title="option.hint" @click="updateSpan(index, option.span)">{{ option.label }}</button>
             </div>
