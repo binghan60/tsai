@@ -518,6 +518,10 @@ html {
   overflow: hidden;
 }
 
+.bottom-action-bar {
+  box-shadow: 0 -10px 30px -20px rgb(0 0 0 / 0.35);
+}
+
 /* 報告紙面走自己的字級尺度，不跟著後台的 16px 下限走。
    兩個理由：一、它是 A4 列印文件不是螢幕介面，放大會直接改變分頁位置，
    而 PDF 是要寄給飼主的正式文件；二、report/* 那組元件與後台共用

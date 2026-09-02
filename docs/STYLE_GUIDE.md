@@ -49,6 +49,41 @@
 - 紅色 `danger` / `destructive`：異常、失敗、危險操作。
 - 中性 `muted`：草稿、已取消——沒有人在等它的狀態不該搶顏色。
 
+### 色票治理規則
+
+專案分成三層色票，新增顏色時必須先判斷屬於哪一層：
+
+1. **產品 UI 語意色**：`primary`、`secondary`、`muted`、`accent`、`destructive`、
+   `success`、`warning`、`info`、`danger`。一般頁面與共用元件只能使用這一層。
+2. **固定列印報告色**：名稱以 `report-*` 開頭。報告與 PDF 必須固定淺色，不能因後台切換深色模式而改變；
+   因此只能在 `ReportViewPage.vue` 與 `components/report/` 使用。
+3. **資料視覺化色**：`chart-*` 與 `dental-*`。只用於圖表資料系列、牙位方向與牙科狀態，
+   不得拿來當按鈕、提示或一般文字色。
+
+所有實際 HEX／RGB 色碼只能出現在 `client/src/style.css`。Vue／JavaScript 不可直接寫色碼，
+也不可使用 Tailwind 內建的 `red-*`、`emerald-*`、`amber-*`、`stone-*` 等固定色階。
+新增色票時需同時完成以下事項：
+
+- 在 `:root` 定義語意 token；需要支援深色模式的 token，必須在 `.dark` 提供對應值。
+- 需要在 class 使用的 token，要在 `@theme inline` 匯出為 `--color-*`。
+- 在本文件補上用途與禁止用途；同一語意不得另起近似色。
+- 執行 `npm run audit:colors`。此檢查也會隨 `npm run build` 自動執行。
+
+黑／白只允許用於遮罩、列印紙面與已確認對比的前景，例如 `bg-black/50`、`text-white`；
+不能用黑白繞過既有的 `foreground`、`surface` 或 `border` token。
+
+### 狀態與操作不可混用
+
+| 語意 | 正確用途 | 禁止用途 |
+| --- | --- | --- |
+| `primary` | 當下唯一的主要安全操作、互動連結、選取中 | 一般內容、錯誤、刪除 |
+| `secondary` | 編輯、複製、設定等可逆支援操作 | 最終提交、刪除確認 |
+| `muted` | 次要內容、停用或已結束狀態 | 需要立即注意的狀態 |
+| `success` | 已成功、正常、已寄送 | 儲存按鈕或一般正向裝飾 |
+| `warning` | 待處理、未到診、過敏或需留意 | 一般導覽與編輯 |
+| `info` | 處理中、已排程 | 一般連結與主要操作 |
+| `destructive` / `danger` | 刪除、撤銷、捨棄、失敗、異常 | 取消篩選、關閉視窗等安全操作 |
+
 ## 文字顏色
 
 預設是 `text-foreground`（近黑）。**內容本身不上色**——寵物名、飼主名、日期、診斷、表格內容都是黑的，
@@ -92,8 +127,8 @@
 
 ```vue
 <Button>主要操作</Button>
-<Button variant="outline">次要操作</Button>
-<Button variant="secondary">輔助操作</Button>
+<Button variant="outline">返回／取消</Button>
+<Button variant="secondary">編輯／輔助操作</Button>
 <Button variant="destructive">低強度危險操作</Button>
 <Button variant="destructive-solid">確認刪除</Button>
 
@@ -105,8 +140,8 @@
 | Variant | 用途 | 常見範例 |
 | --- | --- | --- |
 | `default` | 當下最重要且安全的下一步 | 新增健檢、預覽、下載 PDF |
-| `outline` | 返回、編輯、儲存草稿等次要操作 | 編輯資料、回上一頁 |
-| `secondary` | 可重複執行的支援操作 | 分享、複製連結、批次標示 |
+| `outline` | 離開目前流程或不提交變更 | 返回、取消、關閉、儲存草稿並返回 |
+| `secondary` | 可逆、可重複執行的支援操作 | 編輯、設定、分享、複製連結、批次標示 |
 | `destructive` | 尚未進入最終確認的危險操作 | 刪除、捨棄、撤銷入口 |
 | `destructive-solid` | 確認視窗內的最終危險操作 | 確認刪除、確認撤銷 |
 | `link` | 段落文字內的超連結，不作工具列按鈕 | 前往補填資料 |

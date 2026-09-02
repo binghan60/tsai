@@ -1056,7 +1056,7 @@ function handleBeforeUnload(event) {
       </form>
 
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
-      <div v-if="!isLocked" id="record-action-bar" class="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 shadow-[0_-10px_30px_-20px_rgba(0,0,0,0.35)] lg:left-64">
+      <div v-if="!isLocked" id="record-action-bar" class="bottom-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 lg:left-64">
         <div class="mx-auto max-w-6xl">
           <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
           <div class="grid grid-cols-3 gap-2 sm:hidden">

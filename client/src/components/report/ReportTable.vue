@@ -30,46 +30,46 @@ function groupsOf(run) {
     <template v-for="run in runs" :key="run.key">
       <div v-if="run.kind === 'primary'" class="space-y-5">
         <div v-for="group in groupsOf(run)" :key="group.label" class="break-inside-avoid">
-          <h3 v-if="group.label" class="mb-2 text-xs font-semibold text-stone-500">{{ group.label }}</h3>
-          <div class="overflow-x-auto rounded-xl border border-stone-200">
-            <div class="grid min-w-[640px] grid-cols-[1fr_2.8rem_0.5fr_0.5fr_2.8fr] border-b border-stone-200 bg-stone-50/80 px-4 py-2 text-xs font-semibold text-stone-500">
+          <h3 v-if="group.label" class="mb-2 text-xs font-semibold text-report-muted">{{ group.label }}</h3>
+          <div class="overflow-x-auto rounded-xl border border-report-border">
+            <div class="grid min-w-[640px] grid-cols-[1fr_2.8rem_0.5fr_0.5fr_2.8fr] border-b border-report-border bg-report-surface-muted/80 px-4 py-2 text-xs font-semibold text-report-muted">
               <span>項目名稱</span>
-              <span class="border-l border-stone-200 pl-2">結果</span>
-              <span class="border-l border-stone-200 pl-2">本次數值</span>
-              <span class="border-l border-stone-200 pl-2">上次數值</span>
-              <span class="border-l border-stone-200 pl-2">備註</span>
+              <span class="border-l border-report-border pl-2">結果</span>
+              <span class="border-l border-report-border pl-2">本次數值</span>
+              <span class="border-l border-report-border pl-2">上次數值</span>
+              <span class="border-l border-report-border pl-2">備註</span>
             </div>
             <div
               v-for="finding in group.items"
               :key="finding.key"
-              class="grid min-w-[640px] grid-cols-[1fr_2.8rem_0.5fr_0.5fr_2.8fr] gap-x-0 border-b border-stone-200 px-4 py-3 text-sm last:border-0"
+              class="grid min-w-[640px] grid-cols-[1fr_2.8rem_0.5fr_0.5fr_2.8fr] gap-x-0 border-b border-report-border px-4 py-3 text-sm last:border-0"
             >
               <!-- 1. 項目名稱 -->
-              <span class="min-w-0 pr-2 font-medium text-stone-800">{{ finding.label }}</span>
+              <span class="min-w-0 pr-2 font-medium text-report-foreground">{{ finding.label }}</span>
               <!-- 2. 結果（未檢查留空） -->
               <span
                 v-if="finding.status === 'abnormal' || finding.status === 'normal'"
-                class="min-w-0 border-l border-stone-100 pl-2"
-                :class="finding.status === 'abnormal' ? 'text-red-700' : 'text-emerald-700'"
+                class="min-w-0 border-l border-report-canvas pl-2"
+                :class="finding.status === 'abnormal' ? 'text-report-danger' : 'text-report-success'"
               >
                 {{ statusText(finding.status) }}
               </span>
-              <span v-else class="min-w-0 border-l border-stone-100 pl-2"></span>
+              <span v-else class="min-w-0 border-l border-report-canvas pl-2"></span>
               <!-- 3. 本次數值 -->
-              <span class="min-w-0 border-l border-stone-100 pl-2 text-stone-700">
+              <span class="min-w-0 border-l border-report-canvas pl-2 text-report-text">
                 <strong class="font-medium">{{ labValueLabel(finding) }}</strong>
               </span>
               <!-- 4. 上次數值（獨立欄位，沒有歷史數值時保持空白） -->
-              <span class="min-w-0 border-l border-stone-100 pl-2 text-stone-700">
+              <span class="min-w-0 border-l border-report-canvas pl-2 text-report-text">
                 <template v-if="previousLabValueLabel(finding)">
                   <span>
-                    <small v-if="previousDateLabel(finding)" class="block text-xs text-stone-500">{{ previousDateLabel(finding) }}</small>
+                    <small v-if="previousDateLabel(finding)" class="block text-xs text-report-muted">{{ previousDateLabel(finding) }}</small>
                     <strong class="font-medium">{{ previousLabValueLabel(finding) }}</strong>
                   </span>
                 </template>
               </span>
               <!-- 5. 備註 -->
-              <span class="min-w-0 whitespace-pre-wrap border-l border-stone-100 pl-2 text-stone-600">{{ finding.note || '' }}</span>
+              <span class="min-w-0 whitespace-pre-wrap border-l border-report-canvas pl-2 text-report-text">{{ finding.note || '' }}</span>
             </div>
           </div>
         </div>

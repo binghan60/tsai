@@ -17,7 +17,7 @@ defineProps({
         <router-link v-if="item.to" :to="item.to" class="rounded-lg px-2 py-1 font-medium text-primary outline-none transition-colors hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-ring">
           {{ item.label }}
         </router-link>
-        <span v-else aria-current="page" class="max-w-56 truncate rounded-lg bg-accent px-2 py-1 font-semibold text-accent-foreground shadow-[inset_0_0_0_1px_hsl(var(--border)/0.45)] sm:max-w-sm">
+        <span v-else aria-current="page" class="max-w-56 truncate rounded-lg bg-accent px-2 py-1 font-semibold text-accent-foreground ring-1 ring-inset ring-border/50 sm:max-w-sm">
           {{ item.label }}
         </span>
       </li>
