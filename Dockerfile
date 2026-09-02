@@ -5,6 +5,7 @@ WORKDIR /app/client
 COPY client/package.json client/package-lock.json ./
 RUN npm ci --include=dev
 COPY client/ ./
+COPY shared/ /app/shared/
 
 ARG VITE_API_BASE_URL=/api
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
@@ -34,6 +35,7 @@ WORKDIR /app/server
 COPY --from=server-dependencies --chown=node:node /app/server/node_modules ./node_modules
 COPY --chown=node:node server/package.json ./package.json
 COPY --chown=node:node server/src ./src
+COPY --chown=node:node shared/ /app/shared/
 COPY --from=client-builder --chown=node:node /app/client/dist /app/client/dist
 
 USER node
