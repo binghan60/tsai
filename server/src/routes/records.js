@@ -10,7 +10,7 @@ import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } f
 import { hasPdfRenderAccess } from '../config/pdfAccess.js';
 import { publicAppOrigin } from '../config/publicUrl.js';
 import { defaultRecordFields, storageFor, templateForRecord } from '../lib/formTemplate.js';
-import { sanitizeImageValue } from '../lib/imageUploads.js';
+import { deleteCloudinaryImages, removedImagePublicIds, imagePublicIds, sanitizeImageValue } from '../lib/imageUploads.js';
 import { composeReportSections } from '../lib/reportSections.js';
 import { escapeRegExp } from '../lib/regex.js';
 import { validateFinalRecord } from '../lib/recordValidation.js';
@@ -70,6 +70,16 @@ function sanitizeRecordImages(data, template, existingRecord = null) {
     }
   }
   return { ...data, customValues };
+}
+
+async function cleanUpImages(publicIds, context) {
+  if (!publicIds.length) return;
+  try {
+    await deleteCloudinaryImages(publicIds);
+  } catch (err) {
+    // 資料庫操作已完成；清理失敗只能記錄，不能讓使用者誤以為儲存或刪除失敗。
+    console.error(`[image-cleanup] ${context}`, err);
+  }
 }
 
 function isFinalizedRecord(record) {
@@ -449,6 +459,7 @@ recordsRouter.put('/:id', async (req, res, next) => {
         currentVersion: existing.__v,
       });
     }
+    await cleanUpImages(removedImagePublicIds(existingForValidation, record), `record ${record._id} updated`);
     res.json(record);
   } catch (err) {
     next(err);
@@ -752,6 +763,7 @@ recordsRouter.post('/:id/revisions', async (req, res, next) => {
 });
 
 recordsRouter.delete('/:id', async (req, res, next) => {
+  let deletedImageIds = [];
   try {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
@@ -800,6 +812,7 @@ recordsRouter.delete('/:id', async (req, res, next) => {
         error.status = 409;
         throw error;
       }
+      deletedImageIds = imagePublicIds(current);
       // 報告可能在最初讀取與 transaction 開始之間剛好完成結案，
       // 因此確認文字必須用 transaction 內的最新狀態再驗一次。
       if (isFinalizedRecord(current)) {
@@ -837,6 +850,7 @@ recordsRouter.delete('/:id', async (req, res, next) => {
         throw error;
       }
     });
+    await cleanUpImages(deletedImageIds, `record ${req.params.id} deleted`);
     res.status(204).end();
   } catch (err) {
     next(err);

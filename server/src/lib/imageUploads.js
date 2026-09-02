@@ -22,6 +22,17 @@ function signatureFor(params, apiSecret) {
   return crypto.createHash('sha1').update(`${serialized}${apiSecret}`).digest('hex');
 }
 
+function configuredCloudinaryCredentials({
+  cloudName = process.env.CLOUDINARY_CLOUD_NAME,
+  apiKey = process.env.CLOUDINARY_API_KEY,
+  apiSecret = process.env.CLOUDINARY_API_SECRET,
+} = {}) {
+  if (!cloudName || !apiKey || !apiSecret) {
+    throw new Error('尚未設定 Cloudinary 圖片服務');
+  }
+  return { cloudName, apiKey, apiSecret };
+}
+
 export function createImageUploadSignature({ cloudName, apiKey, apiSecret, uploadPreset, folder = configuredImageFolder() }) {
   const timestamp = Math.floor(Date.now() / 1000);
   const publicId = `image-${crypto.randomUUID()}`;
@@ -101,4 +112,42 @@ export function sanitizeImageValue(value, {
       ...(caption ? { caption } : {}),
     };
   });
+}
+
+export function imagePublicIds(record, { folder = configuredImageFolder() } = {}) {
+  const values = record?.customValues instanceof Map
+    ? [...record.customValues.values()]
+    : Object.values(record?.customValues ?? {});
+  const prefix = `${folder}/`;
+  return [...new Set(values
+    .flatMap((value) => Array.isArray(value) ? value : [])
+    .map((image) => String(image?.publicId ?? ''))
+    .filter((publicId) => publicId.startsWith(prefix) && /^image-[0-9a-f-]{36}$/i.test(publicId.slice(prefix.length))))];
+}
+
+export function removedImagePublicIds(previousRecord, nextRecord, options) {
+  const retained = new Set(imagePublicIds(nextRecord, options));
+  return imagePublicIds(previousRecord, options).filter((publicId) => !retained.has(publicId));
+}
+
+export async function deleteCloudinaryImages(publicIds, {
+  fetchImpl = fetch,
+  ...credentials
+} = {}) {
+  const ids = [...new Set(publicIds ?? [])];
+  if (!ids.length) return;
+  const { cloudName, apiKey, apiSecret } = configuredCloudinaryCredentials(credentials);
+  const timestamp = Math.floor(Date.now() / 1000);
+  const results = await Promise.allSettled(ids.map(async (publicId) => {
+    const signature = signatureFor({ invalidate: true, public_id: publicId, timestamp }, apiSecret);
+    const body = new URLSearchParams({ public_id: publicId, timestamp: String(timestamp), invalidate: 'true', api_key: apiKey, signature });
+    const response = await fetchImpl(`https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    if (!response.ok) throw new Error(`Cloudinary 刪除圖片失敗（${response.status}）`);
+  }));
+  const failure = results.find((result) => result.status === 'rejected');
+  if (failure) throw failure.reason;
 }

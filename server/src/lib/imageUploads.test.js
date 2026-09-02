@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { configuredImageFolder, createImageUploadSignature, sanitizeImageValue } from './imageUploads.js';
+import { configuredImageFolder, createImageUploadSignature, deleteCloudinaryImages, imagePublicIds, removedImagePublicIds, sanitizeImageValue } from './imageUploads.js';
 
 const cloudName = 'clinic';
 const uploadPreset = 'tsai-medical-record-images';
@@ -52,4 +52,32 @@ test('sanitizeImageValue only accepts the configured Cloudinary image folder', (
     () => sanitizeImageValue(Array.from({ length: 13 }, () => validImage), { cloudName }),
     { message: '圖片欄位最多只能有 12 張圖片', status: 422 }
   );
+});
+
+test('finds only images removed from a record', () => {
+  const retainedImage = { ...validImage, publicId: validImage.publicId.replace('12345678', 'aaaaaaaa'), url: validImage.url.replace('12345678', 'aaaaaaaa') };
+  const previous = { customValues: new Map([['images', [validImage, retainedImage]]]) };
+  const next = { customValues: { images: [retainedImage] } };
+  assert.deepEqual(imagePublicIds(previous), [validImage.publicId, retainedImage.publicId]);
+  assert.deepEqual(removedImagePublicIds(previous, next), [validImage.publicId]);
+});
+
+test('deletes Cloudinary images through the signed server-side API', async () => {
+  const calls = [];
+  await deleteCloudinaryImages([validImage.publicId], {
+    cloudName,
+    apiKey: 'key',
+    apiSecret: 'secret',
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options });
+      return { ok: true };
+    },
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].url, 'https://api.cloudinary.com/v1_1/clinic/image/destroy');
+  assert.equal(calls[0].options.method, 'POST');
+  assert.equal(calls[0].options.body.get('public_id'), validImage.publicId);
+  assert.equal(calls[0].options.body.get('api_key'), 'key');
+  assert.equal(calls[0].options.body.get('invalidate'), 'true');
+  assert.match(calls[0].options.body.get('signature'), /^[0-9a-f]{40}$/);
 });
