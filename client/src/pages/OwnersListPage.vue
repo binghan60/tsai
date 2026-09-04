@@ -246,7 +246,7 @@ function goToPage(next) {
       <Pagination :page="currentPage" :total-pages="totalPages" @update:page="goToPage" />
     </template>
 
-    <OwnerFormDialog v-if="editTarget" title="編輯飼主資料" submit-label="儲存" :initial-value="{ name: editTarget.name, phone: editTarget.phone, email: editTarget.email ?? '' }" :submitting="editSaving" :error-message="editError" @submit="submitEdit" @close="editTarget = null" />
+    <OwnerFormDialog v-if="editTarget" title="編輯飼主資料" submit-label="儲存" :initial-value="{ name: editTarget.name, phone: editTarget.phone, email: editTarget.email ?? '', address: editTarget.address ?? '' }" :submitting="editSaving" :error-message="editError" @submit="submitEdit" @close="editTarget = null" />
     <OwnerFormDialog v-if="showCreate" title="新增飼主資料" submit-label="下一步：新增寵物" :initial-value="createDraft" :submitting="creating" :error-message="createError" @submit="createOwner" @update:draft="createDraft = $event" @close="showCreate = false" />
     <ConfirmDialog
       :open="Boolean(ownerToRemove)"

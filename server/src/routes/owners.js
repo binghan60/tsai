@@ -35,10 +35,10 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, phone, email } = req.body;
+    const { name, phone, email, address } = req.body;
     const validationError = validateOwnerInput({ name, phone, email });
     if (validationError) return res.status(422).json({ message: validationError });
-    const owner = await Owner.create({ name, phone, email });
+    const owner = await Owner.create({ name, phone, email, address });
     res.status(201).json(owner);
   } catch (err) {
     next(err);
@@ -68,7 +68,7 @@ router.get('/:id', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, phone, email } = req.body;
+    const { name, phone, email, address } = req.body;
     const validationError = validateOwnerInput({ name, phone, email });
     if (validationError) return res.status(422).json({ message: validationError });
     const expectedVersion = Number(req.body?.expectedVersion);
@@ -77,7 +77,7 @@ router.put('/:id', async (req, res, next) => {
     }
     const owner = await Owner.findOneAndUpdate(
       { _id: req.params.id, __v: expectedVersion },
-      { $set: { name, phone, email }, $inc: { __v: 1 } },
+      { $set: { name, phone, email, address }, $inc: { __v: 1 } },
       { new: true, runValidators: true }
     );
     if (!owner) {

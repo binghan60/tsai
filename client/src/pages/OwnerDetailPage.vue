@@ -245,7 +245,7 @@ watch(
         </div>
         <Button type="button" variant="secondary" @click="editOwnerOpen = true"><Pencil class="h-4 w-4" />編輯飼主資料</Button>
       </div>
-      <dl v-if="owner.phone || owner.email || petPagination.total" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
+      <dl v-if="owner.phone || owner.email || owner.address || petPagination.total" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
         <div v-if="owner.phone" class="min-w-0">
           <dt class="text-xs font-medium text-muted-foreground">電話</dt>
           <dd class="mt-1 tabular-nums text-foreground">{{ owner.phone }}</dd>
@@ -257,6 +257,10 @@ watch(
         <div v-if="petPagination.total" class="min-w-0">
           <dt class="text-xs font-medium text-muted-foreground">寵物數</dt>
           <dd class="mt-1 text-foreground">{{ petPagination.total }} 隻</dd>
+        </div>
+        <div v-if="owner.address" class="col-span-2 min-w-0 sm:col-span-3">
+          <dt class="text-xs font-medium text-muted-foreground">地址</dt>
+          <dd class="mt-1 text-foreground">{{ owner.address }}</dd>
         </div>
       </dl>
     </Card>
@@ -353,7 +357,7 @@ watch(
       v-if="editOwnerOpen"
       title="編輯飼主資料"
       submit-label="儲存"
-      :initial-value="{ name: owner.name, phone: owner.phone, email: owner.email ?? '' }"
+      :initial-value="{ name: owner.name, phone: owner.phone, email: owner.email ?? '', address: owner.address ?? '' }"
       :submitting="editOwnerSaving"
       :error-message="editOwnerError"
       @submit="saveOwner"

@@ -3,7 +3,7 @@
 // 只有在真的新增成功之後才重置回這裡的空白值。
 
 export function emptyOwnerDraft() {
-  return { name: '', phone: '', email: '' };
+  return { name: '', phone: '', email: '', address: '' };
 }
 
 export function emptyPetDraft() {

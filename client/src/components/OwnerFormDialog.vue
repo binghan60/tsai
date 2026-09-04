@@ -26,6 +26,7 @@ const { handleSubmit, values } = useForm({ initialValues: { ...emptyOwnerDraft()
 const { value: name, errorMessage: nameError } = useField('name', requiredRule);
 const { value: phone, errorMessage: phoneError } = useField('phone', requiredRule);
 const { value: email, errorMessage: emailError } = useField('email', emailRule);
+const { value: address } = useField('address');
 
 // 讓開啟這個 Modal 的頁面能保管草稿：Modal 是 v-if 掛載的，關掉就整個卸載，
 // 表單內容得先交回頁面才活得過一次關閉。
@@ -64,6 +65,11 @@ const onSubmit = handleSubmit((formValues) => emit('submit', formValues));
           <Label for="owner-email" class="text-xs font-medium text-foreground">Email（選填）</Label>
           <Input id="owner-email" v-model="email" type="email" class="border-border focus:border-primary" placeholder="例：owner@example.com" />
           <p v-if="emailError" class="text-xs font-medium text-destructive">{{ emailError }}</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <Label for="owner-address" class="text-xs font-medium text-foreground">地址（選填）</Label>
+          <Input id="owner-address" v-model="address" class="border-border focus:border-primary" placeholder="例：台北市中山區中山北路一段1號" />
         </div>
 
         <Alert v-if="errorMessage" variant="destructive" class="mt-2">

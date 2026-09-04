@@ -24,7 +24,7 @@
 ## 二、資料模型（MongoDB collections）
 
 ### owners 飼主
-`name`、`phone`、`email`。一位飼主可養多隻寵物。
+`name`、`phone`、`email`、`address`（皆選填，僅 `name`／`phone` 必填）。一位飼主可養多隻寵物。
 
 ### pets 寵物
 `name`、`ownerId`、`medicalRecordNumber`（自動產生 `PET-XXXXXXXX`）、`species`、`breed`、`sex`、`neutered`、`birthDate`、`weightKg`、`allergies`、`chronicConditions`、`currentMedications`、`notes`。`legacyMedicalRecordNumber`（選填，unique+sparse）是舊系統匯入時保留的舊病歷號，供追溯與匯入腳本判斷是否已匯過，非匯入資料一律是 `null`。
