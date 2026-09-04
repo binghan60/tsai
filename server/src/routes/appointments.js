@@ -5,6 +5,7 @@ import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import ClinicalNote from '../models/ClinicalNote.js';
 import ClinicSettings from '../models/ClinicSettings.js';
 import { withTransaction } from '../lib/transaction.js';
 import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
@@ -450,6 +451,15 @@ router.post('/:id/complete', async (req, res, next) => {
         examType: template.name,
       }], { session });
       appointment.recordId = record._id;
+      // 看診備註不會出現在報告裡（見上），但仍是有價值的病歷內容，改落地到病歷日誌。
+      if (String(appointment.visitNote ?? '').trim()) {
+        await ClinicalNote.create([{
+          petId: appointment.petId,
+          entryDate: combineClinicDateTime(appointment.date, '10:00'),
+          content: appointment.visitNote,
+          source: 'appointment',
+        }], { session });
+      }
       // 看完診就歸還自己的實體號碼牌；其他候診者手上的牌號完全不變。
       await saveLeavingQueue(appointment, true, session);
     });

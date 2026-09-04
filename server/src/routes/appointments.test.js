@@ -7,6 +7,7 @@ import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
 import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import ClinicalNote from '../models/ClinicalNote.js';
 import ClinicSettings from '../models/ClinicSettings.js';
 import { clinicToday } from '../lib/clinicTime.js';
 import { enumerateDates, fillDailyCounts } from './appointments.js';
@@ -53,14 +54,17 @@ describe('appointments routes', () => {
   let originalTemplateFindOne;
   let originalSettingsFindOne;
   let originalRecordCreate;
+  let originalNoteCreate;
 
   before(async () => {
     originalTemplateFindOne = FormTemplate.findOne;
     originalSettingsFindOne = ClinicSettings.findOne;
     originalRecordCreate = MedicalRecord.create;
+    originalNoteCreate = ClinicalNote.create;
     FormTemplate.findOne = async () => ({ _id: '507f1f77bcf86cd799439011', name: '預設表單', version: 1 });
     ClinicSettings.findOne = () => ({ lean: async () => ({ defaultAppointmentTemplateId: '507f1f77bcf86cd799439011' }) });
     MedicalRecord.create = async ([record]) => [{ _id: 'record-1', ...record }];
+    ClinicalNote.create = async ([note]) => [{ _id: 'note-1', ...note }];
     server = app.listen(0, '127.0.0.1');
     if (!server.listening) await once(server, 'listening');
     origin = `http://127.0.0.1:${server.address().port}`;
@@ -70,6 +74,7 @@ describe('appointments routes', () => {
     FormTemplate.findOne = originalTemplateFindOne;
     ClinicSettings.findOne = originalSettingsFindOne;
     MedicalRecord.create = originalRecordCreate;
+    ClinicalNote.create = originalNoteCreate;
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 
@@ -438,6 +443,87 @@ describe('appointments routes', () => {
       assert.equal(queue.phases, 0);
     } finally {
       Appointment.findById = originalFindById;
+      queue.restore();
+    }
+  });
+
+  it('完成看診時，看診備註會落地成病歷日誌，但不會寫進報告的 other 欄位', async () => {
+    const originalFindById = Appointment.findById;
+    const originalNoteCreate = ClinicalNote.create;
+    const appointment = {
+      _id: 'apt-note',
+      petId: 'pet-note',
+      status: 'arrived',
+      date: '2026-08-26',
+      checkinNumber: 1,
+      save: async () => {},
+    };
+    Appointment.findById = () => ({
+      session: async () => appointment,
+      then: (resolve, reject) => Promise.resolve(appointment).then(resolve, reject),
+    });
+    const noteCreateCalls = [];
+    ClinicalNote.create = async ([note], options) => {
+      noteCreateCalls.push([note, options]);
+      return [{ _id: 'note-2', ...note }];
+    };
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-note/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ visitNote: '拿藥回診，追蹤肝指數' }),
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(noteCreateCalls.length, 1);
+      const [note, options] = noteCreateCalls[0];
+      assert.equal(note.petId, 'pet-note');
+      assert.equal(note.content, '拿藥回診，追蹤肝指數');
+      assert.equal(note.source, 'appointment');
+      assert.ok(options?.session, '要跟報告草稿在同一個 transaction 裡寫入');
+      assert.equal(body.record.other, undefined, '看診備註不可以出現在報告會顯示的欄位');
+    } finally {
+      Appointment.findById = originalFindById;
+      ClinicalNote.create = originalNoteCreate;
+      queue.restore();
+    }
+  });
+
+  it('完成看診時沒填看診備註就不會建立病歷日誌', async () => {
+    const originalFindById = Appointment.findById;
+    const originalNoteCreate = ClinicalNote.create;
+    const appointment = {
+      _id: 'apt-note-empty',
+      petId: 'pet-note-empty',
+      status: 'arrived',
+      date: '2026-08-26',
+      checkinNumber: 1,
+      save: async () => {},
+    };
+    Appointment.findById = () => ({
+      session: async () => appointment,
+      then: (resolve, reject) => Promise.resolve(appointment).then(resolve, reject),
+    });
+    let noteCreateCalled = false;
+    ClinicalNote.create = async ([note]) => {
+      noteCreateCalled = true;
+      return [{ _id: 'note-3', ...note }];
+    };
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-note-empty/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ visitNote: '   ' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(noteCreateCalled, false);
+    } finally {
+      Appointment.findById = originalFindById;
+      ClinicalNote.create = originalNoteCreate;
       queue.restore();
     }
   });

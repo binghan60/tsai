@@ -796,6 +796,7 @@ watch(pet, async (value) => {
                   <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span class="flex items-center gap-1.5"><CalendarDays class="h-3.5 w-3.5 shrink-0" />{{ formatDate(note.entryDate) }}</span>
                     <Badge v-if="note.source === 'legacy_import'" class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">舊系統匯入</Badge>
+                    <Badge v-else-if="note.source === 'appointment'" class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">看診自動建立</Badge>
                   </div>
                   <p
                     v-if="editingNoteId !== note._id"
