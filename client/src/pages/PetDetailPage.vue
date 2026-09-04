@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { AlertTriangle, CalendarDays, Check, ChevronDown, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2, User, X } from '@lucide/vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
+import FilterTabs from '../components/FilterTabs.vue';
 import { http } from '../api/http';
 import { ageLabel as calcAgeLabel, clinicDateInput, formatDate as formatClinicDate, formatDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
@@ -62,6 +63,14 @@ const recordToRemove = ref(null);
 const deletingRecordId = ref(null);
 const removeError = ref('');
 let fetchSequence = 0;
+
+// 病歷日誌／歷次健檢原本各自整段全展開，兩份長清單疊在同一頁造成頁面又長又雜。
+// 改成頁籤只顯示其中一段，切換時另一段完全不佔版面。
+const activeSection = ref('notes');
+const SECTION_TABS = [
+  { key: 'notes', label: '病歷日誌' },
+  { key: 'records', label: '歷次健檢' },
+];
 
 const clinicalNotes = ref([]);
 const notePage = ref(1);
@@ -510,12 +519,21 @@ watch(notePage, () => {
   if (pet.value) fetchPet();
 });
 
+// 頁籤切走時日誌卡片會整段卸載，量測過的收合狀態跟著遺失；切回來要重新量一次，
+// 不然「展開/收合」按鈕會照著卸載前的舊寬度判斷，可能整段跟實際內容對不上。
+watch(activeSection, async (value) => {
+  if (value !== 'notes') return;
+  await nextTick();
+  measureNoteOverflow();
+});
+
 watch(
   () => route.params.id,
   (petId) => {
     pet.value = null;
     recordPage.value = 1;
     notePage.value = 1;
+    activeSection.value = 'notes';
     petEditing.value = false;
     ownerEditing.value = false;
     shareNotice.value = null;
@@ -726,128 +744,136 @@ watch(pet, async (value) => {
     </div>
 
     <div class="space-y-4">
-      <div>
-        <h2 class="text-base font-semibold text-foreground">病歷日誌</h2>
-        <p class="mt-1 text-xs text-muted-foreground">看診或拿藥時的隨手記事，不需要結案即可直接新增。</p>
-      </div>
-
-      <Card class="space-y-3 p-4 shadow-sm dark:shadow-none">
-        <Textarea v-model="newNoteContent" rows="3" placeholder="輸入看診記事…" />
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="flex items-center gap-2">
-            <Label for="new-note-date" class="text-xs font-medium text-muted-foreground">日期</Label>
-            <DatePicker id="new-note-date" v-model="newNoteDate" aria-label="日期" class="w-40" :clearable="false" />
-          </div>
-          <Button :disabled="noteSaving || !newNoteContent.trim()" @click="addNote">新增紀錄</Button>
-        </div>
-        <Alert v-if="noteError" variant="destructive"><AlertDescription>{{ noteError }}</AlertDescription></Alert>
-      </Card>
-
-      <ul v-if="clinicalNotes.length" class="space-y-3">
-        <li v-for="note in clinicalNotes" :key="note._id">
-          <Card class="p-4 shadow-sm dark:shadow-none">
-            <div class="flex items-start gap-3">
-              <button
-                v-if="isNoteCollapsible(note._id)"
-                type="button"
-                class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                :aria-expanded="expandedNoteIds.includes(note._id) || editingNoteId === note._id"
-                :aria-label="expandedNoteIds.includes(note._id) ? '收合日誌內容' : '展開日誌內容'"
-                @click="toggleNote(note._id)"
-              >
-                <ChevronDown
-                  class="h-4 w-4 transition-transform"
-                  :class="expandedNoteIds.includes(note._id) || editingNoteId === note._id ? 'rotate-180' : ''"
-                  stroke-width="1.75"
-                />
-              </button>
-              <span v-else aria-hidden="true" class="h-7 w-7 shrink-0"></span>
-              <div class="min-w-0 flex-1">
-                <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span class="flex items-center gap-1.5"><CalendarDays class="h-3.5 w-3.5 shrink-0" />{{ formatDate(note.entryDate) }}</span>
-                  <Badge v-if="note.source === 'legacy_import'" class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">舊系統匯入</Badge>
-                </div>
-                <p
-                  v-if="editingNoteId !== note._id"
-                  :ref="(element) => setNoteContentElement(note._id, element)"
-                  class="mt-2 min-w-0 text-sm text-foreground"
-                  :class="isNoteCollapsible(note._id) && !expandedNoteIds.includes(note._id) ? 'truncate' : 'whitespace-pre-wrap [overflow-wrap:anywhere]'"
-                >{{ note.content }}</p>
-              </div>
-              <div class="flex shrink-0 gap-1">
-                <Button variant="secondary" size="icon-sm" aria-label="編輯日誌" @click="startEditNote(note)"><Pencil class="h-3.5 w-3.5" /></Button>
-                <Button variant="destructive" size="icon-sm" aria-label="刪除日誌" @click="openRemoveNote(note)"><Trash2 class="h-3.5 w-3.5" /></Button>
-              </div>
-            </div>
-            <div v-if="editingNoteId === note._id" class="mt-3">
-              <Textarea v-model="editingNoteContent" rows="3" />
-              <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
-                <DatePicker v-model="editingNoteDate" aria-label="日期" class="w-40" :clearable="false" />
-                <div class="flex gap-2">
-                  <Button variant="outline" size="sm" @click="cancelEditNote">取消</Button>
-                  <Button size="sm" :disabled="noteSaving" @click="saveEditNote(note)">儲存</Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </li>
-      </ul>
-      <EmptyState v-else :icon="NotebookPen" title="尚無病歷日誌" description="在上方輸入框新增第一則記事。" />
-
-      <Pagination v-if="clinicalNotes.length" :page="notePage" :total-pages="totalNotePages" @update:page="goToNotePage" />
-    </div>
-
-    <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
-
-    <Card v-if="shareNotice" class="border-success/35 bg-success-surface p-4 text-sm text-success shadow-none">
-      <p class="font-medium">{{ shareNotice.copied ? '分享連結已複製' : '分享連結已建立' }}</p>
-      <p class="mt-1 break-all">{{ shareNotice.url }}</p>
-      <p class="mt-1 text-xs opacity-80">連結有效至 {{ formatDate(shareNotice.expiresAt) }}，到期或手動撤銷後即無法開啟</p>
-    </Card>
-
-    <div class="space-y-4">
+      <!-- 病歷日誌／歷次健檢原本各自整段全展開、上下疊在同一頁，兩份長清單同時佔版面
+           是這頁最大的雜亂來源。改成頁籤一次只顯示一段，切換時另一段完全不佔空間。 -->
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 class="text-base font-semibold text-foreground">歷次健檢</h2><p class="mt-1 text-xs text-muted-foreground">依健檢日期排序，草稿可繼續編輯。</p></div>
-        <Button as-child><router-link :to="`/pets/${pet._id}/records/new`"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button>
+        <FilterTabs
+          v-model="activeSection"
+          :items="SECTION_TABS"
+          :counts="{ notes: notePagination.total, records: recordPagination.total }"
+          aria-label="切換病歷日誌與歷次健檢"
+        />
+        <Button v-if="activeSection === 'records'" as-child><router-link :to="`/pets/${pet._id}/records/new`"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button>
       </div>
 
-      <Card v-if="pet.medicalRecords.length" class="hidden overflow-hidden p-0 shadow-sm lg:block dark:shadow-none" style="--data-columns: minmax(9rem, 1.15fr) minmax(8rem, 1fr) minmax(10rem, 1fr) 10.5rem">
-        <div class="desktop-data-header">
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">看診日期</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">狀態</span>
-          <span class="desktop-data-cell"></span>
-        </div>
-        <div v-for="record in pet.medicalRecords" :key="record._id" class="desktop-data-row">
-          <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ formatDate(record.visitDate) }}</span>
-          <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> · 第 {{ record.reportVersion }} 版</span></span>
-          <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap"><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge></span>
-          <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的就診紀錄`" @select="(action) => handleRowAction(record, action)" /></span>
-        </div>
-      </Card>
+      <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
-      <ul v-if="pet.medicalRecords.length" class="space-y-3 lg:hidden">
-        <li v-for="record in pet.medicalRecords" :key="record._id">
-          <Card class="p-4 shadow-sm dark:shadow-none">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 text-xs text-muted-foreground">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
-            <div class="flex shrink-0 items-center gap-1.5 text-sm">
-              <Button v-if="record.status === 'draft'" as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
-              <Button v-else as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
-              <RowActions
-                v-if="rowActions(record).length"
-                :actions="rowActions(record)"
-                :label="`${formatDate(record.visitDate)} 的更多操作`"
-                @select="(action) => handleRowAction(record, action)"
-              />
+      <template v-if="activeSection === 'notes'">
+        <p class="text-xs text-muted-foreground">看診或拿藥時的隨手記事，不需要結案即可直接新增。</p>
+
+        <Card class="space-y-3 p-4 shadow-sm dark:shadow-none">
+          <Textarea v-model="newNoteContent" rows="3" placeholder="輸入看診記事…" />
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-2">
+              <Label for="new-note-date" class="text-xs font-medium text-muted-foreground">日期</Label>
+              <DatePicker id="new-note-date" v-model="newNoteDate" aria-label="日期" class="w-40" :clearable="false" />
             </div>
+            <Button :disabled="noteSaving || !newNoteContent.trim()" @click="addNote">新增紀錄</Button>
           </div>
-          </Card>
-        </li>
-      </ul>
-      <EmptyState v-else :icon="PawPrint" title="尚無就診紀錄" description="點右上角「新增健檢」建立第一份報告。" />
+          <Alert v-if="noteError" variant="destructive"><AlertDescription>{{ noteError }}</AlertDescription></Alert>
+        </Card>
 
-      <Pagination v-if="pet.medicalRecords.length" :page="recordPage" :total-pages="totalRecordPages" @update:page="goToRecordPage" />
+        <ul v-if="clinicalNotes.length" class="space-y-3">
+          <li v-for="note in clinicalNotes" :key="note._id">
+            <Card class="p-4 shadow-sm dark:shadow-none">
+              <div class="flex items-start gap-3">
+                <button
+                  v-if="isNoteCollapsible(note._id)"
+                  type="button"
+                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  :aria-expanded="expandedNoteIds.includes(note._id) || editingNoteId === note._id"
+                  :aria-label="expandedNoteIds.includes(note._id) ? '收合日誌內容' : '展開日誌內容'"
+                  @click="toggleNote(note._id)"
+                >
+                  <ChevronDown
+                    class="h-4 w-4 transition-transform"
+                    :class="expandedNoteIds.includes(note._id) || editingNoteId === note._id ? 'rotate-180' : ''"
+                    stroke-width="1.75"
+                  />
+                </button>
+                <span v-else aria-hidden="true" class="h-7 w-7 shrink-0"></span>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span class="flex items-center gap-1.5"><CalendarDays class="h-3.5 w-3.5 shrink-0" />{{ formatDate(note.entryDate) }}</span>
+                    <Badge v-if="note.source === 'legacy_import'" class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">舊系統匯入</Badge>
+                  </div>
+                  <p
+                    v-if="editingNoteId !== note._id"
+                    :ref="(element) => setNoteContentElement(note._id, element)"
+                    class="mt-2 min-w-0 text-sm text-foreground"
+                    :class="isNoteCollapsible(note._id) && !expandedNoteIds.includes(note._id) ? 'truncate' : 'whitespace-pre-wrap [overflow-wrap:anywhere]'"
+                  >{{ note.content }}</p>
+                </div>
+                <div class="flex shrink-0 gap-1">
+                  <Button variant="secondary" size="icon-sm" aria-label="編輯日誌" @click="startEditNote(note)"><Pencil class="h-3.5 w-3.5" /></Button>
+                  <Button variant="destructive" size="icon-sm" aria-label="刪除日誌" @click="openRemoveNote(note)"><Trash2 class="h-3.5 w-3.5" /></Button>
+                </div>
+              </div>
+              <div v-if="editingNoteId === note._id" class="mt-3">
+                <Textarea v-model="editingNoteContent" rows="3" />
+                <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
+                  <DatePicker v-model="editingNoteDate" aria-label="日期" class="w-40" :clearable="false" />
+                  <div class="flex gap-2">
+                    <Button variant="outline" size="sm" @click="cancelEditNote">取消</Button>
+                    <Button size="sm" :disabled="noteSaving" @click="saveEditNote(note)">儲存</Button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </li>
+        </ul>
+        <EmptyState v-else :icon="NotebookPen" title="尚無病歷日誌" description="在上方輸入框新增第一則記事。" />
+
+        <Pagination v-if="clinicalNotes.length" :page="notePage" :total-pages="totalNotePages" @update:page="goToNotePage" />
+      </template>
+
+      <template v-else>
+        <p class="text-xs text-muted-foreground">依健檢日期排序，草稿可繼續編輯。</p>
+
+        <Card v-if="shareNotice" class="border-success/35 bg-success-surface p-4 text-sm text-success shadow-none">
+          <p class="font-medium">{{ shareNotice.copied ? '分享連結已複製' : '分享連結已建立' }}</p>
+          <p class="mt-1 break-all">{{ shareNotice.url }}</p>
+          <p class="mt-1 text-xs opacity-80">連結有效至 {{ formatDate(shareNotice.expiresAt) }}，到期或手動撤銷後即無法開啟</p>
+        </Card>
+
+        <Card v-if="pet.medicalRecords.length" class="hidden overflow-hidden p-0 shadow-sm lg:block dark:shadow-none" style="--data-columns: minmax(9rem, 1.15fr) minmax(8rem, 1fr) minmax(10rem, 1fr) 10.5rem">
+          <div class="desktop-data-header">
+            <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">看診日期</span>
+            <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型</span>
+            <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">狀態</span>
+            <span class="desktop-data-cell"></span>
+          </div>
+          <div v-for="record in pet.medicalRecords" :key="record._id" class="desktop-data-row">
+            <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ formatDate(record.visitDate) }}</span>
+            <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> · 第 {{ record.reportVersion }} 版</span></span>
+            <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap"><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge></span>
+            <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的就診紀錄`" @select="(action) => handleRowAction(record, action)" /></span>
+          </div>
+        </Card>
+
+        <ul v-if="pet.medicalRecords.length" class="space-y-3 lg:hidden">
+          <li v-for="record in pet.medicalRecords" :key="record._id">
+            <Card class="p-4 shadow-sm dark:shadow-none">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 text-xs text-muted-foreground">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
+              <div class="flex shrink-0 items-center gap-1.5 text-sm">
+                <Button v-if="record.status === 'draft'" as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
+                <Button v-else as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
+                <RowActions
+                  v-if="rowActions(record).length"
+                  :actions="rowActions(record)"
+                  :label="`${formatDate(record.visitDate)} 的更多操作`"
+                  @select="(action) => handleRowAction(record, action)"
+                />
+              </div>
+            </div>
+            </Card>
+          </li>
+        </ul>
+        <EmptyState v-else :icon="PawPrint" title="尚無就診紀錄" description="點右上角「新增健檢」建立第一份報告。" />
+
+        <Pagination v-if="pet.medicalRecords.length" :page="recordPage" :total-pages="totalRecordPages" @update:page="goToRecordPage" />
+      </template>
     </div>
 
     <ConfirmDialog
