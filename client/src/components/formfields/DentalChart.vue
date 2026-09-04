@@ -113,17 +113,19 @@ function render() {
     .attr('stroke', (d) => d.code === selectedCode.value ? DENTAL.selected : DENTAL.outline).attr('stroke-width', (d) => d.code === selectedCode.value ? 6 : 3);
   group.selectAll('text.label').data((d) => [d]).join('text').attr('class', 'label').attr('x', (d) => d.lx).attr('y', (d) => d.ly).attr('text-anchor', 'middle').attr('font-size', 30).attr('font-weight', 700).attr('fill', labelColor).text((d) => d.code);
 
+  // 報告（readonly）只顯示有填寫備註的牙位，沒寫備註的牙不畫連接線／方塊／代號，避免整頁塞滿空框
+  const hasNoteRow = (d) => !props.readonly || noteFor(d.code).trim();
   // 連接線：牙齒中心 → 側欄備註方塊內緣，選中時連同牙齒一起變成強調色，讓「這顆牙對應這個方塊」看得出來
-  group.selectAll('line.leader').data((d) => [d]).join('line').attr('class', 'leader')
+  group.selectAll('line.leader').data((d) => (hasNoteRow(d) ? [d] : [])).join('line').attr('class', 'leader')
     .attr('x1', (d) => d.x).attr('y1', (d) => d.y).attr('x2', (d) => d.lineEndX).attr('y2', (d) => d.boxY)
     .attr('stroke', (d) => d.code === selectedCode.value ? DENTAL.selected : DENTAL.guide).attr('stroke-width', (d) => d.code === selectedCode.value ? 2.5 : 1.5);
   // 備註方塊外側（不是正上方）的牙位代號：貼著方塊同一列橫向排列，不佔額外的直排空間，ROW_GAP 才有辦法縮小
-  group.selectAll('text.boxLabel').data((d) => [d]).join('text').attr('class', 'boxLabel')
+  group.selectAll('text.boxLabel').data((d) => (hasNoteRow(d) ? [d] : [])).join('text').attr('class', 'boxLabel')
     .attr('x', (d) => d.labelX).attr('y', (d) => d.boxY + 7).attr('text-anchor', (d) => d.labelAnchor)
     .attr('font-size', 20).attr('font-weight', 700).attr('fill', labelColor).text((d) => d.code);
   // 備註輸入框：用 foreignObject 承載一顆真正的 <textarea>，用 DOM API 直接建立以避開 SVG／HTML 命名空間問題，
   // 並靠 join 對同一 code 重用既有節點（不重建）以保留輸入中的游標與焦點。
-  const fo = group.selectAll('foreignObject.noteBox').data((d) => [d]).join('foreignObject').attr('class', 'noteBox')
+  const fo = group.selectAll('foreignObject.noteBox').data((d) => (hasNoteRow(d) ? [d] : [])).join('foreignObject').attr('class', 'noteBox')
     .attr('x', (d) => d.boxCx - BOX_W / 2).attr('y', (d) => d.boxY - BOX_H / 2).attr('width', BOX_W).attr('height', BOX_H);
   fo.each(function dentalNoteBox(d) {
     let textarea = this.querySelector('textarea');
@@ -197,7 +199,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-bind="$attrs" class="rounded-xl border border-border bg-field p-3 text-foreground">
+  <div v-bind="$attrs" class="rounded-xl border border-border p-3 text-foreground">
     <svg ref="svg" :viewBox="VIEW_BOX" class="mx-auto block w-full" :class="readonly ? '' : 'cursor-pointer'" />
     <div class="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-muted-foreground"><span v-for="state in STATES" :key="state.value" class="inline-flex items-center gap-1"><i class="h-2.5 w-2.5 rounded-full" :style="swatchStyle(state)" />{{ state.label }}</span></div>
   </div>
