@@ -293,7 +293,7 @@ onMounted(load);
                 </Select>
                 <div class="relative">
                   <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input v-model="fieldQuery" type="search" class="pl-9" placeholder="搜尋欄位名稱" aria-label="搜尋適用欄位" />
+                  <Input v-model="fieldQuery" type="text" class="pl-9" placeholder="搜尋欄位名稱" aria-label="搜尋適用欄位" />
                 </div>
               </div>
               <div class="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">

@@ -2,8 +2,6 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Cat, ClipboardPlus, User } from '@lucide/vue';
 import { http } from '../api/http';
-import OwnerPickerDialog from '../components/OwnerPickerDialog.vue';
-import PetFormDialog from '../components/PetFormDialog.vue';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import FilterBar from '../components/FilterBar.vue';
@@ -13,7 +11,6 @@ import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
-import { emptyPetDraft } from '../lib/formDrafts';
 import { formatDateTime } from '../lib/datetime';
 
 const pets = ref([]);
@@ -23,11 +20,6 @@ const total = ref(0);
 const limit = ref(10);
 const loading = ref(false);
 const error = ref('');
-const ownerPickerOpen = ref(false);
-const petOwner = ref(null);
-const petCreating = ref(false);
-const petCreateError = ref('');
-const petDraft = ref(emptyPetDraft());
 let requestSequence = 0;
 
 async function fetchPets() {
@@ -90,31 +82,6 @@ function goToPage(next) {
   if (target !== currentPage.value) page.value = String(target);
 }
 
-function openCreatePet() {
-  ownerPickerOpen.value = true;
-}
-
-function selectOwner(owner) {
-  ownerPickerOpen.value = false;
-  petCreateError.value = '';
-  petOwner.value = owner;
-}
-
-async function createPet(values) {
-  if (!petOwner.value || petCreating.value) return;
-  petCreating.value = true;
-  petCreateError.value = '';
-  try {
-    await http.post(`/owners/${petOwner.value._id}/pets`, values);
-    petOwner.value = null;
-    petDraft.value = emptyPetDraft();
-    await fetchPets();
-  } catch (err) {
-    petCreateError.value = err.response?.data?.message ?? '新增寵物失敗，請稍後再試。';
-  } finally {
-    petCreating.value = false;
-  }
-}
 </script>
 
 <template>
@@ -122,7 +89,7 @@ async function createPet(values) {
     <PageHeader title="寵物資料" description="先確認寵物與飼主身分，再建立就診紀錄。">
       <template #actions>
         <FilterBar id="pet-list-search" v-model="query" label="搜尋寵物" placeholder="搜尋寵物、飼主或電話" class="w-full min-w-0 md:w-96 xl:w-[28rem]" @submit="applyFilters" />
-        <Button type="button" @click="openCreatePet">+ 新增寵物</Button>
+        <Button as-child><router-link to="/pets/new">+ 新增寵物</router-link></Button>
       </template>
     </PageHeader>
 
@@ -151,10 +118,10 @@ async function createPet(values) {
           <span class="desktop-data-cell truncate text-sm text-foreground" :title="pet.breed || ''">{{ pet.breed || '' }}</span>
           <span class="desktop-data-cell text-sm text-foreground">{{ sexLabel(pet.sex) }}</span>
           <span class="desktop-data-cell">
-            <router-link v-if="pet.ownerId" :to="`/owners/${pet.ownerId._id}`" class="flex min-w-0 items-center gap-2 text-primary" :title="pet.ownerId.phone ? `${pet.ownerId.name} · ${pet.ownerId.phone}` : pet.ownerId.name">
+            <span v-if="pet.ownerId" class="flex min-w-0 items-center gap-2 text-foreground" :title="pet.ownerId.phone ? `${pet.ownerId.name} · ${pet.ownerId.phone}` : pet.ownerId.name">
               <User class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.75" />
               <span class="min-w-0 truncate text-sm">{{ pet.ownerId.name }}<span v-if="pet.ownerId.phone" class="text-xs text-muted-foreground"> · {{ pet.ownerId.phone }}</span></span>
-            </router-link>
+            </span>
           </span>
           <span class="desktop-data-cell whitespace-nowrap text-xs tabular-nums text-muted-foreground">{{ formatDateTime(pet.createdAt, createdAtOptions) }}</span>
           <span class="desktop-data-cell text-right">
@@ -193,16 +160,4 @@ async function createPet(values) {
       <Pagination :page="currentPage" :total-pages="totalPages" @update:page="goToPage" />
     </template>
   </section>
-  <OwnerPickerDialog :open="ownerPickerOpen" @close="ownerPickerOpen = false" @select="selectOwner" />
-  <PetFormDialog
-    v-if="petOwner"
-    title="新增寵物"
-    submit-label="新增寵物"
-    :initial-value="petDraft"
-    :submitting="petCreating"
-    :error-message="petCreateError"
-    @submit="createPet"
-    @update:draft="petDraft = $event"
-    @close="petOwner = null"
-  />
 </template>

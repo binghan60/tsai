@@ -4,9 +4,8 @@ import { useAuthStore } from '../stores/auth';
 
 const DashboardPage = () => import('../pages/DashboardPage.vue');
 const AppointmentsPage = () => import('../pages/AppointmentsPage.vue');
-const OwnersListPage = () => import('../pages/OwnersListPage.vue');
-const OwnerDetailPage = () => import('../pages/OwnerDetailPage.vue');
 const PetsListPage = () => import('../pages/PetsListPage.vue');
+const PetCreatePage = () => import('../pages/PetCreatePage.vue');
 const PetDetailPage = () => import('../pages/PetDetailPage.vue');
 const RecordFormPage = () => import('../pages/RecordFormPage.vue');
 const RecordsListPage = () => import('../pages/RecordsListPage.vue');
@@ -33,9 +32,9 @@ const router = createRouter({
     { path: '/login', component: LoginPage, meta: { bare: true, public: true, title: '登入' } },
     { path: '/', component: DashboardPage, meta: { title: '儀表板' } },
     { path: '/appointments', component: AppointmentsPage, meta: { title: '掛號與候診' } },
-    { path: '/owners', component: OwnersListPage, meta: { title: '飼主' } },
-    { path: '/owners/:id', component: OwnerDetailPage, meta: { title: '飼主資料' } },
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },
+    // 靜態路由要排在 /pets/:id 前面，不然 "new" 會被吃成動態參數 id。
+    { path: '/pets/new', component: PetCreatePage, meta: { title: '新增寵物' } },
     { path: '/pets/:id', component: PetDetailPage, meta: { title: '寵物資料' } },
     { path: '/records', component: RecordsListPage, meta: { title: '就診紀錄' } },
     // 寄送流水帳。掛在 /records 底下是因為它講的是報告的事，但它不依附任何一份報告——

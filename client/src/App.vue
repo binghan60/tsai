@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CalendarClock, Cat, ClipboardList, FileText, LayoutDashboard, LogOut, Mail, Menu, Moon, Search, Sun, Users, Zap } from '@lucide/vue';
+import { CalendarClock, Cat, ClipboardList, FileText, LayoutDashboard, LogOut, Mail, Menu, Moon, Search, Sun, Zap } from '@lucide/vue';
 import { useTheme } from './composables/useTheme';
 import { useAuthStore } from './stores/auth';
 import { Button } from './components/ui/button';
@@ -20,7 +20,6 @@ const auth = useAuthStore();
 // 切到飼主 B（或從舊版報告切到新版）時，舊元件與尚未完成的請求不會殘留在畫面上。
 // 查詢字串不放進 key，列表搜尋與分頁不會因此整頁重掛。
 const ROUTE_IDENTITY_PARAMS = {
-  '/owners/:id': 'id',
   '/pets/:id': 'id',
   '/records/:id/preview': 'id',
   '/report/:token': 'token',
@@ -38,7 +37,6 @@ const routeViewKey = computed(() => {
 const navItems = [
   { to: '/', label: '儀表板', exact: true, icon: LayoutDashboard },
   { to: '/appointments', label: '掛號', exact: false, icon: CalendarClock },
-  { to: '/owners', label: '飼主', exact: false, icon: Users },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
   { to: '/records', label: '就診紀錄', exact: false, icon: FileText },
   { to: '/records/deliveries', label: '寄送歷程', exact: false, icon: Mail },

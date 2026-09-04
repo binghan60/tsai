@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { ArrowRight, PawPrint, Phone, Search, User } from '@lucide/vue';
+import { ArrowRight, PawPrint, Search } from '@lucide/vue';
 import { http } from '../api/http';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 
@@ -14,16 +14,13 @@ const router = useRouter();
 const query = ref('');
 const searching = ref(false);
 const searchError = ref('');
-const results = ref({ owners: [], pets: [] });
+const results = ref({ pets: [] });
 const activeIndex = ref(0);
 const inputEl = ref(null);
 
-// 上下鍵要跨越「寵物」「飼主」兩個分組連續移動，所以攤平成一條清單，
-// 分組只是渲染時的視覺分隔。
-const flatResults = computed(() => [
-  ...results.value.pets.map((pet) => ({ kind: 'pet', id: pet._id, to: `/pets/${pet._id}`, data: pet })),
-  ...results.value.owners.map((owner) => ({ kind: 'owner', id: owner._id, to: `/owners/${owner._id}`, data: owner })),
-]);
+// 飼主不是獨立可瀏覽的實體，搜尋結果一律呈現成寵物——後端 /api/search 的 pets
+// 本來就已經用飼主姓名／電話／Email 做過 join，打飼主關鍵字一樣找得到他的寵物。
+const flatResults = computed(() => results.value.pets.map((pet) => ({ kind: 'pet', id: pet._id, to: `/pets/${pet._id}`, data: pet })));
 const hasQuery = computed(() => query.value.trim().length > 0);
 
 let searchSequence = 0;
@@ -32,7 +29,7 @@ async function runSearch() {
   const value = query.value.trim();
   if (!value) {
     searchSequence += 1;
-    results.value = { owners: [], pets: [] };
+    results.value = { pets: [] };
     searching.value = false;
     return;
   }
@@ -42,7 +39,7 @@ async function runSearch() {
   try {
     const { data } = await http.get('/search', { params: { q: value } });
     if (currentRequest !== searchSequence) return;
-    results.value = { owners: data.owners ?? [], pets: data.pets ?? [] };
+    results.value = { pets: data.pets ?? [] };
     activeIndex.value = 0;
   } catch (err) {
     if (currentRequest === searchSequence) searchError.value = '搜尋暫時無法使用';
@@ -64,7 +61,7 @@ watch(open, async (value) => {
     return;
   }
   query.value = '';
-  results.value = { owners: [], pets: [] };
+  results.value = { pets: [] };
   searchError.value = '';
   activeIndex.value = 0;
   await nextTick();
@@ -143,11 +140,7 @@ onBeforeUnmount(() => {
         <p v-else-if="!flatResults.length" class="px-4 py-6 text-sm text-muted-foreground">找不到符合的寵物或飼主。</p>
 
         <template v-else>
-          <template v-for="(item, index) in flatResults" :key="`${item.kind}-${item.id}`">
-            <p
-              v-if="index === 0 || flatResults[index - 1].kind !== item.kind"
-              class="px-4 pt-3 pb-1 text-xs font-medium text-muted-foreground"
-            >{{ item.kind === 'pet' ? '寵物' : '飼主' }}</p>
+          <template v-for="(item, index) in flatResults" :key="item.id">
             <button
               type="button"
               class="flex min-h-14 w-full items-center justify-between gap-3 px-4 text-left"
@@ -156,18 +149,11 @@ onBeforeUnmount(() => {
               @click="go(item)"
             >
               <span class="flex min-w-0 items-center gap-3">
-                <component
-                  :is="item.kind === 'pet' ? PawPrint : User"
-                  class="h-5 w-5 shrink-0 text-primary"
-                  stroke-width="1.75"
-                />
+                <PawPrint class="h-5 w-5 shrink-0 text-primary" stroke-width="1.75" />
                 <span class="min-w-0">
                   <span class="block truncate text-sm font-medium text-foreground">{{ item.data.name }}</span>
-                  <span v-if="item.kind === 'pet'" class="block truncate text-xs text-muted-foreground">
+                  <span class="block truncate text-xs text-muted-foreground">
                     飼主 {{ item.data.ownerId?.name || '—' }}
-                  </span>
-                  <span v-else class="flex items-center gap-1 text-xs text-muted-foreground">
-                    <Phone class="h-3 w-3" stroke-width="1.75" />{{ item.data.phone }}
                   </span>
                 </span>
               </span>

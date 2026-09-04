@@ -14,6 +14,7 @@ export function emptyPetDraft() {
     sex: 'unknown',
     neutered: 'unknown',
     birthDate: '',
+    birthDateEstimated: false,
     weightKg: null,
     allergies: '',
     chronicConditions: '',

@@ -15,6 +15,8 @@ describe('record transaction workflow against a replica set', { skip: !uri }, ()
   let owner;
   let pet;
   let record;
+  let atomicOwner;
+  let atomicPet;
 
   before(async () => {
     await mongoose.connect(uri, { serverSelectionTimeoutMS: 5000 });
@@ -32,6 +34,8 @@ describe('record transaction workflow against a replica set', { skip: !uri }, ()
     }
     if (pet?._id) await Pet.deleteOne({ _id: pet._id }).catch(() => {});
     if (owner?._id) await Owner.deleteOne({ _id: owner._id }).catch(() => {});
+    if (atomicPet?._id) await Pet.deleteOne({ _id: atomicPet._id }).catch(() => {});
+    if (atomicOwner?._id) await Owner.deleteOne({ _id: atomicOwner._id }).catch(() => {});
     if (server) await new Promise((resolve) => server.close(resolve));
     await mongoose.disconnect();
   });
@@ -44,5 +48,33 @@ describe('record transaction workflow against a replica set', { skip: !uri }, ()
     const deletedResponse = await fetch(`${origin}/api/records/${record._id}`, { method: 'DELETE' });
     assert.equal(deletedResponse.status, 204);
     assert.equal(await MedicalRecord.exists({ _id: record._id }), null);
+  });
+
+  it('creates a new owner and first pet atomically', async () => {
+    const response = await fetch(`${origin}/api/owners/with-pet`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        owner: { name: '原子建檔飼主', phone: '0911000000' },
+        pet: { name: '原子建檔寵物', species: '貓', birthDateEstimated: true },
+      }),
+    });
+    assert.equal(response.status, 201);
+    atomicPet = await response.json();
+    atomicOwner = await Owner.findOne({ phone: '0911000000' });
+    assert.ok(atomicOwner);
+    assert.equal(String(atomicPet.ownerId), String(atomicOwner._id));
+    assert.equal(atomicPet.birthDateEstimated, true);
+  });
+
+  it('rolls back a new owner when its first pet is invalid', async () => {
+    const phone = '0911000001';
+    const response = await fetch(`${origin}/api/owners/with-pet`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ owner: { name: '應回滾飼主', phone }, pet: {} }),
+    });
+    assert.equal(response.status, 422);
+    assert.equal(await Owner.exists({ phone }), null);
   });
 });

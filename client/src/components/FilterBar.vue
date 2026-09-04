@@ -69,7 +69,7 @@ function applyDates() {
       <Search class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.9" aria-hidden="true" />
       <input
         :id="id"
-        type="search"
+        type="text"
         autocomplete="off"
         :placeholder="placeholder"
         :value="modelValue"

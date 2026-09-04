@@ -1,8 +1,7 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
-import { AlertTriangle, CalendarDays, ChevronDown, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2 } from '@lucide/vue';
-import PetFormDialog from '../components/PetFormDialog.vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { AlertTriangle, CalendarDays, Check, ChevronDown, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2, User, X } from '@lucide/vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import { http } from '../api/http';
@@ -15,6 +14,8 @@ import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { DatePicker } from '../components/ui/date-picker';
 import EmptyState from '../components/EmptyState.vue';
 import RowActions from '../components/RowActions.vue';
 import Pagination from '../components/Pagination.vue';
@@ -24,6 +25,7 @@ import ListSkeleton from '../components/ListSkeleton.vue';
 import { useToast } from '../composables/useToast';
 
 const route = useRoute();
+const router = useRouter();
 const toast = useToast();
 const pet = ref(null);
 const recordPage = ref(1);
@@ -33,9 +35,28 @@ const sharingId = ref(null);
 const revokingId = ref(null);
 const shareToRevoke = ref(null);
 const shareNotice = ref(null);
-const editOpen = ref(false);
-const editSaving = ref(false);
-const editError = ref('');
+// 寵物／飼主資料改成就地編輯（不彈 Modal）：這頁的定位就是「一頁同時看到兩邊」，
+// 跳出 Modal 等於又把兩份資料拆回兩個畫面，違背這頁存在的理由。
+const petEditing = ref(false);
+const petSaving = ref(false);
+const petError = ref('');
+const petForm = reactive({ name: '', species: '', breed: '', sex: 'unknown', neutered: 'unknown', birthDate: '', birthDateEstimated: false, weightKg: '', allergies: '', chronicConditions: '', currentMedications: '', notes: '' });
+
+const ownerEditing = ref(false);
+const ownerSaving = ref(false);
+const ownerError = ref('');
+const ownerForm = reactive({ name: '', phone: '', email: '', address: '' });
+
+const SEX_OPTIONS = [
+  { title: '未記錄', value: 'unknown' },
+  { title: '公', value: 'male' },
+  { title: '母', value: 'female' },
+];
+const NEUTERED_OPTIONS = [
+  { title: '未記錄', value: 'unknown' },
+  { title: '已絕育', value: 'yes' },
+  { title: '未絕育', value: 'no' },
+];
 
 const recordToRemove = ref(null);
 const deletingRecordId = ref(null);
@@ -73,7 +94,7 @@ const identityFields = computed(() => filledFields([
   { label: '品種', value: pet.value?.breed ?? '' },
   { label: '性別', value: sexLabel.value },
   { label: '絕育狀態', value: neuteredLabel.value },
-  { label: '年齡', value: ageLabel.value },
+  { label: pet.value?.birthDateEstimated ? '預估年齡' : '年齡', value: ageLabel.value },
 ]));
 const secondaryFields = computed(() => filledFields([
   { label: '最近體重', value: pet.value?.weightKg != null ? `${pet.value.weightKg} kg` : '' },
@@ -85,7 +106,7 @@ const alertFields = computed(() => filledFields([
   { label: '目前用藥', value: pet.value?.currentMedications ?? '' },
 ]));
 const hasAnyPetDetail = computed(() => Boolean(
-  identityFields.value.length || pet.value?.ownerId?.name || secondaryFields.value.length || alertFields.value.length || pet.value?.notes
+  identityFields.value.length || secondaryFields.value.length || alertFields.value.length || pet.value?.notes
 ));
 
 // 列上只留一個主要操作，其餘走「更多」選單。這裡集中決定「這一列現在有哪些次要操作」，
@@ -142,23 +163,100 @@ async function fetchPet(petId = route.params.id) {
   }
 }
 
-async function savePet(values) {
-  editSaving.value = true;
-  editError.value = '';
+function startPetEdit() {
+  Object.assign(petForm, {
+    name: pet.value.name ?? '',
+    species: pet.value.species ?? '',
+    breed: pet.value.breed ?? '',
+    sex: pet.value.sex ?? 'unknown',
+    neutered: pet.value.neutered ?? 'unknown',
+    birthDate: clinicDateInput(pet.value.birthDate) || '',
+    birthDateEstimated: pet.value.birthDateEstimated ?? false,
+    weightKg: pet.value.weightKg ?? '',
+    allergies: pet.value.allergies ?? '',
+    chronicConditions: pet.value.chronicConditions ?? '',
+    currentMedications: pet.value.currentMedications ?? '',
+    notes: pet.value.notes ?? '',
+  });
+  petError.value = '';
+  petEditing.value = true;
+}
+function cancelPetEdit() {
+  petEditing.value = false;
+  petError.value = '';
+}
+async function submitPetEdit() {
+  if (!String(petForm.name).trim() || !String(petForm.species).trim()) {
+    petError.value = '請填寫寵物名字與物種';
+    return;
+  }
+  petSaving.value = true;
+  petError.value = '';
   try {
-    await http.put(`/pets/${pet.value._id}`, { ...values, expectedVersion: pet.value.__v });
-    editOpen.value = false;
-    toast.success(`已成功更新「${values.name || pet.value.name}」的資料`, '修改資料成功');
+    const payload = {
+      ...petForm,
+      birthDate: petForm.birthDate || null,
+      weightKg: petForm.weightKg === '' || petForm.weightKg == null ? null : Number(petForm.weightKg),
+      expectedVersion: pet.value.__v,
+    };
+    await http.put(`/pets/${pet.value._id}`, payload);
+    petEditing.value = false;
+    toast.success(`已成功更新「${petForm.name}」的資料`, '修改資料成功');
     await fetchPet();
   } catch (err) {
-    editError.value = err.response?.data?.message ?? '寵物資料儲存失敗';
-    toast.error(editError.value, '修改資料失敗');
+    petError.value = err.response?.data?.message ?? '寵物資料儲存失敗';
+    toast.error(petError.value, '修改資料失敗');
     if (err.response?.status === 409) {
-      editOpen.value = false;
+      petEditing.value = false;
       await fetchPet();
     }
   } finally {
-    editSaving.value = false;
+    petSaving.value = false;
+  }
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function startOwnerEdit() {
+  const owner = pet.value.ownerId;
+  Object.assign(ownerForm, {
+    name: owner?.name ?? '',
+    phone: owner?.phone ?? '',
+    email: owner?.email ?? '',
+    address: owner?.address ?? '',
+  });
+  ownerError.value = '';
+  ownerEditing.value = true;
+}
+function cancelOwnerEdit() {
+  ownerEditing.value = false;
+  ownerError.value = '';
+}
+async function submitOwnerEdit() {
+  if (!String(ownerForm.name).trim() || !String(ownerForm.phone).trim()) {
+    ownerError.value = '請填寫飼主姓名與電話';
+    return;
+  }
+  if (String(ownerForm.email).trim() && !EMAIL_PATTERN.test(String(ownerForm.email).trim())) {
+    ownerError.value = 'Email 格式不正確';
+    return;
+  }
+  ownerSaving.value = true;
+  ownerError.value = '';
+  try {
+    await http.put(`/owners/${pet.value.ownerId._id}`, { ...ownerForm, expectedVersion: pet.value.ownerId.__v });
+    ownerEditing.value = false;
+    toast.success(`已成功更新飼主「${ownerForm.name}」的資料`, '修改資料成功');
+    await fetchPet();
+  } catch (err) {
+    ownerError.value = err.response?.data?.message ?? '飼主資料儲存失敗';
+    toast.error(ownerError.value, '修改資料失敗');
+    if (err.response?.status === 409) {
+      ownerEditing.value = false;
+      await fetchPet();
+    }
+  } finally {
+    ownerSaving.value = false;
   }
 }
 
@@ -419,7 +517,8 @@ watch(
     pet.value = null;
     recordPage.value = 1;
     notePage.value = 1;
-    editOpen.value = false;
+    petEditing.value = false;
+    ownerEditing.value = false;
     shareNotice.value = null;
     shareToRevoke.value = null;
     recordToRemove.value = null;
@@ -430,71 +529,206 @@ watch(
   },
   { immediate: true }
 );
+
+// 報告預覽頁「補填飼主資料」的深連結（/pets/:id?editOwner=1）：等 pet 真的載入完成
+// 才能呼叫 startOwnerEdit()（要讀 pet.value.ownerId），所以另外開一個 watcher，
+// 不跟上面那支路由 id 的 watcher 疊在一起。網址參數用完即拔，之後重新 fetchPet()
+// 不會再符合條件，不需要額外的「只觸發一次」旗標。
+watch(pet, async (value) => {
+  if (!value || route.query.editOwner !== '1') return;
+  startOwnerEdit();
+  await nextTick();
+  document.getElementById('owner-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const query = { ...route.query };
+  delete query.editOwner;
+  await router.replace({ query });
+});
 </script>
 
 <template>
   <div class="mx-auto max-w-7xl">
   <section v-if="pet" class="space-y-5">
     <Breadcrumbs :items="[
-      { label: '飼主', to: '/owners' },
-      ...(pet.ownerId?._id ? [{ label: pet.ownerId.name || '飼主資料', to: `/owners/${pet.ownerId._id}` }] : []),
+      { label: '寵物', to: '/pets' },
       { label: pet.name },
     ]" />
 
-    <Card class="p-4 shadow-sm dark:shadow-none sm:p-5">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex min-w-0 items-center gap-3">
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><PawPrint class="h-5 w-5" stroke-width="1.75" /></div>
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
-              <h1 class="text-xl font-semibold text-foreground">{{ pet.name }}</h1>
-              <span v-if="pet.medicalRecordNumber" class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">{{ pet.medicalRecordNumber }}</span>
+    <div class="grid gap-4 lg:grid-cols-2 lg:items-start">
+      <!-- 寵物資料：跟飼主資料並排，兩邊都是就地編輯（不彈 Modal）——這頁的定位就是報到時一眼同時看到兩邊。 -->
+      <Card class="p-4 shadow-sm dark:shadow-none sm:p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><PawPrint class="h-5 w-5" stroke-width="1.75" /></div>
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-2">
+                <h1 class="text-xl font-semibold text-foreground">{{ pet.name }}</h1>
+                <span v-if="pet.medicalRecordNumber" class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">{{ pet.medicalRecordNumber }}</span>
+              </div>
+              <p class="mt-0.5 text-xs text-muted-foreground">寵物資料<span v-if="pet.legacyMedicalRecordNumber"> · 舊病歷號：{{ pet.legacyMedicalRecordNumber }}</span></p>
             </div>
-            <p class="mt-0.5 text-xs text-muted-foreground">寵物資料<span v-if="pet.legacyMedicalRecordNumber"> · 舊病歷號：{{ pet.legacyMedicalRecordNumber }}</span></p>
+          </div>
+          <template v-if="petEditing">
+            <div class="flex shrink-0 gap-2">
+              <Button type="button" variant="outline" :disabled="petSaving" @click="cancelPetEdit"><X class="h-4 w-4" />取消</Button>
+              <Button type="button" :disabled="petSaving" @click="submitPetEdit"><Check class="h-4 w-4" />{{ petSaving ? '儲存中…' : '儲存' }}</Button>
+            </div>
+          </template>
+          <Button v-else type="button" variant="secondary" @click="startPetEdit"><Pencil class="h-4 w-4" />編輯資料</Button>
+        </div>
+
+        <Alert v-if="petEditing && petError" variant="destructive" class="mt-3"><AlertDescription>{{ petError }}</AlertDescription></Alert>
+
+        <!-- 編輯模式：直接畫在卡片裡，不彈 Modal。 -->
+        <div v-if="petEditing" class="mt-4 space-y-4 border-t border-border pt-3">
+          <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <Label for="pet-edit-name" class="text-xs font-medium text-foreground">寵物名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Input id="pet-edit-name" v-model="petForm.name" class="border-border focus:border-primary" placeholder="例：咪咪" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="pet-edit-species" class="text-xs font-medium text-foreground">物種 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Input id="pet-edit-species" v-model="petForm.species" class="border-border focus:border-primary" placeholder="例：貓、狗" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="pet-edit-breed" class="text-xs font-medium text-foreground">品種</Label>
+              <Input id="pet-edit-breed" v-model="petForm.breed" class="border-border focus:border-primary" placeholder="例：米克斯、美短" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="pet-edit-birth-date" class="text-xs font-medium text-foreground">{{ petForm.birthDateEstimated ? '預估生日' : '生日' }}</Label>
+              <DatePicker id="pet-edit-birth-date" v-model="petForm.birthDate" aria-label="生日" class="w-full" @update:model-value="petForm.birthDateEstimated = false" />
+              <p v-if="petForm.birthDateEstimated" class="text-[11px] text-muted-foreground">此日期為依年齡推估的月份。</p>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="pet-edit-sex" class="text-xs font-medium text-foreground">性別</Label>
+              <Select v-model="petForm.sex">
+                <SelectTrigger id="pet-edit-sex" class="w-full border-border"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="option in SEX_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="pet-edit-neutered" class="text-xs font-medium text-foreground">絕育狀態</Label>
+              <Select v-model="petForm.neutered">
+                <SelectTrigger id="pet-edit-neutered" class="w-full border-border"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="option in NEUTERED_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="pet-edit-weight" class="text-xs font-medium text-foreground">目前體重（kg）</Label>
+              <Input id="pet-edit-weight" v-model="petForm.weightKg" type="text" class="border-border focus:border-primary" placeholder="例：4.5" />
+            </div>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <Label for="pet-edit-allergies" class="text-xs font-medium text-foreground">過敏紀錄</Label>
+              <Textarea id="pet-edit-allergies" v-model="petForm.allergies" rows="2" class="border-border" placeholder="例：對某類抗生素過敏" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="pet-edit-chronic" class="text-xs font-medium text-foreground">慢性病／重要病史</Label>
+              <Textarea id="pet-edit-chronic" v-model="petForm.chronicConditions" rows="2" class="border-border" placeholder="例：慢性腎臟病二期" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="pet-edit-medications" class="text-xs font-medium text-foreground">目前用藥</Label>
+              <Textarea id="pet-edit-medications" v-model="petForm.currentMedications" rows="2" class="border-border" placeholder="例：每日降血壓藥物" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="pet-edit-notes" class="text-xs font-medium text-foreground">其他備註</Label>
+              <Textarea id="pet-edit-notes" v-model="petForm.notes" rows="2" class="border-border" placeholder="例：看診較為緊張" />
+            </div>
           </div>
         </div>
-        <Button variant="secondary" @click="editOpen = true"><Pencil class="h-4 w-4" />編輯資料</Button>
-      </div>
 
-      <div v-if="hasAnyPetDetail" class="mt-4 space-y-4 border-t border-border pt-3 text-sm">
-        <dl v-if="identityFields.length || pet.ownerId?.name || secondaryFields.length" class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
-          <div v-for="field in identityFields" :key="field.label" class="min-w-0">
-            <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
-            <dd class="mt-1 text-foreground">{{ field.value }}</dd>
-          </div>
-          <div v-if="pet.ownerId?.name" class="min-w-0">
-            <dt class="text-xs font-medium text-muted-foreground">飼主</dt>
-            <dd class="mt-1 truncate">
-              <router-link v-if="pet.ownerId._id" :to="`/owners/${pet.ownerId._id}`" class="font-medium text-primary">{{ pet.ownerId.name }}</router-link>
-              <span v-else class="text-foreground">{{ pet.ownerId.name }}</span>
-            </dd>
-          </div>
-          <div v-if="pet.ownerId?.phone" class="min-w-0">
-            <dt class="text-xs font-medium text-muted-foreground">飼主電話</dt>
-            <dd class="mt-1 tabular-nums text-foreground">{{ pet.ownerId.phone }}</dd>
-          </div>
-          <div v-for="field in secondaryFields" :key="field.label" class="min-w-0">
-            <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
-            <dd class="mt-1 text-foreground">{{ field.value }}</dd>
-          </div>
-        </dl>
-
-        <div v-if="alertFields.length" class="rounded-xl bg-warning-surface px-3 py-2.5 text-warning">
-          <div class="flex items-center gap-1.5 text-xs font-semibold"><AlertTriangle class="h-3.5 w-3.5 shrink-0" />臨床提醒</div>
-          <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-3">
-            <div v-for="field in alertFields" :key="field.label" class="min-w-0">
-              <dt class="text-xs font-medium opacity-80">{{ field.label }}</dt>
-              <dd class="mt-0.5 whitespace-pre-wrap text-xs text-warning">{{ field.value }}</dd>
+        <!-- 顯示模式：原本的唯讀摘要，飼主欄位已經搬到旁邊自己的卡片。 -->
+        <div v-else-if="hasAnyPetDetail" class="mt-4 space-y-4 border-t border-border pt-3 text-sm">
+          <dl v-if="identityFields.length || secondaryFields.length" class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+            <div v-for="field in identityFields" :key="field.label" class="min-w-0">
+              <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
+              <dd class="mt-1 text-foreground">{{ field.value }}</dd>
+            </div>
+            <div v-for="field in secondaryFields" :key="field.label" class="min-w-0">
+              <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
+              <dd class="mt-1 text-foreground">{{ field.value }}</dd>
             </div>
           </dl>
+
+          <div v-if="alertFields.length" class="rounded-xl bg-warning-surface px-3 py-2.5 text-warning">
+            <div class="flex items-center gap-1.5 text-xs font-semibold"><AlertTriangle class="h-3.5 w-3.5 shrink-0" />臨床提醒</div>
+            <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-3">
+              <div v-for="field in alertFields" :key="field.label" class="min-w-0">
+                <dt class="text-xs font-medium opacity-80">{{ field.label }}</dt>
+                <dd class="mt-0.5 whitespace-pre-wrap text-xs text-warning">{{ field.value }}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <dl v-if="pet.notes">
+            <dt class="text-xs font-medium text-muted-foreground">其他備註</dt>
+            <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ pet.notes }}</dd>
+          </dl>
+        </div>
+      </Card>
+
+      <!-- 飼主資料：跟寵物資料同一層卡片，關聯的是 pet.ownerId（populate 出 name/phone/email/address/__v）。 -->
+      <Card id="owner-card" v-if="pet.ownerId" class="p-4 shadow-sm dark:shadow-none sm:p-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><User class="h-5 w-5" stroke-width="1.75" /></div>
+            <div class="min-w-0">
+              <h2 class="block truncate text-xl font-semibold text-foreground">{{ pet.ownerId.name }}</h2>
+              <p class="mt-0.5 text-xs text-muted-foreground">飼主資料</p>
+            </div>
+          </div>
+          <template v-if="ownerEditing">
+            <div class="flex shrink-0 gap-2">
+              <Button type="button" variant="outline" :disabled="ownerSaving" @click="cancelOwnerEdit"><X class="h-4 w-4" />取消</Button>
+              <Button type="button" :disabled="ownerSaving" @click="submitOwnerEdit"><Check class="h-4 w-4" />{{ ownerSaving ? '儲存中…' : '儲存' }}</Button>
+            </div>
+          </template>
+          <Button v-else type="button" variant="secondary" @click="startOwnerEdit"><Pencil class="h-4 w-4" />編輯資料</Button>
         </div>
 
-        <dl v-if="pet.notes">
-          <dt class="text-xs font-medium text-muted-foreground">其他備註</dt>
-          <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ pet.notes }}</dd>
+        <Alert v-if="ownerEditing && ownerError" variant="destructive" class="mt-3"><AlertDescription>{{ ownerError }}</AlertDescription></Alert>
+
+        <div v-if="ownerEditing" class="mt-4 space-y-4 border-t border-border pt-3">
+          <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <Label for="owner-edit-name" class="text-xs font-medium text-foreground">姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Input id="owner-edit-name" v-model="ownerForm.name" class="border-border focus:border-primary" placeholder="例：王小明" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="owner-edit-phone" class="text-xs font-medium text-foreground">電話 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Input id="owner-edit-phone" v-model="ownerForm.phone" class="border-border focus:border-primary" placeholder="例：0912-345-678" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="owner-edit-email" class="text-xs font-medium text-foreground">Email（選填）</Label>
+              <Input id="owner-edit-email" v-model="ownerForm.email" type="email" class="border-border focus:border-primary" placeholder="例：owner@example.com" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="owner-edit-address" class="text-xs font-medium text-foreground">地址（選填）</Label>
+              <Input id="owner-edit-address" v-model="ownerForm.address" class="border-border focus:border-primary" placeholder="例：台北市中山區中山北路一段1號" />
+            </div>
+          </div>
+        </div>
+
+        <dl v-else-if="pet.ownerId.phone || pet.ownerId.email || pet.ownerId.address" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
+          <div v-if="pet.ownerId.phone" class="min-w-0">
+            <dt class="text-xs font-medium text-muted-foreground">電話</dt>
+            <dd class="mt-1 tabular-nums text-foreground">{{ pet.ownerId.phone }}</dd>
+          </div>
+          <div v-if="pet.ownerId.email" class="min-w-0">
+            <dt class="text-xs font-medium text-muted-foreground">Email</dt>
+            <dd class="mt-1 break-all text-foreground">{{ pet.ownerId.email }}</dd>
+          </div>
+          <div v-if="pet.ownerId.address" class="col-span-2 min-w-0 sm:col-span-3">
+            <dt class="text-xs font-medium text-muted-foreground">地址</dt>
+            <dd class="mt-1 text-foreground">{{ pet.ownerId.address }}</dd>
+          </div>
         </dl>
-      </div>
-    </Card>
+      </Card>
+    </div>
 
     <div class="space-y-4">
       <div>
@@ -507,7 +741,7 @@ watch(
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex items-center gap-2">
             <Label for="new-note-date" class="text-xs font-medium text-muted-foreground">日期</Label>
-            <Input id="new-note-date" v-model="newNoteDate" type="date" class="w-40 border-border" />
+            <DatePicker id="new-note-date" v-model="newNoteDate" aria-label="日期" class="w-40" :clearable="false" />
           </div>
           <Button :disabled="noteSaving || !newNoteContent.trim()" @click="addNote">新增紀錄</Button>
         </div>
@@ -553,7 +787,7 @@ watch(
             <div v-if="editingNoteId === note._id" class="mt-3">
               <Textarea v-model="editingNoteContent" rows="3" />
               <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
-                <Input v-model="editingNoteDate" type="date" class="w-40 border-border" />
+                <DatePicker v-model="editingNoteDate" aria-label="日期" class="w-40" :clearable="false" />
                 <div class="flex gap-2">
                   <Button variant="outline" size="sm" @click="cancelEditNote">取消</Button>
                   <Button size="sm" :disabled="noteSaving" @click="saveEditNote(note)">儲存</Button>
@@ -621,7 +855,6 @@ watch(
       <Pagination v-if="pet.medicalRecords.length" :page="recordPage" :total-pages="totalRecordPages" @update:page="goToRecordPage" />
     </div>
 
-    <PetFormDialog v-if="editOpen" title="編輯寵物資料" submit-label="儲存" :initial-value="{ ...pet, birthDate: clinicDateInput(pet.birthDate) }" :submitting="editSaving" :error-message="editError" @submit="savePet" @close="editOpen = false" />
     <ConfirmDialog
       :open="Boolean(noteToRemove)"
       title="刪除病歷日誌"

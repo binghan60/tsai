@@ -128,7 +128,7 @@ async function saveTemplate() {
         <div class="flex min-h-0 flex-col border-b border-border p-4 md:border-b-0 md:border-r">
           <div class="relative">
             <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input v-model="query" type="search" class="pl-10" placeholder="搜尋模板名稱或內容" aria-label="搜尋文字模板" />
+            <Input v-model="query" type="text" class="pl-10" placeholder="搜尋模板名稱或內容" aria-label="搜尋文字模板" />
           </div>
           <SegmentedControl v-model="scope" class="mt-3" :options="LIST_SCOPE_OPTIONS" aria-label="模板清單範圍" size="sm" full-width />
           <div class="mt-3 max-h-72 space-y-2 overflow-y-auto md:max-h-[46vh]">

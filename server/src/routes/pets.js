@@ -13,6 +13,7 @@ const PET_FIELDS = [
   'sex',
   'neutered',
   'birthDate',
+  'birthDateEstimated',
   'weightKg',
   'allergies',
   'chronicConditions',
@@ -111,7 +112,7 @@ petsRouter.get('/', async (req, res, next) => {
 
 petsRouter.get('/:id', async (req, res, next) => {
   try {
-    const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone email');
+    const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone email address __v');
     if (!pet) return res.status(404).json({ message: '找不到寵物' });
     const pagination = paginationOptions(req.query, {
       defaultLimit: 10,

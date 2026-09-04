@@ -16,6 +16,7 @@ const petSchema = new mongoose.Schema(
     sex: { type: String, enum: ['unknown', 'male', 'female'], default: 'unknown' },
     neutered: { type: String, enum: ['unknown', 'yes', 'no'], default: 'unknown' },
     birthDate: { type: Date, default: null },
+    birthDateEstimated: { type: Boolean, default: false },
     weightKg: { type: Number, min: 0, default: null },
     allergies: { type: String, default: '', trim: true },
     chronicConditions: { type: String, default: '', trim: true },

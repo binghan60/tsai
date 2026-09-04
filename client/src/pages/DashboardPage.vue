@@ -97,7 +97,7 @@ onMounted(fetchDashboard)
             <div class="grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm xl:shrink-0">
               <div><p class="text-lg font-semibold tabular-nums">{{ dashboard.monthlyNewOwnerCount }}</p><p class="text-xs text-muted-foreground">本月新增飼主</p></div>
               <div><p class="text-lg font-semibold tabular-nums">{{ dashboard.monthlyNewPetCount }}</p><p class="text-xs text-muted-foreground">本月新增寵物</p></div>
-              <router-link to="/owners" class="flex items-center gap-1.5 text-xs text-primary hover:underline"><UsersRound class="h-3.5 w-3.5" />累計 {{ dashboard.ownerCount }} 位飼主</router-link>
+              <router-link to="/pets" class="flex items-center gap-1.5 text-xs text-primary hover:underline"><UsersRound class="h-3.5 w-3.5" />累計 {{ dashboard.ownerCount }} 位飼主</router-link>
               <router-link to="/pets" class="flex items-center gap-1.5 text-xs text-primary hover:underline"><PawPrint class="h-3.5 w-3.5" />累計 {{ dashboard.petCount }} 隻寵物</router-link>
             </div>
             <div class="grid grid-cols-3 gap-2 border-t border-border pt-3 text-sm xl:shrink-0">

@@ -6,6 +6,24 @@ import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagi
 import { escapeRegExp } from '../lib/regex.js';
 
 const router = Router();
+const PET_FIELDS = [
+  'name',
+  'species',
+  'breed',
+  'sex',
+  'neutered',
+  'birthDate',
+  'birthDateEstimated',
+  'weightKg',
+  'allergies',
+  'chronicConditions',
+  'currentMedications',
+  'notes',
+];
+
+function pickPetFields(body) {
+  return Object.fromEntries(PET_FIELDS.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
+}
 
 function validateOwnerInput({ name, phone, email }) {
   if (!String(name || '').trim()) return '請填寫飼主姓名';
@@ -40,6 +58,31 @@ router.post('/', async (req, res, next) => {
     if (validationError) return res.status(422).json({ message: validationError });
     const owner = await Owner.create({ name, phone, email, address });
     res.status(201).json(owner);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 新飼主與其第一隻寵物必須同時存在；任何一端驗證或寫入失敗都會完整回滾。
+router.post('/with-pet', async (req, res, next) => {
+  try {
+    const ownerInput = req.body?.owner ?? {};
+    const petInput = req.body?.pet ?? {};
+    const validationError = validateOwnerInput(ownerInput);
+    if (validationError) return res.status(422).json({ message: validationError });
+
+    let pet;
+    await withTransaction(async (session) => {
+      const [owner] = await Owner.create([{
+        name: ownerInput.name,
+        phone: ownerInput.phone,
+        email: ownerInput.email,
+        address: ownerInput.address,
+        relationVersion: 1,
+      }], { session });
+      [pet] = await Pet.create([{ ...pickPetFields(petInput), ownerId: owner._id }], { session });
+    });
+    res.status(201).json(pet);
   } catch (err) {
     next(err);
   }
