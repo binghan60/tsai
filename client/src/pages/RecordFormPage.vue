@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
+import { Activity, AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, formatDate } from '../lib/datetime';
@@ -9,6 +9,7 @@ import { collectPreviewIssues } from '../lib/recordFormValidation';
 import { defaultValueForItem } from '../../../shared/formDefaults';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomId, sectionKeyForItem } from '../lib/formTemplate';
+import { familyOf } from '../lib/fieldFamily';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useTextTemplates } from '../composables/useTextTemplates';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
@@ -16,6 +17,7 @@ import { Button } from '../components/ui/button';
 import { DatePicker } from '../components/ui/date-picker';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import FormSection from '../components/formfields/FormSection.vue';
@@ -109,6 +111,10 @@ const revisionReason = ref('');
 const isLocked = computed(() => recordStatus.value !== 'draft');
 const showDiscardConfirm = ref(false);
 const discarding = ref(false);
+// 重新帶入：一開始選錯來源報告時，不用捨棄草稿重來，直接在填寫畫面換一份已結案報告覆蓋文字欄位。
+const showRecopyDialog = ref(false);
+const recopyFromId = ref('');
+const recopying = ref(false);
 
 // 健檢類型 = 用哪一份範本，只在建立報告時決定；建立後不可更改，
 // 否則已填的作答會對不上表單結構。
@@ -209,11 +215,9 @@ async function confirmExamType() {
     await applyTemplate(pendingTemplateId.value);
     if (startMode.value === 'previous' && selectedFinalizedSource.value?._id) {
       const { data } = await http.get(`/records/${selectedFinalizedSource.value._id}`);
-      const copiedCount = copyForwardTextValues(data);
+      const copiedCount = copyForwardAllValues(data);
       toast.info(
-        copiedCount
-          ? `已帶入 ${copiedCount} 個文字欄位；日期、獸醫師、量測與檢驗數值仍維持空白。`
-          : '來源報告沒有可帶入的相同文字欄位，因此保持空白。',
+        copiedCount ? `已帶入 ${copiedCount} 個欄位的內容。` : '來源報告沒有可帶入的相同欄位，因此保持空白。',
         '已帶入上次報告',
       );
     }
@@ -233,22 +237,43 @@ async function confirmExamType() {
   }
 }
 
-const COPY_FORWARD_TYPES = new Set(['text', 'textarea', 'quickSelect']);
-
-function copyForwardTextValues(sourceRecord) {
+// 帶入來源報告的每一個欄位（理學檢查／檢驗／量測／牙齒圖／圖片／獸醫師／看診日期全部覆蓋），
+// 不再侷限於文字類欄位——來源報告的 sections 快照已經是 composeReportSections() 組好的
+// { status, value, note... } 形狀，跟 finding/lab/measurement 在畫面上讀寫的欄位一一對應，
+// 直接照抄同一套形狀最不容易漏欄位。
+function copyForwardAllValues(sourceRecord) {
   const sourceItems = (sourceRecord?.sections ?? []).flatMap((section) => section.items ?? []);
   const sourceByKey = new Map(sourceItems.map((item) => [item.key, item]));
   const sourceByTypeAndLabel = new Map(sourceItems.map((item) => [`${item.type}:${String(item.label ?? '').trim()}`, item]));
+  const findSource = (item) => sourceByKey.get(item.key) ?? sourceByTypeAndLabel.get(`${item.type}:${String(item.label ?? '').trim()}`);
   let copiedCount = 0;
   for (const section of TEMPLATE_SECTIONS.value) {
     for (const item of section.items ?? []) {
-      if (!COPY_FORWARD_TYPES.has(item.type) || item.role === 'vet' || item.role === 'visitDate') continue;
-      const source = sourceByKey.get(item.key)
-        ?? sourceByTypeAndLabel.get(`${item.type}:${String(item.label ?? '').trim()}`);
-      const value = source?.value ?? sourceRecord?.customValues?.[item.key] ?? sourceRecord?.[item.key];
-      if (value === undefined || value === null || String(value).trim() === '') continue;
-      setValue(item, value);
-      copiedCount += 1;
+      const source = findSource(item);
+      if (!source) continue;
+      const family = familyOf(item);
+      if (family === 'finding') {
+        const target = record.examinationFindings.find((row) => row.key === item.key);
+        if (!target) continue;
+        target.status = source.status ?? 'not_checked';
+        target.note = source.note ?? '';
+        copiedCount += 1;
+      } else if (family === 'lab') {
+        const target = record.labFindings.find((row) => row.key === item.key);
+        if (!target) continue;
+        target.status = source.status ?? 'not_checked';
+        target.statusSource = source.statusSource ?? 'manual';
+        target.value = source.value ?? '';
+        target.note = source.note ?? '';
+        copiedCount += 1;
+      } else {
+        if (source.value === undefined || source.value === null) continue;
+        const value = item.role === 'visitDate' ? clinicDateInput(source.value) : source.value;
+        if (String(value).trim() === '') continue;
+        setValue(item, value);
+        if (family === 'measurement') autoJudgeMeasurement(item, value);
+        copiedCount += 1;
+      }
     }
   }
   return copiedCount;
@@ -262,6 +287,29 @@ async function loadFinalizedSources() {
   } catch (err) {
     finalizedSources.value = [];
     copyFromId.value = '';
+  }
+}
+
+function openRecopyDialog() {
+  recopyFromId.value = copyFromId.value || String(finalizedSources.value[0]?._id ?? '');
+  showRecopyDialog.value = true;
+}
+async function confirmRecopy() {
+  if (!recopyFromId.value || recopying.value) return;
+  recopying.value = true;
+  try {
+    const { data } = await http.get(`/records/${recopyFromId.value}`);
+    const copiedCount = copyForwardAllValues(data);
+    copyFromId.value = recopyFromId.value;
+    showRecopyDialog.value = false;
+    toast.info(
+      copiedCount ? `已重新帶入 ${copiedCount} 個欄位，覆蓋原本的內容。` : '來源報告沒有可帶入的相同欄位，內容維持不變。',
+      '已重新帶入報告內容',
+    );
+  } catch (err) {
+    toast.error(err.response?.data?.message || '重新帶入失敗，請稍後再試', '重新帶入失敗');
+  } finally {
+    recopying.value = false;
   }
 }
 
@@ -464,6 +512,8 @@ async function init() {
       examTypeName.value = data.examType || examTypeName.value;
       applyRecord(data);
       await loadPreviousValues();
+      // 草稿才可能用到「重新帶入」；已結案報告唯讀，不必多打這支 API。
+      if (data.status === 'draft') await loadFinalizedSources();
     } else {
       // 新報告：先知道是哪隻寵物，才能只列出適用該物種的表單。
       // 這個階段「不」載入任何表單結構，等使用者確認類型後才載入。
@@ -817,7 +867,10 @@ function handleBeforeUnload(event) {
   <section class="mx-auto max-w-6xl space-y-5 pb-48 sm:pb-32">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div><Breadcrumbs class="mb-2" :items="[{ label: '寵物', to: '/pets' }, { label: pet?.name || '寵物資料', to: petId ? `/pets/${petId}` : '/pets' }, { label: isEdit ? '編輯就診紀錄' : '新增就診紀錄' }]" /><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案就診紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯就診紀錄' : '新增就診紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
-      <div v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-danger' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
+      <div v-if="!isLocked" class="flex flex-wrap items-center justify-end gap-3">
+        <Button v-if="!needsTypeChoice && finalizedSources.length" type="button" variant="outline" size="sm" @click="openRecopyDialog"><Copy class="h-4 w-4" />重新帶入報告內容</Button>
+        <div v-if="recordId || isDirty || saveState === 'saving' || saveState === 'error'" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-danger' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
+      </div>
     </div>
 
     <Alert v-if="loadError" variant="destructive"><AlertDescription>{{ loadError }}</AlertDescription></Alert>
@@ -839,7 +892,7 @@ function handleBeforeUnload(event) {
           </button>
           <button type="button" class="rounded-lg border px-3 py-3 text-left transition-colors" :class="startMode === 'previous' ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-muted/40'" :aria-pressed="startMode === 'previous'" @click="startMode = 'previous'; if (!copyFromId) copyFromId = String(finalizedSources[0]?._id ?? '')">
             <span class="block text-sm font-medium text-foreground">從已結案報告開始</span>
-            <span class="mt-1 block text-xs text-muted-foreground">僅帶入文字內容；日期、獸醫師、量測與檢驗數值不帶入。</span>
+            <span class="mt-1 block text-xs text-muted-foreground">會帶入來源報告的所有欄位內容，包含理學檢查、檢驗、量測值、牙齒圖、圖片、獸醫師與看診日期。</span>
           </button>
         </div>
         <div v-if="startMode === 'previous'" class="mt-3">
@@ -1096,5 +1149,28 @@ function handleBeforeUnload(event) {
       @confirm="confirmLeave"
     />
     <TextTemplatePickerDialog />
+    <Dialog :open="showRecopyDialog" @update:open="(value) => !value && (showRecopyDialog = false)">
+      <DialogContent size="sm">
+        <div class="space-y-1.5 p-6 pb-0 pr-12 sm:p-7 sm:pb-0 sm:pr-14">
+          <DialogTitle>重新帶入報告內容</DialogTitle>
+          <DialogDescription>選擇另一份已結案報告，會用它的內容覆蓋目前所有對應欄位，包含理學檢查、檢驗、量測值、牙齒圖、圖片、獸醫師與看診日期。</DialogDescription>
+        </div>
+        <div class="p-6 sm:p-7">
+          <Label for="recopy-from-record">選擇要帶入的報告</Label>
+          <Select v-model="recopyFromId">
+            <SelectTrigger id="recopy-from-record" class="mt-1 w-full"><SelectValue placeholder="請選擇一份報告" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="source in finalizedSources" :key="source._id" :value="String(source._id)">
+                {{ formatDate(source.visitDate) }} · {{ source.examType || '健檢報告' }} · 第 {{ source.reportVersion || 1 }} 版
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" :disabled="recopying" @click="showRecopyDialog = false">取消</Button>
+          <Button type="button" variant="destructive-outline" :disabled="!recopyFromId || recopying" @click="confirmRecopy">{{ recopying ? '帶入中…' : '覆蓋並帶入' }}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </section>
 </template>
