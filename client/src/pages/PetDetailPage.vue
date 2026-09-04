@@ -570,122 +570,122 @@ watch(pet, async (value) => {
       { label: pet.name },
     ]" />
 
-    <div class="grid gap-4 lg:grid-cols-2 lg:items-start">
-      <!-- 寵物資料：跟飼主資料並排，兩邊都是就地編輯（不彈 Modal）——這頁的定位就是報到時一眼同時看到兩邊。 -->
-      <Card class="p-4 shadow-sm dark:shadow-none sm:p-5">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="flex min-w-0 items-center gap-3">
-            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><PawPrint class="h-5 w-5" stroke-width="1.75" /></div>
-            <div class="min-w-0">
-              <div class="flex flex-wrap items-center gap-2">
-                <h1 class="text-xl font-semibold text-foreground">{{ pet.name }}</h1>
-                <span v-if="pet.medicalRecordNumber" class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">{{ pet.medicalRecordNumber }}</span>
-              </div>
-              <p class="mt-0.5 text-xs text-muted-foreground">寵物資料<span v-if="pet.legacyMedicalRecordNumber"> · 舊病歷號：{{ pet.legacyMedicalRecordNumber }}</span></p>
+    <!-- 寵物與飼主資料合併成同一張卡片、中間用分隔線隔開，不再是兩張並排卡片——
+         報到時兩邊資料要一眼同時看到，兩張卡片在視覺上等於多切一刀。兩邊各自獨立
+         就地編輯（不彈 Modal），互不影響彼此的編輯狀態。 -->
+    <Card class="p-4 shadow-sm dark:shadow-none sm:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-3">
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><PawPrint class="h-5 w-5" stroke-width="1.75" /></div>
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <h1 class="text-xl font-semibold text-foreground">{{ pet.name }}</h1>
+              <span v-if="pet.medicalRecordNumber" class="rounded-full bg-muted px-2 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">{{ pet.medicalRecordNumber }}</span>
             </div>
-          </div>
-          <template v-if="petEditing">
-            <div class="flex shrink-0 gap-2">
-              <Button type="button" variant="outline" :disabled="petSaving" @click="cancelPetEdit"><X class="h-4 w-4" />取消</Button>
-              <Button type="button" :disabled="petSaving" @click="submitPetEdit"><Check class="h-4 w-4" />{{ petSaving ? '儲存中…' : '儲存' }}</Button>
-            </div>
-          </template>
-          <Button v-else type="button" variant="secondary" @click="startPetEdit"><Pencil class="h-4 w-4" />編輯資料</Button>
-        </div>
-
-        <Alert v-if="petEditing && petError" variant="destructive" class="mt-3"><AlertDescription>{{ petError }}</AlertDescription></Alert>
-
-        <!-- 編輯模式：直接畫在卡片裡，不彈 Modal。 -->
-        <div v-if="petEditing" class="mt-4 space-y-4 border-t border-border pt-3">
-          <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2">
-            <div class="space-y-1.5">
-              <Label for="pet-edit-name" class="text-xs font-medium text-foreground">寵物名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <Input id="pet-edit-name" v-model="petForm.name" class="border-border focus:border-primary" placeholder="例：咪咪" />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="pet-edit-breed" class="text-xs font-medium text-foreground">品種</Label>
-              <Input id="pet-edit-breed" v-model="petForm.breed" class="border-border focus:border-primary" placeholder="例：米克斯、美短" />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="pet-edit-birth-date" class="text-xs font-medium text-foreground">{{ petForm.birthDateEstimated ? '預估生日' : '生日' }}</Label>
-              <DatePicker id="pet-edit-birth-date" v-model="petForm.birthDate" aria-label="生日" class="w-full" @update:model-value="petForm.birthDateEstimated = false" />
-              <p v-if="petForm.birthDateEstimated" class="text-[11px] text-muted-foreground">此日期為依年齡推估的月份。</p>
-            </div>
-            <div class="space-y-1.5">
-              <Label for="pet-edit-sex" class="text-xs font-medium text-foreground">性別</Label>
-              <Select v-model="petForm.sex">
-                <SelectTrigger id="pet-edit-sex" class="w-full border-border"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="option in SEX_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div class="space-y-1.5">
-              <Label for="pet-edit-neutered" class="text-xs font-medium text-foreground">絕育狀態</Label>
-              <Select v-model="petForm.neutered">
-                <SelectTrigger id="pet-edit-neutered" class="w-full border-border"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="option in NEUTERED_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div class="space-y-1.5">
-              <Label for="pet-edit-weight" class="text-xs font-medium text-foreground">目前體重（kg）</Label>
-              <Input id="pet-edit-weight" v-model="petForm.weightKg" type="text" class="border-border focus:border-primary" placeholder="例：4.5" />
-            </div>
-          </div>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <div class="space-y-1.5">
-              <Label for="pet-edit-allergies" class="text-xs font-medium text-foreground">過敏紀錄</Label>
-              <Textarea id="pet-edit-allergies" v-model="petForm.allergies" rows="2" class="border-border" placeholder="例：對某類抗生素過敏" />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="pet-edit-chronic" class="text-xs font-medium text-foreground">慢性病／重要病史</Label>
-              <Textarea id="pet-edit-chronic" v-model="petForm.chronicConditions" rows="2" class="border-border" placeholder="例：慢性腎臟病二期" />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="pet-edit-medications" class="text-xs font-medium text-foreground">目前用藥</Label>
-              <Textarea id="pet-edit-medications" v-model="petForm.currentMedications" rows="2" class="border-border" placeholder="例：每日降血壓藥物" />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="pet-edit-notes" class="text-xs font-medium text-foreground">其他備註</Label>
-              <Textarea id="pet-edit-notes" v-model="petForm.notes" rows="2" class="border-border" placeholder="例：看診較為緊張" />
-            </div>
+            <p class="mt-0.5 text-xs text-muted-foreground">寵物資料<span v-if="pet.legacyMedicalRecordNumber"> · 舊病歷號：{{ pet.legacyMedicalRecordNumber }}</span></p>
           </div>
         </div>
+        <template v-if="petEditing">
+          <div class="flex shrink-0 gap-2">
+            <Button type="button" variant="outline" :disabled="petSaving" @click="cancelPetEdit"><X class="h-4 w-4" />取消</Button>
+            <Button type="button" :disabled="petSaving" @click="submitPetEdit"><Check class="h-4 w-4" />{{ petSaving ? '儲存中…' : '儲存' }}</Button>
+          </div>
+        </template>
+        <Button v-else type="button" variant="secondary" @click="startPetEdit"><Pencil class="h-4 w-4" />編輯資料</Button>
+      </div>
 
-        <!-- 顯示模式：原本的唯讀摘要，飼主欄位已經搬到旁邊自己的卡片。 -->
-        <div v-else-if="hasAnyPetDetail" class="mt-4 space-y-4 border-t border-border pt-3 text-sm">
-          <dl v-if="identityFields.length || secondaryFields.length" class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
-            <div v-for="field in identityFields" :key="field.label" class="min-w-0">
-              <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
-              <dd class="mt-1 text-foreground">{{ field.value }}</dd>
-            </div>
-            <div v-for="field in secondaryFields" :key="field.label" class="min-w-0">
-              <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
-              <dd class="mt-1 text-foreground">{{ field.value }}</dd>
+      <Alert v-if="petEditing && petError" variant="destructive" class="mt-3"><AlertDescription>{{ petError }}</AlertDescription></Alert>
+
+      <!-- 編輯模式：直接畫在卡片裡，不彈 Modal。 -->
+      <div v-if="petEditing" class="mt-4 space-y-4 border-t border-border pt-3">
+        <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+          <div class="space-y-1.5">
+            <Label for="pet-edit-name" class="text-xs font-medium text-foreground">寵物名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+            <Input id="pet-edit-name" v-model="petForm.name" class="border-border focus:border-primary" placeholder="例：咪咪" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pet-edit-breed" class="text-xs font-medium text-foreground">品種</Label>
+            <Input id="pet-edit-breed" v-model="petForm.breed" class="border-border focus:border-primary" placeholder="例：米克斯、美短" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pet-edit-birth-date" class="text-xs font-medium text-foreground">{{ petForm.birthDateEstimated ? '預估生日' : '生日' }}</Label>
+            <DatePicker id="pet-edit-birth-date" v-model="petForm.birthDate" aria-label="生日" class="w-full" @update:model-value="petForm.birthDateEstimated = false" />
+            <p v-if="petForm.birthDateEstimated" class="text-[11px] text-muted-foreground">此日期為依年齡推估的月份。</p>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pet-edit-sex" class="text-xs font-medium text-foreground">性別</Label>
+            <Select v-model="petForm.sex">
+              <SelectTrigger id="pet-edit-sex" class="w-full border-border"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="option in SEX_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pet-edit-neutered" class="text-xs font-medium text-foreground">絕育狀態</Label>
+            <Select v-model="petForm.neutered">
+              <SelectTrigger id="pet-edit-neutered" class="w-full border-border"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="option in NEUTERED_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pet-edit-weight" class="text-xs font-medium text-foreground">目前體重（kg）</Label>
+            <Input id="pet-edit-weight" v-model="petForm.weightKg" type="text" class="border-border focus:border-primary" placeholder="例：4.5" />
+          </div>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="space-y-1.5">
+            <Label for="pet-edit-allergies" class="text-xs font-medium text-foreground">過敏紀錄</Label>
+            <Textarea id="pet-edit-allergies" v-model="petForm.allergies" rows="2" class="border-border" placeholder="例：對某類抗生素過敏" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pet-edit-chronic" class="text-xs font-medium text-foreground">慢性病／重要病史</Label>
+            <Textarea id="pet-edit-chronic" v-model="petForm.chronicConditions" rows="2" class="border-border" placeholder="例：慢性腎臟病二期" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pet-edit-medications" class="text-xs font-medium text-foreground">目前用藥</Label>
+            <Textarea id="pet-edit-medications" v-model="petForm.currentMedications" rows="2" class="border-border" placeholder="例：每日降血壓藥物" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pet-edit-notes" class="text-xs font-medium text-foreground">其他備註</Label>
+            <Textarea id="pet-edit-notes" v-model="petForm.notes" rows="2" class="border-border" placeholder="例：看診較為緊張" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 顯示模式：原本的唯讀摘要，飼主欄位已經合併到下方同一張卡片裡。 -->
+      <div v-else-if="hasAnyPetDetail" class="mt-4 space-y-4 border-t border-border pt-3 text-sm">
+        <dl v-if="identityFields.length || secondaryFields.length" class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+          <div v-for="field in identityFields" :key="field.label" class="min-w-0">
+            <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
+            <dd class="mt-1 text-foreground">{{ field.value }}</dd>
+          </div>
+          <div v-for="field in secondaryFields" :key="field.label" class="min-w-0">
+            <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
+            <dd class="mt-1 text-foreground">{{ field.value }}</dd>
+          </div>
+        </dl>
+
+        <div v-if="alertFields.length" class="rounded-xl bg-warning-surface px-3 py-2.5 text-warning">
+          <div class="flex items-center gap-1.5 text-xs font-semibold"><AlertTriangle class="h-3.5 w-3.5 shrink-0" />臨床提醒</div>
+          <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-3">
+            <div v-for="field in alertFields" :key="field.label" class="min-w-0">
+              <dt class="text-xs font-medium opacity-80">{{ field.label }}</dt>
+              <dd class="mt-0.5 whitespace-pre-wrap text-xs text-warning">{{ field.value }}</dd>
             </div>
           </dl>
-
-          <div v-if="alertFields.length" class="rounded-xl bg-warning-surface px-3 py-2.5 text-warning">
-            <div class="flex items-center gap-1.5 text-xs font-semibold"><AlertTriangle class="h-3.5 w-3.5 shrink-0" />臨床提醒</div>
-            <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-3">
-              <div v-for="field in alertFields" :key="field.label" class="min-w-0">
-                <dt class="text-xs font-medium opacity-80">{{ field.label }}</dt>
-                <dd class="mt-0.5 whitespace-pre-wrap text-xs text-warning">{{ field.value }}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <dl v-if="pet.notes">
-            <dt class="text-xs font-medium text-muted-foreground">其他備註</dt>
-            <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ pet.notes }}</dd>
-          </dl>
         </div>
-      </Card>
 
-      <!-- 飼主資料：跟寵物資料同一層卡片，關聯的是 pet.ownerId（populate 出 name/phone/email/address/__v）。 -->
-      <Card id="owner-card" v-if="pet.ownerId" class="p-4 shadow-sm dark:shadow-none sm:p-5">
+        <dl v-if="pet.notes">
+          <dt class="text-xs font-medium text-muted-foreground">其他備註</dt>
+          <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ pet.notes }}</dd>
+        </dl>
+      </div>
+
+      <!-- 飼主資料：跟寵物資料同一張卡片，用分隔線隔開；關聯的是 pet.ownerId（populate 出 name/phone/email/address/__v）。 -->
+      <div v-if="pet.ownerId" id="owner-card" class="mt-5 border-t border-border pt-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-3">
             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><User class="h-5 w-5" stroke-width="1.75" /></div>
@@ -740,8 +740,8 @@ watch(pet, async (value) => {
             <dd class="mt-1 text-foreground">{{ pet.ownerId.address }}</dd>
           </div>
         </dl>
-      </Card>
-    </div>
+      </div>
+    </Card>
 
     <div class="space-y-4">
       <!-- 病歷日誌／歷次健檢原本各自整段全展開、上下疊在同一頁，兩份長清單同時佔版面
