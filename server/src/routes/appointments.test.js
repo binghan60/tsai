@@ -462,7 +462,7 @@ describe('appointments routes', () => {
       weightKg: 3,
       temperatureC: 38,
       followUpDate: new Date('2026-09-15T02:00:00.000Z'),
-      other: '原始備註',
+      other: '報告表單自己填的備註',
       save: async (options) => { saves.push(['record', options]); },
     };
     Appointment.findById = () => ({ session: async () => appointment });
@@ -481,7 +481,8 @@ describe('appointments routes', () => {
       assert.equal(record.temperatureC, 39.1);
       assert.equal(appointment.followUpDate, '2026-09-22');
       assert.equal(record.followUpDate.toISOString(), '2026-09-22T02:00:00.000Z');
-      assert.equal(record.other, '更新備註');
+      assert.equal(appointment.visitNote, '更新備註');
+      assert.equal(record.other, '報告表單自己填的備註', '掛號內部備註不可以寫進報告會顯示的欄位');
       assert.equal(saves.length, 2);
       assert.ok(saves.every(([, options]) => options?.session));
     } finally {

@@ -439,7 +439,6 @@ router.post('/:id/complete', async (req, res, next) => {
         ...(appointment.temperatureC != null ? { temperatureC: appointment.temperatureC } : {}),
         ...(appointment.followUpDate ? { followUpDate: combineClinicDateTime(appointment.followUpDate, '10:00') } : {}),
         ...(String(appointment.reason ?? '').trim() ? { chiefComplaint: appointment.reason } : {}),
-        ...(String(appointment.visitNote ?? '').trim() ? { other: appointment.visitNote } : {}),
       };
       [record] = await MedicalRecord.create([{
         petId: appointment.petId,
@@ -496,7 +495,6 @@ router.patch('/:id/visit-data', async (req, res, next) => {
           record.followUpDate = appointment.followUpDate
             ? combineClinicDateTime(appointment.followUpDate, '10:00')
             : null;
-          record.other = appointment.visitNote;
           await record.save({ session });
         }
       }
