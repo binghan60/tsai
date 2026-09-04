@@ -7,7 +7,6 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 const props = defineProps({
   appointment: { type: Object, required: true },
@@ -22,19 +21,11 @@ const { handleSubmit } = useForm({
     ownerName: props.appointment.ownerName || '',
     ownerPhone: props.appointment.ownerPhone || '',
     petName: props.appointment.petName || '',
-    species: props.appointment.species || '貓',
   },
 });
 const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName', requiredRule);
 const { value: ownerPhone, errorMessage: ownerPhoneError } = useField('ownerPhone', requiredRule);
 const { value: petName, errorMessage: petNameError } = useField('petName', requiredRule);
-const { value: species } = useField('species');
-
-const speciesOptions = [
-  { title: '貓', value: '貓' },
-  { title: '狗', value: '狗' },
-  { title: '其他', value: '其他' },
-];
 
 const onSubmit = handleSubmit((values) => emit('submit', values));
 </script>
@@ -63,21 +54,10 @@ const onSubmit = handleSubmit((values) => emit('submit', values));
           <Input id="checkin-owner-phone" v-model="ownerPhone" class="border-border" />
           <p v-if="ownerPhoneError" class="text-xs font-medium text-destructive">{{ ownerPhoneError }}</p>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div class="space-y-1.5">
-            <Label for="checkin-pet-name" class="text-xs font-medium text-foreground">寵物姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-            <Input id="checkin-pet-name" v-model="petName" class="border-border" />
-            <p v-if="petNameError" class="text-xs font-medium text-destructive">{{ petNameError }}</p>
-          </div>
-          <div class="space-y-1.5">
-            <Label for="checkin-species" class="text-xs font-medium text-foreground">物種</Label>
-            <Select v-model="species">
-              <SelectTrigger id="checkin-species" class="w-full border-border"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="option in speciesOptions" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div class="space-y-1.5">
+          <Label for="checkin-pet-name" class="text-xs font-medium text-foreground">寵物姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+          <Input id="checkin-pet-name" v-model="petName" class="border-border" />
+          <p v-if="petNameError" class="text-xs font-medium text-destructive">{{ petNameError }}</p>
         </div>
 
         <Alert v-if="errorMessage" variant="destructive" class="mt-2">

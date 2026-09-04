@@ -83,7 +83,7 @@ const onSubmit = handleSubmit((values) => {
           </div>
           <div class="space-y-1.5">
             <Label for="edit-apt-species" class="text-xs font-medium text-foreground">物種</Label>
-            <Input id="edit-apt-species" v-model="species" class="border-border" placeholder="例：犬、貓" />
+            <Input id="edit-apt-species" v-model="species" class="border-border" placeholder="例：貓" />
           </div>
         </div>
 

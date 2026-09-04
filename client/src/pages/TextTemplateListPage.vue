@@ -279,7 +279,7 @@ onMounted(load);
       <form @submit.prevent="save">
         <div class="space-y-5 px-6 pb-6">
           <Alert v-if="editorError" variant="destructive"><AlertDescription>{{ editorError }}</AlertDescription></Alert>
-          <div class="space-y-1.5"><Label for="text-template-name">模板名稱</Label><Input id="text-template-name" v-model="form.name" maxlength="80" placeholder="例如：老年犬年度健檢建議" /></div>
+          <div class="space-y-1.5"><Label for="text-template-name">模板名稱</Label><Input id="text-template-name" v-model="form.name" maxlength="80" placeholder="例如：老貓年度健檢建議" /></div>
           <div class="space-y-1.5"><Label for="text-template-content">模板內容</Label><Textarea id="text-template-content" v-model="form.content" class="min-h-64 whitespace-pre-wrap" maxlength="2000" placeholder="輸入要插入報告的完整文字內容…" /><p class="text-right text-xs tabular-nums text-muted-foreground">{{ form.content.length }} / 2,000</p></div>
           <div class="rounded-xl border border-border p-4"><div class="flex items-start justify-between gap-4"><div><p class="text-sm font-medium text-foreground">所有文字欄位皆可使用</p><p class="mt-1 text-xs text-muted-foreground">關閉後可指定一個或多個適用欄位。</p></div><Switch :model-value="form.availableForAllFields" aria-label="所有文字欄位皆可使用" @update:model-value="form.availableForAllFields = $event" /></div>
             <div v-if="!form.availableForAllFields" class="mt-4 border-t border-border pt-3">

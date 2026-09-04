@@ -55,7 +55,6 @@ const SPECIES_LABELS = { cat: '貓', dog: '犬', all: '不限物種' };
 const SPECIES_FILTERS = [
   { value: 'any', label: '全部物種' },
   { value: 'cat', label: '貓' },
-  { value: 'dog', label: '犬' },
 ];
 const STATUS_FILTERS = [
   { value: 'any', label: '全部狀態' },
@@ -403,7 +402,6 @@ onMounted(load);
                   <SelectContent>
                     <SelectItem value="all">不限物種</SelectItem>
                     <SelectItem value="cat">貓</SelectItem>
-                    <SelectItem value="dog">犬</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -587,7 +587,7 @@ watch(pet, async (value) => {
             </div>
             <div class="space-y-1.5">
               <Label for="pet-edit-species" class="text-xs font-medium text-foreground">物種 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <Input id="pet-edit-species" v-model="petForm.species" class="border-border focus:border-primary" placeholder="例：貓、狗" />
+              <Input id="pet-edit-species" v-model="petForm.species" class="border-border focus:border-primary" placeholder="例：貓" />
             </div>
             <div class="space-y-1.5">
               <Label for="pet-edit-breed" class="text-xs font-medium text-foreground">品種</Label>

@@ -550,7 +550,6 @@ function resolveLeave(confirmed) {
                 <SelectContent>
                   <SelectItem value="all">不限物種</SelectItem>
                   <SelectItem value="cat">貓</SelectItem>
-                  <SelectItem value="dog">犬</SelectItem>
                 </SelectContent>
               </Select>
             </div>
