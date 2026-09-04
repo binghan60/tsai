@@ -15,7 +15,7 @@ import { spanClass } from '../../lib/fieldSpan';
 const props = defineProps({ section: { type: Object, required: true } });
 const {
   valueFor, setValue, labRanges, labRangeLabel,
-  labsFor, setLabStatus, autoJudgeLab, markEmptyLabGroupNormal,
+  labsFor, setLabStatus, autoJudgeLab, autoJudgeLabText, markEmptyLabGroupNormal,
 } = useRecordForm();
 
 // 作答列與範本項目是兩份資料，要用 key 對起來才能照範本的順序渲染。
@@ -74,7 +74,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                       :placeholder="finding.numeric === false ? '選填' : labRanges[finding.key]?.unit ? `輸入數值（${labRanges[finding.key].unit}）` : '選填'"
                       class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
                       :class="finding.numeric === false ? 'pr-20' : ''"
-                      @input="finding.numeric !== false && autoJudgeLab(finding, $event.target.value)"
+                      @input="finding.numeric !== false ? autoJudgeLab(finding, $event.target.value) : autoJudgeLabText(finding, $event.target.value)"
                     />
                     <!-- 數值型欄位打的是數字，不需要文字模板；只有文字結果才顯示入口。 -->
                     <TextTemplateTrigger

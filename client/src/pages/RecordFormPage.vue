@@ -595,6 +595,18 @@ function autoJudgeLab(finding, rawValue) {
   applyAutomaticJudgement(finding, rawValue);
 }
 
+// 文字結果描述（numeric: false）沒有數值可比對參考範圍，沒辦法判斷正常或異常，
+// 一律標成異常提醒醫師確認，避免醫師漏看一段沒有勾選狀態的文字結果。
+function autoJudgeLabText(finding, rawValue) {
+  finding.value = rawValue;
+  if (!String(rawValue ?? '').trim()) {
+    clearAutomaticStatus(finding);
+    return;
+  }
+  finding.status = 'abnormal';
+  finding.statusSource = 'auto';
+}
+
 function labRangeLabel(finding) {
   const range = labRanges.value[finding.key];
   if (!range) return '';
@@ -643,6 +655,7 @@ provideRecordForm({
   measurementAssessment,
   autoJudgeMeasurement,
   autoJudgeLab,
+  autoJudgeLabText,
   setLabStatus,
   markEmptyLabGroupNormal,
   registerImageUploader,

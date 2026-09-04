@@ -22,7 +22,7 @@ const props = defineProps({
 
 const {
   valueFor, setValue, findingsFor, labsFor, labRangeLabel,
-  setLabStatus, autoJudgeLab, measurementAssessment, autoJudgeMeasurement,
+  setLabStatus, autoJudgeLab, autoJudgeLabText, autoJudgeMeasurement,
   preview,
 } = useRecordForm();
 
@@ -36,7 +36,6 @@ const entry = computed(() => {
   return null;
 });
 
-const assessment = computed(() => measurementAssessment(props.item));
 const referenceText = computed(() => labRangeLabel(props.item));
 const imageValue = computed(() => {
   const value = valueFor(props.item);
@@ -80,7 +79,7 @@ const imageValue = computed(() => {
             :placeholder="entry.numeric === false ? '結果描述（選填）' : '檢驗數值'"
             class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
             :class="entry.numeric === false ? 'pr-20' : ''"
-            @input="entry.numeric !== false && autoJudgeLab(entry, $event.target.value)"
+            @input="entry.numeric !== false ? autoJudgeLab(entry, $event.target.value) : autoJudgeLabText(entry, $event.target.value)"
           />
           <TextTemplateTrigger
             v-if="entry.numeric === false"
@@ -106,7 +105,7 @@ const imageValue = computed(() => {
     </FieldShell>
   </div>
 
-  <!-- 量測值：數值輸入 + 自動判讀徽章 -->
+  <!-- 量測值：數值輸入 -->
   <FieldShell v-else-if="family === 'measurement'" :item="item" :input-id="inputId">
     <Input
       :id="inputId"
@@ -116,14 +115,6 @@ const imageValue = computed(() => {
       inputmode="decimal"
       @update:model-value="setValue(item, $event); autoJudgeMeasurement(item, $event)"
     />
-    <div class="mt-1.5 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">
-      <span v-if="referenceText" class="text-muted-foreground">參考 {{ referenceText }}</span>
-      <span
-        v-if="assessment?.status && assessment.status !== 'not_checked'"
-        class="rounded-full px-2 py-0.5 font-medium"
-        :class="assessment.status === 'abnormal' ? 'bg-danger-surface text-danger' : 'bg-success-surface text-success'"
-      >{{ assessment.status === 'abnormal' ? '異常' : '正常' }}・自動</span>
-    </div>
   </FieldShell>
 
   <FieldShell v-else-if="family === 'dental'" :item="item" :input-id="inputId">

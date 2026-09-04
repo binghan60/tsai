@@ -10,7 +10,7 @@ import { sectionRuns } from '../../lib/sectionRuns';
 import { spanClass } from '../../lib/fieldSpan';
 
 const props = defineProps({ section: { type: Object, required: true } });
-const { valueFor, setValue, labRangeLabel, measurementAssessment, autoJudgeMeasurement } = useRecordForm();
+const { valueFor, setValue, autoJudgeMeasurement } = useRecordForm();
 
 // 量測值排成數值卡片、其餘欄位排成兩欄，但照使用者排定的順序切段落。
 const runs = computed(() => sectionRuns(props.section.items, (item) => item.type === 'measurement'));
@@ -34,14 +34,6 @@ const runs = computed(() => sectionRuns(props.section.items, (item) => item.type
               inputmode="decimal"
               @update:model-value="setValue(metric, $event); autoJudgeMeasurement(metric, $event)"
             />
-            <div class="mt-2 flex min-h-5 flex-wrap items-center gap-1.5 text-xs">
-              <span v-if="labRangeLabel(metric)" class="text-muted-foreground">參考 {{ labRangeLabel(metric) }}</span>
-              <span
-                v-if="measurementAssessment(metric)?.status !== 'not_checked'"
-                class="rounded-full px-2 py-0.5 font-medium"
-                :class="measurementAssessment(metric)?.status === 'abnormal' ? 'bg-danger-surface text-danger' : 'bg-success-surface text-success'"
-              >{{ measurementAssessment(metric)?.status === 'abnormal' ? '異常' : '正常' }}・自動</span>
-            </div>
             <PreviousValue :item="metric" compact />
           </div>
           </SelectableItem>
