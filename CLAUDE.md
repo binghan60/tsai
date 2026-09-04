@@ -121,7 +121,8 @@ POST   /api/auth/logout                 登出，清除 cookie
 飼主（沒有對應的前端頁面——飼主不是獨立可瀏覽的實體，見第六節 `/pets`、`/pets/:id`）
 GET    /api/owners                      列表（?q= 搜尋姓名/電話），供 `/pets/new` 搜尋既有飼主
 POST   /api/owners                      供 `/pets/new` 新增飼主分頁與舊資料匯入使用
-GET    /api/owners/:id                  詳情（含旗下寵物）——目前沒有前端呼叫，保留給未來或腳本用
+POST   /api/owners/with-pet             新飼主與其第一隻寵物一次建立，transaction 內完成，任一端失敗整筆回滾——`/pets/new` 選「新增飼主資料」時走這支
+GET    /api/owners/:id                  詳情（含旗下寵物）——`/pets/new?ownerId=` 深連結用來自動鎖定飼主
 PUT    /api/owners/:id                  供 PetDetailPage 就地編輯飼主資料使用
 DELETE /api/owners/:id                  目前沒有 UI 入口會呼叫；不是死代碼，是刻意保留在後端的行政操作
 
