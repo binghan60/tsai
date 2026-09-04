@@ -88,9 +88,8 @@ function filledFields(fields) {
   return fields.filter((field) => String(field.value).trim());
 }
 
-// 身分類欄位（物種／品種／性別／絕育／年齡）一句話就能唸完，用一行 chip 呈現比逐格 dt/dd 更好掃視。
+// 身分類欄位（品種／性別／絕育／年齡）一句話就能唸完，用一行 chip 呈現比逐格 dt/dd 更好掃視。
 const identityFields = computed(() => filledFields([
-  { label: '物種', value: pet.value?.species ?? '' },
   { label: '品種', value: pet.value?.breed ?? '' },
   { label: '性別', value: sexLabel.value },
   { label: '絕育狀態', value: neuteredLabel.value },
@@ -186,8 +185,8 @@ function cancelPetEdit() {
   petError.value = '';
 }
 async function submitPetEdit() {
-  if (!String(petForm.name).trim() || !String(petForm.species).trim()) {
-    petError.value = '請填寫寵物名字與物種';
+  if (!String(petForm.name).trim()) {
+    petError.value = '請填寫寵物名字';
     return;
   }
   petSaving.value = true;
@@ -584,10 +583,6 @@ watch(pet, async (value) => {
             <div class="space-y-1.5">
               <Label for="pet-edit-name" class="text-xs font-medium text-foreground">寵物名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
               <Input id="pet-edit-name" v-model="petForm.name" class="border-border focus:border-primary" placeholder="例：咪咪" />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="pet-edit-species" class="text-xs font-medium text-foreground">物種 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <Input id="pet-edit-species" v-model="petForm.species" class="border-border focus:border-primary" placeholder="例：貓" />
             </div>
             <div class="space-y-1.5">
               <Label for="pet-edit-breed" class="text-xs font-medium text-foreground">品種</Label>

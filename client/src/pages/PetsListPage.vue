@@ -97,10 +97,9 @@ function goToPage(next) {
     <ListSkeleton v-else-if="loading" :rows="5" />
 
     <template v-else>
-      <Card v-if="pets.length" class="hidden overflow-hidden p-0 shadow-sm dark:shadow-none xl:block" style="--data-columns: minmax(9rem, 1fr) minmax(7rem, 0.8fr) minmax(8rem, 0.9fr) 6rem minmax(11rem, 1fr) 10.5rem 9rem">
+      <Card v-if="pets.length" class="hidden overflow-hidden p-0 shadow-sm dark:shadow-none xl:block" style="--data-columns: minmax(9rem, 1fr) minmax(8rem, 0.9fr) 6rem minmax(11rem, 1fr) 10.5rem 9rem">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">物種</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">品種</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">性別</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">飼主</span>
@@ -114,7 +113,6 @@ function goToPage(next) {
             </span>
             <span class="min-w-0 truncate text-sm font-semibold text-primary">{{ pet.name }}</span>
           </router-link>
-          <span class="desktop-data-cell truncate text-sm text-foreground" :title="pet.species || ''">{{ pet.species || '' }}</span>
           <span class="desktop-data-cell truncate text-sm text-foreground" :title="pet.breed || ''">{{ pet.breed || '' }}</span>
           <span class="desktop-data-cell text-sm text-foreground">{{ sexLabel(pet.sex) }}</span>
           <span class="desktop-data-cell">
@@ -141,7 +139,6 @@ function goToPage(next) {
             </span>
           </router-link>
           <dl class="mt-4 grid grid-cols-2 gap-2 border-t border-border pt-3 text-sm sm:grid-cols-3">
-            <div class="rounded-lg bg-muted/35 px-3 py-2"><dt class="text-xs text-muted-foreground">物種</dt><dd class="mt-0.5 truncate text-foreground">{{ pet.species || '' }}</dd></div>
             <div class="rounded-lg bg-muted/35 px-3 py-2"><dt class="text-xs text-muted-foreground">品種</dt><dd class="mt-0.5 truncate text-foreground">{{ pet.breed || '' }}</dd></div>
             <div class="rounded-lg bg-muted/35 px-3 py-2"><dt class="text-xs text-muted-foreground">性別</dt><dd class="mt-0.5 text-foreground">{{ sexLabel(pet.sex) }}</dd></div>
             <div class="rounded-lg bg-muted/35 px-3 py-2"><dt class="text-xs text-muted-foreground">飼主</dt><dd class="mt-0.5 truncate text-foreground">{{ pet.ownerId?.name || '' }}</dd></div>
