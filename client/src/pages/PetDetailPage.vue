@@ -686,7 +686,7 @@ watch(pet, async (value) => {
         <!-- 接成一篇連續病歷，不是逐則卡片：日期只當行內時間戳記，內容直接接續成段落，
              整段用細分隔線斷開而不是各自獨立的卡片外框，讀起來像在翻病歷全文而不是滑條列清單。 -->
         <Card v-if="clinicalNotes.length" class="divide-y divide-border p-0 shadow-sm dark:shadow-none">
-          <article v-for="note in clinicalNotes" :key="note._id" class="p-5">
+          <article v-for="note in clinicalNotes" :key="note._id" class="px-5 py-3">
             <template v-if="editingNoteId === note._id">
               <Textarea v-model="editingNoteContent" rows="3" />
               <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -698,7 +698,7 @@ watch(pet, async (value) => {
               </div>
             </template>
             <template v-else>
-              <header class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+              <header class="flex flex-wrap items-start gap-x-2 gap-y-1">
                 <time class="text-xs font-semibold whitespace-nowrap text-foreground">{{ formatDate(note.entryDate) }}</time>
                 <span v-if="note.source === 'legacy_import'" class="text-xs text-muted-foreground">舊系統匯入</span>
                 <span v-else-if="note.source === 'appointment'" class="text-xs text-muted-foreground">看診自動建立</span>
