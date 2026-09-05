@@ -1,7 +1,7 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AlertTriangle, CalendarDays, Check, ChevronDown, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2, User, X } from '@lucide/vue';
+import { AlertTriangle, CalendarDays, Check, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2, User, X } from '@lucide/vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
@@ -84,10 +84,6 @@ const editingNoteContent = ref('');
 const editingNoteDate = ref('');
 const noteToRemove = ref(null);
 const deletingNoteId = ref(null);
-const expandedNoteIds = ref([]);
-const collapsibleNoteIds = ref([]);
-const noteContentElements = new Map();
-let noteResizeFrame = null;
 
 const sexLabel = computed(() => ({ male: '公', female: '母' })[pet.value?.sex] ?? '');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育' })[pet.value?.neutered] ?? '');
@@ -164,8 +160,6 @@ async function fetchPet(petId = route.params.id) {
     if (!data.clinicalNotes?.length && data.notePagination?.total > 0 && notePage.value > data.notePagination.totalPages) {
       notePage.value = data.notePagination.totalPages;
     }
-    await nextTick();
-    measureNoteOverflow();
   } catch (err) {
     if (currentRequest === fetchSequence) error.value = '寵物資料暫時無法載入，請稍後重試';
   }
@@ -368,8 +362,7 @@ async function addNote() {
   noteSaving.value = true;
   noteError.value = '';
   try {
-    const { data: createdNote } = await http.post(`/pets/${pet.value._id}/clinical-notes`, { content, entryDate: newNoteDate.value || undefined });
-    expandNote(createdNote._id);
+    await http.post(`/pets/${pet.value._id}/clinical-notes`, { content, entryDate: newNoteDate.value || undefined });
     newNoteContent.value = '';
     newNoteDate.value = clinicDateInput();
     toast.success('已新增病歷日誌', '新增成功');
@@ -384,81 +377,10 @@ async function addNote() {
 }
 
 function startEditNote(note) {
-  expandNote(note._id);
   editingNoteId.value = note._id;
   editingNoteContent.value = note.content;
   editingNoteDate.value = clinicDateInput(note.entryDate);
 }
-
-function expandNote(noteId) {
-  if (!expandedNoteIds.value.includes(noteId)) {
-    expandedNoteIds.value = [...expandedNoteIds.value, noteId];
-  }
-}
-
-function isNoteCollapsible(noteId) {
-  return collapsibleNoteIds.value.includes(noteId);
-}
-
-function setNoteContentElement(noteId, element) {
-  if (element) noteContentElements.set(noteId, element);
-  else noteContentElements.delete(noteId);
-}
-
-function measureNoteOverflow() {
-  const nextIds = [];
-  for (const [noteId, element] of noteContentElements) {
-    if (!element.clientWidth) continue;
-    const clone = element.cloneNode(true);
-    clone.removeAttribute('class');
-    Object.assign(clone.style, {
-      position: 'absolute',
-      left: '-99999px',
-      top: '0',
-      width: `${element.clientWidth}px`,
-      height: 'auto',
-      visibility: 'hidden',
-      whiteSpace: 'pre-wrap',
-      overflow: 'visible',
-      overflowWrap: 'anywhere',
-      textOverflow: 'clip',
-    });
-    const computedStyle = window.getComputedStyle(element);
-    clone.style.font = computedStyle.font;
-    clone.style.letterSpacing = computedStyle.letterSpacing;
-    clone.style.lineHeight = computedStyle.lineHeight;
-    document.body.appendChild(clone);
-    const lineHeight = Number.parseFloat(computedStyle.lineHeight) || Number.parseFloat(computedStyle.fontSize) * 1.5;
-    if (clone.scrollHeight > lineHeight * 1.5) nextIds.push(noteId);
-    clone.remove();
-  }
-  if (editingNoteId.value && collapsibleNoteIds.value.includes(editingNoteId.value)) {
-    nextIds.push(editingNoteId.value);
-  }
-  collapsibleNoteIds.value = [...new Set(nextIds)];
-  expandedNoteIds.value = expandedNoteIds.value.filter((id) => collapsibleNoteIds.value.includes(id));
-}
-
-function scheduleNoteOverflowMeasurement() {
-  if (noteResizeFrame) cancelAnimationFrame(noteResizeFrame);
-  noteResizeFrame = requestAnimationFrame(() => {
-    noteResizeFrame = null;
-    measureNoteOverflow();
-  });
-}
-
-function toggleNote(noteId) {
-  if (editingNoteId.value === noteId || !isNoteCollapsible(noteId)) return;
-  expandedNoteIds.value = expandedNoteIds.value.includes(noteId)
-    ? expandedNoteIds.value.filter((id) => id !== noteId)
-    : [...expandedNoteIds.value, noteId];
-}
-
-onMounted(() => window.addEventListener('resize', scheduleNoteOverflowMeasurement));
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', scheduleNoteOverflowMeasurement);
-  if (noteResizeFrame) cancelAnimationFrame(noteResizeFrame);
-});
 
 function cancelEditNote() {
   editingNoteId.value = null;
@@ -505,10 +427,7 @@ const totalNotePages = computed(() => notePagination.value.totalPages ?? 1);
 
 function goToNotePage(next) {
   const target = Math.min(Math.max(next, 1), totalNotePages.value);
-  if (target !== notePage.value) {
-    expandedNoteIds.value = [];
-    notePage.value = target;
-  }
+  if (target !== notePage.value) notePage.value = target;
 }
 
 watch(recordPage, () => {
@@ -517,14 +436,6 @@ watch(recordPage, () => {
 
 watch(notePage, () => {
   if (pet.value) fetchPet();
-});
-
-// 頁籤切走時日誌卡片會整段卸載，量測過的收合狀態跟著遺失；切回來要重新量一次，
-// 不然「展開/收合」按鈕會照著卸載前的舊寬度判斷，可能整段跟實際內容對不上。
-watch(activeSection, async (value) => {
-  if (value !== 'notes') return;
-  await nextTick();
-  measureNoteOverflow();
 });
 
 watch(
@@ -541,7 +452,6 @@ watch(
     recordToRemove.value = null;
     noteToRemove.value = null;
     editingNoteId.value = null;
-    expandedNoteIds.value = [];
     fetchPet(petId);
   },
   { immediate: true }
@@ -773,56 +683,34 @@ watch(pet, async (value) => {
           <Alert v-if="noteError" variant="destructive"><AlertDescription>{{ noteError }}</AlertDescription></Alert>
         </Card>
 
-        <ul v-if="clinicalNotes.length" class="space-y-3">
-          <li v-for="note in clinicalNotes" :key="note._id">
-            <Card class="p-4 shadow-sm dark:shadow-none">
-              <div class="flex items-start gap-3">
-                <button
-                  v-if="isNoteCollapsible(note._id)"
-                  type="button"
-                  class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  :aria-expanded="expandedNoteIds.includes(note._id) || editingNoteId === note._id"
-                  :aria-label="expandedNoteIds.includes(note._id) ? '收合日誌內容' : '展開日誌內容'"
-                  @click="toggleNote(note._id)"
-                >
-                  <ChevronDown
-                    class="h-4 w-4 transition-transform"
-                    :class="expandedNoteIds.includes(note._id) || editingNoteId === note._id ? 'rotate-180' : ''"
-                    stroke-width="1.75"
-                  />
-                </button>
-                <span v-else aria-hidden="true" class="h-7 w-7 shrink-0"></span>
-                <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span class="flex items-center gap-1.5"><CalendarDays class="h-3.5 w-3.5 shrink-0" />{{ formatDate(note.entryDate) }}</span>
-                    <Badge v-if="note.source === 'legacy_import'" class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">舊系統匯入</Badge>
-                    <Badge v-else-if="note.source === 'appointment'" class="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">看診自動建立</Badge>
-                  </div>
-                  <p
-                    v-if="editingNoteId !== note._id"
-                    :ref="(element) => setNoteContentElement(note._id, element)"
-                    class="mt-2 min-w-0 text-sm text-foreground"
-                    :class="isNoteCollapsible(note._id) && !expandedNoteIds.includes(note._id) ? 'truncate' : 'whitespace-pre-wrap [overflow-wrap:anywhere]'"
-                  >{{ note.content }}</p>
+        <!-- 接成一篇連續病歷，不是逐則卡片：日期只當行內時間戳記，內容直接接續成段落，
+             整段用細分隔線斷開而不是各自獨立的卡片外框，讀起來像在翻病歷全文而不是滑條列清單。 -->
+        <Card v-if="clinicalNotes.length" class="divide-y divide-border p-0 shadow-sm dark:shadow-none">
+          <article v-for="note in clinicalNotes" :key="note._id" class="p-5">
+            <template v-if="editingNoteId === note._id">
+              <Textarea v-model="editingNoteContent" rows="3" />
+              <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <DatePicker v-model="editingNoteDate" aria-label="日期" class="w-40" :clearable="false" />
+                <div class="flex gap-2">
+                  <Button variant="outline" size="sm" @click="cancelEditNote">取消</Button>
+                  <Button size="sm" :disabled="noteSaving" @click="saveEditNote(note)">儲存</Button>
                 </div>
-                <div class="flex shrink-0 gap-1">
+              </div>
+            </template>
+            <template v-else>
+              <header class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <time class="text-xs font-semibold whitespace-nowrap text-foreground">{{ formatDate(note.entryDate) }}</time>
+                <span v-if="note.source === 'legacy_import'" class="text-xs text-muted-foreground">舊系統匯入</span>
+                <span v-else-if="note.source === 'appointment'" class="text-xs text-muted-foreground">看診自動建立</span>
+                <span class="ml-auto flex shrink-0 gap-1">
                   <Button variant="secondary" size="icon-sm" aria-label="編輯日誌" @click="startEditNote(note)"><Pencil class="h-3.5 w-3.5" /></Button>
                   <Button variant="destructive" size="icon-sm" aria-label="刪除日誌" @click="openRemoveNote(note)"><Trash2 class="h-3.5 w-3.5" /></Button>
-                </div>
-              </div>
-              <div v-if="editingNoteId === note._id" class="mt-3">
-                <Textarea v-model="editingNoteContent" rows="3" />
-                <div class="mt-2 flex flex-wrap items-center justify-between gap-3">
-                  <DatePicker v-model="editingNoteDate" aria-label="日期" class="w-40" :clearable="false" />
-                  <div class="flex gap-2">
-                    <Button variant="outline" size="sm" @click="cancelEditNote">取消</Button>
-                    <Button size="sm" :disabled="noteSaving" @click="saveEditNote(note)">儲存</Button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </li>
-        </ul>
+                </span>
+              </header>
+              <p class="mt-1.5 text-sm whitespace-pre-wrap wrap-anywhere text-foreground">{{ note.content }}</p>
+            </template>
+          </article>
+        </Card>
         <EmptyState v-else :icon="NotebookPen" title="尚無病歷日誌" description="在上方輸入框新增第一則記事。" />
 
         <Pagination v-if="clinicalNotes.length" :page="notePage" :total-pages="totalNotePages" @update:page="goToNotePage" />
