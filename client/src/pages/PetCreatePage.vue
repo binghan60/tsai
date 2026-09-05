@@ -42,10 +42,10 @@ const toast = useToast();
 // ----------------------------------------------------
 // 飼主管理模組 (Owner Module)
 // ----------------------------------------------------
-const ownerMode = ref('existing');
+const ownerMode = ref('new');
 const OWNER_MODE_OPTIONS = [
-  { value: 'existing', label: '選擇既有飼主' },
   { value: 'new', label: '建立新飼主' },
+  { value: 'existing', label: '選擇既有飼主' },
 ];
 
 const ownerQuery = ref('');
