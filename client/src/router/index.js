@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth';
 
 const DashboardPage = () => import('../pages/DashboardPage.vue');
 const AppointmentsPage = () => import('../pages/AppointmentsPage.vue');
+const FrontDeskPage = () => import('../pages/FrontDeskPage.vue');
 const PetsListPage = () => import('../pages/PetsListPage.vue');
 const PetCreatePage = () => import('../pages/PetCreatePage.vue');
 const PetDetailPage = () => import('../pages/PetDetailPage.vue');
@@ -30,7 +31,10 @@ const router = createRouter({
   routes: [
     { path: '/login', component: LoginPage, meta: { bare: true, public: true, title: '登入' } },
     { path: '/', component: DashboardPage, meta: { title: '儀表板' } },
-    { path: '/appointments', component: AppointmentsPage, meta: { title: '掛號與候診' } },
+    // 醫生頁：只服務候診中的病患，不含任何掛號行政操作。
+    { path: '/appointments', component: AppointmentsPage, meta: { title: '看診' } },
+    // 櫃台頁：掛號、報到、當天所有狀態總覽（含即時看到醫生填的看診資料）、已完成清單。
+    { path: '/front-desk', component: FrontDeskPage, meta: { title: '櫃台' } },
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },
     // 靜態路由要排在 /pets/:id 前面，不然 "new" 會被吃成動態參數 id。
     { path: '/pets/new', component: PetCreatePage, meta: { title: '新增寵物' } },

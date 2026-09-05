@@ -21,6 +21,13 @@ export function canTransitionAppointmentStatus(from, to) {
   return ALLOWED_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
+// 留言串只在「現場有人」的期間開放：報到中到已完成。scheduled/cancelled/no_show
+// 都還沒有人可以聊，不開放留言。
+export const VISIT_MESSAGE_STATUSES = ['arrived', 'completed'];
+export function canPostVisitMessage(status) {
+  return VISIT_MESSAGE_STATUSES.includes(status);
+}
+
 export function describeAppointmentTransition(from, to) {
   const fromLabel = APPOINTMENT_STATUS_LABELS[from] ?? from;
   const toLabel = APPOINTMENT_STATUS_LABELS[to] ?? to;

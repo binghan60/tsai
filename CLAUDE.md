@@ -55,9 +55,9 @@
 `name`、`content`、`availableForAllFields`、`applicableItemKeys`、`enabled`、`usageCount`。填表時可插入文字欄位的長篇內容，取代了早期的 quickPhrases 常用語（該 collection 與其路由已移除）。
 
 ### clinicalNotes 病歷日誌
-`petId`、`entryDate`、`content`、`source`（`manual` / `legacy_import` / `appointment`）。醫師看診或拿藥時隨手記的自由文字記事，不用填表、不用結案，跟 `medicalRecords`（結案才鎖定的正式健檢報告）是兩條平行的軌道——日誌給日常記事用，健檢報告給需要 PDF／分享的正式場合用。`source: 'legacy_import'` 的記事來自舊系統資料遷移（見 `server/scripts/legacy-migration/`），內容是舊系統逐年累加的病歷全文，整段當一筆記事匯入，不逐筆拆分（舊資料格式不一致，拆分風險高於價值）；`source: 'appointment'` 的記事由 `POST /api/appointments/:id/complete` 自動建立——掛號的「看診備註」（`appointments.visitNote`）刻意不會流進健檢報告（見第二節 appointments），完成看診時若非空白就落地成一筆日誌，並用 `appointmentId` 記住是哪一筆掛號生的；沒填看診備註就不建立。這筆日誌寫入刻意獨立於完成看診／建立報告草稿的 transaction 之外，日誌寫入失敗不影響看診已完成的結果。
+`petId`、`entryDate`、`content`、`source`（`manual` / `legacy_import` / `appointment`）。醫師看診或拿藥時隨手記的自由文字記事，不用填表、不用結案，跟 `medicalRecords`（結案才鎖定的正式健檢報告）是兩條平行的軌道——日誌給日常記事用，健檢報告給需要 PDF／分享的正式場合用。`source: 'legacy_import'` 的記事來自舊系統資料遷移（見 `server/scripts/legacy-migration/`），內容是舊系統逐年累加的病歷全文，整段當一筆記事匯入，不逐筆拆分（舊資料格式不一致，拆分風險高於價值）。
 
-**`visitNote` 與它生出的這筆日誌是同一份資料，雙向同步**：候診頁事後修改 `visitNote`（`PATCH /api/appointments/:id/visit-data`）會回寫同一筆日誌的 `content`；原本沒填、後來補上就補建一筆；清空則把日誌一併刪除。反過來，在寵物詳情頁編輯/刪除這筆日誌（`PUT`／`DELETE /api/clinical-notes/:id`）也會回寫或清空對應掛號的 `visitNote`。同步靠 `appointmentId` 找對方，兩邊各自的寫入都是各自獨立的一次 DB 操作（不包 transaction）——同步失敗會讓那次請求整體回錯誤，但不影響已經寫入的那一半。一筆掛號最多對應一筆日誌（`appointmentId` 唯一索引），`manual`／`legacy_import` 兩種來源沒有這個欄位、不受影響，一樣可自由編輯/刪除、沒有唯讀鎖定。索引 `{petId, entryDate, _id}`、`{appointmentId}`（partial unique）。刪除寵物前會檢查 `ClinicalNote.exists({petId})`，跟 `medicalRecords` 一樣擋刪除。
+`source: 'appointment'` 的記事是掛號留言串（`appointments.visitMessages`，見第二節 appointments）**單向同步**出來的抄本：`POST /api/appointments/:id/visit-messages` 每新增一則留言，就把整串留言組成一份逐則記錄文字（`lib/visitMessages.js` 的 `formatVisitMessagesTranscript`，格式如 `[14:32 醫生] 免掛號費`），寫進（或建立）用 `appointmentId` 連結的這筆日誌；同步落在該支路由裡（見 `routes/appointments.js` 的 `syncVisitMessagesToClinicalNote`）。**只有這個方向**：留言串是多則、多作者、只增不減的資料，沒辦法回推「使用者改的到底是哪一則」，所以反向的「改日誌回寫掛號」整個不存在——`PUT /api/clinical-notes/:id` 若偵測到該筆日誌的 `appointmentId` 有值且 body 想改 `content`，直接回 422，請使用者回掛號頁的留言串新增留言；`DELETE` 仍可刪，但只刪掉這份抄本，掛號本身的留言串不受影響，下一則新留言會重新落地一筆。一筆掛號最多對應一筆日誌（`appointmentId` 唯一索引），`manual`／`legacy_import` 兩種來源沒有這個欄位、不受影響，一樣可自由編輯/刪除、沒有唯讀鎖定。索引 `{petId, entryDate, _id}`、`{appointmentId}`（partial unique）。刪除寵物前會檢查 `ClinicalNote.exists({petId})`，跟 `medicalRecords` 一樣擋刪除。
 
 ### deliveryLogs 寄送流水帳
 append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
@@ -74,7 +74,11 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ### appointments 掛號與候診
 只服務當日門診時間軸。`date`／`time` 是登記來源（`date` 由掛號時指定，預設今天），`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。
 
-`status` 為 `scheduled`／`arrived`／`completed`／`cancelled`／`no_show`。候診中可填 `weightKg`、`temperatureC`、會顯示在飼主報告上的 `followUpDate`＋`followUpTime`，以及內部用 `visitNote`。`followUpDate`（`YYYY-MM-DD`）與 `followUpTime`（`HH:MM`）分開存，理由跟 `date`／`time` 一樣是避免日期因伺服器時區偏移；完成看診後會建立健檢報告草稿，兩者用 `combineClinicDateTime` 併成 `MedicalRecord.followUpDate`（真正的 `Date`，精確到分鐘）。**前端規則：`followUpDate` 本身選填，但選了日期就要一併填 `followUpTime`**（RecordFormPage 與 AppointmentsPage 皆擋送出並顯示紅字提示）；後端仍保留沒填時間時預設上午 10:00 的容錯，只當非經前端表單的呼叫端（例如直接打 API）沒帶時間時墊底，不是常態路徑。填了回診日期＋時間，`POST /:id/complete` 會直接幫忙掛上那一天的號（`visitType: 'return'`、身分快照與 `templateId` 都照抄這次掛號）；這裡不套用「預約時段僅限 10:00–11:30、14:00–19:30」的限制——那是電話掛號 UX 上的排班規則，不是這筆掛號資料本身的限制，自動掛號沿用 `followUpTime` 的原始值即可。`followUpReason`（選填文字）就是這筆下次掛號的 `reason`（來院原因）——填了什麼就照樣搬過去，沒填則用「回診」墊底，不是這次看診本身的來院原因。新掛號的 `_id` 記在原掛號的 `followUpAppointmentId`（`Appointment` 新欄位）上，兩筆掛號因此是連結的：之後用「編輯看診資料」（`PATCH /visit-data`）改回診日期／時間／原因，只要那筆自動掛出去的下一次掛號還是 `scheduled`（現場還沒報到/完成/取消/未到，代表沒被另外處理過），就會回頭同步它的 `date`／`time`／`scheduledAt`／`reason`；回診日期被清空則直接取消那筆掛號（`status: 'cancelled'`）並解除連結；原本沒填、後來補上則補建一筆——跟 `visitNote`／`clinicalNotes` 是同一套「原本沒填就補建、清空就處理掉」同步精神（見下）。只有在 `followUpDate`／`followUpTime`／`followUpReason` 任一個真的變動時才會觸發這個同步，避免把現場已經手動改期的下一次掛號覆寫回舊值。共用邏輯在 `routes/appointments.js` 的 `syncFollowUpAppointment`，同樣獨立於完成看診／修正看診資料的 transaction 之外，掛號失敗不影響已完成的這次看診。`visitNote` 刻意不帶進報告草稿（不可以出現在飼主看得到的報告裡），而是落地成一筆 `clinicalNotes`（見第二節），且之後雙向同步。已完成掛號後續修改時，只同步尚未結案的草稿；`visitNote` 之後的修改會回頭同步已建立的日誌（反之亦然，見第二節 clinicalNotes）。
+`status` 為 `scheduled`／`arrived`／`completed`／`cancelled`／`no_show`。候診中可填 `weightKg`、`temperatureC`、會顯示在飼主報告上的 `followUpDate`＋`followUpTime`。`followUpDate`（`YYYY-MM-DD`）與 `followUpTime`（`HH:MM`）分開存，理由跟 `date`／`time` 一樣是避免日期因伺服器時區偏移；完成看診後會建立健檢報告草稿，兩者用 `combineClinicDateTime` 併成 `MedicalRecord.followUpDate`（真正的 `Date`，精確到分鐘）。**前端規則：`followUpDate` 本身選填，但選了日期就要一併填 `followUpTime`**（RecordFormPage 與 AppointmentsPage 皆擋送出並顯示紅字提示）；後端仍保留沒填時間時預設上午 10:00 的容錯，只當非經前端表單的呼叫端（例如直接打 API）沒帶時間時墊底，不是常態路徑。填了回診日期＋時間，`POST /:id/complete` 會直接幫忙掛上那一天的號（`visitType: 'return'`、身分快照與 `templateId` 都照抄這次掛號）；這裡不套用「預約時段僅限 10:00–11:30、14:00–19:30」的限制——那是電話掛號 UX 上的排班規則，不是這筆掛號資料本身的限制，自動掛號沿用 `followUpTime` 的原始值即可。`followUpReason`（選填文字）就是這筆下次掛號的 `reason`（來院原因）——填了什麼就照樣搬過去，沒填則用「回診」墊底，不是這次看診本身的來院原因。新掛號的 `_id` 記在原掛號的 `followUpAppointmentId`（`Appointment` 新欄位）上，兩筆掛號因此是連結的：之後用「編輯看診資料」（`PATCH /visit-data`）改回診日期／時間／原因，只要那筆自動掛出去的下一次掛號還是 `scheduled`（現場還沒報到/完成/取消/未到，代表沒被另外處理過），就會回頭同步它的 `date`／`time`／`scheduledAt`／`reason`；回診日期被清空則直接取消那筆掛號（`status: 'cancelled'`）並解除連結；原本沒填、後來補上則補建一筆。只有在 `followUpDate`／`followUpTime`／`followUpReason` 任一個真的變動時才會觸發這個同步，避免把現場已經手動改期的下一次掛號覆寫回舊值。共用邏輯在 `routes/appointments.js` 的 `syncFollowUpAppointment`，同樣獨立於完成看診／修正看診資料的 transaction 之外，掛號失敗不影響已完成的這次看診。
+
+**`visitMessages` 是醫生↔櫃台的看診留言串**（操作性溝通，例如「免掛號費」「注意過敏反應」，不是病歷內容），取代了舊的單一字串欄位 `visitNote`：`[{ sender: 'vet'|'front_desk', content, createdAt }]`，只增不刪，不支援編輯/刪除單則留言。可留言的狀態限於 `arrived`／`completed`（`lib/appointmentStatus.js` 的 `canPostVisitMessage`），透過專用的 `POST /:id/visit-messages` 新增，用原子的 `$push` 直接寫進符合狀態篩選的文件（避免「先查狀態再寫入」中間被搶的競態，也不會撞上 schema 的 `optimisticConcurrency`——那個只保護 `.save()`）。**`sender` 是頁面固定的身分，不是使用者手動選的**：`/appointments`（醫生頁）發言一律是 `'vet'`，`/front-desk`（櫃台頁）一律是 `'front_desk'`，兩個頁面各自的職責完全分開，不需要也不提供身分切換 UI（早期版本做過 `useStaffIdentity` 讓使用者手動切換，後來確認醫生／櫃台本來就該是兩個獨立頁面，這個切換機制已經拿掉）。刻意不帶進報告草稿（不可以出現在飼主看得到的報告裡），而是單向同步落地成一筆 `clinicalNotes` 抄本（見第二節 clinicalNotes），且每則新留言都會更新抄本。新留言成功寫入後，會透過 Socket.IO 廣播給同一天房間裡的所有連線（見第三節即時通訊）。
+
+**`weightKg`／`temperatureC`／`followUpDate`／`followUpTime`／`followUpReason` 這組候診量測與回診欄位，候診中（`arrived`）就可以用 `PATCH /:id/visit-data` 更新，不用等到完成看診。** 這是醫生頁「更新」按鈕打的端點——醫生在候診中隨時可以把目前填的內容存到後端並廣播（見下），讓櫃台頁能立刻看到最新資料，這正是兩頁分開後「看診中即時同步」的機制；跟「完成看診」（`POST /:id/complete`，會把狀態轉成 `completed` 並建立健檢報告草稿）是兩個獨立動作。回診日期／原因跟下一次掛號的自動同步（見上段 `syncFollowUpAppointment`）**只在已完成階段才觸發**——候診中先填的回診日期只是暫存在這筆掛號上，還沒真的確定，等 `POST /complete` 才會據此掛出下一次的號，避免醫生候診中隨手填的日期就先掛出一筆回診。
 
 **`checkinNumber` 是候診佇列裡的位置，不是報到時發的票號，而且完全自動——沒有手動指定的入口。** 同一天所有 `arrived` 的掛號，號碼是連續的 1..N；報到接到隊尾，離開佇列（完成／取消／未到／取消報到）就清成 null 並讓後面的人遞補。因此「這個號碼已經被用掉」在結構上不存在，不需要靠衝突檢查去擋——檢查本來也擋不住併發。代價是排在後面的人號碼會隨著前面的人看完而變小，那正是即時位置該有的行為。排序與編號規則在 `lib/appointmentQueue.js`（純邏輯，可測）。
 
@@ -93,6 +97,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 | 後端 | Node.js + Express | 單人使用，不需要 Nest.js 的架構開銷 |
 | 資料庫 | MongoDB + Mongoose | |
 | 登入 | `jsonwebtoken` + Node 內建 `crypto.scrypt` | JWT 放在 HttpOnly cookie；密碼雜湊用內建 scrypt，不另外裝 bcrypt |
+| 即時通訊 | Socket.IO | 掛號留言即時推播（醫生↔櫃台），伺服器掛在 Express 的 httpServer 上（`server/src/lib/realtime.js`），沿用既有的 cookie session 驗證連線；房間以「天」為單位（`appointments:<date>`） |
 | PDF | Puppeteer | 見下節 |
 | Email | Nodemailer | SMTP（Gmail 應用程式密碼） |
 | 測試 | Node 內建 `node --test` | 不裝額外框架 |
@@ -139,8 +144,8 @@ DELETE /api/pets/:id                    刪除（寵物仍有報告或病歷日�
 病歷日誌
 GET    /api/pets/:petId/clinical-notes  該寵物的日誌列表（分頁）
 POST   /api/pets/:petId/clinical-notes  新增一則日誌
-PUT    /api/clinical-notes/:id          編輯日誌內容／日期
-DELETE /api/clinical-notes/:id          刪除日誌
+PUT    /api/clinical-notes/:id          編輯日誌內容／日期；來自掛號留言串同步的日誌（appointmentId 有值）擋掉 content 修改（422）
+DELETE /api/clinical-notes/:id          刪除日誌；來自掛號留言串的日誌只刪抄本，不影響掛號本身
 
 報告
 GET    /api/pets/:petId/records         該寵物的報告
@@ -165,10 +170,23 @@ GET    /api/appointments/:id
 PUT    /api/appointments/:id            更新掛號資料（時段／來院原因／身分快照）
 POST   /api/appointments/:id/check-in   報到；初診同時建立飼主與寵物（自動接到候診佇列尾端）
 POST   /api/appointments/:id/complete   完成看診並保存候診量測；有填回診日期＋時間就自動幫忙掛下次的號
+POST   /api/appointments/:id/visit-messages   新增一則看診留言（報到中～已完成期間），成功後透過 Socket.IO 廣播給同一天房間
+PATCH  /api/appointments/:id/visit-data 候診中或已完成都可修正候診量測與回診資料（不含看診留言，留言走上面那支）；
+                                       這是醫生頁「更新」按鈕打的端點，成功後廣播 appointment:updated 讓櫃台頁即時看到
 POST   /api/appointments/:id/cancel     取消掛號
 POST   /api/appointments/:id/no-show    標記未到診
 POST   /api/appointments/:id/restore    恢復已取消或未到診的掛號
 DELETE /api/appointments/:id            永久刪除（僅限已取消或未到）
+
+即時通訊（Socket.IO，掛在 httpServer 上，沿用既有 cookie session 驗證）
+join-day / leave-day（client→server）  加入／離開 appointments:<date> 房間
+visit-message:new（server→client）     該天房間內新增一則看診留言時廣播 { appointmentId, petName, date, status, message }；
+                                       petName/date/status 是給全站通知鈴鐺用的（見第六節），鈴鐺不一定開在掛號頁，
+                                       手上沒有這筆掛號的完整資料
+appointment:updated（server→client）   掛號本身狀態／欄位變動時廣播完整掛號文件（報到、取消、標記未到、恢復、調整
+                                       號碼牌、完成看診、候診中或已完成修正看診資料都會觸發），讓候診佇列／櫃台總覽
+                                       即時反映新狀態，不用等 60 秒輪詢——櫃台報到後醫生頁能立刻看到新病患進入候診
+                                       佇列，靠的正是這個事件
 
 寄送紀錄
 GET    /api/delivery-logs               流水帳（?recordId= / ?event= / 分頁）
@@ -208,7 +226,8 @@ GET    /api/health
 | 路由 | 頁面 | 說明 |
 |---|---|---|
 | `/` | 工作台 | 全站綜覽儀表板，由粗到細三層：**現在**（寄送異常橫幅）→ **分佈與趨勢**（報告流程四格、近 6 週健檢量長條、本月與累計數字）→ **明細**（待辦清單、最近完成）。**同一個數字只在其中一層出現一次**——之前草稿數同時出現在優先處理卡、workStage 卡、待辦清單與狀態長條四個地方，那是這頁最主要的雜訊來源。每一格數字都要能點進對應清單 |
-| `/appointments` | 掛號與候診 | **兩個區塊，因為這頁上有兩種順序**：上方「候診中」依看診序號排，由上而下就是看診順序；下方「看診時間軸」只放尚未報到的人，軸就純粹是時間。報到＝從時間軸移到佇列。頁面最上方是日期面板，支援「單日／本週」Tab 切換。單日檢視有前後一天／日曆、快捷跳轉按鈕（明天／後天／上下一個相同星期幾），以及當日掛號統計摘要（總掛號數／候診中／已完成）；本週檢視是一排 7 天格子（週一到週日），點格子切換回單日並帶那天的資料。選的日期同步進網址 `?date=`，兩個區塊都跟著它走；只有今天才畫「現在」指示線、才自動重新整理。號碼是唯讀的，看診順序完全由報到先後決定，沒有手動調整的入口 |
+| `/appointments` | 看診（醫生頁） | **只服務候診中的病患，不做任何掛號行政操作**——新增掛號、報到、取消、標記未到、編輯掛號基本資料、號碼牌調整一律在 `/front-desk`（櫃台頁）做，這頁完全沒有這些入口。固定顯示「今天」，沒有日期切換（醫生只關心現在，不需要看別天）。列表就是候診佇列，依報到先後排列；每張卡片展開後可填體重／體溫／回診日期時間／原因，按「更新」會呼叫 `PATCH /visit-data` 存檔並透過 Socket.IO 廣播，讓櫃台頁立刻看到最新內容——這是候診中即時同步的機制，不是逐字同步，是「按更新才送出」。同一個面板下方是醫生↔櫃台的看診留言串（`VisitMessageThread`，見第二節 `visitMessages`，發言身分固定是 `'vet'`），最後是選表單＋「完成看診」。頁面很輕量（不到 15KB），因為所有行政功能都不在這裡 |
+| `/front-desk` | 櫃台（櫃台頁） | **當天所有掛號的總覽＋所有行政操作**，取代了舊版本裡曾經想過的「已完成看診」「櫃台看板」兩個獨立頁面——那兩個構想後來發現本來就該是櫃台工作的一部分，合併進同一頁。日期面板（單日／本週切換、前後一天、快捷跳轉、新增掛號）沿用掛號頁原本的設計。單日檢視預設是一張資料表，**不分狀態、不分區塊**：未報到／候診中／已完成／已取消／未到都在同一份清單裡依時段排序，狀態欄用徽章分辨；候診中與已完成的列會顯示體重／體溫／回診資料（候診中是醫生正在填、隨 Socket.IO 即時更新；已完成則可以直接編輯校正）。上方「今日掛號／待報到／候診中／已完成」四格統計可以點擊縮小範圍（只看某個狀態），再點一次同一格或點「今日掛號」清除篩選；純前端依 `appointments` 陣列過濾，不是另外打 API，切換日期或單日／本週檢視時會自動重置回不篩選。操作欄依狀態顯示對應按鈕：未報到＝報到＋更多操作（編輯／標記未到／取消）；候診中＝「查看／留言」開彈窗（唯讀量測資料＋留言串，可回覆）＋更多操作（編輯／取消報到）；已完成＝「留言／編輯」開彈窗（量測／回診資料可編輯＋留言串）；已取消／未到＝恢復／刪除。留言發言身分固定是 `'front_desk'` |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | **飼主不是獨立可瀏覽的實體**——沒有 `/owners` 或 `/owners/:id`，飼主資料一律以附帶資訊的形式跟著寵物出現。詳情頁把寵物資料與飼主資料合併在同一張卡片裡、中間用分隔線隔開（`pets.ownerId` populate 出 `name/phone/email/address/__v`），而不是兩張並排的卡片——報到時兩邊資料要一眼同時看到，兩張卡片在視覺上等於多切一刀。兩邊各自獨立「編輯」後直接就地變成輸入框、儲存/取消，不彈 Modal，互不影響彼此的編輯狀態。下方病歷日誌（隨手記事，見第二節 `clinicalNotes`）與歷次健檢報告用頁籤（`FilterTabs`）切換，不會同時整段展開——避免兩份可能很長的清單同時佔滿版面 |
 | `/pets/new` | 新增寵物 | 飼主與寵物欄位合併成同一頁（不是 Modal）——欄位量（飼主搜尋/新增＋完整寵物資料）已經跟健檢表單一樣值得有自己的網址，塞進 Modal 只會逼出內部再捲動一層。飼主段用 `SegmentedControl` 切「選擇既有飼主」（搜尋清單）或「新增飼主資料」，跟寵物欄位一次送出；有離開頁面前的未儲存提示。送出成功導去新寵物的 `/pets/:id` |
 | `/records` | 就診紀錄清單 | 跨寵物，佇列切換 |
@@ -224,6 +243,7 @@ GET    /api/health
 - 各頁的返回連結走 `useBackTarget`，回到使用者真正的出發點（router 在 `afterEach` 記進 `history.state`），不是寫死的上層網址。標了 `meta.transient` 的路由不列入來源。
 - 列表頁的搜尋／佇列／頁碼用 `useSearchQueryParam` 同步進網址，配合 router 的 `scrollBehavior` 讓返回時狀態與捲動位置都還在。
 - 全站搜尋是蓋在當前頁面上的命令面板（`Ctrl/Cmd+K`），**不換路由**。
+- **看診留言的未讀提示是側邊欄徽章＋卡片紅點，沒有獨立的通知鈴鐺／下拉清單**（早期版本做過 FB 風格的頁首鈴鐺，後來拿掉，因為留言的目的地本來就只有「看診」或「櫃台」兩個地方，直接標在對應的側邊欄項目上比額外開一個下拉清單更直覺）。未讀狀態存在 Pinia store（`stores/appointmentNotifications.js`），只在記憶體裡、不持久化：`doctorCount`／`frontDeskCount` 兩個 getter 分別對應側邊欄「看診」「櫃台」項目要顯示的數字徽章，`isUnread(appointmentId, destination)` 給頁面內判斷某張候診卡片（`AppointmentsPage.vue`）或某一列（`FrontDeskPage.vue` 的「查看／留言」「留言／編輯」按鈕）要不要顯示小紅點——早期版本用過的同一種樣式，卡片本身不用展開就看得到。判斷一則留言算哪一頁的未讀（`isForFrontDesk`）：已完成的掛號只有櫃台頁看得到；候診中則看 `sender`——醫生發的算櫃台未讀，櫃台發的算醫生未讀。使用者展開卡片／打開查看留言的彈窗，會呼叫 `store.clearAppointment(id, destination)` 清掉對應未讀（`AppointmentsPage.vue` 傳 `'doctor'`、`FrontDeskPage.vue` 傳 `'front-desk'`）。**`destination` 是必要參數，不能省略**：同一筆掛號常常同時存在兩個方向的未讀（例如互相回覆，或櫃台在已完成的掛號上留言），清除若不分方向會把對方根本還沒看過的那一份也一起清掉——早期版本清除時忽略方向、只用 `appointmentId` 篩選，就出現過「其中一邊點開查看，另一邊的未讀也跟著消失」的問題，因此改成兩個方向各自獨立清除。連線生命週期跟頁面內容脫鉤：`useGlobalAppointmentNotifications`（`App.vue` 掛載時呼叫一次）負責整個 App 存活期間的 Socket.IO 連線（登入才連、登出就斷並清空），固定 join「今天」的房間，把收到的留言寫進上述 store；掛號頁面自己的 `useAppointmentRealtime` 只負責依使用者選的日期 join/leave 房間與訂閱事件（用來即時更新頁面上顯示的留言串與掛號資料），**不再自己開關連線**——如果頁面卸載時呼叫 `disconnect()`，會把側邊欄未讀徽章也在用的同一條連線切斷。**這個全域監聽在 App 外殼層級，不知道「現在操作的人是醫生還是櫃台」**（身分是頁面固定的，不是全域狀態，見第二節 `visitMessages`）：判斷「是不是自己剛發的留言、不用通知自己」用 `lib/sentMessageTracker.js` 追蹤，不用身分比對。**光靠「送出成功後才標記留言 `_id`」不夠**：`POST /:id/visit-messages` 在回應這支請求之前還要多做一次 ClinicalNote 同步，socket 廣播完全可能比 HTTP 回應先一步送達發話者自己的瀏覽器（兩者是各自獨立的連線，沒有先後保證）——廣播先到時 `_id` 還沒標記，自己剛發的留言就會被誤判成「別人發的」，變成一則永遠清不掉的幽靈通知（因為發話那一頁根本不會去清「給對方看」的那個方向）。所以送出「之前」就要先用「掛號＋身分＋內容」這組不必等伺服器回應就還原得出來的線索佔位（`markMessageSending`），真正拿到留言 `_id` 後再補標一次精準的 id（`markMessageAsSent`），兩種標記都在 15 秒後自動過期。
 
 ## 七、UI／視覺設計規範
 
@@ -320,7 +340,9 @@ npm run dev            # 使用者自己開
 
 ## 九、現況與待辦
 
-已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋、當日掛號與候診流程、病歷日誌（隨手記事，見第二節 `clinicalNotes`），以及共用帳號登入（JWT HttpOnly cookie、`tokenVersion` 可撤銷 session、登入限流、`/api/auth/login` 密碼驗證用固定時間比對防帳號列舉、前端 401 自動導回登入頁）。
+已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋、病歷日誌（隨手記事，見第二節 `clinicalNotes`），以及共用帳號登入（JWT HttpOnly cookie、`tokenVersion` 可撤銷 session、登入限流、`/api/auth/login` 密碼驗證用固定時間比對防帳號列舉、前端 401 自動導回登入頁）。
+
+掛號與候診流程拆成兩個各司其職的頁面：`/appointments`（醫生頁，只服務候診中的病患）與 `/front-desk`（櫃台頁，掛號行政操作＋當天所有狀態總覽）；醫生候診中填的量測／回診資料按「更新」即透過 Socket.IO 即時同步給櫃台，雙方也能透過看診留言串（`visitMessages`）即時對話——這是從「單頁＋身分切換」的版本演化來的：一開始做過在同一頁用 `SegmentedControl` 手動切換醫生／櫃台身分，後來發現這兩種身分的職責（醫生看診 vs 櫃台行政）本來就該是獨立頁面，才拆開並拿掉身分切換 UI。
 
 舊系統資料遷移：盤點過 `Data/` 底下的舊 Access 資料庫（全套動物醫院管理系統），確認實際有在用的只有 `RegData.mdb::RecordData`（飼主/寵物主檔＋逐年累加的病歷全文），其餘（收費、庫存、藥局、診斷字典、疫苗提醒等）用量證據薄弱，不遷移。遷移腳本在 `server/scripts/legacy-migration/`（PowerShell 抽取 + Node 匯入，兩階段，見該資料夾 README）。
 

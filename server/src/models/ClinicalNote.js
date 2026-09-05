@@ -6,8 +6,8 @@ const clinicalNoteSchema = new mongoose.Schema(
     entryDate: { type: Date, required: true, default: Date.now },
     content: { type: String, required: true, trim: true },
     source: { type: String, enum: ['manual', 'legacy_import', 'appointment'], default: 'manual' },
-    // source: 'appointment' 這筆日誌跟掛號的 visitNote 是同一份資料，靠這個欄位互相同步；
-    // 其餘來源一律是 null。
+    // source: 'appointment' 這筆日誌是掛號留言串（Appointment.visitMessages）單向同步出來的
+    // 抄本，靠這個欄位找到來源；其餘來源一律是 null。
     appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
   },
   { timestamps: true }

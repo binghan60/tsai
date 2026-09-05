@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { canTransitionAppointmentStatus } from './appointmentStatus.js';
+import { canPostVisitMessage, canTransitionAppointmentStatus } from './appointmentStatus.js';
 
 describe('canTransitionAppointmentStatus', () => {
   it('允許預約的正常到診流程', () => {
@@ -37,5 +37,22 @@ describe('canTransitionAppointmentStatus', () => {
   it('未知狀態一律回 false', () => {
     assert.equal(canTransitionAppointmentStatus('unknown', 'scheduled'), false);
     assert.equal(canTransitionAppointmentStatus('scheduled', 'unknown'), false);
+  });
+});
+
+describe('canPostVisitMessage', () => {
+  it('報到中與已完成可以留言', () => {
+    assert.equal(canPostVisitMessage('arrived'), true);
+    assert.equal(canPostVisitMessage('completed'), true);
+  });
+
+  it('尚未報到、已取消、未到診都不能留言', () => {
+    assert.equal(canPostVisitMessage('scheduled'), false);
+    assert.equal(canPostVisitMessage('cancelled'), false);
+    assert.equal(canPostVisitMessage('no_show'), false);
+  });
+
+  it('未知狀態回 false', () => {
+    assert.equal(canPostVisitMessage('unknown'), false);
   });
 });

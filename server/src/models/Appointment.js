@@ -61,8 +61,18 @@ const appointmentSchema = new mongoose.Schema(
     // 同步這筆（見 routes/appointments.js 的 syncFollowUpAppointment），只有它還是 scheduled
     // 狀態才動；已經報到/完成/取消就是現場已經另外處理過了，不回頭改。
     followUpAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
-    // 內部用途（藥品/費用等），不會出現在健檢報告裡。
-    visitNote: { type: String, default: '', trim: true },
+    // 醫生↔櫃台的看診留言串（操作性溝通，例如「免掛號費」「注意過敏反應」，不是病歷內容）。
+    // 只增不刪：不支援編輯/刪除單則留言。可留言的狀態見 lib/appointmentStatus.js 的
+    // canPostVisitMessage()。sender 只是輕量身分標記（見 client useStaffIdentity），
+    // 不對應真實使用者帳號。
+    visitMessages: {
+      type: [{
+        sender: { type: String, enum: ['vet', 'front_desk'], required: true },
+        content: { type: String, required: true, trim: true, maxlength: 500 },
+        createdAt: { type: Date, default: Date.now },
+      }],
+      default: [],
+    },
     completedAt: { type: Date, default: null },
   },
   { timestamps: true, optimisticConcurrency: true }

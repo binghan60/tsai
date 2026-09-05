@@ -21,6 +21,7 @@ import textTemplatesRouter from './routes/textTemplates.js';
 import uploadsRouter from './routes/uploads.js';
 import { closeBrowser } from './lib/pdf.js';
 import { resumePdfJobs } from './lib/reportPdfJobs.js';
+import { initRealtime } from './lib/realtime.js';
 
 const app = express();
 const clientDistPath = fileURLToPath(new URL('../../client/dist/', import.meta.url));
@@ -128,6 +129,7 @@ export async function startServer() {
   await ensureBootstrapUser();
   await resumePdfJobs();
   httpServer = app.listen(port, () => console.log(`[server] listening on http://localhost:${port}`));
+  initRealtime(httpServer);
   return httpServer;
 }
 

@@ -3,10 +3,9 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { app } from '../app.js';
 import ClinicalNote from '../models/ClinicalNote.js';
-import Appointment from '../models/Appointment.js';
 
-// 完成看診時自動落地的日誌（source: 'appointment'）跟掛號的 visitNote 是同一份資料，
-// 靠 ClinicalNote.appointmentId 互相同步；這裡釘住反方向（改／刪日誌回頭同步掛號）。
+// 掛號留言串同步出來的日誌（source: 'appointment'）內容是單向抄本——
+// 這裡釘住「不能手動改內容」，以及「刪除只影響抄本，不會去動掛號」。
 describe('clinical notes routes', () => {
   let server;
   let origin;
@@ -21,79 +20,72 @@ describe('clinical notes routes', () => {
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 
-  it('編輯來自掛號的日誌內容時，會同步回掛號的看診備註', async () => {
+  it('掛號留言同步出來的日誌不可手動修改內容', async () => {
+    const originalFindById = ClinicalNote.findById;
     const originalFindByIdAndUpdate = ClinicalNote.findByIdAndUpdate;
-    const originalAppointmentUpdate = Appointment.findByIdAndUpdate;
-    const appointmentUpdates = [];
-    ClinicalNote.findByIdAndUpdate = async (id, update) => ({
-      _id: id,
-      appointmentId: 'apt-linked',
-      content: update.$set.content,
-      entryDate: new Date('2026-08-26T02:00:00.000Z'),
-      source: 'appointment',
-    });
-    Appointment.findByIdAndUpdate = async (id, update) => {
-      appointmentUpdates.push([id, update]);
-      return {};
-    };
+    let updateCalled = false;
+    ClinicalNote.findById = async (id) => ({ _id: id, appointmentId: 'apt-linked', content: '原始留言記錄', source: 'appointment' });
+    ClinicalNote.findByIdAndUpdate = async () => { updateCalled = true; };
     try {
       const response = await fetch(`${origin}/api/clinical-notes/note-linked`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ content: '修正後的看診備註' }),
+        body: JSON.stringify({ content: '想改掉的內容' }),
       });
-      assert.equal(response.status, 200);
-      assert.equal(appointmentUpdates.length, 1);
-      const [id, update] = appointmentUpdates[0];
-      assert.equal(id, 'apt-linked');
-      assert.equal(update.visitNote, '修正後的看診備註');
+      assert.equal(response.status, 422);
+      assert.match((await response.json()).message, /掛號留言/);
+      assert.equal(updateCalled, false);
     } finally {
+      ClinicalNote.findById = originalFindById;
       ClinicalNote.findByIdAndUpdate = originalFindByIdAndUpdate;
-      Appointment.findByIdAndUpdate = originalAppointmentUpdate;
     }
   });
 
-  it('編輯一般手動日誌不會去動任何掛號', async () => {
+  it('掛號留言同步出來的日誌仍可修改 entryDate（只擋 content）', async () => {
+    const originalFindById = ClinicalNote.findById;
     const originalFindByIdAndUpdate = ClinicalNote.findByIdAndUpdate;
-    const originalAppointmentUpdate = Appointment.findByIdAndUpdate;
-    let appointmentUpdateCalled = false;
-    ClinicalNote.findByIdAndUpdate = async (id, update) => ({
-      _id: id,
-      appointmentId: null,
-      content: update.$set.content,
-      source: 'manual',
-    });
-    Appointment.findByIdAndUpdate = async () => { appointmentUpdateCalled = true; };
+    ClinicalNote.findById = async (id) => ({ _id: id, appointmentId: 'apt-linked', content: '原始留言記錄', source: 'appointment' });
+    ClinicalNote.findByIdAndUpdate = async (id, update) => ({ _id: id, ...update.$set });
+    try {
+      const response = await fetch(`${origin}/api/clinical-notes/note-linked`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entryDate: '2026-08-27T02:00:00.000Z' }),
+      });
+      assert.equal(response.status, 200);
+    } finally {
+      ClinicalNote.findById = originalFindById;
+      ClinicalNote.findByIdAndUpdate = originalFindByIdAndUpdate;
+    }
+  });
+
+  it('編輯一般手動日誌的內容不受影響', async () => {
+    const originalFindById = ClinicalNote.findById;
+    const originalFindByIdAndUpdate = ClinicalNote.findByIdAndUpdate;
+    ClinicalNote.findById = async (id) => ({ _id: id, appointmentId: null, content: '單純手動記事', source: 'manual' });
+    ClinicalNote.findByIdAndUpdate = async (id, update) => ({ _id: id, appointmentId: null, ...update.$set });
     try {
       const response = await fetch(`${origin}/api/clinical-notes/note-manual`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ content: '單純手動記事' }),
+        body: JSON.stringify({ content: '修改後的手動記事' }),
       });
       assert.equal(response.status, 200);
-      assert.equal(appointmentUpdateCalled, false);
+      assert.equal((await response.json()).content, '修改後的手動記事');
     } finally {
+      ClinicalNote.findById = originalFindById;
       ClinicalNote.findByIdAndUpdate = originalFindByIdAndUpdate;
-      Appointment.findByIdAndUpdate = originalAppointmentUpdate;
     }
   });
 
-  it('刪除來自掛號的日誌時，掛號的看診備註會清空', async () => {
+  it('刪除掛號留言同步出來的日誌，只刪抄本，不會去動掛號本身', async () => {
     const originalFindByIdAndDelete = ClinicalNote.findByIdAndDelete;
-    const originalAppointmentUpdate = Appointment.findByIdAndUpdate;
-    const appointmentUpdates = [];
     ClinicalNote.findByIdAndDelete = async (id) => ({ _id: id, appointmentId: 'apt-linked-2' });
-    Appointment.findByIdAndUpdate = async (id, update) => { appointmentUpdates.push([id, update]); return {}; };
     try {
       const response = await fetch(`${origin}/api/clinical-notes/note-linked-2`, { method: 'DELETE' });
       assert.equal(response.status, 204);
-      assert.equal(appointmentUpdates.length, 1);
-      const [id, update] = appointmentUpdates[0];
-      assert.equal(id, 'apt-linked-2');
-      assert.equal(update.visitNote, '');
     } finally {
       ClinicalNote.findByIdAndDelete = originalFindByIdAndDelete;
-      Appointment.findByIdAndUpdate = originalAppointmentUpdate;
     }
   });
 });
