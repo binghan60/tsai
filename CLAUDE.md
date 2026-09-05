@@ -55,7 +55,9 @@
 `name`、`content`、`availableForAllFields`、`applicableItemKeys`、`enabled`、`usageCount`。填表時可插入文字欄位的長篇內容，取代了早期的 quickPhrases 常用語（該 collection 與其路由已移除）。
 
 ### clinicalNotes 病歷日誌
-`petId`、`entryDate`、`content`、`source`（`manual` / `legacy_import` / `appointment`）。醫師看診或拿藥時隨手記的自由文字記事，不用填表、不用結案，跟 `medicalRecords`（結案才鎖定的正式健檢報告）是兩條平行的軌道——日誌給日常記事用，健檢報告給需要 PDF／分享的正式場合用。`source: 'legacy_import'` 的記事來自舊系統資料遷移（見 `server/scripts/legacy-migration/`），內容是舊系統逐年累加的病歷全文，整段當一筆記事匯入，不逐筆拆分（舊資料格式不一致，拆分風險高於價值）；`source: 'appointment'` 的記事由 `POST /api/appointments/:id/complete` 自動建立——掛號的「看診備註」（`appointments.visitNote`）刻意不會流進健檢報告（見第二節 appointments），完成看診時若非空白就落地成一筆日誌，跟建立報告草稿在同一個 transaction 裡一起提交；沒填看診備註就不建立。不論來源為何，記事都跟一般記事一樣可編輯/刪除，沒有唯讀鎖定，也沒有跟建立它的掛號保持同步——之後在候診頁修改看診備註不會回頭改動已建立的日誌。索引 `{petId, entryDate, _id}`。刪除寵物前會檢查 `ClinicalNote.exists({petId})`，跟 `medicalRecords` 一樣擋刪除。
+`petId`、`entryDate`、`content`、`source`（`manual` / `legacy_import` / `appointment`）。醫師看診或拿藥時隨手記的自由文字記事，不用填表、不用結案，跟 `medicalRecords`（結案才鎖定的正式健檢報告）是兩條平行的軌道——日誌給日常記事用，健檢報告給需要 PDF／分享的正式場合用。`source: 'legacy_import'` 的記事來自舊系統資料遷移（見 `server/scripts/legacy-migration/`），內容是舊系統逐年累加的病歷全文，整段當一筆記事匯入，不逐筆拆分（舊資料格式不一致，拆分風險高於價值）；`source: 'appointment'` 的記事由 `POST /api/appointments/:id/complete` 自動建立——掛號的「看診備註」（`appointments.visitNote`）刻意不會流進健檢報告（見第二節 appointments），完成看診時若非空白就落地成一筆日誌，並用 `appointmentId` 記住是哪一筆掛號生的；沒填看診備註就不建立。這筆日誌寫入刻意獨立於完成看診／建立報告草稿的 transaction 之外，日誌寫入失敗不影響看診已完成的結果。
+
+**`visitNote` 與它生出的這筆日誌是同一份資料，雙向同步**：候診頁事後修改 `visitNote`（`PATCH /api/appointments/:id/visit-data`）會回寫同一筆日誌的 `content`；原本沒填、後來補上就補建一筆；清空則把日誌一併刪除。反過來，在寵物詳情頁編輯/刪除這筆日誌（`PUT`／`DELETE /api/clinical-notes/:id`）也會回寫或清空對應掛號的 `visitNote`。同步靠 `appointmentId` 找對方，兩邊各自的寫入都是各自獨立的一次 DB 操作（不包 transaction）——同步失敗會讓那次請求整體回錯誤，但不影響已經寫入的那一半。一筆掛號最多對應一筆日誌（`appointmentId` 唯一索引），`manual`／`legacy_import` 兩種來源沒有這個欄位、不受影響，一樣可自由編輯/刪除、沒有唯讀鎖定。索引 `{petId, entryDate, _id}`、`{appointmentId}`（partial unique）。刪除寵物前會檢查 `ClinicalNote.exists({petId})`，跟 `medicalRecords` 一樣擋刪除。
 
 ### deliveryLogs 寄送流水帳
 append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
@@ -72,7 +74,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ### appointments 掛號與候診
 只服務當日門診時間軸。`date`／`time` 是登記來源（`date` 由掛號時指定，預設今天），`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。
 
-`status` 為 `scheduled`／`arrived`／`completed`／`cancelled`／`no_show`。候診中可填 `weightKg`、`temperatureC`、會顯示在飼主報告上的 `followUpDate`，以及內部用 `visitNote`。完成看診後會建立健檢報告草稿並帶入 `weightKg`／`temperatureC`／`followUpDate`；`visitNote` 刻意不帶進報告草稿（不可以出現在飼主看得到的報告裡），而是落地成一筆 `clinicalNotes`（見第二節）。已完成掛號後續修改時，只同步尚未結案的草稿；`visitNote` 之後的修改也不會回頭同步已建立的日誌。
+`status` 為 `scheduled`／`arrived`／`completed`／`cancelled`／`no_show`。候診中可填 `weightKg`、`temperatureC`、會顯示在飼主報告上的 `followUpDate`，以及內部用 `visitNote`。完成看診後會建立健檢報告草稿並帶入 `weightKg`／`temperatureC`／`followUpDate`；`visitNote` 刻意不帶進報告草稿（不可以出現在飼主看得到的報告裡），而是落地成一筆 `clinicalNotes`（見第二節），且之後雙向同步。已完成掛號後續修改時，只同步尚未結案的草稿；`visitNote` 之後的修改會回頭同步已建立的日誌（反之亦然，見第二節 clinicalNotes）。
 
 **`checkinNumber` 是候診佇列裡的位置，不是報到時發的票號，而且完全自動——沒有手動指定的入口。** 同一天所有 `arrived` 的掛號，號碼是連續的 1..N；報到接到隊尾，離開佇列（完成／取消／未到／取消報到）就清成 null 並讓後面的人遞補。因此「這個號碼已經被用掉」在結構上不存在，不需要靠衝突檢查去擋——檢查本來也擋不住併發。代價是排在後面的人號碼會隨著前面的人看完而變小，那正是即時位置該有的行為。排序與編號規則在 `lib/appointmentQueue.js`（純邏輯，可測）。
 

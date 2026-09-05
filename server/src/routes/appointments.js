@@ -451,18 +451,21 @@ router.post('/:id/complete', async (req, res, next) => {
         examType: template.name,
       }], { session });
       appointment.recordId = record._id;
-      // 看診備註不會出現在報告裡（見上），但仍是有價值的病歷內容，改落地到病歷日誌。
-      if (String(appointment.visitNote ?? '').trim()) {
-        await ClinicalNote.create([{
-          petId: appointment.petId,
-          entryDate: combineClinicDateTime(appointment.date, '10:00'),
-          content: appointment.visitNote,
-          source: 'appointment',
-        }], { session });
-      }
       // 看完診就歸還自己的實體號碼牌；其他候診者手上的牌號完全不變。
       await saveLeavingQueue(appointment, true, session);
     });
+    // 看診備註不會出現在報告裡（見上），但仍是有價值的病歷內容，落地到病歷日誌，
+    // 之後兩邊互相編輯會同步（見 /visit-data 與 clinicalNotes 路由）；
+    // 刻意獨立於上面的 transaction 之外，日誌寫入失敗不影響完成看診與建立報告草稿。
+    if (String(appointment.visitNote ?? '').trim()) {
+      await ClinicalNote.create({
+        petId: appointment.petId,
+        entryDate: combineClinicDateTime(appointment.date, '10:00'),
+        content: appointment.visitNote,
+        source: 'appointment',
+        appointmentId: appointment._id,
+      });
+    }
     res.json({ ...(appointment.toObject?.() ?? appointment), record });
   } catch (err) {
     next(err);
@@ -471,6 +474,7 @@ router.post('/:id/complete', async (req, res, next) => {
 
 // 已完成後仍可修正候診時記下的量測與內部備註；若剛建立的草稿還沒結案，
 // 同步更新草稿，避免掛號列表和接著打開的就診紀錄出現兩套資料。
+// 看診備註另外跟落地的病歷日誌同步（見下方），兩邊改其中一邊都會反映到另一邊。
 router.patch('/:id/visit-data', async (req, res, next) => {
   try {
     const weightKg = req.body?.weightKg;
@@ -511,6 +515,29 @@ router.patch('/:id/visit-data', async (req, res, next) => {
 
       await appointment.save({ session });
     });
+
+    // 看診備註跟完成看診時落地的病歷日誌是同一份資料，這裡改了要同步回日誌；
+    // 刻意獨立於上面的 transaction 之外，理由同完成看診時的日誌寫入。
+    if (visitNote !== undefined) {
+      const note = await ClinicalNote.findOne({ appointmentId: appointment._id });
+      if (appointment.visitNote) {
+        if (note) {
+          note.content = appointment.visitNote;
+          await note.save();
+        } else {
+          await ClinicalNote.create({
+            petId: appointment.petId,
+            entryDate: combineClinicDateTime(appointment.date, '10:00'),
+            content: appointment.visitNote,
+            source: 'appointment',
+            appointmentId: appointment._id,
+          });
+        }
+      } else if (note) {
+        await note.deleteOne();
+      }
+    }
+
     res.json(appointment);
   } catch (err) {
     next(err);

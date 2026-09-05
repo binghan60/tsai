@@ -64,7 +64,7 @@ describe('appointments routes', () => {
     FormTemplate.findOne = async () => ({ _id: '507f1f77bcf86cd799439011', name: '預設表單', version: 1 });
     ClinicSettings.findOne = () => ({ lean: async () => ({ defaultAppointmentTemplateId: '507f1f77bcf86cd799439011' }) });
     MedicalRecord.create = async ([record]) => [{ _id: 'record-1', ...record }];
-    ClinicalNote.create = async ([note]) => [{ _id: 'note-1', ...note }];
+    ClinicalNote.create = async (note) => ({ _id: 'note-1', ...note });
     server = app.listen(0, '127.0.0.1');
     if (!server.listening) await once(server, 'listening');
     origin = `http://127.0.0.1:${server.address().port}`;
@@ -463,9 +463,9 @@ describe('appointments routes', () => {
       then: (resolve, reject) => Promise.resolve(appointment).then(resolve, reject),
     });
     const noteCreateCalls = [];
-    ClinicalNote.create = async ([note], options) => {
-      noteCreateCalls.push([note, options]);
-      return [{ _id: 'note-2', ...note }];
+    ClinicalNote.create = async (note) => {
+      noteCreateCalls.push(note);
+      return { _id: 'note-2', ...note };
     };
     const queue = captureQueueWrites();
     Appointment.find = () => stubQueue([]);
@@ -478,11 +478,11 @@ describe('appointments routes', () => {
       assert.equal(response.status, 200);
       const body = await response.json();
       assert.equal(noteCreateCalls.length, 1);
-      const [note, options] = noteCreateCalls[0];
+      const note = noteCreateCalls[0];
       assert.equal(note.petId, 'pet-note');
       assert.equal(note.content, '拿藥回診，追蹤肝指數');
       assert.equal(note.source, 'appointment');
-      assert.ok(options?.session, '要跟報告草稿在同一個 transaction 裡寫入');
+      assert.equal(note.appointmentId, 'apt-note', '要跟掛號連結，之後才能互相同步');
       assert.equal(body.record.other, undefined, '看診備註不可以出現在報告會顯示的欄位');
     } finally {
       Appointment.findById = originalFindById;
@@ -507,9 +507,9 @@ describe('appointments routes', () => {
       then: (resolve, reject) => Promise.resolve(appointment).then(resolve, reject),
     });
     let noteCreateCalled = false;
-    ClinicalNote.create = async ([note]) => {
+    ClinicalNote.create = async (note) => {
       noteCreateCalled = true;
-      return [{ _id: 'note-3', ...note }];
+      return { _id: 'note-3', ...note };
     };
     const queue = captureQueueWrites();
     Appointment.find = () => stubQueue([]);
@@ -531,6 +531,7 @@ describe('appointments routes', () => {
   it('修正看診資料時，掛號與草稿病歷使用同一個 transaction', async () => {
     const originalAppointmentFindById = Appointment.findById;
     const originalRecordFindById = MedicalRecord.findById;
+    const originalNoteFindOne = ClinicalNote.findOne;
     const saves = [];
     const appointment = {
       _id: 'apt-visit-data',
@@ -551,8 +552,10 @@ describe('appointments routes', () => {
       other: '報告表單自己填的備註',
       save: async (options) => { saves.push(['record', options]); },
     };
+    const existingNote = { appointmentId: 'apt-visit-data', content: '原始備註', save: async () => {} };
     Appointment.findById = () => ({ session: async () => appointment });
     MedicalRecord.findById = () => ({ session: async () => record });
+    ClinicalNote.findOne = () => Promise.resolve(existingNote);
     const queue = captureQueueWrites();
     try {
       const response = await fetch(`${origin}/api/appointments/apt-visit-data/visit-data`, {
@@ -569,12 +572,45 @@ describe('appointments routes', () => {
       assert.equal(record.followUpDate.toISOString(), '2026-09-22T02:00:00.000Z');
       assert.equal(appointment.visitNote, '更新備註');
       assert.equal(record.other, '報告表單自己填的備註', '掛號內部備註不可以寫進報告會顯示的欄位');
-      assert.equal(saves.length, 2);
+      assert.equal(existingNote.content, '更新備註', '看診備註跟落地的日誌是同一份資料，要互相同步');
+      assert.equal(saves.length, 2, '日誌同步刻意獨立於掛號／報告的 transaction 之外');
       assert.ok(saves.every(([, options]) => options?.session));
     } finally {
       Appointment.findById = originalAppointmentFindById;
       MedicalRecord.findById = originalRecordFindById;
+      ClinicalNote.findOne = originalNoteFindOne;
       queue.restore();
+    }
+  });
+
+  it('候診頁清空看診備註時，先前落地的日誌會一起刪除', async () => {
+    const originalAppointmentFindById = Appointment.findById;
+    const originalNoteFindOne = ClinicalNote.findOne;
+    const appointment = {
+      _id: 'apt-visit-data-clear',
+      status: 'completed',
+      recordId: null,
+      visitNote: '原始備註',
+      save: async () => {},
+    };
+    let deleted = false;
+    const existingNote = { appointmentId: 'apt-visit-data-clear', content: '原始備註', deleteOne: async () => { deleted = true; } };
+    Appointment.findById = () => ({ session: async () => appointment });
+    ClinicalNote.findOne = () => Promise.resolve(existingNote);
+    const queue = captureQueueWrites();
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-visit-data-clear/visit-data`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ visitNote: '' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.visitNote, '');
+      assert.ok(deleted, '看診備註清空後，同步的日誌也要跟著消失');
+    } finally {
+      Appointment.findById = originalAppointmentFindById;
+      queue.restore();
+      ClinicalNote.findOne = originalNoteFindOne;
     }
   });
 
