@@ -40,7 +40,7 @@ function close() {
 <template>
   <Dialog :open="open" @update:open="(value) => !value && close()">
     <DialogContent :show-close-button="!loading" size="sm">
-      <div class="relative p-6 sm:p-7 pb-5">
+      <div class="relative p-6 sm:p-7 pb-5">
         <div class="flex gap-4">
           <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border" :class="tone.shell">
             <component :is="tone.icon" class="h-5 w-5" stroke-width="1.75" />
@@ -52,7 +52,7 @@ function close() {
         </div>
       </div>
       <DialogFooter>
-        <Button type="button" variant="outline" class="px-5 border-border hover:bg-muted/60" :disabled="loading" @click="close">
+        <Button type="button" variant="outline" class="px-5" :disabled="loading" @click="close">
           {{ cancelLabel }}
         </Button>
         <Button type="button" :variant="destructive ? 'destructive-solid' : 'default'" class="px-5" :disabled="loading" @click="emit('confirm')">

@@ -53,7 +53,7 @@ function submit() {
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" class="px-5 border-border hover:bg-muted/60" :disabled="submitting" @click="$emit('close')">返回</Button>
+        <Button type="button" variant="outline" class="px-5" :disabled="submitting" @click="$emit('close')">返回</Button>
         <Button type="submit" variant="destructive-solid" class="px-5" :disabled="submitting">{{ submitting ? '取消中…' : '確認取消' }}</Button>
       </DialogFooter>
     </form>

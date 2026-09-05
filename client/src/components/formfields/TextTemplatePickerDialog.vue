@@ -194,7 +194,7 @@ async function saveTemplate() {
             <div v-if="expandedId === template._id" class="space-y-3 border-t border-border/70 px-3 pb-3 pt-3">
               <p class="whitespace-pre-wrap rounded-lg bg-field p-3 text-sm leading-7 text-foreground">{{ template.content }}</p>
               <div class="flex flex-wrap justify-end gap-2">
-                <Button v-if="picker?.currentText" type="button" variant="destructive-outline" size="sm" @click="overwriteTemplate(template)">覆蓋內容</Button>
+                <Button v-if="picker?.currentText" type="button" variant="destructive" size="sm" @click="overwriteTemplate(template)">覆蓋內容</Button>
                 <Button type="button" size="sm" @click="quickInsert(template)">{{ picker?.currentText ? '插入游標處' : '插入' }}</Button>
               </div>
             </div>

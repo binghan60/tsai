@@ -126,7 +126,7 @@ const onSubmit = handleSubmit((values) => {
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" class="px-5 border-border hover:bg-muted/60" :disabled="submitting" @click="$emit('close')">取消</Button>
+        <Button type="button" variant="outline" class="px-5" :disabled="submitting" @click="$emit('close')">取消</Button>
         <Button type="submit" class="px-5" :disabled="submitting">{{ submitting ? '儲存中…' : '儲存變更' }}</Button>
       </DialogFooter>
     </form>

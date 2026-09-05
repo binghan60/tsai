@@ -1143,13 +1143,13 @@ function handleBeforeUnload(event) {
         <div class="mx-auto max-w-6xl">
           <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
           <div class="grid grid-cols-3 gap-2 sm:hidden">
-            <Button type="button" variant="destructive-outline" class="w-full px-2" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄</Button>
+            <Button type="button" variant="destructive" class="w-full px-2" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄</Button>
             <Button type="button" variant="outline" class="w-full px-2" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中' : '儲存' }}</Button>
             <Button type="button" class="w-full px-2" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽</Button>
           </div>
           <div class="hidden sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
             <p class="hidden sm:mr-auto sm:flex sm:items-center sm:gap-1.5 sm:text-xs sm:text-muted-foreground"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
-            <Button type="button" variant="destructive-outline" class="w-full sm:w-auto" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄草稿</Button>
+            <Button type="button" variant="destructive" class="w-full sm:w-auto" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄草稿</Button>
             <Button type="button" variant="outline" class="w-full sm:w-auto" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
             <Button type="button" class="col-span-2 w-full sm:col-auto sm:w-auto" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
           </div>
@@ -1198,7 +1198,7 @@ function handleBeforeUnload(event) {
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" :disabled="recopying" @click="showRecopyDialog = false">取消</Button>
-          <Button type="button" variant="destructive-outline" :disabled="!recopyFromId || recopying" @click="confirmRecopy">{{ recopying ? '帶入中…' : '覆蓋並帶入' }}</Button>
+          <Button type="button" variant="destructive" :disabled="!recopyFromId || recopying" @click="confirmRecopy">{{ recopying ? '帶入中…' : '覆蓋並帶入' }}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

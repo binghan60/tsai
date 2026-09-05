@@ -25,10 +25,6 @@ export const buttonVariants = cva(
           "bg-destructive-surface text-destructive hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         "destructive-solid":
           "bg-destructive-solid text-destructive-solid-foreground hover:bg-destructive-solid/90 focus-visible:ring-destructive-solid/30",
-        // 唯一保留邊框的 variant：跟卡片同底色、只靠一圈危險色邊框區分，
-        // 用在「撤銷」這類比 destructive-solid 輕、又不想跟 destructive 的淡底混淆的場合。
-        "destructive-outline":
-          "border-destructive/40 bg-card text-destructive hover:border-destructive/60 hover:bg-destructive/10 focus-visible:ring-destructive/20 dark:border-destructive/50 dark:hover:bg-destructive/15",
         link: "bg-accent/70 text-primary shadow-none underline-offset-4 hover:bg-accent hover:underline",
       },
       // 高度階層是真的分階，不是四個名字指向同一個 h-11。xs 只給桌機的密集表格用；
