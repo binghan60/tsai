@@ -52,6 +52,15 @@ const appointmentSchema = new mongoose.Schema(
     temperatureC: { type: Number, min: 0, default: null },
     // 看診結束時約定的下次回診日。保留 date-only 字串，避免日期因伺服器時區偏移。
     followUpDate: { type: String, default: '', match: /^$|^\d{4}-\d{2}-\d{2}$/ },
+    // 回診時間（選填，HH:MM）。沒填時併入 MedicalRecord.followUpDate 會落在當天 00:00。
+    followUpTime: { type: String, default: '', match: /^$|^\d{2}:\d{2}$/ },
+    // 回診原因——就是下一筆自動掛號的「來院原因」（Appointment.reason），
+    // 不是這次看診本身的來院原因。沒填就用「回診」墊底。
+    followUpReason: { type: String, default: '', trim: true },
+    // 完成看診時依 followUpDate/followUpTime 自動掛出的下一筆掛號。之後改回診日期會回頭
+    // 同步這筆（見 routes/appointments.js 的 syncFollowUpAppointment），只有它還是 scheduled
+    // 狀態才動；已經報到/完成/取消就是現場已經另外處理過了，不回頭改。
+    followUpAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
     // 內部用途（藥品/費用等），不會出現在健檢報告裡。
     visitNote: { type: String, default: '', trim: true },
     completedAt: { type: Date, default: null },

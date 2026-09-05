@@ -4,7 +4,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { Activity, AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
-import { clinicDateInput, formatDate } from '../lib/datetime';
+import { clinicDateInput, clinicTimeInput, combineClinicDateTime, formatDate } from '../lib/datetime';
 import { collectPreviewIssues } from '../lib/recordFormValidation';
 import { defaultValueForItem } from '../../../shared/formDefaults';
 import ListSkeleton from '../components/ListSkeleton.vue';
@@ -15,6 +15,7 @@ import { useTextTemplates } from '../composables/useTextTemplates';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
 import { Button } from '../components/ui/button';
 import { DatePicker } from '../components/ui/date-picker';
+import { TimePicker } from '../components/ui/time-picker';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
@@ -142,6 +143,9 @@ const labRanges = computed(() => referenceRanges(template.value));
 const vet = ref('');
 const visitDate = ref(clinicDateInput());
 const followUpDate = ref('');
+const followUpTime = ref('');
+// 回診日期本身選填，但選了日期就要一併給出時間，否則報告上只會出現一個沒有意義的午夜時刻。
+const followUpTimeError = computed(() => (followUpDate.value && !followUpTime.value ? '已選擇回診日期，請一併填寫時間' : ''));
 // 三個 findings 陣列在範本載入後才建立（見 applyTemplateDefaults）。
 const record = reactive({
   weightKg: null,
@@ -390,6 +394,7 @@ function applyRecord(data) {
   vet.value = data.vet ?? '';
   visitDate.value = clinicDateInput(data.visitDate);
   followUpDate.value = clinicDateInput(data.followUpDate);
+  followUpTime.value = data.followUpDate ? clinicTimeInput(data.followUpDate) : '';
   for (const key of ['weightKg', 'temperatureC', 'heartRate', 'respiratoryRate', 'bodyConditionScore', 'chiefComplaint', 'history', 'conclusion', 'diagnosis', 'labSummary', 'treatmentPlan', 'other']) {
     if (data[key] !== undefined && data[key] !== null) record[key] = data[key];
   }
@@ -684,7 +689,7 @@ function buildPayload() {
     customValues,
     vet: vet.value,
     visitDate: visitDate.value || null,
-    followUpDate: followUpDate.value || null,
+    followUpDate: followUpDate.value ? combineClinicDateTime(followUpDate.value, followUpTime.value) : null,
     weightKg: optionalNumber(record.weightKg),
     temperatureC: optionalNumber(record.temperatureC),
     heartRate: optionalNumber(record.heartRate),
@@ -759,6 +764,12 @@ function validateForPreview() {
     findings: record.examinationFindings,
     labFindings: record.labFindings,
   });
+  if (followUpTimeError.value) {
+    validationErrors.value = [
+      ...validationErrors.value,
+      { targetId: 'record-follow-up-date', focusId: 'record-follow-up-time', message: followUpTimeError.value },
+    ];
+  }
   return validationErrors.value.length === 0;
 }
 
@@ -815,7 +826,7 @@ async function openPreview() {
 }
 
 watch(
-  () => JSON.stringify({ vet: vet.value, visitDate: visitDate.value, followUpDate: followUpDate.value, record }),
+  () => JSON.stringify({ vet: vet.value, visitDate: visitDate.value, followUpDate: followUpDate.value, followUpTime: followUpTime.value, record }),
   () => {
     if (!hydrated.value) return;
     validationErrors.value = [];
@@ -972,12 +983,18 @@ function handleBeforeUnload(event) {
           <div class="flex min-w-0 items-center gap-2 text-sm text-foreground"><User class="h-4 w-4 shrink-0 text-muted-foreground" /><span class="truncate">{{ pet?.ownerId?.name ?? '—' }}</span></div>
         </div>
         <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-warning-surface px-3 py-2 text-xs text-warning"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
-        <div class="mt-3 flex flex-col gap-2 border-t border-border/70 pt-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="mt-3 flex flex-col gap-2 border-t border-border/70 pt-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <Label for="record-follow-up-date">回診日期</Label>
-            <p class="mt-0.5 text-xs text-muted-foreground">選填，會顯示在提供給飼主的報告中</p>
+            <p class="mt-0.5 text-xs text-muted-foreground">會顯示在提供給飼主的報告中；選了日期就要一併填時間<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></p>
           </div>
-          <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="尚未安排" aria-label="選擇回診日期" class="w-full sm:w-56" />
+          <div class="flex flex-col items-end gap-1">
+            <div class="flex w-full gap-2 sm:w-auto">
+              <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="尚未安排" aria-label="選擇回診日期" class="w-full sm:w-40" />
+              <TimePicker id="record-follow-up-time" v-model="followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="!followUpDate" class="w-32 shrink-0" />
+            </div>
+            <p v-if="followUpTimeError" class="text-xs font-medium text-destructive">{{ followUpTimeError }}</p>
+          </div>
         </div>
       </div>
 

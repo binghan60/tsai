@@ -528,6 +528,140 @@ describe('appointments routes', () => {
     }
   });
 
+  it('完成看診時，填了合法回診日期＋時間會自動掛下次的號', async () => {
+    const originalFindById = Appointment.findById;
+    const originalCreate = Appointment.create;
+    const appointment = {
+      _id: 'apt-followup',
+      petId: 'pet-followup',
+      ownerId: 'owner-followup',
+      ownerName: '王小明',
+      ownerPhone: '0912345678',
+      petName: '妞妞',
+      species: '犬',
+      templateId: '507f1f77bcf86cd799439011',
+      status: 'arrived',
+      date: '2026-08-26',
+      checkinNumber: 1,
+      save: async () => {},
+    };
+    Appointment.findById = () => ({
+      session: async () => appointment,
+      then: (resolve, reject) => Promise.resolve(appointment).then(resolve, reject),
+    });
+    const createCalls = [];
+    Appointment.create = async (doc) => {
+      createCalls.push(doc);
+      return { _id: 'apt-followup-next', ...doc };
+    };
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-followup/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ followUpDate: '2026-09-08', followUpTime: '10:30' }),
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(createCalls.length, 1, '要幫忙掛下次的號，不能只留在報告的提醒文字上');
+      const created = createCalls[0];
+      assert.equal(created.date, '2026-09-08');
+      assert.equal(created.time, '10:30');
+      assert.equal(created.scheduledAt.toISOString(), '2026-09-08T02:30:00.000Z');
+      assert.equal(created.petId, 'pet-followup');
+      assert.equal(created.ownerId, 'owner-followup');
+      assert.equal(created.ownerName, '王小明');
+      assert.equal(created.petName, '妞妞');
+      assert.equal(created.visitType, 'return', '身分已知，不是初診');
+      assert.equal(created.reason, '回診');
+      assert.equal(created.templateId, '507f1f77bcf86cd799439011', '沿用這次看診用的表單，下次完成看診時直接可用');
+      assert.equal(created.reason, '回診', '沒填回診原因就用「回診」墊底');
+      assert.equal(body.followUpAppointment.date, '2026-09-08');
+    } finally {
+      Appointment.findById = originalFindById;
+      Appointment.create = originalCreate;
+      queue.restore();
+    }
+  });
+
+  it('完成看診時，填了回診原因會直接當成下次掛號的來院原因', async () => {
+    const originalFindById = Appointment.findById;
+    const originalCreate = Appointment.create;
+    const appointment = {
+      _id: 'apt-followup-reason',
+      petId: 'pet-followup-reason',
+      status: 'arrived',
+      date: '2026-08-26',
+      checkinNumber: 1,
+      save: async () => {},
+    };
+    Appointment.findById = () => ({
+      session: async () => appointment,
+      then: (resolve, reject) => Promise.resolve(appointment).then(resolve, reject),
+    });
+    const createCalls = [];
+    Appointment.create = async (doc) => {
+      createCalls.push(doc);
+      return { _id: 'apt-followup-reason-next', ...doc };
+    };
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-followup-reason/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ followUpDate: '2026-09-08', followUpTime: '10:30', followUpReason: '拆線' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(createCalls[0].reason, '拆線');
+    } finally {
+      Appointment.findById = originalFindById;
+      Appointment.create = originalCreate;
+      queue.restore();
+    }
+  });
+
+  it('完成看診時自動掛的回診號不受預約時段限制，跟手動掛號的時段規則是兩回事', async () => {
+    const originalFindById = Appointment.findById;
+    const originalCreate = Appointment.create;
+    const appointment = {
+      _id: 'apt-followup-offhours',
+      petId: 'pet-followup-offhours',
+      status: 'arrived',
+      date: '2026-08-26',
+      checkinNumber: 1,
+      save: async () => {},
+    };
+    Appointment.findById = () => ({
+      session: async () => appointment,
+      then: (resolve, reject) => Promise.resolve(appointment).then(resolve, reject),
+    });
+    const createCalls = [];
+    Appointment.create = async (doc) => {
+      createCalls.push(doc);
+      return { _id: 'apt-followup-offhours-next', ...doc };
+    };
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-followup-offhours/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ followUpDate: '2026-09-08', followUpTime: '20:00' }),
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(createCalls.length, 1);
+      assert.equal(createCalls[0].time, '20:00');
+      assert.equal(body.followUpAppointment.time, '20:00');
+    } finally {
+      Appointment.findById = originalFindById;
+      Appointment.create = originalCreate;
+      queue.restore();
+    }
+  });
+
   it('修正看診資料時，掛號與草稿病歷使用同一個 transaction', async () => {
     const originalAppointmentFindById = Appointment.findById;
     const originalRecordFindById = MedicalRecord.findById;
@@ -611,6 +745,195 @@ describe('appointments routes', () => {
       Appointment.findById = originalAppointmentFindById;
       queue.restore();
       ClinicalNote.findOne = originalNoteFindOne;
+    }
+  });
+
+  it('修正看診資料時，回診時間改變會同步更新已掛出去、還沒報到的下次回診號', async () => {
+    const originalAppointmentFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-followup-sync',
+      status: 'completed',
+      recordId: null,
+      followUpDate: '2026-09-15',
+      followUpTime: '10:30',
+      followUpAppointmentId: 'apt-followup-linked',
+      save: async () => {},
+    };
+    const linked = {
+      _id: 'apt-followup-linked',
+      status: 'scheduled',
+      date: '2026-09-15',
+      time: '10:30',
+      save: async () => {},
+    };
+    Appointment.findById = (id) => {
+      if (id === 'apt-followup-linked') return Promise.resolve(linked);
+      return { session: async () => appointment };
+    };
+    const queue = captureQueueWrites();
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-followup-sync/visit-data`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ followUpDate: '2026-09-20', followUpTime: '15:00' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(linked.date, '2026-09-20');
+      assert.equal(linked.time, '15:00');
+      assert.equal(linked.scheduledAt.toISOString(), '2026-09-20T07:00:00.000Z');
+    } finally {
+      Appointment.findById = originalAppointmentFindById;
+      queue.restore();
+    }
+  });
+
+  it('修正看診資料時，清空回診日期會取消已掛出去、還沒報到的下次回診號', async () => {
+    const originalAppointmentFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-followup-clear',
+      status: 'completed',
+      recordId: null,
+      followUpDate: '2026-09-15',
+      followUpTime: '10:30',
+      followUpAppointmentId: 'apt-followup-linked-2',
+      save: async () => {},
+    };
+    const linked = {
+      _id: 'apt-followup-linked-2',
+      status: 'scheduled',
+      save: async () => {},
+    };
+    Appointment.findById = (id) => {
+      if (id === 'apt-followup-linked-2') return Promise.resolve(linked);
+      return { session: async () => appointment };
+    };
+    const queue = captureQueueWrites();
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-followup-clear/visit-data`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ followUpDate: '', followUpTime: '' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(linked.status, 'cancelled');
+      assert.equal(linked.cancelReason, '回診日期已取消或修改');
+      assert.equal(appointment.followUpAppointmentId, null);
+    } finally {
+      Appointment.findById = originalAppointmentFindById;
+      queue.restore();
+    }
+  });
+
+  it('修正看診資料時，下次回診號已經報到就不回頭改期', async () => {
+    const originalAppointmentFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-followup-arrived',
+      status: 'completed',
+      recordId: null,
+      followUpDate: '2026-09-15',
+      followUpTime: '10:30',
+      followUpAppointmentId: 'apt-followup-linked-3',
+      save: async () => {},
+    };
+    const linked = {
+      _id: 'apt-followup-linked-3',
+      status: 'arrived',
+      date: '2026-09-15',
+      time: '10:30',
+      save: async () => { throw new Error('已經報到的下次回診號不該被改動'); },
+    };
+    Appointment.findById = (id) => {
+      if (id === 'apt-followup-linked-3') return Promise.resolve(linked);
+      return { session: async () => appointment };
+    };
+    const queue = captureQueueWrites();
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-followup-arrived/visit-data`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ followUpDate: '2026-09-20', followUpTime: '15:00' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(linked.date, '2026-09-15', '已經報到，不回頭改期');
+      assert.equal(appointment.followUpAppointmentId, 'apt-followup-linked-3', '連結保留，只是不再同步');
+    } finally {
+      Appointment.findById = originalAppointmentFindById;
+      queue.restore();
+    }
+  });
+
+  it('修正看診資料時，回診日期沒有變動就不會去查或去動已掛出去的下次回診號', async () => {
+    const originalAppointmentFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-followup-untouched',
+      status: 'completed',
+      recordId: null,
+      weightKg: 3,
+      followUpDate: '2026-09-15',
+      followUpTime: '10:30',
+      followUpAppointmentId: 'apt-followup-linked-4',
+      save: async () => {},
+    };
+    let linkedLookedUp = false;
+    Appointment.findById = (id) => {
+      if (id === 'apt-followup-linked-4') {
+        linkedLookedUp = true;
+        return Promise.resolve(null);
+      }
+      return { session: async () => appointment };
+    };
+    const queue = captureQueueWrites();
+    try {
+      // 現場可能已經直接把下次回診的時段改期，這裡送出的仍是原本的日期／時間——不該被當成「變動」而覆寫回去。
+      const response = await fetch(`${origin}/api/appointments/apt-followup-untouched/visit-data`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ weightKg: 4, followUpDate: '2026-09-15', followUpTime: '10:30' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(linkedLookedUp, false, '值沒變就不該去查、更不該去動已經連結的下次回診號');
+    } finally {
+      Appointment.findById = originalAppointmentFindById;
+      queue.restore();
+    }
+  });
+
+  it('修正看診資料時，只改回診原因也會同步已掛出去、還沒報到的下次回診號', async () => {
+    const originalAppointmentFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-followup-reason-sync',
+      status: 'completed',
+      recordId: null,
+      followUpDate: '2026-09-15',
+      followUpTime: '10:30',
+      followUpReason: '回診',
+      followUpAppointmentId: 'apt-followup-linked-5',
+      save: async () => {},
+    };
+    const linked = {
+      _id: 'apt-followup-linked-5',
+      status: 'scheduled',
+      date: '2026-09-15',
+      time: '10:30',
+      reason: '回診',
+      save: async () => {},
+    };
+    Appointment.findById = (id) => {
+      if (id === 'apt-followup-linked-5') return Promise.resolve(linked);
+      return { session: async () => appointment };
+    };
+    const queue = captureQueueWrites();
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-followup-reason-sync/visit-data`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ followUpDate: '2026-09-15', followUpTime: '10:30', followUpReason: '拆線' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(linked.reason, '拆線', '日期時間沒變，但原因變了也要同步');
+    } finally {
+      Appointment.findById = originalAppointmentFindById;
+      queue.restore();
     }
   });
 

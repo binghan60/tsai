@@ -16,6 +16,7 @@ import {
 import { clinicDateInput, formatDate, formatDateTime, shiftDateInput, startOfWeek, weekdayLabel } from '../lib/datetime';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { DatePicker } from '../components/ui/date-picker';
+import { TimePicker } from '../components/ui/time-picker';
 import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
@@ -80,7 +81,7 @@ const cancelError = ref('');
 const completedVisitTarget = ref(null);
 const completedVisitSaving = ref(false);
 const completedVisitError = ref('');
-const completedVisitForm = reactive({ weightKg: '', temperatureC: '', followUpDate: '', visitNote: '' });
+const completedVisitForm = reactive({ weightKg: '', temperatureC: '', followUpDate: '', followUpTime: '', followUpReason: '', visitNote: '' });
 
 const ROW_ACTIONS = [
   { key: 'edit', label: '編輯掛號' },
@@ -316,6 +317,8 @@ function toggleExpanded(appointment) {
         weightKg: appointment.weightKg ?? '',
         temperatureC: appointment.temperatureC ?? '',
         followUpDate: appointment.followUpDate ?? '',
+        followUpTime: appointment.followUpTime ?? '',
+        followUpReason: appointment.followUpReason ?? '',
         visitNote: appointment.visitNote ?? '',
         templateId: String(appointment.templateId || defaultTemplateId.value || ''),
       };
@@ -423,24 +426,44 @@ async function submitNewAppointment(payload) {
   }
 }
 
+// 回診日期選填，但選了日期就要一併給時間，否則併進報告的時刻只會是沒有意義的午夜。
+function followUpTimeMissing(draft) {
+  return Boolean(draft?.followUpDate && !draft?.followUpTime);
+}
+
 async function completeVisit(appointment) {
   const draft = simpleForms[appointment._id] || {};
+  if (followUpTimeMissing(draft)) {
+    toast.error('已選擇回診日期，請一併填寫時間', '看診資料未完成');
+    return;
+  }
   setBusy(appointment._id, true);
   try {
-    await http.post(`/appointments/${appointment._id}/complete`, {
+    const { data } = await http.post(`/appointments/${appointment._id}/complete`, {
       weightKg: draft.weightKg === '' || draft.weightKg == null ? null : Number(draft.weightKg),
       temperatureC: draft.temperatureC === '' || draft.temperatureC == null ? null : Number(draft.temperatureC),
       followUpDate: draft.followUpDate || '',
+      followUpTime: draft.followUpTime || '',
+      followUpReason: draft.followUpReason || '',
       visitNote: draft.visitNote || '',
       templateId: draft.templateId || undefined,
     });
-    toast.success('已在背景建立就診草稿', '看診完成');
+    const followUp = data?.followUpAppointment;
+    toast.success(
+      followUp ? `已在背景建立就診草稿，並掛上 ${formatDate(followUp.date)} ${followUp.time} 的回診` : '已在背景建立就診草稿',
+      '看診完成'
+    );
     await fetchAppointments({ silent: true });
   } catch (err) {
     reportApiError(err, '完成看診失敗，請稍後再試');
   } finally {
     setBusy(appointment._id, false);
   }
+}
+
+function followUpLabel(appointment) {
+  if (!appointment.followUpDate) return formatDate(appointment.followUpDate);
+  return appointment.followUpTime ? `${formatDate(appointment.followUpDate)} ${appointment.followUpTime}` : formatDate(appointment.followUpDate);
 }
 
 function templateName(templateId) {
@@ -453,11 +476,17 @@ function openCompletedVisitEditor(appointment) {
   completedVisitForm.weightKg = appointment.weightKg ?? '';
   completedVisitForm.temperatureC = appointment.temperatureC ?? '';
   completedVisitForm.followUpDate = appointment.followUpDate ?? '';
+  completedVisitForm.followUpTime = appointment.followUpTime ?? '';
+  completedVisitForm.followUpReason = appointment.followUpReason ?? '';
   completedVisitForm.visitNote = appointment.visitNote ?? '';
 }
 
 async function saveCompletedVisit() {
   if (!completedVisitTarget.value) return;
+  if (followUpTimeMissing(completedVisitForm)) {
+    completedVisitError.value = '已選擇回診日期，請一併填寫時間';
+    return;
+  }
   completedVisitSaving.value = true;
   completedVisitError.value = '';
   try {
@@ -465,6 +494,8 @@ async function saveCompletedVisit() {
       weightKg: completedVisitForm.weightKg === '' ? null : Number(completedVisitForm.weightKg),
       temperatureC: completedVisitForm.temperatureC === '' ? null : Number(completedVisitForm.temperatureC),
       followUpDate: completedVisitForm.followUpDate || '',
+      followUpTime: completedVisitForm.followUpTime || '',
+      followUpReason: completedVisitForm.followUpReason || '',
       visitNote: completedVisitForm.visitNote,
     });
     toast.success('已更新看診資料', '儲存完成');
@@ -798,8 +829,16 @@ onBeforeUnmount(() => {
               </div>
               <label class="block space-y-1.5 text-xs font-medium text-foreground">
                 回診日期
-                <DatePicker v-model="simpleForms[appointment._id].followUpDate" placeholder="選擇回診日期" aria-label="選擇回診日期" />
-                <span class="block text-xs font-normal text-muted-foreground">填寫後會顯示在提供給飼主的報告與 PDF。</span>
+                <div class="flex gap-2">
+                  <DatePicker v-model="simpleForms[appointment._id].followUpDate" placeholder="選擇回診日期" aria-label="選擇回診日期" class="flex-1" />
+                  <TimePicker v-model="simpleForms[appointment._id].followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="!simpleForms[appointment._id].followUpDate" class="w-32 shrink-0" />
+                </div>
+                <span v-if="followUpTimeMissing(simpleForms[appointment._id])" class="block text-xs font-medium text-destructive">已選擇日期，請一併填寫時間</span>
+                <span v-else class="block text-xs font-normal text-muted-foreground">完成看診時會直接掛上這個時段的下次回診。</span>
+              </label>
+              <label class="block space-y-1.5 text-xs font-medium text-foreground">
+                回診原因
+                <input v-model="simpleForms[appointment._id].followUpReason" type="text" placeholder="例：拆線、追蹤肝指數" class="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
               </label>
               <label class="block space-y-1.5 text-xs font-medium text-foreground">
                 備註
@@ -819,7 +858,7 @@ onBeforeUnmount(() => {
                 <p class="text-xs text-muted-foreground">完成看診後會立即建立並開啟這份表單的草稿。</p>
               </div>
               <div class="flex justify-end">
-                <Button type="button" size="sm" :disabled="isBusy(appointment._id) || !simpleForms[appointment._id].templateId" @click="completeVisit(appointment)">
+                <Button type="button" size="sm" :disabled="isBusy(appointment._id) || !simpleForms[appointment._id].templateId || followUpTimeMissing(simpleForms[appointment._id])" @click="completeVisit(appointment)">
                   <Check class="h-4 w-4" stroke-width="2" />完成看診
                 </Button>
               </div>
@@ -1089,7 +1128,7 @@ onBeforeUnmount(() => {
                 <td class="whitespace-nowrap px-4 py-3 text-muted-foreground">{{ appointment.completedAt ? formatDateTime(appointment.completedAt, checkinTimeOptions) : '—' }}</td>
                 <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }}</td>
                 <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }}</td>
-                <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ formatDate(appointment.followUpDate) }}</td>
+                <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ followUpLabel(appointment) }}</td>
                 <td class="max-w-64 px-4 py-3 text-muted-foreground"><p class="line-clamp-2 whitespace-pre-wrap">{{ appointment.visitNote || '—' }}</p></td>
                 <td class="px-4 py-3 text-muted-foreground">{{ templateName(appointment.templateId) }}</td>
                 <td class="px-4 py-3 text-right"><Button type="button" variant="secondary" size="sm" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button></td>
@@ -1193,11 +1232,23 @@ onBeforeUnmount(() => {
             <label class="space-y-1.5 text-sm font-medium text-foreground">體重（kg）<input v-model="completedVisitForm.weightKg" type="text" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" /></label>
             <label class="space-y-1.5 text-sm font-medium text-foreground">體溫（°C）<input v-model="completedVisitForm.temperatureC" type="text" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" /></label>
           </div>
-          <label class="block space-y-1.5 text-sm font-medium text-foreground">回診日期<DatePicker v-model="completedVisitForm.followUpDate" placeholder="選擇回診日期" aria-label="選擇回診日期" /><span class="block text-xs font-normal text-muted-foreground">尚未結案的報告會同步更新，並顯示給飼主。</span></label>
+          <label class="block space-y-1.5 text-sm font-medium text-foreground">
+            回診日期
+            <div class="flex gap-2">
+              <DatePicker v-model="completedVisitForm.followUpDate" placeholder="選擇回診日期" aria-label="選擇回診日期" class="flex-1" />
+              <TimePicker v-model="completedVisitForm.followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="!completedVisitForm.followUpDate" class="w-32 shrink-0" />
+            </div>
+            <span v-if="followUpTimeMissing(completedVisitForm)" class="block text-xs font-medium text-destructive">已選擇日期，請一併填寫時間</span>
+            <span v-else class="block text-xs font-normal text-muted-foreground">尚未結案的報告會同步更新；已掛出去的下次回診號（若還沒報到）也會跟著改期。</span>
+          </label>
+          <label class="block space-y-1.5 text-sm font-medium text-foreground">
+            回診原因
+            <input v-model="completedVisitForm.followUpReason" type="text" placeholder="例：拆線、追蹤肝指數" class="h-11 w-full rounded-lg border border-input bg-field px-3 text-sm font-normal text-foreground" />
+          </label>
           <label class="block space-y-1.5 text-sm font-medium text-foreground">看診備註<textarea v-model="completedVisitForm.visitNote" rows="4" class="w-full rounded-lg border border-input bg-field px-3 py-2 text-sm font-normal text-foreground"></textarea></label>
           <Alert v-if="completedVisitError" variant="destructive"><AlertDescription>{{ completedVisitError }}</AlertDescription></Alert>
         </div>
-        <DialogFooter><Button type="button" variant="outline" :disabled="completedVisitSaving" @click="completedVisitTarget = null">取消</Button><Button type="submit" :disabled="completedVisitSaving">{{ completedVisitSaving ? '儲存中…' : '儲存變更' }}</Button></DialogFooter>
+        <DialogFooter><Button type="button" variant="outline" :disabled="completedVisitSaving" @click="completedVisitTarget = null">取消</Button><Button type="submit" :disabled="completedVisitSaving || followUpTimeMissing(completedVisitForm)">{{ completedVisitSaving ? '儲存中…' : '儲存變更' }}</Button></DialogFooter>
       </form>
     </ModalDialog>
 

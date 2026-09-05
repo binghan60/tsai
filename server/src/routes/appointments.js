@@ -90,6 +90,60 @@ async function saveLeavingQueue(appointment, wasQueued, session = null) {
   await appointment.save(session ? { session } : undefined);
 }
 
+// 回診日期就是要幫忙掛的下一次號，跟看診備註／病歷日誌是同一種同步精神：
+// 只在還沒被動過（status 仍是 scheduled）的那筆下一次掛號上動手，已經報到、完成、
+// 取消或未到，代表現場已經另外處理過，不回頭改。呼叫端負責在合適的時機呼叫
+// （完成看診一定要呼叫一次；修正看診資料只在 followUpDate/followUpTime/followUpReason
+// 真的變動時呼叫，否則會把現場已經手動改期的下一次掛號覆寫回舊值）。
+async function syncFollowUpAppointment(appointment) {
+  let linked = appointment.followUpAppointmentId
+    ? await Appointment.findById(appointment.followUpAppointmentId)
+    : null;
+  if (appointment.followUpAppointmentId && !linked) {
+    appointment.followUpAppointmentId = null;
+  }
+
+  const hasFollowUp = Boolean(appointment.followUpDate && appointment.followUpTime);
+
+  if (linked) {
+    if (linked.status !== 'scheduled') return null;
+    if (!hasFollowUp) {
+      linked.status = 'cancelled';
+      linked.cancelReason = '回診日期已取消或修改';
+      await linked.save();
+      appointment.followUpAppointmentId = null;
+      await appointment.save();
+      return null;
+    }
+    linked.date = appointment.followUpDate;
+    linked.time = appointment.followUpTime;
+    linked.scheduledAt = combineClinicDateTime(appointment.followUpDate, appointment.followUpTime);
+    linked.reason = String(appointment.followUpReason ?? '').trim() || '回診';
+    await linked.save();
+    return linked;
+  }
+
+  if (!hasFollowUp) return null;
+
+  const created = await Appointment.create({
+    date: appointment.followUpDate,
+    time: appointment.followUpTime,
+    scheduledAt: combineClinicDateTime(appointment.followUpDate, appointment.followUpTime),
+    ownerId: appointment.ownerId,
+    petId: appointment.petId,
+    visitType: 'return',
+    ownerName: appointment.ownerName,
+    ownerPhone: appointment.ownerPhone,
+    petName: appointment.petName,
+    species: appointment.species,
+    reason: String(appointment.followUpReason ?? '').trim() || '回診',
+    templateId: appointment.templateId,
+  });
+  appointment.followUpAppointmentId = created._id;
+  await appointment.save();
+  return created;
+}
+
 // 兩個人同時報到可能各自算出同一張今日未發牌號，被唯一索引擋下。那不是使用者做錯什麼，
 // 重算一次就會拿到另一張未發牌號，所以在這裡自行重試，不要把錯誤丟到前台。
 async function withQueueRetry(operation, attempts = 3) {
@@ -406,7 +460,7 @@ router.post('/:id/complete', async (req, res, next) => {
       return res.status(422).json({ message: describeAppointmentTransition(initialAppointment.status, 'completed') });
     }
 
-    const { weightKg, temperatureC, followUpDate, visitNote } = req.body;
+    const { weightKg, temperatureC, followUpDate, followUpTime, followUpReason, visitNote } = req.body;
     let appointment;
     let record;
 
@@ -431,6 +485,8 @@ router.post('/:id/complete', async (req, res, next) => {
         appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
       }
       if (followUpDate !== undefined) appointment.followUpDate = String(followUpDate ?? '').trim();
+      if (followUpTime !== undefined) appointment.followUpTime = String(followUpTime ?? '').trim();
+      if (followUpReason !== undefined) appointment.followUpReason = String(followUpReason ?? '').trim();
       if (visitNote !== undefined) appointment.visitNote = visitNote;
       appointment.status = 'completed';
       appointment.completedAt = new Date();
@@ -438,7 +494,7 @@ router.post('/:id/complete', async (req, res, next) => {
       const appointmentValues = {
         ...(appointment.weightKg != null ? { weightKg: appointment.weightKg } : {}),
         ...(appointment.temperatureC != null ? { temperatureC: appointment.temperatureC } : {}),
-        ...(appointment.followUpDate ? { followUpDate: combineClinicDateTime(appointment.followUpDate, '10:00') } : {}),
+        ...(appointment.followUpDate ? { followUpDate: combineClinicDateTime(appointment.followUpDate, appointment.followUpTime || '10:00') } : {}),
         ...(String(appointment.reason ?? '').trim() ? { chiefComplaint: appointment.reason } : {}),
       };
       [record] = await MedicalRecord.create([{
@@ -466,7 +522,10 @@ router.post('/:id/complete', async (req, res, next) => {
         appointmentId: appointment._id,
       });
     }
-    res.json({ ...(appointment.toObject?.() ?? appointment), record });
+    // 約好回診日期就是要再回來，直接幫忙掛上那一天的號，不用等飼主再打來一次；
+    // 同樣獨立於上面的 transaction 之外，排號失敗不影響已完成的這次看診。
+    const followUpAppointment = await syncFollowUpAppointment(appointment);
+    res.json({ ...(appointment.toObject?.() ?? appointment), record, followUpAppointment });
   } catch (err) {
     next(err);
   }
@@ -480,8 +539,13 @@ router.patch('/:id/visit-data', async (req, res, next) => {
     const weightKg = req.body?.weightKg;
     const temperatureC = req.body?.temperatureC;
     const followUpDate = req.body?.followUpDate;
+    const followUpTime = req.body?.followUpTime;
+    const followUpReason = req.body?.followUpReason;
     const visitNote = req.body?.visitNote;
     let appointment;
+    let previousFollowUpDate;
+    let previousFollowUpTime;
+    let previousFollowUpReason;
 
     await withTransaction(async (session) => {
       appointment = await Appointment.findById(req.params.id).session(session);
@@ -496,9 +560,14 @@ router.patch('/:id/visit-data', async (req, res, next) => {
         throw error;
       }
 
+      previousFollowUpDate = appointment.followUpDate;
+      previousFollowUpTime = appointment.followUpTime;
+      previousFollowUpReason = appointment.followUpReason;
       if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
       if (temperatureC !== undefined) appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
       if (followUpDate !== undefined) appointment.followUpDate = String(followUpDate ?? '').trim();
+      if (followUpTime !== undefined) appointment.followUpTime = String(followUpTime ?? '').trim();
+      if (followUpReason !== undefined) appointment.followUpReason = String(followUpReason ?? '').trim();
       if (visitNote !== undefined) appointment.visitNote = String(visitNote ?? '').trim();
 
       if (appointment.recordId) {
@@ -507,7 +576,7 @@ router.patch('/:id/visit-data', async (req, res, next) => {
           record.weightKg = appointment.weightKg;
           record.temperatureC = appointment.temperatureC;
           record.followUpDate = appointment.followUpDate
-            ? combineClinicDateTime(appointment.followUpDate, '10:00')
+            ? combineClinicDateTime(appointment.followUpDate, appointment.followUpTime || '10:00')
             : null;
           await record.save({ session });
         }
@@ -536,6 +605,16 @@ router.patch('/:id/visit-data', async (req, res, next) => {
       } else if (note) {
         await note.deleteOne();
       }
+    }
+
+    // 回診日期／原因跟完成看診時掛出去的下一次掛號是同一份資料，這裡改了要回頭同步；
+    // 只在真的有變動時才做，否則現場已經手動改期的下一次掛號會被舊值蓋回去。
+    if (
+      appointment.followUpDate !== previousFollowUpDate
+      || appointment.followUpTime !== previousFollowUpTime
+      || appointment.followUpReason !== previousFollowUpReason
+    ) {
+      await syncFollowUpAppointment(appointment);
     }
 
     res.json(appointment);

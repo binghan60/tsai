@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ageLabel, clinicDateInput, shiftDateInput, weekdayLabel, startOfWeek } from './datetime.js';
+import { ageLabel, clinicDateInput, clinicTimeInput, combineClinicDateTime, shiftDateInput, weekdayLabel, startOfWeek } from './datetime.js';
 
 describe('clinic date helpers', () => {
   it('uses the Taipei calendar day around UTC midnight', () => {
@@ -13,6 +13,33 @@ describe('clinic date helpers', () => {
 
   it('does not display a plausible age for a future birth date', () => {
     assert.equal(ageLabel('2026-08-15T00:00:00.000Z', '2026-08-14T00:00:00.000Z', '—'), '—');
+  });
+});
+
+describe('combineClinicDateTime', () => {
+  it('把診所時區的日期＋時間換算成正確的 UTC 時刻', () => {
+    assert.equal(combineClinicDateTime('2026-08-20', '16:30').toISOString(), '2026-08-20T08:30:00.000Z');
+  });
+
+  it('沒填時間就當作診所時區當天 00:00', () => {
+    assert.equal(combineClinicDateTime('2026-08-20', '').toISOString(), '2026-08-19T16:00:00.000Z');
+    assert.equal(combineClinicDateTime('2026-08-20', undefined).toISOString(), '2026-08-19T16:00:00.000Z');
+  });
+
+  it('日期格式不對就回 null', () => {
+    assert.equal(combineClinicDateTime('not-a-date', '10:00'), null);
+    assert.equal(combineClinicDateTime('', '10:00'), null);
+  });
+});
+
+describe('clinicTimeInput', () => {
+  it('取出診所時區下的 HH:MM', () => {
+    assert.equal(clinicTimeInput('2026-08-20T08:30:00.000Z'), '16:30');
+  });
+
+  it('格式不對就回空字串', () => {
+    assert.equal(clinicTimeInput(''), '');
+    assert.equal(clinicTimeInput('not-a-date'), '');
   });
 });
 

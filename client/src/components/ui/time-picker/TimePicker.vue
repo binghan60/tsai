@@ -19,6 +19,7 @@ const props = defineProps({
   id: { type: String, default: undefined },
   ranges: { type: Array, default: () => [] },
   minuteStep: { type: Number, default: 5 },
+  disabled: { type: Boolean, default: false },
   class: { type: [Boolean, null, String, Object, Array], required: false, skipCheck: true },
 });
 const emit = defineEmits(['update:modelValue']);
@@ -78,6 +79,7 @@ function selectMinute(minute) {
   emit('update:modelValue', `${effectiveHour.value || '00'}:${minute}`);
 }
 function clearTime(event) {
+  if (props.disabled) return;
   event.stopPropagation();
   emit('update:modelValue', '');
 }
@@ -89,17 +91,18 @@ function clearTime(event) {
       <button
         :id="id"
         type="button"
+        :disabled="disabled"
         :aria-label="ariaLabel"
         :class="
           cn(
-            'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-field px-3 text-sm text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+            'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-field px-3 text-sm text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
             props.class,
           )
         "
       >
         <span :class="label ? 'text-foreground' : 'text-muted-foreground'">{{ label || placeholder }}</span>
         <span class="flex shrink-0 items-center gap-1">
-          <X v-if="label" class="h-3.5 w-3.5 text-muted-foreground transition-colors hover:text-foreground" stroke-width="1.75" @click="clearTime" />
+          <X v-if="label && !disabled" class="h-3.5 w-3.5 text-muted-foreground transition-colors hover:text-foreground" stroke-width="1.75" @click="clearTime" />
           <Clock class="h-4 w-4 text-muted-foreground" stroke-width="1.75" />
         </span>
       </button>

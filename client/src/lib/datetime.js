@@ -26,6 +26,60 @@ export function clinicDateInput(value = new Date()) {
 }
 
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+const TIME_ONLY = /^(\d{2}):(\d{2})$/;
+
+// 某個時刻在指定時區的 UTC 偏移量（毫秒）。做法跟後端 lib/clinicTime.js 的
+// zoneOffsetMs 一樣：把這個時刻「當成該時區的牆上時間」格式化出來，再當成 UTC 讀回去，
+// 兩者的差就是偏移量。前後端各自獨立一份，因為前端不能 import 後端程式碼。
+function zoneOffsetMs(instant, timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(instant);
+  const valueOf = (type) => Number(parts.find((part) => part.type === type)?.value);
+  const asUtc = Date.UTC(
+    valueOf('year'),
+    valueOf('month') - 1,
+    valueOf('day'),
+    valueOf('hour') % 24,
+    valueOf('minute'),
+    valueOf('second')
+  );
+  return asUtc - instant.getTime();
+}
+
+// 把使用者選的 YYYY-MM-DD ＋ HH:MM（時間選填）換算成診所時區對應的實際時刻。
+// 用途：回診日期需要精確到分鐘，但 <input type="date"> 只給得出日期，時間另外用
+// TimePicker 收。沒填時間就當作診所時區當天 00:00。
+export function combineClinicDateTime(dateInput, timeInput) {
+  const match = DATE_ONLY.exec(String(dateInput ?? '').trim());
+  if (!match) return null;
+  const [, year, month, day] = match;
+  const utcMidnight = Date.UTC(Number(year), Number(month) - 1, Number(day));
+  const dayStart = utcMidnight - zoneOffsetMs(new Date(utcMidnight), CLINIC_TIME_ZONE);
+  const timeMatch = TIME_ONLY.exec(String(timeInput ?? '').trim());
+  const minutes = timeMatch ? Number(timeMatch[1]) * 60 + Number(timeMatch[2]) : 0;
+  const instant = new Date(dayStart + minutes * 60_000);
+  return Number.isNaN(instant.getTime()) ? null : instant;
+}
+
+// 從既有時刻取出診所時區下的 HH:MM，供 TimePicker 顯示既有的回診時間。
+export function clinicTimeInput(value) {
+  const date = toValidDate(value);
+  if (!date) return '';
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: CLINIC_TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(date);
+}
 
 // 在 YYYY-MM-DD 上加減天數，回傳同樣格式。
 //

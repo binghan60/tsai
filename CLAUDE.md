@@ -74,7 +74,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ### appointments 掛號與候診
 只服務當日門診時間軸。`date`／`time` 是登記來源（`date` 由掛號時指定，預設今天），`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。
 
-`status` 為 `scheduled`／`arrived`／`completed`／`cancelled`／`no_show`。候診中可填 `weightKg`、`temperatureC`、會顯示在飼主報告上的 `followUpDate`，以及內部用 `visitNote`。完成看診後會建立健檢報告草稿並帶入 `weightKg`／`temperatureC`／`followUpDate`；`visitNote` 刻意不帶進報告草稿（不可以出現在飼主看得到的報告裡），而是落地成一筆 `clinicalNotes`（見第二節），且之後雙向同步。已完成掛號後續修改時，只同步尚未結案的草稿；`visitNote` 之後的修改會回頭同步已建立的日誌（反之亦然，見第二節 clinicalNotes）。
+`status` 為 `scheduled`／`arrived`／`completed`／`cancelled`／`no_show`。候診中可填 `weightKg`、`temperatureC`、會顯示在飼主報告上的 `followUpDate`＋`followUpTime`，以及內部用 `visitNote`。`followUpDate`（`YYYY-MM-DD`）與 `followUpTime`（`HH:MM`）分開存，理由跟 `date`／`time` 一樣是避免日期因伺服器時區偏移；完成看診後會建立健檢報告草稿，兩者用 `combineClinicDateTime` 併成 `MedicalRecord.followUpDate`（真正的 `Date`，精確到分鐘）。**前端規則：`followUpDate` 本身選填，但選了日期就要一併填 `followUpTime`**（RecordFormPage 與 AppointmentsPage 皆擋送出並顯示紅字提示）；後端仍保留沒填時間時預設上午 10:00 的容錯，只當非經前端表單的呼叫端（例如直接打 API）沒帶時間時墊底，不是常態路徑。填了回診日期＋時間，`POST /:id/complete` 會直接幫忙掛上那一天的號（`visitType: 'return'`、身分快照與 `templateId` 都照抄這次掛號）；這裡不套用「預約時段僅限 10:00–11:30、14:00–19:30」的限制——那是電話掛號 UX 上的排班規則，不是這筆掛號資料本身的限制，自動掛號沿用 `followUpTime` 的原始值即可。`followUpReason`（選填文字）就是這筆下次掛號的 `reason`（來院原因）——填了什麼就照樣搬過去，沒填則用「回診」墊底，不是這次看診本身的來院原因。新掛號的 `_id` 記在原掛號的 `followUpAppointmentId`（`Appointment` 新欄位）上，兩筆掛號因此是連結的：之後用「編輯看診資料」（`PATCH /visit-data`）改回診日期／時間／原因，只要那筆自動掛出去的下一次掛號還是 `scheduled`（現場還沒報到/完成/取消/未到，代表沒被另外處理過），就會回頭同步它的 `date`／`time`／`scheduledAt`／`reason`；回診日期被清空則直接取消那筆掛號（`status: 'cancelled'`）並解除連結；原本沒填、後來補上則補建一筆——跟 `visitNote`／`clinicalNotes` 是同一套「原本沒填就補建、清空就處理掉」同步精神（見下）。只有在 `followUpDate`／`followUpTime`／`followUpReason` 任一個真的變動時才會觸發這個同步，避免把現場已經手動改期的下一次掛號覆寫回舊值。共用邏輯在 `routes/appointments.js` 的 `syncFollowUpAppointment`，同樣獨立於完成看診／修正看診資料的 transaction 之外，掛號失敗不影響已完成的這次看診。`visitNote` 刻意不帶進報告草稿（不可以出現在飼主看得到的報告裡），而是落地成一筆 `clinicalNotes`（見第二節），且之後雙向同步。已完成掛號後續修改時，只同步尚未結案的草稿；`visitNote` 之後的修改會回頭同步已建立的日誌（反之亦然，見第二節 clinicalNotes）。
 
 **`checkinNumber` 是候診佇列裡的位置，不是報到時發的票號，而且完全自動——沒有手動指定的入口。** 同一天所有 `arrived` 的掛號，號碼是連續的 1..N；報到接到隊尾，離開佇列（完成／取消／未到／取消報到）就清成 null 並讓後面的人遞補。因此「這個號碼已經被用掉」在結構上不存在，不需要靠衝突檢查去擋——檢查本來也擋不住併發。代價是排在後面的人號碼會隨著前面的人看完而變小，那正是即時位置該有的行為。排序與編號規則在 `lib/appointmentQueue.js`（純邏輯，可測）。
 
@@ -164,7 +164,7 @@ POST   /api/appointments                新增掛號（body 可帶 date，省略
 GET    /api/appointments/:id
 PUT    /api/appointments/:id            更新掛號資料（時段／來院原因／身分快照）
 POST   /api/appointments/:id/check-in   報到；初診同時建立飼主與寵物（自動接到候診佇列尾端）
-POST   /api/appointments/:id/complete   完成看診並保存候診量測
+POST   /api/appointments/:id/complete   完成看診並保存候診量測；有填回診日期＋時間就自動幫忙掛下次的號
 POST   /api/appointments/:id/cancel     取消掛號
 POST   /api/appointments/:id/no-show    標記未到診
 POST   /api/appointments/:id/restore    恢復已取消或未到診的掛號
