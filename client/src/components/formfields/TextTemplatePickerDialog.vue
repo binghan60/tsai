@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Check, FilePlus2, FileText, Search, Trash2 } from '@lucide/vue';
+import { ChevronRight, FilePlus2, Search, Trash2, Zap } from '@lucide/vue';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '../ui/dialog';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
@@ -13,7 +13,7 @@ const { picker, closePicker, createTemplate, templates, templatesFor, markUsed, 
 const toast = useToast();
 const query = ref('');
 const scope = ref('relevant');
-const selectedId = ref('');
+const expandedId = ref('');
 const creating = ref(false);
 const saving = ref(false);
 const createError = ref('');
@@ -35,25 +35,37 @@ const candidates = computed(() => {
   return templatesFor(picker.value.itemKey, { all: scope.value === 'all' })
     .filter((template) => !keyword || `${template.name} ${template.content}`.toLowerCase().includes(keyword));
 });
-const selected = computed(() => candidates.value.find((template) => template._id === selectedId.value) ?? null);
 
 watch(picker, (value) => {
   if (!value) return;
   query.value = '';
   scope.value = 'relevant';
-  selectedId.value = '';
+  expandedId.value = '';
   creating.value = value.quickCreate === true;
   createError.value = '';
   form.value = { scope: 'field' };
 });
 watch(candidates, (list) => {
-  if (selectedId.value && !list.some((template) => template._id === selectedId.value)) selectedId.value = '';
+  if (expandedId.value && !list.some((template) => template._id === expandedId.value)) expandedId.value = '';
 });
 
-function insert(mode) {
-  if (!selected.value || !picker.value) return;
-  picker.value.onInsert?.(selected.value, mode);
-  markUsed(selected.value);
+function toggleExpand(id) {
+  expandedId.value = expandedId.value === id ? '' : id;
+}
+
+// 閃電鈕跟展開列裡的「插入」共用：有現有內容就插到游標處，沒有就直接取代——
+// 不用先選取再到頁尾按鈕，點了就當場插入，不彈確認。
+function quickInsert(template) {
+  if (!picker.value) return;
+  picker.value.onInsert?.(template, picker.value.currentText ? 'cursor' : 'replace');
+  markUsed(template);
+  closePicker();
+}
+
+function overwriteTemplate(template) {
+  if (!picker.value) return;
+  picker.value.onInsert?.(template, 'replace');
+  markUsed(template);
   closePicker();
 }
 
@@ -62,7 +74,7 @@ async function confirmDelete() {
   deleting.value = true;
   try {
     await deleteTemplate(deleteTarget.value._id);
-    if (selectedId.value === deleteTarget.value._id) selectedId.value = '';
+    if (expandedId.value === deleteTarget.value._id) expandedId.value = '';
     toast.success(`已刪除「${deleteTarget.value.name}」`);
     deleteTarget.value = null;
   } catch (err) {
@@ -95,7 +107,7 @@ async function saveTemplate() {
       enabled: true,
     });
     scope.value = 'relevant';
-    selectedId.value = template._id;
+    expandedId.value = template._id;
     creating.value = false;
   } catch (err) {
     createError.value = err.response?.data?.message ?? '新增文字模板失敗，請稍後再試。';
@@ -124,59 +136,70 @@ async function saveTemplate() {
         </div>
       </form>
 
-      <div v-else class="grid min-h-0 flex-1 border-y border-border md:grid-cols-[minmax(260px,0.9fr)_minmax(0,1.1fr)]">
-        <div class="flex min-h-0 flex-col border-b border-border p-4 md:border-b-0 md:border-r">
+      <div v-else class="flex min-h-0 flex-1 flex-col border-y border-border">
+        <div class="space-y-3 p-4 pb-3">
           <div class="relative">
             <Search class="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input v-model="query" type="text" class="pl-10" placeholder="搜尋模板名稱或內容" aria-label="搜尋文字模板" />
           </div>
-          <SegmentedControl v-model="scope" class="mt-3" :options="LIST_SCOPE_OPTIONS" aria-label="模板清單範圍" size="sm" full-width />
-          <div class="mt-3 max-h-72 space-y-2 overflow-y-auto md:max-h-[46vh]">
-            <div
-              v-for="template in candidates"
-              :key="template._id"
-              class="grid w-full grid-cols-[minmax(0,1fr)_2.75rem] items-start gap-1 rounded-xl border bg-card p-1 shadow-sm transition-colors"
-              :class="selectedId === template._id ? 'border-primary' : 'border-border'"
-            >
-              <button
-                type="button"
-                class="min-h-16 w-full rounded-lg px-2 py-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:translate-y-px"
-                :class="selectedId === template._id ? 'bg-accent' : 'bg-field/70'"
-                :aria-pressed="selectedId === template._id"
-                :aria-label="`選取文字模板 ${template.name}`"
-                @click="selectedId = template._id"
-              >
-                <span class="flex items-center justify-between gap-2">
-                  <span class="min-w-0 truncate font-medium text-foreground">{{ template.name }}</span>
-                  <span v-if="selectedId === template._id" class="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
-                    <Check class="h-3.5 w-3.5" stroke-width="1.75" />已選取
-                  </span>
-                </span>
-                <span class="mt-1 line-clamp-2 whitespace-pre-wrap text-xs text-muted-foreground">{{ template.content }}</span>
-              </button>
-              <Button
-                type="button"
-                variant="destructive"
-                size="icon"
-                :aria-label="`刪除文字模板 ${template.name}`"
-                @click.stop="deleteTarget = template"
-              >
-                <Trash2 class="h-4 w-4" stroke-width="1.75" />
-              </Button>
-            </div>
-            <p v-if="!candidates.length" class="py-8 text-center text-sm text-muted-foreground">{{ scope === 'relevant' ? '目前沒有適用此欄位的模板。' : '找不到符合條件的模板。' }}</p>
-          </div>
+          <SegmentedControl v-model="scope" :options="LIST_SCOPE_OPTIONS" aria-label="模板清單範圍" size="sm" full-width />
         </div>
 
-        <div class="min-h-48 overflow-y-auto p-5 md:max-h-[62vh]">
-          <template v-if="selected">
-            <h3 class="text-base font-semibold text-foreground">{{ selected.name }}</h3>
-            <div class="mt-4 whitespace-pre-wrap rounded-xl border border-border bg-field p-4 text-sm leading-7 text-foreground">{{ selected.content }}</div>
-          </template>
-          <div v-else class="flex min-h-48 flex-col items-center justify-center text-center text-muted-foreground">
-            <FileText class="h-8 w-8" stroke-width="1.5" />
-            <p class="mt-3 text-sm">先從左側選擇模板，再確認完整內容。</p>
+        <div class="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 pb-4 md:max-h-[52vh]">
+          <div
+            v-for="template in candidates"
+            :key="template._id"
+            class="rounded-xl border transition-colors"
+            :class="expandedId === template._id ? 'border-primary bg-accent/30' : 'border-border bg-card hover:border-primary/30'"
+          >
+            <div class="flex items-stretch gap-1 p-1">
+              <button
+                type="button"
+                class="min-w-0 flex-1 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:translate-y-px"
+                :aria-expanded="expandedId === template._id"
+                :aria-label="`展開文字模板 ${template.name}`"
+                @click="toggleExpand(template._id)"
+              >
+                <span class="flex items-center gap-1.5">
+                  <ChevronRight
+                    class="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform"
+                    :class="expandedId === template._id ? 'rotate-90' : ''"
+                    stroke-width="1.75"
+                  />
+                  <span class="min-w-0 truncate font-medium text-foreground">{{ template.name }}</span>
+                </span>
+                <span v-if="expandedId !== template._id" class="mt-0.5 line-clamp-1 block pl-5 text-xs text-muted-foreground">{{ template.content }}</span>
+              </button>
+              <div class="flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon-sm"
+                  :aria-label="`直接插入文字模板 ${template.name}`"
+                  @click.stop="quickInsert(template)"
+                >
+                  <Zap class="h-4 w-4" stroke-width="1.75" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon-sm"
+                  :aria-label="`刪除文字模板 ${template.name}`"
+                  @click.stop="deleteTarget = template"
+                >
+                  <Trash2 class="h-4 w-4" stroke-width="1.75" />
+                </Button>
+              </div>
+            </div>
+            <div v-if="expandedId === template._id" class="space-y-3 border-t border-border/70 px-3 pb-3 pt-3">
+              <p class="whitespace-pre-wrap rounded-lg bg-field p-3 text-sm leading-7 text-foreground">{{ template.content }}</p>
+              <div class="flex flex-wrap justify-end gap-2">
+                <Button v-if="picker?.currentText" type="button" variant="destructive-outline" size="sm" @click="overwriteTemplate(template)">覆蓋內容</Button>
+                <Button type="button" size="sm" @click="quickInsert(template)">{{ picker?.currentText ? '插入游標處' : '插入' }}</Button>
+              </div>
+            </div>
           </div>
+          <p v-if="!candidates.length" class="py-8 text-center text-sm text-muted-foreground">{{ scope === 'relevant' ? '目前沒有適用此欄位的模板。' : '找不到符合條件的模板。' }}</p>
         </div>
       </div>
 
@@ -186,13 +209,11 @@ async function saveTemplate() {
           <Button type="button" :disabled="saving" @click="saveTemplate">{{ saving ? '新增中…' : '新增模板' }}</Button>
         </template>
         <template v-else>
-          <Button v-if="picker?.currentText" type="button" class="mr-auto" @click="creating = true">
+          <Button v-if="picker?.currentText" type="button" variant="secondary" class="mr-auto" @click="creating = true">
             <FilePlus2 class="h-4 w-4" stroke-width="1.75" />
-            將目前內容存成模板
+            存成模板
           </Button>
           <Button type="button" variant="outline" @click="closePicker">取消</Button>
-          <Button v-if="picker?.currentText" type="button" variant="destructive-outline" :disabled="!selected" @click="insert('replace')">覆蓋</Button>
-          <Button type="button" :disabled="!selected" @click="insert(picker?.currentText ? 'cursor' : 'replace')">插入</Button>
         </template>
       </DialogFooter>
     </DialogContent>
