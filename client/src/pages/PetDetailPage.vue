@@ -85,6 +85,13 @@ const editingNoteDate = ref('');
 const noteToRemove = ref(null);
 const deletingNoteId = ref(null);
 
+const removeNoteDescription = computed(() => {
+  if (noteToRemove.value?.source === 'appointment') {
+    return '這則記事是看診完成時自動建立的，跟該筆掛號的看診備註是同一份資料。刪除後對應掛號的看診備註也會一併清空，此操作無法復原。';
+  }
+  return '確定要刪除這則記事嗎？此操作無法復原。';
+});
+
 const sexLabel = computed(() => ({ male: '公', female: '母' })[pet.value?.sex] ?? '');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育' })[pet.value?.neutered] ?? '');
 const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), ''));
@@ -777,7 +784,7 @@ watch(pet, async (value) => {
     <ConfirmDialog
       :open="Boolean(noteToRemove)"
       title="刪除病歷日誌"
-      description="確定要刪除這則記事嗎？此操作無法復原。"
+      :description="removeNoteDescription"
       confirm-label="刪除"
       destructive
       :loading="Boolean(deletingNoteId)"
