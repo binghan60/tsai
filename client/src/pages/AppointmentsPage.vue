@@ -1124,7 +1124,11 @@ onBeforeUnmount(() => {
             </thead>
             <tbody class="divide-y divide-border">
               <tr v-for="appointment in completedAppointments" :key="appointment._id" class="bg-card hover:bg-muted/20">
-                <td class="px-4 py-3"><p class="font-semibold text-foreground">{{ appointment.petName || '—' }}</p><p class="mt-0.5 text-xs text-muted-foreground">{{ appointment.ownerName || '—' }}</p></td>
+                <td class="px-4 py-3">
+                  <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" target="_blank" rel="noopener" class="font-semibold text-primary hover:underline">{{ appointment.petName || '—' }}</router-link>
+                  <p v-else class="font-semibold text-foreground">{{ appointment.petName || '—' }}</p>
+                  <p class="mt-0.5 text-xs text-muted-foreground">{{ appointment.ownerName || '—' }}</p>
+                </td>
                 <td class="whitespace-nowrap px-4 py-3 text-muted-foreground">{{ appointment.completedAt ? formatDateTime(appointment.completedAt, checkinTimeOptions) : '—' }}</td>
                 <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }}</td>
                 <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }}</td>
