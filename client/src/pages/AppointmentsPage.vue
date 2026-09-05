@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { CalendarClock, CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Lock, Pencil, Phone, Settings, User, UserPlus, UserX, X } from '@lucide/vue';
+import { CalendarClock, CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Lock, MessageSquareText, Pencil, Phone, Settings, User, UserPlus, UserX, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
 import {
@@ -964,6 +964,10 @@ onBeforeUnmount(() => {
                             <span class="font-medium text-primary">{{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }} 報到</span>
                           </template>
                         </span>
+                        <p
+                          v-if="appointment.reason"
+                          class="mt-0.5 flex min-w-0 items-start gap-1 text-xs text-muted-foreground"
+                        ><MessageSquareText class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" /><span class="min-w-0 whitespace-pre-wrap break-words">{{ appointment.reason }}</span></p>
                       </div>
 
                       <div class="ml-auto flex shrink-0 items-center gap-1.5">
