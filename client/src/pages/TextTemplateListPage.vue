@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue';
-import { Copy, FileText, Pencil, Plus, Search, SearchX, Trash2 } from '@lucide/vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
+import { CornerDownLeft, Copy, FileText, Pencil, Plus, Search, SearchX, Trash2 } from '@lucide/vue';
 import FilterBar from '../components/FilterBar.vue';
 import Pagination from '../components/Pagination.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
@@ -60,13 +60,29 @@ const form = reactive({
 const fieldMap = computed(() => new Map(fields.value.map((field) => [field.key, field])));
 const fieldFormOptions = computed(() => [...new Set(fields.value.flatMap((field) => field.forms ?? []))]
   .sort((a, b) => a.localeCompare(b, 'zh-Hant')));
-const filteredFields = computed(() => {
+
+// 同一個名稱（例如「用藥」）在同一份表單裡可能對到好幾個不同的 item.key——
+// 選面板照名稱分組，勾一次就把底下所有 key 一起收進 applicableItemKeys，
+// 不用每個重複欄位都手動勾一次。
+const fieldGroups = computed(() => {
+  const groups = new Map();
+  fields.value.forEach((field) => {
+    const existing = groups.get(field.label) ?? { label: field.label, keys: [], forms: [] };
+    existing.keys.push(field.key);
+    (field.forms ?? []).forEach((formName) => { if (!existing.forms.includes(formName)) existing.forms.push(formName); });
+    groups.set(field.label, existing);
+  });
+  return [...groups.values()].sort((a, b) => a.label.localeCompare(b.label, 'zh-Hant'));
+});
+const filteredFieldGroups = computed(() => {
   const keyword = fieldQuery.value.trim().toLowerCase();
-  return fields.value.filter((field) => {
-    if (fieldFormFilter.value !== 'all' && !field.forms?.includes(fieldFormFilter.value)) return false;
-    return !keyword || `${field.label} ${field.key}`.toLowerCase().includes(keyword);
+  return fieldGroups.value.filter((group) => {
+    if (fieldFormFilter.value !== 'all' && !group.forms.includes(fieldFormFilter.value)) return false;
+    return !keyword || `${group.label} ${group.keys.join(' ')}`.toLowerCase().includes(keyword);
   });
 });
+const selectedGroupCount = computed(() => fieldGroups.value
+  .filter((group) => group.keys.some((key) => form.applicableItemKeys.includes(key))).length);
 // 關鍵字選好、按下搜尋才查——全站搜尋一律走提交式，不做即時（狀態是切換按鈕組，本來就該即時）。
 function applyFilters() {
   query.value = queryInput.value;
@@ -132,15 +148,29 @@ function duplicate(template) {
   editorOpen.value = true;
 }
 
-function toggleField(key, checked) {
+// 純文字框按 Enter 本來就能換行，但這裡另外放一顆明確的按鈕——
+// 診所同仁不一定確定 Enter 有沒有作用，尤其是觸控裝置。
+function insertNewline() {
+  const textarea = document.getElementById('text-template-content');
+  const start = Number.isInteger(textarea?.selectionStart) ? textarea.selectionStart : form.content.length;
+  const end = Number.isInteger(textarea?.selectionEnd) ? textarea.selectionEnd : start;
+  form.content = `${form.content.slice(0, start)}\n${form.content.slice(end)}`;
+  nextTick(() => {
+    if (!textarea) return;
+    textarea.focus();
+    textarea.setSelectionRange(start + 1, start + 1);
+  });
+}
+
+function toggleFieldGroup(keys, checked) {
   form.applicableItemKeys = checked
-    ? [...new Set([...form.applicableItemKeys, key])]
-    : form.applicableItemKeys.filter((entry) => entry !== key);
+    ? [...new Set([...form.applicableItemKeys, ...keys])]
+    : form.applicableItemKeys.filter((entry) => !keys.includes(entry));
 }
 
 function applicabilityLabel(template) {
   if (template.availableForAllFields) return '所有文字欄位';
-  const labels = (template.applicableItemKeys ?? []).map((key) => fieldMap.value.get(key)?.label || '已移除欄位');
+  const labels = [...new Set((template.applicableItemKeys ?? []).map((key) => fieldMap.value.get(key)?.label || '已移除欄位'))];
   if (!labels.length) return '尚未指定欄位';
   return labels.length > 2 ? `${labels.slice(0, 2).join('、')}等 ${labels.length} 個欄位` : labels.join('、');
 }
@@ -280,7 +310,17 @@ onMounted(load);
         <div class="space-y-5 px-6 pb-6">
           <Alert v-if="editorError" variant="destructive"><AlertDescription>{{ editorError }}</AlertDescription></Alert>
           <div class="space-y-1.5"><Label for="text-template-name">模板名稱</Label><Input id="text-template-name" v-model="form.name" maxlength="80" placeholder="例如：老貓年度健檢建議" /></div>
-          <div class="space-y-1.5"><Label for="text-template-content">模板內容</Label><Textarea id="text-template-content" v-model="form.content" class="min-h-64 whitespace-pre-wrap" maxlength="2000" placeholder="輸入要插入報告的完整文字內容…" /><p class="text-right text-xs tabular-nums text-muted-foreground">{{ form.content.length }} / 2,000</p></div>
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between gap-2">
+              <Label for="text-template-content">模板內容</Label>
+              <Button type="button" variant="secondary" size="xs" @click="insertNewline">
+                <CornerDownLeft class="h-3.5 w-3.5" stroke-width="1.75" />
+                插入換行
+              </Button>
+            </div>
+            <Textarea id="text-template-content" v-model="form.content" class="min-h-64 whitespace-pre-wrap" maxlength="2000" placeholder="輸入要插入報告的完整文字內容…" />
+            <p class="text-right text-xs tabular-nums text-muted-foreground">{{ form.content.length }} / 2,000</p>
+          </div>
           <div class="rounded-xl border border-border p-4"><div class="flex items-start justify-between gap-4"><div><p class="text-sm font-medium text-foreground">所有文字欄位皆可使用</p><p class="mt-1 text-xs text-muted-foreground">關閉後可指定一個或多個適用欄位。</p></div><Switch :model-value="form.availableForAllFields" aria-label="所有文字欄位皆可使用" @update:model-value="form.availableForAllFields = $event" /></div>
             <div v-if="!form.availableForAllFields" class="mt-4 border-t border-border pt-3">
               <div class="grid gap-2 sm:grid-cols-[minmax(0,220px)_1fr]">
@@ -297,16 +337,25 @@ onMounted(load);
                 </div>
               </div>
               <div class="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                <span>顯示 {{ filteredFields.length }} 個欄位</span>
-                <span>已選 {{ form.applicableItemKeys.length }} 個</span>
+                <span>顯示 {{ filteredFieldGroups.length }} 個名稱</span>
+                <span>已選 {{ selectedGroupCount }} 個<span v-if="form.applicableItemKeys.length !== selectedGroupCount">（共 {{ form.applicableItemKeys.length }} 個欄位）</span></span>
               </div>
               <div class="mt-2 max-h-56 space-y-1 overflow-y-auto">
-                <label v-for="field in filteredFields" :key="field.key" class="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 hover:bg-muted/30">
-                  <input type="checkbox" class="h-4 w-4 accent-belle-600 dark:accent-brand-500" :checked="form.applicableItemKeys.includes(field.key)" @change="toggleField(field.key, $event.target.checked)" />
-                  <span class="min-w-0"><span class="block text-sm text-foreground">{{ field.label }}</span><span class="block truncate text-xs text-muted-foreground">{{ field.forms.join('、') }}</span></span>
+                <label v-for="group in filteredFieldGroups" :key="group.label" class="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 hover:bg-muted/30">
+                  <input
+                    type="checkbox"
+                    class="h-4 w-4 accent-belle-600 dark:accent-brand-500"
+                    :checked="group.keys.every((key) => form.applicableItemKeys.includes(key))"
+                    :ref="(el) => { if (el) el.indeterminate = group.keys.some((key) => form.applicableItemKeys.includes(key)) && !group.keys.every((key) => form.applicableItemKeys.includes(key)); }"
+                    @change="toggleFieldGroup(group.keys, $event.target.checked)"
+                  />
+                  <span class="min-w-0">
+                    <span class="block text-sm text-foreground">{{ group.label }}<span v-if="group.keys.length > 1" class="ml-1 text-xs text-muted-foreground">（同名 {{ group.keys.length }} 個欄位，一起套用）</span></span>
+                    <span class="block truncate text-xs text-muted-foreground">{{ group.forms.join('、') }}</span>
+                  </span>
                 </label>
                 <p v-if="!fields.length" class="py-4 text-center text-sm text-muted-foreground">目前沒有可用的文字欄位。</p>
-                <p v-else-if="!filteredFields.length" class="py-4 text-center text-sm text-muted-foreground">找不到符合條件的欄位。</p>
+                <p v-else-if="!filteredFieldGroups.length" class="py-4 text-center text-sm text-muted-foreground">找不到符合條件的欄位。</p>
               </div>
             </div>
           </div>
