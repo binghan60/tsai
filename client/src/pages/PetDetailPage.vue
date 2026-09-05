@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AlertTriangle, CalendarDays, Check, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2, User, X } from '@lucide/vue';
+import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, CalendarDays, Check, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2, User, X } from '@lucide/vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
@@ -84,6 +84,7 @@ const editingNoteContent = ref('');
 const editingNoteDate = ref('');
 const noteToRemove = ref(null);
 const deletingNoteId = ref(null);
+const NOTE_QUICK_NAV_THRESHOLD = 700;
 
 const removeNoteDescription = computed(() => {
   if (noteToRemove.value?.source === 'appointment') {
@@ -91,6 +92,17 @@ const removeNoteDescription = computed(() => {
   }
   return '確定要刪除這則記事嗎？此操作無法復原。';
 });
+
+function isLongNote(note) {
+  return (note.content?.trim().length ?? 0) > NOTE_QUICK_NAV_THRESHOLD;
+}
+
+function scrollNoteTo(noteId, position) {
+  document.getElementById(`clinical-note-${noteId}`)?.scrollIntoView({
+    behavior: 'smooth',
+    block: position,
+  });
+}
 
 const sexLabel = computed(() => ({ male: '公', female: '母' })[pet.value?.sex] ?? '');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育' })[pet.value?.neutered] ?? '');
@@ -702,7 +714,7 @@ watch(pet, async (value) => {
         <!-- 接成一篇連續病歷，不是逐則卡片：日期只當行內時間戳記，內容直接接續成段落，
              整段用細分隔線斷開而不是各自獨立的卡片外框，讀起來像在翻病歷全文而不是滑條列清單。 -->
         <Card v-if="clinicalNotes.length" class="divide-y divide-border p-0 shadow-sm dark:shadow-none">
-          <article v-for="note in clinicalNotes" :key="note._id" class="px-5 py-3">
+          <article :id="`clinical-note-${note._id}`" v-for="note in clinicalNotes" :key="note._id" class="relative px-5 py-3">
             <template v-if="editingNoteId === note._id">
               <Textarea v-model="editingNoteContent" rows="3" />
               <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
@@ -718,12 +730,46 @@ watch(pet, async (value) => {
                 <time class="text-xs font-semibold whitespace-nowrap text-foreground">{{ formatDate(note.entryDate) }}</time>
                 <span v-if="note.source === 'legacy_import'" class="text-xs text-muted-foreground">舊系統匯入</span>
                 <span v-else-if="note.source === 'appointment'" class="text-xs text-muted-foreground">看診自動建立</span>
+
                 <span class="ml-auto flex shrink-0 gap-1">
                   <Button variant="secondary" size="icon-sm" aria-label="編輯日誌" @click="startEditNote(note)"><Pencil class="h-3.5 w-3.5" /></Button>
                   <Button variant="destructive" size="icon-sm" aria-label="刪除日誌" @click="openRemoveNote(note)"><Trash2 class="h-3.5 w-3.5" /></Button>
                 </span>
               </header>
-              <p class="mt-1.5 text-sm whitespace-pre-wrap wrap-anywhere text-foreground">{{ note.content }}</p>
+              <!-- 長日誌快捷導航按鈕：當日誌篇幅較長時，在右側提供跟隨滾動的精緻膠囊導航列 -->
+              <div
+                v-if="isLongNote(note)"
+                class="pointer-events-none absolute inset-y-2 right-2.5 z-10 flex w-8 flex-col justify-center sm:right-3.5"
+              >
+                <nav
+                  class="pointer-events-auto sticky top-1/2 flex -translate-y-1/2 flex-col items-center rounded-full border border-border/80 bg-card/95 p-1 shadow-md backdrop-blur-md transition-all duration-200 hover:border-primary/30 hover:shadow-lg dark:bg-card/90"
+                  aria-label="日誌快速跳轉導航"
+                >
+                  <button
+                    type="button"
+                    class="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="移至日誌最上面"
+                    title="移至日誌頂部"
+                    @click="scrollNoteTo(note._id, 'start')"
+                  >
+                    <ArrowUpToLine class="h-3.5 w-3.5" stroke-width="2" />
+                  </button>
+                  <div class="my-0.5 h-px w-3.5 bg-border/70"></div>
+                  <button
+                    type="button"
+                    class="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label="移至日誌最下面"
+                    title="移至日誌底部"
+                    @click="scrollNoteTo(note._id, 'end')"
+                  >
+                    <ArrowDownToLine class="h-3.5 w-3.5" stroke-width="2" />
+                  </button>
+                </nav>
+              </div>
+              <p
+                class="mt-1.5 text-sm whitespace-pre-wrap wrap-anywhere text-foreground"
+                :class="{ 'pr-8 sm:pr-9': isLongNote(note) }"
+              >{{ note.content }}</p>
             </template>
           </article>
         </Card>
