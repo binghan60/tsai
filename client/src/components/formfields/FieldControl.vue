@@ -5,7 +5,6 @@ import StatusToggle from './StatusToggle.vue';
 import FieldShell from './FieldShell.vue';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import DentalChart from './DentalChart.vue';
-import QuickSelectField from './QuickSelectField.vue';
 import ImageUploadField from './ImageUploadField.vue';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
@@ -120,8 +119,6 @@ const imageValue = computed(() => {
   <FieldShell v-else-if="family === 'dental'" :item="item" :input-id="inputId">
     <DentalChart :id="inputId" :model-value="valueFor(item)" :readonly="preview" @update:model-value="setValue(item, $event)" />
   </FieldShell>
-
-  <QuickSelectField v-else-if="item.type === 'quickSelect'" :item="item" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
 
   <ImageUploadField v-else-if="item.type === 'image'" :item="item" :model-value="imageValue" @update:model-value="setValue(item, $event)" />
 

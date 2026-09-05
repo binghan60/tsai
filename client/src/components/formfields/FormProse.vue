@@ -5,7 +5,6 @@ import { Textarea } from '../ui/textarea';
 import FieldControl from './FieldControl.vue';
 import SelectableItem from './SelectableItem.vue';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
-import QuickMenuTrigger from './QuickMenuTrigger.vue';
 import { useRecordForm } from './context';
 import { sectionRuns } from '../../lib/sectionRuns';
 import { spanClass } from '../../lib/fieldSpan';
@@ -46,7 +45,6 @@ const runs = computed(() => sectionRuns(items.value, (item) => item.type === 'te
               compact
               @update:model-value="setValue(item, $event)"
             />
-            <QuickMenuTrigger :label="item.label" :quick-menu-id="item.quickMenuId" :model-value="valueFor(item)" @update:model-value="setValue(item, $event)" />
             </div>
           </div>
         </SelectableItem>

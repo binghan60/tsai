@@ -1,4 +1,4 @@
-const DEFAULT_VALUE_TYPES = new Set(['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox', 'quickSelect']);
+const DEFAULT_VALUE_TYPES = new Set(['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox']);
 
 // Dependency-free so the browser and API apply identical template-default rules.
 export function defaultValueForItem(item) {

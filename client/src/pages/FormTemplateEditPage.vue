@@ -51,7 +51,6 @@ const currentName = ref('');
 const currentDescription = ref('');
 const currentSpecies = ref('all');
 const sections = ref([]);
-const quickMenus = ref([]);
 const documentVersion = ref(0);
 const loading = ref(true);
 const saving = ref(false);
@@ -84,7 +83,6 @@ const PRESENTATION_OPTIONS = [
 // 工具箱的每一格。型別不再藏在「進階設定」的下拉選單裡 —— 使用者是先挑欄位種類，
 // 再把它放進區塊，這才是實際的思考順序。
 const TYPE_META = {
-  quickSelect: { title: '快捷選擇', icon: MousePointerClick, hint: '從指定快捷選單選取內容' },
   dentalChart: { title: '牙科圖', icon: SmilePlus, hint: '逐顆記錄牙齒狀態與備註' },
   text: { title: '單行文字', icon: Type, hint: '姓名、編號這類短文字' },
   textarea: { title: '多行文字', icon: TextAlignStart, hint: '可換行的長段落' },
@@ -101,13 +99,13 @@ const TYPE_META = {
 
 // 一般欄位到哪個版式都能用 —— 各版式的「非主型別」項目最後都是交給
 // ScalarField 渲染，沒有任何版式撐不住其中某一種的理由。
-const GENERAL_TYPES = ['text', 'textarea', 'image', 'number', 'date', 'select', 'radio', 'checkbox', 'quickSelect'];
+const GENERAL_TYPES = ['text', 'textarea', 'image', 'number', 'date', 'select', 'radio', 'checkbox'];
 
 // 主型別則綁死在版式上：measurement／finding／lab 要靠各自的版式元件才畫得出
 // 狀態切換、參考範圍與分組表格，放進別種版式只會被當成普通文字框。
 // 這三種都是「從固定選項裡挑」，差別只在呈現方式，共用同一份選項設定。
 const OPTION_TYPES = new Set(['select', 'radio', 'checkbox']);
-const DEFAULT_VALUE_TYPES = new Set(['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox', 'quickSelect']);
+const DEFAULT_VALUE_TYPES = new Set(['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox']);
 
 const SPAN_OPTIONS = [
   { value: 'auto', title: '自動', hint: '跟著版式的預設欄寬' },
@@ -220,11 +218,10 @@ async function load() {
   loading.value = true;
   error.value = '';
   try {
-    const [templateResponse, menusResponse] = await Promise.all([http.get('/settings/form-templates/' + currentId.value, {
+    const templateResponse = await http.get('/settings/form-templates/' + currentId.value, {
       params: { includeDisabled: 1 },
-    }), http.get('/quick-menus')]);
+    });
     applyTemplate(templateResponse.data);
-    quickMenus.value = menusResponse.data ?? [];
     markSaved();
   } catch (err) {
     error.value = err.response?.status === 404
@@ -308,7 +305,6 @@ function addItem(type) {
     placeholder: '',
     defaultValue: '',
     options: OPTION_TYPES.has(type) ? ['正常', '異常'] : [],
-    quickMenuId: '',
     span: 'auto',
     enabled: true,
     required: false,
@@ -851,13 +847,7 @@ function resolveLeave(confirmed) {
                     <p class="text-xs text-muted-foreground">{{ selectedItem.type === 'checkbox' ? '複選請用逗號分隔，例如：食慾正常、精神正常。' : '只會套用到新建立的表單，不會覆寫既有紀錄。' }}</p>
                   </div>
 
-                  <div v-if="['textarea', 'quickSelect'].includes(selectedItem.type)" class="space-y-1.5">
-                    <Label for="item-quick-menu" class="text-xs font-medium">快捷選單</Label>
-                    <Select v-model="selectedItem.quickMenuId"><SelectTrigger id="item-quick-menu" class="w-full"><SelectValue placeholder="選擇快捷選單" /></SelectTrigger><SelectContent><SelectItem v-for="menu in quickMenus" :key="menu._id" :value="menu._id">{{ menu.name }}</SelectItem></SelectContent></Select>
-                    <p class="text-xs text-muted-foreground">選取項目後會直接帶入其文字內容。</p>
-                  </div>
-
-                  <div v-if="['text', 'textarea', 'number', 'date', 'quickSelect'].includes(selectedItem.type)" class="space-y-1.5">
+                  <div v-if="['text', 'textarea', 'number', 'date'].includes(selectedItem.type)" class="space-y-1.5">
                     <Label for="item-placeholder" class="text-xs font-medium">輸入提示</Label>
                     <Input id="item-placeholder" v-model="selectedItem.placeholder" placeholder="選填，顯示在空白欄位裡" />
                   </div>
