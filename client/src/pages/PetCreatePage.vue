@@ -532,52 +532,58 @@ onBeforeUnmount(() => {
         </template>
 
         <!-- 模式 2：建立新飼主 -->
-        <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div class="space-y-1.5">
-            <Label for="new-owner-name" class="text-xs font-medium text-foreground">飼主姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-            <Input
-              id="new-owner-name"
-              v-model="newOwner.name"
-              autocomplete="name"
-              class="h-9 text-sm"
-              :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerName }"
-              placeholder="例：王小明"
-              @input="errors.newOwnerName = ''"
-            />
-            <p v-if="errors.newOwnerName" class="text-xs text-destructive">{{ errors.newOwnerName }}</p>
+        <div v-else class="space-y-4">
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="space-y-1.5">
+              <Label for="new-owner-name" class="text-xs font-medium text-foreground">飼主姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Input
+                id="new-owner-name"
+                v-model="newOwner.name"
+                autocomplete="name"
+                class="h-9 text-sm"
+                :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerName }"
+                placeholder="例：王小明"
+                @input="errors.newOwnerName = ''"
+              />
+              <p v-if="errors.newOwnerName" class="text-xs text-destructive">{{ errors.newOwnerName }}</p>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="new-owner-phone" class="text-xs font-medium text-foreground">聯絡電話 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Input
+                id="new-owner-phone"
+                v-model="newOwner.phone"
+                type="tel"
+                autocomplete="tel"
+                inputmode="tel"
+                class="h-9 text-sm"
+                :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerPhone }"
+                placeholder="例：0912-345-678"
+                @input="errors.newOwnerPhone = ''"
+              />
+              <p v-if="errors.newOwnerPhone" class="text-xs text-destructive">{{ errors.newOwnerPhone }}</p>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="new-owner-email" class="text-xs font-medium text-foreground">電子信箱（選填）</Label>
+              <Input
+                id="new-owner-email"
+                v-model="newOwner.email"
+                type="email"
+                autocomplete="email"
+                class="h-9 text-sm"
+                :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerEmail }"
+                placeholder="例：owner@example.com"
+                @input="errors.newOwnerEmail = ''"
+              />
+              <p v-if="errors.newOwnerEmail" class="text-xs text-destructive">{{ errors.newOwnerEmail }}</p>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="new-owner-address" class="text-xs font-medium text-foreground">通訊地址（選填）</Label>
+              <Input id="new-owner-address" v-model="newOwner.address" autocomplete="street-address" class="h-9 text-sm" placeholder="例：台北市中山區中山北路…" />
+            </div>
           </div>
           <div class="space-y-1.5">
-            <Label for="new-owner-phone" class="text-xs font-medium text-foreground">聯絡電話 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-            <Input
-              id="new-owner-phone"
-              v-model="newOwner.phone"
-              type="tel"
-              autocomplete="tel"
-              inputmode="tel"
-              class="h-9 text-sm"
-              :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerPhone }"
-              placeholder="例：0912-345-678"
-              @input="errors.newOwnerPhone = ''"
-            />
-            <p v-if="errors.newOwnerPhone" class="text-xs text-destructive">{{ errors.newOwnerPhone }}</p>
-          </div>
-          <div class="space-y-1.5">
-            <Label for="new-owner-email" class="text-xs font-medium text-foreground">電子信箱（選填）</Label>
-            <Input
-              id="new-owner-email"
-              v-model="newOwner.email"
-              type="email"
-              autocomplete="email"
-              class="h-9 text-sm"
-              :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerEmail }"
-              placeholder="例：owner@example.com"
-              @input="errors.newOwnerEmail = ''"
-            />
-            <p v-if="errors.newOwnerEmail" class="text-xs text-destructive">{{ errors.newOwnerEmail }}</p>
-          </div>
-          <div class="space-y-1.5">
-            <Label for="new-owner-address" class="text-xs font-medium text-foreground">通訊地址（選填）</Label>
-            <Input id="new-owner-address" v-model="newOwner.address" autocomplete="street-address" class="h-9 text-sm" placeholder="例：台北市中山區中山北路…" />
+            <Label for="new-owner-notes" class="text-xs font-medium text-foreground">備註（選填）</Label>
+            <Textarea id="new-owner-notes" v-model="newOwner.notes" rows="2" class="text-sm" placeholder="例：習慣接聽時段、特殊聯絡方式提醒…" />
           </div>
         </div>
       </div>

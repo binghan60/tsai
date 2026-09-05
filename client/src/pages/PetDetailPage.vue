@@ -46,7 +46,7 @@ const petForm = reactive({ name: '', species: '', breed: '', sex: 'unknown', neu
 const ownerEditing = ref(false);
 const ownerSaving = ref(false);
 const ownerError = ref('');
-const ownerForm = reactive({ name: '', phone: '', email: '', address: '' });
+const ownerForm = reactive({ name: '', phone: '', email: '', address: '', notes: '' });
 
 const SEX_OPTIONS = [
   { title: '未記錄', value: 'unknown' },
@@ -226,6 +226,7 @@ function startOwnerEdit() {
     phone: owner?.phone ?? '',
     email: owner?.email ?? '',
     address: owner?.address ?? '',
+    notes: owner?.notes ?? '',
   });
   ownerError.value = '';
   ownerEditing.value = true;
@@ -594,7 +595,7 @@ watch(pet, async (value) => {
         </dl>
       </div>
 
-      <!-- 飼主資料：跟寵物資料同一張卡片，用分隔線隔開；關聯的是 pet.ownerId（populate 出 name/phone/email/address/__v）。 -->
+      <!-- 飼主資料：跟寵物資料同一張卡片，用分隔線隔開；關聯的是 pet.ownerId（populate 出 name/phone/email/address/notes/__v）。 -->
       <div v-if="pet.ownerId" id="owner-card" class="mt-5 border-t border-border pt-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-3">
@@ -634,9 +635,13 @@ watch(pet, async (value) => {
               <Input id="owner-edit-address" v-model="ownerForm.address" class="border-border focus:border-primary" placeholder="例：台北市中山區中山北路一段1號" />
             </div>
           </div>
+          <div class="space-y-1.5">
+            <Label for="owner-edit-notes" class="text-xs font-medium text-foreground">備註（選填）</Label>
+            <Textarea id="owner-edit-notes" v-model="ownerForm.notes" rows="2" class="border-border focus:border-primary" placeholder="例：習慣接聽時段、特殊聯絡方式提醒…" />
+          </div>
         </div>
 
-        <dl v-else-if="pet.ownerId.phone || pet.ownerId.email || pet.ownerId.address" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
+        <dl v-else-if="pet.ownerId.phone || pet.ownerId.email || pet.ownerId.address || pet.ownerId.notes" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
           <div v-if="pet.ownerId.phone" class="min-w-0">
             <dt class="text-xs font-medium text-muted-foreground">電話</dt>
             <dd class="mt-1 tabular-nums text-foreground">{{ pet.ownerId.phone }}</dd>
@@ -648,6 +653,10 @@ watch(pet, async (value) => {
           <div v-if="pet.ownerId.address" class="col-span-2 min-w-0 sm:col-span-3">
             <dt class="text-xs font-medium text-muted-foreground">地址</dt>
             <dd class="mt-1 text-foreground">{{ pet.ownerId.address }}</dd>
+          </div>
+          <div v-if="pet.ownerId.notes" class="col-span-2 min-w-0 sm:col-span-3">
+            <dt class="text-xs font-medium text-muted-foreground">備註</dt>
+            <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ pet.ownerId.notes }}</dd>
           </div>
         </dl>
       </div>

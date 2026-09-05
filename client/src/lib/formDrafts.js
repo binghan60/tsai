@@ -1,7 +1,7 @@
 // PetCreatePage 的初始空白值，成功送出後用來重置表單。
 
 export function emptyOwnerDraft() {
-  return { name: '', phone: '', email: '', address: '' };
+  return { name: '', phone: '', email: '', address: '', notes: '' };
 }
 
 export function emptyPetDraft() {

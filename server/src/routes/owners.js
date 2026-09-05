@@ -53,10 +53,10 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, phone, email, address } = req.body;
+    const { name, phone, email, address, notes } = req.body;
     const validationError = validateOwnerInput({ name, phone, email });
     if (validationError) return res.status(422).json({ message: validationError });
-    const owner = await Owner.create({ name, phone, email, address });
+    const owner = await Owner.create({ name, phone, email, address, notes });
     res.status(201).json(owner);
   } catch (err) {
     next(err);
@@ -78,6 +78,7 @@ router.post('/with-pet', async (req, res, next) => {
         phone: ownerInput.phone,
         email: ownerInput.email,
         address: ownerInput.address,
+        notes: ownerInput.notes,
         relationVersion: 1,
       }], { session });
       [pet] = await Pet.create([{ ...pickPetFields(petInput), ownerId: owner._id }], { session });
@@ -111,7 +112,7 @@ router.get('/:id', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, phone, email, address } = req.body;
+    const { name, phone, email, address, notes } = req.body;
     const validationError = validateOwnerInput({ name, phone, email });
     if (validationError) return res.status(422).json({ message: validationError });
     const expectedVersion = Number(req.body?.expectedVersion);
@@ -120,7 +121,7 @@ router.put('/:id', async (req, res, next) => {
     }
     const owner = await Owner.findOneAndUpdate(
       { _id: req.params.id, __v: expectedVersion },
-      { $set: { name, phone, email, address }, $inc: { __v: 1 } },
+      { $set: { name, phone, email, address, notes }, $inc: { __v: 1 } },
       { new: true, runValidators: true }
     );
     if (!owner) {
