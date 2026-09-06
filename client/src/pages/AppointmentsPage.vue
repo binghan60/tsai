@@ -89,6 +89,18 @@ const ROW_ACTIONS = [
   { key: 'no_show', label: '標記未到' },
   { key: 'cancel', label: '取消掛號', danger: true },
 ];
+const ROW_ACTIONS_ARRIVED = [
+  { key: 'edit', label: '編輯掛號' },
+  { key: 'undo_check_in', label: '取消報到', danger: true },
+];
+
+const STATUS_LABEL = {
+  scheduled: '未報到',
+  arrived: '候診中',
+  completed: '已完成',
+  cancelled: '已取消',
+  no_show: '未到診',
+};
 
 const VISIT_TYPE_META = {
   new: { label: '初診', classes: 'bg-brand-50 text-brand-700 ring-brand-300/80 dark:bg-brand-950/60 dark:text-brand-200 dark:ring-brand-500/40' },
@@ -193,6 +205,29 @@ const dayStats = computed(() => [
   { key: 'completed', label: '已完成', icon: Check, value: completedAppointments.value.length, iconBg: 'bg-success-surface text-success ring-1 ring-success/20' },
 ]);
 
+// 「待報到／候診中／已完成」三格可以點擊，切成表格檢視只看那個狀態；再點一次
+// 同一格清除篩選、回到候診卡片＋時間軸的預設畫面。「今日掛號」純粹顯示總數，
+// 不參與篩選（它不是單一狀態，沒有對應的表格可以切）。
+const STATUS_FILTER_MAP = { scheduled: 'scheduled', waiting: 'arrived', completed: 'completed' };
+const statusFilter = ref(null);
+function toggleStatusFilter(key) {
+  const value = STATUS_FILTER_MAP[key];
+  if (!value) return;
+  statusFilter.value = statusFilter.value === value ? null : value;
+}
+const filteredByStatus = computed(() => {
+  if (!statusFilter.value) return [];
+  return [...appointments.value]
+    .filter((item) => item.status === statusFilter.value)
+    .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
+});
+// 從表格的候診中列跳回候診卡片並展開，複用同一套 simpleForms／completeVisit，
+// 不用在表格裡重做一次量測表單。
+function focusCandidate(appointment) {
+  statusFilter.value = null;
+  if (!expandedIds.value.has(appointment._id)) toggleExpanded(appointment);
+}
+
 // 週檢視相關
 const weekStart = computed(() => startOfWeek(selectedDate.value));
 const weekDates = computed(() => Array.from({ length: 7 }, (_, i) => shiftDateInput(weekStart.value, i)));
@@ -242,6 +277,7 @@ watch([selectedDate, viewMode], ([date, mode]) => {
   collapsedSessionIds.value = new Set();
   editingCardNumberId.value = null;
   cardNumberDraft.value = '';
+  statusFilter.value = null;
   if (mode === 'week') fetchWeekSummary();
   else fetchAppointments();
 });
@@ -643,28 +679,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="grid w-full gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center lg:flex lg:justify-end">
-          <div class="flex flex-wrap items-center gap-2 sm:justify-end">
-            <span class="text-sm font-medium" :class="isToday ? 'text-primary' : 'text-muted-foreground'">
-              {{ weekdayLabel(selectedDate) }}<template v-if="isToday"> · 今天</template>
-            </span>
-            <Button v-if="!isToday" type="button" variant="outline" size="sm" @click="selectedDate = today">回到今天</Button>
-            <RowActions
-              :actions="[
-                { key: 'tomorrow', label: '明天' },
-                { key: 'day_after_tomorrow', label: '後天' },
-                { key: 'next_weekday', label: `下一個${weekdayLabel(selectedDate)}` },
-                { key: 'prev_weekday', label: `上一個${weekdayLabel(selectedDate)}` },
-              ]"
-              :icon="CalendarClock"
-              label="快速跳轉日期"
-              @select="(key) => {
-                if (key === 'tomorrow') selectedDate = shiftDateInput(today, 1);
-                else if (key === 'day_after_tomorrow') selectedDate = shiftDateInput(today, 2);
-                else if (key === 'next_weekday') selectedDate = shiftDateInput(selectedDate, 7);
-                else if (key === 'prev_weekday') selectedDate = shiftDateInput(selectedDate, -7);
-              }"
-            />
-          </div>
+          
           <div class="flex w-full items-center gap-1 rounded-xl bg-muted/60 p-1 sm:w-auto">
             <Button
               type="button"
@@ -690,10 +705,14 @@ onBeforeUnmount(() => {
       </div>
 
       <dl v-if="viewMode === 'day'" class="grid grid-cols-4 border-t border-border bg-field/30" :aria-busy="loading || undefined">
-        <div
+        <button
           v-for="stat in dayStats"
           :key="stat.key"
-          class="flex min-w-0 flex-col items-center justify-center gap-0.5 px-1.5 py-2.5 transition-colors sm:flex-row sm:gap-2.5 sm:px-3 hover:bg-card/50 [&:not(:last-child)]:border-r [&:not(:last-child)]:border-border"
+          type="button"
+          class="flex min-w-0 flex-col items-center justify-center gap-0.5 px-1.5 py-2.5 transition-colors sm:flex-row sm:gap-2.5 sm:px-3 hover:bg-accent/40 [&:not(:last-child)]:border-r [&:not(:last-child)]:border-border"
+          :class="statusFilter && STATUS_FILTER_MAP[stat.key] === statusFilter ? 'bg-accent text-accent-foreground' : ''"
+          :aria-pressed="STATUS_FILTER_MAP[stat.key] === statusFilter"
+          @click="stat.key === 'total' ? (statusFilter = null) : toggleStatusFilter(stat.key)"
         >
           <span
             class="hidden h-7 w-7 shrink-0 items-center justify-center rounded-lg sm:flex"
@@ -702,9 +721,9 @@ onBeforeUnmount(() => {
           >
             <component :is="stat.icon" class="h-3.5 w-3.5" stroke-width="1.9" />
           </span>
-          <dt class="truncate text-xs font-medium text-muted-foreground">{{ stat.label }}</dt>
-          <dd class="text-lg font-bold leading-none tabular-nums text-foreground">{{ loading || error ? '—' : stat.value }}</dd>
-        </div>
+          <dt class="truncate text-xs font-medium" :class="STATUS_FILTER_MAP[stat.key] === statusFilter ? 'text-accent-foreground' : 'text-muted-foreground'">{{ stat.label }}</dt>
+          <dd class="text-lg font-bold leading-none tabular-nums" :class="STATUS_FILTER_MAP[stat.key] === statusFilter ? 'text-accent-foreground' : 'text-foreground'">{{ loading || error ? '—' : stat.value }}</dd>
+        </button>
       </dl>
 
       <div v-else class="flex flex-wrap items-center justify-between gap-2 border-t border-border bg-field/30 px-3 py-2.5 sm:px-4">
@@ -726,6 +745,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <!-- ── 單日檢視 ── -->
       <div v-if="viewMode === 'day'" id="appointments-day-panel" role="tabpanel" aria-labelledby="appointments-day-tab" class="space-y-4">
+      <template v-if="!statusFilter">
       <!-- ── 候診佇列 ──
            報到之後預約時間就不再決定任何事，人已經在診所裡；決定誰先看的是這份順序。
            候診區依報到時間排列；時間軸仍保留原預約位置。紙本牌號只供辨識，不影響順序。 -->
@@ -1154,6 +1174,110 @@ onBeforeUnmount(() => {
           </table>
         </div>
       </details>
+      </template>
+
+      <!-- ── 統計格篩選出來的表格檢視：只看單一狀態，跟櫃台頁拿掉之前用過的版型一樣。 -->
+      <template v-else>
+        <EmptyState
+          v-if="!filteredByStatus.length"
+          :icon="UserPlus"
+          :title="`今天沒有「${STATUS_LABEL[statusFilter]}」的掛號`"
+          description="點一次上方統計格可以清除篩選，看回候診卡片與時間軸。"
+        />
+        <template v-else>
+          <!-- 桌機：資料表 -->
+          <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: 6rem minmax(9rem, 1fr) 6.5rem minmax(8rem, 0.9fr) minmax(8rem, 0.9fr) 12rem">
+            <div class="desktop-data-header">
+              <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">時間／牌號</span>
+              <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">病患</span>
+              <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">狀態</span>
+              <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">量測</span>
+              <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">回診</span>
+              <span class="desktop-data-cell"><span class="sr-only">操作</span></span>
+            </div>
+            <div v-for="appointment in filteredByStatus" :key="appointment._id" class="desktop-data-row">
+              <span class="desktop-data-cell whitespace-nowrap text-foreground">
+                <template v-if="appointment.status === 'arrived'">
+                  <input
+                    v-if="editingCardNumberId === appointment._id"
+                    v-model="cardNumberDraft"
+                    autofocus
+                    type="text"
+                    class="h-8 w-12 rounded-md border-2 border-primary bg-card text-center text-sm font-bold tabular-nums text-foreground outline-none"
+                    :disabled="isBusy(appointment._id)"
+                    @focus="$event.currentTarget.select()"
+                    @keydown.enter.prevent="$event.currentTarget.blur()"
+                    @keydown.esc.prevent="cancelCardNumberEdit"
+                    @blur="submitCardNumber(appointment)"
+                  />
+                  <button v-else type="button" class="rounded-md bg-primary px-2 py-1 text-xs font-bold tabular-nums text-primary-foreground" :disabled="isBusy(appointment._id)" @click="beginCardNumberEdit(appointment)">
+                    {{ appointment.checkinNumber }} 號
+                  </button>
+                </template>
+                <template v-else>{{ appointment.time || formatDateTime(appointment.scheduledAt, checkinTimeOptions, '—') }}</template>
+              </span>
+              <span class="desktop-data-cell min-w-0">
+                <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" target="_blank" rel="noopener" class="block truncate font-semibold text-primary hover:underline">{{ appointment.petName || '—' }}</router-link>
+                <p v-else class="truncate font-semibold text-foreground">{{ appointment.petName || '—' }}</p>
+                <p class="flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground">
+                  {{ appointment.ownerName || '—' }}
+                  <template v-if="appointment.ownerPhone"><Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}</template>
+                </p>
+              </span>
+              <span class="desktop-data-cell"><span class="inline-flex h-6.5 items-center rounded-md px-2 text-xs font-semibold" :class="appointmentStatusClasses(appointment.status)">{{ STATUS_LABEL[appointment.status] }}</span></span>
+              <span class="desktop-data-cell truncate" :class="appointment.weightKg == null && appointment.temperatureC == null ? 'text-muted-foreground' : 'text-foreground'">
+                <template v-if="appointment.status !== 'scheduled'">{{ appointment.weightKg == null ? '—' : `${appointment.weightKg}kg` }}／{{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC}°C` }}</template>
+                <template v-else>—</template>
+              </span>
+              <span class="desktop-data-cell truncate text-muted-foreground">{{ appointment.status !== 'scheduled' ? followUpLabel(appointment) : '—' }}</span>
+              <span class="desktop-data-cell flex items-center justify-end gap-1.5">
+                <template v-if="appointment.status === 'scheduled'">
+                  <Button type="button" size="xs" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
+                  <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                </template>
+                <template v-else-if="appointment.status === 'arrived'">
+                  <Button type="button" variant="secondary" size="xs" @click="focusCandidate(appointment)"><Pencil class="h-3.5 w-3.5" />看診資料</Button>
+                  <RowActions :actions="ROW_ACTIONS_ARRIVED" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                </template>
+                <template v-else>
+                  <Button type="button" variant="secondary" size="xs" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button>
+                </template>
+              </span>
+            </div>
+          </Card>
+
+          <!-- 手機：卡片 -->
+          <div class="space-y-3 xl:hidden">
+            <Card v-for="appointment in filteredByStatus" :key="appointment._id" class="gap-2 p-4 shadow-sm dark:shadow-none">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" class="block truncate font-semibold text-primary">{{ appointment.petName || '—' }}</router-link>
+                  <p v-else class="truncate font-semibold text-foreground">{{ appointment.petName || '—' }}</p>
+                  <p class="truncate text-xs text-muted-foreground">{{ appointment.ownerName || '—' }}<template v-if="appointment.ownerPhone"> · {{ appointment.ownerPhone }}</template></p>
+                </div>
+                <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{{ appointment.status === 'arrived' ? `${appointment.checkinNumber} 號` : (appointment.time || formatDateTime(appointment.scheduledAt, checkinTimeOptions, '—')) }}</span>
+              </div>
+              <span class="inline-flex h-6.5 w-fit items-center rounded-md px-2 text-xs font-semibold" :class="appointmentStatusClasses(appointment.status)">{{ STATUS_LABEL[appointment.status] }}</span>
+              <p v-if="appointment.status !== 'scheduled'" class="text-sm text-foreground">
+                {{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }} ・ {{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }} ・ 回診：{{ followUpLabel(appointment) }}
+              </p>
+              <div class="flex flex-wrap gap-1.5">
+                <template v-if="appointment.status === 'scheduled'">
+                  <Button type="button" size="sm" class="flex-1" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
+                  <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                </template>
+                <template v-else-if="appointment.status === 'arrived'">
+                  <Button type="button" variant="secondary" size="sm" class="flex-1" @click="focusCandidate(appointment)"><Pencil class="h-3.5 w-3.5" />看診資料</Button>
+                  <RowActions :actions="ROW_ACTIONS_ARRIVED" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                </template>
+                <template v-else>
+                  <Button type="button" variant="secondary" size="sm" class="flex-1" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button>
+                </template>
+              </div>
+            </Card>
+          </div>
+        </template>
+      </template>
       </div>
 
       <!-- ── 週檢視 ── -->
