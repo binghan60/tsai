@@ -1,15 +1,15 @@
 <script setup>
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CalendarClock, Cat, ClipboardList, FileText, LayoutDashboard, LogOut, Mail, Menu, Moon, Search, Stethoscope, Sun } from '@lucide/vue';
+import { CalendarClock, Cat, ClipboardList, FileText, LayoutDashboard, LogOut, Mail, Menu, Moon, Search, Sun } from '@lucide/vue';
 import { useTheme } from './composables/useTheme';
 import { useAuthStore } from './stores/auth';
-import { useAppointmentNotificationsStore } from './stores/appointmentNotifications';
-import { useGlobalAppointmentNotifications } from './composables/useGlobalAppointmentNotifications';
+import { useGlobalChat } from './composables/useGlobalChat';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
 import ToastContainer from './components/ToastContainer.vue';
 import GlobalSearchDialog from './components/GlobalSearchDialog.vue';
+import GlobalChatWidget from './components/GlobalChatWidget.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -17,8 +17,7 @@ const { isDark, toggleTheme } = useTheme();
 const mobileOpen = ref(false);
 const searchOpen = ref(false);
 const auth = useAuthStore();
-const notifications = useAppointmentNotificationsStore();
-useGlobalAppointmentNotifications();
+useGlobalChat();
 
 // Vue Router 會重用同一條動態路由的元件實例。以資料識別碼作 key，確保從飼主 A
 // 切到飼主 B（或從舊版報告切到新版）時，舊元件與尚未完成的請求不會殘留在畫面上。
@@ -40,8 +39,7 @@ const routeViewKey = computed(() => {
 // 沒有這層的話一進那些頁面側邊欄會全暗，等於在系統裡失去座標。
 const navItems = [
   { to: '/', label: '儀表板', exact: true, icon: LayoutDashboard },
-  { to: '/appointments', label: '看診', exact: false, icon: Stethoscope },
-  { to: '/front-desk', label: '櫃台', exact: false, icon: CalendarClock },
+  { to: '/appointments', label: '掛號', exact: false, icon: CalendarClock },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
   { to: '/records', label: '就診紀錄', exact: false, icon: FileText },
   { to: '/records/deliveries', label: '寄送歷程', exact: false, icon: Mail },
@@ -50,20 +48,6 @@ const navItems = [
 ];
 
 const activeTitle = computed(() => route.meta.title ?? navItems.find(isNavActive)?.label ?? '儀表板');
-
-// 看診／櫃台留言的未讀提示直接標在各自的側邊欄項目上（取代原本獨立的通知鈴鐺），
-// 對應規則見 stores/appointmentNotifications.js 的 doctorCount／frontDeskCount。
-const NAV_BADGE_COUNTS = {
-  '/appointments': () => notifications.doctorCount,
-  '/front-desk': () => notifications.frontDeskCount,
-};
-function navBadgeCount(item) {
-  return NAV_BADGE_COUNTS[item.to]?.() ?? 0;
-}
-function navBadgeLabel(item) {
-  const count = navBadgeCount(item);
-  return count > 9 ? '9+' : String(count);
-}
 
 // router-link 內建的 active-class 是靠比對路由「記錄」（route.matched），不是比對網址字串——
 // /settings、/settings/forms、/settings/forms/:id 各自是獨立註冊的路由，不是巢狀父子關係，
@@ -158,8 +142,7 @@ watch(
               :class="isNavActive(item) ? navActiveClass : ''"
             >
               <component :is="item.icon" class="h-4 w-4" stroke-width="1.9" />
-              <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
-              <span v-if="navBadgeCount(item)" class="ml-auto shrink-0 rounded-full bg-danger px-1.5 py-0.5 text-xs font-bold text-white">{{ navBadgeLabel(item) }}</span>
+              <span>{{ item.label }}</span>
             </router-link>
           </div>
         </nav>
@@ -255,8 +238,7 @@ watch(
                 :class="isNavActive(item) ? navActiveClass : ''"
               >
                 <component :is="item.icon" class="h-4 w-4" stroke-width="1.9" />
-                <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
-                <span v-if="navBadgeCount(item)" class="ml-auto shrink-0 rounded-full bg-danger px-1.5 py-0.5 text-xs font-bold text-white">{{ navBadgeLabel(item) }}</span>
+                {{ item.label }}
               </router-link>
             </nav>
             <div class="border-t border-sidebar-border p-3">
@@ -279,6 +261,7 @@ watch(
       </div>
     </div>
     <GlobalSearchDialog v-model:open="searchOpen" />
+    <GlobalChatWidget />
     <ToastContainer />
   </template>
 </template>

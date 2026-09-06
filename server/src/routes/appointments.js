@@ -9,15 +9,10 @@ import ClinicalNote from '../models/ClinicalNote.js';
 import ClinicSettings from '../models/ClinicSettings.js';
 import { withTransaction } from '../lib/transaction.js';
 import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
-import {
-  VISIT_MESSAGE_STATUSES,
-  canTransitionAppointmentStatus,
-  describeAppointmentTransition,
-} from '../lib/appointmentStatus.js';
+import { canTransitionAppointmentStatus, describeAppointmentTransition } from '../lib/appointmentStatus.js';
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 import { defaultRecordFields } from '../lib/formTemplate.js';
-import { formatVisitMessagesTranscript } from '../lib/visitMessages.js';
-import { emitAppointmentUpdate, emitVisitMessage } from '../lib/realtime.js';
+import { emitAppointmentUpdate } from '../lib/realtime.js';
 
 const router = Router();
 
@@ -469,7 +464,7 @@ router.post('/:id/complete', async (req, res, next) => {
       return res.status(422).json({ message: describeAppointmentTransition(initialAppointment.status, 'completed') });
     }
 
-    const { weightKg, temperatureC, followUpDate, followUpTime, followUpReason } = req.body;
+    const { weightKg, temperatureC, followUpDate, followUpTime, followUpReason, visitNote } = req.body;
     let appointment;
     let record;
 
@@ -496,6 +491,7 @@ router.post('/:id/complete', async (req, res, next) => {
       if (followUpDate !== undefined) appointment.followUpDate = String(followUpDate ?? '').trim();
       if (followUpTime !== undefined) appointment.followUpTime = String(followUpTime ?? '').trim();
       if (followUpReason !== undefined) appointment.followUpReason = String(followUpReason ?? '').trim();
+      if (visitNote !== undefined) appointment.visitNote = visitNote;
       appointment.status = 'completed';
       appointment.completedAt = new Date();
       appointment.templateId = template._id;
@@ -518,11 +514,23 @@ router.post('/:id/complete', async (req, res, next) => {
       // 看完診就歸還自己的實體號碼牌；其他候診者手上的牌號完全不變。
       await saveLeavingQueue(appointment, true, session);
     });
+    // 看診備註不會出現在報告裡（見上），但仍是有價值的病歷內容，落地到病歷日誌，
+    // 之後兩邊互相編輯會同步（見 /visit-data 與 clinicalNotes 路由）；
+    // 刻意獨立於上面的 transaction 之外，日誌寫入失敗不影響完成看診與建立報告草稿。
+    if (String(appointment.visitNote ?? '').trim()) {
+      await ClinicalNote.create({
+        petId: appointment.petId,
+        entryDate: combineClinicDateTime(appointment.date, '10:00'),
+        content: appointment.visitNote,
+        source: 'appointment',
+        appointmentId: appointment._id,
+      });
+    }
     // 約好回診日期就是要再回來，直接幫忙掛上那一天的號，不用等飼主再打來一次；
     // 同樣獨立於上面的 transaction 之外，排號失敗不影響已完成的這次看診。
     const followUpAppointment = await syncFollowUpAppointment(appointment);
     // 完成看診是狀態轉換，其他分頁（例如櫃台開著的「已完成看診」清單）要能立刻看到，
-    // 不必等現有的 60 秒輪詢；跟看診留言共用同一個「天」房間。
+    // 不必等現有的 60 秒輪詢。
     emitAppointmentUpdate(appointment);
     res.json({ ...(appointment.toObject?.() ?? appointment), record, followUpAppointment });
   } catch (err) {
@@ -530,61 +538,9 @@ router.post('/:id/complete', async (req, res, next) => {
   }
 });
 
-// 留言串是單向同步的來源：組出逐則記錄文字，寫進（或建立）對應的病歷日誌抄本。
-// 只增不減——留言不會被清空，所以這裡不處理刪除日誌的分支。
-async function syncVisitMessagesToClinicalNote(appointment) {
-  const transcript = formatVisitMessagesTranscript(appointment.visitMessages);
-  if (!transcript) return;
-  const note = await ClinicalNote.findOne({ appointmentId: appointment._id });
-  if (note) {
-    note.content = transcript;
-    await note.save();
-  } else {
-    await ClinicalNote.create({
-      petId: appointment.petId,
-      entryDate: combineClinicDateTime(appointment.date, '10:00'),
-      content: transcript,
-      source: 'appointment',
-      appointmentId: appointment._id,
-    });
-  }
-}
-
-// 醫生↔櫃台的看診留言，報到中～已完成期間都能發言（見 canPostVisitMessage）。
-// 只增不刪：用原子的 $push 直接寫進符合狀態的文件，避免「先查狀態再寫入」中間被搶的競態，
-// 也不會撞上 schema 的 optimisticConcurrency（那個只保護 .save()）。
-router.post('/:id/visit-messages', async (req, res, next) => {
-  try {
-    const sender = req.body?.sender;
-    if (!['vet', 'front_desk'].includes(sender)) return res.status(422).json({ message: '身分參數不正確' });
-    const content = String(req.body?.content ?? '').trim();
-    if (!content) return res.status(422).json({ message: '留言內容不可為空' });
-
-    const message = { sender, content, createdAt: new Date() };
-    const appointment = await Appointment.findOneAndUpdate(
-      { _id: req.params.id, status: { $in: VISIT_MESSAGE_STATUSES } },
-      { $push: { visitMessages: message } },
-      { new: true, runValidators: true }
-    );
-    if (!appointment) {
-      const exists = await Appointment.exists({ _id: req.params.id });
-      return res.status(exists ? 422 : 404).json({
-        message: exists ? '只有報到中或已完成的掛號可以留言' : '找不到掛號',
-      });
-    }
-
-    const posted = appointment.visitMessages[appointment.visitMessages.length - 1];
-    await syncVisitMessagesToClinicalNote(appointment);
-    emitVisitMessage(appointment, posted);
-    res.status(201).json(posted);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// 候診中或已完成都可以用這支修正量測／回診資料——候診頁（醫生）按「更新」時打的
+// 候診中或已完成都可以用這支修正量測／回診資料／備註——候診頁（醫生）按「更新」時打的
 // 就是這支，讓櫃台頁能立刻看到最新內容（見下方 emitAppointmentUpdate）；已完成後
-// 則是行政校正用途。看診留言串走專用的 /visit-messages 端點，不在這裡處理。
+// 則是行政校正用途。
 router.patch('/:id/visit-data', async (req, res, next) => {
   try {
     const initialAppointment = await Appointment.findById(req.params.id);
@@ -598,6 +554,7 @@ router.patch('/:id/visit-data', async (req, res, next) => {
     const followUpDate = req.body?.followUpDate;
     const followUpTime = req.body?.followUpTime;
     const followUpReason = req.body?.followUpReason;
+    const visitNote = req.body?.visitNote;
     let appointment;
     let previousFollowUpDate;
     let previousFollowUpTime;
@@ -626,6 +583,7 @@ router.patch('/:id/visit-data', async (req, res, next) => {
       if (followUpDate !== undefined) appointment.followUpDate = String(followUpDate ?? '').trim();
       if (followUpTime !== undefined) appointment.followUpTime = String(followUpTime ?? '').trim();
       if (followUpReason !== undefined) appointment.followUpReason = String(followUpReason ?? '').trim();
+      if (visitNote !== undefined) appointment.visitNote = String(visitNote ?? '').trim();
 
       if (appointment.recordId) {
         const record = await MedicalRecord.findById(appointment.recordId).session(session);
@@ -653,6 +611,28 @@ router.patch('/:id/visit-data', async (req, res, next) => {
         || appointment.followUpReason !== previousFollowUpReason)
     ) {
       await syncFollowUpAppointment(appointment);
+    }
+
+    // 看診備註跟落地的病歷日誌是同一份資料，這裡改了要同步回日誌；刻意獨立於
+    // 上面的 transaction 之外，理由同完成看診時的日誌寫入。
+    if (visitNote !== undefined) {
+      const note = await ClinicalNote.findOne({ appointmentId: appointment._id });
+      if (appointment.visitNote) {
+        if (note) {
+          note.content = appointment.visitNote;
+          await note.save();
+        } else {
+          await ClinicalNote.create({
+            petId: appointment.petId,
+            entryDate: combineClinicDateTime(appointment.date, '10:00'),
+            content: appointment.visitNote,
+            source: 'appointment',
+            appointmentId: appointment._id,
+          });
+        }
+      } else if (note) {
+        await note.deleteOne();
+      }
     }
 
     emitAppointmentUpdate(appointment);

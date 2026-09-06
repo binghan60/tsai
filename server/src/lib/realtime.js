@@ -40,17 +40,9 @@ export function initRealtime(httpServer) {
   return io;
 }
 
-// 掛號留言串新增一則時廣播給同一天房間裡的所有人；前端自己用 appointmentId 過濾。
-// 附上 petName／date／status 是給全站通知鈴鐺用的——鈴鐺不一定開在掛號頁，
-// 手上沒有這筆掛號的完整資料，得靠廣播內容自己顯示與決定點擊後要導去哪一頁。
-export function emitVisitMessage(appointment, message) {
-  io?.to(dayRoom(appointment.date)).emit('visit-message:new', {
-    appointmentId: String(appointment._id),
-    petName: appointment.petName,
-    date: appointment.date,
-    status: appointment.status,
-    message,
-  });
+// 全站聊天沒有房間概念——全診所只有一個對話，直接廣播給所有已連線且通過驗證的 socket。
+export function emitChatMessage(message) {
+  io?.emit('chat:new', message);
 }
 
 // 掛號本身的狀態／欄位有變動時廣播完整文件（完成看診、候診中或已完成修正看診資料
