@@ -74,6 +74,36 @@ const checkInSubmitting = ref(false);
 const checkInError = ref('');
 const actionToConfirm = ref(null);
 const editTarget = ref(null);
+const detailTarget = ref(null);
+const detailAppointment = computed(() => appointments.value.find((item) => item._id === detailTarget.value?._id) ?? detailTarget.value);
+const detailFields = computed(() => {
+  const appointment = detailAppointment.value;
+  if (!appointment) return [];
+  return [
+    ['病患', appointment.petName],
+    ['物種', appointment.species],
+    ['飼主', appointment.ownerName],
+    ['聯絡電話', appointment.ownerPhone],
+    ['掛號日期', formatDate(appointment.date)],
+    ['預約時間', appointment.time || '未指定'],
+    ['狀態', STATUS_LABEL[appointment.status]],
+    ['就診類型', { new: '初診', return: '回診' }[appointment.visitType]],
+    ['號碼牌', appointment.checkinNumber == null ? '—' : `${appointment.checkinNumber} 號`],
+    ['已發號碼牌', appointment.checkinNumberHistory?.join('、')],
+    ['報到時間', formatDateTime(appointment.checkedInAt)],
+    ['完成時間', formatDateTime(appointment.completedAt)],
+    ['體重', appointment.weightKg == null ? '—' : `${appointment.weightKg} kg`],
+    ['體溫', appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C`],
+    ['回診日期／時間', followUpLabel(appointment)],
+    ['草稿表單', templateName(appointment.templateId)],
+    ['來院原因', appointment.reason, true],
+    ['回診原因', appointment.followUpReason, true],
+    ['看診備註', appointment.visitNote, true],
+    ...(appointment.cancelReason ? [['取消原因', appointment.cancelReason, true]] : []),
+    ['建立時間', formatDateTime(appointment.createdAt)],
+    ['更新時間', formatDateTime(appointment.updatedAt)],
+  ];
+});
 const editSubmitting = ref(false);
 const editError = ref('');
 const cancelTarget = ref(null);
@@ -1131,52 +1161,11 @@ onBeforeUnmount(() => {
       </Card>
       </div>
 
-      <details v-if="completedAppointments.length" class="group overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-sm dark:shadow-none">
-        <summary class="flex min-h-12 list-none items-center gap-3 px-4 py-2.5 text-sm font-semibold marker:content-none hover:bg-muted/50">
-          <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-success-surface text-success ring-1 ring-success/20">
-            <Check class="h-4 w-4" stroke-width="2" />
-          </span>
-          <span>已完成</span>
-          <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-success-surface px-2 text-xs font-semibold tabular-nums text-success ring-1 ring-success/20">{{ completedAppointments.length }}</span>
-          <span class="ml-auto text-xs font-normal text-muted-foreground">查看今日完成紀錄</span>
-          <ChevronDown class="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" stroke-width="1.75" />
-        </summary>
-        <div class="overflow-x-auto border-t border-border">
-          <table class="w-full min-w-[52rem] text-left text-sm">
-            <thead class="bg-muted/50 text-xs font-semibold text-muted-foreground">
-              <tr>
-                <th class="px-4 py-3">病患</th>
-                <th class="px-4 py-3">完成時間</th>
-                <th class="px-4 py-3">體重</th>
-                <th class="px-4 py-3">體溫</th>
-                <th class="px-4 py-3">回診日期</th>
-                <th class="px-4 py-3">看診備註</th>
-                <th class="px-4 py-3">草稿表單</th>
-                <th class="px-4 py-3"><span class="sr-only">操作</span></th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border">
-              <tr v-for="appointment in completedAppointments" :key="appointment._id" class="bg-card hover:bg-muted/20">
-                <td class="px-4 py-3">
-                  <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" target="_blank" rel="noopener" class="font-semibold text-primary hover:underline">{{ appointment.petName || '—' }}</router-link>
-                  <p v-else class="font-semibold text-foreground">{{ appointment.petName || '—' }}</p>
-                  <p class="mt-0.5 text-xs text-muted-foreground">{{ appointment.ownerName || '—' }}</p>
-                </td>
-                <td class="whitespace-nowrap px-4 py-3 text-muted-foreground">{{ appointment.completedAt ? formatDateTime(appointment.completedAt, checkinTimeOptions) : '—' }}</td>
-                <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }}</td>
-                <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }}</td>
-                <td class="whitespace-nowrap px-4 py-3 text-foreground">{{ followUpLabel(appointment) }}</td>
-                <td class="max-w-64 px-4 py-3 text-muted-foreground"><p class="line-clamp-2 whitespace-pre-wrap">{{ appointment.visitNote || '—' }}</p></td>
-                <td class="px-4 py-3 text-muted-foreground">{{ templateName(appointment.templateId) }}</td>
-                <td class="px-4 py-3 text-right"><Button type="button" variant="secondary" size="sm" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </details>
       </template>
 
-      <!-- ── 統計格篩選出來的表格檢視：只看單一狀態，跟櫃台頁拿掉之前用過的版型一樣。 -->
+      <!-- ── 統計格篩選出來的表格檢視：只看單一狀態。已完成沿用原本「已完成」清單的欄位
+           （完成時間／量測／回診／備註／草稿表單），比待報到／候診中多需要看的資訊更多，
+           所以另外分支；其餘兩種狀態跟櫃台頁拿掉之前用過的版型一樣。 -->
       <template v-else>
         <EmptyState
           v-if="!filteredByStatus.length"
@@ -1184,9 +1173,66 @@ onBeforeUnmount(() => {
           :title="`今天沒有「${STATUS_LABEL[statusFilter]}」的掛號`"
           description="點一次上方統計格可以清除篩選，看回候診卡片與時間軸。"
         />
+
+        <template v-else-if="statusFilter === 'completed'">
+          <!-- 桌機：資料表 -->
+          <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none">
+            <div class="overflow-x-auto">
+              <div class="min-w-[52rem] text-left text-sm" style="--data-columns: minmax(0, 1.6fr) minmax(0, 1.1fr) minmax(0, 0.7fr) minmax(0, 0.7fr) minmax(0, 1.1fr) minmax(0, 2.6fr) minmax(0, 1.2fr) 10rem">
+                <div class="desktop-data-header text-xs font-semibold text-muted-foreground">
+                    <span class="desktop-data-cell">病患</span>
+                    <span class="desktop-data-cell">完成時間</span>
+                    <span class="desktop-data-cell">體重</span>
+                    <span class="desktop-data-cell">體溫</span>
+                    <span class="desktop-data-cell">回診日期</span>
+                    <span class="desktop-data-cell">看診備註</span>
+                    <span class="desktop-data-cell">草稿表單</span>
+                    <span class="desktop-data-cell"><span class="sr-only">操作</span></span>
+                </div>
+                  <div v-for="appointment in filteredByStatus" :key="appointment._id" class="desktop-data-row bg-card hover:bg-muted/20">
+                    <div class="desktop-data-cell">
+                      <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" target="_blank" rel="noopener" class="block truncate font-semibold text-primary hover:underline">{{ appointment.petName || '—' }}</router-link>
+                      <p v-else class="truncate font-semibold text-foreground">{{ appointment.petName || '—' }}</p>
+                      <p class="truncate text-xs text-muted-foreground">{{ appointment.ownerName || '—' }}</p>
+                    </div>
+                    <div class="whitespace-nowrap desktop-data-cell text-muted-foreground">{{ appointment.completedAt ? formatDateTime(appointment.completedAt, checkinTimeOptions) : '—' }}</div>
+                    <div class="whitespace-nowrap desktop-data-cell text-foreground">{{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }}</div>
+                    <div class="whitespace-nowrap desktop-data-cell text-foreground">{{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }}</div>
+                    <div class="whitespace-nowrap desktop-data-cell text-foreground">{{ followUpLabel(appointment) }}</div>
+                    <div class="desktop-data-cell text-muted-foreground"><p class="truncate" :title="appointment.visitNote || undefined">{{ appointment.visitNote || '—' }}</p></div>
+                    <div class="truncate desktop-data-cell text-muted-foreground">{{ templateName(appointment.templateId) }}</div>
+                    <div class="desktop-data-cell flex items-center justify-end gap-1.5"><Button type="button" variant="outline" size="xs" :aria-label="`查看 ${appointment.petName || '這筆掛號'} 的完整內容`" @click="detailTarget = appointment">查看</Button><Button type="button" variant="secondary" size="xs" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button></div>
+                  </div>
+              </div>
+            </div>
+          </Card>
+
+          <!-- 手機：卡片 -->
+          <div class="space-y-3 xl:hidden">
+            <Card v-for="appointment in filteredByStatus" :key="appointment._id" class="gap-2 p-4 shadow-sm dark:shadow-none">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" class="block truncate font-semibold text-primary">{{ appointment.petName || '—' }}</router-link>
+                  <p v-else class="truncate font-semibold text-foreground">{{ appointment.petName || '—' }}</p>
+                  <p class="truncate text-xs text-muted-foreground">{{ appointment.ownerName || '—' }}</p>
+                </div>
+                <span class="shrink-0 text-xs text-muted-foreground">{{ appointment.completedAt ? formatDateTime(appointment.completedAt, checkinTimeOptions) : '—' }}</span>
+              </div>
+              <p class="text-sm text-foreground">
+                {{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }} ・ {{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }} ・ 回診：{{ followUpLabel(appointment) }}
+              </p>
+              <p class="text-xs text-muted-foreground">草稿表單：{{ templateName(appointment.templateId) }}</p>
+              <p class="whitespace-pre-wrap text-sm text-muted-foreground">看診備註：{{ appointment.visitNote || '—' }}</p>
+              <Button type="button" variant="outline" size="xs" :aria-label="`查看 ${appointment.petName || '這筆掛號'} 的完整內容`" @click="detailTarget = appointment">查看</Button>
+              <Button type="button" variant="secondary" size="sm" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button>
+            </Card>
+          </div>
+        </template>
+
         <template v-else>
           <!-- 桌機：資料表 -->
-          <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: 6rem minmax(9rem, 1fr) 6.5rem minmax(8rem, 0.9fr) minmax(8rem, 0.9fr) 12rem">
+          <Card class="hidden overflow-x-auto p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: 6rem minmax(9rem, 1fr) 6.5rem minmax(8rem, 0.9fr) minmax(8rem, 0.9fr) 16rem">
+            <div class="min-w-[64rem]">
             <div class="desktop-data-header">
               <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">時間／牌號</span>
               <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">病患</span>
@@ -1231,6 +1277,7 @@ onBeforeUnmount(() => {
               </span>
               <span class="desktop-data-cell truncate text-muted-foreground">{{ appointment.status !== 'scheduled' ? followUpLabel(appointment) : '—' }}</span>
               <span class="desktop-data-cell flex items-center justify-end gap-1.5">
+                <Button type="button" variant="outline" size="xs" :aria-label="`查看 ${appointment.petName || '這筆掛號'} 的完整內容`" @click="detailTarget = appointment">查看</Button>
                 <template v-if="appointment.status === 'scheduled'">
                   <Button type="button" size="xs" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
                   <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
@@ -1243,6 +1290,7 @@ onBeforeUnmount(() => {
                   <Button type="button" variant="secondary" size="xs" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button>
                 </template>
               </span>
+            </div>
             </div>
           </Card>
 
@@ -1262,6 +1310,7 @@ onBeforeUnmount(() => {
                 {{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }} ・ {{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }} ・ 回診：{{ followUpLabel(appointment) }}
               </p>
               <div class="flex flex-wrap gap-1.5">
+                <Button type="button" variant="outline" size="xs" :aria-label="`查看 ${appointment.petName || '這筆掛號'} 的完整內容`" @click="detailTarget = appointment">查看</Button>
                 <template v-if="appointment.status === 'scheduled'">
                   <Button type="button" size="sm" class="flex-1" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
                   <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
@@ -1359,6 +1408,22 @@ onBeforeUnmount(() => {
       <DialogFooter>
         <Button type="button" variant="outline" :disabled="savingDefaultTemplate" @click="defaultTemplateDialogOpen = false">取消</Button>
         <Button type="button" :disabled="savingDefaultTemplate || !defaultTemplateId" @click="saveDefaultTemplate">{{ savingDefaultTemplate ? '儲存中…' : '儲存' }}</Button>
+      </DialogFooter>
+    </ModalDialog>
+
+    <ModalDialog v-if="detailAppointment" size="lg" @close="detailTarget = null">
+      <div class="p-6 pb-3 sm:p-7 sm:pb-3">
+        <DialogTitle>掛號完整內容</DialogTitle>
+        <DialogDescription class="mt-1">查看病患、掛號與看診資料。</DialogDescription>
+      </div>
+      <dl class="grid gap-4 p-6 pt-2 sm:grid-cols-2 sm:p-7 sm:pt-2">
+        <div v-for="[label, value, fullWidth] in detailFields" :key="label" class="min-w-0 space-y-1" :class="{ 'sm:col-span-2': fullWidth }">
+          <dt class="text-xs font-medium text-muted-foreground">{{ label }}</dt>
+          <dd class="whitespace-pre-wrap break-words text-sm text-foreground [overflow-wrap:anywhere]">{{ value || '—' }}</dd>
+        </div>
+      </dl>
+      <DialogFooter class="px-6 pb-6 sm:px-7 sm:pb-7">
+        <Button type="button" variant="outline" @click="detailTarget = null">關閉</Button>
       </DialogFooter>
     </ModalDialog>
 
