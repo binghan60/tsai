@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { CalendarClock, CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Lock, MessageSquareText, Pencil, Phone, Settings, User, UserPlus, UserX, X } from '@lucide/vue';
 import { http } from '../api/http';
+import { appointmentNotification, appointmentSubject, changedAppointmentFields, describeVisitChanges } from '../lib/appointmentNotifications';
 import { useToast } from '../composables/useToast';
 import { useAppointmentRealtime } from '../composables/useAppointmentRealtime';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
@@ -48,8 +49,8 @@ const chatStore = useChatStore();
 // 錯誤往外拋。操作的這台裝置自己不用因為自己剛做的事跳未讀紅點——送出前先在
 // chat store 佔位（見 markPendingAuto），該則訊息透過 Socket.IO 廣播回來時會
 // 被認出來，只加進訊息紀錄但不計未讀。
-function notifyChat(content) {
-  if (!content) return;
+function notifyChat(appointment, action, options) {
+  const content = appointmentNotification(appointment, action, options);
   chatStore.markPendingAuto(identity.value, content);
   http.post('/chat/messages', { sender: identity.value, content, auto: true }).catch(() => {});
 }
@@ -450,9 +451,9 @@ async function submitCardNumber(appointment) {
   setBusy(appointment._id, true);
   markSelfUpdate(appointment._id);
   try {
-    await http.patch(`/appointments/${appointment._id}/check-in-number`, { checkinNumber: nextNumber });
-    toast.success(`${appointment.petName || '這隻寵物'}已改拿 ${nextNumber} 號牌`, '號碼牌已更新');
-    notifyChat(`${appointment.petName || '這隻寵物'}已改拿 ${nextNumber} 號牌`);
+    const { data } = await http.patch(`/appointments/${appointment._id}/check-in-number`, { checkinNumber: nextNumber });
+    toast.success(`${appointmentSubject(data)}的號碼牌已改為 ${data.checkinNumber} 號`, '號碼牌已更新');
+    notifyChat(data, 'card_number');
     await fetchAppointments({ silent: true });
   } catch (err) {
     reportApiError(err, '號碼牌更新失敗，請稍後再試');
@@ -471,9 +472,9 @@ async function checkIn(appointment) {
     setBusy(appointment._id, true);
     markSelfUpdate(appointment._id);
     try {
-      await http.post(`/appointments/${appointment._id}/check-in`, {});
-      toast.success(`${appointment.petName || '這隻寵物'}已報到`, '報到完成');
-      notifyChat(`${appointment.petName || '這隻寵物'}已報到`);
+      const { data } = await http.post(`/appointments/${appointment._id}/check-in`, {});
+      toast.success(`${appointmentSubject(data)}已報到`, '報到完成');
+      notifyChat(data, 'check_in');
       await fetchAppointments({ silent: true });
     } catch (err) {
       reportApiError(err, '報到失敗，請稍後再試');
@@ -492,9 +493,9 @@ async function submitCheckIn(values) {
   checkInError.value = '';
   markSelfUpdate(checkInTarget.value._id);
   try {
-    await http.post(`/appointments/${checkInTarget.value._id}/check-in`, values);
-    toast.success('已建立正式病歷並報到', '報到完成');
-    notifyChat(`${checkInTarget.value.petName || '這隻寵物'}已報到`);
+    const { data } = await http.post(`/appointments/${checkInTarget.value._id}/check-in`, values);
+    toast.success(`${appointmentSubject(data)}已報到`, '報到完成');
+    notifyChat(data, 'check_in');
     checkInTarget.value = null;
     await fetchAppointments({ silent: true });
   } catch (err) {
@@ -508,9 +509,9 @@ async function submitNewAppointment(payload) {
   newAppointmentSubmitting.value = true;
   newAppointmentError.value = '';
   try {
-    await http.post('/appointments', payload);
-    toast.success(isToday.value ? '已加入今日掛號' : `已加入 ${formatDate(selectedDate.value)} 的掛號`, '新增成功');
-    notifyChat(`已新增${payload.petName || '這隻寵物'}的掛號`);
+    const { data } = await http.post('/appointments', payload);
+    toast.success(appointmentNotification(data, 'create'), '掛號已新增');
+    notifyChat(data, 'create');
     newAppointmentOpen.value = false;
     await fetchAppointments({ silent: true });
   } catch (err) {
@@ -545,10 +546,10 @@ async function completeVisit(appointment) {
     });
     const followUp = data?.followUpAppointment;
     toast.success(
-      followUp ? `已在背景建立就診草稿，並掛上 ${formatDate(followUp.date)} ${followUp.time} 的回診` : '已在背景建立就診草稿',
+      followUp ? `已建立就診草稿，並新增 ${formatDate(followUp.date)} ${followUp.time} 的回診` : '已建立就診草稿',
       '看診完成'
     );
-    notifyChat(`${appointment.petName || '這隻寵物'}已完成看診`);
+    notifyChat(data, 'complete');
     await fetchAppointments({ silent: true });
   } catch (err) {
     reportApiError(err, '完成看診失敗，請稍後再試');
@@ -579,32 +580,23 @@ function openCompletedVisitEditor(appointment) {
 }
 
 // 聊天室通知要講清楚改了什麼，不是每次都只講「已更新」；依實際變動的欄位組句子。
-function describeCompletedVisitChanges() {
-  const parts = [];
-  if (String(completedVisitOriginal.visitNote ?? '') !== String(completedVisitForm.visitNote ?? '')) parts.push('看診備註');
-  if (
-    String(completedVisitOriginal.weightKg ?? '') !== String(completedVisitForm.weightKg ?? '')
-    || String(completedVisitOriginal.temperatureC ?? '') !== String(completedVisitForm.temperatureC ?? '')
-  ) parts.push('量測資料');
-  if (
-    completedVisitOriginal.followUpDate !== completedVisitForm.followUpDate
-    || completedVisitOriginal.followUpTime !== completedVisitForm.followUpTime
-    || completedVisitOriginal.followUpReason !== completedVisitForm.followUpReason
-  ) parts.push('回診資料');
-  return parts;
-}
-
 async function saveCompletedVisit() {
   if (!completedVisitTarget.value) return;
   if (followUpTimeMissing(completedVisitForm)) {
     completedVisitError.value = '已選擇回診日期，請一併填寫時間';
     return;
   }
+  const changedParts = describeVisitChanges(completedVisitOriginal, completedVisitForm);
+  if (!changedParts.length) {
+    toast.info('看診資料沒有變更');
+    completedVisitTarget.value = null;
+    return;
+  }
   completedVisitSaving.value = true;
   completedVisitError.value = '';
   markSelfUpdate(completedVisitTarget.value._id);
   try {
-    await http.patch(`/appointments/${completedVisitTarget.value._id}/visit-data`, {
+    const { data } = await http.patch(`/appointments/${completedVisitTarget.value._id}/visit-data`, {
       weightKg: completedVisitForm.weightKg === '' ? null : Number(completedVisitForm.weightKg),
       temperatureC: completedVisitForm.temperatureC === '' ? null : Number(completedVisitForm.temperatureC),
       followUpDate: completedVisitForm.followUpDate || '',
@@ -613,9 +605,7 @@ async function saveCompletedVisit() {
       visitNote: completedVisitForm.visitNote,
     });
     toast.success('已更新看診資料', '儲存完成');
-    const petName = completedVisitTarget.value.petName || '這隻寵物';
-    const changedParts = describeCompletedVisitChanges();
-    notifyChat(changedParts.length ? `已修改${petName}的${changedParts.join('、')}` : `已更新${petName}的看診資料`);
+    notifyChat(data, 'visit_data', { changedParts });
     completedVisitTarget.value = null;
     await fetchAppointments({ silent: true });
   } catch (err) {
@@ -642,12 +632,19 @@ function requestRowAction(appointment, key) {
 
 async function submitEditAppointment(payload) {
   if (!editTarget.value) return;
+  const fields = ['petName', 'species', 'ownerName', 'ownerPhone', 'time', 'reason', 'templateId'];
+  if (!changedAppointmentFields(editTarget.value, payload, fields).length) {
+    toast.info('掛號資料沒有變更');
+    editTarget.value = null;
+    return;
+  }
   editSubmitting.value = true;
+  markSelfUpdate(editTarget.value._id);
   editError.value = '';
   try {
-    await http.put(`/appointments/${editTarget.value._id}`, payload);
+    const { data } = await http.put(`/appointments/${editTarget.value._id}`, payload);
     toast.success('掛號資料已更新', '儲存完成');
-    notifyChat(`${editTarget.value.petName || '這隻寵物'}的掛號資料已更新`);
+    notifyChat(data, 'edit');
     editTarget.value = null;
     await fetchAppointments({ silent: true });
   } catch (err) {
@@ -665,9 +662,9 @@ async function submitCancelAppointment(cancelReason) {
   setBusy(appointment._id, true);
   markSelfUpdate(appointment._id);
   try {
-    await http.post(`/appointments/${appointment._id}/cancel`, { cancelReason });
+    const { data } = await http.post(`/appointments/${appointment._id}/cancel`, { cancelReason });
     toast.info('已取消這筆掛號', '已更新');
-    notifyChat(`${appointment.petName || '這隻寵物'}已取消掛號${cancelReason ? `（原因：${cancelReason}）` : ''}`);
+    notifyChat(data, 'cancel');
     cancelTarget.value = null;
     await fetchAppointments({ silent: true });
   } catch (err) {
@@ -686,21 +683,21 @@ async function confirmRowAction() {
   markSelfUpdate(appointment._id);
   try {
     if (key === 'no_show') {
-      await http.post(`/appointments/${appointment._id}/no-show`, {});
-      toast.info('已標記未到診', '已更新');
-      notifyChat(`${appointment.petName || '這隻寵物'}已標記未到診`);
+      const { data } = await http.post(`/appointments/${appointment._id}/no-show`, {});
+      toast.info('已標記為未到診', '已更新');
+      notifyChat(data, 'no_show');
     } else if (key === 'restore') {
-      await http.post(`/appointments/${appointment._id}/restore`, {});
-      toast.success('掛號已恢復至今日候診流程', '恢復完成');
-      notifyChat(`${appointment.petName || '這隻寵物'}的掛號已恢復候診`);
+      const { data } = await http.post(`/appointments/${appointment._id}/restore`, {});
+      toast.success('掛號已恢復，等待報到', '恢復完成');
+      notifyChat(data, 'restore');
     } else if (key === 'undo_check_in') {
-      await http.post(`/appointments/${appointment._id}/restore`, {});
+      const { data } = await http.post(`/appointments/${appointment._id}/restore`, {});
       toast.info('已恢復為尚未報到', '報到已取消');
-      notifyChat(`${appointment.petName || '這隻寵物'}已取消報到`);
+      notifyChat(data, 'undo_check_in');
     } else if (key === 'delete') {
       await http.delete(`/appointments/${appointment._id}`);
       toast.success('掛號已永久刪除', '刪除完成');
-      notifyChat(`${appointment.petName || '這隻寵物'}的掛號已永久刪除`);
+      notifyChat(appointment, 'delete');
     }
     actionToConfirm.value = null;
     await fetchAppointments({ silent: true });
@@ -755,7 +752,7 @@ function handleAppointmentUpdate(updated) {
     Object.assign(appointments.value[index], updated);
   }
   if (!isSelf) {
-    toast.info(`${updated.petName || '這隻寵物'}：${STATUS_LABEL[updated.status] || '資料'}已更新`, '即時同步');
+    toast.info(`${appointmentSubject(updated)}的掛號資料已同步，目前狀態：${STATUS_LABEL[updated.status] || '未知'}`, '即時同步');
     flashHighlight(updated._id);
   }
 }

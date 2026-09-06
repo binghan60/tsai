@@ -222,7 +222,7 @@ async function confirmExamType() {
       const copiedCount = copyForwardAllValues(data);
       toast.info(
         copiedCount ? `已帶入 ${copiedCount} 個欄位的內容。` : '來源報告沒有可帶入的相同欄位，因此保持空白。',
-        '已帶入上次報告',
+        copiedCount ? '已帶入上次報告' : '沒有可帶入的內容',
       );
     }
     if (fromAppointmentId.value) {
@@ -308,7 +308,7 @@ async function confirmRecopy() {
     showRecopyDialog.value = false;
     toast.info(
       copiedCount ? `已重新帶入 ${copiedCount} 個欄位，覆蓋原本的內容。` : '來源報告沒有可帶入的相同欄位，內容維持不變。',
-      '已重新帶入報告內容',
+      copiedCount ? '已重新帶入報告內容' : '沒有可帶入的內容',
     );
   } catch (err) {
     toast.error(err.response?.data?.message || '重新帶入失敗，請稍後再試', '重新帶入失敗');

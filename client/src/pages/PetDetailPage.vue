@@ -319,7 +319,8 @@ async function copyExistingShare(record) {
   const url = `${window.location.origin}/report/${record.shareToken}`;
   const copied = await copyText(url);
   shareNotice.value = { url, copied, expiresAt: record.shareExpiresAt };
-  toast.success(copied ? '分享連結已複製到剪貼簿' : '已取得分享連結', '複製成功');
+  if (copied) toast.success('分享連結已複製到剪貼簿', '複製成功');
+  else toast.info('請從下方分享連結手動複製', '未能複製到剪貼簿');
 }
 
 async function revokeShare(record) {
