@@ -370,7 +370,7 @@ const sessionGroups = computed(() => groupBySession(timelineAppointments.value, 
 const visibleSessionGroups = computed(() =>
   sessionGroups.value
     .map((group, sessionIndex) => ({ ...group, sessionIndex }))
-    .filter((group) => group.items.length)
+    .filter((group) => group.items.length || !timelineAppointments.value.length)
 );
 const nowSessionIndex = computed(() => assignSessionIndex(now.value.getHours() * 60 + now.value.getMinutes(), SESSIONS));
 const nowLabel = computed(() =>
@@ -1040,24 +1040,18 @@ onBeforeUnmount(() => {
           <span class="inline-flex h-6.5 min-w-6.5 shrink-0 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold text-foreground">{{ timelineAppointments.length }}</span>
         </div>
 
-        <EmptyState
-          v-if="!hasAnyAppointment"
-          inset
-          :icon="UserPlus"
-          :title="isToday ? '今天還沒有任何掛號' : `${formatDate(selectedDate)} 沒有任何掛號`"
-          description="選擇「掛號」開始。"
-        />
-
-        <div v-else class="px-4 pb-4">
+        <div class="px-4 pb-4">
           <!-- 已取消、未到與已完成仍在下方各自保留；這裡只描述進行中的時間軸。 -->
-          <p v-if="!timelineAppointments.length" class="rounded-xl border border-dashed border-border bg-muted px-3.5 py-4 text-center text-sm text-muted-foreground">
-            {{ isToday ? '今天' : formatDate(selectedDate) }}沒有待報到或候診中的掛號。
-          </p>
+          <div v-if="!timelineAppointments.length" class="mb-3 rounded-xl border border-dashed border-border bg-muted px-3.5 py-4 text-center" role="status">
+            <p class="text-sm font-medium text-foreground">
+              {{ isToday ? '今天' : formatDate(selectedDate) }}{{ hasAnyAppointment ? '沒有待報到或候診中的掛號' : '還沒有任何掛號' }}
+            </p>
+            <p class="mt-1 text-xs text-muted-foreground">點選右上方「掛號」新增，資料會依預約時段顯示在下方時間軸。</p>
+          </div>
 
-          <template v-else>
           <template v-for="group in visibleSessionGroups" :key="group.session.id">
             <div
-              v-if="group.sessionIndex === 1 && sessionGroups[0]?.items.length"
+              v-if="group.sessionIndex === 1 && (sessionGroups[0]?.items.length || !timelineAppointments.length)"
               class="my-2 flex items-center gap-2.5"
               :aria-label="`${SURGERY_BLOCK.label} ${SURGERY_BLOCK.start} 到 ${SURGERY_BLOCK.end}，不排診`"
             >
@@ -1100,6 +1094,10 @@ onBeforeUnmount(() => {
               :inert="isSessionCollapsed(group.session.id)"
             >
               <div class="ml-2 min-h-0 border-l-2 border-border/80 pl-2 sm:ml-20 sm:pl-5">
+              <div v-if="!group.items.length" class="relative py-4">
+                <span class="absolute left-[-9px] top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card bg-muted-foreground/60 ring-1 ring-border sm:left-[-21px]" aria-hidden="true"></span>
+                <p class="rounded-xl border border-dashed border-border bg-field/30 px-3 py-5 text-center text-sm text-muted-foreground">此時段尚無掛號</p>
+              </div>
               <template v-for="(appointment, itemIndex) in group.items" :key="appointment._id">
                 <div
                   v-if="isToday && group.sessionIndex === nowSessionIndex && itemIndex === nowIndexInSession(group.items, now)"
@@ -1198,7 +1196,6 @@ onBeforeUnmount(() => {
               </div>
               </div>
             </div>
-          </template>
           </template>
 
           <div v-if="closedGroups.length" class="mt-4 grid gap-3 sm:grid-cols-2">
