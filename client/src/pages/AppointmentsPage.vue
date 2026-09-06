@@ -4,6 +4,8 @@ import { CalendarClock, CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRigh
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
 import { useAppointmentRealtime } from '../composables/useAppointmentRealtime';
+import { useStaffIdentity } from '../composables/useStaffIdentity';
+import { useChatStore } from '../stores/chat';
 import {
   SESSIONS,
   SURGERY_BLOCK,
@@ -36,6 +38,21 @@ import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/d
 import SegmentedControl from '../components/SegmentedControl.vue';
 
 const toast = useToast();
+const { identity } = useStaffIdentity();
+const chatStore = useChatStore();
+
+// 掛號上的動作（報到、取消、完成看診、改備註…）順手發一則訊息到全站聊天室，
+// 讓開著聊天視窗的另一邊不用回頭看掛號頁也知道發生了什麼事；發言身分沿用這台
+// 裝置在聊天室的固定身分，並標記 auto:true 讓聊天視窗知道這不是手動打字送出
+// 的。這只是錦上添花的提示，貼失敗不影響掛號本身的操作，所以不 await、也不讓
+// 錯誤往外拋。操作的這台裝置自己不用因為自己剛做的事跳未讀紅點——送出前先在
+// chat store 佔位（見 markPendingAuto），該則訊息透過 Socket.IO 廣播回來時會
+// 被認出來，只加進訊息紀錄但不計未讀。
+function notifyChat(content) {
+  if (!content) return;
+  chatStore.markPendingAuto(identity.value, content);
+  http.post('/chat/messages', { sender: identity.value, content, auto: true }).catch(() => {});
+}
 
 // 看哪一天。同步進網址（?date=），等於今天時參數會被省略——
 // 這樣返回、重整、把網址貼給別人都還在同一天上，跟其他列表頁的做法一致。
@@ -113,6 +130,9 @@ const completedVisitTarget = ref(null);
 const completedVisitSaving = ref(false);
 const completedVisitError = ref('');
 const completedVisitForm = reactive({ weightKg: '', temperatureC: '', followUpDate: '', followUpTime: '', followUpReason: '', visitNote: '' });
+// 開編輯彈窗當下的快照，存起來給儲存時比對到底改了什麼，聊天室通知才能講清楚
+// 「改了備註」還是「改了量測資料」，而不是每次都只講「已更新」。
+const completedVisitOriginal = reactive({ weightKg: '', temperatureC: '', followUpDate: '', followUpTime: '', followUpReason: '', visitNote: '' });
 
 const ROW_ACTIONS = [
   { key: 'edit', label: '編輯掛號' },
@@ -428,9 +448,11 @@ async function submitCardNumber(appointment) {
   if (nextNumber === appointment.checkinNumber) return;
 
   setBusy(appointment._id, true);
+  markSelfUpdate(appointment._id);
   try {
     await http.patch(`/appointments/${appointment._id}/check-in-number`, { checkinNumber: nextNumber });
     toast.success(`${appointment.petName || '這隻寵物'}已改拿 ${nextNumber} 號牌`, '號碼牌已更新');
+    notifyChat(`${appointment.petName || '這隻寵物'}已改拿 ${nextNumber} 號牌`);
     await fetchAppointments({ silent: true });
   } catch (err) {
     reportApiError(err, '號碼牌更新失敗，請稍後再試');
@@ -447,9 +469,11 @@ function reportApiError(err, fallback) {
 async function checkIn(appointment) {
   if (isIdentityConfirmed(appointment)) {
     setBusy(appointment._id, true);
+    markSelfUpdate(appointment._id);
     try {
       await http.post(`/appointments/${appointment._id}/check-in`, {});
       toast.success(`${appointment.petName || '這隻寵物'}已報到`, '報到完成');
+      notifyChat(`${appointment.petName || '這隻寵物'}已報到`);
       await fetchAppointments({ silent: true });
     } catch (err) {
       reportApiError(err, '報到失敗，請稍後再試');
@@ -466,9 +490,11 @@ async function submitCheckIn(values) {
   if (!checkInTarget.value) return;
   checkInSubmitting.value = true;
   checkInError.value = '';
+  markSelfUpdate(checkInTarget.value._id);
   try {
     await http.post(`/appointments/${checkInTarget.value._id}/check-in`, values);
     toast.success('已建立正式病歷並報到', '報到完成');
+    notifyChat(`${checkInTarget.value.petName || '這隻寵物'}已報到`);
     checkInTarget.value = null;
     await fetchAppointments({ silent: true });
   } catch (err) {
@@ -484,6 +510,7 @@ async function submitNewAppointment(payload) {
   try {
     await http.post('/appointments', payload);
     toast.success(isToday.value ? '已加入今日掛號' : `已加入 ${formatDate(selectedDate.value)} 的掛號`, '新增成功');
+    notifyChat(`已新增${payload.petName || '這隻寵物'}的掛號`);
     newAppointmentOpen.value = false;
     await fetchAppointments({ silent: true });
   } catch (err) {
@@ -505,6 +532,7 @@ async function completeVisit(appointment) {
     return;
   }
   setBusy(appointment._id, true);
+  markSelfUpdate(appointment._id);
   try {
     const { data } = await http.post(`/appointments/${appointment._id}/complete`, {
       weightKg: draft.weightKg === '' || draft.weightKg == null ? null : Number(draft.weightKg),
@@ -520,6 +548,7 @@ async function completeVisit(appointment) {
       followUp ? `已在背景建立就診草稿，並掛上 ${formatDate(followUp.date)} ${followUp.time} 的回診` : '已在背景建立就診草稿',
       '看診完成'
     );
+    notifyChat(`${appointment.petName || '這隻寵物'}已完成看診`);
     await fetchAppointments({ silent: true });
   } catch (err) {
     reportApiError(err, '完成看診失敗，請稍後再試');
@@ -546,6 +575,23 @@ function openCompletedVisitEditor(appointment) {
   completedVisitForm.followUpTime = appointment.followUpTime ?? '';
   completedVisitForm.followUpReason = appointment.followUpReason ?? '';
   completedVisitForm.visitNote = appointment.visitNote ?? '';
+  Object.assign(completedVisitOriginal, completedVisitForm);
+}
+
+// 聊天室通知要講清楚改了什麼，不是每次都只講「已更新」；依實際變動的欄位組句子。
+function describeCompletedVisitChanges() {
+  const parts = [];
+  if (String(completedVisitOriginal.visitNote ?? '') !== String(completedVisitForm.visitNote ?? '')) parts.push('看診備註');
+  if (
+    String(completedVisitOriginal.weightKg ?? '') !== String(completedVisitForm.weightKg ?? '')
+    || String(completedVisitOriginal.temperatureC ?? '') !== String(completedVisitForm.temperatureC ?? '')
+  ) parts.push('量測資料');
+  if (
+    completedVisitOriginal.followUpDate !== completedVisitForm.followUpDate
+    || completedVisitOriginal.followUpTime !== completedVisitForm.followUpTime
+    || completedVisitOriginal.followUpReason !== completedVisitForm.followUpReason
+  ) parts.push('回診資料');
+  return parts;
 }
 
 async function saveCompletedVisit() {
@@ -556,6 +602,7 @@ async function saveCompletedVisit() {
   }
   completedVisitSaving.value = true;
   completedVisitError.value = '';
+  markSelfUpdate(completedVisitTarget.value._id);
   try {
     await http.patch(`/appointments/${completedVisitTarget.value._id}/visit-data`, {
       weightKg: completedVisitForm.weightKg === '' ? null : Number(completedVisitForm.weightKg),
@@ -566,6 +613,9 @@ async function saveCompletedVisit() {
       visitNote: completedVisitForm.visitNote,
     });
     toast.success('已更新看診資料', '儲存完成');
+    const petName = completedVisitTarget.value.petName || '這隻寵物';
+    const changedParts = describeCompletedVisitChanges();
+    notifyChat(changedParts.length ? `已修改${petName}的${changedParts.join('、')}` : `已更新${petName}的看診資料`);
     completedVisitTarget.value = null;
     await fetchAppointments({ silent: true });
   } catch (err) {
@@ -597,6 +647,7 @@ async function submitEditAppointment(payload) {
   try {
     await http.put(`/appointments/${editTarget.value._id}`, payload);
     toast.success('掛號資料已更新', '儲存完成');
+    notifyChat(`${editTarget.value.petName || '這隻寵物'}的掛號資料已更新`);
     editTarget.value = null;
     await fetchAppointments({ silent: true });
   } catch (err) {
@@ -612,9 +663,11 @@ async function submitCancelAppointment(cancelReason) {
   cancelSubmitting.value = true;
   cancelError.value = '';
   setBusy(appointment._id, true);
+  markSelfUpdate(appointment._id);
   try {
     await http.post(`/appointments/${appointment._id}/cancel`, { cancelReason });
     toast.info('已取消這筆掛號', '已更新');
+    notifyChat(`${appointment.petName || '這隻寵物'}已取消掛號${cancelReason ? `（原因：${cancelReason}）` : ''}`);
     cancelTarget.value = null;
     await fetchAppointments({ silent: true });
   } catch (err) {
@@ -630,19 +683,24 @@ async function confirmRowAction() {
   if (!pending) return;
   const { appointment, key } = pending;
   setBusy(appointment._id, true);
+  markSelfUpdate(appointment._id);
   try {
     if (key === 'no_show') {
       await http.post(`/appointments/${appointment._id}/no-show`, {});
       toast.info('已標記未到診', '已更新');
+      notifyChat(`${appointment.petName || '這隻寵物'}已標記未到診`);
     } else if (key === 'restore') {
       await http.post(`/appointments/${appointment._id}/restore`, {});
       toast.success('掛號已恢復至今日候診流程', '恢復完成');
+      notifyChat(`${appointment.petName || '這隻寵物'}的掛號已恢復候診`);
     } else if (key === 'undo_check_in') {
       await http.post(`/appointments/${appointment._id}/restore`, {});
       toast.info('已恢復為尚未報到', '報到已取消');
+      notifyChat(`${appointment.petName || '這隻寵物'}已取消報到`);
     } else if (key === 'delete') {
       await http.delete(`/appointments/${appointment._id}`);
       toast.success('掛號已永久刪除', '刪除完成');
+      notifyChat(`${appointment.petName || '這隻寵物'}的掛號已永久刪除`);
     }
     actionToConfirm.value = null;
     await fetchAppointments({ silent: true });
@@ -653,15 +711,53 @@ async function confirmRowAction() {
   }
 }
 
+// 自己按下報到／完成看診等操作後，伺服器廣播的 appointment:updated 也會送回
+// 自己這台裝置——這時不用再跳一次「即時同步」提示，那只是自己剛做的事。送出
+// 請求前先標記，5 秒緩衝涵蓋一般的網路延遲；逾時沒被消費掉就自動視為過期。
+const selfUpdateTimers = new Map();
+function markSelfUpdate(id) {
+  if (!id) return;
+  clearTimeout(selfUpdateTimers.get(id));
+  selfUpdateTimers.set(id, setTimeout(() => selfUpdateTimers.delete(id), 5000));
+}
+function consumeSelfUpdate(id) {
+  if (!selfUpdateTimers.has(id)) return false;
+  clearTimeout(selfUpdateTimers.get(id));
+  selfUpdateTimers.delete(id);
+  return true;
+}
+
+// 遠端更新（別台電腦報到、完成看診、修正看診資料）要讓人一眼注意到，短暫替
+// 對應的卡片／列加上外框當顯目提示，1.8 秒後自動退場。
+const highlightedIds = ref(new Set());
+function isHighlighted(id) {
+  return highlightedIds.value.has(id);
+}
+function flashHighlight(id) {
+  const next = new Set(highlightedIds.value);
+  next.add(id);
+  highlightedIds.value = next;
+  setTimeout(() => {
+    const cleared = new Set(highlightedIds.value);
+    cleared.delete(id);
+    highlightedIds.value = cleared;
+  }, 1800);
+}
+
 // 掛號狀態變動時即時反映，不用等 60 秒輪詢——開著同一頁的另一台電腦報到、
 // 完成看診或修正看診資料後，這裡能立刻看到最新狀態。輪詢仍保留當保底。
 function handleAppointmentUpdate(updated) {
+  const isSelf = consumeSelfUpdate(updated._id);
   const index = appointments.value.findIndex((item) => item._id === updated._id);
   if (index === -1) {
     appointments.value.push(updated);
-    return;
+  } else {
+    Object.assign(appointments.value[index], updated);
   }
-  Object.assign(appointments.value[index], updated);
+  if (!isSelf) {
+    toast.info(`${updated.petName || '這隻寵物'}：${STATUS_LABEL[updated.status] || '資料'}已更新`, '即時同步');
+    flashHighlight(updated._id);
+  }
 }
 useAppointmentRealtime(selectedDate, { onAppointmentUpdate: handleAppointmentUpdate });
 
@@ -798,6 +894,7 @@ onBeforeUnmount(() => {
             v-for="appointment in waitingQueue"
             :key="appointment._id"
             class="rounded-xl border border-border/80 bg-card p-3 shadow-xs transition-all duration-150 hover:border-primary/40 hover:shadow-sm"
+            :class="isHighlighted(appointment._id) ? 'ring-2 ring-warning' : ''"
           >
             <div class="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3">
               <input
@@ -1031,7 +1128,10 @@ onBeforeUnmount(() => {
 
                   <div
                     class="rounded-xl border px-3 py-2 transition-colors"
-                    :class="appointment.status === 'arrived' ? 'border-primary/25 bg-accent/35 shadow-2xs' : 'border-transparent hover:bg-field/30'"
+                    :class="[
+                      appointment.status === 'arrived' ? 'border-primary/25 bg-accent/35 shadow-2xs' : 'border-transparent hover:bg-field/30',
+                      isHighlighted(appointment._id) ? 'ring-2 ring-warning' : '',
+                    ]"
                   >
                     <div class="flex flex-wrap items-center gap-2.5">
                       <span
@@ -1112,6 +1212,7 @@ onBeforeUnmount(() => {
                   v-for="appointment in group.items"
                   :key="appointment._id"
                   class="grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2.5 shadow-2xs"
+                  :class="isHighlighted(appointment._id) ? 'ring-2 ring-warning' : ''"
                 >
                   <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
                     <component :is="group.icon" class="h-4.5 w-4.5" stroke-width="1.75" />
@@ -1189,7 +1290,12 @@ onBeforeUnmount(() => {
                     <span class="desktop-data-cell">草稿表單</span>
                     <span class="desktop-data-cell"><span class="sr-only">操作</span></span>
                 </div>
-                  <div v-for="appointment in filteredByStatus" :key="appointment._id" class="desktop-data-row bg-card hover:bg-muted/20">
+                  <div
+                    v-for="appointment in filteredByStatus"
+                    :key="appointment._id"
+                    class="desktop-data-row bg-card hover:bg-muted/20"
+                    :class="isHighlighted(appointment._id) ? 'ring-2 ring-warning' : ''"
+                  >
                     <div class="desktop-data-cell">
                       <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" target="_blank" rel="noopener" class="block truncate font-semibold text-primary hover:underline">{{ appointment.petName || '—' }}</router-link>
                       <p v-else class="truncate font-semibold text-foreground">{{ appointment.petName || '—' }}</p>
@@ -1209,7 +1315,12 @@ onBeforeUnmount(() => {
 
           <!-- 手機：卡片 -->
           <div class="space-y-3 xl:hidden">
-            <Card v-for="appointment in filteredByStatus" :key="appointment._id" class="gap-2 p-4 shadow-sm dark:shadow-none">
+            <Card
+              v-for="appointment in filteredByStatus"
+              :key="appointment._id"
+              class="gap-2 p-4 shadow-sm dark:shadow-none"
+              :class="isHighlighted(appointment._id) ? 'ring-2 ring-warning' : ''"
+            >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" class="block truncate font-semibold text-primary">{{ appointment.petName || '—' }}</router-link>
@@ -1241,7 +1352,12 @@ onBeforeUnmount(() => {
               <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">回診</span>
               <span class="desktop-data-cell"><span class="sr-only">操作</span></span>
             </div>
-            <div v-for="appointment in filteredByStatus" :key="appointment._id" class="desktop-data-row">
+            <div
+              v-for="appointment in filteredByStatus"
+              :key="appointment._id"
+              class="desktop-data-row"
+              :class="isHighlighted(appointment._id) ? 'ring-2 ring-warning' : ''"
+            >
               <span class="desktop-data-cell whitespace-nowrap text-foreground">
                 <template v-if="appointment.status === 'arrived'">
                   <input
@@ -1296,7 +1412,12 @@ onBeforeUnmount(() => {
 
           <!-- 手機：卡片 -->
           <div class="space-y-3 xl:hidden">
-            <Card v-for="appointment in filteredByStatus" :key="appointment._id" class="gap-2 p-4 shadow-sm dark:shadow-none">
+            <Card
+              v-for="appointment in filteredByStatus"
+              :key="appointment._id"
+              class="gap-2 p-4 shadow-sm dark:shadow-none"
+              :class="isHighlighted(appointment._id) ? 'ring-2 ring-warning' : ''"
+            >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <router-link v-if="appointment.petId" :to="`/pets/${appointment.petId}`" class="block truncate font-semibold text-primary">{{ appointment.petName || '—' }}</router-link>

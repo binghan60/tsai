@@ -58,6 +58,25 @@ describe('chat routes', () => {
       assert.equal(body.content, '今天下午提早關診');
       assert.equal(capturedDoc.sender, 'vet');
       assert.equal(capturedDoc.content, '今天下午提早關診');
+      assert.equal(capturedDoc.auto, false);
+    } finally {
+      ChatMessage.create = originalCreate;
+    }
+  });
+
+  it('POST /messages 可以標記為掛號頁自動發送的訊息', async () => {
+    const originalCreate = ChatMessage.create;
+    let capturedDoc;
+    ChatMessage.create = async (doc) => { capturedDoc = doc; return { _id: 'new-msg', ...doc, createdAt: new Date() }; };
+    try {
+      const response = await fetch(`${origin}/api/chat/messages`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sender: 'front_desk', content: '王小明已報到', auto: true }),
+      });
+      assert.equal(response.status, 201);
+      assert.equal(capturedDoc.auto, true);
+      assert.equal((await response.json()).auto, true);
     } finally {
       ChatMessage.create = originalCreate;
     }

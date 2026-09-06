@@ -24,7 +24,7 @@ router.post('/messages', async (req, res, next) => {
     const content = String(req.body?.content ?? '').trim();
     if (!content) return res.status(422).json({ message: '訊息內容不可為空' });
 
-    const message = await ChatMessage.create({ sender, content });
+    const message = await ChatMessage.create({ sender, content, auto: Boolean(req.body?.auto) });
     emitChatMessage(message);
     res.status(201).json(message);
   } catch (err) {

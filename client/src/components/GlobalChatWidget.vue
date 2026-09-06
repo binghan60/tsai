@@ -94,7 +94,10 @@ async function submit() {
             class="max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap"
             :class="message.sender === identity ? 'bg-accent text-accent-foreground' : 'bg-muted text-foreground'"
           >{{ message.content }}</div>
-          <span class="mt-0.5 px-1 text-xs text-muted-foreground">{{ senderLabel(message.sender) }}・{{ formatDateTime(message.createdAt, timeOptions) }}</span>
+          <span class="mt-0.5 px-1 text-xs text-muted-foreground">
+            <span v-if="message.auto" class="mr-1 inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">自動通知</span>
+            {{ senderLabel(message.sender) }}・{{ formatDateTime(message.createdAt, timeOptions) }}
+          </span>
         </div>
       </div>
       <form class="flex items-end gap-2 border-t border-border p-3" @submit.prevent="submit">
