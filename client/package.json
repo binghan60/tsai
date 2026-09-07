@@ -8,6 +8,7 @@
     "build": "npm run audit:colors && vite build",
     "audit:colors": "node scripts/audit-colors.mjs",
     "test": "node --test",
+    "test:workflow-browser": "node scripts/check-appointment-workflow.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

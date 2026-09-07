@@ -63,6 +63,33 @@ test('看診資料原樣儲存不送請求或通知，數字格式與空白不�
   assert.deepEqual(describeVisitChanges({ weightKg: null }, { weightKg: 0 }), ['量測資料']);
 });
 
+test('問診完成、結帳完成、退回候診的通知文案帶出金額摘要', () => {
+  assert.match(
+    appointmentNotification({ ...appointment, billingSubtotal: 800 }, 'send_to_checkout'),
+    /已完成問診，待櫃台結帳（建議金額 NT\$800）/
+  );
+  assert.doesNotMatch(
+    appointmentNotification({ ...appointment, billingSubtotal: 0 }, 'send_to_checkout'),
+    /建議金額/
+  );
+  assert.match(
+    appointmentNotification({ ...appointment, checkoutTotal: 700 }, 'checkout_complete'),
+    /已完成結帳並看診結束（結算 NT\$700）/
+  );
+  assert.match(
+    appointmentNotification({ ...appointment, checkoutTotal: 0 }, 'checkout_complete'),
+    /已完成結帳並看診結束（結算 NT\$0）/
+  );
+  assert.match(appointmentNotification(appointment, 'reopen_visit'), /結帳已退回候診，等待醫生補充資料/);
+});
+
+test('describeVisitChanges 認得出特殊照護與批價項目的變動', () => {
+  const before = { specialCareNote: '', billingItems: [] };
+  const after = { specialCareNote: '傷口勿舔舐', billingItems: [{ name: '看診費', amount: 500 }] };
+  assert.deepEqual(describeVisitChanges(before, after), ['特殊照護', '批價項目']);
+  assert.deepEqual(describeVisitChanges(before, { ...before }), []);
+});
+
 test('恢復掛號與取消報到均描述待報到，未指定時間不冒充實際預約時間', () => {
   for (const action of ['restore', 'undo_check_in']) {
     const message = appointmentNotification({ ...appointment, time: '' }, action);

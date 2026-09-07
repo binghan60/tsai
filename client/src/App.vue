@@ -1,8 +1,8 @@
 <script setup>
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CalendarClock, Cat, ClipboardList, FileText, LayoutDashboard, LogOut, Mail, Menu, Moon, Search, Sun } from '@lucide/vue';
-import { useTheme } from './composables/useTheme';
+import { CalendarClock, Cat, ClipboardList, FileText, LayoutDashboard, Mail, Menu, Search } from '@lucide/vue';
+import AppSettingsMenu from './components/AppSettingsMenu.vue';
 import { useAuthStore } from './stores/auth';
 import { useGlobalChat } from './composables/useGlobalChat';
 import { Button } from './components/ui/button';
@@ -13,7 +13,7 @@ import GlobalChatWidget from './components/GlobalChatWidget.vue';
 
 const route = useRoute();
 const router = useRouter();
-const { isDark, toggleTheme } = useTheme();
+
 const mobileOpen = ref(false);
 const searchOpen = ref(false);
 const auth = useAuthStore();
@@ -23,6 +23,7 @@ useGlobalChat();
 // 切到飼主 B（或從舊版報告切到新版）時，舊元件與尚未完成的請求不會殘留在畫面上。
 // 查詢字串不放進 key，列表搜尋與分頁不會因此整頁重掛。
 const ROUTE_IDENTITY_PARAMS = {
+  '/appointments/:id/visit': 'id',
   '/pets/:id': 'id',
   '/records/:id/preview': 'id',
   '/report/:token': 'token',
@@ -39,7 +40,8 @@ const routeViewKey = computed(() => {
 // 沒有這層的話一進那些頁面側邊欄會全暗，等於在系統裡失去座標。
 const navItems = [
   { to: '/', label: '儀表板', exact: true, icon: LayoutDashboard },
-  { to: '/appointments', label: '掛號', exact: false, icon: CalendarClock },
+  { to: '/appointments', label: '醫師診療台', exact: false, icon: CalendarClock },
+  { to: '/reception', label: '櫃台工作台', exact: false, icon: ClipboardList },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
   { to: '/records', label: '就診紀錄', exact: false, icon: FileText },
   { to: '/records/deliveries', label: '寄送歷程', exact: false, icon: Mail },
@@ -147,25 +149,7 @@ watch(
           </div>
         </nav>
 
-        <div class="border-t border-sidebar-border p-3">
-          <button
-            type="button"
-            class="mb-2 flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            @click="logout"
-          >
-            <LogOut class="h-4 w-4" stroke-width="1.9" />
-            登出
-          </button>
-          <button
-            type="button"
-            class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            @click="toggleTheme"
-          >
-            <Sun v-if="isDark" class="h-4 w-4" stroke-width="1.9" />
-            <Moon v-else class="h-4 w-4" stroke-width="1.9" />
-            {{ isDark ? '淺色模式' : '深色模式' }}
-          </button>
-        </div>
+        <div class="border-t border-sidebar-border p-3"><AppSettingsMenu @logout="logout" /></div>
       </aside>
 
       <div class="min-w-0 flex-1 lg:@container/content">
@@ -201,17 +185,7 @@ watch(
             <span class="py-2">搜尋飼主、寵物或電話</span>
           </button>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            class="min-w-11 lg:hidden"
-            :aria-label="isDark ? '切換淺色模式' : '切換深色模式'"
-            @click="toggleTheme"
-          >
-            <Sun v-if="isDark" class="h-4 w-4" />
-            <Moon v-else class="h-4 w-4" />
-          </Button>
+          <AppSettingsMenu icon-only @logout="logout" />
         </header>
 
         <Sheet v-model:open="mobileOpen">
@@ -241,17 +215,7 @@ watch(
                 {{ item.label }}
               </router-link>
             </nav>
-            <div class="border-t border-sidebar-border p-3">
-              <button
-                type="button"
-                class="flex min-h-11 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                @click="toggleTheme"
-              >
-                <Sun v-if="isDark" class="h-4 w-4" stroke-width="1.9" />
-                <Moon v-else class="h-4 w-4" stroke-width="1.9" />
-                {{ isDark ? '淺色模式' : '深色模式' }}
-              </button>
-            </div>
+            <div class="border-t border-sidebar-border p-3"><AppSettingsMenu @logout="logout" /></div>
           </SheetContent>
         </Sheet>
 
@@ -262,6 +226,6 @@ watch(
     </div>
     <GlobalSearchDialog v-model:open="searchOpen" />
     <GlobalChatWidget />
-    <ToastContainer />
+    <ToastContainer :placement="route.path.startsWith('/appointments') || route.path === '/reception' ? 'top' : 'bottom'" />
   </template>
 </template>

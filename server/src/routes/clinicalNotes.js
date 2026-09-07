@@ -2,6 +2,8 @@ import { Router } from 'express';
 import ClinicalNote from '../models/ClinicalNote.js';
 import Appointment from '../models/Appointment.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
+import { withTransaction } from '../lib/transaction.js';
+import { emitAppointmentUpdate } from '../lib/realtime.js';
 
 const NOTE_FIELDS = ['content', 'entryDate'];
 
@@ -41,13 +43,16 @@ export const clinicalNotesRouter = Router();
 clinicalNotesRouter.put('/:id', async (req, res, next) => {
   try {
     const fields = pickNoteFields(req.body);
-    const note = await ClinicalNote.findByIdAndUpdate(req.params.id, { $set: fields }, { new: true, runValidators: true });
+    let note;
+    let appointment;
+    await withTransaction(async session => {
+      note = await ClinicalNote.findByIdAndUpdate(req.params.id, { $set: fields }, { new: true, runValidators: true, session });
+      if (note?.appointmentId && fields.content !== undefined) {
+        appointment = await Appointment.findByIdAndUpdate(note.appointmentId, { visitNote: note.content, $inc: { __v: 1 } }, { new: true, session });
+      }
+    });
     if (!note) return res.status(404).json({ message: '找不到病歷日誌' });
-    // 這筆日誌若是完成看診／候診中同步落地的，內容跟掛號的 visitNote 是同一份資料，
-    // 改這邊要同步回去。
-    if (note.appointmentId && fields.content !== undefined) {
-      await Appointment.findByIdAndUpdate(note.appointmentId, { visitNote: note.content });
-    }
+    if (appointment) emitAppointmentUpdate(appointment);
     res.json(note);
   } catch (err) {
     next(err);
@@ -56,12 +61,16 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
 
 clinicalNotesRouter.delete('/:id', async (req, res, next) => {
   try {
-    const deleted = await ClinicalNote.findByIdAndDelete(req.params.id);
+    let deleted;
+    let appointment;
+    await withTransaction(async session => {
+      deleted = await ClinicalNote.findByIdAndDelete(req.params.id, { session });
+      if (deleted?.appointmentId) {
+        appointment = await Appointment.findByIdAndUpdate(deleted.appointmentId, { visitNote: '', $inc: { __v: 1 } }, { new: true, session });
+      }
+    });
     if (!deleted) return res.status(404).json({ message: '找不到病歷日誌' });
-    // 同步同一份掛號備註：日誌沒了，備註也清空，避免兩邊資料分岔。
-    if (deleted.appointmentId) {
-      await Appointment.findByIdAndUpdate(deleted.appointmentId, { visitNote: '' });
-    }
+    if (appointment) emitAppointmentUpdate(appointment);
     res.status(204).end();
   } catch (err) {
     next(err);

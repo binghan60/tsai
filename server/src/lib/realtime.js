@@ -48,7 +48,8 @@ export function emitChatMessage(message) {
 // 掛號本身的狀態／欄位有變動時廣播完整文件（完成看診、候診中或已完成修正看診資料
 // 都會呼叫）；前端收到後直接用 _id 找到本地那一筆更新欄位，不用整頁重新 fetch——
 // 這是醫生頁按下「更新」送出量測／回診資料後，櫃台頁能立刻看到最新內容的機制。
-export function emitAppointmentUpdate(appointment) {
+export function emitAppointmentUpdate(appointment, previousDate) {
   const payload = typeof appointment.toObject === 'function' ? appointment.toObject() : appointment;
   io?.to(dayRoom(appointment.date)).emit('appointment:updated', payload);
+  if (previousDate && previousDate !== appointment.date) io?.to(dayRoom(previousDate)).emit('appointment:updated', payload);
 }

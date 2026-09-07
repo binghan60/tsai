@@ -101,6 +101,9 @@ const sectionListOpen = ref(false);
 
 const route = useRoute();
 const router = useRouter();
+const visitReturnTarget = computed(() => /^[a-f\d]{24}$/i.test(String(route.query.visit || ''))
+  ? { path: `/appointments/${route.query.visit}/visit`, query: { returnTo: route.query.returnTo } }
+  : null);
 const toast = useToast();
 const petId = ref(route.params.petId ?? null);
 const recordId = ref(route.params.id ?? null);
@@ -808,7 +811,7 @@ async function submitDraft() {
   const saved = await saveRecord({ uploadImages: true });
   if (saved) {
     leavingAfterAction.value = true;
-    await router.push(`/pets/${petId.value}`);
+    await router.push(visitReturnTarget.value || `/pets/${petId.value}`);
   }
 }
 
@@ -889,6 +892,7 @@ function handleBeforeUnload(event) {
 
 <template>
   <section class="mx-auto max-w-6xl space-y-5 pb-48 sm:pb-32">
+    <Button v-if="visitReturnTarget" as-child variant="outline"><router-link :to="visitReturnTarget">返回本次看診</router-link></Button>
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div><Breadcrumbs class="mb-2" :items="[{ label: '寵物', to: '/pets' }, { label: pet?.name || '寵物資料', to: petId ? `/pets/${petId}` : '/pets' }, { label: isEdit ? '編輯就診紀錄' : '新增就診紀錄' }]" /><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案就診紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯就診紀錄' : '新增就診紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked" class="flex flex-wrap items-center justify-end gap-3">

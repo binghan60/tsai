@@ -1,11 +1,21 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { canTransitionAppointmentStatus } from './appointmentStatus.js';
+import { canTransitionAppointmentStatus, holdsCheckinNumber } from './appointmentStatus.js';
 
 describe('canTransitionAppointmentStatus', () => {
-  it('允許預約的正常到診流程', () => {
+  it('允許預約的正常到診流程，中間要先經過待結帳', () => {
     assert.equal(canTransitionAppointmentStatus('scheduled', 'arrived'), true);
-    assert.equal(canTransitionAppointmentStatus('arrived', 'completed'), true);
+    assert.equal(canTransitionAppointmentStatus('arrived', 'pending_checkout'), true);
+    assert.equal(canTransitionAppointmentStatus('pending_checkout', 'completed'), true);
+  });
+
+  it('不能再從候診中直接完成看診，必須先進待結帳', () => {
+    assert.equal(canTransitionAppointmentStatus('arrived', 'completed'), false);
+  });
+
+  it('待結帳可以退回候診補資料，或直接取消', () => {
+    assert.equal(canTransitionAppointmentStatus('pending_checkout', 'arrived'), true);
+    assert.equal(canTransitionAppointmentStatus('pending_checkout', 'cancelled'), true);
   });
 
   it('允許取消/未到診', () => {
@@ -37,5 +47,19 @@ describe('canTransitionAppointmentStatus', () => {
   it('未知狀態一律回 false', () => {
     assert.equal(canTransitionAppointmentStatus('unknown', 'scheduled'), false);
     assert.equal(canTransitionAppointmentStatus('scheduled', 'unknown'), false);
+  });
+});
+
+describe('holdsCheckinNumber', () => {
+  it('候診中與待結帳都算持有現場號碼牌', () => {
+    assert.equal(holdsCheckinNumber('arrived'), true);
+    assert.equal(holdsCheckinNumber('pending_checkout'), true);
+  });
+
+  it('其餘狀態不持有號碼牌', () => {
+    assert.equal(holdsCheckinNumber('scheduled'), false);
+    assert.equal(holdsCheckinNumber('completed'), false);
+    assert.equal(holdsCheckinNumber('cancelled'), false);
+    assert.equal(holdsCheckinNumber('no_show'), false);
   });
 });

@@ -4,20 +4,25 @@ import { once } from 'node:events';
 import { app } from '../app.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import Appointment from '../models/Appointment.js';
+import mongoose from 'mongoose';
 
 // 完成看診／候診中同步落地的日誌（source: 'appointment'）內容跟掛號的 visitNote
 // 是同一份資料，雙向同步——這裡釘住「改日誌內容會回寫掛號」與「刪除日誌會清空備註」。
 describe('clinical notes routes', () => {
   let server;
   let origin;
+  let originalStartSession;
 
   before(async () => {
+    originalStartSession = mongoose.startSession;
+    mongoose.startSession = async () => ({ withTransaction: async callback => callback(), endSession: async () => {} });
     server = app.listen(0, '127.0.0.1');
     if (!server.listening) await once(server, 'listening');
     origin = `http://127.0.0.1:${server.address().port}`;
   });
 
   after(async () => {
+    mongoose.startSession = originalStartSession;
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 

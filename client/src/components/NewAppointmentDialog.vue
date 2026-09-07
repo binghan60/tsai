@@ -36,7 +36,6 @@ const selectedPet = ref(null);
 const petPickerOpen = ref(false);
 const pickPetError = ref('');
 const templateId = ref(props.defaultTemplateId || '');
-const templateError = ref('');
 
 // 回診跟初診共用同一份表單，只是要不要驗證寵物姓名視 mode 而定——
 // 切成兩份表單反而讓「預約時段」「來院原因」這兩個共用欄位要維護兩次。
@@ -63,10 +62,6 @@ function selectPet(pet) {
 }
 
 const onSubmit = handleSubmit((values) => {
-  if (!templateId.value) {
-    templateError.value = '請選擇要開啟的表單';
-    return;
-  }
   if (mode.value === 'return') {
     if (!selectedPet.value) {
       pickPetError.value = '請先選擇寵物';
@@ -157,14 +152,14 @@ const onSubmit = handleSubmit((values) => {
         </div>
 
         <div class="space-y-1.5">
-          <Label for="apt-template" class="text-xs font-medium text-foreground">看診表單<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-          <Select v-model="templateId" @update:model-value="templateError = ''">
-            <SelectTrigger id="apt-template" class="w-full"><SelectValue placeholder="選擇看診完成後要開啟的表單" /></SelectTrigger>
+          <Label for="apt-template" class="text-xs font-medium text-foreground">正式表單（選填）</Label>
+          <Select v-model="templateId">
+            <SelectTrigger id="apt-template" class="w-full"><SelectValue placeholder="需要時可由醫師選擇" /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="template in templates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
             </SelectContent>
           </Select>
-          <p v-if="templateError" class="text-xs font-medium text-destructive">{{ templateError }}</p>
+          <p class="text-xs text-muted-foreground">僅預選表單；醫師需要時才建立草稿。</p>
         </div>
 
         <div class="space-y-1.5">

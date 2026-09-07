@@ -10,6 +10,7 @@ import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { TimePicker } from './ui/time-picker';
+import { DatePicker } from './ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/appointmentTime';
 
@@ -42,21 +43,18 @@ const { value: species } = useField('species');
 const { value: time, errorMessage: timeError } = useField('time', requiredTime);
 const { value: reason } = useField('reason');
 const templateId = ref(String(props.appointment.templateId || props.defaultTemplateId || ''));
-const templateError = ref('');
+const date = ref(props.appointment.date);
 
 const onSubmit = handleSubmit((values) => {
-  if (!templateId.value) {
-    templateError.value = '請選擇要開啟的表單';
-    return;
-  }
   emit('submit', {
+  date: date.value,
   ownerName: values.ownerName?.trim() ?? '',
   ownerPhone: values.ownerPhone?.trim() ?? '',
   petName: values.petName.trim(),
   species: values.species?.trim() ?? '',
   time: values.time ?? '',
   reason: values.reason?.trim() ?? '',
-  templateId: templateId.value,
+  ...(templateId.value ? { templateId: templateId.value } : {}),
   });
 });
 </script>
@@ -100,19 +98,19 @@ const onSubmit = handleSubmit((values) => {
 
         <div class="space-y-1.5">
           <Label for="edit-apt-time" class="text-xs font-medium text-foreground">預約時段<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+          <DatePicker v-model="date" aria-label="預約日期" />
           <TimePicker id="edit-apt-time" v-model="time" placeholder="選擇預約時段" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" />
           <p v-if="timeError" class="text-xs font-medium text-destructive">{{ timeError }}</p>
         </div>
 
         <div class="space-y-1.5">
-          <Label for="edit-apt-template" class="text-xs font-medium text-foreground">看診表單<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-          <Select v-model="templateId" @update:model-value="templateError = ''">
-            <SelectTrigger id="edit-apt-template" class="w-full"><SelectValue placeholder="選擇看診完成後要開啟的表單" /></SelectTrigger>
+          <Label for="edit-apt-template" class="text-xs font-medium text-foreground">正式表單（選填）</Label>
+          <Select v-model="templateId">
+            <SelectTrigger id="edit-apt-template" class="w-full"><SelectValue placeholder="需要時可由醫師選擇" /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="template in templates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
             </SelectContent>
           </Select>
-          <p v-if="templateError" class="text-xs font-medium text-destructive">{{ templateError }}</p>
         </div>
 
         <div class="space-y-1.5">

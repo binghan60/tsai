@@ -414,7 +414,7 @@ describe('appointments routes', () => {
     const originalFindById = Appointment.findById;
     const appointment = {
       _id: 'apt-done',
-      status: 'arrived',
+      status: 'pending_checkout',
       date: '2026-08-26',
       checkinNumber: 1,
       save: async () => {},
@@ -453,7 +453,7 @@ describe('appointments routes', () => {
     const appointment = {
       _id: 'apt-note',
       petId: 'pet-note',
-      status: 'arrived',
+      status: 'pending_checkout',
       date: '2026-08-26',
       checkinNumber: 1,
       save: async () => {},
@@ -496,7 +496,7 @@ describe('appointments routes', () => {
     const appointment = {
       _id: 'apt-note-empty',
       petId: 'pet-note-empty',
-      status: 'arrived',
+      status: 'pending_checkout',
       date: '2026-08-26',
       checkinNumber: 1,
       save: async () => {},
@@ -539,7 +539,7 @@ describe('appointments routes', () => {
       petName: '妞妞',
       species: '犬',
       templateId: '507f1f77bcf86cd799439011',
-      status: 'arrived',
+      status: 'pending_checkout',
       date: '2026-08-26',
       checkinNumber: 1,
       save: async () => {},
@@ -590,7 +590,7 @@ describe('appointments routes', () => {
     const appointment = {
       _id: 'apt-followup-reason',
       petId: 'pet-followup-reason',
-      status: 'arrived',
+      status: 'pending_checkout',
       date: '2026-08-26',
       checkinNumber: 1,
       save: async () => {},
@@ -627,7 +627,7 @@ describe('appointments routes', () => {
     const appointment = {
       _id: 'apt-followup-offhours',
       petId: 'pet-followup-offhours',
-      status: 'arrived',
+      status: 'pending_checkout',
       date: '2026-08-26',
       checkinNumber: 1,
       save: async () => {},
@@ -761,7 +761,7 @@ describe('appointments routes', () => {
         body: JSON.stringify({ weightKg: 3 }),
       });
       assert.equal(response.status, 422);
-      assert.match((await response.json()).message, /候診中或已完成/);
+      assert.match((await response.json()).message, /候診中、待結帳或已完成/);
     } finally {
       Appointment.findById = originalFindById;
     }
@@ -1119,6 +1119,177 @@ describe('appointments routes', () => {
     }
   });
 
+  it('候診中不能跳過待結帳直接完成看診', async () => {
+    const originalFindById = Appointment.findById;
+    Appointment.findById = async () => ({ _id: 'apt-4b', status: 'arrived' });
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-4b/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(response.status, 422);
+      assert.deepEqual(await response.json(), { message: '無法從「報到」改為「已完成」' });
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('問診完成：候診中掛號送出批價/照護資料後轉入待結帳，號碼牌不歸還', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-checkout',
+      status: 'arrived',
+      checkinNumber: 5,
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-checkout/send-to-checkout`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          weightKg: 4.2,
+          specialCareNote: '傷口勿舔舐',
+          billingItems: [{ name: '看診費', quantity: 1, unitPrice: 500 }, { name: '' }],
+        }),
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(appointment.status, 'pending_checkout');
+      assert.ok(appointment.pendingCheckoutAt instanceof Date);
+      assert.equal(appointment.checkinNumber, 5, '人還在診所，號碼牌不歸還');
+      assert.equal(appointment.specialCareNote, '傷口勿舔舐');
+      assert.equal(appointment.billingItems.length, 1, '沒有名稱的項目要被過濾掉');
+      assert.equal(appointment.billingSubtotal, 500);
+      assert.equal(body.status, 'pending_checkout');
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('問診完成只能從候診中呼叫', async () => {
+    const originalFindById = Appointment.findById;
+    Appointment.findById = async () => ({ _id: 'apt-checkout-bad', status: 'scheduled' });
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-checkout-bad/send-to-checkout`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(response.status, 422);
+      assert.deepEqual(await response.json(), { message: '無法從「已預約」改為「待結帳」' });
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('確認結帳：未帶結算總額時預設採用建議小計', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-checkout-default-total',
+      status: 'pending_checkout',
+      date: '2026-08-26',
+      checkinNumber: 2,
+      billingItems: [{ amount: 800 }],
+      billingSubtotal: 800,
+      save: async () => {},
+    };
+    Appointment.findById = () => ({
+      session: async () => appointment,
+      then: (resolve, reject) => Promise.resolve(appointment).then(resolve, reject),
+    });
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-checkout-default-total/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.checkoutTotal, 800);
+    } finally {
+      Appointment.findById = originalFindById;
+      queue.restore();
+    }
+  });
+
+  it('確認結帳：帶了結算總額且跟建議小計不同時，照櫃台輸入的值為準', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-checkout-discount',
+      status: 'pending_checkout',
+      date: '2026-08-26',
+      checkinNumber: 2,
+      billingItems: [{ amount: 800 }],
+      billingSubtotal: 800,
+      save: async () => {},
+    };
+    Appointment.findById = () => ({
+      session: async () => appointment,
+      then: (resolve, reject) => Promise.resolve(appointment).then(resolve, reject),
+    });
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-checkout-discount/complete`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ checkoutTotal: 700, checkoutAdjustmentNote: '常客折扣' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.checkoutTotal, 700);
+      assert.equal(appointment.checkoutAdjustmentNote, '常客折扣');
+    } finally {
+      Appointment.findById = originalFindById;
+      queue.restore();
+    }
+  });
+
+  it('退回候診：待結帳可以退回候診補資料，保留已填的批價與照護資料', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-reopen',
+      status: 'pending_checkout',
+      pendingCheckoutAt: new Date(),
+      billingItems: [{ name: '看診費', amount: 500 }],
+      specialCareNote: '傷口勿舔舐',
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-reopen/reopen-visit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.status, 'arrived');
+      assert.equal(appointment.pendingCheckoutAt, null);
+      assert.equal(appointment.billingItems.length, 1, '退回候診不清空已填的批價資料');
+      assert.equal(appointment.specialCareNote, '傷口勿舔舐');
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('退回候診只能從待結帳呼叫', async () => {
+    const originalFindById = Appointment.findById;
+    Appointment.findById = async () => ({ _id: 'apt-reopen-bad', status: 'completed' });
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-reopen-bad/reopen-visit`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(response.status, 422);
+      assert.deepEqual(await response.json(), { message: '無法從「已完成」改為「報到」' });
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
   it('取消掛號會保存去除前後空白的取消原因', async () => {
     const originalFindById = Appointment.findById;
     const appointment = {
@@ -1138,6 +1309,32 @@ describe('appointments routes', () => {
       assert.equal(response.status, 200);
       assert.equal(appointment.status, 'cancelled');
       assert.equal(appointment.cancelReason, '飼主臨時改期');
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('待結帳中被取消一樣要歸還號碼牌', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-cancel-checkout',
+      status: 'pending_checkout',
+      checkinNumber: 4,
+      checkinNumberHistory: [],
+      cancelReason: '',
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-cancel-checkout/cancel`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ cancelReason: '結帳前反悔' }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(appointment.status, 'cancelled');
+      assert.equal(appointment.checkinNumber, null);
+      assert.deepEqual(appointment.checkinNumberHistory, [4]);
     } finally {
       Appointment.findById = originalFindById;
     }

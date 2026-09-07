@@ -3,7 +3,8 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
 const DashboardPage = () => import('../pages/DashboardPage.vue');
-const AppointmentsPage = () => import('../pages/AppointmentsPage.vue');
+const AppointmentWorkspacePage = () => import('../pages/AppointmentWorkspacePage.vue');
+const AppointmentVisitPage = () => import('../pages/AppointmentVisitPage.vue');
 const PetsListPage = () => import('../pages/PetsListPage.vue');
 const PetCreatePage = () => import('../pages/PetCreatePage.vue');
 const PetDetailPage = () => import('../pages/PetDetailPage.vue');
@@ -30,8 +31,9 @@ const router = createRouter({
   routes: [
     { path: '/login', component: LoginPage, meta: { bare: true, public: true, title: '登入' } },
     { path: '/', component: DashboardPage, meta: { title: '儀表板' } },
-    // 掛號與候診：電話掛號、報到候診、填寫看診資料、完成看診都在這一頁。
-    { path: '/appointments', component: AppointmentsPage, meta: { title: '掛號與候診' } },
+    { path: '/appointments', component: AppointmentWorkspacePage, props: { workspaceRole: 'vet' }, meta: { title: '醫師診療台' } },
+    { path: '/reception', component: AppointmentWorkspacePage, props: { workspaceRole: 'front_desk' }, meta: { title: '櫃台工作台' } },
+    { path: '/appointments/:id/visit', component: AppointmentVisitPage, meta: { title: '看診', nav: '/appointments' } },
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },
     // 靜態路由要排在 /pets/:id 前面，不然 "new" 會被吃成動態參數 id。
     { path: '/pets/new', component: PetCreatePage, meta: { title: '新增寵物' } },

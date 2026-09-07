@@ -1,5 +1,22 @@
 import mongoose from 'mongoose';
 
+// 批價／開藥合併清單的單一項目。kind==='medication' 時 dosage/instructions 才有意義，
+// 但不因 kind 切換而清空欄位值，避免使用者來回切換時遺失已輸入的內容。
+const appointmentBillingItemSchema = new mongoose.Schema(
+  {
+    kind: { type: String, enum: ['fee', 'medication'], default: 'fee' },
+    name: { type: String, required: true, trim: true },
+    quantity: { type: Number, default: 1, min: 0 },
+    unitPrice: { type: Number, default: 0, min: 0 },
+    // 小計快照：預設等於 quantity*unitPrice，但允許人工覆寫（例如整批藥另外喊價），
+    // 見 lib/appointmentBilling.js 的 sanitizeBillingItem。
+    amount: { type: Number, default: 0, min: 0 },
+    dosage: { type: String, default: '', trim: true },
+    instructions: { type: String, default: '', trim: true },
+  },
+  { _id: true }
+);
+
 const appointmentSchema = new mongoose.Schema(
   {
     // 診所當天日期，來源真相；所有「哪一天」的查詢都以它為準。
@@ -33,7 +50,7 @@ const appointmentSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ['scheduled', 'arrived', 'completed', 'cancelled', 'no_show'],
+      enum: ['scheduled', 'arrived', 'pending_checkout', 'completed', 'cancelled', 'no_show'],
       default: 'scheduled',
     },
     cancelReason: { type: String, default: '', trim: true, maxlength: 300 },
@@ -61,9 +78,35 @@ const appointmentSchema = new mongoose.Schema(
     // 同步這筆（見 routes/appointments.js 的 syncFollowUpAppointment），只有它還是 scheduled
     // 狀態才動；已經報到/完成/取消就是現場已經另外處理過了，不回頭改。
     followUpAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
-    // 醫生↔櫃台的內部備註（批價、注意事項等），不會出現在健檢報告裡。
+    // 醫生↔櫃台的內部操作備註（行政交接等），不會出現在健檢報告，也不會讓飼主看到。
+    // 藥品/費用請填 billingItems，要提醒飼主的照護注意事項請填 specialCareNote。
     // 跟 clinicalNotes（病歷日誌）雙向同步，見 routes/appointments.js 與 routes/clinicalNotes.js。
     visitNote: { type: String, default: '', trim: true },
+
+    // 面向飼主的照護提醒（例如「傷口勿舔舐」），由醫生填、給櫃台轉告客人。
+    // 語意上跟 visitNote（內部溝通）分開，刻意不跟 clinicalNotes 雙向同步——
+    // 單一資料來源留在這裡，避免同時存在兩套同步機制。
+    specialCareNote: { type: String, default: '', trim: true, maxlength: 500 },
+    // 批價／開藥合併清單，醫生問診完成時填、櫃台結帳時可調整。
+    billingItems: { type: [appointmentBillingItemSchema], default: [] },
+    // 永遠由伺服器依 billingItems 重算（見 lib/appointmentBilling.js），不信任前端送來的加總值。
+    billingSubtotal: { type: Number, default: 0, min: 0 },
+    // 櫃台最終確認的結算總額，可能因折扣/抹零而不同於 billingSubtotal；只在結帳完成時寫入。
+    checkoutTotal: { type: Number, default: null, min: 0 },
+    checkoutAdjustmentNote: { type: String, default: '', trim: true, maxlength: 200 },
+    // 問診完成、轉入待結帳的時間，待結帳佇列依此排序（FIFO）。
+    pendingCheckoutAt: { type: Date, default: null },
+
+    workflowVersion: { type: Number, default: 0 },
+    visitStartedAt: { type: Date, default: null },
+    visitCompletedAt: { type: Date, default: null },
+    billingCompletedAt: { type: Date, default: null },
+    paymentCompletedAt: { type: Date, default: null },
+    billingRevision: { type: Number, default: 0 },
+    paymentMethod: { type: String, enum: ['', 'cash', 'card', 'transfer'], default: '' },
+    handoffNote: { type: String, default: '', trim: true, maxlength: 1000 },
+    handoffAcknowledgedAt: { type: Date, default: null },
+    followUpRecommendation: { type: String, default: '', trim: true, maxlength: 500 },
     completedAt: { type: Date, default: null },
   },
   { timestamps: true, optimisticConcurrency: true }
@@ -73,11 +116,16 @@ const appointmentSchema = new mongoose.Schema(
 appointmentSchema.index({ scheduledAt: 1 });
 // 依狀態篩選（例如把已取消/未到跟其餘分開），以及讀取當日候診佇列。
 appointmentSchema.index({ status: 1, scheduledAt: 1 });
-// 同一天仍在候診的人不能同時持有相同的實體號碼牌。兩人同時報到可能算到同一張
+// 同一天仍持有號碼牌的人不能同時持有相同的實體號碼牌。兩人同時報到可能算到同一張
 // 可用牌號，由這個索引擋下後讓報到流程重試；離開候診的人號碼會清空，不受索引管理。
+// pending_checkout（問診完成、待結帳）人還在診所、還沒歸還號碼牌，一併納入保護範圍，
+// 見 lib/appointmentStatus.js 的 holdsCheckinNumber。
 appointmentSchema.index(
   { date: 1, checkinNumber: 1 },
-  { unique: true, partialFilterExpression: { status: 'arrived', checkinNumber: { $type: 'number' } } }
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ['arrived', 'pending_checkout'] }, checkinNumber: { $type: 'number' } },
+  }
 );
 // 同一天每個紙本牌號只能發出一次；即使已完成、取消報到或中途改號，舊號仍由 history 保留。
 appointmentSchema.index(

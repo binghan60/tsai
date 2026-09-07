@@ -7,13 +7,11 @@ import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { useToast } from '../composables/useToast';
 import { formatDateTime } from '../lib/datetime';
 import { Button } from './ui/button';
-import SegmentedControl from './SegmentedControl.vue';
 
 // 全站即時聊天的浮動視窗：右下角常駐泡泡，任何頁面都叫得出來，不綁任何
-// 掛號／病患。身分是裝置固定的（見 useStaffIdentity）——這台電腦第一次用
-// 聊天室時選一次，之後記住，不用每次進來手動選。
+// 掛號／病患。身分在設定選單中選擇並記住，聊天室只顯示目前身分。
 const store = useChatStore();
-const { identity, setIdentity } = useStaffIdentity();
+const { identity } = useStaffIdentity();
 const toast = useToast();
 
 const draft = ref('');
@@ -70,17 +68,7 @@ async function submit() {
         </Button>
       </div>
       <div class="border-b border-border px-4 py-2.5">
-        <SegmentedControl
-          :model-value="identity"
-          :options="[
-            { value: 'vet', label: '醫生' },
-            { value: 'front_desk', label: '櫃台' },
-          ]"
-          aria-label="這台裝置的身分"
-          size="sm"
-          full-width
-          @update:model-value="setIdentity"
-        />
+        <p class="text-xs text-muted-foreground">目前身分：{{ senderLabel(identity) }}</p>
       </div>
       <div ref="listEl" class="flex-1 space-y-2 overflow-y-auto px-4 py-3">
         <p v-if="!store.messages.length" class="py-8 text-center text-sm text-muted-foreground">還沒有訊息，開始聊聊吧</p>

@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { CalendarClock, CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Lock, MessageSquareText, Pencil, Phone, Settings, User, UserPlus, UserX, X } from '@lucide/vue';
+import { CalendarClock, CalendarX2, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Lock, MessageSquareText, Pencil, Phone, RotateCcw, Settings, ShieldAlert, User, UserPlus, UserX, Wallet, X } from '@lucide/vue';
+import AppointmentBillingEditor from '../components/AppointmentBillingEditor.vue';
+import AppointmentQueueCardItem from '../components/AppointmentQueueCardItem.vue';
 import { http } from '../api/http';
 import { appointmentNotification, appointmentSubject, changedAppointmentFields, describeVisitChanges } from '../lib/appointmentNotifications';
 import { useToast } from '../composables/useToast';
@@ -16,6 +18,7 @@ import {
   isIdentityConfirmed,
   nowIndexInSession,
   splitAppointmentsByQueueState,
+  visitTypeMeta,
 } from '../lib/appointmentTimeline';
 import { clinicDateInput, formatDate, formatDateTime, shiftDateInput, startOfWeek, weekdayLabel } from '../lib/datetime';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
@@ -77,11 +80,30 @@ let nowTimer;
 let refreshTimer;
 
 const expandedIds = ref(new Set());
+const checkoutExpandedIds = ref(new Set());
 const collapsedSessionIds = ref(new Set());
 const editingCardNumberId = ref(null);
 const cardNumberDraft = ref('');
 const simpleForms = reactive({});
+const checkoutForms = reactive({});
 const busyIds = ref(new Set());
+
+// 候診卡片與待結帳卡片堆疊在左欄同一個位置，依裝置身分（醫生／櫃台）決定預設哪張
+// 展開、哪張摺成摘要列——但只影響初始呈現，不是功能鎖，兩張卡片本身的按鈕/輸入框
+// 完全不因身分而 disable，使用者仍可以隨時手動展開/收合。之後切換身分不會回頭改動
+// 使用者已經手動調整過的展開狀態。
+const sectionOpen = reactive({
+  waiting: identity.value !== 'front_desk',
+  checkout: identity.value === 'front_desk',
+  // 新增掛號、報到、編輯掛號資料、取消/標記未到/恢復掛號/取消報到——這些都是行政/排班
+  // 工作，不是醫生問診的一部分。醫生裝置預設收起來，眼前只看得到候診名單；櫃台裝置
+  // 預設攤開。跟候診/待結帳卡片一樣不是硬權限牆，手動切一次就看得到、按得到，
+  // 之後切換身分也不會回頭改動已經手動調整過的狀態。
+  admin: identity.value !== 'vet',
+});
+function toggleSection(key) {
+  sectionOpen[key] = !sectionOpen[key];
+}
 
 const newAppointmentOpen = ref(false);
 const newAppointmentSubmitting = ref(false);
@@ -109,14 +131,19 @@ const detailFields = computed(() => {
     ['號碼牌', appointment.checkinNumber == null ? '—' : `${appointment.checkinNumber} 號`],
     ['已發號碼牌', appointment.checkinNumberHistory?.join('、')],
     ['報到時間', formatDateTime(appointment.checkedInAt)],
+    ['問診完成時間', formatDateTime(appointment.pendingCheckoutAt)],
     ['完成時間', formatDateTime(appointment.completedAt)],
     ['體重', appointment.weightKg == null ? '—' : `${appointment.weightKg} kg`],
     ['體溫', appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C`],
     ['回診日期／時間', followUpLabel(appointment)],
     ['草稿表單', templateName(appointment.templateId)],
+    ['建議小計', appointment.billingSubtotal ? `NT$${appointment.billingSubtotal}` : '—'],
+    ['結算總額', checkoutSummaryLabel(appointment)],
     ['來院原因', appointment.reason, true],
     ['回診原因', appointment.followUpReason, true],
     ['看診備註', appointment.visitNote, true],
+    ['照護提醒', appointment.specialCareNote, true],
+    ...(appointment.checkoutAdjustmentNote ? [['結算調整說明', appointment.checkoutAdjustmentNote, true]] : []),
     ...(appointment.cancelReason ? [['取消原因', appointment.cancelReason, true]] : []),
     ['建立時間', formatDateTime(appointment.createdAt)],
     ['更新時間', formatDateTime(appointment.updatedAt)],
@@ -144,33 +171,25 @@ const ROW_ACTIONS_ARRIVED = [
   { key: 'edit', label: '編輯掛號' },
   { key: 'undo_check_in', label: '取消報到', danger: true },
 ];
+const ROW_ACTIONS_PENDING_CHECKOUT = [
+  { key: 'reopen_visit', label: '退回候診' },
+  { key: 'cancel', label: '取消掛號', danger: true },
+];
 
 const STATUS_LABEL = {
   scheduled: '未報到',
   arrived: '候診中',
+  pending_checkout: '待結帳',
   completed: '已完成',
   cancelled: '已取消',
   no_show: '未到診',
 };
 
-const VISIT_TYPE_META = {
-  new: { label: '初診', classes: 'bg-brand-50 text-brand-700 ring-brand-300/80 dark:bg-brand-950/60 dark:text-brand-200 dark:ring-brand-500/40' },
-  return: { label: '回診', classes: 'bg-petrol-50 text-petrol-700 ring-petrol-300/80 dark:bg-petrol-950/60 dark:text-petrol-300 dark:ring-petrol-500/40' },
-  unknown: { label: '類型未記錄', classes: 'bg-muted text-muted-foreground ring-border' },
-};
-
-function visitTypeMeta(appointment) {
-  if (VISIT_TYPE_META[appointment?.visitType]) return VISIT_TYPE_META[appointment.visitType];
-  // 舊資料在尚未報到時，petId 仍能代表掛號當下是否選了既有病患；報到後 petId
-  // 可能是初診現場才建立的，這時不能再猜，明確標示未記錄。
-  if (appointment?.status === 'scheduled') return appointment.petId ? VISIT_TYPE_META.return : VISIT_TYPE_META.new;
-  return VISIT_TYPE_META.unknown;
-}
-
 function appointmentStatusClasses(status) {
   return {
     scheduled: 'bg-info-surface text-info',
     arrived: 'bg-accent text-accent-foreground',
+    pending_checkout: 'bg-warning-surface text-warning',
     completed: 'bg-success-surface text-success',
     cancelled: 'bg-destructive-surface text-destructive',
     no_show: 'bg-muted text-muted-foreground',
@@ -233,6 +252,8 @@ async function saveDefaultTemplate() {
 const appointmentGroups = computed(() => splitAppointmentsByQueueState(appointments.value));
 // 候診佇列＝已報到還沒看完的人，由上而下依報到時間排列；牌號只供現場辨識。
 const waitingQueue = computed(() => appointmentGroups.value.waiting);
+// 待結帳佇列＝醫生問診完成、還沒結帳的人，依轉入待結帳的時間排列；人還在診所，牌號不變。
+const pendingCheckoutQueue = computed(() => appointmentGroups.value.pendingCheckout);
 // 尚未報到數量獨立用於流程摘要；時間軸本身會連同已報到項目一起顯示。
 const upcomingAppointments = computed(() => appointmentGroups.value.scheduled);
 // 時間軸保留預約當下的脈絡：報到後另外進入候診佇列，但仍留在原預約時間上。
@@ -253,13 +274,14 @@ const dayStats = computed(() => [
   { key: 'total', label: '今日掛號', icon: CalendarClock, value: appointments.value.length, iconBg: 'bg-primary/10 text-primary ring-1 ring-primary/20' },
   { key: 'scheduled', label: '待報到', icon: UserPlus, value: upcomingAppointments.value.length, iconBg: 'bg-info-surface text-info ring-1 ring-info/20' },
   { key: 'waiting', label: '候診中', icon: Clock, value: waitingQueue.value.length, iconBg: 'bg-petrol-100 text-petrol-700 dark:bg-petrol-900/50 dark:text-petrol-300 ring-1 ring-petrol-300/40' },
+  { key: 'pendingCheckout', label: '待結帳', icon: Wallet, value: pendingCheckoutQueue.value.length, iconBg: 'bg-warning-surface text-warning ring-1 ring-warning/20' },
   { key: 'completed', label: '已完成', icon: Check, value: completedAppointments.value.length, iconBg: 'bg-success-surface text-success ring-1 ring-success/20' },
 ]);
 
-// 「待報到／候診中／已完成」三格可以點擊，切成表格檢視只看那個狀態；再點一次
+// 「待報到／候診中／待結帳／已完成」四格可以點擊，切成表格檢視只看那個狀態；再點一次
 // 同一格清除篩選、回到候診卡片＋時間軸的預設畫面。「今日掛號」純粹顯示總數，
 // 不參與篩選（它不是單一狀態，沒有對應的表格可以切）。
-const STATUS_FILTER_MAP = { scheduled: 'scheduled', waiting: 'arrived', completed: 'completed' };
+const STATUS_FILTER_MAP = { scheduled: 'scheduled', waiting: 'arrived', pendingCheckout: 'pending_checkout', completed: 'completed' };
 const statusFilter = ref(null);
 function toggleStatusFilter(key) {
   const value = STATUS_FILTER_MAP[key];
@@ -272,11 +294,19 @@ const filteredByStatus = computed(() => {
     .filter((item) => item.status === statusFilter.value)
     .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
 });
-// 從表格的候診中列跳回候診卡片並展開，複用同一套 simpleForms／completeVisit，
+// 從表格的候診中列跳回候診卡片並展開，複用同一套 simpleForms／sendToCheckout，
 // 不用在表格裡重做一次量測表單。
 function focusCandidate(appointment) {
   statusFilter.value = null;
+  sectionOpen.waiting = true;
   if (!expandedIds.value.has(appointment._id)) toggleExpanded(appointment);
+}
+
+// 同上，從表格的待結帳列跳回待結帳卡片並展開。
+function focusCheckout(appointment) {
+  statusFilter.value = null;
+  sectionOpen.checkout = true;
+  if (!checkoutExpandedIds.value.has(appointment._id)) toggleCheckout(appointment);
 }
 
 // 週檢視相關
@@ -408,11 +438,40 @@ function toggleExpanded(appointment) {
         followUpTime: appointment.followUpTime ?? '',
         followUpReason: appointment.followUpReason ?? '',
         visitNote: appointment.visitNote ?? '',
+        specialCareNote: appointment.specialCareNote ?? '',
+        billingItems: (appointment.billingItems ?? []).map((item) => ({ ...item })),
         templateId: String(appointment.templateId || defaultTemplateId.value || ''),
       };
     }
   }
   expandedIds.value = next;
+}
+
+function toggleCheckout(appointment) {
+  const next = new Set(checkoutExpandedIds.value);
+  if (next.has(appointment._id)) {
+    next.delete(appointment._id);
+  } else {
+    next.add(appointment._id);
+    if (!checkoutForms[appointment._id]) {
+      checkoutForms[appointment._id] = {
+        billingItems: (appointment.billingItems ?? []).map((item) => ({ ...item })),
+        checkoutTotal: appointment.billingSubtotal ?? 0,
+        checkoutAdjustmentNote: '',
+      };
+    }
+  }
+  checkoutExpandedIds.value = next;
+}
+
+function isCheckoutExpanded(id) {
+  return checkoutExpandedIds.value.has(id);
+}
+
+// 待結帳卡片的批價清單改動時，結算總額還沒被使用者手動調整過就跟著建議小計走，
+// 一改就自動同步；使用者一旦手動改過結算總額，就不再回頭覆寫，尊重折扣/抹零的輸入。
+function checkoutSubtotal(appointmentId) {
+  return (checkoutForms[appointmentId]?.billingItems ?? []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 }
 
 function isBusy(id) {
@@ -526,7 +585,9 @@ function followUpTimeMissing(draft) {
   return Boolean(draft?.followUpDate && !draft?.followUpTime);
 }
 
-async function completeVisit(appointment) {
+// 候診 → 待結帳。醫生問診完成時呼叫，批價/開藥清單與特殊照護提醒一併送出交給櫃台；
+// 建立健檢報告草稿的動作仍留在結帳完成（confirmCheckout）那一步。
+async function sendToCheckout(appointment) {
   const draft = simpleForms[appointment._id] || {};
   if (followUpTimeMissing(draft)) {
     toast.error('已選擇回診日期，請一併填寫時間', '看診資料未完成');
@@ -535,24 +596,63 @@ async function completeVisit(appointment) {
   setBusy(appointment._id, true);
   markSelfUpdate(appointment._id);
   try {
-    const { data } = await http.post(`/appointments/${appointment._id}/complete`, {
+    const { data } = await http.post(`/appointments/${appointment._id}/send-to-checkout`, {
       weightKg: draft.weightKg === '' || draft.weightKg == null ? null : Number(draft.weightKg),
       temperatureC: draft.temperatureC === '' || draft.temperatureC == null ? null : Number(draft.temperatureC),
       followUpDate: draft.followUpDate || '',
       followUpTime: draft.followUpTime || '',
       followUpReason: draft.followUpReason || '',
       visitNote: draft.visitNote || '',
+      specialCareNote: draft.specialCareNote || '',
+      billingItems: draft.billingItems || [],
       templateId: draft.templateId || undefined,
+    });
+    toast.success('已標記問診完成，待櫃台結帳', '問診完成');
+    notifyChat(data, 'send_to_checkout');
+    await fetchAppointments({ silent: true });
+  } catch (err) {
+    reportApiError(err, '問診完成失敗，請稍後再試');
+  } finally {
+    setBusy(appointment._id, false);
+  }
+}
+
+// 待結帳 → 已完成。櫃台確認結帳時呼叫，這一步才真正建立健檢報告草稿、幫忙掛回診號。
+async function confirmCheckout(appointment) {
+  const draft = checkoutForms[appointment._id] || {};
+  setBusy(appointment._id, true);
+  markSelfUpdate(appointment._id);
+  try {
+    const { data } = await http.post(`/appointments/${appointment._id}/complete`, {
+      billingItems: draft.billingItems || [],
+      checkoutTotal: draft.checkoutTotal === '' || draft.checkoutTotal == null ? undefined : Number(draft.checkoutTotal),
+      checkoutAdjustmentNote: draft.checkoutAdjustmentNote || '',
     });
     const followUp = data?.followUpAppointment;
     toast.success(
-      followUp ? `已建立就診草稿，並新增 ${formatDate(followUp.date)} ${followUp.time} 的回診` : '已建立就診草稿',
-      '看診完成'
+      followUp ? `已完成結帳，並新增 ${formatDate(followUp.date)} ${followUp.time} 的回診` : '已完成結帳',
+      '結帳完成'
     );
-    notifyChat(data, 'complete');
+    notifyChat(data, 'checkout_complete');
     await fetchAppointments({ silent: true });
   } catch (err) {
-    reportApiError(err, '完成看診失敗，請稍後再試');
+    reportApiError(err, '結帳失敗，請稍後再試');
+  } finally {
+    setBusy(appointment._id, false);
+  }
+}
+
+// 待結帳 → 候診中。結帳前發現醫生資料有誤或漏開藥時的安全閥，保留已填的批價/照護資料。
+async function reopenVisit(appointment) {
+  setBusy(appointment._id, true);
+  markSelfUpdate(appointment._id);
+  try {
+    const { data } = await http.post(`/appointments/${appointment._id}/reopen-visit`, {});
+    toast.info('已退回候診，醫生可以補充資料後重新送出', '已退回候診');
+    notifyChat(data, 'reopen_visit');
+    await fetchAppointments({ silent: true });
+  } catch (err) {
+    reportApiError(err, '退回候診失敗，請稍後再試');
   } finally {
     setBusy(appointment._id, false);
   }
@@ -565,6 +665,18 @@ function followUpLabel(appointment) {
 
 function templateName(templateId) {
   return formTemplates.value.find((template) => String(template._id) === String(templateId))?.name ?? '未選擇表單';
+}
+
+// 已完成清單的結算總額顯示；跟建議小計不同時附上調整說明當 tooltip，方便事後稽核金額為何不同。
+function checkoutSummaryLabel(appointment) {
+  if (appointment.checkoutTotal == null) return '—';
+  return `NT$${appointment.checkoutTotal}`;
+}
+function checkoutSummaryTitle(appointment) {
+  if (appointment.checkoutTotal == null || appointment.checkoutTotal === appointment.billingSubtotal) return undefined;
+  return appointment.checkoutAdjustmentNote
+    ? `建議小計 NT$${appointment.billingSubtotal}，調整原因：${appointment.checkoutAdjustmentNote}`
+    : `建議小計 NT$${appointment.billingSubtotal}`;
 }
 
 function openCompletedVisitEditor(appointment) {
@@ -625,6 +737,10 @@ function requestRowAction(appointment, key) {
   if (key === 'cancel') {
     cancelError.value = '';
     cancelTarget.value = appointment;
+    return;
+  }
+  if (key === 'reopen_visit') {
+    reopenVisit(appointment);
     return;
   }
   actionToConfirm.value = { appointment, key };
@@ -781,7 +897,17 @@ onBeforeUnmount(() => {
   <section class="mx-auto max-w-7xl space-y-4">
     <PageHeader title="掛號" description="依門診時段掌握報到順序，候診中可直接完成量測與看診。">
       <template #actions>
-        <Button type="button" @click="newAppointmentOpen = true"><UserPlus class="h-4 w-4" stroke-width="1.75" />掛號</Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          :aria-expanded="sectionOpen.admin"
+          :aria-label="sectionOpen.admin ? '收合行政操作' : '展開行政操作（新增掛號、報到、編輯、取消等）'"
+          @click="toggleSection('admin')"
+        >
+          <component :is="sectionOpen.admin ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />行政操作
+        </Button>
+        <Button v-if="sectionOpen.admin" type="button" @click="newAppointmentOpen = true"><UserPlus class="h-4 w-4" stroke-width="1.75" />掛號</Button>
       </template>
     </PageHeader>
 
@@ -827,7 +953,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <dl v-if="viewMode === 'day'" class="grid grid-cols-4 border-t border-border bg-field/30" :aria-busy="loading || undefined">
+      <dl v-if="viewMode === 'day'" class="grid grid-cols-5 border-t border-border bg-field/30" :aria-busy="loading || undefined">
         <button
           v-for="stat in dayStats"
           :key="stat.key"
@@ -873,9 +999,10 @@ onBeforeUnmount(() => {
            報到之後預約時間就不再決定任何事，人已經在診所裡；決定誰先看的是這份順序。
            候診區依報到時間排列；時間軸仍保留原預約位置。紙本牌號只供辨識，不影響順序。 -->
       <div
-         class="grid items-stretch gap-4 xl:grid-cols-[minmax(21rem,0.82fr)_minmax(0,1.7fr)]"
+         class="grid items-stretch gap-4 xl:grid-cols-[minmax(26rem,1.1fr)_minmax(0,1.4fr)]"
       >
-       <Card class="h-full overflow-hidden p-0 shadow-sm dark:shadow-none">
+       <div class="flex min-w-0 flex-col gap-4">
+       <Card class="overflow-hidden p-0 shadow-sm dark:shadow-none" :class="identity === 'front_desk' ? 'order-2' : 'order-1'">
         <div class="flex items-start justify-between gap-3 p-4 pb-3">
           <div>
             <h2 class="text-base font-semibold text-foreground">候診 <span class="inline-flex h-6.5 min-w-6.5 items-center justify-center rounded-full bg-accent px-2 text-xs font-bold text-accent-foreground ring-1 ring-primary/20">{{ waitingQueue.length }}</span> 位</h2>
@@ -883,69 +1010,44 @@ onBeforeUnmount(() => {
           </div>
           <div class="flex shrink-0 items-center gap-1.5">
             <Button type="button" variant="secondary" size="icon-sm" aria-label="設定掛號預設表單" title="設定掛號預設表單" @click="defaultTemplateDialogOpen = true"><Settings class="h-4 w-4" stroke-width="1.75" /></Button>
+            <Button
+              type="button"
+              variant="secondary"
+              size="icon-sm"
+              :aria-expanded="sectionOpen.waiting"
+              :aria-label="sectionOpen.waiting ? '收合候診' : '展開候診'"
+              @click="toggleSection('waiting')"
+            >
+              <component :is="sectionOpen.waiting ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
+            </Button>
           </div>
         </div>
 
+        <p v-if="!sectionOpen.waiting" class="border-t border-border bg-field/20 px-4 py-3 text-center text-xs text-muted-foreground">
+          {{ waitingQueue.length ? `${waitingQueue.length} 位候診中，點擊上方箭頭展開查看` : '目前沒有候診中的病患' }}
+        </p>
+        <template v-else>
         <ul v-if="waitingQueue.length" class="space-y-2.5 border-t border-border bg-field/30 p-3">
-          <li
+          <AppointmentQueueCardItem
             v-for="appointment in waitingQueue"
             :key="appointment._id"
-            class="rounded-xl border border-border/80 bg-card p-3 shadow-xs transition-all duration-150 hover:border-primary/40 hover:shadow-sm"
-            :class="isHighlighted(appointment._id) ? 'ring-2 ring-warning' : ''"
+            :appointment="appointment"
+            :highlighted="isHighlighted(appointment._id)"
+            variant="primary"
+            status-label="已報到"
+            :timestamp-value="appointment.checkedInAt"
+            timestamp-label="報到"
+            :timestamp-icon="Clock"
+            :editing-card-number="editingCardNumberId === appointment._id"
+            :card-number-draft="cardNumberDraft"
+            :card-number-busy="isBusy(appointment._id)"
+            :expanded="isExpanded(appointment._id)"
+            @begin-edit-card-number="beginCardNumberEdit(appointment)"
+            @update:card-number-draft="cardNumberDraft = $event"
+            @submit-card-number="submitCardNumber(appointment)"
+            @cancel-card-number="cancelCardNumberEdit"
           >
-            <div class="grid grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3">
-              <input
-                v-if="editingCardNumberId === appointment._id"
-                v-model="cardNumberDraft"
-                autofocus
-                type="text"
-                class="h-9 w-9 appearance-none rounded-lg border-2 border-primary bg-card text-center text-sm font-bold tabular-nums text-foreground outline-none focus-visible:ring-3 focus-visible:ring-primary/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                aria-label="輸入新的實體號碼牌編號"
-                :disabled="isBusy(appointment._id)"
-                @focus="$event.currentTarget.select()"
-                @keydown.enter.prevent="$event.currentTarget.blur()"
-                @keydown.esc.prevent="cancelCardNumberEdit"
-                @blur="submitCardNumber(appointment)"
-              />
-              <button
-                v-else
-                type="button"
-                class="group/number relative flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-primary text-sm font-bold tabular-nums text-primary-foreground shadow-xs transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring"
-                :aria-label="`目前持有 ${appointment.checkinNumber} 號牌，點擊修改`"
-                title="修改實體號碼牌"
-                :disabled="isBusy(appointment._id)"
-                @click="beginCardNumberEdit(appointment)"
-              >
-                {{ appointment.checkinNumber }}
-                <span class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-card text-primary ring-1 ring-border shadow-xs" aria-hidden="true">
-                  <Pencil class="h-2.5 w-2.5" stroke-width="2" />
-                </span>
-              </button>
-
-              <div class="min-w-0 flex-1">
-                <div class="flex min-w-0 items-center gap-1.5">
-                  <span
-                    v-if="visitTypeMeta(appointment)"
-                    class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-semibold ring-1 shadow-2xs"
-                    :class="visitTypeMeta(appointment).classes"
-                  >{{ visitTypeMeta(appointment).label }}</span>
-                  <span class="truncate text-sm font-semibold text-foreground">{{ appointment.petName || '—' }}</span>
-                </div>
-                <div class="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-                  <span class="truncate">{{ appointment.ownerName || '—' }}</span>
-                  <span v-if="appointment.ownerPhone" class="inline-flex items-center gap-1">
-                    <Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}
-                  </span>
-                  <span v-if="appointment.checkedInAt" class="inline-flex items-center gap-1 font-medium text-primary">
-                    <Clock class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }} 報到
-                  </span>
-                </div>
-              </div>
-
-              <span class="inline-flex h-7 shrink-0 items-center rounded-md bg-accent px-2 text-xs font-semibold text-accent-foreground ring-1 ring-primary/20">已報到</span>
-            </div>
-
-            <div class="mt-2.5 flex flex-wrap items-center justify-end gap-1.5 border-t border-border/60 pt-2.5">
+            <template #actions>
               <Button
                 type="button"
                 variant="outline"
@@ -958,75 +1060,206 @@ onBeforeUnmount(() => {
                 <component :is="isExpanded(appointment._id) ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
                 {{ isExpanded(appointment._id) ? '收合資料' : '看診資料' }}
               </Button>
-              <Button type="button" variant="secondary" size="xs" :aria-label="`編輯 ${appointment.petName || '這筆'} 的掛號`" @click="editTarget = appointment">
-                <Pencil class="h-4 w-4" stroke-width="1.75" />編輯
-              </Button>
-              <Button type="button" variant="destructive" size="xs" :disabled="isBusy(appointment._id)" @click="actionToConfirm = { appointment, key: 'undo_check_in' }">
-                <X class="h-4 w-4" stroke-width="1.9" />
-                取消
-              </Button>
-            </div>
-
-            <div v-if="isExpanded(appointment._id)" class="mt-3.5 space-y-3.5 border-t border-border/60 pt-3.5">
-              <div class="grid gap-3.5 sm:grid-cols-2">
-                <label class="space-y-1.5 text-xs font-medium text-foreground">
-                  體重
-                  <div class="relative">
-                    <input v-model="simpleForms[appointment._id].weightKg" type="text" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
-                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">kg</span>
+              <template v-if="sectionOpen.admin">
+                <Button type="button" variant="secondary" size="xs" :aria-label="`編輯 ${appointment.petName || '這筆'} 的掛號`" @click="editTarget = appointment">
+                  <Pencil class="h-4 w-4" stroke-width="1.75" />編輯
+                </Button>
+                <Button type="button" variant="destructive" size="xs" :disabled="isBusy(appointment._id)" @click="actionToConfirm = { appointment, key: 'undo_check_in' }">
+                  <X class="h-4 w-4" stroke-width="1.9" />
+                  取消
+                </Button>
+              </template>
+            </template>
+            <template #expanded>
+              <div class="grid gap-4 lg:grid-cols-2 lg:items-start">
+                <div class="space-y-3.5">
+                  <div class="grid gap-3.5 sm:grid-cols-2">
+                    <label class="space-y-1.5 text-xs font-medium text-foreground">
+                      體重
+                      <div class="relative">
+                        <input v-model="simpleForms[appointment._id].weightKg" type="text" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                        <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">kg</span>
+                      </div>
+                    </label>
+                    <label class="space-y-1.5 text-xs font-medium text-foreground">
+                      體溫
+                      <div class="relative">
+                        <input v-model="simpleForms[appointment._id].temperatureC" type="text" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                        <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">°C</span>
+                      </div>
+                    </label>
                   </div>
-                </label>
-                <label class="space-y-1.5 text-xs font-medium text-foreground">
-                  體溫
-                  <div class="relative">
-                    <input v-model="simpleForms[appointment._id].temperatureC" type="text" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
-                    <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">°C</span>
+                  <label class="block space-y-1.5 text-xs font-medium text-foreground">
+                    回診日期
+                    <div class="flex gap-2">
+                      <DatePicker v-model="simpleForms[appointment._id].followUpDate" placeholder="選擇回診日期" aria-label="選擇回診日期" class="flex-1" />
+                      <TimePicker v-model="simpleForms[appointment._id].followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="!simpleForms[appointment._id].followUpDate" class="w-32 shrink-0" />
+                    </div>
+                    <span v-if="followUpTimeMissing(simpleForms[appointment._id])" class="block text-xs font-medium text-destructive">已選擇日期，請一併填寫時間</span>
+                    <span v-else class="block text-xs font-normal text-muted-foreground">完成看診時會直接掛上這個時段的下次回診。</span>
+                  </label>
+                  <label class="block space-y-1.5 text-xs font-medium text-foreground">
+                    回診原因
+                    <input v-model="simpleForms[appointment._id].followUpReason" type="text" placeholder="例：拆線、追蹤肝指數" class="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                  </label>
+                  <div class="space-y-1.5">
+                    <label :for="`visit-template-${appointment._id}`" class="block text-xs font-medium text-foreground">建立草稿的表單</label>
+                    <Select v-model="simpleForms[appointment._id].templateId">
+                      <SelectTrigger :id="`visit-template-${appointment._id}`" class="w-full"><SelectValue placeholder="選擇表單" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem v-for="template in formTemplates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p class="text-xs text-muted-foreground">問診完成後會立即建立並開啟這份表單的草稿。</p>
                   </div>
-                </label>
-              </div>
-              <label class="block space-y-1.5 text-xs font-medium text-foreground">
-                回診日期
-                <div class="flex gap-2">
-                  <DatePicker v-model="simpleForms[appointment._id].followUpDate" placeholder="選擇回診日期" aria-label="選擇回診日期" class="flex-1" />
-                  <TimePicker v-model="simpleForms[appointment._id].followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="!simpleForms[appointment._id].followUpDate" class="w-32 shrink-0" />
                 </div>
-                <span v-if="followUpTimeMissing(simpleForms[appointment._id])" class="block text-xs font-medium text-destructive">已選擇日期，請一併填寫時間</span>
-                <span v-else class="block text-xs font-normal text-muted-foreground">完成看診時會直接掛上這個時段的下次回診。</span>
-              </label>
-              <label class="block space-y-1.5 text-xs font-medium text-foreground">
-                回診原因
-                <input v-model="simpleForms[appointment._id].followUpReason" type="text" placeholder="例：拆線、追蹤肝指數" class="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
-              </label>
-              <label class="block space-y-1.5 text-xs font-medium text-foreground">
-                備註
-                <textarea v-model="simpleForms[appointment._id].visitNote" rows="2" class="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"></textarea>
-                <span class="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
-                  <Lock class="h-3.5 w-3.5 shrink-0" stroke-width="1.75" />僅供內部使用（藥品／費用等），不會出現在健檢報告中
-                </span>
-              </label>
-              <div class="space-y-1.5">
-                <label :for="`visit-template-${appointment._id}`" class="block text-xs font-medium text-foreground">建立草稿的表單</label>
-                <Select v-model="simpleForms[appointment._id].templateId">
-                  <SelectTrigger :id="`visit-template-${appointment._id}`" class="w-full"><SelectValue placeholder="選擇表單" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem v-for="template in formTemplates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p class="text-xs text-muted-foreground">完成看診後會立即建立並開啟這份表單的草稿。</p>
+                <div class="space-y-3.5">
+                  <label class="block space-y-1.5 text-xs font-medium text-foreground">
+                    備註
+                    <textarea v-model="simpleForms[appointment._id].visitNote" rows="2" class="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"></textarea>
+                    <span class="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                      <Lock class="h-3.5 w-3.5 shrink-0" stroke-width="1.75" />內部溝通備註，不會出現在健檢報告或飼主看到的任何地方；藥品／費用請填下方批價清單，照護提醒請填下方欄位
+                    </span>
+                  </label>
+                  <label class="block space-y-1.5 text-xs font-medium text-foreground">
+                    照護提醒
+                    <textarea v-model="simpleForms[appointment._id].specialCareNote" rows="2" placeholder="會提示櫃台轉知飼主，例：傷口勿舔舐" class="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"></textarea>
+                    <span class="flex items-center gap-1.5 text-xs font-normal text-muted-foreground">
+                      <ShieldAlert class="h-3.5 w-3.5 shrink-0" stroke-width="1.75" />給飼主的照護注意事項，結帳時會提示櫃台轉告
+                    </span>
+                  </label>
+                  <div class="space-y-1.5">
+                    <p class="text-xs font-medium text-foreground">批價／開藥</p>
+                    <AppointmentBillingEditor
+                      :items="simpleForms[appointment._id].billingItems"
+                      :disabled="isBusy(appointment._id)"
+                      @update:items="(items) => (simpleForms[appointment._id].billingItems = items)"
+                    />
+                  </div>
+                </div>
               </div>
               <div class="flex justify-end">
-                <Button type="button" size="sm" :disabled="isBusy(appointment._id) || !simpleForms[appointment._id].templateId || followUpTimeMissing(simpleForms[appointment._id])" @click="completeVisit(appointment)">
-                  <Check class="h-4 w-4" stroke-width="2" />完成看診
+                <Button type="button" size="sm" :disabled="isBusy(appointment._id) || !simpleForms[appointment._id].templateId || followUpTimeMissing(simpleForms[appointment._id])" @click="sendToCheckout(appointment)">
+                  <Check class="h-4 w-4" stroke-width="2" />問診完成
                 </Button>
               </div>
-            </div>
-          </li>
+            </template>
+          </AppointmentQueueCardItem>
         </ul>
         <div v-else class="border-t border-border bg-field/20 px-4 py-8 text-center">
           <p class="text-sm font-medium text-foreground">目前沒有候診中的病患</p>
           <p class="mt-1 text-xs text-muted-foreground">病患完成報到後會顯示在這裡</p>
         </div>
+        </template>
       </Card>
+
+       <Card class="overflow-hidden p-0 shadow-sm dark:shadow-none" :class="identity === 'front_desk' ? 'order-1' : 'order-2'">
+        <div class="flex items-start justify-between gap-3 p-4 pb-3">
+          <div>
+            <h2 class="text-base font-semibold text-foreground">待結帳 <span class="inline-flex h-6.5 min-w-6.5 items-center justify-center rounded-full bg-warning-surface px-2 text-xs font-bold text-warning ring-1 ring-warning/20">{{ pendingCheckoutQueue.length }}</span> 位</h2>
+            <p class="mt-0.5 text-xs text-muted-foreground">依問診完成時間排列；醫生填的批價/開藥清單可在此調整</p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="icon-sm"
+            :aria-expanded="sectionOpen.checkout"
+            :aria-label="sectionOpen.checkout ? '收合待結帳' : '展開待結帳'"
+            @click="toggleSection('checkout')"
+          >
+            <component :is="sectionOpen.checkout ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
+          </Button>
+        </div>
+
+        <p v-if="!sectionOpen.checkout" class="border-t border-border bg-field/20 px-4 py-3 text-center text-xs text-muted-foreground">
+          {{ pendingCheckoutQueue.length ? `${pendingCheckoutQueue.length} 位待結帳，點擊上方箭頭展開查看` : '目前沒有待結帳的病患' }}
+        </p>
+        <template v-else>
+        <ul v-if="pendingCheckoutQueue.length" class="space-y-2.5 border-t border-border bg-field/30 p-3">
+          <AppointmentQueueCardItem
+            v-for="appointment in pendingCheckoutQueue"
+            :key="appointment._id"
+            :appointment="appointment"
+            :highlighted="isHighlighted(appointment._id)"
+            variant="warning"
+            status-label="待結帳"
+            :timestamp-value="appointment.pendingCheckoutAt"
+            timestamp-label="問診完成"
+            :timestamp-icon="Wallet"
+            :editing-card-number="editingCardNumberId === appointment._id"
+            :card-number-draft="cardNumberDraft"
+            :card-number-busy="isBusy(appointment._id)"
+            :expanded="isCheckoutExpanded(appointment._id)"
+            @begin-edit-card-number="beginCardNumberEdit(appointment)"
+            @update:card-number-draft="cardNumberDraft = $event"
+            @submit-card-number="submitCardNumber(appointment)"
+            @cancel-card-number="cancelCardNumberEdit"
+          >
+            <template #actions>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                class="mr-auto"
+                :aria-expanded="isCheckoutExpanded(appointment._id)"
+                :aria-label="isCheckoutExpanded(appointment._id) ? '收合結帳資料' : '展開結帳資料'"
+                @click="toggleCheckout(appointment)"
+              >
+                <component :is="isCheckoutExpanded(appointment._id) ? ChevronUp : ChevronDown" class="h-4 w-4" stroke-width="1.75" />
+                {{ isCheckoutExpanded(appointment._id) ? '收合資料' : '結帳資料' }}
+              </Button>
+              <Button type="button" variant="secondary" size="xs" :disabled="isBusy(appointment._id)" @click="reopenVisit(appointment)">
+                <RotateCcw class="h-4 w-4" stroke-width="1.75" />退回候診
+              </Button>
+            </template>
+            <template #expanded>
+              <div class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] lg:items-start">
+                <div class="space-y-1.5">
+                  <p class="text-xs font-medium text-foreground">批價／開藥</p>
+                  <AppointmentBillingEditor
+                    :items="checkoutForms[appointment._id].billingItems"
+                    :disabled="isBusy(appointment._id)"
+                    @update:items="(items) => (checkoutForms[appointment._id].billingItems = items)"
+                  />
+                </div>
+                <div class="space-y-3.5">
+                  <div v-if="appointment.specialCareNote" class="flex items-start gap-1.5 rounded-lg bg-warning-surface px-3 py-2 text-xs text-warning">
+                    <ShieldAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" stroke-width="1.75" />
+                    <span class="whitespace-pre-wrap">請轉告飼主：{{ appointment.specialCareNote }}</span>
+                  </div>
+                  <dl class="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+                    <div><dt class="font-medium text-foreground">體重／體溫</dt><dd>{{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }} ／ {{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }}</dd></div>
+                    <div><dt class="font-medium text-foreground">回診</dt><dd>{{ followUpLabel(appointment) }}</dd></div>
+                  </dl>
+                  <label class="space-y-1.5 text-xs font-medium text-foreground">
+                    結算總額
+                    <div class="relative">
+                      <input v-model="checkoutForms[appointment._id].checkoutTotal" type="text" class="h-10 w-full rounded-lg border border-input bg-card px-3 pr-10 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                      <span class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">NT$</span>
+                    </div>
+                    <span class="block text-xs font-normal text-muted-foreground">建議小計 NT$ {{ checkoutSubtotal(appointment._id) }}</span>
+                  </label>
+                  <label class="block space-y-1.5 text-xs font-medium text-foreground">
+                    結算調整說明
+                    <input v-model="checkoutForms[appointment._id].checkoutAdjustmentNote" type="text" placeholder="例：常客折扣" class="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" />
+                  </label>
+                </div>
+              </div>
+              <div class="flex justify-end">
+                <Button type="button" size="sm" :disabled="isBusy(appointment._id)" @click="confirmCheckout(appointment)">
+                  <Check class="h-4 w-4" stroke-width="2" />確認結帳，完成看診
+                </Button>
+              </div>
+            </template>
+          </AppointmentQueueCardItem>
+        </ul>
+        <div v-else class="border-t border-border bg-field/20 px-4 py-8 text-center">
+          <p class="text-sm font-medium text-foreground">目前沒有待結帳的病患</p>
+          <p class="mt-1 text-xs text-muted-foreground">醫生按下「問診完成」後會顯示在這裡</p>
+        </div>
+        </template>
+      </Card>
+       </div>
 
        <Card class="h-full overflow-hidden p-0 shadow-sm dark:shadow-none">
         <div class="flex items-start justify-between gap-3 p-4 pb-3">
@@ -1112,19 +1345,26 @@ onBeforeUnmount(() => {
                     class="absolute left-[-9px] top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card sm:left-[-21px]"
                     :class="appointment.status === 'arrived'
                       ? 'bg-primary ring-4 ring-primary/20'
-                      : 'bg-muted-foreground/60 ring-1 ring-border'"
+                      : appointment.status === 'pending_checkout'
+                        ? 'bg-warning ring-4 ring-warning/20'
+                        : 'bg-muted-foreground/60 ring-1 ring-border'"
                     aria-hidden="true"
                   ></span>
                   <span
-                    v-if="appointment.status === 'arrived'"
-                    class="absolute left-[-9px] top-1/2 h-0.5 w-[9px] -translate-y-1/2 bg-primary/60 sm:left-[-21px] sm:w-[21px]"
+                    v-if="appointment.status === 'arrived' || appointment.status === 'pending_checkout'"
+                    class="absolute left-[-9px] top-1/2 h-0.5 w-[9px] -translate-y-1/2 sm:left-[-21px] sm:w-[21px]"
+                    :class="appointment.status === 'pending_checkout' ? 'bg-warning/60' : 'bg-primary/60'"
                     aria-hidden="true"
                   ></span>
 
                   <div
                     class="rounded-xl border px-3 py-2 transition-colors"
                     :class="[
-                      appointment.status === 'arrived' ? 'border-primary/25 bg-accent/35 shadow-2xs' : 'border-transparent hover:bg-field/30',
+                      appointment.status === 'arrived'
+                        ? 'border-primary/25 bg-accent/35 shadow-2xs'
+                        : appointment.status === 'pending_checkout'
+                          ? 'border-warning/30 bg-warning-surface shadow-2xs'
+                          : 'border-transparent hover:bg-field/30',
                       isHighlighted(appointment._id) ? 'ring-2 ring-warning' : '',
                     ]"
                   >
@@ -1133,9 +1373,11 @@ onBeforeUnmount(() => {
                         class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
                         :class="appointment.status === 'arrived'
                           ? 'bg-primary/10 text-primary ring-1 ring-primary/20'
-                          : isIdentityConfirmed(appointment)
-                            ? 'bg-accent text-accent-foreground'
-                            : 'bg-muted text-muted-foreground'"
+                          : appointment.status === 'pending_checkout'
+                            ? 'bg-warning-surface text-warning ring-1 ring-warning/20'
+                            : isIdentityConfirmed(appointment)
+                              ? 'bg-accent text-accent-foreground'
+                              : 'bg-muted text-muted-foreground'"
                       >
                         <User class="h-4 w-4" stroke-width="1.75" />
                       </span>
@@ -1155,10 +1397,10 @@ onBeforeUnmount(() => {
                             <span class="text-border">·</span>
                             <Phone class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ appointment.ownerPhone }}
                           </template>
-                          <template v-if="appointment.status === 'arrived' && appointment.checkedInAt">
+                          <template v-if="(appointment.status === 'arrived' || appointment.status === 'pending_checkout') && appointment.checkedInAt">
                             <span class="text-border">·</span>
-                            <Clock class="h-3 w-3 shrink-0 text-primary" stroke-width="1.9" />
-                            <span class="font-medium text-primary">{{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }} 報到</span>
+                            <Clock class="h-3 w-3 shrink-0" :class="appointment.status === 'pending_checkout' ? 'text-warning' : 'text-primary'" stroke-width="1.9" />
+                            <span class="font-medium" :class="appointment.status === 'pending_checkout' ? 'text-warning' : 'text-primary'">{{ formatDateTime(appointment.checkedInAt, checkinTimeOptions) }} 報到</span>
                           </template>
                         </span>
                         <p
@@ -1173,9 +1415,17 @@ onBeforeUnmount(() => {
                             已報到<template v-if="appointment.checkinNumber"> · 號碼牌 {{ appointment.checkinNumber }} 號</template>
                           </span>
                         </template>
-                        <template v-else>
+                        <template v-else-if="appointment.status === 'pending_checkout'">
+                          <span class="inline-flex min-h-7 items-center rounded-md bg-warning-surface px-2.5 text-xs font-semibold text-warning ring-1 ring-warning/20">
+                            待結帳<template v-if="appointment.checkinNumber"> · 號碼牌 {{ appointment.checkinNumber }} 號</template>
+                          </span>
+                        </template>
+                        <template v-else-if="sectionOpen.admin">
                           <Button type="button" size="sm" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
                           <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                        </template>
+                        <template v-else>
+                          <span class="inline-flex min-h-7 items-center rounded-md bg-info-surface px-2.5 text-xs font-semibold text-info ring-1 ring-info/20">未報到</span>
                         </template>
                       </div>
                     </div>
@@ -1230,7 +1480,7 @@ onBeforeUnmount(() => {
                       >{{ appointment.cancelReason ? `取消原因：${appointment.cancelReason}` : '—' }}</p>
                     </div>
                   </div>
-                  <div class="flex shrink-0 items-center gap-1.5">
+                  <div v-if="sectionOpen.admin" class="flex shrink-0 items-center gap-1.5">
                     <Button
                       type="button"
                       variant="outline"
@@ -1273,7 +1523,7 @@ onBeforeUnmount(() => {
           <!-- 桌機：資料表 -->
           <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none">
             <div class="overflow-x-auto">
-              <div class="min-w-[52rem] text-left text-sm" style="--data-columns: minmax(0, 1.6fr) minmax(0, 1.1fr) minmax(0, 0.7fr) minmax(0, 0.7fr) minmax(0, 1.1fr) minmax(0, 2.6fr) minmax(0, 1.2fr) 10rem">
+              <div class="min-w-[58rem] text-left text-sm" style="--data-columns: minmax(0, 1.6fr) minmax(0, 1.1fr) minmax(0, 0.7fr) minmax(0, 0.7fr) minmax(0, 1.1fr) minmax(0, 2.6fr) minmax(0, 1.2fr) minmax(0, 1fr) 10rem">
                 <div class="desktop-data-header text-xs font-semibold text-muted-foreground">
                     <span class="desktop-data-cell">病患</span>
                     <span class="desktop-data-cell">完成時間</span>
@@ -1282,6 +1532,7 @@ onBeforeUnmount(() => {
                     <span class="desktop-data-cell">回診日期</span>
                     <span class="desktop-data-cell">看診備註</span>
                     <span class="desktop-data-cell">草稿表單</span>
+                    <span class="desktop-data-cell">結算總額</span>
                     <span class="desktop-data-cell"><span class="sr-only">操作</span></span>
                 </div>
                   <div
@@ -1301,6 +1552,7 @@ onBeforeUnmount(() => {
                     <div class="whitespace-nowrap desktop-data-cell text-foreground">{{ followUpLabel(appointment) }}</div>
                     <div class="desktop-data-cell text-muted-foreground"><p class="truncate" :title="appointment.visitNote || undefined">{{ appointment.visitNote || '—' }}</p></div>
                     <div class="truncate desktop-data-cell text-muted-foreground">{{ templateName(appointment.templateId) }}</div>
+                    <div class="whitespace-nowrap desktop-data-cell text-foreground" :title="checkoutSummaryTitle(appointment)">{{ checkoutSummaryLabel(appointment) }}</div>
                     <div class="desktop-data-cell flex items-center justify-end gap-1.5"><Button type="button" variant="outline" size="xs" :aria-label="`查看 ${appointment.petName || '這筆掛號'} 的完整內容`" @click="detailTarget = appointment">查看</Button><Button type="button" variant="secondary" size="xs" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button></div>
                   </div>
               </div>
@@ -1327,6 +1579,7 @@ onBeforeUnmount(() => {
                 {{ appointment.weightKg == null ? '—' : `${appointment.weightKg} kg` }} ・ {{ appointment.temperatureC == null ? '—' : `${appointment.temperatureC} °C` }} ・ 回診：{{ followUpLabel(appointment) }}
               </p>
               <p class="text-xs text-muted-foreground">草稿表單：{{ templateName(appointment.templateId) }}</p>
+              <p class="text-xs text-muted-foreground" :title="checkoutSummaryTitle(appointment)">結算總額：{{ checkoutSummaryLabel(appointment) }}</p>
               <p class="whitespace-pre-wrap text-sm text-muted-foreground">看診備註：{{ appointment.visitNote || '—' }}</p>
               <Button type="button" variant="outline" size="xs" :aria-label="`查看 ${appointment.petName || '這筆掛號'} 的完整內容`" @click="detailTarget = appointment">查看</Button>
               <Button type="button" variant="secondary" size="sm" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button>
@@ -1353,7 +1606,7 @@ onBeforeUnmount(() => {
               :class="isHighlighted(appointment._id) ? 'ring-2 ring-warning' : ''"
             >
               <span class="desktop-data-cell whitespace-nowrap text-foreground">
-                <template v-if="appointment.status === 'arrived'">
+                <template v-if="appointment.status === 'arrived' || appointment.status === 'pending_checkout'">
                   <input
                     v-if="editingCardNumberId === appointment._id"
                     v-model="cardNumberDraft"
@@ -1389,12 +1642,18 @@ onBeforeUnmount(() => {
               <span class="desktop-data-cell flex items-center justify-end gap-1.5">
                 <Button type="button" variant="outline" size="xs" :aria-label="`查看 ${appointment.petName || '這筆掛號'} 的完整內容`" @click="detailTarget = appointment">查看</Button>
                 <template v-if="appointment.status === 'scheduled'">
-                  <Button type="button" size="xs" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
-                  <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                  <template v-if="sectionOpen.admin">
+                    <Button type="button" size="xs" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
+                    <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                  </template>
                 </template>
                 <template v-else-if="appointment.status === 'arrived'">
                   <Button type="button" variant="secondary" size="xs" @click="focusCandidate(appointment)"><Pencil class="h-3.5 w-3.5" />看診資料</Button>
-                  <RowActions :actions="ROW_ACTIONS_ARRIVED" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                  <RowActions v-if="sectionOpen.admin" :actions="ROW_ACTIONS_ARRIVED" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                </template>
+                <template v-else-if="appointment.status === 'pending_checkout'">
+                  <Button type="button" variant="secondary" size="xs" @click="focusCheckout(appointment)"><Wallet class="h-3.5 w-3.5" />結帳</Button>
+                  <RowActions v-if="sectionOpen.admin" :actions="ROW_ACTIONS_PENDING_CHECKOUT" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
                 </template>
                 <template v-else>
                   <Button type="button" variant="secondary" size="xs" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button>
@@ -1418,7 +1677,7 @@ onBeforeUnmount(() => {
                   <p v-else class="truncate font-semibold text-foreground">{{ appointment.petName || '—' }}</p>
                   <p class="truncate text-xs text-muted-foreground">{{ appointment.ownerName || '—' }}<template v-if="appointment.ownerPhone"> · {{ appointment.ownerPhone }}</template></p>
                 </div>
-                <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{{ appointment.status === 'arrived' ? `${appointment.checkinNumber} 號` : (appointment.time || formatDateTime(appointment.scheduledAt, checkinTimeOptions, '—')) }}</span>
+                <span class="shrink-0 text-xs tabular-nums text-muted-foreground">{{ appointment.status === 'arrived' || appointment.status === 'pending_checkout' ? `${appointment.checkinNumber} 號` : (appointment.time || formatDateTime(appointment.scheduledAt, checkinTimeOptions, '—')) }}</span>
               </div>
               <span class="inline-flex h-6.5 w-fit items-center rounded-md px-2 text-xs font-semibold" :class="appointmentStatusClasses(appointment.status)">{{ STATUS_LABEL[appointment.status] }}</span>
               <p v-if="appointment.status !== 'scheduled'" class="text-sm text-foreground">
@@ -1427,12 +1686,18 @@ onBeforeUnmount(() => {
               <div class="flex flex-wrap gap-1.5">
                 <Button type="button" variant="outline" size="xs" :aria-label="`查看 ${appointment.petName || '這筆掛號'} 的完整內容`" @click="detailTarget = appointment">查看</Button>
                 <template v-if="appointment.status === 'scheduled'">
-                  <Button type="button" size="sm" class="flex-1" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
-                  <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                  <template v-if="sectionOpen.admin">
+                    <Button type="button" size="sm" class="flex-1" :disabled="isBusy(appointment._id)" @click="checkIn(appointment)">報到</Button>
+                    <RowActions :actions="ROW_ACTIONS" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                  </template>
                 </template>
                 <template v-else-if="appointment.status === 'arrived'">
                   <Button type="button" variant="secondary" size="sm" class="flex-1" @click="focusCandidate(appointment)"><Pencil class="h-3.5 w-3.5" />看診資料</Button>
-                  <RowActions :actions="ROW_ACTIONS_ARRIVED" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                  <RowActions v-if="sectionOpen.admin" :actions="ROW_ACTIONS_ARRIVED" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
+                </template>
+                <template v-else-if="appointment.status === 'pending_checkout'">
+                  <Button type="button" variant="secondary" size="sm" class="flex-1" @click="focusCheckout(appointment)"><Wallet class="h-3.5 w-3.5" />結帳</Button>
+                  <RowActions v-if="sectionOpen.admin" :actions="ROW_ACTIONS_PENDING_CHECKOUT" :label="`${appointment.petName || '這筆掛號'}的更多操作`" @select="(key) => requestRowAction(appointment, key)" />
                 </template>
                 <template v-else>
                   <Button type="button" variant="secondary" size="sm" class="flex-1" @click="openCompletedVisitEditor(appointment)"><Pencil class="h-3.5 w-3.5" />編輯</Button>
@@ -1484,7 +1749,7 @@ onBeforeUnmount(() => {
                 <button v-for="appointment in (weekAppointments.get(date) ?? [])" :key="appointment._id" type="button" class="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-field/60" @click="selectedDate = date; viewMode = 'day'">
                   <span class="w-10 shrink-0 font-medium tabular-nums text-muted-foreground">{{ appointment.time || formatDateTime(appointment.scheduledAt, checkinTimeOptions, '—') }}</span>
                   <span class="min-w-0 flex-1 truncate font-medium text-foreground">{{ appointment.petName || '—' }}</span>
-                  <span class="shrink-0 rounded-full px-1.5 py-0.5 text-sm" :class="appointmentStatusClasses(appointment.status)">{{ appointment.status === 'completed' ? '完成' : appointment.status === 'arrived' ? '候診' : appointment.status === 'cancelled' ? '取消' : appointment.status === 'no_show' ? '未到' : '預約' }}</span>
+                  <span class="shrink-0 rounded-full px-1.5 py-0.5 text-sm" :class="appointmentStatusClasses(appointment.status)">{{ appointment.status === 'completed' ? '完成' : appointment.status === 'arrived' ? '候診' : appointment.status === 'pending_checkout' ? '結帳' : appointment.status === 'cancelled' ? '取消' : appointment.status === 'no_show' ? '未到' : '預約' }}</span>
                 </button>
               </div>
             </article>

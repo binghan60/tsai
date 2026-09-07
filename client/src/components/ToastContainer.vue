@@ -3,6 +3,7 @@ import { CheckCircle2, XCircle, Info, X } from '@lucide/vue';
 import { useToast } from '../composables/useToast';
 
 const { toasts, removeToast } = useToast();
+defineProps({ placement: { type: String, default: 'bottom' } });
 
 // 每種提示只用一個語意色。之前 topBar 是三色漸層（success 是 emerald→brand→emerald，
 // 深色再換成 brand→belle→amber），一個 4px 高的裝飾條上放了三個色站、明暗兩態各一組，
@@ -30,7 +31,7 @@ const typeConfig = {
 </script>
 
 <template>
-  <div class="pointer-events-none fixed bottom-5 right-5 z-60 flex w-full max-w-sm flex-col gap-3 px-4 sm:px-0" aria-live="polite">
+  <div class="pointer-events-none fixed inset-x-4 z-60 flex max-w-sm flex-col gap-3 sm:left-auto sm:right-5 sm:w-full" :class="placement === 'top' ? 'top-20 lg:top-5' : 'bottom-5'" aria-live="polite">
     <TransitionGroup
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="translate-y-4 opacity-0 scale-95"
