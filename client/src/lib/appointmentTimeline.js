@@ -28,9 +28,9 @@ function timeOfDayMinutes(date) {
 // 繼續依原預約時間排列。同一筆已報到掛號會出現在兩處，但各自回答不同問題：
 // 候診區回答「下一位是誰」，時間軸回答「原本約在幾點、目前進行到哪裡」。
 //
-// pending_checkout（醫生問診完成、待櫃台結帳）人還在診所，跟 waiting 一樣是「現場正在
+// pending_checkout（醫師已交櫃台、櫃台還沒處理完）人還在診所，跟 waiting 一樣是「現場正在
 // 處理中」的隊列，只是排的問題不同：waiting 回答「下一位該看診的是誰」，pendingCheckout
-// 回答「下一位該結帳的是誰」，依轉入待結帳的時間排序（沒有則退回報到時間）。
+// 回答「下一位該由櫃台處理的是誰」，依交出去的時間（handoffAt）排序。
 //
 // 已取消與未到各自集中到最下面；已完成另由頁面收進可展開的完成紀錄，
 // 不混進仍待處理的候診佇列與時間軸。
@@ -55,16 +55,16 @@ export function splitAppointmentsByQueueState(appointments) {
     return String(a._id).localeCompare(String(b._id));
   });
   pendingCheckout.sort((a, b) => {
-    const left = a.pendingCheckoutAt ? new Date(a.pendingCheckoutAt).getTime() : Number.MAX_SAFE_INTEGER;
-    const right = b.pendingCheckoutAt ? new Date(b.pendingCheckoutAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const left = a.handoffAt ? new Date(a.handoffAt).getTime() : Number.MAX_SAFE_INTEGER;
+    const right = b.handoffAt ? new Date(b.handoffAt).getTime() : Number.MAX_SAFE_INTEGER;
     if (left !== right) return left - right;
     return String(a._id).localeCompare(String(b._id));
   });
   return { waiting, pendingCheckout, scheduled, cancelled, noShow };
 }
 
-// 報到（含問診完成、待結帳）不是從日程消失，而是多了進行中的子狀態。時間軸保留三種
-// 進行中狀態，並重新依預約時間排序，避免候診佇列/待結帳佇列各自的排序污染時間軸順序。
+// 報到（含已交櫃台）不是從日程消失，而是多了進行中的子狀態。時間軸保留三種進行中狀態，
+// 並重新依預約時間排序，避免候診佇列／待處理佇列各自的排序污染時間軸順序。
 export function appointmentsForTimeline(appointments) {
   return (appointments ?? [])
     .filter((appointment) => ['scheduled', 'arrived', 'pending_checkout'].includes(appointment.status))
@@ -77,8 +77,8 @@ export function isIdentityConfirmed(appointment) {
   return Boolean(appointment?.petId);
 }
 
-// 初診／回診徽章樣式，候診卡片、待結帳卡片（AppointmentQueueCardItem）、時間軸、
-// 篩選表格共用同一份判斷，避免各處各寫一份、之後改樣式要改好幾處。
+// 初診／回診徽章樣式，候診佇列、時間軸與各清單共用同一份判斷，
+// 避免各處各寫一份、之後改樣式要改好幾處。
 export const VISIT_TYPE_META = {
   new: { label: '初診', classes: 'bg-brand-50 text-brand-700 ring-brand-300/80 dark:bg-brand-950/60 dark:text-brand-200 dark:ring-brand-500/40' },
   return: { label: '回診', classes: 'bg-petrol-50 text-petrol-700 ring-petrol-300/80 dark:bg-petrol-950/60 dark:text-petrol-300 dark:ring-petrol-500/40' },

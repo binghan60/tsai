@@ -41,9 +41,9 @@ describe('splitAppointmentsByQueueState', () => {
 
   // 待結帳佇列回答「下一位該結帳的是誰」，依轉入待結帳的時間排序，不是問診完成的先後喊價。
   it('待結帳依轉入待結帳的時間排序', () => {
-    const later = apt({ _id: 'later', status: 'pending_checkout', pendingCheckoutAt: '2026-08-26T03:10:00.000Z' });
-    const earlier = apt({ _id: 'earlier', status: 'pending_checkout', pendingCheckoutAt: '2026-08-26T03:00:00.000Z' });
-    const missingTimestamp = apt({ _id: 'none', status: 'pending_checkout', pendingCheckoutAt: null });
+    const later = apt({ _id: 'later', status: 'pending_checkout', handoffAt: '2026-08-26T03:10:00.000Z' });
+    const earlier = apt({ _id: 'earlier', status: 'pending_checkout', handoffAt: '2026-08-26T03:00:00.000Z' });
+    const missingTimestamp = apt({ _id: 'none', status: 'pending_checkout', handoffAt: null });
     const result = splitAppointmentsByQueueState([later, missingTimestamp, earlier]);
     assert.deepEqual(result.pendingCheckout.map((item) => item._id), ['earlier', 'later', 'none']);
   });

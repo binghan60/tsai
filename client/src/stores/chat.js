@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 
-// 掛號頁的動作會自動發一則系統訊息到聊天室（見 AppointmentsPage.vue 的
+// 診務頁的動作會自動發一則系統訊息到聊天室（見 composables/useAppointmentNotifier.js 的
 // notifyChat）；操作那台裝置自己不需要因為自己剛做的事而跳未讀紅點——那不是
 // 「別人講了什麼」，是自己剛做的事的回音。用「身分＋內容」這組送出前就還原
 // 得出來的線索佔位（不能等伺服器回應才標記，socket 廣播可能先到，見掛號即時

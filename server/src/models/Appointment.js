@@ -1,22 +1,5 @@
 import mongoose from 'mongoose';
 
-// 批價／開藥合併清單的單一項目。kind==='medication' 時 dosage/instructions 才有意義，
-// 但不因 kind 切換而清空欄位值，避免使用者來回切換時遺失已輸入的內容。
-const appointmentBillingItemSchema = new mongoose.Schema(
-  {
-    kind: { type: String, enum: ['fee', 'medication'], default: 'fee' },
-    name: { type: String, required: true, trim: true },
-    quantity: { type: Number, default: 1, min: 0 },
-    unitPrice: { type: Number, default: 0, min: 0 },
-    // 小計快照：預設等於 quantity*unitPrice，但允許人工覆寫（例如整批藥另外喊價），
-    // 見 lib/appointmentBilling.js 的 sanitizeBillingItem。
-    amount: { type: Number, default: 0, min: 0 },
-    dosage: { type: String, default: '', trim: true },
-    instructions: { type: String, default: '', trim: true },
-  },
-  { _id: true }
-);
-
 const appointmentSchema = new mongoose.Schema(
   {
     // 診所當天日期，來源真相；所有「哪一天」的查詢都以它為準。
@@ -79,35 +62,28 @@ const appointmentSchema = new mongoose.Schema(
     // 同步這筆（見 routes/appointments.js 的 syncFollowUpAppointment），只有它還是 scheduled
     // 狀態才動；已經報到/完成/取消就是現場已經另外處理過了，不回頭改。
     followUpAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
-    // 醫生↔櫃台的內部操作備註（行政交接等），不會出現在健檢報告，也不會讓飼主看到。
-    // 藥品/費用請填 billingItems，要提醒飼主的照護注意事項請填 specialCareNote。
-    // 跟 clinicalNotes（病歷日誌）雙向同步，見 routes/appointments.js 與 routes/clinicalNotes.js。
+    // 本次簡易紀錄：醫師寫的病歷內容，跟 clinicalNotes（病歷日誌）雙向同步，見
+    // routes/appointmentWorkflow.js 與 routes/clinicalNotes.js。飼主看不到，也不進健檢報告。
     visitNote: { type: String, default: '', trim: true },
-
-    // 面向飼主的照護提醒（例如「傷口勿舔舐」），由醫生填、給櫃台轉告客人。
-    // 語意上跟 visitNote（內部溝通）分開，刻意不跟 clinicalNotes 雙向同步——
-    // 單一資料來源留在這裡，避免同時存在兩套同步機制。
+    // 面向飼主的照護提醒（例如「傷口勿舔舐」），由醫師填、櫃台當面轉告飼主。
+    // 跟 handoffNote（櫃台的作業指示）語意分開，才能在櫃台端用警示樣式獨立呈現——
+    // 這是最容易漏講的一件事。刻意不跟 clinicalNotes 同步，單一資料來源留在這裡。
     specialCareNote: { type: String, default: '', trim: true, maxlength: 500 },
-    // 批價／開藥合併清單，醫生問診完成時填、櫃台結帳時可調整。
-    billingItems: { type: [appointmentBillingItemSchema], default: [] },
-    // 永遠由伺服器依 billingItems 重算（見 lib/appointmentBilling.js），不信任前端送來的加總值。
-    billingSubtotal: { type: Number, default: 0, min: 0 },
-    // 櫃台最終確認的結算總額，可能因折扣/抹零而不同於 billingSubtotal；只在結帳完成時寫入。
-    checkoutTotal: { type: Number, default: null, min: 0 },
-    checkoutAdjustmentNote: { type: String, default: '', trim: true, maxlength: 200 },
-    // 問診完成、轉入待結帳的時間，待結帳佇列依此排序（FIFO）。
-    pendingCheckoutAt: { type: Date, default: null },
-
-    workflowVersion: { type: Number, default: 0 },
-    visitStartedAt: { type: Date, default: null },
-    visitCompletedAt: { type: Date, default: null },
-    billingCompletedAt: { type: Date, default: null },
-    paymentCompletedAt: { type: Date, default: null },
-    billingRevision: { type: Number, default: 0 },
-    paymentMethod: { type: String, enum: ['', 'cash', 'card', 'transfer'], default: '' },
+    // 給櫃台的交辦：收費項目、領藥、要開的證明都寫這裡，取代了早期逐項計價的批價清單。
+    // 系統不解析內容、不計價也不記金額——櫃台讀這段文字自行收費。
     handoffNote: { type: String, default: '', trim: true, maxlength: 1000 },
-    handoffAcknowledgedAt: { type: Date, default: null },
     followUpRecommendation: { type: String, default: '', trim: true, maxlength: 500 },
+
+    // 流水線的三個里程碑，見 shared/appointmentWorkflow.js。status 由它們推導出來，
+    // 不是另一個獨立的真相。workflowVersion 2 ＝這條四步流水線；1 是舊的批價／收款版本，
+    // 那些欄位已從 schema 移除、讀不回來，改由 status 回推階段。
+    workflowVersion: { type: Number, default: 0 },
+    // 醫師開啟工作區＝開始看診。
+    visitStartedAt: { type: Date, default: null },
+    // 醫師「完成看診，送交櫃台」。取回（reclaim）會清成 null，讓這筆退回看診中。
+    handoffAt: { type: Date, default: null },
+    // 櫃台「完成處理」。寫入後就是終態，不能再取回。
+    deskCompletedAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
   },
   { timestamps: true, optimisticConcurrency: true }
@@ -119,7 +95,7 @@ appointmentSchema.index({ scheduledAt: 1 });
 appointmentSchema.index({ status: 1, scheduledAt: 1 });
 // 同一天仍持有號碼牌的人不能同時持有相同的實體號碼牌。兩人同時報到可能算到同一張
 // 可用牌號，由這個索引擋下後讓報到流程重試；離開候診的人號碼會清空，不受索引管理。
-// pending_checkout（問診完成、待結帳）人還在診所、還沒歸還號碼牌，一併納入保護範圍，
+// pending_checkout（醫師已交櫃台、櫃台還沒處理完）人還在診所、還沒歸還號碼牌，一併納入保護範圍，
 // 見 lib/appointmentStatus.js 的 holdsCheckinNumber。
 appointmentSchema.index(
   { date: 1, checkinNumber: 1 },

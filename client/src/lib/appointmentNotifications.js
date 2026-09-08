@@ -5,15 +5,18 @@ export function appointmentSubject(appointment) {
   return name ? `「${name}」` : '未填姓名的病患';
 }
 
+// 全站聊天室的系統訊息文案。集中在這裡是為了讓「發生了什麼事」只有一種說法——
+// 開著聊天視窗的另一邊不用切回診務頁，也知道現場的進度。
 export function appointmentNotification(appointment, action, { changedParts = [] } = {}) {
   const subject = appointmentSubject(appointment);
   const messages = {
     create: `已為${subject}新增掛號`,
     check_in: `${subject}已報到`,
     card_number: `${subject}的號碼牌已改為 ${appointment.checkinNumber} 號`,
-    send_to_checkout: `${subject}已完成問診，待櫃台結帳${appointment.billingSubtotal ? `（建議金額 NT$${appointment.billingSubtotal}）` : ''}`,
-    checkout_complete: `${subject}已完成結帳並看診結束${appointment.checkoutTotal != null ? `（結算 NT$${appointment.checkoutTotal}）` : ''}`,
-    reopen_visit: `${subject}的結帳已退回候診，等待醫生補充資料`,
+    handoff: `${subject}已完成看診，交給櫃台處理`,
+    reclaim: `${subject}被醫師取回修改，暫時退回看診中`,
+    desk_complete: `${subject}的櫃台作業已完成，這次看診結束`,
+    follow_up: `${subject}已預約回診（${formatDate(appointment.followUpDate)} ${appointment.followUpTime || '未指定時間'}）`,
     visit_data: `${subject}的${changedParts.join('、') || '看診資料'}已更新`,
     edit: `${subject}的掛號資料已更新`,
     cancel: `${subject}的掛號已取消${appointment.cancelReason ? `（原因：${appointment.cancelReason}）` : ''}`,
@@ -36,18 +39,14 @@ export function changedAppointmentFields(before, after, fields) {
   return fields.filter((key) => !Object.is(normalizedValue(key, before[key]), normalizedValue(key, after[key])));
 }
 
-// 批價清單有沒有變動只看陣列內容是否相同，不逐項比對細節，通知文案只需要「有沒有動過」。
-function billingItemsChanged(before, after) {
-  return JSON.stringify(before?.billingItems ?? []) !== JSON.stringify(after?.billingItems ?? []);
-}
-
+// 只講真正變動的部分。空值、前後空白與等值的數字格式都不算變更，
+// 否則使用者原樣按一次儲存，聊天室就會冒出一則「已更新」。
 export function describeVisitChanges(before, after) {
-  const labels = [
-    ['看診備註', ['visitNote']],
-    ['特殊照護', ['specialCareNote']],
+  return [
+    ['本次紀錄', ['visitNote']],
+    ['櫃台交辦', ['handoffNote']],
+    ['飼主提醒', ['specialCareNote']],
     ['量測資料', ['weightKg', 'temperatureC']],
-    ['回診資料', ['followUpDate', 'followUpTime', 'followUpReason']],
+    ['回診資料', ['followUpRecommendation', 'followUpReason', 'followUpDate', 'followUpTime']],
   ].filter(([, fields]) => changedAppointmentFields(before, after, fields).length).map(([label]) => label);
-  if (billingItemsChanged(before, after)) labels.push('批價項目');
-  return labels;
 }

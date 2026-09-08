@@ -23,7 +23,6 @@ useGlobalChat();
 // 切到飼主 B（或從舊版報告切到新版）時，舊元件與尚未完成的請求不會殘留在畫面上。
 // 查詢字串不放進 key，列表搜尋與分頁不會因此整頁重掛。
 const ROUTE_IDENTITY_PARAMS = {
-  '/appointments/:id/visit': 'id',
   '/pets/:id': 'id',
   '/records/:id/preview': 'id',
   '/report/:token': 'token',

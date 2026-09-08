@@ -23,7 +23,7 @@ describe('independent appointment workflow HTTP routes', () => {
   after(async () => { mock.restoreAll(); await new Promise(resolve => server.close(resolve)); });
   beforeEach(() => {
     mock.restoreAll();
-    store = new Map([[id, { _id: id, petId, templateId, __v: 0, date: '2026-09-07', time: '10:00', scheduledAt: new Date('2026-09-07T02:00:00Z'), status: 'arrived', checkinNumber: 1, billingSubtotal: 0, petName: '豆豆' }]]);
+    store = new Map([[id, { _id: id, petId, templateId, __v: 0, date: '2026-09-07', time: '10:00', scheduledAt: new Date('2026-09-07T02:00:00Z'), status: 'arrived', checkinNumber: 1, petName: '豆豆' }]]);
     diary = new Map(); records = new Map(); failDiary = false;
     function document(raw) {
       if (!raw) return null;
@@ -89,17 +89,36 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal(store.get(id).__v, 0);
     assert.equal(store.get(id).visitNote, undefined);
   });
-  it('can collect payment before finishing the visit and rejects repeat/stale confirmations', async () => {
-    await post('clinical', { billingItems: [{ name: '看診費', quantity: 1, unitPrice: 850, amount: 850 }] });
-    assert.equal((await post('bill')).status, 200);
-    const version = store.get(id).__v;
-    const paid = await post('pay', { billingRevision: 1, checkoutTotal: 850, paymentMethod: 'cash' });
-    assert.equal(paid.status, 200);
-    assert.equal(paid.body.visitCompletedAt, null);
+  it('hands the visit to the desk, keeps the queue number, and rejects stale confirmations', async () => {
+    await post('clinical', { handoffNote: '診察費＋胸腔 X 光兩張' });
+    const handed = await post('handoff');
+    assert.equal(handed.status, 200);
+    assert.equal(handed.body.status, 'pending_checkout');
+    // 人還在診所等櫃台，號碼牌不歸還；也不會順手建立健檢報告。
+    assert.equal(handed.body.checkinNumber, 1);
     assert.equal(records.size, 0);
-    assert.equal((await post('pay', { version, billingRevision: 1, checkoutTotal: 850, paymentMethod: 'cash' })).status, 409);
-    assert.equal((await post('finish')).body.status, 'completed');
-    assert.equal(records.size, 0);
+
+    const staleVersion = store.get(id).__v - 1;
+    assert.equal((await post('complete', { version: staleVersion })).status, 409);
+
+    const done = await post('complete');
+    assert.equal(done.status, 200);
+    assert.equal(done.body.status, 'completed');
+    assert.equal(done.body.checkinNumber, null);
+    assert.deepEqual(done.body.checkinNumberHistory, [1]);
+  });
+  it('lets the vet reclaim a handed-off visit until the desk completes it', async () => {
+    await post('handoff');
+    const reclaimed = await post('reclaim');
+    assert.equal(reclaimed.status, 200);
+    assert.equal(reclaimed.body.status, 'arrived');
+    assert.equal(reclaimed.body.handoffAt, null);
+    // 取回後補內容、再送一次，櫃台完成之後就不能再取回。
+    assert.equal((await post('clinical', { handoffNote: '補開止咳藥' })).status, 200);
+    await post('handoff');
+    await post('complete');
+    assert.equal((await post('reclaim')).status, 409);
+    assert.equal((await post('clinical', { visitNote: '事後再改' })).status, 409);
   });
   it('creates a draft only on demand and reopens the same linked draft', async () => {
     const first = await post('record');
@@ -109,13 +128,14 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal(second.body.recordId, first.body.recordId);
     assert.equal(records.size, 1);
   });
-  it('books one linked follow-up independently of payment and validates the clinic schedule', async () => {
+  it('books one linked follow-up before the desk finishes and validates the clinic schedule', async () => {
     await post('clinical', { followUpRecommendation: '一週後', followUpReason: '追蹤傷口' });
     assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '12:00' })).status, 422);
     assert.equal((await post('followup', { followUpDate: '2026-02-30', followUpTime: '10:00' })).status, 422);
     const first = await post('followup', { followUpDate: '2026-09-14', followUpTime: '10:00' });
     assert.equal(first.status, 200);
-    assert.equal(first.body.paymentCompletedAt, null);
+    // 約回診不代表櫃台已經處理完，這筆仍留在待處理匣裡。
+    assert.equal(first.body.deskCompletedAt, null);
     const second = await post('followup', { followUpDate: '2026-09-15', followUpTime: '14:00' });
     assert.equal(second.status, 200);
     assert.equal(first.body.followUpAppointmentId, second.body.followUpAppointmentId);

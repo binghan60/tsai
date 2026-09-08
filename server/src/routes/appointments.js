@@ -4,32 +4,27 @@ import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import FormTemplate from '../models/FormTemplate.js';
-import MedicalRecord from '../models/MedicalRecord.js';
-import ClinicalNote from '../models/ClinicalNote.js';
 import ClinicSettings from '../models/ClinicSettings.js';
 import { withTransaction } from '../lib/transaction.js';
 import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsCheckinNumber } from '../lib/appointmentStatus.js';
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
-import { sanitizeBillingItems, calculateBillingSubtotal } from '../lib/appointmentBilling.js';
-import { defaultRecordFields } from '../lib/formTemplate.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import appointmentWorkflowRouter from './appointmentWorkflow.js';
 
 const router = Router();
 router.use('/:id/workflow', appointmentWorkflowRouter);
 
-// Older open tabs must not collapse the independent milestones back into legacy status.
+// 開著舊分頁的裝置不能覆寫別人剛做的事：版本不符一律擋下。
+// 另外，已經開始看診（或已交櫃台、已完成）的掛號不接受取消報到／取消／未到——
+// 那些是排班動作，人都已經在診間裡了就不該再走那條路。
 function checkWorkflowCompatibility(appointment, path, version) {
   if (version !== undefined && version !== (appointment.__v ?? 0)) {
     throw Object.assign(new Error('掛號資料已更新，請重新載入後再確認'), { status: 409 });
   }
-  if (appointment.workflowVersion !== 1) return;
   const action = path.split('/').at(-1);
-  if (['send-to-checkout', 'complete', 'reopen-visit', 'visit-data'].includes(action)) {
-    throw Object.assign(new Error('此就診已使用新版診務流程，請重新整理後操作'), { status: 409 });
-  }
-  if (['cancel', 'restore', 'no-show'].includes(action) && (appointment.visitStartedAt || appointment.visitCompletedAt || appointment.billingCompletedAt || appointment.paymentCompletedAt)) {
+  const started = appointment.visitStartedAt || appointment.handoffAt || appointment.deskCompletedAt;
+  if (['cancel', 'restore', 'no-show'].includes(action) && started) {
     throw Object.assign(new Error('此就診已開始處理，不能取消報到或標記未到'), { status: 422 });
   }
 }
@@ -108,60 +103,6 @@ async function saveLeavingQueue(appointment, wasQueued, session = null) {
   if (wasQueued) rememberCheckinNumber(appointment, appointment.checkinNumber);
   if (wasQueued || appointment.checkinNumber != null) appointment.checkinNumber = null;
   await appointment.save(session ? { session } : undefined);
-}
-
-// 回診日期就是要幫忙掛的下一次號，跟看診備註／病歷日誌是同一種同步精神：
-// 只在還沒被動過（status 仍是 scheduled）的那筆下一次掛號上動手，已經報到、完成、
-// 取消或未到，代表現場已經另外處理過，不回頭改。呼叫端負責在合適的時機呼叫
-// （完成看診一定要呼叫一次；修正看診資料只在 followUpDate/followUpTime/followUpReason
-// 真的變動時呼叫，否則會把現場已經手動改期的下一次掛號覆寫回舊值）。
-async function syncFollowUpAppointment(appointment) {
-  let linked = appointment.followUpAppointmentId
-    ? await Appointment.findById(appointment.followUpAppointmentId)
-    : null;
-  if (appointment.followUpAppointmentId && !linked) {
-    appointment.followUpAppointmentId = null;
-  }
-
-  const hasFollowUp = Boolean(appointment.followUpDate && appointment.followUpTime);
-
-  if (linked) {
-    if (linked.status !== 'scheduled') return null;
-    if (!hasFollowUp) {
-      linked.status = 'cancelled';
-      linked.cancelReason = '回診日期已取消或修改';
-      await linked.save();
-      appointment.followUpAppointmentId = null;
-      await appointment.save();
-      return null;
-    }
-    linked.date = appointment.followUpDate;
-    linked.time = appointment.followUpTime;
-    linked.scheduledAt = combineClinicDateTime(appointment.followUpDate, appointment.followUpTime);
-    linked.reason = String(appointment.followUpReason ?? '').trim() || '回診';
-    await linked.save();
-    return linked;
-  }
-
-  if (!hasFollowUp) return null;
-
-  const created = await Appointment.create({
-    date: appointment.followUpDate,
-    time: appointment.followUpTime,
-    scheduledAt: combineClinicDateTime(appointment.followUpDate, appointment.followUpTime),
-    ownerId: appointment.ownerId,
-    petId: appointment.petId,
-    visitType: 'return',
-    ownerName: appointment.ownerName,
-    ownerPhone: appointment.ownerPhone,
-    petName: appointment.petName,
-    species: appointment.species,
-    reason: String(appointment.followUpReason ?? '').trim() || '回診',
-    templateId: appointment.templateId,
-  });
-  appointment.followUpAppointmentId = created._id;
-  await appointment.save();
-  return created;
 }
 
 // 兩個人同時報到可能各自算出同一張今日未發牌號，被唯一索引擋下。那不是使用者做錯什麼，
@@ -484,297 +425,6 @@ router.post('/:id/check-in', async (req, res, next) => {
     }));
 
     // 報到讓這筆掛號進入候診佇列，醫生頁要立刻看到，不必等 60 秒輪詢。
-    emitAppointmentUpdate(appointment);
-    res.json(appointment);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// arrived → pending_checkout。醫生問診完成時呼叫：填批價/開藥清單、特殊照護提醒與量測/回診資料，
-// 交給櫃台結帳。人還在診所，號碼牌不歸還（見 lib/appointmentStatus.js 的 holdsCheckinNumber）。
-router.post('/:id/send-to-checkout', async (req, res, next) => {
-  try {
-    const appointment = await Appointment.findById(req.params.id);
-    if (!appointment) return res.status(404).json({ message: '找不到掛號' });
-    checkWorkflowCompatibility(appointment, req.path, req.body?.version);
-    if (!canTransitionAppointmentStatus(appointment.status, 'pending_checkout')) {
-      return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'pending_checkout') });
-    }
-
-    const { weightKg, temperatureC, followUpDate, followUpTime, followUpReason, visitNote, specialCareNote, billingItems, templateId } = req.body;
-
-    if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
-    if (temperatureC !== undefined) appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
-    if (followUpDate !== undefined) appointment.followUpDate = String(followUpDate ?? '').trim();
-    if (followUpTime !== undefined) appointment.followUpTime = String(followUpTime ?? '').trim();
-    if (followUpReason !== undefined) appointment.followUpReason = String(followUpReason ?? '').trim();
-    if (visitNote !== undefined) appointment.visitNote = String(visitNote ?? '').trim();
-    if (specialCareNote !== undefined) appointment.specialCareNote = String(specialCareNote ?? '').trim();
-    if (templateId) appointment.templateId = templateId;
-    if (billingItems !== undefined) {
-      appointment.billingItems = sanitizeBillingItems(billingItems);
-      appointment.billingSubtotal = calculateBillingSubtotal(appointment.billingItems);
-    }
-
-    appointment.status = 'pending_checkout';
-    appointment.pendingCheckoutAt = new Date();
-    await appointment.save();
-
-    // 看診備註跟病歷日誌是同一份資料，這裡改了要同步；獨立於掛號儲存之外，
-    // 日誌寫入失敗不影響問診完成本身（比照 /visit-data 與 /complete 既有作法）。
-    if (visitNote !== undefined) {
-      const note = await ClinicalNote.findOne({ appointmentId: appointment._id });
-      if (appointment.visitNote) {
-        if (note) {
-          note.content = appointment.visitNote;
-          await note.save();
-        } else {
-          await ClinicalNote.create({
-            petId: appointment.petId,
-            entryDate: combineClinicDateTime(appointment.date, '10:00'),
-            content: appointment.visitNote,
-            source: 'appointment',
-            appointmentId: appointment._id,
-          });
-        }
-      } else if (note) {
-        await note.deleteOne();
-      }
-    }
-
-    emitAppointmentUpdate(appointment);
-    res.json(appointment);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// pending_checkout → arrived。結帳前發現醫生資料有誤或漏開藥時的安全閥，任一裝置都能呼叫。
-// 保留已填的批價/照護/備註資料，不清空，補完後可以重新問診完成一次。
-router.post('/:id/reopen-visit', async (req, res, next) => {
-  try {
-    const appointment = await Appointment.findById(req.params.id);
-    if (!appointment) return res.status(404).json({ message: '找不到掛號' });
-    checkWorkflowCompatibility(appointment, req.path, req.body?.version);
-    if (!canTransitionAppointmentStatus(appointment.status, 'arrived')) {
-      return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'arrived') });
-    }
-    appointment.status = 'arrived';
-    appointment.pendingCheckoutAt = null;
-    await appointment.save();
-    emitAppointmentUpdate(appointment);
-    res.json(appointment);
-  } catch (err) {
-    next(err);
-  }
-});
-
-// pending_checkout → completed。櫃台確認結帳時呼叫：完成時立刻用掛號選定的表單建立草稿，
-// 讓看診人員不必再選一次。
-router.post('/:id/complete', async (req, res, next) => {
-  try {
-    const initialAppointment = await Appointment.findById(req.params.id);
-    if (!initialAppointment) return res.status(404).json({ message: '找不到掛號' });
-    checkWorkflowCompatibility(initialAppointment, req.path, req.body?.version);
-    if (!canTransitionAppointmentStatus(initialAppointment.status, 'completed')) {
-      return res.status(422).json({ message: describeAppointmentTransition(initialAppointment.status, 'completed') });
-    }
-
-    const { weightKg, temperatureC, followUpDate, followUpTime, followUpReason, visitNote, billingItems, checkoutTotal, checkoutAdjustmentNote } = req.body;
-    let appointment;
-    let record;
-
-    // The record and the completed appointment must commit together. A concurrent
-    // completion attempt loses optimistic concurrency and its transaction rolls back.
-    await withTransaction(async (session) => {
-      appointment = await Appointment.findById(req.params.id).session(session);
-      if (!appointment) {
-        const error = new Error('找不到掛號');
-        error.status = 404;
-        throw error;
-      }
-      if (!canTransitionAppointmentStatus(appointment.status, 'completed')) {
-        const error = new Error(describeAppointmentTransition(appointment.status, 'completed'));
-        error.status = 422;
-        throw error;
-      }
-
-      const template = await resolveAppointmentTemplate(req.body.templateId || appointment.templateId);
-      if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
-      if (temperatureC !== undefined) {
-        appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
-      }
-      if (followUpDate !== undefined) appointment.followUpDate = String(followUpDate ?? '').trim();
-      if (followUpTime !== undefined) appointment.followUpTime = String(followUpTime ?? '').trim();
-      if (followUpReason !== undefined) appointment.followUpReason = String(followUpReason ?? '').trim();
-      if (visitNote !== undefined) appointment.visitNote = visitNote;
-      if (billingItems !== undefined) {
-        appointment.billingItems = sanitizeBillingItems(billingItems);
-        appointment.billingSubtotal = calculateBillingSubtotal(appointment.billingItems);
-      }
-      // 結算總額未給就照建議小計結帳，方便「金額沒問題、直接確認」一鍵完成。
-      appointment.checkoutTotal = checkoutTotal === undefined || checkoutTotal === '' || checkoutTotal == null
-        ? appointment.billingSubtotal
-        : Number(checkoutTotal);
-      if (checkoutAdjustmentNote !== undefined) appointment.checkoutAdjustmentNote = String(checkoutAdjustmentNote ?? '').trim();
-      appointment.status = 'completed';
-      appointment.completedAt = new Date();
-      appointment.templateId = template._id;
-      const appointmentValues = {
-        ...(appointment.weightKg != null ? { weightKg: appointment.weightKg } : {}),
-        ...(appointment.temperatureC != null ? { temperatureC: appointment.temperatureC } : {}),
-        ...(appointment.followUpDate ? { followUpDate: combineClinicDateTime(appointment.followUpDate, appointment.followUpTime || '10:00') } : {}),
-        ...(String(appointment.reason ?? '').trim() ? { chiefComplaint: appointment.reason } : {}),
-      };
-      [record] = await MedicalRecord.create([{
-        petId: appointment.petId,
-        ...defaultRecordFields(template),
-        visitDate: combineClinicDateTime(appointment.date, '10:00'),
-        ...appointmentValues,
-        templateId: template._id,
-        templateVersion: template.version,
-        examType: template.name,
-      }], { session });
-      appointment.recordId = record._id;
-      // 看完診就歸還自己的實體號碼牌；其他候診者手上的牌號完全不變。
-      await saveLeavingQueue(appointment, true, session);
-    });
-    // 看診備註不會出現在報告裡（見上），但仍是有價值的病歷內容，落地到病歷日誌，
-    // 之後兩邊互相編輯會同步（見 /visit-data 與 clinicalNotes 路由）；
-    // 刻意獨立於上面的 transaction 之外，日誌寫入失敗不影響完成看診與建立報告草稿。
-    if (String(appointment.visitNote ?? '').trim()) {
-      await ClinicalNote.create({
-        petId: appointment.petId,
-        entryDate: combineClinicDateTime(appointment.date, '10:00'),
-        content: appointment.visitNote,
-        source: 'appointment',
-        appointmentId: appointment._id,
-      });
-    }
-    // 約好回診日期就是要再回來，直接幫忙掛上那一天的號，不用等飼主再打來一次；
-    // 同樣獨立於上面的 transaction 之外，排號失敗不影響已完成的這次看診。
-    const followUpAppointment = await syncFollowUpAppointment(appointment);
-    // 完成看診是狀態轉換，其他分頁（例如櫃台開著的「已完成看診」清單）要能立刻看到，
-    // 不必等現有的 60 秒輪詢。
-    emitAppointmentUpdate(appointment);
-    res.json({ ...(appointment.toObject?.() ?? appointment), record, followUpAppointment });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// 候診中或已完成都可以用這支修正量測／回診資料／備註——候診頁（醫生）按「更新」時打的
-// 就是這支，讓櫃台頁能立刻看到最新內容（見下方 emitAppointmentUpdate）；已完成後
-// 則是行政校正用途。
-const VISIT_DATA_EDITABLE_STATUSES = ['arrived', 'pending_checkout', 'completed'];
-
-router.patch('/:id/visit-data', async (req, res, next) => {
-  try {
-    const initialAppointment = await Appointment.findById(req.params.id);
-    if (!initialAppointment) return res.status(404).json({ message: '找不到掛號' });
-    checkWorkflowCompatibility(initialAppointment, req.path, req.body?.version);
-    if (!VISIT_DATA_EDITABLE_STATUSES.includes(initialAppointment.status)) {
-      return res.status(422).json({ message: '只有候診中、待結帳或已完成的掛號可以編輯看診資料' });
-    }
-
-    const weightKg = req.body?.weightKg;
-    const temperatureC = req.body?.temperatureC;
-    const followUpDate = req.body?.followUpDate;
-    const followUpTime = req.body?.followUpTime;
-    const followUpReason = req.body?.followUpReason;
-    const visitNote = req.body?.visitNote;
-    const specialCareNote = req.body?.specialCareNote;
-    const billingItems = req.body?.billingItems;
-    let appointment;
-    let previousFollowUpDate;
-    let previousFollowUpTime;
-    let previousFollowUpReason;
-    let hasEnteredCheckout;
-
-    await withTransaction(async (session) => {
-      appointment = await Appointment.findById(req.params.id).session(session);
-      if (!appointment) {
-        const error = new Error('找不到掛號');
-        error.status = 404;
-        throw error;
-      }
-      if (!VISIT_DATA_EDITABLE_STATUSES.includes(appointment.status)) {
-        const error = new Error('只有候診中、待結帳或已完成的掛號可以編輯看診資料');
-        error.status = 422;
-        throw error;
-      }
-      // 回診同步只在真正離開候診階段（待結帳／已完成）後才有意義；候診中先填的
-      // 回診日期還沒真的確定，見下方 syncFollowUpAppointment 呼叫前的說明。
-      hasEnteredCheckout = ['pending_checkout', 'completed'].includes(appointment.status);
-
-      previousFollowUpDate = appointment.followUpDate;
-      previousFollowUpTime = appointment.followUpTime;
-      previousFollowUpReason = appointment.followUpReason;
-      if (weightKg !== undefined) appointment.weightKg = weightKg === '' || weightKg == null ? null : Number(weightKg);
-      if (temperatureC !== undefined) appointment.temperatureC = temperatureC === '' || temperatureC == null ? null : Number(temperatureC);
-      if (followUpDate !== undefined) appointment.followUpDate = String(followUpDate ?? '').trim();
-      if (followUpTime !== undefined) appointment.followUpTime = String(followUpTime ?? '').trim();
-      if (followUpReason !== undefined) appointment.followUpReason = String(followUpReason ?? '').trim();
-      if (visitNote !== undefined) appointment.visitNote = String(visitNote ?? '').trim();
-      if (specialCareNote !== undefined) appointment.specialCareNote = String(specialCareNote ?? '').trim();
-      if (billingItems !== undefined) {
-        appointment.billingItems = sanitizeBillingItems(billingItems);
-        appointment.billingSubtotal = calculateBillingSubtotal(appointment.billingItems);
-      }
-
-      if (appointment.recordId) {
-        const record = await MedicalRecord.findById(appointment.recordId).session(session);
-        if (record?.status === 'draft') {
-          record.weightKg = appointment.weightKg;
-          record.temperatureC = appointment.temperatureC;
-          record.followUpDate = appointment.followUpDate
-            ? combineClinicDateTime(appointment.followUpDate, appointment.followUpTime || '10:00')
-            : null;
-          await record.save({ session });
-        }
-      }
-
-      await appointment.save({ session });
-    });
-
-    // 回診日期／原因跟完成看診時掛出去的下一次掛號是同一份資料，這裡改了要回頭同步；
-    // 只在「待結帳」或「已完成」階段才有意義——候診中先填的回診日期只是暫存在這筆掛號上，
-    // 還沒真的確定要不要掛出下一次的號。約回診時間本來就是櫃台在待結帳階段的工作，
-    // 所以待結帳期間改動就觸發同步（第一次會直接建立下一筆掛號，之後 /complete 呼叫
-    // 到的 syncFollowUpAppointment 會找到既有的 followUpAppointmentId 就地更新，不會重複建立）。
-    // 只在真的有變動時才做，否則現場已經手動改期的下一次掛號會被舊值蓋回去。
-    if (
-      hasEnteredCheckout
-      && (appointment.followUpDate !== previousFollowUpDate
-        || appointment.followUpTime !== previousFollowUpTime
-        || appointment.followUpReason !== previousFollowUpReason)
-    ) {
-      await syncFollowUpAppointment(appointment);
-    }
-
-    // 看診備註跟落地的病歷日誌是同一份資料，這裡改了要同步回日誌；刻意獨立於
-    // 上面的 transaction 之外，理由同完成看診時的日誌寫入。
-    if (visitNote !== undefined) {
-      const note = await ClinicalNote.findOne({ appointmentId: appointment._id });
-      if (appointment.visitNote) {
-        if (note) {
-          note.content = appointment.visitNote;
-          await note.save();
-        } else {
-          await ClinicalNote.create({
-            petId: appointment.petId,
-            entryDate: combineClinicDateTime(appointment.date, '10:00'),
-            content: appointment.visitNote,
-            source: 'appointment',
-            appointmentId: appointment._id,
-          });
-        }
-      } else if (note) {
-        await note.deleteOne();
-      }
-    }
-
     emitAppointmentUpdate(appointment);
     res.json(appointment);
   } catch (err) {

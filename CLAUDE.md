@@ -57,10 +57,10 @@
 ### clinicalNotes 病歷日誌
 `petId`、`entryDate`、`content`、`source`（`manual` / `legacy_import` / `appointment`）。醫師看診或拿藥時隨手記的自由文字記事，不用填表、不用結案，跟 `medicalRecords`（結案才鎖定的正式健檢報告）是兩條平行的軌道——日誌給日常記事用，健檢報告給需要 PDF／分享的正式場合用。`source: 'legacy_import'` 的記事來自舊系統資料遷移（見 `server/scripts/legacy-migration/`），內容是舊系統逐年累加的病歷全文，整段當一筆記事匯入，不逐筆拆分（舊資料格式不一致，拆分風險高於價值）。
 
-`source: 'appointment'` 的記事跟掛號的 `visitNote`（見第二節 appointments）是**同一份資料、雙向同步**：問診完成、結帳完成或候診中/待結帳修改 `visitNote` 非空時，會建立（或更新）一筆用 `appointmentId` 連結的日誌（見 `routes/appointments.js` 的 `/send-to-checkout`、`/complete`、`/visit-data`）；反過來，`PUT /api/clinical-notes/:id` 若這筆日誌的 `appointmentId` 有值且 body 帶了 `content`，會回頭把新內容寫回該筆掛號的 `visitNote`（見 `routes/clinicalNotes.js`）；`DELETE` 也會把對應掛號的 `visitNote` 清空，避免兩邊資料分岔。一筆掛號最多對應一筆日誌（`appointmentId` 唯一索引），`manual`／`legacy_import` 兩種來源沒有這個欄位、不受影響，一樣可自由編輯/刪除、沒有唯讀鎖定。索引 `{petId, entryDate, _id}`、`{appointmentId}`（partial unique）。刪除寵物前會檢查 `ClinicalNote.exists({petId})`，跟 `medicalRecords` 一樣擋刪除。
+`source: 'appointment'` 的記事跟掛號的 `visitNote`（見第二節 appointments）是**同一份資料、雙向同步**：`POST /api/appointments/:id/workflow/clinical` 帶了 `visitNote`／`weightKg`／`temperatureC` 任一個而內容非空時，會建立（或更新）一筆用 `appointmentId` 連結的日誌（見 `routes/appointmentWorkflow.js`，內容由 `lib/appointmentWorkflow.js` 的 `appointmentJournalContent` 把量測值與紀錄併起來）；反過來，`PUT /api/clinical-notes/:id` 若這筆日誌的 `appointmentId` 有值且 body 帶了 `content`，會回頭把新內容寫回該筆掛號的 `visitNote`（見 `routes/clinicalNotes.js`）；`DELETE` 也會把對應掛號的 `visitNote` 清空，避免兩邊資料分岔。一筆掛號最多對應一筆日誌（`appointmentId` 唯一索引），`manual`／`legacy_import` 兩種來源沒有這個欄位、不受影響，一樣可自由編輯/刪除、沒有唯讀鎖定。索引 `{petId, entryDate, _id}`、`{appointmentId}`（partial unique）。刪除寵物前會檢查 `ClinicalNote.exists({petId})`，跟 `medicalRecords` 一樣擋刪除。
 
 ### chatMessages 全站內部聊天
-`sender`（`vet` / `front_desk`）、`content`、`auto`（布林，預設 `false`）。醫生↔櫃台的全站即時聊天紀錄，跟任何掛號／病患都無關（例如「今天下午提早關診」），所以不像 `visitNote`／`clinicalNotes` 那樣掛在 `petId`／`appointmentId` 底下，也沒有雙向同步這回事——單純是一份不斷增長的訊息紀錄。前端用浮動視窗呈現（`GlobalChatWidget`，見第六節），身分是裝置固定的（`useStaffIdentity`，存在 `localStorage`），不是頁面固定或使用者帳號決定的。索引 `{createdAt: 1}`。**不是每一筆都是使用者手動打字送出的**：`/appointments` 頁（見第六節）每完成一個會改變掛號狀態或內容的動作，會自動用同一支 `POST /chat/messages` API 補一則描述動作內容的系統訊息（例如「王小明已報到」），`sender` 一樣是操作當下那台裝置的固定身分，`auto` 標成 `true`。`auto` 純粹是顯示用的標記——聊天視窗靠它在訊息旁加一個「自動通知」小標籤，跟手動打字的訊息區分開來；也讓發出動作的那台裝置自己判斷要不要跳未讀紅點（見下）。
+`sender`（`vet` / `front_desk`）、`content`、`auto`（布林，預設 `false`）。醫生↔櫃台的全站即時聊天紀錄，跟任何掛號／病患都無關（例如「今天下午提早關診」），所以不像 `visitNote`／`clinicalNotes` 那樣掛在 `petId`／`appointmentId` 底下，也沒有雙向同步這回事——單純是一份不斷增長的訊息紀錄。前端用浮動視窗呈現（`GlobalChatWidget`，見第六節），身分是裝置固定的（`useStaffIdentity`，存在 `localStorage`），不是頁面固定或使用者帳號決定的。索引 `{createdAt: 1}`。**不是每一筆都是使用者手動打字送出的**：診療台與櫃台工作台（見第六節）每完成一個會改變掛號狀態或內容的動作，會自動用同一支 `POST /chat/messages` API 補一則描述動作內容的系統訊息（例如「「豆豆」已完成看診，交給櫃台處理」）。文案集中在 `lib/appointmentNotifications.js`，送出的共用進入點是 `composables/useAppointmentNotifier.js`，`sender` 一樣是操作當下那台裝置的固定身分，`auto` 標成 `true`。`auto` 純粹是顯示用的標記——聊天視窗靠它在訊息旁加一個「自動通知」小標籤，跟手動打字的訊息區分開來；也讓發出動作的那台裝置自己判斷要不要跳未讀紅點（見下）。
 
 ### deliveryLogs 寄送流水帳
 append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
@@ -77,21 +77,34 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ### appointments 掛號與候診
 只服務當日門診時間軸。`date`／`time` 是登記來源（`date` 由掛號時指定，預設今天），`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。
 
-`status` 為 `scheduled`／`arrived`／`pending_checkout`／`completed`／`cancelled`／`no_show`。`arrived`（候診中）與 `completed`（已完成）之間插了 `pending_checkout`（待結帳）：醫生問診完成時呼叫 `POST /:id/send-to-checkout` 轉入這個狀態，交給櫃台結帳；櫃台按 `POST /:id/complete` 才真正轉入 `completed`。刻意不留 `arrived → completed` 的直接路徑（`lib/appointmentStatus.js` 的 `ALLOWED_TRANSITIONS` 沒有這條邊），逼所有看診都經過一個明確的交接點。`pending_checkout → arrived` 是安全閥（`POST /:id/reopen-visit`）：結帳前發現醫生資料有誤或漏開藥，任一裝置都能退回候診補資料，已填的批價/照護資料不會被清空。候診中可填 `weightKg`、`temperatureC`、會顯示在飼主報告上的 `followUpDate`＋`followUpTime`。`followUpDate`（`YYYY-MM-DD`）與 `followUpTime`（`HH:MM`）分開存，理由跟 `date`／`time` 一樣是避免日期因伺服器時區偏移；完成看診後會建立健檢報告草稿，兩者用 `combineClinicDateTime` 併成 `MedicalRecord.followUpDate`（真正的 `Date`，精確到分鐘）。**前端規則：`followUpDate` 本身選填，但選了日期就要一併填 `followUpTime`**（RecordFormPage 與 AppointmentsPage 皆擋送出並顯示紅字提示）；後端仍保留沒填時間時預設上午 10:00 的容錯，只當非經前端表單的呼叫端（例如直接打 API）沒帶時間時墊底，不是常態路徑。填了回診日期＋時間，`POST /:id/complete` 會直接幫忙掛上那一天的號（`visitType: 'return'`、身分快照與 `templateId` 都照抄這次掛號）；這裡不套用「預約時段僅限 10:00–11:30、14:00–19:30」的限制——那是電話掛號 UX 上的排班規則，不是這筆掛號資料本身的限制，自動掛號沿用 `followUpTime` 的原始值即可。`followUpReason`（選填文字）就是這筆下次掛號的 `reason`（來院原因）——填了什麼就照樣搬過去，沒填則用「回診」墊底，不是這次看診本身的來院原因。新掛號的 `_id` 記在原掛號的 `followUpAppointmentId`（`Appointment` 新欄位）上，兩筆掛號因此是連結的：之後用「編輯看診資料」（`PATCH /visit-data`）改回診日期／時間／原因，只要那筆自動掛出去的下一次掛號還是 `scheduled`（現場還沒報到/完成/取消/未到，代表沒被另外處理過），就會回頭同步它的 `date`／`time`／`scheduledAt`／`reason`；回診日期被清空則直接取消那筆掛號（`status: 'cancelled'`）並解除連結；原本沒填、後來補上則補建一筆。只有在 `followUpDate`／`followUpTime`／`followUpReason` 任一個真的變動時才會觸發這個同步，避免把現場已經手動改期的下一次掛號覆寫回舊值。共用邏輯在 `routes/appointments.js` 的 `syncFollowUpAppointment`，同樣獨立於完成看診／修正看診資料的 transaction 之外，掛號失敗不影響已完成的這次看診。
+**一條四步流水線：預約 → 候診 → 看診 → 櫃台完成。** 真相是三個里程碑時間戳記，`status` 由它們推導出來，不是另一個獨立的維度（推導在 `lib/appointmentWorkflow.js` 的 `applyWorkflowAction` 尾端）：
 
-**`visitNote` 是醫生↔櫃台的內部備註**（操作性溝通，例如「免掛號費」，不是病歷內容，也不是批價/開藥/照護提醒——那三個各有自己的欄位，見下段），一個會被整段覆蓋的字串，跟醫生／櫃台目前用哪一頁無關——填寫不記發言者，純粹是「目前這筆掛號的備註內容」。刻意不帶進報告草稿（不可以出現在飼主看得到的報告裡），而是跟 `clinicalNotes`（病歷日誌）**雙向同步**（見第二節 clinicalNotes）：`POST /:id/send-to-checkout`、`POST /:id/complete` 時非空會建立一筆日誌，`PATCH /:id/visit-data`（候診中、待結帳或已完成都可以用）改了會建立/更新/刪除對應日誌；反過來，直接編輯那筆日誌的內容也會回頭覆蓋這裡的 `visitNote`。醫生↔櫃台真正想聊、跟哪個病患無關的內容（例如「今天下午提早關診」），走全站聊天浮動視窗，不是這個欄位——見第六節 `GlobalChatWidget` 與第二節 `chatMessages`。
+| 里程碑 | 寫入時機 | 對應 `status` |
+|---|---|---|
+| `visitStartedAt` | 醫師在診療台開啟工作區（`POST /workflow/start`）——開啟即視為開始看診，沒有另一顆「開始看診」按鈕 | `arrived` |
+| `handoffAt` | 醫師「完成看診，送交櫃台」（`POST /workflow/handoff`） | `pending_checkout` |
+| `deskCompletedAt` | 櫃台「完成處理」（`POST /workflow/complete`） | `completed` |
 
-**批價／開藥／特殊照護是三個獨立欄位，跟 `visitNote` 語意分開**（早期版本曾經全部擠在 `visitNote` 這個自由文字裡，肉眼很難從一段文字辨識金額與藥品，於是拆開）：
+`status` 仍是 `scheduled`／`arrived`／`pending_checkout`／`completed`／`cancelled`／`no_show`（索引、號碼牌與排班邏輯都依賴它），只是 `pending_checkout` 現在讀作「醫師已交櫃台、櫃台還沒處理完」。刻意不留 `arrived → completed` 的直接路徑（`lib/appointmentStatus.js` 的 `ALLOWED_TRANSITIONS` 沒有這條邊），逼所有看診都經過一個明確的交接點。
 
-- `specialCareNote`：面向飼主的照護提醒（例如「傷口勿舔舐」），由醫生填、待結帳時提示櫃台「請轉告飼主」。不跟 `clinicalNotes` 雙向同步——單一資料來源留在 `Appointment` 上，避免又長出第二套同步機制。
-- `billingItems`：批價／開藥合併清單（`[{ kind: 'fee'|'medication', name, quantity, unitPrice, amount, dosage, instructions }]`），醫生問診完成時填、櫃台結帳時可調整增刪。`amount` 預設 `quantity*unitPrice` 四捨五入，但允許人工覆寫（例如整批藥另外喊價）。正規化與加總是純函式 `lib/appointmentBilling.js` 的 `sanitizeBillingItems`/`calculateBillingSubtotal`，**伺服器一律重算 `billingSubtotal`，不信任前端送來的加總值**。
-- `checkoutTotal`／`checkoutAdjustmentNote`：櫃台結帳時的最終確認金額，可能因折扣/抹零而不同於 `billingSubtotal`；只在 `POST /:id/complete` 寫入，草稿（`pending_checkout`）階段一律是 `null`。
+**`POST /workflow/reclaim`（取回這筆）是唯一的回頭路**：`handoffAt` 清成 null，這筆退回 `arrived` 讓醫師補資料。**櫃台按下「完成處理」之後就不能再取回**（`deskCompletedAt` 有值時回 409）——那時號碼牌已歸還、就診已結案。這條回頭路是刻意保留的：舊版「批價完成就再也改不了」正是當時最卡的地方。
 
-**`weightKg`／`temperatureC`／`followUpDate`／`followUpTime`／`followUpReason`／`visitNote`／`specialCareNote`／`billingItems` 這組候診量測、回診、備註與批價欄位，候診中（`arrived`）或待結帳（`pending_checkout`）都可以用 `PATCH /:id/visit-data` 更新。** 掛號頁的候診卡片按「問診完成」時打的是 `POST /:id/send-to-checkout`（`arrived → pending_checkout`，一次送出量測/回診/備註/照護提醒/批價清單）；`PATCH /:id/visit-data` 則是候診中或待結帳期間的事後校正，以及「已完成」清單的編輯彈窗用的端點。**不接受 `checkoutTotal`／`checkoutAdjustmentNote`**——結算金額只能透過 `POST /:id/complete` 寫入，避免在草稿階段就把結算金額寫死。回診日期／原因跟下一次掛號的自動同步（見上段 `syncFollowUpAppointment`）**只在待結帳或已完成階段才觸發**——約回診時間本來就是櫃台在待結帳階段的工作，所以待結帳期間改動就會觸發同步（第一次直接建立下一筆掛號，`POST /:id/complete` 呼叫到的 `syncFollowUpAppointment` 找到既有的 `followUpAppointmentId` 就地更新，不會重複建立）；候診中先填的回診日期只是暫存，還沒真的確定，避免醫生候診中隨手填的日期就先掛出一筆回診。
+`workflowVersion` 標記這筆用的是哪一代流程：`2` ＝這條四步流水線，`1` 是舊的批價／收款版本，`0` 是更早只有 `status` 的版本。舊版欄位（`billingItems`／`billingSubtotal`／`checkoutTotal`／`paymentMethod`／`billingCompletedAt`／`paymentCompletedAt`／`billingRevision`／`pendingCheckoutAt`／`visitCompletedAt`／`handoffAcknowledgedAt`）**已經從 schema 移除、讀不回來**，所以 `shared/appointmentWorkflow.js` 的 legacy 分支改由 `status` 回推階段（`pending_checkout` ＝已交櫃台、`completed` ＝已完成），不做資料庫遷移——沒有人會再去操作已結案的舊掛號，回推只是要讓它們在清單上落在正確的那一格。第一次被新流程碰到時 `adoptWorkflow` 會補上里程碑並把 `workflowVersion` 設成 2。
 
-**`checkinNumber` 是候診佇列裡的位置，不是報到時發的票號，而且完全自動——沒有手動指定的入口。** 同一天所有持有號碼牌的掛號（`arrived` 或 `pending_checkout`，統稱「人還在診所」，見 `lib/appointmentStatus.js` 的 `holdsCheckinNumber`），號碼是連續的 1..N；報到接到隊尾，離開佇列（完成／取消／未到／取消報到）就清成 null 並讓後面的人遞補。**問診完成轉入 `pending_checkout` 時不歸還號碼牌**——人還要去櫃台結帳，號碼牌代表「現場還在」，不是「還沒看診」。因此「這個號碼已經被用掉」在結構上不存在，不需要靠衝突檢查去擋——檢查本來也擋不住併發。代價是排在後面的人號碼會隨著前面的人看完而變小，那正是即時位置該有的行為。排序與編號規則在 `lib/appointmentQueue.js`（純邏輯，可測）。
+**四個文字欄位，各有各的讀者**（早期版本把批價／開藥擠成結構化清單又拆成三個欄位，後來確認診所根本不用系統計價，整組退場改回純文字）：
 
-索引 `{scheduledAt: 1}` 與 `{status: 1, scheduledAt: 1}` 對應時間軸排序、狀態分組與讀取當日佇列。另有 partial unique index `{date, checkinNumber}`（限 `status` 為 `arrived` 或 `pending_checkout` 且號碼為數字）：重排是在 transaction 裡整批改寫佇列的，併發重排會因為改到同一批文件而互相衝突，唯一擋不住的是「兩個人同時報到各自算出同一個隊尾號碼」——那由這個索引接住，路由收到 E11000 後自行重試。**寫回號碼一定要兩階段**（先整批挪到負數再寫回正式號碼）：唯一索引是逐筆檢查的，直接把 B 寫成 1 會撞到還沒讓位的 A。
+- `visitNote` 本次簡易紀錄：醫師寫的病歷內容，跟 `clinicalNotes`（病歷日誌）**雙向同步**（見第二節 clinicalNotes）——`POST /workflow/clinical` 帶了 `visitNote`／`weightKg`／`temperatureC` 任一個就建立／更新／刪除對應日誌，反過來直接編輯那筆日誌也會回頭覆蓋這裡。飼主看不到，也不進健檢報告。
+- `handoffNote` 給櫃台的交辦：收費項目、領藥、要開的證明都寫這裡，**取代了早期逐項計價的批價清單**。系統不解析內容、不計價、不加總，也不記任何金額——櫃台讀這段文字自行收費。
+- `specialCareNote` 請轉告飼主：面向飼主的照護提醒（例如「傷口勿舔舐」）。跟 `handoffNote` 語意分開才能在櫃台端用警示樣式獨立呈現——那是最容易漏講的一件事。刻意不跟 `clinicalNotes` 同步，單一資料來源留在 `Appointment` 上。
+- `followUpRecommendation` 回診建議：醫師寫期間與原因，櫃台跟飼主敲定實際時段後才真的掛下一次的號。
+
+這四欄加上 `weightKg`／`temperatureC` 是同一支 `POST /workflow/clinical` 的可選欄位，前端自動存檔（1.2 秒 debounce）。**櫃台按下完成處理之後就整組鎖定**（回 409）。醫生↔櫃台真正想聊、跟哪個病患無關的內容（例如「今天下午提早關診」），走全站聊天浮動視窗，不是這些欄位——見第六節 `GlobalChatWidget` 與第二節 `chatMessages`。
+
+`followUpDate`（`YYYY-MM-DD`）與 `followUpTime`（`HH:MM`）分開存，理由跟 `date`／`time` 一樣是避免日期因伺服器時區偏移。它們只由 `POST /workflow/followup` 寫入——那是櫃台跟飼主敲定時段的那一刻，會在同一個 transaction 裡建立（或就地改期）下一筆掛號（`visitType: 'return'`、身分快照與 `templateId` 都照抄這次掛號，`reason` 取 `followUpReason`，沒填則用「回診」墊底），新掛號的 `_id` 記在 `followUpAppointmentId` 上。回診時段有驗證（10:00–11:30、14:00–19:30，每 5 分鐘一格，且不得早於本次就診）；已經被現場另外處理過（不再是 `scheduled`）的下一筆掛號不回頭改期，改回 409 要求從那筆掛號本身處理。
+
+**`checkinNumber` 是候診佇列裡的位置，不是報到時發的票號，而且完全自動——沒有手動指定的入口。** 同一天所有持有號碼牌的掛號（`arrived` 或 `pending_checkout`，統稱「人還在診所」，見 `lib/appointmentStatus.js` 的 `holdsCheckinNumber`），號碼是連續的 1..N；報到接到隊尾，離開佇列（完成／取消／未到／取消報到）就清成 null 並讓後面的人遞補。**送交櫃台轉入 `pending_checkout` 時不歸還號碼牌**——人還要去櫃台領藥付錢，號碼牌代表「現場還在」，不是「還沒看診」。因此「這個號碼已經被用掉」在結構上不存在，不需要靠衝突檢查去擋——檢查本來也擋不住併發。代價是排在後面的人號碼會隨著前面的人看完而變小，那正是即時位置該有的行為。排序與編號規則在 `lib/appointmentQueue.js`（純邏輯，可測）。
+
+
 
 ## 三、技術棧
 
@@ -178,21 +191,24 @@ POST   /api/appointments                新增掛號（body 可帶 date，省略
 GET    /api/appointments/:id
 PUT    /api/appointments/:id            更新掛號資料（時段／來院原因／身分快照）
 POST   /api/appointments/:id/check-in   報到；初診同時建立飼主與寵物（自動接到候診佇列尾端）
-POST   /api/appointments/:id/send-to-checkout  醫生問診完成：arrived → pending_checkout，一次送出量測/回診/
-                                       備註/照護提醒(specialCareNote)/批價清單(billingItems)；人還在診所，
-                                       號碼牌不歸還
-POST   /api/appointments/:id/complete   櫃台確認結帳：pending_checkout → completed，保存最終批價清單與結算總額
-                                       (checkoutTotal/checkoutAdjustmentNote，未帶則採用建議小計)，建立健檢
-                                       報告草稿；有填回診日期＋時間就自動幫忙掛下次的號
-POST   /api/appointments/:id/reopen-visit  待結帳退回候診：pending_checkout → arrived，安全閥，保留已填的
-                                       批價/照護資料，任一裝置都能呼叫
-PATCH  /api/appointments/:id/visit-data 候診中、待結帳或已完成都可修正候診量測、回診資料、備註、照護提醒與
-                                       批價清單（不接受 checkoutTotal，結算金額只能透過 /complete 寫入）；
-                                       成功後廣播 appointment:updated，讓開著同一頁的其他電腦即時看到
+PATCH  /api/appointments/:id/check-in-number  手動改發出去的實體號碼牌
 POST   /api/appointments/:id/cancel     取消掛號
 POST   /api/appointments/:id/no-show    標記未到診
-POST   /api/appointments/:id/restore    恢復已取消或未到診的掛號
+POST   /api/appointments/:id/restore    恢復已取消或未到診的掛號，以及候診中的「取消報到」
 DELETE /api/appointments/:id            永久刪除（僅限已取消或未到）
+
+看診流水線（全部掛在 /api/appointments/:id/workflow/:action，見 routes/appointmentWorkflow.js）
+每一支都必須帶 body.version＝目前的 __v，不符回 409；整支路由跑在同一個 transaction 裡，
+掛號、病歷日誌、回診掛號與健檢報告草稿要嘛一起成功、要嘛一起回滾。
+POST   .../workflow/clinical            存量測與四個文字欄位（weightKg/temperatureC/visitNote/handoffNote/
+                                       specialCareNote/followUpRecommendation/followUpReason），前端自動
+                                       存檔用；帶到 visitNote/量測時同步病歷日誌。櫃台完成後回 409
+POST   .../workflow/start               開啟工作區＝開始看診，寫 visitStartedAt
+POST   .../workflow/handoff             完成看診，送交櫃台：寫 handoffAt → pending_checkout，號碼牌不歸還
+POST   .../workflow/reclaim             取回這筆：清 handoffAt → 退回 arrived；deskCompletedAt 已寫入時回 409
+POST   .../workflow/complete            櫃台完成處理：寫 deskCompletedAt → completed，歸還號碼牌
+POST   .../workflow/followup            櫃台敲定回診時段：寫 followUpDate/Time 並建立（或改期）下一筆掛號
+POST   .../workflow/record              建立／取得本次就診綁定的健檢報告草稿（body.templateId）
 
 內部聊天（全站，不綁掛號／病患）
 GET    /api/chat/messages               最近訊息（?limit=，預設 100），依時間正序回傳
@@ -202,9 +218,8 @@ POST   /api/chat/messages               新增一則訊息，body { sender: 'vet
 即時通訊（Socket.IO，掛在 httpServer 上，沿用既有 cookie session 驗證）
 join-day / leave-day（client→server）  加入／離開 appointments:<date> 房間
 appointment:updated（server→client）   掛號本身狀態／欄位變動時廣播完整掛號文件（報到、取消、標記未到、恢復、調整
-                                       號碼牌、問診完成轉待結帳、確認結帳、退回候診、候診中/待結帳/已完成修正看診
-                                       資料都會觸發），讓開著 `/appointments` 的其他電腦即時反映新狀態，不用等
-                                       60 秒輪詢
+                                       號碼牌，以及 workflow 的每一支動作都會觸發），讓開著 `/appointments`
+                                       診療台與 `/reception` 櫃台台的其他電腦即時反映新狀態，不用等 30 秒輪詢
 chat:new（server→client）              全站內部聊天新增一則訊息時廣播，不分房間、廣播給所有已連線的 socket
 
 寄送紀錄
@@ -245,9 +260,8 @@ GET    /api/health
 | 路由 | 頁面 | 說明 |
 |---|---|---|
 | `/` | 工作台 | 全站綜覽儀表板，由粗到細三層：**現在**（寄送異常橫幅）→ **分佈與趨勢**（報告流程四格、近 6 週健檢量長條、本月與累計數字）→ **明細**（待辦清單、最近完成）。**同一個數字只在其中一層出現一次**——之前草稿數同時出現在優先處理卡、workStage 卡、待辦清單與狀態長條四個地方，那是這頁最主要的雜訊來源。每一格數字都要能點進對應清單 |
-| `/appointments` | 掛號與候診 | **單一一頁，沒有分頁也沒有身分切換**：電話掛號、報到候診、填寫看診資料、問診完成、櫃台結帳都在這裡——這是從「拆成醫生頁／櫃台頁兩頁」的版本演化來的，後來發現分頁造成的權責混亂（該由誰報到、誰填量測、留言又該綁在哪一頁）比合併帶來的複雜度更麻煩，才合回同一頁，見第九節。單日檢視是**左右兩張卡片＋下方區塊**，不是單一資料表：左欄堆疊「候診」與「待結帳」兩張卡片（欄寬 `xl:grid-cols-[minmax(26rem,1.1fr)_minmax(0,1.4fr)]`，比早期版本寬，展開表單才有空間放批價清單），右邊是「看診時間軸」。兩張卡片的清單列（號碼牌／身分徽章／姓名／飼主聯絡方式／時間戳記／狀態徽章／操作列／展開區塊的外殼）共用同一個 `AppointmentQueueCardItem` 元件，只靠 `variant`（`primary`/`warning`）與插槽內容區分——**候診中與待結帳的號碼牌都可以點擊修改**，不是候診專屬的能力。「候診」是已報到還沒看完的人，依報到先後排列；卡片展開後**分兩欄**填體重／體溫／回診資料／建立草稿的表單（左欄）與內部備註（`visitNote`）／照護提醒（`specialCareNote`）／批價與開藥清單（`AppointmentBillingEditor` 元件，`billingItems`，候診卡片與待結帳卡片共用同一份）（右欄），底部「問診完成」（呼叫 `POST /:id/send-to-checkout`，轉入待結帳）。**這裡刻意不用 Modal 承載這份表單**——醫生手上常常同時有好幾隻動物在跑（等一隻的檢驗結果時先看下一隻），Modal 一次只能開一個，會擋住在候診中的病患之間來回切換；用卡片內展開＋每筆掛號各自的草稿（`simpleForms[id]`），可以同時展開多筆，互不干擾。「待結帳」是醫生已問診完成、還沒結帳的人，依轉入待結帳的時間排列；卡片展開後**左欄是批價清單、右欄是**醫生填的完整資料摘要（含照護提醒的顯眼提示「請轉告飼主」）與結算總額／調整說明，填完按「確認結帳，完成看診」（`POST /:id/complete`，轉入已完成、建立健檢報告草稿），或按「退回候診」（`POST /:id/reopen-visit`）讓醫生補資料。**這兩張卡片的按鈕/輸入框不因裝置身分而 disable 或隱藏**——`useStaffIdentity`（裝置固定身分）只決定初始展開狀態與排列順序：`vet` 身分預設「候診」展開、「待結帳」摺成摘要列，`front_desk` 身分相反；使用者可以隨時手動展開/收合(`sectionOpen`)，不受身分限制，之後切換身分也不會回頭改動手動調整過的展開狀態——這是刻意避開「拆兩頁時期身分鎖路由、換角色要跳頁」的舊教訓（見第九節）。
-
-**新增掛號、報到、編輯掛號資料（時段/來院原因/身分快照）、取消/標記未到/恢復掛號/取消報到——這一整組行政/排班操作，同樣依 `sectionOpen.admin` 決定預設看不看得到，`vet` 身分預設收起、`front_desk` 身分預設攤開，一樣不是硬權限牆。** 頁首「行政操作」按鈕（`PageHeader` 的 actions 插槽）是這組狀態唯一的手動開關，展開時才會一併顯示旁邊的「掛號」按鈕；收起時，看診時間軸上未報到的項目只顯示灰階「未報到」標籤、不出現「報到」按鈕與更多操作選單，候診卡片與各篩選表格列的「編輯」「取消」「恢復」「刪除」之類按鈕與 `RowActions` 選單也一併隱藏。**「看診資料」（`focusCandidate`）與「結帳」（`focusCheckout`）這兩個導向候診卡片／待結帳卡片本身的按鈕不受影響、一律顯示**——那是醫生/櫃台各自角色本來就該做的臨床/收費工作，不是行政排班；只有報到、編輯聯絡資料、取消/未到/恢復這類跟「安排今天看診順序」有關的操作才跟著 `sectionOpen.admin` 走。理由是使用者實際回饋：候診時間軸上一堆報到/編輯/取消按鈕跟醫生的問診工作無關，醫生裝置預設應該只看到候診名單，不該被這些按鈕分心；但因為前面已經吃過「拆兩頁導致行政操作沒人管」的虧，這次選擇用同一個 `sectionOpen` 收合機制而不是路由或權限鎖——跟候診/待結帳卡片的展開邏輯同一套心智模型，需要時一鍵展開，不會切換裝置或跳頁面。右邊「看診時間軸」依**原預約時段**排列（上午診／下午診分段、中間手術時段留白不排診），今天的話會有一條「現在」插入線；候診中與待結帳的項目仍留在原預約位置上，用色塊（候診＝主色、待結帳＝warning）與號碼牌標示，未報到的項目在 `sectionOpen.admin` 展開時可以直接按「報到」。時間軸下方是已取消／未到的收合區塊，裡面的「恢復」「刪除」按鈕同樣依 `sectionOpen.admin` 顯示。上方統計格「待報到／候診中／待結帳／已完成」**可以點擊切換成表格檢視**，只顯示那個狀態，純前端依 `appointments` 陣列過濾；再點一次同一格或點「今日掛號」清除篩選、回到候診卡片＋時間軸的預設畫面（「今日掛號」本身不是單一狀態，沒有對應的表格，只用來清除篩選）。**已完成**的表格版型跟其他狀態不同——它不是共用的 `--data-columns` 版型，而是原本掛在頁面最下方、可展開的「已完成」清單那張表格（欄位：病患、完成時間、體重、體溫、回診日期、看診備註、草稿表單、**結算總額**、操作；結算總額跟建議小計不同時滑鼠移上去顯示調整說明），現在改成點「已完成」這格才看得到，不再是預設展開、需要另外點開的收合區塊；「待報到」「候診中」「待結帳」則沿用拆成兩頁時期用過的櫃台頁表格版型（時間／牌號、病患、狀態、量測、回診、操作）。表格裡候診中的列按「看診資料」會清掉篩選並跳回候診卡片、直接展開該筆（`focusCandidate`）；待結帳的列按「結帳」會清掉篩選並跳回待結帳卡片、直接展開該筆（`focusCheckout`）；都不在表格裡重做一次表單。已完成的列按「編輯」開的是同一個既有的編輯彈窗。切換日期或單日／本週檢視時篩選會自動重置。日期面板（單日／本週切換、前後一天、快捷跳轉、新增掛號）在最上方。`appointment:updated` 透過 Socket.IO 廣播，讓開著同一頁的其他電腦即時反映報到／問診完成／確認結帳／退回候診／修正看診資料，不用等 60 秒輪詢，時間軸、候診卡片與待結帳卡片會自動跟著重新分組。**遠端更新會有顯目提示，自己操作造成的更新則不會**：收到的更新若不是自己剛做的操作（`markSelfUpdate`／`consumeSelfUpdate`，操作送出當下先標記、5 秒內被同一筆的即時同步事件消費掉就跳過提示，避免自己對自己的操作也跳一次「其他人改了什麼」的提示），會跳一則 `toast.info` 並讓對應那筆掛號不管顯示在候診卡片、待結帳卡片、時間軸、已取消／未到區塊、或篩選出來的表格裡，都短暫套上 `ring-2 ring-warning` 高亮 1.8 秒（`highlightedIds`／`flashHighlight`）——原本刻意選這頁當時沒有任何狀態在用的顏色（待報到＝info、候診中＝primary、已完成＝success、已取消＝danger），才不會被誤認成某種既有狀態；待結帳（`pending_checkout`）後來也用了 `warning` 當狀態色（語意上最貼近「等櫃台動手」），是刻意接受的例外——待結帳卡片與表格列平常就常駐 `warning` 徽章，短暫的 `ring-warning` 閃爍疊上去只是同色加深，不會讓人誤以為狀態變了，跟其餘三個「原本沒有、突然冒出警示色」的狀態情境不同。醫生↔櫃台跟病患無關的內部溝通走全站聊天浮動視窗（`GlobalChatWidget`，任何頁面都看得到，不是這頁專屬），這頁本身不提供打字聊天的介面，但**每個會改變掛號狀態或內容的動作，成功後都會順手發一則系統訊息到全站聊天室**（`notifyChat`，本質是呼叫跟 `GlobalChatWidget` 相同的 `POST /chat/messages`），訊息內容依動作明確描述發生了什麼事，例如「「豆豆」已報到」「「豆豆」的掛號已取消（原因：客人臨時有事）」「「豆豆」已完成問診，待櫃台結帳（建議金額 NT$800）」「「豆豆」已完成結帳並看診結束（結算 NT$700）」「「豆豆」的結帳已退回候診，等待醫生補充資料」「「豆豆」的看診備註已更新」，並附上掛號日期與預約時間（未填時間則明示「未指定時間」）。文案集中於 `lib/appointmentNotifications.js`，除永久刪除使用刪除前資料，其餘均使用操作成功後 API 回傳的掛號資料，避免回診掛號漏姓名或編輯後仍顯示舊姓名；恢復掛號與取消報到均明確描述回到待報到狀態——這樣開著聊天視窗的另一邊不用切回掛號頁也能知道現場發生的事。發言身分沿用這台裝置在聊天室的固定身分（`useStaffIdentity`），不是另外開一種「系統」身分，訊息會標 `auto: true`（見上方 `chatMessages`）。這只是錦上添花的提示，貼失敗（例如網路不穩）不 await、不阻塞、也不影響掛號動作本身是否成功。已完成清單的編輯彈窗會依實際變動的欄位組訊息（`describeVisitChanges`：比對備註、特殊照護、量測資料、回診資料、批價項目是否真的改了，只講真正變動的部分；掛號與看診資料未變更時只顯示本機提示，不送更新請求或聊天室通知，空值、前後空白與等值數字格式不算變更）。**操作的這台裝置自己不會因為自己剛做的事而跳聊天室未讀紅點**：送出前先用「身分＋內容」這組線索在 `stores/chat.js` 佔位（`markPendingAuto`，5 秒後過期，理由跟前面 `markSelfUpdate` 一樣是 socket 廣播可能比 HTTP 回應先到），該則訊息廣播回來時會被認出來，正常加進聊天紀錄，只是不計未讀、不跳紅點——其他裝置收到同一則訊息仍然正常計未讀。|
+| `/appointments` | 醫師診療台 | **左欄常駐候診佇列＋右欄可同時開多筆的看診工作區**（`VetConsolePage` ＋ `VisitWorkspace`）。佇列分「候診中／看診中／已交櫃台」三段（＋今日已完成收合），點一筆就在右欄開一個分頁——**開啟工作區＝開始看診**，不必再按一次「開始看診」。**刻意不換頁也不用 Modal**：醫師手上常常同時有好幾隻動物在跑（等一隻的檢驗結果時先看下一隻），換頁與 Modal 一次都只能停在一筆上。分頁是各自獨立掛載的 `VisitWorkspace`（`v-show` 切換，不是換 props），切回來未儲存的輸入還在。工作區左欄是體重／體溫＋本次簡易紀錄＋歷次病歷日誌，右欄是給櫃台的交辦／請轉告飼主／回診建議＋建立正式表單；1.2 秒 debounce 自動存檔，別人同時改到同一欄才跳衝突提示讓使用者選版本。底部只有一顆主要按鈕「完成看診，送交櫃台」；已交出去的那筆改成「取回這筆」，佇列的「已交櫃台」段落每一列也有「取回」。 |
+| `/reception` | 櫃台工作台 | **以「現在該做什麼」分匣**（`ReceptionPage`），時間軸退到右欄當參考。左欄由上而下就是櫃台的優先順序：**醫師已交辦·待處理**（人正站在櫃台前，用主色框起來）→ **待報到**（inline「報到」＋更多操作）→ **待安排回診** → **今日已完成**（收合）。點「處理」開右側 `HandoffSheet`，段落順序刻意是「請轉告飼主 → 醫師交辦 → 本次簡易紀錄（收起）→ 回診安排」——那就是櫃台當面講話的順序，轉告事項最容易漏掉所以放最上面並用警示底色。「完成處理」一顆按鈕收尾：還沒掛號的回診先掛上再結束這次就診。候診中的人不在左欄任何一個匣子裡，所以時間軸上還沒開始看診的那幾列帶了「修改掛號／取消報到」，那是他們唯一的行政出口。右欄是現場人數統計＋上午診/下午診時間軸（含「現在」線）。 |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | **飼主不是獨立可瀏覽的實體**——沒有 `/owners` 或 `/owners/:id`，飼主資料一律以附帶資訊的形式跟著寵物出現。詳情頁把寵物資料與飼主資料合併在同一張卡片裡、中間用分隔線隔開（`pets.ownerId` populate 出 `name/phone/email/address/__v`），而不是兩張並排的卡片——報到時兩邊資料要一眼同時看到，兩張卡片在視覺上等於多切一刀。兩邊各自獨立「編輯」後直接就地變成輸入框、儲存/取消，不彈 Modal，互不影響彼此的編輯狀態。下方病歷日誌（隨手記事，見第二節 `clinicalNotes`）與歷次健檢報告用頁籤（`FilterTabs`）切換，不會同時整段展開——避免兩份可能很長的清單同時佔滿版面 |
 | `/pets/new` | 新增寵物 | 飼主與寵物欄位合併成同一頁（不是 Modal）——欄位量（飼主搜尋/新增＋完整寵物資料）已經跟健檢表單一樣值得有自己的網址，塞進 Modal 只會逼出內部再捲動一層。飼主段用 `SegmentedControl` 切「選擇既有飼主」（搜尋清單）或「新增飼主資料」，跟寵物欄位一次送出；有離開頁面前的未儲存提示。送出成功導去新寵物的 `/pets/:id` |
 | `/records` | 就診紀錄清單 | 跨寵物，佇列切換 |
@@ -362,13 +376,16 @@ npm run dev            # 使用者自己開
 
 已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋、病歷日誌（隨手記事，見第二節 `clinicalNotes`），以及共用帳號登入（JWT HttpOnly cookie、`tokenVersion` 可撤銷 session、登入限流、`/api/auth/login` 密碼驗證用固定時間比對防帳號列舉、前端 401 自動導回登入頁）。
 
-掛號與候診流程是單一一頁（`/appointments`）：候診卡片＋看診時間軸＋已完成清單都在同一頁，完成看診時一併存量測／回診資料／備註（`visitNote` 跟病歷日誌雙向同步），`appointment:updated` 透過 Socket.IO 廣播讓開著同一頁的其他電腦立刻看到。這是從「拆成醫生頁／櫃台頁兩頁、外加身分切換」的版本演化來的：一開始覺得醫生與櫃台是兩種不同職責，該拆成兩個獨立頁面，各自固定發言身分；後來發現這樣反而權責混亂（該由誰報到、誰填量測、備註又該綁在哪一頁），而且留言一旦綁在單一掛號上，跟哪個病患無關的內部溝通（例如「今天下午提早關診」）就無處安放，才決定合回同一頁、留言拆成獨立的全站即時聊天浮動視窗（`GlobalChatWidget`，身分裝置固定，見 `useStaffIdentity`），掛號本身的備註改回單純字串，頁面版型也改回原本候診卡片＋看診時間軸的設計（拆分兩頁期間曾經改成單一資料表，後來覺得時間軸更直覺又改了回來）。
+診務流程目前是**兩頁一條線**：`/appointments` 醫師診療台、`/reception` 櫃台工作台，共用 `shared/appointmentWorkflow.js` 定義的四步流水線（預約 → 候診 → 看診 → 櫃台完成）。這是一路演化來的，中間走過的路都留在下面，因為每一條都是被實際使用回饋否定掉的：
 
-後續在同一頁上又加了一層「醫生↔櫃台交接」的工作流：醫生問診完成到櫃台結帳完成之間新增 `pending_checkout`（待結帳）狀態與對應卡片，`visitNote` 原本混裝的批價／開藥／照護提醒拆成三個獨立欄位（`billingItems`、`specialCareNote`）並在候診卡片與待結帳卡片間共用 `AppointmentBillingEditor` 元件。這次沒有走回拆兩頁的路——沿用單頁＋`useStaffIdentity` 只決定卡片預設展開順序、不做成硬權限牆，兩張卡片的按鈕/輸入框對任何裝置都可操作，狀態轉換由 `send-to-checkout`／`complete`／`reopen-visit` 三支動作端點驅動，避免重蹈「身分鎖住操作」與「行政操作被切一半」的舊覆轍（見上段）；批價/照護提醒雖然是新的結構化欄位，但仍然只掛在單一掛號的 `_id` 上（本來就該綁在這次看診），不像早期的 `visitMessages` 那樣需要跟「跟病患無關的內部溝通」搶位置——那部分已經有獨立的全站聊天解決。
+1. **一開始拆成醫生頁／櫃台頁兩頁，各自固定發言身分**——結果權責混亂（該由誰報到、誰填量測、留言又該綁在哪一頁），而且留言綁在單一掛號上，跟哪個病患無關的內部溝通（例如「今天下午提早關診」）無處安放。
+2. **於是合回單一頁 `/appointments`**，留言拆成獨立的全站聊天浮動視窗（`GlobalChatWidget`，身分裝置固定，見 `useStaffIdentity`）。這個決定至今有效——聊天確實不該綁在掛號上。
+3. **接著在同一頁上長出「醫生↔櫃台交接」的工作流**：`pending_checkout` 狀態、結構化的批價／開藥清單（`billingItems`）、結算總額與收款。批價欄位越加越多，候診卡片塞不下，又拿 `sectionOpen` 收合行政操作來救。
+4. **最後使用者確認診所根本不用系統計價**：批價、開藥、要開的證明全部併回一段給櫃台看的純文字（`handoffNote`），金額完全不記也不統計。這一刀把 `billingItems`／`billingSubtotal`／`checkoutTotal`／`paymentMethod`／`billingRevision`／付款方式／折讓原因／當日營收統計、以及「待批價」「待收款」兩個狀態全部移除，狀態機從五步收成四步。同一次也修掉三個一直卡著的問題：醫師端本來就沒有批價輸入介面（`AppointmentBillingEditor` 是孤兒元件）、批完價無法反悔、各分頁數字加總對不上當日總數。
 
-候診卡片一開始把新欄位塞進原本就偏窄的左欄（拆兩頁時期留下的欄寬），批價清單一多就很擠；曾經考慮過改成 Modal 承載這份表單，但醫生實際工作時常常同時追著好幾隻動物跑（等一隻的檢驗結果、先看下一隻），Modal 一次只能開一筆會擋住這種來回切換，所以維持卡片內展開＋加寬左欄（`xl:grid-cols-[minmax(26rem,1.1fr)_minmax(0,1.4fr)]`）＋展開時分兩欄排版。候診卡片與待結帳卡片原本各寫一份幾乎相同的清單列 markup（號碼牌、身分徽章、姓名、聯絡方式、狀態徽章、操作列），抽成共用的 `AppointmentQueueCardItem` 元件後順便修掉一個不一致：候診卡片的號碼牌本來可以點擊修改，待結帳卡片原本不行，統一後兩邊都能改。
+第 4 步同時重做了版面，這次**是重新拆成兩頁，但拆的方式跟第 1 步不同**：不是用路由鎖身分（那正是第 1 步失敗的原因），而是兩頁看同一份資料的不同切片，任何裝置都能開任何一頁、按任何按鈕。醫師頁解掉的是「一次只能停在一筆病患上」——舊版點一筆會整頁跳到 `/appointments/:id/visit`，比更早的 Modal 版更封閉；現在右欄是可以同時開多筆的工作區（各自獨立掛載、`v-show` 切換，未儲存的輸入不會因為切分頁而消失）。櫃台頁解掉的是「要自己在時間軸上掃描誰該處理」——改成三個依優先順序排列的待辦匣，時間軸降為右欄參考。醫師「送交櫃台」之後仍可**取回這筆**（`POST /workflow/reclaim`），直到櫃台按下「完成處理」為止，這是刻意補上的回頭路。
 
-再之後使用者又回饋：新增掛號、報到、編輯掛號資料、取消/標記未到/恢復掛號/取消報到這組行政/排班操作，不分身分到處都看得到、按得到，跟醫生的問診工作無關，「分工還是很糟糕」。這是新問題，不是走回「拆兩頁」那條路的理由——拆兩頁失敗的根源是路由/身分鎖死導致換角色要跳頁、行政操作被硬切一半沒人管，而這次要解的問題只是「醫生裝置的預設畫面太雜」，解法沿用候診/待結帳卡片已經在用的 `sectionOpen` 收合模式：加一個 `sectionOpen.admin`，`vet` 預設收起、`front_desk` 預設攤開，頁首有一個一鍵展開的「行政操作」按鈕，不受身分限制、需要時誰都能按開。「看診資料」「結帳」這兩個導向候診/待結帳卡片本身工作的按鈕不受影響。
+一併清掉的死代碼：`AppointmentsPage.vue`（1880 行，早已無路由引用，但 `appointmentNotifications.test.js` 還在讀它的原始碼當斷言來源，等於測試在測一個下線的頁面）、`AppointmentWorkspacePage.vue`、`AppointmentVisitPage.vue`、`AppointmentDeskPanel.vue`、`AppointmentListRow.vue`、`AppointmentRowActions.vue`、`AppointmentQueueCardItem.vue`、`AppointmentBillingEditor.vue`、`lib/appointmentBilling.js`，以及 `routes/appointments.js` 裡的 `/send-to-checkout`、`/reopen-visit`、`/complete`、`/visit-data` 四支舊端點與 `syncFollowUpAppointment`（回診掛號改由 `POST /workflow/followup` 在 transaction 內處理）。
 
 舊系統資料遷移：盤點過 `Data/` 底下的舊 Access 資料庫（全套動物醫院管理系統），確認實際有在用的只有 `RegData.mdb::RecordData`（飼主/寵物主檔＋逐年累加的病歷全文），其餘（收費、庫存、藥局、診斷字典、疫苗提醒等）用量證據薄弱，不遷移。遷移腳本在 `server/scripts/legacy-migration/`（PowerShell 抽取 + Node 匯入，兩階段，見該資料夾 README）。
 

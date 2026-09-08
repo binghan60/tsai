@@ -1,7 +1,7 @@
 import { onBeforeUnmount, onMounted, watch } from 'vue';
 import { getSocket } from '../api/socket';
 
-// 掛號狀態的即時推播，在 AppointmentsPage 掛載時加入使用者選定日期的房間
+// 掛號狀態的即時推播，在診務頁掛載時加入使用者選定日期的房間
 // （見後端 lib/realtime.js），dateRef 換日期時要 leave 舊的、join 新的。
 // 連線本身（connect/disconnect）由全站常駐的 useGlobalChat（App.vue 掛載時
 // 建立，負責全站聊天浮動視窗）統一管理，這裡只負責房間與事件的訂閱/取消訂閱，

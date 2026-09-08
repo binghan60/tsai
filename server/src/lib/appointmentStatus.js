@@ -3,16 +3,16 @@ export const APPOINTMENT_STATUSES = ['scheduled', 'arrived', 'pending_checkout',
 const APPOINTMENT_STATUS_LABELS = {
   scheduled: '已預約',
   arrived: '報到',
-  pending_checkout: '待結帳',
+  pending_checkout: '待櫃台處理',
   completed: '已完成',
   cancelled: '已取消',
   no_show: '未到診',
 };
 
 // completed 是終態：完成後不允許再變動狀態，要修正請走編輯備註，不要動狀態。
-// arrived → completed 沒有直接路徑：問診完成後一律先進 pending_checkout（待結帳），
-// 由櫃台確認結帳才真正 completed，中間留一個明確的交接點。
-// pending_checkout → arrived 是安全閥：結帳前發現醫生資料有誤/漏開藥，可以退回候診補資料。
+// arrived → completed 沒有直接路徑：醫師看完一律先進 pending_checkout（已交櫃台、待處理），
+// 由櫃台按「完成處理」才真正 completed，中間留一個明確的交接點。
+// pending_checkout → arrived 是「取回這筆」：櫃台還沒處理完之前，醫師可以取回修改。
 const ALLOWED_TRANSITIONS = {
   scheduled: ['arrived', 'cancelled', 'no_show'],
   arrived: ['pending_checkout', 'cancelled', 'scheduled'],
