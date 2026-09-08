@@ -215,16 +215,34 @@ onBeforeUnmount(() => {
 <template>
   <section class="flex min-h-0 flex-1 flex-col" :aria-label="`${appointment.petName} 的看診工作區`">
     <header class="border-b border-border px-5 py-4 sm:px-6">
-      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+      <div class="sr-only">
         <h2 class="text-xl font-semibold">{{ appointment.petName }}</h2>
         <span class="text-sm text-muted-foreground">{{ petSummary }}</span>
-        <span v-if="pet?.medicalRecordNumber" class="ml-auto text-xs tabular-nums text-muted-foreground">{{ pet.medicalRecordNumber }}</span>
+        <div v-if="appointment.reason" class="ml-auto flex min-w-0 items-center gap-2 border-l-2 border-primary pl-3 text-left sm:max-w-[22rem]">
+          <span class="shrink-0 text-xs font-semibold text-primary">來院原因</span>
+          <span class="truncate text-sm font-semibold text-foreground" :title="appointment.reason">{{ appointment.reason }}</span>
+        </div>
       </div>
-      <p class="mt-1 text-sm">
+      <p class="sr-only">
         {{ owner?.name || appointment.ownerName || '飼主待確認' }}
         <template v-if="owner?.phone || appointment.ownerPhone"> · <span class="tabular-nums">{{ owner?.phone || appointment.ownerPhone }}</span></template>
         <template v-if="appointment.reason"> · {{ appointment.reason }}</template>
       </p>
+
+      <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)]">
+        <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
+          <p class="text-xs font-semibold text-primary">寵物資料</p>
+          <p class="mt-0.5 truncate text-sm font-semibold text-foreground">{{ appointment.petName }} <span v-if="petSummary" class="font-normal text-muted-foreground">{{ petSummary }}</span></p>
+        </section>
+        <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
+          <p class="text-xs font-semibold text-muted-foreground">飼主資料</p>
+          <p class="mt-0.5 truncate text-sm font-medium text-foreground">{{ owner?.name || appointment.ownerName || '未提供飼主資料' }}<template v-if="owner?.phone || appointment.ownerPhone"> · <span class="tabular-nums">{{ owner?.phone || appointment.ownerPhone }}</span></template></p>
+        </section>
+        <section v-if="appointment.reason" class="min-w-0 rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <p class="text-xs font-semibold text-primary">來院原因</p>
+          <p class="mt-0.5 truncate text-sm font-semibold text-foreground" :title="appointment.reason">{{ appointment.reason }}</p>
+        </section>
+      </div>
 
       <div v-if="hasReminders" class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg bg-warning-surface px-3.5 py-2.5 text-sm text-warning">
         <span class="inline-flex items-center gap-2 font-semibold"><ShieldAlert class="h-4 w-4" stroke-width="1.75" />臨床提醒</span>
@@ -257,7 +275,7 @@ onBeforeUnmount(() => {
       <div class="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
         <div class="space-y-4">
           <section class="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-            <h3 class="border-b border-border pb-3 text-sm font-semibold">本次簡易紀錄</h3>
+            <h3 class="border-b border-border pb-1 text-sm font-semibold">本次簡易紀錄</h3>
           <div class="grid grid-cols-2 gap-3">
             <label class="space-y-1.5 text-xs font-medium">體重（kg）
               <Input v-model="draft.weightKg" type="number" min="0" step="0.01" :disabled="!editable || committing" />
@@ -288,8 +306,8 @@ onBeforeUnmount(() => {
           </section>
         </div>
 
-        <section class="h-full space-y-4 rounded-xl border border-border bg-field/40 p-4 sm:p-5">
-          <h3 class="border-b border-border pb-3 text-sm font-semibold">交辦與後續追蹤</h3>
+        <section class="h-full space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+          <h3 class="border-b border-border pb-1 text-sm font-semibold">交辦與後續追蹤</h3>
           <label class="block space-y-1.5">
             <span class="text-xs font-medium">給櫃台的交辦（收費與領藥）</span>
             <Textarea v-model="draft.handoffNote" rows="6" maxlength="1000" :disabled="!editable || committing" placeholder="例如：診察費 ＋ 胸腔 X 光兩張、止咳藥水 30ml（已包好）" />
