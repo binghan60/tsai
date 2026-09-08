@@ -364,7 +364,7 @@ onBeforeUnmount(() => {
         <Button v-else-if="state.handedOff" variant="secondary" :disabled="busy" @click="run('reclaim')">
           <Undo2 class="h-4 w-4" />取回這筆
         </Button>
-        <Button v-else-if="!state.handedOff" :disabled="busy || !!conflicts.length" @click="run('handoff')">
+        <Button v-else-if="appointment.status === 'arrived' && !state.handedOff" :disabled="busy || !!conflicts.length" @click="run('handoff')">
           完成看診，送交櫃台<ArrowRight class="h-4 w-4" />
         </Button>
       </div>
