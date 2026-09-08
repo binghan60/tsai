@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { CalendarClock, ChevronLeft, ChevronRight, Plus, RefreshCw, Stethoscope, Undo2, X } from '@lucide/vue';
+import { CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Plus, RefreshCw, Stethoscope, Ticket, Undo2, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
 import { useClinicSync } from '../composables/useClinicSync';
@@ -43,12 +43,13 @@ const TABS_STORAGE_KEY = 'clinic.vetConsoleTabs';
 function restoreTabs(forDate) {
   try {
     const saved = JSON.parse(localStorage.getItem(TABS_STORAGE_KEY) || 'null');
-    if (!saved || saved.date !== forDate) return { openIds: [], activeId: '' };
+    if (!saved || saved.date !== forDate) return { openIds: [], activeId: '', collapsedGroups: {} };
     return {
       openIds: Array.isArray(saved.openIds) ? saved.openIds.map(String) : [],
       activeId: String(saved.activeId || ''),
+      collapsedGroups: saved.collapsedGroups && typeof saved.collapsedGroups === 'object' ? saved.collapsedGroups : {},
     };
-  } catch { return { openIds: [], activeId: '' }; }
+  } catch { return { openIds: [], activeId: '', collapsedGroups: {} }; }
 }
 const restored = restoreTabs(date.value);
 const openIds = ref(restored.openIds);
@@ -60,11 +61,17 @@ let request = 0;
 const byId = computed(() => new Map(items.value.map(item => [String(item._id), item])));
 const openTabs = computed(() => openIds.value.map(id => byId.value.get(id)).filter(Boolean));
 const active = computed(() => byId.value.get(activeId.value) || null);
+const scheduled = computed(() => queue('scheduled'));
 const waiting = computed(() => queue('waiting'));
 const visiting = computed(() => queue('visiting'));
 const handedOff = computed(() => queue('handoff'));
 const finished = computed(() => queue('completed'));
 const onsiteCount = computed(() => waiting.value.length + visiting.value.length + handedOff.value.length);
+const collapsedGroups = ref(restored.collapsedGroups);
+
+function toggleGroup(key) {
+  collapsedGroups.value = { ...collapsedGroups.value, [key]: !collapsedGroups.value[key] };
+}
 
 function queue(filter) {
   return items.value
@@ -106,8 +113,8 @@ function applyUpdate(item) {
 const { connected } = useClinicSync(date, refresh, applyUpdate);
 
 // 重新整理要回到原本開著的那幾筆，所以每次分頁增減／切換都寫回去。
-watch([openIds, activeId, date], () => {
-  try { localStorage.setItem(TABS_STORAGE_KEY, JSON.stringify({ date: date.value, openIds: openIds.value, activeId: activeId.value })); }
+watch([openIds, activeId, collapsedGroups, date], () => {
+  try { localStorage.setItem(TABS_STORAGE_KEY, JSON.stringify({ date: date.value, openIds: openIds.value, activeId: activeId.value, collapsedGroups: collapsedGroups.value })); }
   catch { /* 無痕視窗或停用儲存時就只是不還原，不影響看診。 */ }
 }, { deep: true });
 
@@ -116,19 +123,27 @@ watch(date, () => {
   items.value = [];
   openIds.value = [];
   activeId.value = '';
+  collapsedGroups.value = {};
   refresh();
 });
 
-// 開啟工作區就是開始看診——不必再按一次「開始看診」，那顆按鈕只會變成每次都要點掉的儀式。
-async function openPatient(appointment) {
+// 選取病患只開啟工作區；真正開始看診必須由醫師明確按下按鈕。
+function openPatient(appointment) {
   const id = String(appointment._id);
   if (!openIds.value.includes(id)) openIds.value.push(id);
   activeId.value = id;
-  if (appointment.visitStartedAt || appointment.handoffAt || appointment.deskCompletedAt) return;
+}
+
+async function startVisit(appointment) {
+  if (busy.value || appointment.visitStartedAt || appointment.handoffAt || appointment.deskCompletedAt) return;
+  busy.value = true;
   try {
-    const { data } = await http.post(`/appointments/${id}/workflow/start`, { version: appointment.__v ?? 0 });
+    const { data } = await http.post(`/appointments/${appointment._id}/workflow/start`, { version: appointment.__v ?? 0 });
     applyUpdate(data);
-  } catch { /* 開始看診只是記一個時間點，失敗不擋醫師繼續填內容。 */ }
+    toast.success('已開始看診');
+  } catch (err) {
+    toast.error(err.response?.data?.message || '開始看診失敗，請稍後重試');
+  } finally { busy.value = false; }
 }
 
 function closeTab(id) {
@@ -231,41 +246,53 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
           <ListSkeleton v-if="loading" :rows="4" />
           <template v-else>
             <template v-for="group in [
+              { key: 'scheduled', label: '已掛號', list: scheduled },
               { key: 'waiting', label: '候診中', list: waiting },
               { key: 'visiting', label: '看診中', list: visiting },
               { key: 'handoff', label: '已交櫃台', list: handedOff },
             ]" :key="group.key">
-              <p class="flex items-center gap-2 px-2 pb-1.5 pt-3 text-xs font-semibold text-muted-foreground">
+              <button type="button" class="flex w-full items-center gap-2 px-2 pb-1.5 pt-3 text-left text-xs font-semibold text-muted-foreground" @click="toggleGroup(group.key)">
+                <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="collapsedGroups[group.key] ? '-rotate-90' : ''" />
                 {{ group.label }}<span class="font-normal">{{ group.list.length }}</span>
-              </p>
+              </button>
+              <template v-if="!collapsedGroups[group.key]">
               <p v-if="!group.list.length" class="px-2 pb-1 text-xs text-muted-foreground">目前沒有人</p>
               <div
                 v-for="item in group.list"
                 :key="item._id"
-                class="mb-1 flex items-center gap-3 rounded-xl border p-2.5 transition-colors"
-                :class="String(item._id) === activeId ? 'border-primary/40 bg-accent shadow-[inset_3px_0_0_var(--primary)]' : 'border-border bg-card hover:bg-field'"
+                  class="mb-1 flex items-center gap-2.5 rounded-xl border p-2 transition-colors"
+                  :class="String(item._id) === activeId ? 'border-primary/40 bg-accent' : 'border-border bg-card hover:bg-field'"
               >
                 <button type="button" class="flex min-w-0 flex-1 items-center gap-3 text-left" @click="openPatient(item)">
                   <span
-                    class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-base font-semibold tabular-nums"
+                    v-if="item.checkinNumber != null"
+                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums"
                     :class="String(item._id) === activeId ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'"
-                  >{{ item.checkinNumber ?? '—' }}</span>
+                  >{{ item.checkinNumber }}</span>
+                  <span v-else class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-field text-muted-foreground" title="未取號" aria-label="未取號"><Ticket class="h-4 w-4" /><span class="sr-only">未取號</span></span>
                   <span class="min-w-0 flex-1">
                     <span class="block truncate text-sm font-semibold" :class="String(item._id) === activeId ? 'text-accent-foreground' : ''">{{ item.petName }}</span>
                     <span class="block truncate text-xs text-muted-foreground">
                       {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template>
                     </span>
                   </span>
-                  <span v-if="group.key === 'waiting' && waitedMinutes(item) !== null" class="shrink-0 text-xs tabular-nums text-muted-foreground">等候 {{ waitedMinutes(item) }} 分</span>
+                    <span v-if="group.key === 'scheduled'" class="shrink-0 text-xs tabular-nums text-muted-foreground">掛號 {{ item.time || '時間未指定' }}</span>
+                    <span v-else-if="group.key === 'waiting' && waitedMinutes(item) !== null" class="shrink-0 text-xs tabular-nums text-muted-foreground">等候 {{ waitedMinutes(item) }} 分</span>
                   <span v-else-if="group.key === 'visiting' && openIds.includes(String(item._id))" class="shrink-0 text-xs text-muted-foreground">已開啟</span>
                 </button>
-                <Button v-if="group.key === 'handoff'" variant="secondary" size="xs" :disabled="busy" @click="reclaim(item)">
+                <Button v-if="group.key === 'waiting'" size="xs" :disabled="busy" @click="startVisit(item)"><Stethoscope class="h-4 w-4" />看診</Button>
+                <Button v-else-if="group.key === 'handoff'" variant="secondary" size="xs" :disabled="busy" @click="reclaim(item)">
                   <Undo2 class="h-4 w-4" />取回
                 </Button>
               </div>
+              </template>
             </template>
 
-            <p v-if="finished.length" class="px-2 pb-1.5 pt-4 text-xs font-semibold text-muted-foreground">今日已完成<span class="ml-2 font-normal">{{ finished.length }}</span></p>
+            <button type="button" class="flex w-full items-center gap-2 px-2 pb-1.5 pt-4 text-left text-xs font-semibold text-muted-foreground" @click="toggleGroup('completed')">
+              <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="collapsedGroups.completed ? '-rotate-90' : ''" />
+              今日已完成<span class="font-normal">{{ finished.length }}</span>
+            </button>
+            <template v-if="!collapsedGroups.completed">
             <button
               v-for="item in finished"
               :key="item._id"
@@ -276,6 +303,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">✓</span>
               <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ item.petName }}</span>
             </button>
+            </template>
           </template>
         </div>
 
@@ -317,7 +345,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
           v-if="!active && !loading"
           :icon="CalendarClock"
           title="從左邊選一位病患開始看診"
-          description="開啟工作區就會記錄看診開始時間。可以同時開好幾位，切換不會清空已輸入的內容。"
+          description="選取病患後，按「開始看診」才會記錄開始時間。可以同時開好幾位，切換不會清空已輸入的內容。"
           inset
         />
       </section>

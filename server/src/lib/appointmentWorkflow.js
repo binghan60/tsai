@@ -1,6 +1,6 @@
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 
-export const WORKFLOW_ACTIONS = ['clinical', 'start', 'handoff', 'reclaim', 'complete', 'record', 'followup'];
+export const WORKFLOW_ACTIONS = ['clinical', 'start', 'handoff', 'reclaim', 'complete', 'record', 'followup', 'request-reopen', 'approve-reopen'];
 
 export function workflowError(message, status = 422) {
   return Object.assign(new Error(message), { status });
@@ -71,6 +71,16 @@ export function applyWorkflowAction(appointment, action, body, now = new Date())
     if (!state.handedOff) throw workflowError('請等醫師完成看診並送交櫃台', 409);
     if (state.completed) throw workflowError('這筆就診已完成處理', 409);
     appointment.deskCompletedAt = now;
+  } else if (action === 'request-reopen') {
+    if (!state.completed) throw workflowError('只有已完成的就診可以申請修改', 409);
+    const reason = String(body.reason || '').trim();
+    if (!reason) throw workflowError('請填寫申請修改的原因');
+    appointment.reopenRequest = { reason, requestedAt: now, approvedAt: null };
+  } else if (action === 'approve-reopen') {
+    if (!state.completed || !appointment.reopenRequest?.requestedAt) throw workflowError('目前沒有待核准的修改申請', 409);
+    appointment.deskCompletedAt = null;
+    appointment.completedAt = null;
+    appointment.reopenRequest.approvedAt = now;
   } else if (!['followup', 'record'].includes(action)) {
     throw workflowError('不支援的診務操作');
   }

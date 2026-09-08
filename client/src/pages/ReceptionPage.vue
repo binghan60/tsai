@@ -124,7 +124,17 @@ function admin(kind, appointment = null) {
   dialogError.value = '';
   if (kind === 'new') { dialog.value = 'new'; return; }
   if (kind === 'edit' || kind === 'cancel') { dialog.value = kind; return; }
-  if (kind === 'check-in' || kind === 'check-in-late') { lateCheckIn.value = kind === 'check-in-late'; dialog.value = 'check-in'; return; }
+  if (kind === 'check-in' || kind === 'check-in-late') {
+    lateCheckIn.value = kind === 'check-in-late';
+    // 回診身分已確認，按報到就是執行報到；不再多一道確認。
+    // 初診仍須開表單，現場補齊飼主與寵物資料以建立正式病歷。
+    if (appointment?.petId && kind === 'check-in') {
+      submit({ version: appointment.__v ?? 0 }, 'check-in');
+      return;
+    }
+    dialog.value = 'check-in';
+    return;
+  }
   confirmation.value = {
     kind,
     title: kind === 'no-show' ? '標記這筆預約未到？' : '恢復為待報到？',

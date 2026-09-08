@@ -19,7 +19,10 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'close']);
 
 const requiredRule = (value) => (value && String(value).trim() !== '') || '必填';
-const patientFieldRule = (value) => props.appointment.petId || requiredRule(value);
+// vee-validate 將 validator 回傳的字串視為錯誤訊息；不能直接回傳 petId。
+// 回診的三個身分欄位雖然隱藏，仍會參與表單驗證，必須明確回傳 true，
+// 否則送出會被靜默攔下。
+const patientFieldRule = (value) => (props.appointment.petId ? true : requiredRule(value));
 const { handleSubmit } = useForm({
   initialValues: {
     ownerName: props.appointment.ownerName || '',

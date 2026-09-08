@@ -84,6 +84,12 @@ const appointmentSchema = new mongoose.Schema(
     handoffAt: { type: Date, default: null },
     // 櫃台「完成處理」。寫入後就是終態，不能再取回。
     deskCompletedAt: { type: Date, default: null },
+    // 醫師對已結案就診提出的重新開啟申請；保留原因與時間，櫃台核准後才可再修改。
+    reopenRequest: {
+      reason: { type: String, default: '', trim: true, maxlength: 500 },
+      requestedAt: { type: Date, default: null },
+      approvedAt: { type: Date, default: null },
+    },
     completedAt: { type: Date, default: null },
   },
   { timestamps: true, optimisticConcurrency: true }

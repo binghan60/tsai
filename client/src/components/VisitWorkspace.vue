@@ -8,18 +8,18 @@ import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { clinicalDraft, draftPatch, mergeClinicalUpdate } from '../lib/visitDraft';
 import { ageLabel, formatDateTime } from '../lib/datetime';
 import AppointmentMilestones from './AppointmentMilestones.vue';
+import ModalDialog from './ModalDialog.vue';
 import { Button } from './ui/button';
+import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription } from './ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 
 // 醫師的單一病患工作區。刻意做成元件而不是獨立頁面：醫師常常同時追好幾隻動物
 // （等一隻的檢驗結果時先看下一隻），診療台會同時掛著好幾個這種工作區，
 // 各自保有未儲存的輸入，切換分頁不會清空（見 pages/VetConsolePage.vue）。
 const props = defineProps({
   appointment: { type: Object, required: true },
-  templates: { type: Array, default: () => [] },
 });
 const toast = useToast();
 const emit = defineEmits(['updated', 'open-record']);
@@ -30,11 +30,13 @@ const conflicts = ref([]);
 const busy = ref(false);
 const committing = ref(false);
 const error = ref('');
+const reopenDialog = ref(false);
+const reopenReason = ref('');
+const reopenError = ref('');
 const savedAt = ref(null);
 const pet = ref(null);
 const notes = ref([]);
 const contextError = ref('');
-const templateId = ref(props.appointment.templateId || '');
 let timer;
 let disposed = false;
 let savePromise = null;
@@ -42,7 +44,8 @@ let queued = null;
 
 const state = computed(() => workflowState(props.appointment));
 // 櫃台按下「完成處理」之後這次就診結案，內容不再可改（伺服器也會擋）。
-const editable = computed(() => !state.value.completed);
+// 尚未開始看診前僅供檢視，避免自動儲存誤送出尚未開始的看診資料。
+const editable = computed(() => state.value.started && !state.value.completed);
 const dirty = computed(() => Object.keys(draftPatch(draft, baseline.value)).length > 0);
 const owner = computed(() => (typeof pet.value?.ownerId === 'object' ? pet.value.ownerId : null));
 const petSummary = computed(() => {
@@ -137,7 +140,7 @@ function resolveConflict(keepLocal) {
   if (keepLocal) save();
 }
 
-async function run(action) {
+async function run(action, payload = {}) {
   if (busy.value || conflicts.value.length) return;
   committing.value = true;
   try {
@@ -147,7 +150,7 @@ async function run(action) {
     error.value = '';
     const { data } = await http.post(`/appointments/${props.appointment._id}/workflow/${action}`, {
       version: props.appointment.__v ?? 0,
-      ...(action === 'record' ? { templateId: templateId.value } : {}),
+      ...payload,
     });
     baseline.value = clinicalDraft(data);
     Object.assign(draft, clinicalDraft(data));
@@ -159,6 +162,24 @@ async function run(action) {
     busy.value = false;
     committing.value = false;
     if (queued) { const update = queued; queued = null; receive(update); }
+  }
+}
+
+function openReopenRequest() {
+  reopenReason.value = '';
+  reopenError.value = '';
+  reopenDialog.value = true;
+}
+
+async function requestReopen() {
+  const reason = reopenReason.value.trim();
+  if (!reason) { reopenError.value = '請填寫申請修改的原因'; return; }
+  try {
+    await run('request-reopen', { reason });
+    reopenDialog.value = false;
+    toast.success('已送出修改申請，等待櫃台核准');
+  } catch (err) {
+    reopenError.value = err.response?.data?.message || '申請送出失敗，請稍後重試';
   }
 }
 
@@ -221,8 +242,6 @@ onBeforeUnmount(() => {
         <span class="flex-1">{{ contextError }}</span>
         <Button variant="secondary" size="xs" @click="loadContext">重新載入</Button>
       </div>
-      <div v-if="!editable" class="mb-4 rounded-lg bg-muted p-3 text-sm text-muted-foreground">櫃台已完成這筆就診，內容不能再修改。需要更正請改在寵物的病歷日誌上。</div>
-
       <div v-if="conflicts.length" role="alert" class="mb-4 space-y-3 rounded-xl bg-warning-surface p-4 text-sm text-warning">
         <p>另一端更新了 {{ conflicts.map(key => CONFLICT_LABELS[key]).join('、') }}。你的輸入仍保留，請核對後選擇要保留哪一份。</p>
         <div v-for="key in conflicts" :key="key" class="rounded-lg bg-card p-3 text-foreground">
@@ -269,7 +288,6 @@ onBeforeUnmount(() => {
           <label class="block space-y-1.5">
             <span class="text-xs font-medium">給櫃台的交辦（收費與領藥）</span>
             <Textarea v-model="draft.handoffNote" rows="6" maxlength="1000" :disabled="!editable || committing" placeholder="例如：診察費 ＋ 胸腔 X 光兩張、止咳藥水 30ml（已包好）" />
-            <span class="block text-xs text-muted-foreground">收費依這段文字，系統不計價也不加總。</span>
           </label>
           <label class="block space-y-1.5">
             <span class="text-xs font-medium text-warning">請轉告飼主</span>
@@ -278,22 +296,8 @@ onBeforeUnmount(() => {
           <label class="block space-y-1.5">
             <span class="text-xs font-medium">回診建議</span>
             <Textarea v-model="draft.followUpRecommendation" rows="2" maxlength="500" :disabled="!editable || committing" placeholder="例如：兩週後回診複查胸腔 X 光" />
-            <span class="block text-xs text-muted-foreground">櫃台會與飼主確認實際時段。</span>
           </label>
 
-          <section class="space-y-2 rounded-xl border border-border p-4">
-            <h3 class="text-sm font-semibold">正式表單</h3>
-            <p class="text-xs text-muted-foreground">需要完整健檢報告時才建立；簡易看診不需要。</p>
-            <Select v-if="!appointment.recordId" v-model="templateId">
-              <SelectTrigger class="w-full"><SelectValue placeholder="選擇表單類型" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="form in templates" :key="form._id" :value="form._id">{{ form.name }}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="secondary" size="sm" class="w-full" :disabled="busy || !editable || (!appointment.recordId && !templateId)" @click="run('record')">
-              <FileText class="h-4 w-4" />{{ appointment.recordId ? '開啟本次表單' : '建立本次表單草稿' }}
-            </Button>
-          </section>
         </div>
       </div>
     </div>
@@ -301,7 +305,13 @@ onBeforeUnmount(() => {
     <footer class="flex flex-wrap items-center gap-3 border-t border-border bg-field/40 px-5 py-3 sm:px-6">
       <p class="text-xs text-muted-foreground" role="status">{{ savedLabel }}</p>
       <div class="ml-auto flex flex-wrap gap-2">
-        <Button v-if="state.handedOff && !state.completed" variant="secondary" :disabled="busy" @click="run('reclaim')">
+        <Button v-if="appointment.recordId" variant="secondary" :disabled="busy" @click="emit('open-record', appointment)">
+          <FileText class="h-4 w-4" />開啟表單草稿
+        </Button>
+        <Button v-if="state.completed" variant="secondary" :disabled="busy || !!appointment.reopenRequest?.requestedAt" @click="openReopenRequest">
+          {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
+        </Button>
+        <Button v-else-if="state.handedOff" variant="secondary" :disabled="busy" @click="run('reclaim')">
           <Undo2 class="h-4 w-4" />取回這筆
         </Button>
         <Button v-else-if="!state.handedOff" :disabled="busy || !!conflicts.length" @click="run('handoff')">
@@ -309,5 +319,25 @@ onBeforeUnmount(() => {
         </Button>
       </div>
     </footer>
+
+    <ModalDialog v-if="reopenDialog" size="sm" @close="reopenDialog = false">
+      <form class="flex flex-col" @submit.prevent="requestReopen">
+        <div class="space-y-4 p-6 sm:p-7">
+          <div>
+            <DialogTitle>申請修改</DialogTitle>
+            <DialogDescription class="mt-1 text-xs">請說明需要更正或重新處理的原因，櫃台核准後才能修改此筆就診。</DialogDescription>
+          </div>
+          <label class="block space-y-1.5">
+            <span class="text-xs font-medium">申請原因</span>
+            <Textarea v-model="reopenReason" rows="4" maxlength="500" autofocus placeholder="例如：需補正交辦內容或收費項目" />
+          </label>
+          <Alert v-if="reopenError" variant="destructive"><AlertDescription>{{ reopenError }}</AlertDescription></Alert>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" @click="reopenDialog = false">取消</Button>
+          <Button type="submit" :disabled="busy">送出申請</Button>
+        </DialogFooter>
+      </form>
+    </ModalDialog>
   </section>
 </template>

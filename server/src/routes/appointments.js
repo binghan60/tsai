@@ -5,6 +5,8 @@ import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import FormTemplate from '../models/FormTemplate.js';
 import ClinicSettings from '../models/ClinicSettings.js';
+import MedicalRecord from '../models/MedicalRecord.js';
+import { defaultRecordFields } from '../lib/formTemplate.js';
 import { withTransaction } from '../lib/transaction.js';
 import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsCheckinNumber } from '../lib/appointmentStatus.js';
@@ -77,6 +79,40 @@ async function resolveAppointmentTemplate(templateId, { optional = false } = {})
     throw error;
   }
   return template;
+}
+
+async function createCheckinRecord(appointment, session) {
+  if (appointment.recordId) return;
+
+  const settings = appointment.templateId
+    ? null
+    : await ClinicSettings.findOne().session(session);
+  const selectedId = appointment.templateId || settings?.defaultAppointmentTemplateId;
+  if (!mongoose.isValidObjectId(selectedId)) {
+    const error = new Error('請先在表單管理設定預設表單，或在掛號時選擇表單');
+    error.status = 422;
+    throw error;
+  }
+  const template = await FormTemplate.findOne({ _id: selectedId, enabled: { $ne: false } }).session(session);
+  if (!template) {
+    const error = new Error('指定的表單不存在或已停用，請更換表單後再報到');
+    error.status = 422;
+    throw error;
+  }
+
+  const [record] = await MedicalRecord.create([{
+    petId: appointment.petId,
+    ...defaultRecordFields(template),
+    visitDate: combineClinicDateTime(appointment.date, appointment.time || '10:00'),
+    chiefComplaint: appointment.reason,
+    weightKg: appointment.weightKg,
+    temperatureC: appointment.temperatureC,
+    templateId: template._id,
+    templateVersion: template.version,
+    examType: template.name,
+  }], { session });
+  appointment.recordId = record._id;
+  appointment.templateId = template._id;
 }
 
 // 當日曾經發出去的牌號都算已使用，包含仍在候診的 current number 與已歸還／改號的 history。
@@ -391,9 +427,11 @@ router.post('/:id/check-in', async (req, res, next) => {
       : 0;
     if (isLate && latenessMinutes < 1) return res.status(422).json({ message: '尚未超過預約時間，請使用一般報到' });
     const originalNumberHistory = Array.from(appointment.checkinNumberHistory ?? []);
+    const originalRecordId = appointment.recordId;
     await withQueueRetry(() => withTransaction(async (session) => {
       // transaction 因併發牌號衝突重試時，不能把失敗那次尚未發出的候選號留進 history。
       appointment.checkinNumberHistory = [...originalNumberHistory];
+      appointment.recordId = originalRecordId;
       if (needsNewPatient) {
         const species = String(req.body.species || '').trim();
         const [owner] = await Owner.create(
@@ -411,6 +449,9 @@ router.post('/:id/check-in', async (req, res, next) => {
         appointment.petName = pet.name;
         appointment.species = pet.species;
       }
+
+      // 表單草稿在報到時建立，醫師進入診療台時已可直接編輯。
+      await createCheckinRecord(appointment, session);
 
       // 報到時配一張今天從未發出過的實體號碼牌。候診先後仍由 checkedInAt 決定，
       // 所以這個數字之後即使人工修改，也不會改變誰先看診。

@@ -64,6 +64,17 @@ async function complete() {
     error.value = err.response?.data?.message || '操作失敗，請稍後重試';
   } finally { busy.value = false; }
 }
+
+async function approveReopen() {
+  if (busy.value) return;
+  busy.value = true;
+  error.value = '';
+  try {
+    await run('approve-reopen');
+  } catch (err) {
+    error.value = err.response?.data?.message || '操作失敗，請稍後重試';
+  } finally { busy.value = false; }
+}
 </script>
 
 <template>
@@ -154,11 +165,16 @@ async function complete() {
           </section>
         </div>
 
+        <div v-if="state.completed && appointment.reopenRequest?.requestedAt && !appointment.reopenRequest?.approvedAt" class="mx-5 mb-3 rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-sm text-warning sm:mx-6">
+          <span class="font-semibold">醫師請求修改：</span>{{ appointment.reopenRequest.reason }}
+        </div>
+
         <footer class="flex shrink-0 items-center gap-3 border-t border-border bg-field/40 px-5 py-4 sm:px-6">
           <p class="text-xs text-muted-foreground">收費以交辦文字為準，系統不記金額</p>
           <div class="ml-auto flex gap-3">
             <Button variant="secondary" :disabled="busy" @click="close">{{ state.completed ? '關閉' : '稍後處理' }}</Button>
-            <Button v-if="!state.completed" :disabled="busy || !state.handedOff" @click="complete"><Check class="h-4 w-4" />完成處理</Button>
+            <Button v-if="state.completed && appointment.reopenRequest?.requestedAt && !appointment.reopenRequest?.approvedAt" :disabled="busy" @click="approveReopen">核准修改</Button>
+            <Button v-else-if="!state.completed" :disabled="busy || !state.handedOff" @click="complete"><Check class="h-4 w-4" />完成處理</Button>
           </div>
         </footer>
       </div>
