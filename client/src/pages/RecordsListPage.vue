@@ -232,7 +232,7 @@ function actionLabel(record) {
           </span>
 
           <span class="desktop-data-cell text-right">
-            <Button as-child variant="outline" size="sm">
+            <Button as-child variant="secondary" size="sm">
               <router-link :to="recordLink(record)">
                 <component :is="record.status === 'draft' ? Pencil : FileText" class="h-4 w-4" stroke-width="1.75" />
                 {{ actionLabel(record) }}
@@ -270,7 +270,7 @@ function actionLabel(record) {
             <span class="min-w-0">{{ record.deliveryError }}</span>
           </p>
 
-          <Button as-child variant="outline" size="sm" class="w-full">
+          <Button as-child variant="secondary" size="sm" class="w-full">
             <router-link :to="recordLink(record)">
               <component :is="record.status === 'draft' ? Pencil : FileText" class="h-4 w-4" stroke-width="1.75" />
               {{ actionLabel(record) }}

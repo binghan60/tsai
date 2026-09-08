@@ -105,7 +105,7 @@ function applyDates() {
           </div>
           <div class="mt-3 flex justify-end gap-2">
             <Button type="button" variant="secondary" size="sm" :disabled="!hasDateRange" @click="clearDates">清除</Button>
-            <Button type="button" variant="outline" size="sm" @click="applyDates">套用</Button>
+            <Button type="button" variant="secondary" size="sm" @click="applyDates">套用</Button>
           </div>
         </PopoverContent>
       </Popover>

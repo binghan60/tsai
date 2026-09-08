@@ -60,7 +60,10 @@ function tray(filter, sortKey) {
 const handoffs = computed(() => tray('handoff', 'handoffAt'));
 const upcoming = computed(() => tray('scheduled', 'scheduledAt'));
 const followUps = computed(() => tray('followup', 'handoffAt').filter(item => workflowState(item).completed));
-const finished = computed(() => tray('completed', 'deskCompletedAt'));
+const reopenRequests = computed(() => items.value
+  .filter(item => workflowState(item).completed && item.reopenRequest?.requestedAt && !item.reopenRequest?.approvedAt && matches(item))
+  .sort((a, b) => new Date(a.reopenRequest.requestedAt) - new Date(b.reopenRequest.requestedAt)));
+const finished = computed(() => tray('completed', 'deskCompletedAt').filter(item => !item.reopenRequest?.requestedAt || item.reopenRequest?.approvedAt));
 const onsite = computed(() => items.value.filter(item => workflowFilter(item, 'onsite')));
 const waitingCount = computed(() => items.value.filter(item => workflowFilter(item, 'waiting')).length);
 const visitingCount = computed(() => items.value.filter(item => workflowFilter(item, 'visiting')).length);
@@ -223,6 +226,23 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
 
     <div v-else class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <div class="space-y-4">
+        <section v-if="reopenRequests.length" class="overflow-hidden rounded-xl border border-warning/35 bg-card" aria-label="醫師申請修改">
+          <div class="flex flex-wrap items-center gap-3 border-b border-warning/25 bg-warning-surface px-5 py-3">
+            <ClipboardList class="h-5 w-5 text-warning" />
+            <h2 class="text-base font-semibold text-warning">醫師申請修改</h2>
+            <span class="inline-flex h-6 items-center rounded-full bg-card px-3 text-xs font-medium leading-none text-warning">{{ reopenRequests.length }} 筆</span>
+            <p class="ml-auto text-xs text-warning/80">請確認後核准重新開啟就診</p>
+          </div>
+          <div v-for="item in reopenRequests" :key="item._id" class="flex flex-wrap items-center gap-4 border-b border-border px-5 py-3.5 last:border-b-0">
+            <div class="w-40 shrink-0">
+              <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
+              <p class="truncate text-xs text-muted-foreground">{{ item.ownerName || '未填飼主' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></p>
+            </div>
+            <p class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ item.reopenRequest.reason || '未填寫申請原因' }}</p>
+            <Button size="sm" class="shrink-0" @click="openSheet(item)">處理申請</Button>
+          </div>
+        </section>
+
         <section class="overflow-hidden rounded-xl border border-primary/35 bg-card" aria-label="醫師已交辦">
           <div class="flex flex-wrap items-center gap-3 border-b border-primary/25 bg-accent px-5 py-3">
             <h2 class="text-base font-semibold text-accent-foreground">醫師已交辦 · 待處理</h2>
@@ -264,7 +284,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template><template v-if="item.reason">　{{ item.reason }}</template>
             </p>
             <div class="flex shrink-0 items-center gap-2">
-              <Button variant="outline" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
+              <Button variant="secondary" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
               <RowActions
                 :actions="[
                   { key: 'check-in-late', label: '遲到報到' },

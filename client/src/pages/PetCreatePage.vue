@@ -417,7 +417,7 @@ onBeforeUnmount(() => {
         </h1>
         <p class="mt-1 text-sm text-muted-foreground">確認飼主身分、填寫貓咪基本資料與病史，一次送出建立檔案。</p>
       </div>
-      <Button type="button" variant="outline" size="sm" class="self-start sm:self-auto" :disabled="submitting" @click="cancel">取消返回</Button>
+      <Button type="button" variant="secondary" size="sm" class="self-start sm:self-auto" :disabled="submitting" @click="cancel">取消返回</Button>
     </div>
 
     <Alert v-if="submitError" variant="destructive">
@@ -466,7 +466,7 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </div>
-              <Button type="button" variant="outline" size="sm" class="h-8 shrink-0 gap-1.5 self-start text-xs sm:self-center" @click="clearSelectedOwner">
+              <Button type="button" variant="secondary" size="sm" class="h-8 shrink-0 gap-1.5 self-start text-xs sm:self-center" @click="clearSelectedOwner">
                 <RefreshCw class="h-3.5 w-3.5" />
                 更換飼主
               </Button>
@@ -518,13 +518,13 @@ onBeforeUnmount(() => {
                 </PickerOptionRow>
               </div>
               <div v-if="hasMoreOwners" class="pt-1 text-center">
-                <Button type="button" variant="outline" size="sm" class="h-8 text-xs" :disabled="ownerLoading" @click="loadMoreOwners">載入更多結果</Button>
+                <Button type="button" variant="secondary" size="sm" class="h-8 text-xs" :disabled="ownerLoading" @click="loadMoreOwners">載入更多結果</Button>
               </div>
             </div>
 
             <div v-else-if="ownerQuery.trim()" class="space-y-2 rounded-xl border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
               <p>查無符合「<strong class="text-foreground">{{ ownerQuery }}</strong>」的既有飼主</p>
-              <Button type="button" variant="outline" size="sm" class="h-8 text-xs text-primary hover:text-primary" @click="switchModeToNewWithQuery">直接建立此飼主資料 &rarr;</Button>
+              <Button type="button" variant="secondary" size="sm" class="h-8 text-xs text-primary hover:text-primary" @click="switchModeToNewWithQuery">直接建立此飼主資料 &rarr;</Button>
             </div>
 
             <p v-else class="rounded-xl border border-border/50 bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">輸入飼主姓名或手機號碼，系統將即時查詢並列出相符檔案。</p>
@@ -711,7 +711,7 @@ onBeforeUnmount(() => {
           <span v-if="petForm.name">・貓咪：<strong class="font-medium text-foreground">{{ petForm.name }}</strong><span v-if="petForm.breed">（{{ petForm.breed }}）</span></span>
         </div>
         <div class="flex w-full items-center justify-end gap-3 sm:w-auto">
-          <Button type="button" variant="outline" :disabled="submitting" @click="cancel">取消返回</Button>
+          <Button type="button" variant="secondary" :disabled="submitting" @click="cancel">取消返回</Button>
           <Button type="button" class="min-w-36 gap-1.5" :disabled="submitting" @click="submit">
             <Check class="h-4 w-4" />
             {{ submitting ? '處理中…' : '確認新增貓咪' }}

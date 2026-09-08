@@ -86,7 +86,7 @@ function submit() {
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" :disabled="submitting" @click="emit('close')">取消</Button>
+        <Button type="button" variant="secondary" :disabled="submitting" @click="emit('close')">取消</Button>
         <Button type="submit" variant="destructive-solid" :disabled="!canSubmit || submitting">{{ submitting ? '刪除中…' : '刪除報告' }}</Button>
       </DialogFooter>
     </form>

@@ -74,7 +74,6 @@ export function applyWorkflowAction(appointment, action, body, now = new Date())
   } else if (action === 'request-reopen') {
     if (!state.completed) throw workflowError('只有已完成的就診可以申請修改', 409);
     const reason = String(body.reason || '').trim();
-    if (!reason) throw workflowError('請填寫申請修改的原因');
     appointment.reopenRequest = { reason, requestedAt: now, approvedAt: null };
   } else if (action === 'approve-reopen') {
     if (!state.completed || !appointment.reopenRequest?.requestedAt) throw workflowError('目前沒有待核准的修改申請', 409);

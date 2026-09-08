@@ -167,7 +167,7 @@ async function approveReopen() {
         </div>
 
         <div v-if="state.completed && appointment.reopenRequest?.requestedAt && !appointment.reopenRequest?.approvedAt" class="mx-5 mb-3 rounded-lg border border-warning/30 bg-warning-surface px-3 py-2 text-sm text-warning sm:mx-6">
-          <span class="font-semibold">醫師請求修改：</span>{{ appointment.reopenRequest.reason }}
+          <span class="font-semibold">醫師請求修改</span><template v-if="appointment.reopenRequest.reason">：{{ appointment.reopenRequest.reason }}</template>
         </div>
 
         <footer class="flex shrink-0 items-center gap-3 border-t border-border bg-field/40 px-5 py-4 sm:px-6">

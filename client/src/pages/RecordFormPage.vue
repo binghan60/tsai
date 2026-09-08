@@ -894,11 +894,11 @@ function handleBeforeUnload(event) {
 
 <template>
   <section class="mx-auto max-w-6xl space-y-5 pb-48 sm:pb-32">
-    <Button v-if="visitReturnTarget" as-child variant="outline"><router-link :to="visitReturnTarget">返回診療台</router-link></Button>
+    <Button v-if="visitReturnTarget" as-child variant="secondary"><router-link :to="visitReturnTarget">返回診療台</router-link></Button>
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div><Breadcrumbs class="mb-2" :items="[{ label: '寵物', to: '/pets' }, { label: pet?.name || '寵物資料', to: petId ? `/pets/${petId}` : '/pets' }, { label: isEdit ? '編輯就診紀錄' : '新增就診紀錄' }]" /><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案就診紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯就診紀錄' : '新增就診紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked" class="flex flex-wrap items-center justify-end gap-3">
-        <Button v-if="!needsTypeChoice && finalizedSources.length" type="button" variant="outline" size="sm" @click="openRecopyDialog"><Copy class="h-4 w-4" />重新帶入報告內容</Button>
+        <Button v-if="!needsTypeChoice && finalizedSources.length" type="button" variant="secondary" size="sm" @click="openRecopyDialog"><Copy class="h-4 w-4" />重新帶入報告內容</Button>
         <div v-if="recordId || isDirty || saveState === 'saving' || saveState === 'error'" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-danger' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
       </div>
     </div>
@@ -962,7 +962,7 @@ function handleBeforeUnload(event) {
         <Button type="button" :disabled="!pendingTemplateId || confirmingExamType" @click="confirmExamType">
           {{ confirmingExamType ? '載入表單中…' : `開始填寫${pendingTemplateId ? `「${examTypes.find((type) => type._id === pendingTemplateId)?.name}」` : ''}` }}
         </Button>
-        <Button as-child variant="outline">
+        <Button as-child variant="secondary">
           <router-link :to="petId ? `/pets/${petId}` : '/pets'">取消</router-link>
         </Button>
       </div>
@@ -977,7 +977,7 @@ function handleBeforeUnload(event) {
             <p class="mt-1 text-sm">為避免已結案的內容與 PDF 不一致，此版本不再開放直接編輯。</p>
             <div class="mt-4 flex flex-wrap gap-2">
               <Button as-child><router-link :to="`/records/${recordId}/preview`"><FileText class="h-4 w-4" />查看正式報告</router-link></Button>
-              <Button as-child variant="outline"><router-link :to="`/pets/${petId}`">回寵物資料</router-link></Button>
+              <Button as-child variant="secondary"><router-link :to="`/pets/${petId}`">回寵物資料</router-link></Button>
             </div>
           </div>
         </div>
@@ -1133,14 +1133,14 @@ function handleBeforeUnload(event) {
                 <p v-if="section.description" class="text-xs text-muted-foreground">{{ section.description }}</p>
               </div>
             </div>
-            <Button v-if="section.presentation === 'findings'" type="button" variant="outline" size="sm" @click="markUncheckedFindingsNormal(section)">未標示項目全部正常</Button>
+            <Button v-if="section.presentation === 'findings'" type="button" variant="secondary" size="sm" @click="markUncheckedFindingsNormal(section)">未標示項目全部正常</Button>
           </div>
           <FormSection :section="section" />
         </section>
 
         <div class="flex items-center justify-between gap-3">
-          <Button type="button" variant="outline" :disabled="activeSectionIndex === 0" @click="adjacentSection(-1)">← 上一區</Button>
-          <Button type="button" variant="outline" :disabled="activeSectionIndex === FORM_SECTIONS.length - 1" @click="adjacentSection(1)">下一區 →</Button>
+          <Button type="button" variant="secondary" :disabled="activeSectionIndex === 0" @click="adjacentSection(-1)">← 上一區</Button>
+          <Button type="button" variant="secondary" :disabled="activeSectionIndex === FORM_SECTIONS.length - 1" @click="adjacentSection(1)">下一區 →</Button>
         </div>
       </form>
 
@@ -1150,13 +1150,13 @@ function handleBeforeUnload(event) {
           <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
           <div class="grid grid-cols-3 gap-2 sm:hidden">
             <Button type="button" variant="destructive" class="w-full px-2" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄</Button>
-            <Button type="button" variant="outline" class="w-full px-2" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中' : '儲存' }}</Button>
+            <Button type="button" variant="secondary" class="w-full px-2" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中' : '儲存' }}</Button>
             <Button type="button" class="w-full px-2" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽</Button>
           </div>
           <div class="hidden sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
             <p class="hidden sm:mr-auto sm:flex sm:items-center sm:gap-1.5 sm:text-xs sm:text-muted-foreground"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
             <Button type="button" variant="destructive" class="w-full sm:w-auto" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄草稿</Button>
-            <Button type="button" variant="outline" class="w-full sm:w-auto" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
+            <Button type="button" variant="secondary" class="w-full sm:w-auto" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
             <Button type="button" class="col-span-2 w-full sm:col-auto sm:w-auto" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
           </div>
         </div>
@@ -1203,7 +1203,7 @@ function handleBeforeUnload(event) {
           </Select>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" :disabled="recopying" @click="showRecopyDialog = false">取消</Button>
+          <Button type="button" variant="secondary" :disabled="recopying" @click="showRecopyDialog = false">取消</Button>
           <Button type="button" variant="destructive" :disabled="!recopyFromId || recopying" @click="confirmRecopy">{{ recopying ? '帶入中…' : '覆蓋並帶入' }}</Button>
         </DialogFooter>
       </DialogContent>

@@ -45,7 +45,7 @@ function submit() {
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" :disabled="submitting" @click="emit('close')">取消</Button>
+        <Button type="button" variant="secondary" :disabled="submitting" @click="emit('close')">取消</Button>
         <Button type="submit" :disabled="submitting">{{ submitting ? '建立中…' : '建立修訂草稿' }}</Button>
       </DialogFooter>
     </form>

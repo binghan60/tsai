@@ -141,10 +141,10 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
       <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
         <span class="text-xs tabular-nums text-muted-foreground">第 {{ page }} / {{ totalPages }} 頁</span>
         <div class="flex gap-2">
-          <Button type="button" variant="outline" size="sm" :disabled="page <= 1 || loading" @click="goToPage(page - 1)">
+          <Button type="button" variant="secondary" size="sm" :disabled="page <= 1 || loading" @click="goToPage(page - 1)">
             <ChevronLeft class="h-4 w-4" />上一頁
           </Button>
-          <Button type="button" variant="outline" size="sm" :disabled="page >= totalPages || loading" @click="goToPage(page + 1)">
+          <Button type="button" variant="secondary" size="sm" :disabled="page >= totalPages || loading" @click="goToPage(page + 1)">
             下一頁<ChevronRight class="h-4 w-4" />
           </Button>
         </div>

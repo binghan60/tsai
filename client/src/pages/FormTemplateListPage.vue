@@ -260,7 +260,7 @@ onMounted(load);
         title="找不到符合條件的表單"
         description="換個關鍵字，或清除目前的篩選條件。"
       >
-        <Button type="button" variant="outline" class="mt-4" @click="clearFilters">清除篩選</Button>
+        <Button type="button" variant="secondary" class="mt-4" @click="clearFilters">清除篩選</Button>
       </EmptyState>
 
       <!-- 桌機：清單卡，與其他列表頁同一套版式 -->
@@ -347,7 +347,7 @@ onMounted(load);
             <Button type="button" variant="secondary" size="sm" @click="router.push(`/settings/forms/${template._id}`)">
               <Pencil class="h-4 w-4" stroke-width="1.75" />編輯表單
             </Button>
-            <Button type="button" variant="outline" size="sm" :disabled="Boolean(busyId)" @click="openDuplicate(template)">
+            <Button type="button" variant="secondary" size="sm" :disabled="Boolean(busyId)" @click="openDuplicate(template)">
               <Copy class="h-4 w-4" stroke-width="1.75" />以此建立
             </Button>
             <Button
@@ -443,7 +443,7 @@ onMounted(load);
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" :disabled="creating" @click="closeCreate">取消</Button>
+          <Button type="button" variant="secondary" :disabled="creating" @click="closeCreate">取消</Button>
           <Button type="submit" :disabled="creating || !newName.trim() || (startMode === 'copy' && !copyFromId)">
             {{ creating ? '建立中…' : '建立並編輯' }}
           </Button>

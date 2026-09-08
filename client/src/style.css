@@ -30,22 +30,28 @@
   --color-petrol-800: #0a3743;
   --color-petrol-900: #072932;
 
-  /* ── 表面：暖中性紙感 Paper ─────────────────────────────────────────────
+  /* ── 表面：冷中性 Paper ─────────────────────────────────────────────────
      舊的象牙白卡片 #FFF8EA 疊在米黃底 #EFE2C1 上，明度差只有 1.22——卡片是不是
      一個獨立物件，全靠 #C8AF78 那條深卡其邊框在扛，整片畫面因此又黃又髒。
-     這組把飽和度幾乎拉光：卡片純白、頁面底暖灰白，白/灰的明度差(1.12)加一條
-     細邊框就夠讓卡片浮起來，顏色預算全部讓給主行動與狀態。 */
+     這組把飽和度幾乎拉光：卡片純白、頁面底冷灰白，明度差加一條細邊框就夠讓卡片
+     浮起來，顏色預算全部讓給主行動與狀態。
+
+     整條色階是在 OKLCH 上算的：色相固定 220（跟 petrol 深端同家族，不再像舊版
+     那樣從 197 漂到 215，淺階偏青、深階偏藍像兩種灰），彩度隨明度降低而緩升
+     0→0.026，明度階距是排過的，不是舊版那種 1.6 / 3.5 / 11.5 / 16.7 的跳法。
+     邊框(300)特地訂在 L87.4：舊值對純白卡片只有 1.38，而這份設計是「卡片靠
+     明度差加一條細邊框浮起來」，邊框太弱等於少了一半。現在是 1.46。 */
   --color-paper-0: #ffffff;
-  --color-paper-50: #faf8f5;
-  --color-paper-100: #f5f2ed;
-  --color-paper-200: #ede9e2;
-  --color-paper-300: #e0dad1;
-  --color-paper-400: #c7bfb3;
-  --color-paper-500: #9a9288;
-  --color-paper-600: #6d665d;
-  --color-paper-700: #4a443d;
-  --color-paper-800: #302b26;
-  --color-paper-900: #1f1b17;
+  --color-paper-50: #f7fafc;
+  --color-paper-100: #f0f5f7;
+  --color-paper-200: #e2eaed;
+  --color-paper-300: #ccd8dc;
+  --color-paper-400: #a4b4ba;
+  --color-paper-500: #778a90;
+  --color-paper-600: #53676e;
+  --color-paper-700: #374a50;
+  --color-paper-800: #22353b;
+  --color-paper-900: #112329;
 
   /* 品牌金。側邊欄 active、Logo、報告紙面用；不作後台的主要操作色。 */
   --color-brand-50: #fff7df;
@@ -126,42 +132,66 @@
   --popover-foreground: var(--color-paper-900);
   --primary: var(--color-petrol-600);
   --primary-foreground: #ffffff;
-  --secondary: var(--color-paper-200);
-  --secondary-foreground: var(--color-paper-800);
+  /* H≈215° 的霧青次要操作，與 Petrol 主色同色相、以明度而非另一種顏色分層。 */
+  --secondary: #c1e3ec;
+  --secondary-hover: #acd6e1;
+  --secondary-foreground: #154a57;
   --muted: var(--color-paper-200);
   --muted-foreground: var(--color-paper-600);
-  --accent: var(--color-petrol-50);
+  /* accent 的彩度(0.040)刻意比 muted(0.006) 高一個量級。「已結案」用 accent、
+     「草稿」用 muted，兩者明度幾乎相同，能分開全靠有沒有顏色——舊值 petrol-50
+     的彩度只有 0.010，兩張徽章在清單上是同一塊淡灰。 */
+  --accent: #d6f6ff;
   --accent-foreground: var(--color-petrol-700);
-  --destructive: #b3202d;
-  --destructive-surface: #fbe8e9;
-  --destructive-solid: var(--destructive);
+  /* H≈22° 的深磚紅（OKLCH 實測色相；舊註解寫的 351° 是別的色彩系統的值）。
+     明度刻意壓到 L38，是四個狀態色裡最深的一個——見下方狀態語意的說明。 */
+  --destructive: #7c111d;
+  --destructive-surface: #ffe8e7;
+  --destructive-solid: #a8353a;
   --destructive-solid-foreground: #ffffff;
   --border: var(--color-paper-300);
   --input: var(--color-paper-300);
   /* field：輸入框與浮在卡片上的可點表面。卡片改成純白之後，這層不可能再「比卡片
      更亮」，所以淺色改成往下凹一階；深色沒有更暗可用（會跟頁面底糊在一起），
      仍然往上浮。兩態方向相反、傳達的是同一件事：這塊是可以動的東西。 */
-  --field: #f6f3ee;
+  --field: #f2f7f9;
   --ring: var(--color-petrol-600);
 
   /* 狀態語意。四個色相各自獨佔一種語意，且都不是 primary——主色只表示「主要操作」，
      狀態只表示「這筆資料現在怎麼了」，兩者在畫面上不會被誤讀成對方。
      surface 是徽章／橫幅的底色：舊版直接用 Tailwind 的 amber-50／emerald-50，
-     那是冷調亮白，疊在象牙卡片上對比只有 1.00–1.02，等於底色根本沒畫出來。 */
-  --success: #146a47;
-  --success-surface: #e4f3ea;
-  --warning: #8a5809;
-  --warning-surface: #fbf0da;
-  --info: #175e8e;
-  --info-surface: #e2effa;
+     那是冷調亮白，疊在象牙卡片上對比只有 1.00–1.02，等於底色根本沒畫出來。
+
+     ── 明度是刻意錯開的，不是同一階 ──────────────────────────────────
+     這組色的四個明度看起來不整齊，那是必要的。紅綠色盲（占男性約 8%）下紅與綠
+     會塌到同一個色相上，唯一還留著的線索就是明度差——舊版四個狀態色明度全擠在
+     L47–52，模擬紅綠色盲後「已寄送」與「寄送失敗」的 ΔE 只有 1.6，等於同一個
+     顏色。現在三個暖／綠色相在可用區間內拉開（danger L38 / warning L44 /
+     success L50），最小 ΔE 拉到 6.2。
+
+     可用區間的上限是「徽章文字站在自己的徽章底色上要有 5:1」——淺色主題大約
+     L50 就到頂了。特別注意 WCAG 亮度對綠色加權特別高，同樣的 OKLCH 明度下
+     綠色的實際對比會比琥珀色低一截，success 因此不能再往上抬。
+
+     info 從舊值 H237 移到 H266。舊值跟 petrol 主色(H218)只差 19°，「寄送中」
+     的徽章和主色連結在畫面上是同一種藍，違反上面「狀態不會被誤讀成主色」那條。
+
+     藍黃色盲（約 0.01%）下 info 與主色仍然偏近(ΔE 4.2)，這是四個色相塞進這麼窄
+     的明度區間換來的，取捨後接受——徽章一律帶文字標籤，顏色不是唯一線索。 */
+  --success: #00755a;
+  --success-surface: #dbf6eb;
+  --warning: #724800;
+  --warning-surface: #fcecd8;
+  --info: #4461a9;
+  --info-surface: #e7efff;
   /* danger 是既有狀態 API 的相容名稱；錯誤、異常與刪除共用同一套紅色來源。 */
   --danger: var(--destructive);
   --danger-surface: var(--destructive-surface);
 
-  --chart-1: #068ba6;
-  --chart-2: #19abc8;
-  --chart-3: #54bfd4;
-  --chart-area: rgb(14 90 107 / 0.15);
+  --chart-1: #007f98;
+  --chart-2: #00a5b6;
+  --chart-3: #5dc4c7;
+  --chart-area: rgb(0 127 152 / 0.15);
 
   /* Data-visualization colors are centralized here because canvas/SVG cannot use
      Tailwind utility classes. These tokens describe domain categories, not actions. */
@@ -223,47 +253,66 @@
 }
 
 .dark {
-  --background: #0b1218;
+  /* 深色的表面分層是一條排過的梯子：側邊欄 L15.5 → 頁面底 16.5 → 卡片 20.5 →
+     輸入框 22.8 → 浮層 24.6 → accent 26.7 → 狀態底 29 → muted 31 → secondary 35
+     → 邊框 38。舊版是 accent 27.1 / field 28.2 / destructive-surface 28.7 /
+     muted 29.6 四層全擠在 3 個明度點之內，加上彩度都很低，畫面上它們就是同一塊
+     「比卡片亮一點的東西」——那正是「配色沒問題但細節很髒」的來源。
+
+     梯子的頂端(24.6)不是隨便訂的：主色 petrol-400 是固定的，而主色文字站在
+     任何表面上都要有 4.5，反推出「會承載 text-primary 的表面不能亮過 L24.6」。
+     舊版 --field 是 L28.2，primary 站上去只有 4.24，本來就沒過。 */
+  --background: #061014;
   /* 原本是 #f4ead0（暖米白），那是配酒紅／金的舊主色留下的。疊在 petrol 上會發黃、
      顯髒，改成中性偏冷的白，跟深青主色同一個溫度。 */
-  --foreground: #e9eef1;
-  --card: #121b22;
-  --card-foreground: #e9eef1;
-  --popover: #121b22;
-  --popover-foreground: #e9eef1;
+  --foreground: #e3eef0;
+  --card: #0b1a1e;
+  --card-foreground: #e3eef0;
+  /* 浮層比卡片再亮一階：對話框／選單／Sheet 疊在卡片上時要看得出是浮起來的。 */
+  --popover: #122429;
+  --popover-foreground: #e3eef0;
   /* 深色主題最亮的東西應該是主行動。舊值 brand-600 #8D541D 對卡片只有 2.84，
      主要按鈕反而是畫面上最沉的一塊。改成亮階當底、深墨當字（Material 3 的
      on-primary 做法），對比 4.92 / 4.68。 */
   --primary: var(--color-petrol-400);
-  --primary-foreground: #04222a;
-  --secondary: #1e2a33;
-  --secondary-foreground: #e3e8eb;
-  --muted: #1b2a35;
-  --muted-foreground: #9aa5ad;
-  --accent: #0e2830;
-  --accent-foreground: var(--color-petrol-300);
-  --destructive: #ff8f86;
-  --destructive-surface: #351c1f;
-  --destructive-solid: #c0303c;
+  --primary-foreground: #00161d;
+  --secondary: #1f4049;
+  --secondary-hover: #284f5a;
+  --secondary-foreground: #cfebf0;
+  --muted: #213439;
+  --muted-foreground: #a3adaf;
+  --accent: #002b35;
+  /* 深色的 accent-foreground 用 petrol-200 而不是 300：它要跟 muted-foreground
+     （草稿徽章的字）分得開，300 太接近那個灰。 */
+  --accent-foreground: var(--color-petrol-200);
+  --destructive: #ffb4b1;
+  --destructive-surface: #3f2221;
+  --destructive-solid: #b94548;
   --destructive-solid-foreground: #ffffff;
-  --border: #2c3a44;
-  --input: #35454f;
-  --field: #1c2831;
+  --border: #32464d;
+  --input: #3d545b;
+  /* field 與卡片的明度差只有 1.05，靠 --input 那條邊框把它撐起來——它同樣受
+     上面那條「承載 text-primary 的表面不能太亮」的天花板限制（HandoffSheet 的
+     號碼牌、表單設計頁的檢視切換鈕都是 text-primary + bg-field）。 */
+  --field: #0f1f24;
   --ring: var(--color-petrol-400);
 
-  --success: #5fd3a0;
-  --success-surface: #12261d;
-  --warning: #e8b45c;
-  --warning-surface: #2a2113;
-  --info: #6fb6e8;
-  --info-surface: #122430;
+  /* 明度錯開的理由同淺色主題，方向相反：深色主題裡「亮」等於「重」，
+     所以 danger 是最亮的一個(L84)，success 最沉(L70)。兩個主題共通的原則是
+     ——四個狀態色裡，危險永遠是對比最高的那一個。 */
+  --success: #4ab494;
+  --success-surface: #103328;
+  --warning: #dfa963;
+  --warning-surface: #392710;
+  --info: #a4c0ff;
+  --info-surface: #212b42;
   --danger: var(--destructive);
   --danger-surface: var(--destructive-surface);
 
-  --chart-1: #2fa3bf;
-  --chart-2: #56b9d2;
-  --chart-3: #88ccdd;
-  --chart-area: rgb(62 147 166 / 0.22);
+  --chart-1: #16a2c1;
+  --chart-2: #51bccc;
+  --chart-3: #7dd5d8;
+  --chart-area: rgb(22 162 193 / 0.22);
 
   --dental-normal: #1c2831;
   --dental-outline: #c4c4cc;
@@ -293,6 +342,7 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
+  --color-secondary-hover: var(--secondary-hover);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);

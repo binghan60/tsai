@@ -205,7 +205,7 @@ async function saveTemplate() {
 
       <DialogFooter>
         <template v-if="creating">
-          <Button type="button" variant="outline" :disabled="saving" @click="creating = false">返回模板清單</Button>
+          <Button type="button" variant="secondary" :disabled="saving" @click="creating = false">返回模板清單</Button>
           <Button type="button" :disabled="saving" @click="saveTemplate">{{ saving ? '新增中…' : '新增模板' }}</Button>
         </template>
         <template v-else>
@@ -213,7 +213,7 @@ async function saveTemplate() {
             <FilePlus2 class="h-4 w-4" stroke-width="1.75" />
             存成模板
           </Button>
-          <Button type="button" variant="outline" @click="closePicker">取消</Button>
+          <Button type="button" variant="secondary" @click="closePicker">取消</Button>
         </template>
       </DialogFooter>
     </DialogContent>

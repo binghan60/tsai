@@ -186,7 +186,6 @@ function openReopenRequest() {
 
 async function requestReopen() {
   const reason = reopenReason.value.trim();
-  if (!reason) { reopenError.value = '請填寫申請修改的原因'; return; }
   try {
     await run('request-reopen', { reason });
     reopenDialog.value = false;
@@ -376,16 +375,16 @@ onBeforeUnmount(() => {
         <div class="space-y-4 p-6 sm:p-7">
           <div>
             <DialogTitle>申請修改</DialogTitle>
-            <DialogDescription class="mt-1 text-xs">請說明需要更正或重新處理的原因，櫃台核准後才能修改此筆就診。</DialogDescription>
+            <DialogDescription class="mt-1 text-xs">可補充需要更正或重新處理的原因；櫃台核准後才能修改此筆就診。</DialogDescription>
           </div>
           <label class="block space-y-1.5">
-            <span class="text-xs font-medium">申請原因</span>
+            <span class="text-xs font-medium">申請原因（選填）</span>
             <Textarea v-model="reopenReason" rows="4" maxlength="500" autofocus placeholder="例如：需補正交辦內容或收費項目" />
           </label>
           <Alert v-if="reopenError" variant="destructive"><AlertDescription>{{ reopenError }}</AlertDescription></Alert>
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" @click="reopenDialog = false">取消</Button>
+          <Button type="button" variant="secondary" @click="reopenDialog = false">取消</Button>
           <Button type="submit" :disabled="busy">送出申請</Button>
         </DialogFooter>
       </form>

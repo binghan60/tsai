@@ -120,6 +120,15 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal((await post('reclaim')).status, 409);
     assert.equal((await post('clinical', { visitNote: '事後再改' })).status, 409);
   });
+  it('allows the vet to request reopening without a reason', async () => {
+    await post('handoff');
+    await post('complete');
+
+    const requested = await post('request-reopen');
+    assert.equal(requested.status, 200);
+    assert.equal(requested.body.reopenRequest.reason, '');
+    assert.ok(requested.body.reopenRequest.requestedAt);
+  });
   it('creates a draft only on demand and reopens the same linked draft', async () => {
     const first = await post('record');
     assert.equal(first.status, 200);

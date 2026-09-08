@@ -16,11 +16,9 @@ export const buttonVariants = cva(
         default:
           "bg-primary text-primary-foreground hover:bg-primary/90 aria-expanded:bg-primary/90",
         // 淡色填底取代「描邊＋極淡填色」——跟現況比對比更清楚，也不用再畫一圈邊框。
-        outline:
-          "bg-accent text-accent-foreground hover:bg-primary/15 aria-expanded:bg-primary/15",
         // 中性淡底，跟 outline 的主色調分開：這個是「可重複執行的支援操作」，不代表主色。
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-muted aria-expanded:bg-muted",
+          "bg-secondary text-secondary-foreground hover:bg-secondary-hover aria-expanded:bg-secondary-hover",
         destructive:
           "bg-destructive-surface text-destructive hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         "destructive-solid":

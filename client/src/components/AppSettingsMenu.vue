@@ -18,7 +18,7 @@ function logout() { open.value = false; emit('logout'); }
 <template>
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
-      <Button v-if="iconOnly" variant="outline" size="icon" aria-label="開啟設定選單"><Settings class="h-4 w-4" /></Button>
+      <Button v-if="iconOnly" variant="secondary" size="icon" aria-label="開啟設定選單"><Settings class="h-4 w-4" /></Button>
       <button v-else type="button" class="flex min-h-11 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" aria-label="開啟設定選單"><Settings class="h-4 w-4" />設定</button>
     </PopoverTrigger>
     <PopoverContent :side="iconOnly ? 'bottom' : 'top'" :align="iconOnly ? 'end' : 'start'" class="w-64 p-2">

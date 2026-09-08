@@ -25,7 +25,7 @@ const props = defineProps({
   >
     <slot />
     <DialogClose v-if="showCloseButton" as-child>
-      <Button variant="outline"> 關閉 </Button>
+      <Button variant="secondary"> 關閉 </Button>
     </DialogClose>
   </div>
 </template>

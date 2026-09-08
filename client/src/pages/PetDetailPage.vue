@@ -518,7 +518,7 @@ watch(pet, async (value) => {
         </div>
         <template v-if="petEditing">
           <div class="flex shrink-0 gap-2">
-            <Button type="button" variant="outline" :disabled="petSaving" @click="cancelPetEdit"><X class="h-4 w-4" />取消</Button>
+            <Button type="button" variant="secondary" :disabled="petSaving" @click="cancelPetEdit"><X class="h-4 w-4" />取消</Button>
             <Button type="button" :disabled="petSaving" @click="submitPetEdit"><Check class="h-4 w-4" />{{ petSaving ? '儲存中…' : '儲存' }}</Button>
           </div>
         </template>
@@ -627,7 +627,7 @@ watch(pet, async (value) => {
           </div>
           <template v-if="ownerEditing">
             <div class="flex shrink-0 gap-2">
-              <Button type="button" variant="outline" :disabled="ownerSaving" @click="cancelOwnerEdit"><X class="h-4 w-4" />取消</Button>
+              <Button type="button" variant="secondary" :disabled="ownerSaving" @click="cancelOwnerEdit"><X class="h-4 w-4" />取消</Button>
               <Button type="button" :disabled="ownerSaving" @click="submitOwnerEdit"><Check class="h-4 w-4" />{{ ownerSaving ? '儲存中…' : '儲存' }}</Button>
             </div>
           </template>
@@ -721,7 +721,7 @@ watch(pet, async (value) => {
               <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <DatePicker v-model="editingNoteDate" aria-label="日期" class="w-40" :clearable="false" />
                 <div class="flex gap-2">
-                  <Button variant="outline" size="sm" @click="cancelEditNote">取消</Button>
+                  <Button variant="secondary" size="sm" @click="cancelEditNote">取消</Button>
                   <Button size="sm" :disabled="noteSaving" @click="saveEditNote(note)">儲存</Button>
                 </div>
               </div>
@@ -799,7 +799,7 @@ watch(pet, async (value) => {
             <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ formatDate(record.visitDate) }}</span>
             <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> · 第 {{ record.reportVersion }} 版</span></span>
             <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap"><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge></span>
-            <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的就診紀錄`" @select="(action) => handleRowAction(record, action)" /></span>
+            <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的就診紀錄`" @select="(action) => handleRowAction(record, action)" /></span>
           </div>
         </Card>
 
@@ -809,8 +809,8 @@ watch(pet, async (value) => {
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 text-xs text-muted-foreground">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
               <div class="flex shrink-0 items-center gap-1.5 text-sm">
-                <Button v-if="record.status === 'draft'" as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
-                <Button v-else as-child variant="outline" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
+                <Button v-if="record.status === 'draft'" as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
+                <Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
                 <RowActions
                   v-if="rowActions(record).length"
                   :actions="rowActions(record)"

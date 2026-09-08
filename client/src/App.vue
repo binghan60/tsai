@@ -155,7 +155,7 @@ watch(
         <header id="app-header" class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-4 sm:px-6 lg:hidden">
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             size="icon"
             class="min-w-11 lg:hidden"
             aria-label="開啟導覽選單"
@@ -170,7 +170,7 @@ watch(
 
           <Button
             type="button"
-            variant="outline"
+            variant="secondary"
             size="icon"
             class="min-w-11 md:hidden"
             aria-label="搜尋飼主、寵物或電話"

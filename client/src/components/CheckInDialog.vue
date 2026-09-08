@@ -75,7 +75,7 @@ const onSubmit = handleSubmit((values) => emit('submit', { ...values, isLate: pr
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="outline" class="px-5" @click="$emit('close')">取消</Button>
+        <Button type="button" variant="secondary" class="px-5" @click="$emit('close')">取消</Button>
         <Button type="submit" class="px-5" :disabled="submitting">{{ submitting ? '處理中…' : '確認報到' }}</Button>
       </DialogFooter>
     </form>

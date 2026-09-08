@@ -59,7 +59,7 @@ onMounted(fetchDashboard)
 <template>
   <section class="mx-auto max-w-7xl space-y-5 xl:flex xl:min-h-[calc(100vh-2.5rem)] xl:flex-col xl:space-y-3">
     <Alert v-if="error" variant="destructive">
-      <AlertDescription class="flex items-center justify-between gap-3"><span>{{ error }}</span><Button type="button" variant="outline" size="sm" :disabled="loading" @click="fetchDashboard">重新整理</Button></AlertDescription>
+      <AlertDescription class="flex items-center justify-between gap-3"><span>{{ error }}</span><Button type="button" variant="secondary" size="sm" :disabled="loading" @click="fetchDashboard">重新整理</Button></AlertDescription>
     </Alert>
     <ListSkeleton v-if="loading && !dashboard" :rows="7" />
 

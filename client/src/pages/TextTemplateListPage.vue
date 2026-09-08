@@ -361,7 +361,7 @@ onMounted(load);
           </div>
           <div class="flex min-h-12 items-center justify-between rounded-xl border border-border px-4"><span><span class="block text-sm font-medium text-foreground">啟用模板</span><span class="block text-xs text-muted-foreground">停用後不會出現在填表選擇介面。</span></span><Switch :model-value="form.enabled" aria-label="啟用模板" @update:model-value="form.enabled = $event" /></div>
         </div>
-        <DialogFooter><Button type="button" variant="outline" @click="editorOpen = false">取消</Button><Button type="submit" :disabled="saving">{{ saving ? '儲存中…' : '儲存模板' }}</Button></DialogFooter>
+        <DialogFooter><Button type="button" variant="secondary" @click="editorOpen = false">取消</Button><Button type="submit" :disabled="saving">{{ saving ? '儲存中…' : '儲存模板' }}</Button></DialogFooter>
       </form>
     </ModalDialog>
 

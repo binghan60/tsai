@@ -52,7 +52,7 @@ function close() {
         </div>
       </div>
       <DialogFooter>
-        <Button type="button" variant="outline" class="px-5" :disabled="loading" @click="close">
+        <Button type="button" variant="secondary" class="px-5" :disabled="loading" @click="close">
           {{ cancelLabel }}
         </Button>
         <Button type="button" :variant="destructive ? 'destructive-solid' : 'default'" class="px-5" :disabled="loading" @click="emit('confirm')">

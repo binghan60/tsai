@@ -388,8 +388,8 @@ watch(
     <section v-if="record" class="mx-auto max-w-[210mm] space-y-4 print:max-w-none print:space-y-0">
       <div class="sticky top-2 z-20 -mx-2 flex flex-col gap-2 rounded-xl border border-report-border bg-report-canvas/95 px-2 py-2 shadow-sm print:hidden sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div v-if="isPreview" class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <Button type="button" variant="outline" class="w-full border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted hover:text-report-foreground sm:w-auto" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
-          <Button type="button" variant="outline" class="w-full border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted hover:text-report-foreground sm:w-auto" @click="router.push('/records')"><List class="h-4 w-4" />回就診紀錄</Button>
+          <Button type="button" variant="secondary" class="w-full border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted hover:text-report-foreground sm:w-auto" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
+          <Button type="button" variant="secondary" class="w-full border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted hover:text-report-foreground sm:w-auto" @click="router.push('/records')"><List class="h-4 w-4" />回就診紀錄</Button>
         </div>
         <div v-else></div>
         <div class="flex w-full flex-wrap justify-start gap-2 sm:w-auto sm:justify-end">
@@ -459,7 +459,7 @@ watch(
         <p class="mt-2 break-all rounded-lg bg-report-canvas px-3 py-2 font-mono text-xs">{{ shareNotice.url }}</p>
         <p class="mt-2 text-xs text-report-muted">{{ shareExpiryNote }}</p>
         <div class="mt-3 flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" class="border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</Button>
+          <Button type="button" variant="secondary" size="sm" class="border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</Button>
         </div>
         <p v-if="!ownerEmail" class="mt-3 text-xs text-report-warning">這位飼主尚未填寫 Email，請先複製連結，再透過其他方式傳送。</p>
       </div>
