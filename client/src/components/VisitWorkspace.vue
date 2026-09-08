@@ -154,11 +154,11 @@ function resolveConflict(keepLocal) {
 }
 
 async function run(action, payload = {}) {
-  if (busy.value || conflicts.value.length) return;
+  if (busy.value || conflicts.value.length) return false;
   committing.value = true;
   try {
-    if (!await save()) return;
-    if (dirty.value && !await save()) return;
+    if (!await save()) return false;
+    if (dirty.value && !await save()) return false;
     busy.value = true;
     error.value = '';
     const { data } = await http.post(`/appointments/${props.appointment._id}/workflow/${action}`, {
@@ -169,8 +169,10 @@ async function run(action, payload = {}) {
     Object.assign(draft, clinicalDraft(data));
     emit('updated', data, action);
     if (action === 'record' && data.recordId) emit('open-record', data);
+    return true;
   } catch (err) {
     error.value = err.response?.data?.message || '操作失敗，請稍後重試';
+    return false;
   } finally {
     busy.value = false;
     committing.value = false;
@@ -186,13 +188,13 @@ function openReopenRequest() {
 
 async function requestReopen() {
   const reason = reopenReason.value.trim();
-  try {
-    await run('request-reopen', { reason });
-    reopenDialog.value = false;
-    toast.success('已送出修改申請，等待櫃台核准');
-  } catch (err) {
-    reopenError.value = err.response?.data?.message || '申請送出失敗，請稍後重試';
+  const submitted = await run('request-reopen', { reason });
+  if (!submitted) {
+    reopenError.value = error.value || '申請送出失敗，請稍後重試';
+    return;
   }
+  reopenDialog.value = false;
+  toast.success('已送出修改申請，等待櫃台核准');
 }
 
 // 自動存檔有 1.2 秒的 debounce，剛打完就重新整理／關分頁的話那段字還沒送出去。

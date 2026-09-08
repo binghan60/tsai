@@ -128,6 +128,10 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal(requested.status, 200);
     assert.equal(requested.body.reopenRequest.reason, '');
     assert.ok(requested.body.reopenRequest.requestedAt);
+
+    const duplicate = await post('request-reopen', { reason: '不應覆寫原申請' });
+    assert.equal(duplicate.status, 409);
+    assert.equal(store.get(id).reopenRequest.reason, '');
   });
   it('creates a draft only on demand and reopens the same linked draft', async () => {
     const first = await post('record');
