@@ -251,11 +251,12 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               { key: 'visiting', label: '看診中', list: visiting },
               { key: 'handoff', label: '已交櫃台', list: handedOff },
             ]" :key="group.key">
-              <button type="button" class="flex w-full items-center gap-2 px-2 pb-1.5 pt-3 text-left text-xs font-semibold text-muted-foreground" @click="toggleGroup(group.key)">
-                <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="collapsedGroups[group.key] ? '-rotate-90' : ''" />
-                {{ group.label }}<span class="font-normal">{{ group.list.length }}</span>
+              <button type="button" class="group flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-muted-foreground transition-colors hover:bg-field hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:bg-accent" :aria-expanded="!collapsedGroups[group.key]" @click="toggleGroup(group.key)">
+                <ChevronDown class="h-3.5 w-3.5 rounded-sm transition-transform group-hover:bg-card" :class="collapsedGroups[group.key] ? '-rotate-90' : ''" />
+                <span>{{ group.label }}</span><span class="font-normal">{{ group.list.length }}</span>
               </button>
-              <template v-if="!collapsedGroups[group.key]">
+              <Transition name="queue-collapse">
+              <div v-if="!collapsedGroups[group.key]" class="overflow-hidden">
               <p v-if="!group.list.length" class="px-2 pb-1 text-xs text-muted-foreground">目前沒有人</p>
               <div
                 v-for="item in group.list"
@@ -285,14 +286,16 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
                   <Undo2 class="h-4 w-4" />取回
                 </Button>
               </div>
-              </template>
+              </div>
+              </Transition>
             </template>
 
-            <button type="button" class="flex w-full items-center gap-2 px-2 pb-1.5 pt-4 text-left text-xs font-semibold text-muted-foreground" @click="toggleGroup('completed')">
-              <ChevronDown class="h-3.5 w-3.5 transition-transform" :class="collapsedGroups.completed ? '-rotate-90' : ''" />
+            <button type="button" class="group mt-2 flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-muted-foreground transition-colors hover:bg-field hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:bg-accent" :aria-expanded="!collapsedGroups.completed" @click="toggleGroup('completed')">
+              <ChevronDown class="h-3.5 w-3.5 rounded-sm transition-transform group-hover:bg-card" :class="collapsedGroups.completed ? '-rotate-90' : ''" />
               今日已完成<span class="font-normal">{{ finished.length }}</span>
             </button>
-            <template v-if="!collapsedGroups.completed">
+            <Transition name="queue-collapse">
+            <div v-if="!collapsedGroups.completed" class="overflow-hidden">
             <button
               v-for="item in finished"
               :key="item._id"
@@ -303,7 +306,8 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">✓</span>
               <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ item.petName }}</span>
             </button>
-            </template>
+            </div>
+            </Transition>
           </template>
         </div>
 
@@ -364,3 +368,32 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
     />
   </div>
 </template>
+
+<style scoped>
+.queue-collapse-enter-active,
+.queue-collapse-leave-active {
+  overflow: hidden;
+  transition: max-height 180ms ease, opacity 150ms ease, transform 180ms ease;
+}
+
+.queue-collapse-enter-from,
+.queue-collapse-leave-to {
+  max-height: 0;
+  opacity: 0;
+  transform: translateY(-0.25rem);
+}
+
+.queue-collapse-enter-to,
+.queue-collapse-leave-from {
+  max-height: 80rem;
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-collapse-enter-active,
+  .queue-collapse-leave-active {
+    transition: none;
+  }
+}
+</style>

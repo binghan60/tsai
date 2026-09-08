@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { ArrowRight, FileText, ShieldAlert, Undo2 } from '@lucide/vue';
 import { http } from '../api/http';
@@ -14,6 +14,7 @@ import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription } from './ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 // 醫師的單一病患工作區。刻意做成元件而不是獨立頁面：醫師常常同時追好幾隻動物
 // （等一隻的檢驗結果時先看下一隻），診療台會同時掛著好幾個這種工作區，
@@ -41,6 +42,9 @@ let timer;
 let disposed = false;
 let savePromise = null;
 let queued = null;
+const reasonElement = ref(null);
+const reasonOverflows = ref(false);
+let reasonResizeObserver;
 
 const state = computed(() => workflowState(props.appointment));
 // 櫃台按下「完成處理」之後這次就診結案，內容不再可改（伺服器也會擋）。
@@ -56,6 +60,10 @@ const petSummary = computed(() => {
     .filter(Boolean).join(' · ');
 });
 const hasReminders = computed(() => Boolean(pet.value?.allergies || pet.value?.chronicConditions || pet.value?.currentMedications));
+function updateReasonOverflow() {
+  const element = reasonElement.value;
+  reasonOverflows.value = Boolean(element && element.scrollWidth > element.clientWidth);
+}
 const CONFLICT_LABELS = {
   visitNote: '本次簡易紀錄', handoffNote: '給櫃台的交辦', specialCareNote: '請轉告飼主',
   followUpRecommendation: '回診建議', followUpReason: '回診原因', weightKg: '體重', temperatureC: '體溫',
@@ -78,6 +86,11 @@ function receive(incoming) {
   if (merged.conflicts.length) conflicts.value = [...new Set([...conflicts.value, ...merged.conflicts])];
 }
 watch(() => props.appointment, incoming => receive(incoming));
+watch(() => props.appointment.reason, async () => {
+  await nextTick();
+  if (reasonElement.value) reasonResizeObserver?.observe(reasonElement.value);
+  updateReasonOverflow();
+});
 
 async function loadContext() {
   pet.value = null;
@@ -204,11 +217,17 @@ onBeforeRouteLeave(async () => {
   return false;
 });
 
-onMounted(() => window.addEventListener('beforeunload', beforeUnload));
+onMounted(() => {
+  window.addEventListener('beforeunload', beforeUnload);
+  reasonResizeObserver = new ResizeObserver(updateReasonOverflow);
+  if (reasonElement.value) reasonResizeObserver.observe(reasonElement.value);
+  updateReasonOverflow();
+});
 onBeforeUnmount(() => {
   disposed = true;
   clearTimeout(timer);
   window.removeEventListener('beforeunload', beforeUnload);
+  reasonResizeObserver?.disconnect();
 });
 </script>
 
@@ -220,7 +239,7 @@ onBeforeUnmount(() => {
         <span class="text-sm text-muted-foreground">{{ petSummary }}</span>
         <div v-if="appointment.reason" class="ml-auto flex min-w-0 items-center gap-2 border-l-2 border-primary pl-3 text-left sm:max-w-[22rem]">
           <span class="shrink-0 text-xs font-semibold text-primary">來院原因</span>
-          <span class="truncate text-sm font-semibold text-foreground" :title="appointment.reason">{{ appointment.reason }}</span>
+          <span class="truncate text-sm font-semibold text-foreground">{{ appointment.reason }}</span>
         </div>
       </div>
       <p class="sr-only">
@@ -240,7 +259,16 @@ onBeforeUnmount(() => {
         </section>
         <section v-if="appointment.reason" class="min-w-0 rounded-lg border border-primary/30 bg-primary/5 p-3">
           <p class="text-xs font-semibold text-primary">來院原因</p>
-          <p class="mt-0.5 truncate text-sm font-semibold text-foreground" :title="appointment.reason">{{ appointment.reason }}</p>
+          <TooltipProvider :delay-duration="300">
+            <Tooltip :disabled="!reasonOverflows">
+              <TooltipTrigger :as-child="true">
+                <p ref="reasonElement" class="mt-0.5 truncate text-sm font-semibold text-foreground">{{ appointment.reason }}</p>
+              </TooltipTrigger>
+              <TooltipContent v-if="reasonOverflows" side="bottom" align="start">
+                {{ appointment.reason }}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </section>
       </div>
 
