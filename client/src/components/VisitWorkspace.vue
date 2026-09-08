@@ -254,8 +254,10 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+      <div class="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
         <div class="space-y-4">
+          <section class="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
+            <h3 class="border-b border-border pb-3 text-sm font-semibold">本次簡易紀錄</h3>
           <div class="grid grid-cols-2 gap-3">
             <label class="space-y-1.5 text-xs font-medium">體重（kg）
               <Input v-model="draft.weightKg" type="number" min="0" step="0.01" :disabled="!editable || committing" />
@@ -268,6 +270,8 @@ onBeforeUnmount(() => {
             <span class="flex items-center gap-2 text-xs font-medium">本次簡易紀錄<span class="ml-auto font-normal text-muted-foreground">自動存入病歷日誌</span></span>
             <Textarea v-model="draft.visitNote" rows="12" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" />
           </label>
+
+          </section>
 
           <section class="rounded-xl border border-border bg-field/60 p-4">
             <div class="flex items-center justify-between gap-2">
@@ -284,7 +288,8 @@ onBeforeUnmount(() => {
           </section>
         </div>
 
-        <div class="space-y-4">
+        <section class="h-full space-y-4 rounded-xl border border-border bg-field/40 p-4 sm:p-5">
+          <h3 class="border-b border-border pb-3 text-sm font-semibold">交辦與後續追蹤</h3>
           <label class="block space-y-1.5">
             <span class="text-xs font-medium">給櫃台的交辦（收費與領藥）</span>
             <Textarea v-model="draft.handoffNote" rows="6" maxlength="1000" :disabled="!editable || committing" placeholder="例如：診察費 ＋ 胸腔 X 光兩張、止咳藥水 30ml（已包好）" />
@@ -298,15 +303,15 @@ onBeforeUnmount(() => {
             <Textarea v-model="draft.followUpRecommendation" rows="2" maxlength="500" :disabled="!editable || committing" placeholder="例如：兩週後回診複查胸腔 X 光" />
           </label>
 
-        </div>
+        </section>
       </div>
     </div>
 
     <footer class="flex flex-wrap items-center gap-3 border-t border-border bg-field/40 px-5 py-3 sm:px-6">
       <p class="text-xs text-muted-foreground" role="status">{{ savedLabel }}</p>
       <div class="ml-auto flex flex-wrap gap-2">
-        <Button v-if="appointment.recordId" variant="secondary" :disabled="busy" @click="emit('open-record', appointment)">
-          <FileText class="h-4 w-4" />開啟表單草稿
+        <Button variant="secondary" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')">
+          <FileText class="h-4 w-4" />{{ appointment.recordId ? '開啟表單草稿' : '建立表單草稿' }}
         </Button>
         <Button v-if="state.completed" variant="secondary" :disabled="busy || !!appointment.reopenRequest?.requestedAt" @click="openReopenRequest">
           {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
