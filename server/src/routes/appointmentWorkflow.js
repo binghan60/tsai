@@ -8,7 +8,7 @@ import { withTransaction } from '../lib/transaction.js';
 import { combineClinicDateTime } from '../lib/clinicTime.js';
 import { defaultRecordFields } from '../lib/formTemplate.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
-import { applyWorkflowAction, assertWorkflowVersion, workflowError } from '../lib/appointmentWorkflow.js';
+import { applyWorkflowAction, appointmentJournalContent, assertWorkflowVersion, workflowError } from '../lib/appointmentWorkflow.js';
 
 const router = Router({ mergeParams: true });
 
@@ -44,11 +44,12 @@ router.post('/:action', async (req, res, next) => {
       assertWorkflowVersion(appointment, req.body.version);
       applyWorkflowAction(appointment, action, req.body);
 
-      if (action === 'clinical' && req.body.visitNote !== undefined) {
-        if (appointment.visitNote) {
+      if (action === 'clinical' && ['visitNote', 'weightKg', 'temperatureC'].some(key => req.body[key] !== undefined)) {
+        const journalContent = appointmentJournalContent(appointment);
+        if (journalContent) {
           await ClinicalNote.findOneAndUpdate({ appointmentId: appointment._id }, { $set: {
             petId: appointment.petId,
-            content: appointment.visitNote,
+            content: journalContent,
             entryDate: combineClinicDateTime(appointment.date, '10:00'),
             source: 'appointment',
           } }, { upsert: true, runValidators: true, session });

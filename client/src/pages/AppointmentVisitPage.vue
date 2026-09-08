@@ -7,9 +7,8 @@ import { useToast } from '../composables/useToast';
 import { useClinicSync } from '../composables/useClinicSync';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { clinicalDraft, draftPatch, mergeClinicalUpdate } from '../lib/visitDraft';
-import { formatDateTime } from '../lib/datetime';
+import { ageLabel, formatDateTime } from '../lib/datetime';
 import AppointmentMilestones from '../components/AppointmentMilestones.vue';
-import AppointmentBillingEditor from '../components/AppointmentBillingEditor.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -43,6 +42,10 @@ const state = computed(() => workflowState(appointment.value || {}));
 const editable = computed(() => appointment.value && ['arrived', 'pending_checkout', 'completed'].includes(appointment.value.status));
 const dirty = computed(() => Object.keys(draftPatch(draft, baseline.value)).length > 0);
 const backTo = computed(() => typeof route.query.returnTo === 'string' && /^\/(appointments|reception)(\?|$)/.test(route.query.returnTo) ? route.query.returnTo : '/appointments');
+const owner = computed(() => typeof pet.value?.ownerId === 'object' ? pet.value.ownerId : null);
+const petSex = computed(() => ({ male: '公', female: '母' })[pet.value?.sex] || '未填');
+const petNeutered = computed(() => ({ yes: '已絕育', no: '未絕育' })[pet.value?.neutered] || '未填');
+const petAge = computed(() => ageLabel(pet.value?.birthDate, new Date(), '未填'));
 const conflictLabels = { visitNote: '簡易紀錄', handoffNote: '櫃台交辦', specialCareNote: '飼主提醒', followUpRecommendation: '回診建議', followUpReason: '回診原因', billingItems: '處方與費用', weightKg: '體重', temperatureC: '體溫' };
 function receive(incoming) {
   if (disposed || incoming._id !== id) return;
@@ -165,7 +168,12 @@ onBeforeUnmount(() => { disposed = true; clearTimeout(timer); window.removeEvent
     <p v-if="error" role="alert" class="rounded-xl bg-danger-surface p-4 text-sm text-danger">{{ error }}</p>
     <template v-if="appointment">
       <header class="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-border bg-card p-5">
-        <div class="space-y-2"><p class="text-xs text-muted-foreground">{{ appointment.date }} {{ appointment.time }} · {{ pet?.medicalRecordNumber || '就診資料' }}</p><h1 class="text-2xl font-bold">{{ appointment.petName }} <span class="text-base font-normal text-muted-foreground">{{ appointment.species }} · {{ appointment.ownerName }}</span></h1><p class="text-sm">{{ appointment.reason || '未填就診原因' }}</p><AppointmentMilestones :appointment="appointment" /></div>
+        <div class="min-w-0 flex-1 space-y-3"><div class="space-y-2"><p class="text-xs text-muted-foreground">{{ appointment.date }} {{ appointment.time }} · {{ pet?.medicalRecordNumber || '就診資料' }}</p><h1 class="text-2xl font-bold">{{ appointment.petName }} <span class="text-base font-normal text-muted-foreground">{{ appointment.species }} · {{ appointment.ownerName }}</span></h1><p class="text-sm">{{ appointment.reason || '未填就診原因' }}</p><AppointmentMilestones :appointment="appointment" /></div>
+          <div class="grid gap-4 border-t border-border pt-3 lg:grid-cols-2">
+            <section class="rounded-xl bg-field p-3"><h2 class="text-sm font-semibold">寵物資料</h2><dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm"><div><dt class="text-xs text-muted-foreground">病歷號</dt><dd class="mt-0.5 font-medium">{{ pet?.medicalRecordNumber || '—' }}</dd></div><div><dt class="text-xs text-muted-foreground">品種</dt><dd class="mt-0.5 font-medium">{{ pet?.breed || '未填' }}</dd></div><div><dt class="text-xs text-muted-foreground">性別／絕育</dt><dd class="mt-0.5 font-medium">{{ petSex }}／{{ petNeutered }}</dd></div><div><dt class="text-xs text-muted-foreground">年齡</dt><dd class="mt-0.5 font-medium">{{ petAge }}</dd></div></dl></section>
+            <section class="rounded-xl bg-field p-3"><h2 class="text-sm font-semibold">飼主資料</h2><dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm"><div><dt class="text-xs text-muted-foreground">姓名</dt><dd class="mt-0.5 font-medium">{{ owner?.name || appointment.ownerName || '—' }}</dd></div><div><dt class="text-xs text-muted-foreground">電話</dt><dd class="mt-0.5 font-medium">{{ owner?.phone || appointment.ownerPhone || '—' }}</dd></div><div><dt class="text-xs text-muted-foreground">電子信箱</dt><dd class="mt-0.5 break-all font-medium">{{ owner?.email || '未填' }}</dd></div><div><dt class="text-xs text-muted-foreground">地址</dt><dd class="mt-0.5 font-medium">{{ owner?.address || '未填' }}</dd></div></dl></section>
+          </div>
+        </div>
         <Button v-if="editable && !state.started && !state.visited" :disabled="busy" @click="run('start')">開始看診</Button>
       </header>
       <p v-if="!editable" class="rounded-lg bg-warning-surface p-3 text-sm text-warning">此筆就診尚未報到或已取消，目前僅供查看。請由櫃台處理報到。</p>
@@ -185,7 +193,7 @@ onBeforeUnmount(() => { disposed = true; clearTimeout(timer); window.removeEvent
             </div>
             <div class="grid grid-cols-2 gap-3"><label class="space-y-1 text-sm">體重（kg）<Input v-model="draft.weightKg" type="number" min="0" step="0.01" :disabled="!editable || committing" /></label><label class="space-y-1 text-sm">體溫（°C）<Input v-model="draft.temperatureC" type="number" min="0" step="0.1" :disabled="!editable || committing" /></label></div>
             <label class="block space-y-2 text-sm font-medium">本次簡易紀錄<Textarea v-model="draft.visitNote" rows="7" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" /></label>
-            <p class="text-xs text-muted-foreground">自動儲存至寵物的病歷日誌；後續編輯會更新同一筆紀錄。</p>
+            <p class="text-xs text-muted-foreground">請在此記錄本次看診與批價資訊；內容會自動儲存至寵物的病歷日誌，後續編輯會更新同一筆紀錄。</p>
           </section>
           <section class="space-y-4 rounded-2xl border border-border bg-card p-5">
             <div class="flex items-center justify-between gap-2"><h2 class="text-lg font-semibold">歷次病歷日誌</h2><Button v-if="appointment.petId" as-child variant="secondary" size="sm"><router-link :to="`/pets/${appointment.petId}`">完整病歷</router-link></Button></div>
@@ -199,13 +207,9 @@ onBeforeUnmount(() => { disposed = true; clearTimeout(timer); window.removeEvent
           </section>
         </div>
         <aside class="space-y-5 rounded-2xl border border-border bg-card p-5">
-          <h2 class="text-lg font-semibold">批價與交接摘要</h2>
-          <section class="space-y-3"><h3 class="font-medium">處方與費用</h3><AppointmentBillingEditor v-model:items="draft.billingItems" :disabled="!editable || state.billed || busy" />
-            <p v-if="state.paid" class="rounded-lg bg-success-surface p-3 text-sm text-success">已收款 NT$ {{ appointment.checkoutTotal }} · 費用與處方已鎖定</p>
-            <div v-else-if="state.billed" class="space-y-2 rounded-lg bg-info-surface p-3 text-sm"><p>批價已送交櫃台。需要修改費用或處方時，先撤回批價。</p><Button variant="secondary" size="sm" :disabled="busy" @click="confirming = 'unbill'">撤回批價</Button></div>
-          </section>
-          <section class="space-y-3 border-t border-border pt-4"><h3 class="font-medium">交接事項</h3><label class="block space-y-1 text-sm">櫃台交辦<Textarea v-model="draft.handoffNote" :disabled="!editable || committing" maxlength="1000" placeholder="例如：本次批價已含換藥費" /></label><label class="block space-y-1 text-sm">請轉告飼主<Textarea v-model="draft.specialCareNote" :disabled="!editable || committing" maxlength="500" placeholder="照護或用藥注意事項" /></label><p v-if="appointment.handoffAcknowledgedAt" class="text-xs text-success">櫃台已完成交辦</p></section>
-          <section class="space-y-3 border-t border-border pt-4"><h3 class="font-medium">回診需求</h3><label class="block space-y-1 text-sm">建議期間<Input v-model="draft.followUpRecommendation" :disabled="!editable || committing" maxlength="500" placeholder="例如：7 天後回診；不需回診可留白" /></label><label class="block space-y-1 text-sm">回診原因<Input v-model="draft.followUpReason" :disabled="!editable || committing" placeholder="例如：追蹤傷口恢復" /></label><p class="text-xs text-muted-foreground">櫃台會與飼主確認實際預約時段。</p><p v-if="appointment.followUpAppointmentId" class="text-sm text-success">已安排 {{ appointment.followUpDate }} {{ appointment.followUpTime }}</p></section>
+          <h2 class="text-lg font-semibold">交接與回診</h2>
+          <section class="space-y-3"><h3 class="font-medium">交接事項</h3><label class="block space-y-1 text-sm">櫃台交辦<Textarea v-model="draft.handoffNote" :disabled="!editable || committing" maxlength="1000" placeholder="例如：請依本次簡易紀錄處理批價" /></label><label class="block space-y-1 text-sm">請轉告飼主<Textarea v-model="draft.specialCareNote" :disabled="!editable || committing" maxlength="500" placeholder="照護或用藥注意事項" /></label><p v-if="appointment.handoffAcknowledgedAt" class="text-xs text-success">櫃台已完成交辦</p></section>
+          <section class="space-y-3 border-t border-border pt-4"><h3 class="font-medium">回診需求</h3><Textarea v-model="draft.followUpRecommendation" :disabled="!editable || committing" maxlength="500" rows="4" placeholder="例如：7 天後回診追蹤傷口恢復" /><p class="text-xs text-muted-foreground">櫃台會與飼主確認實際預約時段。</p><p v-if="appointment.followUpAppointmentId" class="text-sm text-success">已安排 {{ appointment.followUpDate }} {{ appointment.followUpTime }}</p></section>
         </aside>
       </div>
       <footer class="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 rounded-t-xl border border-border bg-card p-4 shadow-sm">

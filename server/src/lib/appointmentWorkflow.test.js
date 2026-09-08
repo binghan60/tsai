@@ -1,9 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyWorkflowAction, assertWorkflowVersion } from './appointmentWorkflow.js';
+import { applyWorkflowAction, appointmentJournalContent, assertWorkflowVersion } from './appointmentWorkflow.js';
 import { workflowState, workflowFilter } from '../../../shared/appointmentWorkflow.js';
 
 const appointment = () => ({ __v: 0, status: 'arrived', petId: 'pet-1', checkinNumber: 3, checkinNumberHistory: [3], billingSubtotal: 850 });
+test('appointment journal combines the simple note with this visit’s measurements', () => {
+  assert.equal(appointmentJournalContent({ visitNote: '皮膚狀況穩定', weightKg: 4.2, temperatureC: 38.5 }), '體重：4.2 kg　體溫：38.5 °C\n\n皮膚狀況穩定');
+  assert.equal(appointmentJournalContent({ visitNote: '', weightKg: null, temperatureC: 38.1 }), '體溫：38.1 °C');
+});
 test('billing and payment can finish before the visit; only the last milestone releases the queue number', () => {
   const p = appointment();
   applyWorkflowAction(p, 'bill', {});
