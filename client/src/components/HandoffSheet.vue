@@ -9,7 +9,7 @@ import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { DatePicker } from './ui/date-picker';
 import { TimePicker } from './ui/time-picker';
-import { Sheet, SheetContent, SheetTitle, SheetDescription } from './ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 
 // 櫃台處理醫師交辦的面板。段落順序刻意是「請轉告飼主 → 醫師交辦 → 病歷內容收起 → 回診」，
 // 那就是櫃台當面對客人講話的順序；轉告事項最容易漏掉，所以放最上面並用警示底色。
@@ -78,17 +78,18 @@ async function approveReopen() {
 </script>
 
 <template>
-  <Sheet :open="true" @update:open="value => !value && close()">
-    <SheetContent
+  <Dialog :open="true" @update:open="value => !value && close()">
+    <DialogContent
+      size="lg"
       :show-close-button="false"
-      class="gap-0 bg-card data-[side=right]:w-full data-[side=right]:sm:max-w-[36rem]"
+      class="h-[min(90vh,52rem)] gap-0 bg-card p-0 sm:max-w-[36rem]"
       @escape-key-down="event => busy && event.preventDefault()"
-      @interact-outside="event => busy && event.preventDefault()"
+      @pointer-down-outside="event => busy && event.preventDefault()"
     >
       <div class="flex h-full min-h-0 flex-col">
         <header class="shrink-0 border-b border-border px-5 pb-4 pt-5 sm:px-6">
           <div class="mb-3 flex items-center justify-between gap-3">
-            <SheetDescription class="text-xs">就診詳情 · {{ appointment.date }} {{ appointment.time || '未指定時間' }}</SheetDescription>
+            <DialogDescription class="text-xs">就診詳情 · {{ appointment.date }} {{ appointment.time || '未指定時間' }}</DialogDescription>
             <Button variant="secondary" size="icon-sm" aria-label="關閉就診詳情" :disabled="busy" @click="close"><X class="h-4 w-4" /></Button>
           </div>
           <div class="flex items-center gap-3">
@@ -96,9 +97,9 @@ async function approveReopen() {
               {{ appointment.checkinNumber ?? '—' }}
             </span>
             <div class="min-w-0 flex-1">
-              <SheetTitle class="text-xl font-semibold">
+              <DialogTitle class="text-xl font-semibold">
                 {{ appointment.petName }}<span class="ml-2 text-sm font-normal text-muted-foreground">{{ appointment.species }}</span>
-              </SheetTitle>
+              </DialogTitle>
               <p class="text-xs text-muted-foreground">{{ appointment.ownerName || '飼主待確認' }}</p>
             </div>
             <a
@@ -178,6 +179,6 @@ async function approveReopen() {
           </div>
         </footer>
       </div>
-    </SheetContent>
-  </Sheet>
+    </DialogContent>
+  </Dialog>
 </template>
