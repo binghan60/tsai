@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, Search, UserCheck } from '@lucide/vue';
+import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, UserCheck } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
 import { useClinicSync } from '../composables/useClinicSync';
@@ -16,9 +16,9 @@ import EditAppointmentDialog from '../components/EditAppointmentDialog.vue';
 import CheckInDialog from '../components/CheckInDialog.vue';
 import CancelAppointmentDialog from '../components/CancelAppointmentDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import FilterBar from '../components/FilterBar.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { DatePicker } from '../components/ui/date-picker';
 
@@ -198,10 +198,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
         <p class="mt-0.5 text-xs text-muted-foreground">報到、交辦處理與回診安排</p>
       </div>
       <div class="ml-auto flex flex-wrap items-center gap-2">
-        <div class="relative w-56">
-          <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input v-model="search" class="pl-9" placeholder="病患、飼主、電話" aria-label="搜尋診務" />
-        </div>
+        <FilterBar id="reception-search" v-model="search" label="搜尋診務" placeholder="病患、飼主、電話" class="w-72" />
         <Button variant="secondary" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft class="h-4 w-4" /></Button>
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
         <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
