@@ -440,6 +440,15 @@ router.post('/:id/check-in', async (req, res, next) => {
       if (!String(req.body.petName || '').trim()) return res.status(422).json({ message: '請填寫寵物姓名' });
     }
 
+    const isLate = Boolean(req.body?.isLate);
+    const scheduledAt = new Date(appointment.scheduledAt);
+    const lateAt = String(req.body?.lateAt || '');
+    if (isLate && lateAt && !/^\d{2}:\d{2}$/.test(lateAt)) return res.status(422).json({ message: '實際到院時間格式不正確' });
+    const arrivalAt = isLate && lateAt ? combineClinicDateTime(appointment.date, lateAt) : new Date();
+    const latenessMinutes = isLate && !Number.isNaN(scheduledAt.getTime())
+      ? Math.max(0, Math.floor((arrivalAt.getTime() - scheduledAt.getTime()) / 60000))
+      : 0;
+    if (isLate && latenessMinutes < 1) return res.status(422).json({ message: '尚未超過預約時間，請使用一般報到' });
     const originalNumberHistory = Array.from(appointment.checkinNumberHistory ?? []);
     await withQueueRetry(() => withTransaction(async (session) => {
       // transaction 因併發牌號衝突重試時，不能把失敗那次尚未發出的候選號留進 history。
@@ -468,6 +477,7 @@ router.post('/:id/check-in', async (req, res, next) => {
 
       appointment.status = 'arrived';
       appointment.checkedInAt = new Date();
+      appointment.latenessMinutes = latenessMinutes;
       appointment.checkinNumber = nextAvailableCheckinNumber(issuedAppointments);
       rememberCheckinNumber(appointment, appointment.checkinNumber);
       await appointment.save({ session });

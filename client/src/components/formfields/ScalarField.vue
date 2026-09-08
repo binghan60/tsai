@@ -4,6 +4,7 @@ import FieldShell from './FieldShell.vue';
 import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { DatePicker } from '../ui/date-picker';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 
 // 文字／多行／日期／數字／下拉／單選／複選這幾種一般欄位共用同一個元件，
@@ -20,7 +21,7 @@ const value = computed({
   get: () => props.modelValue ?? '',
   set: (next) => emit('update:modelValue', next),
 });
-const inputType = computed(() => (props.item.type === 'date' ? 'date' : 'text'));
+const inputType = computed(() => (props.item.type === 'number' ? 'number' : 'text'));
 const inputMode = computed(() => (props.item.type === 'number' ? 'decimal' : undefined));
 // 空字串在 Select 裡是保留值（代表「沒有選取」），拿它當選項會直接拋錯 ——
 // 表單設計器新增選項時會先產生一列空白，這裡要擋住。
@@ -108,6 +109,13 @@ function toggle(option, checked) {
       />
       <TextTemplateTrigger v-model="value" :item-key="item.key" :label="item.label" :input-id="inputId" centered />
     </div>
+    <DatePicker
+      v-else-if="item.type === 'date'"
+      :id="inputId"
+      v-model="value"
+      :aria-label="item.label"
+      :placeholder="item.placeholder || '選擇日期'"
+    />
     <Input
       v-else
       :id="inputId"

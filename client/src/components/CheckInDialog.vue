@@ -1,4 +1,5 @@
 <script setup>
+import { computed, ref } from 'vue';
 import { useForm, useField } from 'vee-validate';
 import { UserCheck } from '@lucide/vue';
 import ModalDialog from './ModalDialog.vue';
@@ -7,15 +8,18 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
+import { clinicTimeInput } from '../lib/datetime';
 
 const props = defineProps({
   appointment: { type: Object, required: true },
+  late: { type: Boolean, default: false },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
 });
 const emit = defineEmits(['submit', 'close']);
 
 const requiredRule = (value) => (value && String(value).trim() !== '') || '必填';
+const patientFieldRule = (value) => props.appointment.petId || requiredRule(value);
 const { handleSubmit } = useForm({
   initialValues: {
     ownerName: props.appointment.ownerName || '',
@@ -23,11 +27,13 @@ const { handleSubmit } = useForm({
     petName: props.appointment.petName || '',
   },
 });
-const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName', requiredRule);
-const { value: ownerPhone, errorMessage: ownerPhoneError } = useField('ownerPhone', requiredRule);
-const { value: petName, errorMessage: petNameError } = useField('petName', requiredRule);
+const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName', patientFieldRule);
+const { value: ownerPhone, errorMessage: ownerPhoneError } = useField('ownerPhone', patientFieldRule);
+const { value: petName, errorMessage: petNameError } = useField('petName', patientFieldRule);
+const lateAt = ref(clinicTimeInput(new Date()));
+const latenessMinutes = computed(() => Math.max(0, Math.floor((new Date(`${props.appointment.date}T${lateAt.value}`).getTime() - new Date(props.appointment.scheduledAt).getTime()) / 60000)));
 
-const onSubmit = handleSubmit((values) => emit('submit', values));
+const onSubmit = handleSubmit((values) => emit('submit', { ...values, isLate: props.late, lateAt: lateAt.value }));
 </script>
 
 <template>
@@ -44,22 +50,22 @@ const onSubmit = handleSubmit((values) => emit('submit', values));
 
     <form class="flex flex-col" @submit.prevent="onSubmit">
       <div class="space-y-4 p-6 pt-3 sm:p-7 sm:pt-3">
-        <div class="space-y-1.5">
+        <div v-if="!appointment.petId" class="space-y-1.5">
           <Label for="checkin-owner-name" class="text-xs font-medium text-foreground">飼主姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <Input id="checkin-owner-name" v-model="ownerName" class="border-border" autofocus />
           <p v-if="ownerNameError" class="text-xs font-medium text-destructive">{{ ownerNameError }}</p>
         </div>
-        <div class="space-y-1.5">
+        <div v-if="!appointment.petId" class="space-y-1.5">
           <Label for="checkin-owner-phone" class="text-xs font-medium text-foreground">聯絡電話<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <Input id="checkin-owner-phone" v-model="ownerPhone" class="border-border" />
           <p v-if="ownerPhoneError" class="text-xs font-medium text-destructive">{{ ownerPhoneError }}</p>
         </div>
-        <div class="space-y-1.5">
+        <div v-if="!appointment.petId" class="space-y-1.5">
           <Label for="checkin-pet-name" class="text-xs font-medium text-foreground">寵物姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <Input id="checkin-pet-name" v-model="petName" class="border-border" />
           <p v-if="petNameError" class="text-xs font-medium text-destructive">{{ petNameError }}</p>
         </div>
-
+        <div v-if="late" class="space-y-2 rounded-xl bg-warning-surface p-3 text-sm text-warning"><label class="block space-y-1.5 font-medium">實際到院時間<Input v-model="lateAt" type="time" step="60" /></label><p>將依此時間記錄遲到 {{ latenessMinutes }} 分鐘。</p></div>
         <Alert v-if="errorMessage" variant="destructive" class="mt-2">
           <AlertDescription>{{ errorMessage }}</AlertDescription>
         </Alert>

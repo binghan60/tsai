@@ -16,6 +16,8 @@ const state = computed(() => workflowState(props.appointment));
 const additional = computed(() => {
   if (!props.desk || props.busy) return [];
   if (props.appointment.status === 'scheduled') return [
+    { key: 'check-in-late', label: '遲到報到' },
+    { key: 'no-show', label: '標記未到' },
     { key: 'edit', label: '修改預約' },
     { key: 'cancel', label: '取消掛號', danger: true },
   ];
@@ -32,7 +34,6 @@ const additional = computed(() => {
     <template v-if="desk">
       <template v-if="appointment.status === 'scheduled'">
         <Button size="sm" variant="secondary" :disabled="busy" @click="emit('admin', 'check-in')"><UserCheck class="h-4 w-4" />報到</Button>
-        <Button size="sm" variant="secondary" :disabled="busy" @click="emit('admin', 'no-show')">未到</Button>
       </template>
       <template v-else-if="['cancelled', 'no_show'].includes(appointment.status)">
         <Button size="sm" variant="secondary" :disabled="busy" @click="emit('admin', 'restore')">恢復預約</Button>

@@ -320,6 +320,7 @@ describe('appointments routes', () => {
       status: 'scheduled',
       petId: 'pet-1',
       date: '2026-08-26',
+      scheduledAt: new Date(Date.now() - 12 * 60 * 1000),
       checkinNumber: null,
       checkedInAt: null,
       save: async () => {},
@@ -337,12 +338,13 @@ describe('appointments routes', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         // 初次牌號由後端配發，body 偷帶號碼不影響。
-        body: JSON.stringify({ checkinNumber: 1 }),
+        body: JSON.stringify({ checkinNumber: 1, isLate: true }),
       });
       assert.equal(response.status, 200);
       assert.equal(appointment.status, 'arrived');
       assert.equal(appointment.visitType, 'return');
       assert.equal(appointment.checkinNumber, 3);
+      assert.equal(appointment.latenessMinutes, 12);
       assert.deepEqual(appointment.checkinNumberHistory, [3]);
       // 實體牌號只寫在剛報到的人身上，不重編前面兩人的牌。
       assert.equal(queue.phases, 0);

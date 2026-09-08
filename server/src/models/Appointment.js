@@ -60,6 +60,7 @@ const appointmentSchema = new mongoose.Schema(
     checkinNumberHistory: { type: [Number], default: [] },
     // 實際完成報到的時間。取消報到後清除，再次報到時重新記錄。
     checkedInAt: { type: Date, default: null },
+    latenessMinutes: { type: Number, default: 0, min: 0, max: 1440 },
 
     // 報到後量測的生命徵象，供候診時就地填寫的簡易門診表單使用；不回填任何 MedicalRecord，
     // 避免跟健檢報告的欄位混為一談（健檢表單類型只能在建立報告當下選一次，不存在

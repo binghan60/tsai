@@ -56,6 +56,7 @@ const templates = ref([]);
 const defaultTemplate = ref('');
 const dialog = ref(null);
 const target = ref(null);
+const lateCheckIn = ref(false);
 const busy = ref(false);
 const dialogError = ref('');
 const confirmation = ref(null);
@@ -138,8 +139,7 @@ function admin(kind, p = activePatient.value) {
   target.value = p;
   dialogError.value = '';
   if (['new', 'edit', 'cancel'].includes(kind)) { dialog.value = kind; return; }
-  if (kind === 'check-in' && !p.petId) { dialog.value = kind; return; }
-  if (kind === 'check-in') { submit({}, kind); return; }
+  if (['check-in', 'check-in-late'].includes(kind)) { lateCheckIn.value = kind === 'check-in-late'; dialog.value = 'check-in'; return; }
   confirmation.value = { kind, title: kind === 'no-show' ? '標記這筆預約未到？' : '恢復為待報到？' };
 }
 async function submit(values, kind = dialog.value) {
@@ -154,6 +154,7 @@ async function submit(values, kind = dialog.value) {
     else response = await http.post(`/appointments/${target.value._id}/${kind}`, values);
     updated(response.data);
     dialog.value = null;
+    lateCheckIn.value = false;
     confirmation.value = null;
     toast.success('診務資料已更新');
   } catch (err) {
@@ -256,7 +257,7 @@ onBeforeUnmount(() => { ++request; clearInterval(clockTimer); });
     <AppointmentDeskPanel v-if="desk && activePatient" :key="activePatient._id" :appointment="activePatient" :initial-section="detailSection" @updated="updated" @admin="admin" @close="closeDetails" />
     <NewAppointmentDialog v-if="dialog === 'new'" :date="date" :is-today="date === clinicDateInput()" :templates="templates" :default-template-id="defaultTemplate" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = null" />
     <EditAppointmentDialog v-if="dialog === 'edit'" :appointment="target" :templates="templates" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = null" />
-    <CheckInDialog v-if="dialog === 'check-in'" :appointment="target" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = null" />
+    <CheckInDialog v-if="dialog === 'check-in'" :appointment="target" :late="lateCheckIn" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = null" />
     <CancelAppointmentDialog v-if="dialog === 'cancel'" :appointment="target" :submitting="busy" :error-message="dialogError" @submit="reason => submit({ cancelReason: reason })" @close="dialog = null" />
     <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :description="`病患：${target.petName}`" :loading="busy" @confirm="submit({}, confirmation.kind)" @cancel="confirmation = null" />
   </div>
