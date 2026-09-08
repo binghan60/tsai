@@ -35,8 +35,24 @@ const defaultTemplate = ref('');
 const newOpen = ref(false);
 const newError = ref('');
 // 同時開著的病患。順序就是分頁列的順序，各自的未儲存輸入留在各自的工作區元件裡。
-const openIds = ref([]);
-const activeId = ref('');
+//
+// 存進 localStorage 是必要的：診間電腦被重新整理、當掉重開、或不小心關掉分頁時，
+// 醫師手上那幾隻動物不能跟著消失——留在畫面上的工作區就是他的待辦清單。
+// 綁 date 是因為換日期本來就會清空分頁，隔天開機也不該還原昨天的病患。
+const TABS_STORAGE_KEY = 'clinic.vetConsoleTabs';
+function restoreTabs(forDate) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TABS_STORAGE_KEY) || 'null');
+    if (!saved || saved.date !== forDate) return { openIds: [], activeId: '' };
+    return {
+      openIds: Array.isArray(saved.openIds) ? saved.openIds.map(String) : [],
+      activeId: String(saved.activeId || ''),
+    };
+  } catch { return { openIds: [], activeId: '' }; }
+}
+const restored = restoreTabs(date.value);
+const openIds = ref(restored.openIds);
+const activeId = ref(restored.activeId);
 const now = ref(Date.now());
 let clock;
 let request = 0;
@@ -88,6 +104,12 @@ function applyUpdate(item) {
 }
 
 const { connected } = useClinicSync(date, refresh, applyUpdate);
+
+// 重新整理要回到原本開著的那幾筆，所以每次分頁增減／切換都寫回去。
+watch([openIds, activeId, date], () => {
+  try { localStorage.setItem(TABS_STORAGE_KEY, JSON.stringify({ date: date.value, openIds: openIds.value, activeId: activeId.value })); }
+  catch { /* 無痕視窗或停用儲存時就只是不還原，不影響看診。 */ }
+}, { deep: true });
 
 watch(date, () => {
   loading.value = true;
@@ -292,7 +314,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
           @open-record="appointment => router.push({ path: `/records/${appointment.recordId}/edit`, query: { visit: appointment._id, visitDate: appointment.date } })"
         />
         <EmptyState
-          v-if="!active"
+          v-if="!active && !loading"
           :icon="CalendarClock"
           title="從左邊選一位病患開始看診"
           description="開啟工作區就會記錄看診開始時間。可以同時開好幾位，切換不會清空已輸入的內容。"

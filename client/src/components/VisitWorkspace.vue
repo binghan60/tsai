@@ -1,7 +1,9 @@
 <script setup>
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { onBeforeRouteLeave } from 'vue-router';
 import { ArrowRight, FileText, ShieldAlert, Undo2 } from '@lucide/vue';
 import { http } from '../api/http';
+import { useToast } from '../composables/useToast';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { clinicalDraft, draftPatch, mergeClinicalUpdate } from '../lib/visitDraft';
 import { ageLabel, formatDateTime } from '../lib/datetime';
@@ -19,6 +21,7 @@ const props = defineProps({
   appointment: { type: Object, required: true },
   templates: { type: Array, default: () => [] },
 });
+const toast = useToast();
 const emit = defineEmits(['updated', 'open-record']);
 
 const draft = reactive(clinicalDraft(props.appointment));
@@ -159,7 +162,33 @@ async function run(action) {
   }
 }
 
-onBeforeUnmount(() => { disposed = true; clearTimeout(timer); });
+// 自動存檔有 1.2 秒的 debounce，剛打完就重新整理／關分頁的話那段字還沒送出去。
+// 這裡不去猜使用者的意思，交給瀏覽器問一次；留下來的話 debounce 也會補上。
+// 同時盡量把那筆儲存先發出去，能救就救。
+function beforeUnload(event) {
+  if (!dirty.value && !busy.value) return;
+  save();
+  event.preventDefault();
+  event.returnValue = '';
+}
+
+// 站內換頁（例如從側邊欄跳去寵物頁）不會觸發 beforeunload，只能自己攔。
+// 這裡不跳確認框——專案禁用原生 confirm，而且要問的其實不是「要不要丟掉」，
+// 是「先存起來」。存得起來就放行；真的存不進去才留在原地，錯誤已經顯示在工作區上方。
+onBeforeRouteLeave(async () => {
+  // 櫃台已完成的那筆本來就存不進去（伺服器會擋），攔住只會讓人走不掉。
+  if (!dirty.value || !editable.value) return true;
+  if (await save()) return true;
+  toast.error(`「${props.appointment.petName}」還有內容沒有儲存成功，請先處理再離開`);
+  return false;
+});
+
+onMounted(() => window.addEventListener('beforeunload', beforeUnload));
+onBeforeUnmount(() => {
+  disposed = true;
+  clearTimeout(timer);
+  window.removeEventListener('beforeunload', beforeUnload);
+});
 </script>
 
 <template>
