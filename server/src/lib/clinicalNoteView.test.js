@@ -13,7 +13,8 @@ test('linked journals read current appointment fields instead of legacy copied c
     appointment.reason = '追蹤檢查';
     const result = await clinicalNoteViews(notes);
     assert.equal(result[0].content, '來院原因：追蹤檢查\n\n最新紀錄');
-    assert.equal(result[0].readOnly, true);
+    assert.equal(result[0].readOnly, false);
+    assert.equal(result[0].editableContent, '最新紀錄');
     assert.equal(result[1].content, '手動記事');
     assert.equal(notes[0].content, '過期的副本');
   } finally { find.mock.restore(); }

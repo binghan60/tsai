@@ -1,14 +1,15 @@
-<script setup>
+﻿<script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { ArrowRight, FileText, ShieldAlert, Undo2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
+import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { clinicalDraft, draftPatch, mergeClinicalUpdate } from '../lib/visitDraft';
-import { ageLabel, formatDateTime } from '../lib/datetime';
+import { ageLabel } from '../lib/datetime';
 import AppointmentMilestones from './AppointmentMilestones.vue';
-import Pagination from './Pagination.vue';
+import ClinicalNotesPanel from './ClinicalNotesPanel.vue';
 import ModalDialog from './ModalDialog.vue';
 import { Button } from './ui/button';
 import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
@@ -16,13 +17,14 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription } from './ui/alert';
 
-// 醫師的單一病患工作區。刻意做成元件而不是獨立頁面：醫師常常同時追好幾隻動物
-// （等一隻的檢驗結果時先看下一隻），診療台會同時掛著好幾個這種工作區，
-// 各自保有未儲存的輸入，切換分頁不會清空（見 pages/VetConsolePage.vue）。
+// ?怠葦?銝?撌乩???????隞嗉??舐蝡??ｇ??怠葦撣詨虜??餈賢末撟暸?
+// 嚗?銝?餌?瑼ａ?蝯?????銝?鳴?嚗那??????末撟曉車撌乩??嚗?
+// ?靽??芸摮?頛詨嚗???????蝛綽?閬?pages/VetConsolePage.vue嚗?
 const props = defineProps({
   appointment: { type: Object, required: true },
 });
 const toast = useToast();
+const notifyChat = useAppointmentNotifier();
 const emit = defineEmits(['updated', 'open-record']);
 
 const draft = reactive(clinicalDraft(props.appointment));
@@ -49,15 +51,15 @@ let savePromise = null;
 let queued = null;
 
 const state = computed(() => workflowState(props.appointment));
-// 櫃台按下「完成處理」之後這次就診結案，內容不再可改（伺服器也會擋）。
-// 尚未開始看診前僅供檢視，避免自動儲存誤送出尚未開始的看診資料。
+// 瑹????????敺活撠梯那蝯?嚗摰嫣???對?隡箸??其???嚗?
+// 撠???那??靘炎閬??踹??芸??脣?隤日撠????閮箄???
 const editable = computed(() => state.value.started && !state.value.completed);
 const dirty = computed(() => Object.keys(draftPatch(draft, baseline.value)).length > 0);
 const owner = computed(() => (typeof pet.value?.ownerId === 'object' ? pet.value.ownerId : null));
 const petSummary = computed(() => {
   if (!pet.value) return props.appointment.species || '';
   const sex = { male: '公', female: '母' }[pet.value.sex] || '';
-  const neutered = { yes: '已絕育', no: '未絕育' }[pet.value.neutered] || '';
+  const neutered = { yes: '已結紮', no: '未結紮' }[pet.value.neutered] || '';
   return [pet.value.breed || props.appointment.species, sex && neutered ? `${sex} ${neutered}` : sex || neutered, ageLabel(pet.value.birthDate, new Date(), '')]
     .filter(Boolean).join(' · ');
 });
@@ -68,13 +70,13 @@ const CONFLICT_LABELS = {
 };
 const savedLabel = computed(() => {
   if (busy.value) return '儲存中…';
-  if (conflicts.value.length) return '有同步衝突，請先核對';
-  if (dirty.value) return '有尚未儲存的變更';
-  if (savedAt.value) return `${savedAt.value.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} 已自動儲存`;
-  return '已載入儲存內容';
+  if (conflicts.value.length) return '有資料衝突，請先選擇保留內容';
+  if (dirty.value) return '尚未儲存';
+  if (savedAt.value) return `${savedAt.value.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} 已儲存`;
+  return '已儲存';
 });
 
-// 別人（櫃台或另一台裝置）改了這筆時，不能把醫師正在打的字洗掉；同一欄兩邊都動過才算衝突。
+// ?乩犖嚗??唳??虫??啗?蝵殷??嫣?????銝?撣急迤?冽???瘣?嚗?銝甈?????銵???
 function receive(incoming) {
   if (disposed) return;
   if (busy.value) { queued = incoming; return; }
@@ -136,7 +138,7 @@ async function save() {
   savePromise = (async () => {
     try {
       const { data } = await http.post(`/appointments/${props.appointment._id}/workflow/clinical`, { version: props.appointment.__v ?? 0, ...patch });
-      // 請求進行中打的字仍然算未儲存，所以比對的基準是送出當下的快照而不是最新草稿。
+      // 隢??脰?銝剜???隞蝞?脣?嚗?隞交?撠??箸??舫?嗡??翰?扯??舀??啗?蝔踴?
       const merged = mergeClinicalUpdate(draft, snapshot, data);
       Object.assign(draft, merged.draft);
       baseline.value = merged.baseline;
@@ -144,7 +146,7 @@ async function save() {
       emit('updated', data);
       return true;
     } catch (err) {
-      error.value = err.response?.data?.message || '儲存失敗，輸入仍保留，請重試';
+      error.value = err.response?.data?.message || '儲存失敗，請重試。';
       return false;
     } finally {
       savePromise = null;
@@ -185,7 +187,7 @@ async function run(action, payload = {}) {
     if (action === 'record' && data.recordId) emit('open-record', data);
     return true;
   } catch (err) {
-    error.value = err.response?.data?.message || '操作失敗，請稍後重試';
+    error.value = err.response?.data?.message || '操作失敗，請重試。';
     return false;
   } finally {
     busy.value = false;
@@ -204,16 +206,24 @@ async function requestReopen() {
   const reason = reopenReason.value.trim();
   const submitted = await run('request-reopen', { reason });
   if (!submitted) {
-    reopenError.value = error.value || '申請送出失敗，請稍後重試';
+    reopenError.value = error.value || '申請修改失敗，請重試。';
     return;
   }
   reopenDialog.value = false;
-  toast.success('已送出修改申請，等待櫃台核准');
+  toast.success('已送出修改申請，等待櫃台核准。');
 }
 
-// 自動存檔有 1.2 秒的 debounce，剛打完就重新整理／關分頁的話那段字還沒送出去。
-// 這裡不去猜使用者的意思，交給瀏覽器問一次；留下來的話 debounce 也會補上。
-// 同時盡量把那筆儲存先發出去，能救就救。
+function handleHistoricalNoteSaved({ note, content }) {
+  notifyChat(props.appointment, 'visit_data', {
+    changedParts: ['歷次病歷日誌'],
+    snapshot: { fieldLabel: '歷次病歷日誌', before: note.content || '', after: content || '' },
+  });
+  loadNotes(notePage.value);
+}
+
+// ?芸?摮???1.2 蝘? debounce嚗???撠梢??唳??????閰梢畾萄?????颯?
+// ?ㄐ銝?蝙?刻???鈭斤策?汗?典?銝甈∴???靘?閰?debounce 銋?鋆???
+// ???⊿??蝑摮??澆?鳴??賣?撠望???
 function beforeUnload(event) {
   if (!dirty.value && !busy.value) return;
   save();
@@ -221,11 +231,11 @@ function beforeUnload(event) {
   event.returnValue = '';
 }
 
-// 站內換頁（例如從側邊欄跳去寵物頁）不會觸發 beforeunload，只能自己攔。
-// 這裡不跳確認框——專案禁用原生 confirm，而且要問的其實不是「要不要丟掉」，
-// 是「先存起來」。存得起來就放行；真的存不進去才留在原地，錯誤已經顯示在工作區上方。
+// 蝡??嚗?憒??湧?甈歲?餃秘?拚?嚗??孛??beforeunload嚗?質撌望???
+// ?ㄐ銝歲蝣箄?獢?獢??典???confirm嚗?閬??撖虫??胯?銝?銝???
+// ?胯?摮絲靘?敺絲靘停?曇?嚗???銝脣???典??堆??航炊撌脩?憿舐內?典極雿?銝??
 onBeforeRouteLeave(async () => {
-  // 櫃台已完成的那筆本來就存不進去（伺服器會擋），攔住只會讓人走不掉。
+  // 瑹撌脣???????砌?撠勗?銝脣嚗撩???嚗????芣?霈犖韏唬???
   if (!dirty.value || !editable.value) return true;
   if (await save()) return true;
   toast.error(`「${props.appointment.petName}」還有內容沒有儲存成功，請先處理再離開`);
@@ -243,7 +253,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="flex min-h-0 flex-1 flex-col" :aria-label="`${appointment.petName} 的看診工作區`">
+  <section class="flex min-h-0 flex-1 flex-col" :aria-label="`${appointment.petName} ??閮箏極雿?`">
     <header class="border-b border-border px-5 py-4 sm:px-6">
       <div class="sr-only">
         <h2 class="text-xl font-semibold">{{ appointment.petName }}</h2>
@@ -257,7 +267,7 @@ onBeforeUnmount(() => {
 
       <div class="grid gap-3 sm:grid-cols-2">
         <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
-          <p class="text-xs font-semibold text-primary">寵物資料</p>
+          <p class="text-xs font-semibold text-primary">病患資料</p>
           <p class="mt-0.5 truncate text-sm font-semibold text-foreground">{{ appointment.petName }} <span v-if="petSummary" class="font-normal text-muted-foreground">{{ petSummary }}</span></p>
         </section>
         <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
@@ -267,10 +277,10 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="hasReminders" class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg bg-warning-surface px-3.5 py-2.5 text-sm text-warning">
-        <span class="inline-flex items-center gap-2 font-semibold"><ShieldAlert class="h-4 w-4" stroke-width="1.75" />臨床提醒</span>
-        <span v-if="pet.allergies">過敏：{{ pet.allergies }}</span>
-        <span v-if="pet.chronicConditions">慢性病：{{ pet.chronicConditions }}</span>
-        <span v-if="pet.currentMedications">用藥：{{ pet.currentMedications }}</span>
+        <span class="inline-flex items-center gap-2 font-semibold"><ShieldAlert class="h-4 w-4" stroke-width="1.75" />?典???</span>
+        <span v-if="pet.allergies">??嚗{ pet.allergies }}</span>
+        <span v-if="pet.chronicConditions">?Ｘ抒?嚗{ pet.chronicConditions }}</span>
+        <span v-if="pet.currentMedications">?刻嚗{ pet.currentMedications }}</span>
       </div>
 
       <div class="mt-3"><AppointmentMilestones :appointment="appointment" /></div>
@@ -280,24 +290,24 @@ onBeforeUnmount(() => {
       <Alert v-if="error" variant="destructive" class="mb-4"><AlertDescription>{{ error }}</AlertDescription></Alert>
       <div v-if="contextError" class="mb-4 flex items-center gap-3 rounded-lg bg-warning-surface p-3 text-sm text-warning">
         <span class="flex-1">{{ contextError }}</span>
-        <Button variant="secondary" size="xs" @click="loadContext">重新載入</Button>
+        <Button variant="secondary" size="xs" @click="loadContext">?頛</Button>
       </div>
       <div v-if="conflicts.length" role="alert" class="mb-4 space-y-3 rounded-xl bg-warning-surface p-4 text-sm text-warning">
-        <p>另一端更新了 {{ conflicts.map(key => CONFLICT_LABELS[key]).join('、') }}。你的輸入仍保留，請核對後選擇要保留哪一份。</p>
+        <p>此筆就診資料與其他更新衝突：{{ conflicts.map(key => CONFLICT_LABELS[key]).join('、') }}。請選擇要保留的內容。</p>
         <div v-for="key in conflicts" :key="key" class="rounded-lg bg-card p-3 text-foreground">
-          <p class="text-xs font-medium text-muted-foreground">{{ CONFLICT_LABELS[key] }} · 最新內容</p>
+          <p class="text-xs font-medium text-muted-foreground">{{ CONFLICT_LABELS[key] }} · 目前內容</p>
           <p class="mt-1 whitespace-pre-wrap text-sm">{{ baseline[key] || '（空白）' }}</p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" @click="resolveConflict(false)">採用最新內容</Button>
-          <Button variant="secondary" size="sm" @click="resolveConflict(true)">保留我的輸入</Button>
+          <Button variant="secondary" size="sm" @click="resolveConflict(false)">使用目前內容</Button>
+          <Button variant="secondary" size="sm" @click="resolveConflict(true)">保留我的修改</Button>
         </div>
       </div>
 
       <div class="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
         <div class="space-y-4">
           <section class="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-            <h3 class="border-b border-border pb-1 text-sm font-semibold">本次簡易紀錄</h3>
+            <h3 class="border-b border-border pb-1 text-sm font-semibold">看診資料</h3>
           <div class="grid grid-cols-2 gap-3">
             <label class="space-y-1.5 text-xs font-medium">體重（kg）
               <Input v-model="draft.weightKg" type="number" min="0" step="0.01" :disabled="!editable || committing" />
@@ -313,40 +323,32 @@ onBeforeUnmount(() => {
 
           </section>
 
-          <section class="rounded-xl border border-border bg-field/60 p-4">
-            <div class="flex items-center justify-between gap-2">
-              <h3 class="text-sm font-semibold">歷次病歷日誌</h3>
-              <Button v-if="appointment.petId" as-child variant="secondary" size="xs">
-                <router-link :to="`/pets/${appointment.petId}`">完整病歷</router-link>
-              </Button>
-            </div>
-            <article v-for="note in notes" :key="note._id" class="mt-3 border-t border-border pt-3">
-              <p class="text-xs text-muted-foreground">{{ formatDateTime(note.entryDate) }}</p>
-              <p class="mt-0.5 whitespace-pre-wrap wrap-anywhere text-sm">{{ note.content }}</p>
-            </article>
-            <p v-if="notesLoading" class="mt-3 text-sm text-muted-foreground" role="status">載入病歷日誌中…</p>
-            <Alert v-else-if="notesError" variant="destructive" class="mt-3">
-              <AlertDescription>{{ notesError }}</AlertDescription>
-              <Button variant="secondary" size="sm" @click="loadNotes(notePage)">重試</Button>
-            </Alert>
-            <p v-else-if="!notes.length" class="mt-3 text-sm text-muted-foreground">尚無其他病歷日誌</p>
-            <Pagination v-if="noteTotalPages > 1" class="mt-4" :page="notePage" :total-pages="noteTotalPages" @update:page="loadNotes" />
-          </section>
+          <ClinicalNotesPanel
+            :notes="notes"
+            :loading="notesLoading"
+            :error="notesError"
+            :page="notePage"
+            :total-pages="noteTotalPages"
+            :pet-id="appointment.petId"
+            full-record-label="完整病歷"
+            @load="loadNotes"
+            @saved="handleHistoricalNoteSaved"
+          />
         </div>
 
         <section class="h-full space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-          <h3 class="border-b border-border pb-1 text-sm font-semibold">交辦與後續追蹤</h3>
+          <h3 class="border-b border-border pb-1 text-sm font-semibold">交辦與回診</h3>
           <label class="block space-y-1.5">
-            <span class="text-xs font-medium">給櫃台的交辦（收費與領藥）</span>
-            <Textarea v-model="draft.handoffNote" rows="6" maxlength="1000" :disabled="!editable || committing" placeholder="例如：診察費 ＋ 胸腔 X 光兩張、止咳藥水 30ml（已包好）" />
+            <span class="text-xs font-medium">給櫃台的交辦</span>
+            <Textarea v-model="draft.handoffNote" rows="6" maxlength="1000" :disabled="!editable || committing" placeholder="輸入櫃檯需要協助處理或轉告的事項…" />
           </label>
           <label class="block space-y-1.5">
             <span class="text-xs font-medium text-warning">請轉告飼主</span>
-            <Textarea v-model="draft.specialCareNote" rows="3" maxlength="500" :disabled="!editable || committing" placeholder="照護或用藥注意事項，櫃台會當面轉告" />
+            <Textarea v-model="draft.specialCareNote" rows="3" maxlength="500" :disabled="!editable || committing" placeholder="輸入需要櫃檯轉告飼主的提醒…" />
           </label>
           <label class="block space-y-1.5">
             <span class="text-xs font-medium">回診建議</span>
-            <Textarea v-model="draft.followUpRecommendation" rows="2" maxlength="500" :disabled="!editable || committing" placeholder="例如：兩週後回診複查胸腔 X 光" />
+            <Textarea v-model="draft.followUpRecommendation" rows="2" maxlength="500" :disabled="!editable || committing" placeholder="輸入建議回診時間或原因…" />
           </label>
 
         </section>
@@ -363,10 +365,10 @@ onBeforeUnmount(() => {
           {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
         </Button>
         <Button v-else-if="state.handedOff" variant="secondary" :disabled="busy" @click="run('reclaim')">
-          <Undo2 class="h-4 w-4" />取回這筆
+          <Undo2 class="h-4 w-4" />取回修改
         </Button>
         <Button v-else-if="appointment.status === 'arrived' && !state.handedOff" :disabled="busy || !!conflicts.length" @click="run('handoff')">
-          完成看診，送交櫃台<ArrowRight class="h-4 w-4" />
+          交給櫃檯<ArrowRight class="h-4 w-4" />
         </Button>
       </div>
     </footer>
@@ -379,8 +381,8 @@ onBeforeUnmount(() => {
             <DialogDescription class="mt-1 text-xs">可補充需要更正或重新處理的原因；櫃台核准後才能修改此筆就診。</DialogDescription>
           </div>
           <label class="block space-y-1.5">
-            <span class="text-xs font-medium">申請原因（選填）</span>
-            <Textarea v-model="reopenReason" rows="4" maxlength="500" autofocus placeholder="例如：需補正交辦內容或收費項目" />
+            <span class="text-xs font-medium">修改原因（選填）</span>
+            <Textarea v-model="reopenReason" rows="4" maxlength="500" autofocus placeholder="例如：補充用藥交辦、修正看診紀錄…" />
           </label>
           <Alert v-if="reopenError" variant="destructive"><AlertDescription>{{ reopenError }}</AlertDescription></Alert>
         </div>

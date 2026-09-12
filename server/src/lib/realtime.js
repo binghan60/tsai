@@ -53,3 +53,8 @@ export function emitAppointmentUpdate(appointment, previousDate) {
   io?.to(dayRoom(appointment.date)).emit('appointment:updated', payload);
   if (previousDate && previousDate !== appointment.date) io?.to(dayRoom(previousDate)).emit('appointment:updated', payload);
 }
+
+export function emitClinicalNoteUpdate(note) {
+  const payload = typeof note.toObject === 'function' ? note.toObject() : note;
+  io?.emit('clinical-note:updated', payload);
+}

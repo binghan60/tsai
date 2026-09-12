@@ -14,7 +14,8 @@ export async function clinicalNoteViews(notes) {
     return {
       ...note,
       content: appointment ? appointmentJournalContent(appointment) : (note.content || '找不到對應的就診資料'),
-      readOnly: true,
+      editableContent: appointment?.visitNote ?? note.content ?? '',
+      readOnly: false,
     };
   });
 }

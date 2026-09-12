@@ -6,7 +6,7 @@ import ClinicalNote from '../models/ClinicalNote.js';
 import Appointment from '../models/Appointment.js';
 import mongoose from 'mongoose';
 
-// 關聯日誌只能從就診流程修改；手動日誌保留原有操作。
+// 關聯日誌編輯會回寫掛號；手動日誌保留原有操作。
 describe('clinical notes routes', () => {
   let server;
   let origin;
@@ -23,6 +23,7 @@ describe('clinical notes routes', () => {
   beforeEach(() => {
     mock.restoreAll();
     mock.method(ClinicalNote, 'findById', id => ({ session: async () => id.includes('linked') ? { appointmentId: 'apt-linked' } : { appointmentId: null } }));
+    mock.method(Appointment, 'find', () => ({ lean: async () => [] }));
   });
 
   after(async () => {
@@ -57,23 +58,31 @@ describe('clinical notes routes', () => {
     }
   });
 
-  it('拒絕直接編輯關聯日誌，不回寫掛號', async () => {
+  it('編輯關聯日誌會回寫掛號的本次簡易紀錄', async () => {
     const originalFindByIdAndUpdate = ClinicalNote.findByIdAndUpdate;
-    const originalAppointmentUpdate = Appointment.findByIdAndUpdate;
-    let capturedAppointmentUpdate;
-    ClinicalNote.findByIdAndUpdate = async (id, update) => ({ _id: id, appointmentId: 'apt-linked', content: update.$set.content });
-    Appointment.findByIdAndUpdate = async (id, update) => { capturedAppointmentUpdate = { id, update }; };
+    const originalAppointmentFindById = Appointment.findById;
+    const appointment = {
+      _id: 'apt-linked',
+      visitNote: '舊內容',
+      increment() {},
+      async save() {},
+    };
+    ClinicalNote.findByIdAndUpdate = async (id, update) => ({ _id: id, appointmentId: 'apt-linked', ...update.$set });
+    Appointment.findById = id => ({ session: async () => {
+      assert.equal(id, 'apt-linked');
+      return appointment;
+    } });
     try {
       const response = await fetch(`${origin}/api/clinical-notes/note-linked`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ content: '改好的內容' }),
       });
-      assert.equal(response.status, 409);
-      assert.equal(capturedAppointmentUpdate, undefined);
+      assert.equal(response.status, 200);
+      assert.equal(appointment.visitNote, '改好的內容');
     } finally {
       ClinicalNote.findByIdAndUpdate = originalFindByIdAndUpdate;
-      Appointment.findByIdAndUpdate = originalAppointmentUpdate;
+      Appointment.findById = originalAppointmentFindById;
     }
   });
 

@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
+import Appointment from '../models/Appointment.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { withTransaction } from '../lib/transaction.js';
+import { emitAppointmentUpdate, emitClinicalNoteUpdate } from '../lib/realtime.js';
 
 const NOTE_FIELDS = ['content', 'entryDate'];
 
@@ -48,13 +50,29 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
   try {
     const fields = pickNoteFields(req.body);
     let note;
+    let appointment;
     await withTransaction(async session => {
       const existing = await ClinicalNote.findById(req.params.id).session(session);
-      if (existing?.appointmentId) throw Object.assign(new Error('此日誌引用就診資料，請至醫師診療台修改'), { status: 409 });
-      note = await ClinicalNote.findByIdAndUpdate(req.params.id, { $set: fields }, { new: true, runValidators: true, session });
+      if (existing?.appointmentId) {
+        appointment = await Appointment.findById(existing.appointmentId).session(session);
+        if (!appointment) throw Object.assign(new Error('找不到對應的就診資料'), { status: 404 });
+        if (fields.content !== undefined) appointment.visitNote = String(fields.content ?? '').trim();
+        appointment.increment();
+        await appointment.save({ session });
+        const noteFields = {};
+        if (fields.entryDate !== undefined) noteFields.entryDate = fields.entryDate;
+        note = Object.keys(noteFields).length
+          ? await ClinicalNote.findByIdAndUpdate(req.params.id, { $set: noteFields }, { new: true, runValidators: true, session })
+          : existing;
+      } else {
+        note = await ClinicalNote.findByIdAndUpdate(req.params.id, { $set: fields }, { new: true, runValidators: true, session });
+      }
     });
     if (!note) return res.status(404).json({ message: '找不到病歷日誌' });
-    res.json(note);
+    if (appointment) emitAppointmentUpdate(appointment);
+    const [view] = await clinicalNoteViews([note]);
+    emitClinicalNoteUpdate(view ?? note);
+    res.json(view ?? note);
   } catch (err) {
     next(err);
   }

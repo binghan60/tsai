@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { computed, nextTick, ref, watch } from 'vue';
 import { CalendarClock, Check, Phone, X } from '@lucide/vue';
 import { http } from '../api/http';
@@ -7,6 +7,7 @@ import { describeVisitChanges } from '../lib/appointmentNotifications';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { APPOINTMENT_TIME_RANGES, APPOINTMENT_TIME_MINUTE_STEP } from '../lib/appointmentTime';
 import AppointmentMilestones from './AppointmentMilestones.vue';
+import ClinicalNotesPanel from './ClinicalNotesPanel.vue';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { DatePicker } from './ui/date-picker';
@@ -30,6 +31,12 @@ const noteSaved = ref(false);
 const editingNote = ref(false);
 const date = ref(props.appointment.followUpDate || '');
 const time = ref(props.appointment.followUpTime || '');
+const notes = ref([]);
+const notePage = ref(1);
+const noteTotalPages = ref(1);
+const notesLoading = ref(false);
+const notesError = ref('');
+let notesRequest = 0;
 
 const state = computed(() => workflowState(props.appointment));
 const booked = computed(() => Boolean(props.appointment.followUpAppointmentId));
@@ -42,6 +49,8 @@ watch(() => props.appointment._id, () => {
   resetNote();
   editingNote.value = false;
   error.value = '';
+  notePage.value = 1;
+  loadNotes(1);
 });
 
 function resetNote() {
@@ -94,6 +103,40 @@ async function run(action, values = {}) {
   emit('updated', data, action);
   await nextTick();
   return data;
+}
+
+async function loadNotes(page = 1) {
+  const token = ++notesRequest;
+  const petId = props.appointment.petId;
+  notes.value = [];
+  noteTotalPages.value = 1;
+  if (!petId) return;
+  notesLoading.value = true;
+  notesError.value = '';
+  try {
+    const { data } = await http.get(`/pets/${petId}/clinical-notes`, {
+      params: { page, limit: 5, excludeAppointmentId: props.appointment._id },
+    });
+    if (token !== notesRequest || petId !== props.appointment.petId) return;
+    const totalPages = data.totalPages || 1;
+    if (page > totalPages) return await loadNotes(totalPages);
+    notes.value = data.items || [];
+    notePage.value = page;
+    noteTotalPages.value = totalPages;
+  } catch {
+    if (token === notesRequest) notesError.value = '病歷日誌未能載入，請重試。';
+  } finally {
+    if (token === notesRequest) notesLoading.value = false;
+  }
+}
+loadNotes();
+
+function handleHistoricalNoteSaved({ note, content }) {
+  notifyChat(props.appointment, 'visit_data', {
+    changedParts: ['歷次病歷日誌'],
+    snapshot: { fieldLabel: '歷次病歷日誌', before: note.content || '', after: content || '' },
+  });
+  loadNotes(notePage.value);
 }
 
 async function bookFollowUp() {
@@ -200,6 +243,17 @@ async function approveReopen() {
             </div>
           </section>
 
+          <ClinicalNotesPanel
+            :notes="notes"
+            :loading="notesLoading"
+            :error="notesError"
+            :page="notePage"
+            :total-pages="noteTotalPages"
+            :pet-id="appointment.petId"
+            full-record-label="完整病歷"
+            @load="loadNotes"
+            @saved="handleHistoricalNoteSaved"
+          />
           <section class="space-y-3">
             <h3 class="text-base font-semibold">回診安排</h3>
             <div v-if="needsFollowUp" class="rounded-xl bg-accent p-4">
