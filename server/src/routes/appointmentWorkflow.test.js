@@ -72,6 +72,15 @@ describe('independent appointment workflow HTTP routes', () => {
       return [record];
     });
     mock.method(MedicalRecord, 'findById', key => chain(records.get(String(key))));
+    mock.method(MedicalRecord, 'updateOne', async (query, update, options) => {
+      assert.ok(options.session);
+      const record = records.get(String(query._id));
+      if (!record || (query.status && record.status !== query.status)) return { modifiedCount: 0 };
+      Object.assign(record, update.$set || {});
+      record.__v = (record.__v || 0) + (update.$inc?.__v || 0);
+      records.set(String(query._id), record);
+      return { modifiedCount: 1 };
+    });
   });
   async function post(action, values = {}) {
     const response = await fetch(`${origin}/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ version: store.get(id).__v, ...values }) });
@@ -162,6 +171,28 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal(second.status, 200);
     assert.equal(second.body.recordId, first.body.recordId);
     assert.equal(records.size, 1);
+  });
+  it('syncs follow-up date into the linked draft record', async () => {
+    const created = await post('record');
+    assert.equal(created.status, 200);
+    const record = records.get(String(created.body.recordId));
+
+    const booked = await post('followup', { followUpDate: '2026-09-14', followUpTime: '10:00' });
+    assert.equal(booked.status, 200);
+    assert.equal(record.followUpDate.toISOString(), '2026-09-14T02:00:00.000Z');
+
+    const changed = await post('followup', { followUpDate: '2026-09-15', followUpTime: '14:00' });
+    assert.equal(changed.status, 200);
+    assert.equal(record.followUpDate.toISOString(), '2026-09-15T06:00:00.000Z');
+  });
+  it('copies existing follow-up date when creating a draft later', async () => {
+    const booked = await post('followup', { followUpDate: '2026-09-14', followUpTime: '10:00' });
+    assert.equal(booked.status, 200);
+
+    const created = await post('record');
+    assert.equal(created.status, 200);
+    const record = records.get(String(created.body.recordId));
+    assert.equal(record.followUpDate.toISOString(), '2026-09-14T02:00:00.000Z');
   });
   it('books one linked follow-up before the desk finishes and validates the clinic schedule', async () => {
     await post('clinical', { followUpRecommendation: '一週後', followUpReason: '追蹤傷口' });

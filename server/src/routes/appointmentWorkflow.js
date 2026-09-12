@@ -74,6 +74,7 @@ router.post('/:action', async (req, res, next) => {
             chiefComplaint: appointment.reason,
             weightKg: appointment.weightKg,
             temperatureC: appointment.temperatureC,
+            followUpDate: appointment.followUpDate ? combineClinicDateTime(appointment.followUpDate, appointment.followUpTime) : null,
             templateId: template._id,
             templateVersion: template.version,
             examType: template.name,
@@ -108,6 +109,13 @@ router.post('/:action', async (req, res, next) => {
         }
         appointment.followUpDate = date;
         appointment.followUpTime = time;
+        if (appointment.recordId) {
+          await MedicalRecord.updateOne(
+            { _id: appointment.recordId, status: 'draft' },
+            { $set: { followUpDate: combineClinicDateTime(date, time) }, $inc: { __v: 1 } },
+            { session }
+          );
+        }
       }
       if (action === 'clinical' && appointment.recordId) {
         const measurements = {};
