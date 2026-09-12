@@ -7,6 +7,7 @@ const appointment = () => ({ __v: 0, status: 'arrived', petId: 'pet-1', checkinN
 
 test('appointment journal combines the simple note with this visit’s measurements', () => {
   assert.equal(appointmentJournalContent({ reason: ' 咳嗽三天 ', visitNote: '安排檢查', weightKg: 4.2, temperatureC: 38.5 }), '來院原因：咳嗽三天\n\n體重：4.2 kg　體溫：38.5 °C\n\n安排檢查');
+  assert.equal(appointmentJournalContent({ visitNote: '安排檢查', internalNote: '院內追蹤用' }), '安排檢查\n\n內部備註：院內追蹤用');
   assert.equal(appointmentJournalContent({ reason: '定期回診' }), '來院原因：定期回診');
   assert.equal(appointmentJournalContent({ reason: '  ', visitNote: '' }), '');
   assert.equal(appointmentJournalContent({ visitNote: '皮膚狀況穩定', weightKg: 4.2, temperatureC: 38.5 }), '體重：4.2 kg　體溫：38.5 °C\n\n皮膚狀況穩定');
@@ -66,10 +67,11 @@ test('the desk cannot complete before the vet hands off, and cannot complete twi
   assert.throws(() => applyWorkflowAction(p, 'complete', {}), { status: 409 });
 });
 
-test('clinical text and measurements are trimmed, validated and desk note stays editable after handoff', () => {
+test('clinical text and measurements are trimmed, validated and journal notes stay editable after handoff', () => {
   const p = appointment();
-  applyWorkflowAction(p, 'clinical', { visitNote: '  夜咳為主  ', handoffNote: ' 診察費＋X光 ', weightKg: '5.2', temperatureC: '' });
+  applyWorkflowAction(p, 'clinical', { visitNote: '  夜咳為主  ', internalNote: '  院內留存  ', handoffNote: ' 診察費＋X光 ', weightKg: '5.2', temperatureC: '' });
   assert.equal(p.visitNote, '夜咳為主');
+  assert.equal(p.internalNote, '院內留存');
   assert.equal(p.handoffNote, '診察費＋X光');
   assert.equal(p.weightKg, 5.2);
   assert.equal(p.temperatureC, null);
@@ -78,6 +80,8 @@ test('clinical text and measurements are trimmed, validated and desk note stays 
   applyWorkflowAction(p, 'handoff', {});
   applyWorkflowAction(p, 'clinical', { visitNote: '  櫃台補充用藥說明  ' });
   assert.equal(p.visitNote, '櫃台補充用藥說明');
+  applyWorkflowAction(p, 'clinical', { internalNote: '  院內補充  ' });
+  assert.equal(p.internalNote, '院內補充');
   assert.equal(p.status, 'pending_checkout');
   assert.throws(() => applyWorkflowAction(p, 'clinical', { handoffNote: '更改收費項目' }), { status: 409 });
   assert.throws(() => applyWorkflowAction(p, 'clinical', { weightKg: 5.4 }), { status: 409 });

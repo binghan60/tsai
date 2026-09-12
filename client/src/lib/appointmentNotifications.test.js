@@ -46,6 +46,7 @@ test('describeVisitChanges 只講真正變動的部分', () => {
   // 空白與等值的數字格式不算變更，原樣按儲存不會冒出「已更新」。
   assert.deepEqual(describeVisitChanges(before, { ...before, visitNote: ' 備註 ', weightKg: '5.00' }), []);
   assert.deepEqual(describeVisitChanges(before, { ...before, handoffNote: '診察費＋X光' }), ['櫃台交辦']);
+  assert.deepEqual(describeVisitChanges(before, { ...before, internalNote: '院內追蹤' }), ['內部備註']);
   assert.deepEqual(describeVisitChanges(before, { ...before, specialCareNote: '傷口勿舔舐' }), ['飼主提醒']);
   assert.deepEqual(describeVisitChanges(before, { ...before, weightKg: '', followUpRecommendation: '兩週後' }), ['量測資料', '回診資料']);
   assert.deepEqual(describeVisitChanges({ weightKg: null }, { weightKg: 0 }), ['量測資料']);

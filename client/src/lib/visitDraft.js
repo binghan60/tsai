@@ -1,6 +1,6 @@
 // 醫師工作區一次編輯的欄位。四個文字欄位各有各的讀者（見 shared/appointmentWorkflow.js
 // 與設計稿的分工表），量測值則同時要進病歷日誌，所以一起送同一支 clinical 端點。
-export const CLINICAL_FIELDS = ['weightKg', 'temperatureC', 'visitNote', 'handoffNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
+export const CLINICAL_FIELDS = ['weightKg', 'temperatureC', 'visitNote', 'internalNote', 'handoffNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
 
 export function clinicalDraft(appointment) {
   return Object.fromEntries(CLINICAL_FIELDS.map(key => [key, appointment[key] ?? '']));

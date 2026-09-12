@@ -64,6 +64,7 @@ const appointmentSchema = new mongoose.Schema(
     followUpAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
     // 本次簡易紀錄的唯一來源；病歷日誌透過 appointmentId 讀取。飼主看不到，也不進健檢報告。
     visitNote: { type: String, default: '', trim: true },
+    internalNote: { type: String, default: '', trim: true, maxlength: 2000 },
     // 面向飼主的照護提醒（例如「傷口勿舔舐」），由醫師填、櫃台當面轉告飼主。
     // 跟 handoffNote（櫃台的作業指示）語意分開，才能在櫃台端用警示樣式獨立呈現——
     // 這是最容易漏講的一件事。刻意不跟 clinicalNotes 同步，單一資料來源留在這裡。

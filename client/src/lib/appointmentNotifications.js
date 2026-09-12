@@ -44,6 +44,7 @@ export function changedAppointmentFields(before, after, fields) {
 export function describeVisitChanges(before, after) {
   return [
     ['本次簡易紀錄', ['visitNote']],
+    ['內部備註', ['internalNote']],
     ['櫃台交辦', ['handoffNote']],
     ['飼主提醒', ['specialCareNote']],
     ['量測資料', ['weightKg', 'temperatureC']],

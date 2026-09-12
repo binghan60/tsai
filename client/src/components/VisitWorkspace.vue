@@ -89,7 +89,7 @@ const reminderFields = computed(() => {
 });
 const hasReminders = computed(() => reminderFields.value.length > 0);
 const CONFLICT_LABELS = {
-  visitNote: '本次簡易紀錄', handoffNote: '給櫃台的交辦', specialCareNote: '請轉告飼主',
+  visitNote: '本次簡易紀錄', internalNote: '內部備註', handoffNote: '給櫃台的交辦', specialCareNote: '請轉告飼主',
   followUpRecommendation: '回診建議', followUpReason: '回診原因', weightKg: '體重', temperatureC: '體溫',
 };
 const savedLabel = computed(() => {
@@ -347,6 +347,10 @@ onBeforeUnmount(() => {
           <label class="block space-y-1.5">
             <span class="flex items-center gap-2 text-xs font-medium">本次簡易紀錄<span class="ml-auto font-normal text-muted-foreground">自動存入病歷日誌</span></span>
             <Textarea v-model="draft.visitNote" rows="12" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" />
+          </label>
+          <label class="block space-y-1.5">
+            <span class="flex items-center gap-2 text-xs font-medium">備註<span class="ml-auto font-normal text-muted-foreground">僅內部可見・附於病歷日誌最後</span></span>
+            <Textarea v-model="draft.internalNote" rows="4" maxlength="2000" :disabled="!editable || committing" placeholder="輸入僅供內部人員查看的備註…" />
           </label>
 
           </section>
