@@ -2,6 +2,7 @@ import { http } from '../api/http';
 import { useChatStore } from '../stores/chat';
 import { useStaffIdentity } from './useStaffIdentity';
 import { appointmentNotification } from '../lib/appointmentNotifications';
+import { isAppointmentNotificationEnabled } from '../lib/appointmentNotificationPreferences';
 
 // 診務頁每個會改變掛號狀態或內容的動作，成功後順手發一則系統訊息到全站聊天室，
 // 讓開著聊天視窗的另一邊不用切回診務頁也知道現場發生了什麼事。
@@ -13,6 +14,7 @@ export function useAppointmentNotifier() {
   const chatStore = useChatStore();
   const { identity } = useStaffIdentity();
   return function notifyChat(appointment, action, options) {
+    if (!isAppointmentNotificationEnabled(action, options)) return;
     const content = appointmentNotification(appointment, action, options);
     chatStore.markPendingAuto(identity.value, content);
     http.post('/chat/messages', { sender: identity.value, content, auto: true, ...(options?.snapshot ? { snapshot: options.snapshot } : {}) }).catch(() => {});
