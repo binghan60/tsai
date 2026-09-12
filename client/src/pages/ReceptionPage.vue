@@ -250,20 +250,23 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
             <p class="ml-auto text-xs text-accent-foreground/80">飼主正在櫃台等，優先處理</p>
           </div>
           <p v-if="!handoffs.length" class="px-5 py-6 text-center text-sm text-muted-foreground">目前沒有等待處理的交辦。</p>
-          <div v-for="item in handoffs" :key="item._id" class="flex flex-wrap items-center gap-4 border-b border-border px-5 py-3.5 last:border-b-0">
-            <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold tabular-nums text-primary-foreground">{{ item.checkinNumber ?? '—' }}</span>
-            <div class="w-40 shrink-0">
-              <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
-              <p class="truncate text-xs text-muted-foreground">{{ item.ownerName || '飼主待確認' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></p>
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="truncate text-sm">{{ excerpt(item) }}</p>
-              <div class="mt-1 flex flex-wrap gap-2">
-                <span v-if="item.specialCareNote" class="inline-flex h-6 items-center rounded-full bg-warning-surface px-2.5 text-xs font-medium leading-none text-warning">有飼主提醒</span>
-                <span v-if="item.followUpRecommendation" class="inline-flex h-6 items-center rounded-full bg-muted px-2.5 text-xs font-medium leading-none text-muted-foreground">建議回診</span>
+          <div v-for="item in handoffs" :key="item._id" class="border-b border-border px-5 py-3.5 last:border-b-0">
+            <div class="flex flex-wrap items-center gap-4">
+              <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold tabular-nums text-primary-foreground">{{ item.checkinNumber ?? '—' }}</span>
+              <div class="w-40 shrink-0">
+                <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
+                <p class="truncate text-xs text-muted-foreground">{{ item.ownerName || '飼主待確認' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></p>
               </div>
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm">{{ excerpt(item) }}</p>
+                <div class="mt-1 flex flex-wrap gap-2">
+                  <span v-if="item.specialCareNote" class="inline-flex h-6 items-center rounded-full bg-warning-surface px-2.5 text-xs font-medium leading-none text-warning">有飼主提醒</span>
+                  <span v-if="item.followUpRecommendation" class="inline-flex h-6 items-center rounded-full bg-muted px-2.5 text-xs font-medium leading-none text-muted-foreground">建議回診</span>
+                </div>
+              </div>
+              <Button size="sm" class="shrink-0" @click="openSheet(item)">處理</Button>
             </div>
-            <Button size="sm" class="shrink-0" @click="openSheet(item)">處理</Button>
+            <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-15 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
           </div>
         </section>
 
@@ -274,28 +277,31 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
             <p class="ml-auto text-xs text-muted-foreground">依預約時段</p>
           </div>
           <p v-if="!upcoming.length" class="px-5 py-6 text-center text-sm text-muted-foreground">今天沒有等待報到的預約。</p>
-          <div v-for="item in upcoming" :key="item._id" class="flex flex-wrap items-center gap-4 border-b border-border px-5 py-3.5 last:border-b-0">
-            <span class="w-14 shrink-0 text-sm font-semibold tabular-nums">{{ item.time || '未定' }}</span>
-            <div class="w-40 shrink-0">
-              <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
-              <p class="truncate text-xs text-muted-foreground">{{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template></p>
+          <div v-for="item in upcoming" :key="item._id" class="border-b border-border px-5 py-3.5 last:border-b-0">
+            <div class="flex flex-wrap items-center gap-4">
+              <span class="w-14 shrink-0 text-sm font-semibold tabular-nums">{{ item.time || '未定' }}</span>
+              <div class="w-40 shrink-0">
+                <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
+                <p class="truncate text-xs text-muted-foreground">{{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template></p>
+              </div>
+              <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template>
+              </p>
+              <div class="flex shrink-0 items-center gap-2">
+                <Button variant="secondary" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
+                <RowActions
+                  :actions="[
+                    { key: 'check-in-late', label: '遲到報到' },
+                    { key: 'edit', label: '修改預約' },
+                    { key: 'no-show', label: '標記未到' },
+                    { key: 'cancel', label: '取消掛號', danger: true },
+                  ]"
+                  :label="`${item.petName}的更多操作`"
+                  @select="key => admin(key, item)"
+                />
+              </div>
             </div>
-            <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-              {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template><template v-if="item.reason">　{{ item.reason }}</template>
-            </p>
-            <div class="flex shrink-0 items-center gap-2">
-              <Button variant="secondary" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
-              <RowActions
-                :actions="[
-                  { key: 'check-in-late', label: '遲到報到' },
-                  { key: 'edit', label: '修改預約' },
-                  { key: 'no-show', label: '標記未到' },
-                  { key: 'cancel', label: '取消掛號', danger: true },
-                ]"
-                :label="`${item.petName}的更多操作`"
-                @select="key => admin(key, item)"
-              />
-            </div>
+            <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-18 text-xs leading-snug text-muted-foreground">{{ item.reason }}</p>
           </div>
         </section>
 

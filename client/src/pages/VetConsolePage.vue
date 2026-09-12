@@ -235,7 +235,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
       <Button variant="secondary" size="sm" @click="refresh"><RefreshCw class="h-4 w-4" />重試</Button>
     </Alert>
 
-    <div class="grid min-h-0 flex-1 gap-4 xl:grid-cols-[21.5rem_minmax(0,1fr)]">
+    <div class="grid min-h-0 flex-1 gap-4 xl:grid-cols-[24rem_minmax(0,1fr)]">
       <section class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card" aria-label="候診佇列">
         <div class="flex items-center gap-3 px-5 pb-3 pt-4">
           <h2 class="text-base font-semibold">候診佇列</h2>
@@ -261,30 +261,38 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               <div
                 v-for="item in group.list"
                 :key="item._id"
-                  class="mb-1 flex items-center gap-2.5 rounded-xl border p-2 transition-colors"
-                  :class="String(item._id) === activeId ? 'border-primary/40 bg-accent' : 'border-border bg-card hover:bg-field'"
+                class="mb-2 cursor-pointer rounded-xl border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                :class="String(item._id) === activeId ? 'border-primary/40 bg-accent' : 'border-border bg-card hover:bg-field'"
+                role="button"
+                tabindex="0"
+                @click="openPatient(item)"
+                @keydown.enter.prevent="openPatient(item)"
+                @keydown.space.prevent="openPatient(item)"
               >
-                <button type="button" class="flex min-w-0 flex-1 items-center gap-3 text-left" @click="openPatient(item)">
-                  <span
-                    v-if="item.checkinNumber != null"
-                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums"
-                    :class="String(item._id) === activeId ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'"
-                  >{{ item.checkinNumber }}</span>
-                  <span v-else class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-dashed border-border bg-field text-muted-foreground" title="未取號" aria-label="未取號"><Ticket class="h-4 w-4" /><span class="sr-only">未取號</span></span>
-                  <span class="min-w-0 flex-1">
-                    <span class="block truncate text-sm font-semibold" :class="String(item._id) === activeId ? 'text-accent-foreground' : ''">{{ item.petName }}</span>
-                    <span class="block truncate text-xs text-muted-foreground">
-                      {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template>
+                <div class="flex items-center gap-2">
+                  <div class="flex min-w-0 flex-1 items-center gap-2">
+                    <span
+                      v-if="item.checkinNumber != null"
+                      class="inline-flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums"
+                      :class="String(item._id) === activeId ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'"
+                    >{{ item.checkinNumber }}</span>
+                    <span v-else class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground" title="未取號" aria-label="未取號"><Ticket class="h-3.5 w-3.5" /><span class="sr-only">未取號</span></span>
+                    <span class="min-w-0 flex-1 truncate text-sm" :class="String(item._id) === activeId ? 'text-accent-foreground' : ''">
+                      <span class="font-semibold">{{ item.petName }}</span>
+                      <span class="text-xs text-muted-foreground"> · {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template></span>
                     </span>
-                  </span>
-                    <span v-if="group.key === 'scheduled'" class="shrink-0 text-xs tabular-nums text-muted-foreground">掛號 {{ item.time || '時間未指定' }}</span>
-                    <span v-else-if="group.key === 'waiting' && waitedMinutes(item) !== null" class="shrink-0 text-xs tabular-nums text-muted-foreground">等候 {{ waitedMinutes(item) }} 分</span>
-                  <span v-else-if="group.key === 'visiting' && openIds.includes(String(item._id))" class="shrink-0 text-xs text-muted-foreground">已開啟</span>
-                </button>
-                <Button v-if="group.key === 'waiting'" size="xs" :disabled="busy" @click="startVisit(item)"><Stethoscope class="h-4 w-4" />看診</Button>
-                <Button v-else-if="group.key === 'handoff'" variant="secondary" size="xs" :disabled="busy" @click="reclaim(item)">
-                  <Undo2 class="h-4 w-4" />取回
-                </Button>
+                  </div>
+                  <div v-if="group.key !== 'visiting' || openIds.includes(String(item._id))" class="flex shrink-0 items-center gap-2">
+                    <span v-if="group.key === 'scheduled'" class="text-xs tabular-nums text-muted-foreground">掛號 {{ item.time || '時間未指定' }}</span>
+                    <span v-else-if="group.key === 'waiting' && waitedMinutes(item) !== null" class="text-xs tabular-nums text-muted-foreground">等候 {{ waitedMinutes(item) }} 分</span>
+                    <span v-else-if="group.key === 'visiting'" class="text-xs text-muted-foreground">已開啟</span>
+                    <Button v-if="group.key === 'waiting'" size="xs" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope class="h-4 w-4" />看診</Button>
+                    <Button v-else-if="group.key === 'handoff'" variant="secondary" size="xs" :disabled="busy" @click.stop="reclaim(item)">
+                      <Undo2 class="h-4 w-4" />取回
+                    </Button>
+                  </div>
+                </div>
+                <p v-if="item.reason" class="mt-1.5 wrap-break-word text-xs leading-snug text-muted-foreground">{{ item.reason }}</p>
               </div>
               </div>
               </Transition>
