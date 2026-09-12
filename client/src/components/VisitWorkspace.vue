@@ -50,8 +50,8 @@ let savePromise = null;
 let queued = null;
 
 const state = computed(() => workflowState(props.appointment));
-// 完成後的就診僅可瀏覽；需要修改時必須先送出申請。
-const editable = computed(() => state.value.started && !state.value.completed);
+// 送交櫃台後即鎖定；櫃台完成前可取回修改，完成後需申請核准。
+const editable = computed(() => state.value.started && !state.value.handedOff && !state.value.completed);
 const dirty = computed(() => Object.keys(draftPatch(draft, baseline.value)).length > 0);
 const owner = computed(() => (typeof pet.value?.ownerId === 'object' ? pet.value.ownerId : null));
 const petSummary = computed(() => {
@@ -69,6 +69,8 @@ const CONFLICT_LABELS = {
 const savedLabel = computed(() => {
   if (busy.value) return '儲存中…';
   if (conflicts.value.length) return '有資料衝突，請先選擇保留內容';
+  if (state.value.handedOff && !state.value.completed) return '已交櫃台，取回後才能編輯';
+  if (state.value.completed) return '已結案，核准修改後才能編輯';
   if (dirty.value) return '尚未儲存';
   if (savedAt.value) return `${savedAt.value.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} 已儲存`;
   return '已儲存';

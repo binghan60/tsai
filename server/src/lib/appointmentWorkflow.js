@@ -48,6 +48,7 @@ export function applyWorkflowAction(appointment, action, body, now = new Date())
 
   if (action === 'clinical') {
     if (state.completed) throw workflowError('櫃台已完成這筆就診，不能再修改內容', 409);
+    if (state.handedOff) throw workflowError('這筆就診已交給櫃台，請先取回再修改內容', 409);
     for (const field of CLINICAL_TEXT_FIELDS) {
       if (body[field] !== undefined) appointment[field] = String(body[field] ?? '').trim();
     }

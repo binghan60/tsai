@@ -66,7 +66,7 @@ test('the desk cannot complete before the vet hands off, and cannot complete twi
   assert.throws(() => applyWorkflowAction(p, 'complete', {}), { status: 409 });
 });
 
-test('clinical text and measurements are trimmed, validated and locked after the desk finishes', () => {
+test('clinical text and measurements are trimmed, validated and locked after handoff', () => {
   const p = appointment();
   applyWorkflowAction(p, 'clinical', { visitNote: '  夜咳為主  ', handoffNote: ' 診察費＋X光 ', weightKg: '5.2', temperatureC: '' });
   assert.equal(p.visitNote, '夜咳為主');
@@ -76,8 +76,11 @@ test('clinical text and measurements are trimmed, validated and locked after the
   assert.throws(() => applyWorkflowAction(p, 'clinical', { weightKg: -1 }), { status: 422 });
 
   applyWorkflowAction(p, 'handoff', {});
-  // 交出去之後醫師仍可補內容——櫃台看得到最新的，直到它按下完成處理為止。
+  assert.throws(() => applyWorkflowAction(p, 'clinical', { specialCareNote: '傷口勿舔舐' }), { status: 409 });
+  applyWorkflowAction(p, 'reclaim', {});
   applyWorkflowAction(p, 'clinical', { specialCareNote: '傷口勿舔舐' });
+  assert.equal(p.specialCareNote, '傷口勿舔舐');
+  applyWorkflowAction(p, 'handoff', {});
   applyWorkflowAction(p, 'complete', {});
   assert.throws(() => applyWorkflowAction(p, 'clinical', { visitNote: '再改一次' }), { status: 409 });
 });
@@ -99,7 +102,7 @@ test('legacy visits keep their stage when the new workflow first touches them', 
   // 舊版（批價／收款）沒有 handoffAt/deskCompletedAt，靠 status 回推。
   const handedOff = { ...appointment(), status: 'pending_checkout' };
   assert.deepEqual(workflowState(handedOff), { started: true, handedOff: true, completed: false });
-  applyWorkflowAction(handedOff, 'clinical', { visitNote: 'updated' });
+  assert.throws(() => applyWorkflowAction(handedOff, 'clinical', { visitNote: 'updated' }), { status: 409 });
   assert.equal(handedOff.workflowVersion, 2);
   assert.equal(handedOff.status, 'pending_checkout');
   assert.ok(handedOff.handoffAt);

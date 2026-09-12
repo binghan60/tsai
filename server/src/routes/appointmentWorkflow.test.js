@@ -130,6 +130,7 @@ describe('independent appointment workflow HTTP routes', () => {
   });
   it('lets the vet reclaim a handed-off visit until the desk completes it', async () => {
     await post('handoff');
+    assert.equal((await post('clinical', { handoffNote: '取回前不應修改' })).status, 409);
     const reclaimed = await post('reclaim');
     assert.equal(reclaimed.status, 200);
     assert.equal(reclaimed.body.status, 'arrived');
