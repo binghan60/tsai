@@ -1,6 +1,6 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
-import { CalendarClock, Check, ChevronDown, Phone, X } from '@lucide/vue';
+import { computed, nextTick, ref, watch } from 'vue';
+import { CalendarClock, Check, Phone, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { APPOINTMENT_TIME_RANGES, APPOINTMENT_TIME_MINUTE_STEP } from '../lib/appointmentTime';
@@ -9,16 +9,22 @@ import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { DatePicker } from './ui/date-picker';
 import { TimePicker } from './ui/time-picker';
+import { Textarea } from './ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 
-// 櫃台處理醫師交辦的面板。段落順序刻意是「請轉告飼主 → 醫師交辦 → 病歷內容收起 → 回診」，
+// 櫃台處理醫師交辦的面板。段落順序是「請轉告飼主 → 醫師交辦 → 病歷內容 → 回診」，
 // 那就是櫃台當面對客人講話的順序；轉告事項最容易漏掉，所以放最上面並用警示底色。
 const props = defineProps({ appointment: { type: Object, required: true } });
 const emit = defineEmits(['updated', 'close']);
 
 const busy = ref(false);
 const error = ref('');
-const showVisitNote = ref(false);
+const visitNote = ref(props.appointment.visitNote || '');
+const noteBaseline = ref(visitNote.value);
+const noteDirty = computed(() => visitNote.value !== noteBaseline.value);
+const noteConflict = computed(() => noteDirty.value && (props.appointment.visitNote || '') !== noteBaseline.value);
+const noteSaved = ref(false);
+const editingNote = ref(false);
 const date = ref(props.appointment.followUpDate || '');
 const time = ref(props.appointment.followUpTime || '');
 
@@ -30,15 +36,54 @@ const canBook = computed(() => Boolean(date.value && time.value) && !booked.valu
 watch(() => props.appointment._id, () => {
   date.value = props.appointment.followUpDate || '';
   time.value = props.appointment.followUpTime || '';
-  showVisitNote.value = false;
+  resetNote();
+  editingNote.value = false;
   error.value = '';
 });
 
+function resetNote() {
+  visitNote.value = props.appointment.visitNote || '';
+  noteBaseline.value = visitNote.value;
+  noteSaved.value = false;
+}
+watch(() => props.appointment.visitNote, () => { if (!noteDirty.value) resetNote(); });
+
+async function persistNote() {
+  if (!noteDirty.value) return;
+  if (noteConflict.value) throw new Error('本次簡易紀錄已由其他人修改，請先核對最新內容。');
+  if (state.value.completed) throw new Error('這筆就診已結案，請先完成修改申請與核准。');
+  const data = await run('clinical', { visitNote: visitNote.value });
+  visitNote.value = data.visitNote || '';
+  noteBaseline.value = visitNote.value;
+  noteSaved.value = true;
+}
+
+function startEditNote() {
+  resetNote();
+  editingNote.value = true;
+}
+function cancelEditNote() {
+  resetNote();
+  editingNote.value = false;
+}
+
+async function saveNote() {
+  if (busy.value) return;
+  busy.value = true;
+  error.value = '';
+  try {
+    await persistNote();
+    editingNote.value = false;
+  } catch (err) {
+    error.value = err.response?.data?.message || err.message || '儲存失敗，請重試';
+  } finally { busy.value = false; }
+}
 function close() { if (!busy.value) emit('close'); }
 
 async function run(action, values = {}) {
   const { data } = await http.post(`/appointments/${props.appointment._id}/workflow/${action}`, { version: props.appointment.__v ?? 0, ...values });
   emit('updated', data, action);
+  await nextTick();
   return data;
 }
 
@@ -53,7 +98,7 @@ async function bookFollowUp() {
 
 // 一顆按鈕收尾：還沒掛號的回診先掛上，再結束這次就診。分成兩顆只會讓櫃台漏按其中一顆。
 async function complete() {
-  if (busy.value) return;
+  if (busy.value || editingNote.value) return;
   busy.value = true;
   error.value = '';
   try {
@@ -61,7 +106,7 @@ async function complete() {
     await run('complete');
     emit('close');
   } catch (err) {
-    error.value = err.response?.data?.message || '操作失敗，請稍後重試';
+    error.value = err.response?.data?.message || err.message || '操作失敗，請稍後重試';
   } finally { busy.value = false; }
 }
 
@@ -82,7 +127,7 @@ async function approveReopen() {
     <DialogContent
       size="lg"
       :show-close-button="false"
-      class="h-[min(90vh,52rem)] gap-0 bg-card p-0 sm:max-w-[36rem]"
+      class="h-[min(90vh,52rem)] gap-0 bg-card p-0 sm:max-w-[min(56rem,calc(100vw-2rem))]"
       @escape-key-down="event => busy && event.preventDefault()"
       @pointer-down-outside="event => busy && event.preventDefault()"
     >
@@ -125,18 +170,25 @@ async function approveReopen() {
             <p v-else class="rounded-xl bg-field p-4 text-sm text-muted-foreground">醫師沒有留下交辦事項。</p>
           </section>
 
-          <section v-if="appointment.visitNote" class="rounded-xl border border-border">
-            <button
-              type="button"
-              class="flex w-full items-center gap-3 rounded-xl bg-field/60 px-4 py-3 text-left"
-              :aria-expanded="showVisitNote"
-              @click="showVisitNote = !showVisitNote"
-            >
-              <span class="text-sm font-semibold">本次簡易紀錄</span>
-              <span class="text-xs text-muted-foreground">病歷內容，需要時再展開</span>
-              <ChevronDown class="ml-auto h-4 w-4 text-muted-foreground transition-transform" :class="{ '-rotate-90': !showVisitNote }" />
-            </button>
-            <p v-show="showVisitNote" class="whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed">{{ appointment.visitNote }}</p>
+          <section class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="text-base font-semibold">本次簡易紀錄</h3>
+              <Button v-if="!editingNote && !state.completed" variant="secondary" size="sm" :disabled="busy" @click="startEditNote">編輯</Button>
+            </div>
+            <Textarea v-if="editingNote" id="desk-visit-note" v-model="visitNote" aria-label="本次簡易紀錄" rows="8" :disabled="busy || state.completed" placeholder="輸入本次看診紀錄…" />
+            <p v-else class="whitespace-pre-wrap wrap-anywhere rounded-xl bg-field p-4 text-sm leading-relaxed">{{ appointment.visitNote || '尚無本次簡易紀錄。' }}</p>
+            <Alert v-if="editingNote && noteConflict" variant="destructive">
+              <AlertDescription>其他人已修改此紀錄，請先核對最新內容：</AlertDescription>
+              <p class="my-2 whitespace-pre-wrap wrap-anywhere text-sm">{{ appointment.visitNote || '（空白）' }}</p>
+              <Button variant="secondary" size="sm" :disabled="busy" @click="resetNote">採用最新內容</Button>
+            </Alert>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <p class="text-xs text-muted-foreground" role="status">{{ state.completed ? '已結案，核准修改後才能編輯' : editingNote ? '按「儲存」才會保存；取消或關閉會放棄修改' : noteSaved ? '已儲存' : '與醫師診療台及病歷日誌共用同一份紀錄' }}</p>
+              <div v-if="editingNote" class="flex gap-2">
+                <Button variant="secondary" size="sm" :disabled="busy" @click="cancelEditNote">取消</Button>
+                <Button size="sm" :disabled="busy || noteConflict || state.completed" @click="saveNote">儲存</Button>
+              </div>
+            </div>
           </section>
 
           <section class="space-y-3">
@@ -175,7 +227,7 @@ async function approveReopen() {
           <div class="ml-auto flex gap-3">
             <Button variant="secondary" :disabled="busy" @click="close">{{ state.completed ? '關閉' : '稍後處理' }}</Button>
             <Button v-if="state.completed && appointment.reopenRequest?.requestedAt && !appointment.reopenRequest?.approvedAt" :disabled="busy" @click="approveReopen">核准修改</Button>
-            <Button v-else-if="!state.completed" :disabled="busy || !state.handedOff" @click="complete"><Check class="h-4 w-4" />完成處理</Button>
+            <Button v-else-if="!state.completed" :disabled="busy || editingNote || !state.handedOff" @click="complete"><Check class="h-4 w-4" />完成處理</Button>
           </div>
         </footer>
       </div>
