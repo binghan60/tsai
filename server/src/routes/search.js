@@ -13,7 +13,7 @@ router.get('/', async (req, res, next) => {
     const pattern = new RegExp(escapeRegExp(query), 'i');
     const derivedRecordNumber = query.match(/^PET-([0-9A-F]{8})$/i);
     const owners = await Owner.find({
-      $or: [{ name: pattern }, { phone: pattern }, { email: pattern }],
+      $or: [{ name: pattern }, { phone: pattern }, { landline: pattern }, { email: pattern }],
     })
       .sort({ updatedAt: -1 })
       .limit(8);

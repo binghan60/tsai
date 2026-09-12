@@ -1,7 +1,7 @@
 ﻿<script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
-import { ArrowRight, FileText, ShieldAlert, Undo2 } from '@lucide/vue';
+import { ArrowRight, FileText, Undo2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
@@ -54,6 +54,18 @@ const state = computed(() => workflowState(props.appointment));
 const editable = computed(() => state.value.started && !state.value.handedOff && !state.value.completed);
 const dirty = computed(() => Object.keys(draftPatch(draft, baseline.value)).length > 0);
 const owner = computed(() => (typeof pet.value?.ownerId === 'object' ? pet.value.ownerId : null));
+const ownerFields = computed(() => {
+  const data = owner.value;
+  const phone = data?.phone || props.appointment.ownerPhone || '';
+  return [
+    { label: '姓名', value: data?.name || props.appointment.ownerName || '' },
+    { label: '手機', value: phone, class: phone ? 'tabular-nums' : '' },
+    { label: '市話', value: data?.landline || '', class: data?.landline ? 'tabular-nums' : '' },
+    { label: 'Email', value: data?.email || '', class: data?.email ? 'break-all' : '' },
+    { label: '地址', value: data?.address || '' },
+    { label: '備註', value: data?.notes || '', class: data?.notes ? 'whitespace-pre-wrap' : '' },
+  ].filter((field) => field.value);
+});
 const petSummary = computed(() => {
   if (!pet.value) return props.appointment.species || '';
   const sex = { male: '公', female: '母' }[pet.value.sex] || '';
@@ -61,7 +73,20 @@ const petSummary = computed(() => {
   return [pet.value.breed || props.appointment.species, sex && neutered ? `${sex} ${neutered}` : sex || neutered, ageLabel(pet.value.birthDate, new Date(), '')]
     .filter(Boolean).join(' · ');
 });
-const hasReminders = computed(() => Boolean(pet.value?.allergies || pet.value?.chronicConditions || pet.value?.currentMedications));
+const reminderFields = computed(() => {
+  if (!pet.value) return [];
+  const vaccine = { none: '未注射', done: `已注射${pet.value.vaccineDate ? `，最後注射時間 ${pet.value.vaccineDate}` : ''}` }[pet.value.vaccineStatus] || '';
+  const history = [pet.value.medicalHistory?.join('、'), pet.value.medicalHistoryOther].filter(Boolean).join('；');
+  const allergy = { none: '無過敏', yes: `有${pet.value.allergyType ? `，${pet.value.allergyType}` : ''}` }[pet.value.allergyStatus] || '';
+  const checkup = { none: '未健檢', done: `有${pet.value.checkupDate ? `，上次健檢時間 ${pet.value.checkupDate}` : ''}` }[pet.value.checkupStatus] || '';
+  return [
+    { label: '疫苗', value: vaccine },
+    { label: '病史', value: history },
+    { label: '藥物過敏', value: allergy },
+    { label: '健檢', value: checkup },
+  ].filter((field) => field.value);
+});
+const hasReminders = computed(() => reminderFields.value.length > 0);
 const CONFLICT_LABELS = {
   visitNote: '本次簡易紀錄', handoffNote: '給櫃台的交辦', specialCareNote: '請轉告飼主',
   followUpRecommendation: '回診建議', followUpReason: '回診原因', weightKg: '體重', temperatureC: '體溫',
@@ -258,22 +283,27 @@ onBeforeUnmount(() => {
         <template v-if="appointment.reason"> · {{ appointment.reason }}</template>
       </p>
 
-      <div class="grid gap-3 sm:grid-cols-2">
+      <div class="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
           <p class="text-xs font-semibold text-primary">病患資料</p>
           <p class="mt-0.5 truncate text-sm font-semibold text-foreground">{{ appointment.petName }} <span v-if="petSummary" class="font-normal text-muted-foreground">{{ petSummary }}</span></p>
+                  <dl v-if="hasReminders" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-warning">
+                    <div v-for="field in reminderFields" :key="field.label" class="min-w-0">
+                      <dt class="font-semibold">{{ field.label }}</dt>
+                      <dd class="mt-0.5 whitespace-pre-wrap font-semibold">{{ field.value }}</dd>
+                    </div>
+                  </dl>
         </section>
         <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
           <p class="text-xs font-semibold text-muted-foreground">飼主資料</p>
-          <p class="mt-0.5 truncate text-sm font-medium text-foreground">{{ owner?.name || appointment.ownerName || '未提供飼主資料' }}<template v-if="owner?.phone || appointment.ownerPhone"> · <span class="tabular-nums">{{ owner?.phone || appointment.ownerPhone }}</span></template></p>
+          <dl v-if="ownerFields.length" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+            <div v-for="field in ownerFields" :key="field.label" class="min-w-0">
+              <dt class="font-semibold text-muted-foreground">{{ field.label }}</dt>
+              <dd class="mt-0.5 font-medium text-foreground" :class="field.class">{{ field.value }}</dd>
+            </div>
+          </dl>
+          <p v-else class="mt-0.5 text-sm font-medium text-muted-foreground">未提供飼主資料</p>
         </section>
-      </div>
-
-      <div v-if="hasReminders" class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg bg-warning-surface px-3.5 py-2.5 text-sm text-warning">
-        <span class="inline-flex items-center gap-2 font-semibold"><ShieldAlert class="h-4 w-4" stroke-width="1.75" />重要提醒</span>
-        <span v-if="pet.allergies">飲食習慣：{{ pet.allergies }}</span>
-        <span v-if="pet.chronicConditions">既往病史：{{ pet.chronicConditions }}</span>
-        <span v-if="pet.currentMedications">預防針紀錄：{{ pet.currentMedications }}</span>
       </div>
 
       <div class="mt-3"><AppointmentMilestones :appointment="appointment" /></div>

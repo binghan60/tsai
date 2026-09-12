@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, CalendarDays, Check, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2, User, X } from '@lucide/vue';
+import { ArrowDownToLine, ArrowUpToLine, CalendarDays, Check, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2, User, X } from '@lucide/vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
@@ -64,9 +64,6 @@ const petForm = reactive({
   allergyType: '',
   checkupStatus: 'unknown',
   checkupDate: '',
-  allergies: '',
-  chronicConditions: '',
-  currentMedications: '',
   notes: '',
 });
 
@@ -199,11 +196,11 @@ const secondaryFields = computed(() => filledFields([
   { label: '主餐配菜', value: pet.value?.foods?.join('、') ?? '' },
   { label: '放飯頻率', value: feedingLabel.value },
 ]));
-// 飲食習慣／既往病史／預防針紀錄是看診前必須先看到的臨床提醒，獨立成一塊警示樣式，不跟品種、體重這類一般資料混在同一個灰階列表裡。
+// 疫苗、病史、藥物過敏、健檢是看診前必須先看到的資料，保留在原本寵物資料卡片中並用警告色標示。
 const alertFields = computed(() => filledFields([
-  { label: '疫苗', value: vaccineLabel.value || pet.value?.currentMedications || '' },
-  { label: '病史', value: [pet.value?.medicalHistory?.join('、'), pet.value?.medicalHistoryOther, pet.value?.chronicConditions].filter(Boolean).join('；') },
-  { label: '藥物過敏', value: allergyLabel.value || pet.value?.allergies || '' },
+  { label: '疫苗', value: vaccineLabel.value },
+  { label: '病史', value: [pet.value?.medicalHistory?.join('、'), pet.value?.medicalHistoryOther].filter(Boolean).join('；') },
+  { label: '藥物過敏', value: allergyLabel.value },
   { label: '健檢', value: checkupLabel.value },
 ]));
 const hasAnyPetDetail = computed(() => Boolean(
@@ -286,9 +283,6 @@ function startPetEdit() {
     allergyType: pet.value.allergyType ?? '',
     checkupStatus: pet.value.checkupStatus ?? 'unknown',
     checkupDate: pet.value.checkupDate ?? '',
-    allergies: pet.value.allergies ?? '',
-    chronicConditions: pet.value.chronicConditions ?? '',
-    currentMedications: pet.value.currentMedications ?? '',
     notes: pet.value.notes ?? '',
   });
   petError.value = '';
@@ -747,30 +741,24 @@ watch(pet, async (value) => {
 
       <!-- 顯示模式：原本的唯讀摘要，飼主欄位已經合併到下方同一張卡片裡。 -->
       <div v-else-if="hasAnyPetDetail" class="mt-4 space-y-4 border-t border-border pt-3 text-sm">
-        <dl v-if="identityFields.length || secondaryFields.length" class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+        <dl v-if="identityFields.length || secondaryFields.length || alertFields.length" class="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
           <div v-for="field in identityFields" :key="field.label" class="min-w-0">
-            <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
-            <dd class="mt-1 text-foreground">{{ field.value }}</dd>
+            <dt class="text-xs font-semibold text-muted-foreground">{{ field.label }}</dt>
+            <dd class="mt-1 font-medium text-foreground">{{ field.value }}</dd>
           </div>
           <div v-for="field in secondaryFields" :key="field.label" class="min-w-0">
-            <dt class="text-xs font-medium text-muted-foreground">{{ field.label }}</dt>
-            <dd class="mt-1 text-foreground">{{ field.value }}</dd>
+            <dt class="text-xs font-semibold text-muted-foreground">{{ field.label }}</dt>
+            <dd class="mt-1 font-medium text-foreground">{{ field.value }}</dd>
           </div>
+              <div v-for="field in alertFields" :key="field.label" class="min-w-0 text-warning">
+                <dt class="text-xs font-semibold">{{ field.label }}</dt>
+                <dd class="mt-1 whitespace-pre-wrap text-xs font-semibold">{{ field.value }}</dd>
+              </div>
         </dl>
 
-        <div v-if="alertFields.length" class="rounded-xl bg-warning-surface px-3 py-2.5 text-warning">
-          <div class="flex items-center gap-1.5 text-xs font-semibold"><AlertTriangle class="h-3.5 w-3.5 shrink-0" />臨床提醒</div>
-          <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-3">
-            <div v-for="field in alertFields" :key="field.label" class="min-w-0">
-              <dt class="text-xs font-medium opacity-80">{{ field.label }}</dt>
-              <dd class="mt-0.5 whitespace-pre-wrap text-xs text-warning">{{ field.value }}</dd>
-            </div>
-          </dl>
-        </div>
-
         <dl v-if="pet.notes">
-          <dt class="text-xs font-medium text-muted-foreground">其他備註</dt>
-          <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ pet.notes }}</dd>
+          <dt class="text-xs font-semibold text-muted-foreground">其他備註</dt>
+          <dd class="mt-1 whitespace-pre-wrap font-medium text-foreground">{{ pet.notes }}</dd>
         </dl>
       </div>
 
@@ -826,24 +814,24 @@ watch(pet, async (value) => {
 
         <dl v-else-if="pet.ownerId.phone || pet.ownerId.landline || pet.ownerId.email || pet.ownerId.address || pet.ownerId.notes" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
           <div v-if="pet.ownerId.phone" class="min-w-0">
-            <dt class="text-xs font-medium text-muted-foreground">手機</dt>
-            <dd class="mt-1 tabular-nums text-foreground">{{ pet.ownerId.phone }}</dd>
+            <dt class="text-xs font-semibold text-muted-foreground">手機</dt>
+            <dd class="mt-1 tabular-nums font-medium text-foreground">{{ pet.ownerId.phone }}</dd>
           </div>
           <div v-if="pet.ownerId.landline" class="min-w-0">
-            <dt class="text-xs font-medium text-muted-foreground">市話</dt>
-            <dd class="mt-1 tabular-nums text-foreground">{{ pet.ownerId.landline }}</dd>
+            <dt class="text-xs font-semibold text-muted-foreground">市話</dt>
+            <dd class="mt-1 tabular-nums font-medium text-foreground">{{ pet.ownerId.landline }}</dd>
           </div>
           <div v-if="pet.ownerId.email" class="min-w-0">
-            <dt class="text-xs font-medium text-muted-foreground">Email</dt>
-            <dd class="mt-1 break-all text-foreground">{{ pet.ownerId.email }}</dd>
+            <dt class="text-xs font-semibold text-muted-foreground">Email</dt>
+            <dd class="mt-1 break-all font-medium text-foreground">{{ pet.ownerId.email }}</dd>
           </div>
           <div v-if="pet.ownerId.address" class="col-span-2 min-w-0 sm:col-span-3">
-            <dt class="text-xs font-medium text-muted-foreground">地址</dt>
-            <dd class="mt-1 text-foreground">{{ pet.ownerId.address }}</dd>
+            <dt class="text-xs font-semibold text-muted-foreground">地址</dt>
+            <dd class="mt-1 font-medium text-foreground">{{ pet.ownerId.address }}</dd>
           </div>
           <div v-if="pet.ownerId.notes" class="col-span-2 min-w-0 sm:col-span-3">
-            <dt class="text-xs font-medium text-muted-foreground">備註</dt>
-            <dd class="mt-1 whitespace-pre-wrap text-foreground">{{ pet.ownerId.notes }}</dd>
+            <dt class="text-xs font-semibold text-muted-foreground">備註</dt>
+            <dd class="mt-1 whitespace-pre-wrap font-medium text-foreground">{{ pet.ownerId.notes }}</dd>
           </div>
         </dl>
       </div>

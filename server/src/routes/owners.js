@@ -29,9 +29,6 @@ const PET_FIELDS = [
   'allergyType',
   'checkupStatus',
   'checkupDate',
-  'allergies',
-  'chronicConditions',
-  'currentMedications',
   'notes',
 ];
 

@@ -153,9 +153,14 @@ function reportPayload(record, sections) {
           sex: pet.sex,
           neutered: pet.neutered,
           birthDate: pet.birthDate,
-          allergies: pet.allergies,
-          chronicConditions: pet.chronicConditions,
-          currentMedications: pet.currentMedications,
+          vaccineStatus: pet.vaccineStatus,
+          vaccineDate: pet.vaccineDate,
+          medicalHistory: pet.medicalHistory,
+          medicalHistoryOther: pet.medicalHistoryOther,
+          allergyStatus: pet.allergyStatus,
+          allergyType: pet.allergyType,
+          checkupStatus: pet.checkupStatus,
+          checkupDate: pet.checkupDate,
         }
       : null,
     owner: owner ? { name: owner.name } : null,
@@ -324,7 +329,7 @@ const RECORD_LIST_POPULATE = {
 // 關鍵字可能指向寵物或飼主，那是另外兩個 collection——先解析成 petId 清單，
 // 再併進報告自己的欄位（報告編號、獸醫師）一起比對。
 async function petIdsMatching(pattern) {
-  const owners = await Owner.find({ $or: [{ name: pattern }, { phone: pattern }, { email: pattern }] }).select('_id');
+  const owners = await Owner.find({ $or: [{ name: pattern }, { phone: pattern }, { landline: pattern }, { email: pattern }] }).select('_id');
   const ownerIds = owners.map((owner) => owner._id);
   const pets = await Pet.find({
     $or: [

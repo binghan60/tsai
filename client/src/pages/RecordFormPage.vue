@@ -143,6 +143,19 @@ const confirmingExamType = ref(false);
 const typeChoiceError = ref('');
 
 const pet = ref(null);
+const petReminderFields = computed(() => {
+  if (!pet.value) return [];
+  const vaccine = { none: '未注射', done: `已注射${pet.value.vaccineDate ? `，最後注射時間 ${pet.value.vaccineDate}` : ''}` }[pet.value.vaccineStatus] || '';
+  const history = [pet.value.medicalHistory?.join('、'), pet.value.medicalHistoryOther].filter(Boolean).join('；');
+  const allergy = { none: '無過敏', yes: `有${pet.value.allergyType ? `，${pet.value.allergyType}` : ''}` }[pet.value.allergyStatus] || '';
+  const checkup = { none: '未健檢', done: `有${pet.value.checkupDate ? `，上次健檢時間 ${pet.value.checkupDate}` : ''}` }[pet.value.checkupStatus] || '';
+  return [
+    { label: '疫苗', value: vaccine },
+    { label: '病史', value: history },
+    { label: '藥物過敏', value: allergy },
+    { label: '健檢', value: checkup },
+  ].filter((field) => field.value);
+});
 // 參考範圍就存在範本項目上，不必另外請求。
 const labRanges = computed(() => referenceRanges(template.value));
 const vet = ref('');
@@ -988,7 +1001,12 @@ function handleBeforeUnload(event) {
           <div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-primary" /><span class="truncate font-semibold text-foreground">{{ pet?.name ?? '—' }}</span></div>
           <div class="flex min-w-0 items-center gap-2 text-sm text-foreground"><User class="h-4 w-4 shrink-0 text-muted-foreground" /><span class="truncate">{{ pet?.ownerId?.name ?? '—' }}</span></div>
         </div>
-        <div v-if="pet?.allergies" class="mt-3 flex items-start gap-2 rounded-xl bg-warning-surface px-3 py-2 text-xs text-warning"><AlertTriangle class="mt-0.5 h-4 w-4 shrink-0" /><span><strong>過敏提醒：</strong>{{ pet.allergies }}</span></div>
+                <dl v-if="petReminderFields.length" class="mt-2 grid grid-cols-2 gap-x-5 gap-y-2 text-xs text-warning sm:grid-cols-4">
+                  <div v-for="field in petReminderFields" :key="field.label" class="min-w-0">
+                    <dt class="font-semibold">{{ field.label }}</dt>
+                    <dd class="mt-0.5 whitespace-pre-wrap font-semibold">{{ field.value }}</dd>
+                  </div>
+                </dl>
         <div class="mt-3 flex flex-col gap-2 border-t border-border/70 pt-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <Label for="record-follow-up-date">回診日期</Label>

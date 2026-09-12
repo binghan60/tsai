@@ -30,9 +30,6 @@ const PET_FIELDS = [
   'allergyType',
   'checkupStatus',
   'checkupDate',
-  'allergies',
-  'chronicConditions',
-  'currentMedications',
   'notes',
 ];
 const MEDICAL_RECORD_SUMMARY_FIELDS =

@@ -28,9 +28,6 @@ export function emptyPetDraft() {
     allergyType: '',
     checkupStatus: 'unknown',
     checkupDate: '',
-    allergies: '',
-    chronicConditions: '',
-    currentMedications: '',
     notes: '',
   };
 }

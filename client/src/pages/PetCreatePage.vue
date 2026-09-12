@@ -768,7 +768,6 @@ onBeforeUnmount(() => {
             <HeartPulse class="h-4 w-4 text-primary" stroke-width="2" />
             <h2 class="text-xs font-semibold tracking-wide text-foreground uppercase">醫療病史與生活備註（選填）</h2>
           </div>
-          <Badge v-if="filledMedicalCount > 0" variant="secondary" class="bg-accent px-2 py-0 text-xs text-primary">已填寫 {{ filledMedicalCount }} 項</Badge>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">

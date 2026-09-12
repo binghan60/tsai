@@ -49,6 +49,20 @@ const shareActionLabel = computed(() => {
   return '建立飼主分享連結';
 });
 const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
+const petReminderFields = computed(() => {
+  const pet = record.value?.pet;
+  if (!pet) return [];
+  const vaccine = { none: '未注射', done: `已注射${pet.vaccineDate ? `，最後注射時間 ${pet.vaccineDate}` : ''}` }[pet.vaccineStatus] || '';
+  const history = [pet.medicalHistory?.join('、'), pet.medicalHistoryOther].filter(Boolean).join('；');
+  const allergy = { none: '無過敏', yes: `有${pet.allergyType ? `，${pet.allergyType}` : ''}` }[pet.allergyStatus] || '';
+  const checkup = { none: '未健檢', done: `有${pet.checkupDate ? `，上次健檢時間 ${pet.checkupDate}` : ''}` }[pet.checkupStatus] || '';
+  return [
+    { label: '疫苗', value: vaccine },
+    { label: '病史', value: history },
+    { label: '藥物過敏', value: allergy },
+    { label: '健檢', value: checkup },
+  ].filter((field) => field.value);
+});
 
 // 分享連結是有期限的（後端預設 30 天，過期後公開頁直接回 410，寄出的信裡也寫著
 // 「連結有效至 X」）。這行以前寫「連結無使用期限」，會讓院方照著它跟飼主保證錯的事。
@@ -498,13 +512,11 @@ watch(
             <div v-if="record.owner?.name"><dt class="text-xs font-medium text-report-muted">飼主</dt><dd class="mt-1 text-report-foreground">{{ record.owner.name }}</dd></div>
             <div v-if="record.pet?.species || record.pet?.breed"><dt class="text-xs font-medium text-report-muted">物種／品種</dt><dd class="mt-1 text-report-foreground">{{ record.pet?.species || '' }}<template v-if="record.pet?.species && record.pet?.breed">／</template>{{ record.pet?.breed || '' }}</dd></div>
             <div v-if="sexAndAgeLabel"><dt class="text-xs font-medium text-report-muted">性別／健檢時年齡</dt><dd class="mt-1 text-report-foreground">{{ sexAndAgeLabel }}</dd></div>
+                  <div v-for="field in petReminderFields" :key="field.label" class="min-w-0 text-report-warning-strong">
+                    <dt class="text-xs font-semibold text-report-warning">{{ field.label }}</dt>
+                    <dd class="mt-1 whitespace-pre-wrap font-semibold">{{ field.value }}</dd>
+                  </div>
           </dl>
-        </section>
-
-        <section v-if="record.pet?.allergies || record.pet?.chronicConditions || record.pet?.currentMedications" class="mt-6 border-l-4 border-report-warning-accent bg-report-warning-surface px-4 py-3 text-sm text-report-warning-strong">
-          <p v-if="record.pet.allergies"><strong>飲食習慣：</strong>{{ record.pet.allergies }}</p>
-          <p v-if="record.pet.chronicConditions"><strong>既往病史：</strong>{{ record.pet.chronicConditions }}</p>
-          <p v-if="record.pet.currentMedications"><strong>預防針紀錄：</strong>{{ record.pet.currentMedications }}</p>
         </section>
 
         <ReportSection
