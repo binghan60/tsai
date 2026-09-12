@@ -216,6 +216,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
         <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
         <Button variant="secondary" size="sm" :disabled="date === today" @click="date = today">今天</Button>
+        <Button variant="secondary" size="sm" as-child><router-link to="/reception/intakes">初診審核</router-link></Button>
         <Button size="sm" @click="admin('new')"><Plus class="h-4 w-4" />新增掛號</Button>
       </div>
     </header>

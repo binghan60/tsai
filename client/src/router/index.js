@@ -16,6 +16,8 @@ const FormTemplateListPage = () => import('../pages/FormTemplateListPage.vue');
 const FormTemplateEditPage = () => import('../pages/FormTemplateEditPage.vue');
 const TextTemplateListPage = () => import('../pages/TextTemplateListPage.vue');
 const LoginPage = () => import('../pages/LoginPage.vue');
+const PublicIntakePage = () => import('../pages/PublicIntakePage.vue');
+const IntakeReviewPage = () => import('../pages/IntakeReviewPage.vue');
 
 const router = createRouter({
   history: createWebHistory(),
@@ -30,9 +32,11 @@ const router = createRouter({
   },
   routes: [
     { path: '/login', component: LoginPage, meta: { bare: true, public: true, title: '登入' } },
+    { path: '/intake', component: PublicIntakePage, meta: { bare: true, public: true, title: '初診資料填寫' } },
     { path: '/', component: DashboardPage, meta: { title: '儀表板' } },
     { path: '/appointments', component: VetConsolePage, meta: { title: '醫師診療台' } },
     { path: '/reception', component: ReceptionPage, meta: { title: '櫃台工作台' } },
+    { path: '/reception/intakes', component: IntakeReviewPage, meta: { title: '初診表審核', nav: '/reception' } },
     // 舊書籤：看診不再是獨立頁面，改成診療台右欄可以同時開多筆的工作區。
     { path: '/appointments/:id/visit', redirect: '/appointments' },
     { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },

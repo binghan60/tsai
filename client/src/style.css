@@ -124,6 +124,22 @@
    使用端一律寫語意 token，不要碰上面的色階——text-ink-900 dark:text-white 那種
    雙寫等於在系統裡養第二套配色，兩套並行正是「配色沒問題但細節很髒」的來源。 */
 :root {
+  /* 舊紙本初診表的固定白底配色；公開填寫頁不跟隨後台深色主題。 */
+  --intake-white: #fff;
+  --intake-text: #333;
+  --intake-border: #e0e0e0;
+  --intake-red: #d32f2f;
+  --intake-heading: #2c3e50;
+  --intake-muted: #7f8c8d;
+  --intake-dash: #ccc;
+  --intake-label: #444;
+  --intake-secondary: #666;
+  --intake-focus: #2196f3;
+  --intake-focus-surface: #f0f8ff;
+  --intake-hint: #888;
+  --intake-focus-hover: #1976d2;
+  --intake-orange: #d97706;
+  --intake-shadow: rgba(0, 0, 0, 0.1);
   --background: var(--color-paper-100);
   --foreground: var(--color-paper-900);
   --card: var(--color-paper-0);

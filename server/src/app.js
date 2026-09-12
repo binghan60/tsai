@@ -20,6 +20,7 @@ import searchRouter from './routes/search.js';
 import settingsRouter from './routes/settings.js';
 import textTemplatesRouter from './routes/textTemplates.js';
 import uploadsRouter from './routes/uploads.js';
+import { intakeSubmissionsRouter, publicIntakeRouter } from './routes/intakeSubmissions.js';
 import { closeBrowser } from './lib/pdf.js';
 import { resumePdfJobs } from './lib/reportPdfJobs.js';
 import { initRealtime } from './lib/realtime.js';
@@ -64,7 +65,9 @@ app.get('/api/health', async (req, res) => {
 
 app.use('/api/auth', authRouter);
 app.use('/api/public/reports', publicReportsRouter);
+app.use('/api/public/intake-submissions', publicIntakeRouter);
 app.use('/api', requireAuthentication);
+app.use('/api/intake-submissions', intakeSubmissionsRouter);
 app.use('/api/owners/:ownerId/pets', ownerPetsRouter);
 app.use('/api/owners', ownersRouter);
 app.use('/api/pets/:petId/records', petRecordsRouter);
