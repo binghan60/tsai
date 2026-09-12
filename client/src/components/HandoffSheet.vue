@@ -42,6 +42,7 @@ const state = computed(() => workflowState(props.appointment));
 const booked = computed(() => Boolean(props.appointment.followUpAppointmentId));
 const needsFollowUp = computed(() => Boolean(props.appointment.followUpRecommendation || props.appointment.followUpReason));
 const canBook = computed(() => Boolean(date.value && time.value) && !booked.value);
+const latenessLabel = computed(() => props.appointment.latenessMinutes > 0 ? `遲到 ${props.appointment.latenessMinutes} 分` : '');
 
 watch(() => props.appointment._id, () => {
   date.value = props.appointment.followUpDate || '';
@@ -98,9 +99,9 @@ async function saveNote() {
 }
 function close() { if (!busy.value) emit('close'); }
 
-async function run(action, values = {}) {
+async function run(action, values = {}, options = {}) {
   const { data } = await http.post(`/appointments/${props.appointment._id}/workflow/${action}`, { version: props.appointment.__v ?? 0, ...values });
-  emit('updated', data, action);
+  emit('updated', data, action, options);
   await nextTick();
   return data;
 }
@@ -154,7 +155,7 @@ async function complete() {
   busy.value = true;
   error.value = '';
   try {
-    if (canBook.value) await run('followup', { followUpDate: date.value, followUpTime: time.value });
+    if (canBook.value) await run('followup', { followUpDate: date.value, followUpTime: time.value }, { silentToast: true });
     await run('complete');
     emit('close');
   } catch (err) {
@@ -197,7 +198,10 @@ async function approveReopen() {
               <DialogTitle class="text-xl font-semibold">
                 {{ appointment.petName }}<span class="ml-2 text-sm font-normal text-muted-foreground">{{ appointment.species }}</span>
               </DialogTitle>
-              <p class="text-xs text-muted-foreground">{{ appointment.ownerName || '飼主待確認' }}</p>
+              <p class="text-xs text-muted-foreground">
+                {{ appointment.ownerName || '飼主待確認' }}
+                <span v-if="latenessLabel" class="ml-2 font-semibold text-danger">{{ latenessLabel }}</span>
+              </p>
             </div>
             <a
               v-if="appointment.ownerPhone"

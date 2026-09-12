@@ -9,6 +9,7 @@ export function workflowError(message, status = 422) {
 // 醫師寫給櫃台的自由文字。收費、領藥、要開的證明都寫在 handoffNote，
 // 系統不再逐項計價，也不保存任何金額——櫃台讀這段文字自己收費。
 const CLINICAL_TEXT_FIELDS = ['visitNote', 'handoffNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
+const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC'];
 
 // 來院原因、「本次簡易紀錄」與當次量測需在病歷日誌中一同閱讀；也同步成
 // 同一筆自動日誌，避免醫師日後只能看到文字卻缺少看診當下的體重／體溫。
@@ -48,7 +49,9 @@ export function applyWorkflowAction(appointment, action, body, now = new Date())
 
   if (action === 'clinical') {
     if (state.completed) throw workflowError('櫃台已完成這筆就診，不能再修改內容', 409);
-    if (state.handedOff) throw workflowError('這筆就診已交給櫃台，請先取回再修改內容', 409);
+    const requestedFields = CLINICAL_FIELDS.filter((field) => body[field] !== undefined);
+    const onlyVisitNote = requestedFields.length > 0 && requestedFields.every((field) => field === 'visitNote');
+    if (state.handedOff && !onlyVisitNote) throw workflowError('這筆就診已交給櫃台，請先取回再修改內容', 409);
     for (const field of CLINICAL_TEXT_FIELDS) {
       if (body[field] !== undefined) appointment[field] = String(body[field] ?? '').trim();
     }

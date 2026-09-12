@@ -96,6 +96,9 @@ function closedStatusMeta(appointment) {
   if (appointment.status === 'no_show') return { label: '未到診', class: 'bg-warning-surface text-warning' };
   return { label: '已取消', class: 'bg-muted text-muted-foreground' };
 }
+function latenessLabel(appointment) {
+  return appointment.latenessMinutes > 0 ? `遲到 ${appointment.latenessMinutes} 分` : '';
+}
 
 async function refresh() {
   const token = ++request;
@@ -124,10 +127,13 @@ watch(date, () => { loading.value = true; items.value = []; selected.value = '';
 
 function openSheet(appointment) { selected.value = String(appointment._id); }
 
-function onSheetUpdate(appointment, action) {
+function onSheetUpdate(appointment, action, options = {}) {
   applyUpdate(appointment);
   if (action === 'complete') { notifyChat(appointment, 'desk_complete'); toast.success('已完成處理'); }
-  else if (action === 'followup') { notifyChat(appointment, 'follow_up'); toast.success('回診已預約'); }
+  else if (action === 'followup') {
+    notifyChat(appointment, 'follow_up');
+    if (!options.silentToast) toast.success('回診已預約');
+  }
 }
 
 // 行政操作（新增／編輯／報到／取消／未到／恢復）共用同一條送出路徑，
@@ -264,6 +270,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               <div class="min-w-0 flex-1">
                 <p class="truncate text-sm">{{ excerpt(item) }}</p>
                 <div class="mt-1 flex flex-wrap gap-2">
+                  <span v-if="latenessLabel(item)" class="inline-flex h-6 items-center rounded-full bg-danger-surface px-2.5 text-xs font-medium leading-none text-danger">{{ latenessLabel(item) }}</span>
                   <span v-if="item.specialCareNote" class="inline-flex h-6 items-center rounded-full bg-warning-surface px-2.5 text-xs font-medium leading-none text-warning">有飼主提醒</span>
                   <span v-if="item.followUpRecommendation" class="inline-flex h-6 items-center rounded-full bg-muted px-2.5 text-xs font-medium leading-none text-muted-foreground">建議回診</span>
                 </div>
@@ -286,7 +293,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold tabular-nums text-primary-foreground">{{ item.checkinNumber ?? '—' }}</span>
               <div class="w-40 shrink-0">
                 <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
-                <p class="truncate text-xs text-muted-foreground">{{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template></p>
+                <p class="truncate text-xs text-muted-foreground">{{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template><template v-if="latenessLabel(item)"> · <span class="font-medium text-danger">{{ latenessLabel(item) }}</span></template></p>
               </div>
               <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                 {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template>
@@ -377,7 +384,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
           <div v-for="item in followUps" :key="item._id" class="flex flex-wrap items-center gap-4 border-b border-border px-5 py-3.5 last:border-b-0">
             <div class="w-40 shrink-0">
               <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
-              <p class="truncate text-xs text-muted-foreground">{{ item.ownerName || '飼主待確認' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></p>
+              <p class="truncate text-xs text-muted-foreground">{{ item.ownerName || '飼主待確認' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template><template v-if="latenessLabel(item)"> · <span class="font-medium text-danger">{{ latenessLabel(item) }}</span></template></p>
             </div>
             <p class="min-w-0 flex-1 truncate text-sm">醫師建議：{{ item.followUpRecommendation || item.followUpReason }}</p>
             <Button variant="secondary" size="sm" class="shrink-0" @click="openSheet(item)"><CalendarPlus class="h-4 w-4" />安排回診</Button>
@@ -401,7 +408,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
             >
               <span class="w-14 shrink-0 text-xs tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
               <span class="w-40 shrink-0 truncate text-sm font-semibold">{{ item.petName }}</span>
-              <span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ item.ownerName }}<template v-if="item.followUpAppointmentId"> · 已約回診 {{ item.followUpDate }} {{ item.followUpTime }}</template></span>
+              <span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ item.ownerName }}<template v-if="latenessLabel(item)"> · <span class="font-medium text-danger">{{ latenessLabel(item) }}</span></template><template v-if="item.followUpAppointmentId"> · 已約回診 {{ item.followUpDate }} {{ item.followUpTime }}</template></span>
             </button>
           </div>
         </section>
@@ -436,6 +443,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
                 <span class="w-11 shrink-0 text-xs tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
                 <span class="h-2 w-2 shrink-0 rounded-full" :class="dotClass(item)"></span>
                 <span class="min-w-0 flex-1 truncate text-sm">{{ item.petName }}</span>
+                <span v-if="latenessLabel(item)" class="shrink-0 text-xs font-medium text-danger">{{ latenessLabel(item) }}</span>
                 <span class="shrink-0 text-xs text-muted-foreground">{{ visitLabel(item) }}</span>
               </div>
             </template>

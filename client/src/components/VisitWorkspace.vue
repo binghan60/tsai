@@ -73,6 +73,7 @@ const petSummary = computed(() => {
   return [pet.value.breed || props.appointment.species, sex && neutered ? `${sex} ${neutered}` : sex || neutered, ageLabel(pet.value.birthDate, new Date(), '')]
     .filter(Boolean).join(' · ');
 });
+const latenessLabel = computed(() => props.appointment.latenessMinutes > 0 ? `遲到 ${props.appointment.latenessMinutes} 分` : '');
 const reminderFields = computed(() => {
   if (!pet.value) return [];
   const vaccine = { none: '未注射', done: `已注射${pet.value.vaccineDate ? `，最後注射時間 ${pet.value.vaccineDate}` : ''}` }[pet.value.vaccineStatus] || '';
@@ -286,7 +287,11 @@ onBeforeUnmount(() => {
       <div class="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
           <p class="text-xs font-semibold text-primary">病患資料</p>
-          <p class="mt-0.5 truncate text-sm font-semibold text-foreground">{{ appointment.petName }} <span v-if="petSummary" class="font-normal text-muted-foreground">{{ petSummary }}</span></p>
+          <p class="mt-0.5 truncate text-sm font-semibold text-foreground">
+            {{ appointment.petName }}
+            <span v-if="petSummary" class="font-normal text-muted-foreground">{{ petSummary }}</span>
+            <span v-if="latenessLabel" class="ml-2 text-xs font-semibold text-danger">{{ latenessLabel }}</span>
+          </p>
                   <dl v-if="hasReminders" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-warning">
                     <div v-for="field in reminderFields" :key="field.label" class="min-w-0">
                       <dt class="font-semibold">{{ field.label }}</dt>

@@ -66,7 +66,7 @@ test('the desk cannot complete before the vet hands off, and cannot complete twi
   assert.throws(() => applyWorkflowAction(p, 'complete', {}), { status: 409 });
 });
 
-test('clinical text and measurements are trimmed, validated and locked after handoff', () => {
+test('clinical text and measurements are trimmed, validated and desk note stays editable after handoff', () => {
   const p = appointment();
   applyWorkflowAction(p, 'clinical', { visitNote: '  夜咳為主  ', handoffNote: ' 診察費＋X光 ', weightKg: '5.2', temperatureC: '' });
   assert.equal(p.visitNote, '夜咳為主');
@@ -76,6 +76,11 @@ test('clinical text and measurements are trimmed, validated and locked after han
   assert.throws(() => applyWorkflowAction(p, 'clinical', { weightKg: -1 }), { status: 422 });
 
   applyWorkflowAction(p, 'handoff', {});
+  applyWorkflowAction(p, 'clinical', { visitNote: '  櫃台補充用藥說明  ' });
+  assert.equal(p.visitNote, '櫃台補充用藥說明');
+  assert.equal(p.status, 'pending_checkout');
+  assert.throws(() => applyWorkflowAction(p, 'clinical', { handoffNote: '更改收費項目' }), { status: 409 });
+  assert.throws(() => applyWorkflowAction(p, 'clinical', { weightKg: 5.4 }), { status: 409 });
   assert.throws(() => applyWorkflowAction(p, 'clinical', { specialCareNote: '傷口勿舔舐' }), { status: 409 });
   applyWorkflowAction(p, 'reclaim', {});
   applyWorkflowAction(p, 'clinical', { specialCareNote: '傷口勿舔舐' });
@@ -102,7 +107,8 @@ test('legacy visits keep their stage when the new workflow first touches them', 
   // 舊版（批價／收款）沒有 handoffAt/deskCompletedAt，靠 status 回推。
   const handedOff = { ...appointment(), status: 'pending_checkout' };
   assert.deepEqual(workflowState(handedOff), { started: true, handedOff: true, completed: false });
-  assert.throws(() => applyWorkflowAction(handedOff, 'clinical', { visitNote: 'updated' }), { status: 409 });
+  applyWorkflowAction(handedOff, 'clinical', { visitNote: '櫃台補充' });
+  assert.equal(handedOff.visitNote, '櫃台補充');
   assert.equal(handedOff.workflowVersion, 2);
   assert.equal(handedOff.status, 'pending_checkout');
   assert.ok(handedOff.handoffAt);

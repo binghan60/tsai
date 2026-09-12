@@ -83,6 +83,9 @@ function waitedMinutes(appointment) {
   if (!appointment.checkedInAt) return null;
   return Math.max(0, Math.floor((now.value - new Date(appointment.checkedInAt).getTime()) / 60000));
 }
+function latenessLabel(appointment) {
+  return appointment.latenessMinutes > 0 ? `遲到 ${appointment.latenessMinutes} 分` : '';
+}
 
 async function refresh() {
   const token = ++request;
@@ -279,7 +282,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
                     <span v-else class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground" title="未取號" aria-label="未取號"><Ticket class="h-3.5 w-3.5" /><span class="sr-only">未取號</span></span>
                     <span class="min-w-0 flex-1 truncate text-sm" :class="String(item._id) === activeId ? 'text-accent-foreground' : ''">
                       <span class="font-semibold">{{ item.petName }}</span>
-                      <span class="text-xs text-muted-foreground"> · {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template></span>
+                      <span class="text-xs text-muted-foreground"> · {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template><template v-if="latenessLabel(item)"> · <span class="font-medium text-danger">{{ latenessLabel(item) }}</span></template></span>
                     </span>
                   </div>
                   <div v-if="group.key !== 'visiting' || openIds.includes(String(item._id))" class="flex shrink-0 items-center gap-2">
@@ -313,6 +316,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
             >
               <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs text-muted-foreground">✓</span>
               <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ item.petName }}</span>
+              <span v-if="latenessLabel(item)" class="shrink-0 text-xs font-medium text-danger">{{ latenessLabel(item) }}</span>
             </button>
             </div>
             </Transition>
@@ -334,6 +338,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
           >
             <button type="button" class="flex items-center gap-2" @click="activeId = String(tab._id)">
               <span v-if="String(tab._id) === activeId" class="h-2 w-2 rounded-full bg-primary"></span>{{ tab.petName }}
+              <span v-if="latenessLabel(tab)" class="text-xs font-semibold text-danger">{{ latenessLabel(tab) }}</span>
             </button>
             <button type="button" class="text-muted-foreground hover:text-foreground" :aria-label="`關閉 ${tab.petName}`" @click="closeTab(String(tab._id))">
               <X class="h-3.5 w-3.5" />
