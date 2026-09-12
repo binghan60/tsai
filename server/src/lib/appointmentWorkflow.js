@@ -10,13 +10,14 @@ export function workflowError(message, status = 422) {
 // 系統不再逐項計價，也不保存任何金額——櫃台讀這段文字自己收費。
 const CLINICAL_TEXT_FIELDS = ['visitNote', 'handoffNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
 
-// 「本次簡易紀錄」與當次量測需在病歷日誌中一同閱讀；量測留在掛號欄位外，也同步成
+// 來院原因、「本次簡易紀錄」與當次量測需在病歷日誌中一同閱讀；也同步成
 // 同一筆自動日誌，避免醫師日後只能看到文字卻缺少看診當下的體重／體溫。
 export function appointmentJournalContent(appointment) {
+  const reason = String(appointment.reason || '').trim();
   const measurements = [];
   if (appointment.weightKg !== null && appointment.weightKg !== undefined) measurements.push(`體重：${appointment.weightKg} kg`);
   if (appointment.temperatureC !== null && appointment.temperatureC !== undefined) measurements.push(`體溫：${appointment.temperatureC} °C`);
-  return [measurements.join('　'), String(appointment.visitNote || '').trim()].filter(Boolean).join('\n\n');
+  return [reason ? `來院原因：${reason}` : '', measurements.join('　'), String(appointment.visitNote || '').trim()].filter(Boolean).join('\n\n');
 }
 
 export function assertWorkflowVersion(appointment, version) {

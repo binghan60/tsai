@@ -3,6 +3,7 @@ import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import ClinicalNote from '../models/ClinicalNote.js';
+import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
 
@@ -147,7 +148,7 @@ petsRouter.get('/:id', async (req, res, next) => {
       ...pet.toObject(),
       medicalRecords,
       recordPagination: paginationMeta(total, pagination),
-      clinicalNotes,
+      clinicalNotes: await clinicalNoteViews(clinicalNotes),
       notePagination: paginationMeta(noteTotal, notePagination),
     });
   } catch (err) {

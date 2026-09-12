@@ -6,6 +6,9 @@ import { workflowState, workflowFilter, visitLabel } from '../../../shared/appoi
 const appointment = () => ({ __v: 0, status: 'arrived', petId: 'pet-1', checkinNumber: 3, checkinNumberHistory: [3] });
 
 test('appointment journal combines the simple note with this visit’s measurements', () => {
+  assert.equal(appointmentJournalContent({ reason: ' 咳嗽三天 ', visitNote: '安排檢查', weightKg: 4.2, temperatureC: 38.5 }), '來院原因：咳嗽三天\n\n體重：4.2 kg　體溫：38.5 °C\n\n安排檢查');
+  assert.equal(appointmentJournalContent({ reason: '定期回診' }), '來院原因：定期回診');
+  assert.equal(appointmentJournalContent({ reason: '  ', visitNote: '' }), '');
   assert.equal(appointmentJournalContent({ visitNote: '皮膚狀況穩定', weightKg: 4.2, temperatureC: 38.5 }), '體重：4.2 kg　體溫：38.5 °C\n\n皮膚狀況穩定');
   assert.equal(appointmentJournalContent({ visitNote: '', weightKg: null, temperatureC: 38.1 }), '體溫：38.1 °C');
 });

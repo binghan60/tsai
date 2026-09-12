@@ -1,9 +1,8 @@
 import { Router } from 'express';
 import ClinicalNote from '../models/ClinicalNote.js';
-import Appointment from '../models/Appointment.js';
+import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { withTransaction } from '../lib/transaction.js';
-import { emitAppointmentUpdate } from '../lib/realtime.js';
 
 const NOTE_FIELDS = ['content', 'entryDate'];
 
@@ -22,7 +21,7 @@ petClinicalNotesRouter.get('/', async (req, res, next) => {
       ClinicalNote.find(filter).sort({ entryDate: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit),
       ClinicalNote.countDocuments(filter),
     ]);
-    res.json(paginatedPayload(items, total, pagination));
+    res.json(paginatedPayload(await clinicalNoteViews(items), total, pagination));
   } catch (err) {
     next(err);
   }
@@ -44,15 +43,12 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
   try {
     const fields = pickNoteFields(req.body);
     let note;
-    let appointment;
     await withTransaction(async session => {
+      const existing = await ClinicalNote.findById(req.params.id).session(session);
+      if (existing?.appointmentId) throw Object.assign(new Error('此日誌引用就診資料，請至醫師診療台修改'), { status: 409 });
       note = await ClinicalNote.findByIdAndUpdate(req.params.id, { $set: fields }, { new: true, runValidators: true, session });
-      if (note?.appointmentId && fields.content !== undefined) {
-        appointment = await Appointment.findByIdAndUpdate(note.appointmentId, { visitNote: note.content, $inc: { __v: 1 } }, { new: true, session });
-      }
     });
     if (!note) return res.status(404).json({ message: '找不到病歷日誌' });
-    if (appointment) emitAppointmentUpdate(appointment);
     res.json(note);
   } catch (err) {
     next(err);
@@ -62,15 +58,12 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
 clinicalNotesRouter.delete('/:id', async (req, res, next) => {
   try {
     let deleted;
-    let appointment;
     await withTransaction(async session => {
+      const existing = await ClinicalNote.findById(req.params.id).session(session);
+      if (existing?.appointmentId) throw Object.assign(new Error('此日誌引用就診資料，不能單獨刪除'), { status: 409 });
       deleted = await ClinicalNote.findByIdAndDelete(req.params.id, { session });
-      if (deleted?.appointmentId) {
-        appointment = await Appointment.findByIdAndUpdate(deleted.appointmentId, { visitNote: '', $inc: { __v: 1 } }, { new: true, session });
-      }
     });
     if (!deleted) return res.status(404).json({ message: '找不到病歷日誌' });
-    if (appointment) emitAppointmentUpdate(appointment);
     res.status(204).end();
   } catch (err) {
     next(err);

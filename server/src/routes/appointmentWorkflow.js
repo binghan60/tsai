@@ -44,15 +44,15 @@ router.post('/:action', async (req, res, next) => {
       assertWorkflowVersion(appointment, req.body.version);
       applyWorkflowAction(appointment, action, req.body);
 
-      if (action === 'clinical' && ['visitNote', 'weightKg', 'temperatureC'].some(key => req.body[key] !== undefined)) {
+      // 即使只填交辦或直接完成看診，也要將來院原因保存到當次日誌。
+      if (action === 'clinical' || action === 'handoff') {
         const journalContent = appointmentJournalContent(appointment);
         if (journalContent) {
           await ClinicalNote.findOneAndUpdate({ appointmentId: appointment._id }, { $set: {
             petId: appointment.petId,
-            content: journalContent,
             entryDate: combineClinicDateTime(appointment.date, '10:00'),
             source: 'appointment',
-          } }, { upsert: true, runValidators: true, session });
+          }, $unset: { content: '' } }, { upsert: true, runValidators: true, session });
         } else {
           await ClinicalNote.deleteOne({ appointmentId: appointment._id }).session(session);
         }

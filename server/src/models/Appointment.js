@@ -62,8 +62,7 @@ const appointmentSchema = new mongoose.Schema(
     // 同步這筆（見 routes/appointments.js 的 syncFollowUpAppointment），只有它還是 scheduled
     // 狀態才動；已經報到/完成/取消就是現場已經另外處理過了，不回頭改。
     followUpAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
-    // 本次簡易紀錄：醫師寫的病歷內容，跟 clinicalNotes（病歷日誌）雙向同步，見
-    // routes/appointmentWorkflow.js 與 routes/clinicalNotes.js。飼主看不到，也不進健檢報告。
+    // 本次簡易紀錄的唯一來源；病歷日誌透過 appointmentId 讀取。飼主看不到，也不進健檢報告。
     visitNote: { type: String, default: '', trim: true },
     // 面向飼主的照護提醒（例如「傷口勿舔舐」），由醫師填、櫃台當面轉告飼主。
     // 跟 handoffNote（櫃台的作業指示）語意分開，才能在櫃台端用警示樣式獨立呈現——

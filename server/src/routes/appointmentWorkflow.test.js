@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { app } from '../app.js';
 import Appointment from '../models/Appointment.js';
 import ClinicalNote from '../models/ClinicalNote.js';
+import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import FormTemplate from '../models/FormTemplate.js';
 
@@ -48,6 +49,7 @@ describe('independent appointment workflow HTTP routes', () => {
       };
       return session;
     });
+    mock.method(Appointment, 'find', () => ({ lean: async () => [...store.values()] }));
     mock.method(Appointment, 'findById', key => chain(document(store.get(String(key)))));
     mock.method(Appointment, 'create', async ([values], options) => {
       const doc = document({ ...values, _id: new mongoose.Types.ObjectId(), __v: -1 });
@@ -57,7 +59,9 @@ describe('independent appointment workflow HTTP routes', () => {
     mock.method(ClinicalNote, 'findOneAndUpdate', async (query, update, options) => {
       assert.ok(options.session);
       if (failDiary) throw new Error('simulated diary write failure');
-      diary.set(String(query.appointmentId), update.$set);
+      assert.deepEqual(update.$unset, { content: '' });
+      assert.equal(update.$set.content, undefined);
+      diary.set(String(query.appointmentId), { ...update.$set, appointmentId: query.appointmentId });
     });
     mock.method(ClinicalNote, 'deleteOne', query => ({ session: async session => { assert.ok(session); diary.delete(String(query.appointmentId)); } }));
     mock.method(FormTemplate, 'findOne', () => chain({ _id: templateId, version: 1, name: '一般健檢', sections: [] }));
@@ -73,14 +77,31 @@ describe('independent appointment workflow HTTP routes', () => {
     const response = await fetch(`${origin}/${action}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ version: store.get(id).__v, ...values }) });
     return { status: response.status, body: await response.json() };
   }
+  async function diaryContent() { return (await clinicalNoteViews([diary.get(id)]))[0].content; }
   it('saves and updates one diary entry without creating a report', async () => {
     assert.equal((await post('clinical', { visitNote: 'first' })).status, 200);
     assert.equal((await post('clinical', { visitNote: 'second' })).status, 200);
     assert.equal(diary.size, 1);
-    assert.equal(diary.get(id).content, 'second');
+    assert.equal(await diaryContent(), 'second');
     assert.equal(records.size, 0);
     assert.equal((await post('clinical', { visitNote: '' })).status, 200);
     assert.equal(diary.size, 0);
+  });
+  it('keeps the visit reason in the same diary through edits and handoff', async () => {
+    store.get(id).reason = '咳嗽三天';
+    assert.equal((await post('clinical', { visitNote: '安排檢查', weightKg: 4.2 })).status, 200);
+    assert.equal(await diaryContent(), '來院原因：咳嗽三天\n\n體重：4.2 kg\n\n安排檢查');
+    assert.equal((await post('clinical', { visitNote: '', weightKg: null })).status, 200);
+    assert.equal(await diaryContent(), '來院原因：咳嗽三天');
+    assert.equal((await post('handoff')).status, 200);
+    assert.equal(diary.size, 1);
+    assert.equal(await diaryContent(), '來院原因：咳嗽三天');
+  });
+  it('records the reason when handing off without a clinical note', async () => {
+    store.get(id).reason = '定期回診';
+    assert.equal((await post('handoff')).status, 200);
+    assert.equal(await diaryContent(), '來院原因：定期回診');
+    assert.equal(records.size, 0);
   });
   it('rolls back the appointment when diary persistence fails', async () => {
     failDiary = true;

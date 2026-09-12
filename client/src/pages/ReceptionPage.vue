@@ -287,14 +287,14 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                 {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template>
               </p>
-              <div class="flex shrink-0 items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2">
                 <Button variant="secondary" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
+                <Button variant="secondary" size="sm" :disabled="busy" @click="admin('no-show', item)">標記未到</Button>
+                <Button variant="destructive" size="sm" :disabled="busy" @click="admin('cancel', item)">取消掛號</Button>
                 <RowActions
                   :actions="[
                     { key: 'check-in-late', label: '遲到報到' },
                     { key: 'edit', label: '修改預約' },
-                    { key: 'no-show', label: '標記未到' },
-                    { key: 'cancel', label: '取消掛號', danger: true },
                   ]"
                   :label="`${item.petName}的更多操作`"
                   @select="key => admin(key, item)"

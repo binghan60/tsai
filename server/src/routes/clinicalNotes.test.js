@@ -1,4 +1,4 @@
-import { after, before, describe, it } from 'node:test';
+import { after, before, beforeEach, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { app } from '../app.js';
@@ -6,8 +6,7 @@ import ClinicalNote from '../models/ClinicalNote.js';
 import Appointment from '../models/Appointment.js';
 import mongoose from 'mongoose';
 
-// 完成看診／候診中同步落地的日誌（source: 'appointment'）內容跟掛號的 visitNote
-// 是同一份資料，雙向同步——這裡釘住「改日誌內容會回寫掛號」與「刪除日誌會清空備註」。
+// 關聯日誌只能從就診流程修改；手動日誌保留原有操作。
 describe('clinical notes routes', () => {
   let server;
   let origin;
@@ -21,12 +20,18 @@ describe('clinical notes routes', () => {
     origin = `http://127.0.0.1:${server.address().port}`;
   });
 
+  beforeEach(() => {
+    mock.restoreAll();
+    mock.method(ClinicalNote, 'findById', id => ({ session: async () => id.includes('linked') ? { appointmentId: 'apt-linked' } : { appointmentId: null } }));
+  });
+
   after(async () => {
+    mock.restoreAll();
     mongoose.startSession = originalStartSession;
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 
-  it('編輯掛號同步出來的日誌內容，會回寫掛號的 visitNote', async () => {
+  it('拒絕直接編輯關聯日誌，不回寫掛號', async () => {
     const originalFindByIdAndUpdate = ClinicalNote.findByIdAndUpdate;
     const originalAppointmentUpdate = Appointment.findByIdAndUpdate;
     let capturedAppointmentUpdate;
@@ -38,9 +43,8 @@ describe('clinical notes routes', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ content: '改好的內容' }),
       });
-      assert.equal(response.status, 200);
-      assert.equal(capturedAppointmentUpdate.id, 'apt-linked');
-      assert.equal(capturedAppointmentUpdate.update.visitNote, '改好的內容');
+      assert.equal(response.status, 409);
+      assert.equal(capturedAppointmentUpdate, undefined);
     } finally {
       ClinicalNote.findByIdAndUpdate = originalFindByIdAndUpdate;
       Appointment.findByIdAndUpdate = originalAppointmentUpdate;
@@ -83,7 +87,7 @@ describe('clinical notes routes', () => {
     }
   });
 
-  it('刪除掛號同步出來的日誌，會清空掛號的 visitNote', async () => {
+  it('拒絕刪除關聯日誌，不清空掛號', async () => {
     const originalFindByIdAndDelete = ClinicalNote.findByIdAndDelete;
     const originalAppointmentUpdate = Appointment.findByIdAndUpdate;
     let capturedAppointmentUpdate;
@@ -91,9 +95,8 @@ describe('clinical notes routes', () => {
     Appointment.findByIdAndUpdate = async (id, update) => { capturedAppointmentUpdate = { id, update }; };
     try {
       const response = await fetch(`${origin}/api/clinical-notes/note-linked-2`, { method: 'DELETE' });
-      assert.equal(response.status, 204);
-      assert.equal(capturedAppointmentUpdate.id, 'apt-linked-2');
-      assert.equal(capturedAppointmentUpdate.update.visitNote, '');
+      assert.equal(response.status, 409);
+      assert.equal(capturedAppointmentUpdate, undefined);
     } finally {
       ClinicalNote.findByIdAndDelete = originalFindByIdAndDelete;
       Appointment.findByIdAndUpdate = originalAppointmentUpdate;

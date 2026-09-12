@@ -4,10 +4,16 @@ const clinicalNoteSchema = new mongoose.Schema(
   {
     petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', required: true },
     entryDate: { type: Date, required: true, default: Date.now },
-    content: { type: String, required: true, trim: true },
+    content: {
+      type: String,
+      required() {
+        if (this instanceof mongoose.Query) return this.getUpdate()?.$set?.source !== 'appointment';
+        return !this.appointmentId;
+      },
+      trim: true,
+    },
     source: { type: String, enum: ['manual', 'legacy_import', 'appointment'], default: 'manual' },
-    // source: 'appointment' 這筆日誌跟掛號的 visitNote 是同一份資料，雙向同步，
-    // 靠這個欄位找到對應的掛號；其餘來源一律是 null。
+    // 掛號日誌只存關聯，內容由掛號即時組成；其餘來源一律是 null。
     appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
   },
   { timestamps: true }
