@@ -10,6 +10,11 @@ const chatMessageSchema = new mongoose.Schema(
     // AppointmentsPage.vue 的 notifyChat），跟使用者手動打字送出的訊息共用同一份
     // 紀錄，這個欄位只是給前端標註來源、決定要不要算進未讀與怎麼顯示用。
     auto: { type: Boolean, default: false },
+    // 儲存當下的異動快照，往後修改就診資料也不改變這則通知。
+    snapshot: {
+      type: new mongoose.Schema({ fieldLabel: { type: String, trim: true, maxlength: 100 }, before: { type: String, default: '' }, after: { type: String, default: '' } }, { _id: false }),
+      default: undefined,
+    },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

@@ -82,6 +82,32 @@ describe('chat routes', () => {
     }
   });
 
+  it('自動通知完整保存修改前後快照，支援長紀錄與清空', async () => {
+    const originalCreate = ChatMessage.create;
+    ChatMessage.create = async values => {
+      const doc = new ChatMessage(values);
+      await doc.validate();
+      return doc.toObject();
+    };
+    try {
+      const snapshot = { fieldLabel: '本次簡易紀錄', before: '原始紀錄\n'.repeat(300), after: '' };
+      const response = await fetch(`${origin}/api/chat/messages`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sender: 'front_desk', content: '本次紀錄已更新', auto: true, snapshot }),
+      });
+      assert.equal(response.status, 201);
+      assert.deepEqual((await response.json()).snapshot, snapshot);
+    } finally { ChatMessage.create = originalCreate; }
+  });
+
+  it('快照欄位格式錯誤時拒絕建立', async () => {
+    const response = await fetch(`${origin}/api/chat/messages`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sender: 'front_desk', content: '更新', auto: true, snapshot: { before: {}, after: '' } }),
+    });
+    assert.equal(response.status, 422);
+  });
+
   it('身分參數不正確要回 422', async () => {
     const response = await fetch(`${origin}/api/chat/messages`, {
       method: 'POST',

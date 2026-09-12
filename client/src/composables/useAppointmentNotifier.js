@@ -15,6 +15,6 @@ export function useAppointmentNotifier() {
   return function notifyChat(appointment, action, options) {
     const content = appointmentNotification(appointment, action, options);
     chatStore.markPendingAuto(identity.value, content);
-    http.post('/chat/messages', { sender: identity.value, content, auto: true }).catch(() => {});
+    http.post('/chat/messages', { sender: identity.value, content, auto: true, ...(options?.snapshot ? { snapshot: options.snapshot } : {}) }).catch(() => {});
   };
 }

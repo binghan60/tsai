@@ -2,6 +2,8 @@
 import { computed, nextTick, ref, watch } from 'vue';
 import { CalendarClock, Check, Phone, X } from '@lucide/vue';
 import { http } from '../api/http';
+import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
+import { describeVisitChanges } from '../lib/appointmentNotifications';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { APPOINTMENT_TIME_RANGES, APPOINTMENT_TIME_MINUTE_STEP } from '../lib/appointmentTime';
 import AppointmentMilestones from './AppointmentMilestones.vue';
@@ -16,6 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dial
 // 那就是櫃台當面對客人講話的順序；轉告事項最容易漏掉，所以放最上面並用警示底色。
 const props = defineProps({ appointment: { type: Object, required: true } });
 const emit = defineEmits(['updated', 'close']);
+const notifyChat = useAppointmentNotifier();
 
 const busy = ref(false);
 const error = ref('');
@@ -52,7 +55,13 @@ async function persistNote() {
   if (!noteDirty.value) return;
   if (noteConflict.value) throw new Error('本次簡易紀錄已由其他人修改，請先核對最新內容。');
   if (state.value.completed) throw new Error('這筆就診已結案，請先完成修改申請與核准。');
+  const before = { visitNote: noteBaseline.value };
   const data = await run('clinical', { visitNote: visitNote.value });
+  const changedParts = describeVisitChanges(before, { visitNote: data.visitNote });
+  if (changedParts.length) notifyChat(data, 'visit_data', {
+    changedParts,
+    snapshot: { fieldLabel: '本次簡易紀錄', before: before.visitNote, after: data.visitNote || '' },
+  });
   visitNote.value = data.visitNote || '';
   noteBaseline.value = visitNote.value;
   noteSaved.value = true;

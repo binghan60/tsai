@@ -7,6 +7,7 @@ import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { useToast } from '../composables/useToast';
 import { formatDateTime } from '../lib/datetime';
 import { Button } from './ui/button';
+import ChatChangeSnapshot from './ChatChangeSnapshot.vue';
 
 // 全站即時聊天的浮動視窗：右下角常駐泡泡，任何頁面都叫得出來，不綁任何
 // 掛號／病患。身分在設定選單中選擇並記住，聊天室只顯示目前身分。
@@ -81,7 +82,7 @@ async function submit() {
           <div
             class="max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap"
             :class="message.sender === identity ? 'bg-accent text-accent-foreground' : 'bg-muted text-foreground'"
-          >{{ message.content }}</div>
+          >{{ message.content }}<div v-if="message.snapshot"><ChatChangeSnapshot :snapshot="message.snapshot" /></div></div>
           <span class="mt-0.5 px-1 text-xs text-muted-foreground">
             <span v-if="message.auto" class="mr-1 inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground">自動通知</span>
             {{ senderLabel(message.sender) }}・{{ formatDateTime(message.createdAt, timeOptions) }}

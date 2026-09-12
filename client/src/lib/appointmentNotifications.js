@@ -43,7 +43,7 @@ export function changedAppointmentFields(before, after, fields) {
 // 否則使用者原樣按一次儲存，聊天室就會冒出一則「已更新」。
 export function describeVisitChanges(before, after) {
   return [
-    ['本次紀錄', ['visitNote']],
+    ['本次簡易紀錄', ['visitNote']],
     ['櫃台交辦', ['handoffNote']],
     ['飼主提醒', ['specialCareNote']],
     ['量測資料', ['weightKg', 'temperatureC']],

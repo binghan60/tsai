@@ -39,6 +39,9 @@ test('恢復掛號與取消報到均描述待報到，取消掛號帶出原因',
 });
 
 test('describeVisitChanges 只講真正變動的部分', () => {
+  const changedParts = describeVisitChanges({ visitNote: '原紀錄' }, { visitNote: '新紀錄' });
+  assert.deepEqual(changedParts, ['本次簡易紀錄']);
+  assert.match(appointmentNotification(appointment, 'visit_data', { changedParts }), /「豆豆」的本次簡易紀錄已更新/);
   const before = { visitNote: '備註', handoffNote: '', specialCareNote: '', weightKg: 5, temperatureC: null, followUpRecommendation: '' };
   // 空白與等值的數字格式不算變更，原樣按儲存不會冒出「已更新」。
   assert.deepEqual(describeVisitChanges(before, { ...before, visitNote: ' 備註 ', weightKg: '5.00' }), []);

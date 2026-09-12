@@ -24,7 +24,22 @@ router.post('/messages', async (req, res, next) => {
     const content = String(req.body?.content ?? '').trim();
     if (!content) return res.status(422).json({ message: '訊息內容不可為空' });
 
-    const message = await ChatMessage.create({ sender, content, auto: Boolean(req.body?.auto) });
+    const auto = Boolean(req.body?.auto);
+    let snapshot;
+    if (req.body?.snapshot !== undefined) {
+      const value = req.body.snapshot;
+      if (!auto || !value || typeof value.before !== 'string' || typeof value.after !== 'string') {
+        return res.status(422).json({ message: '異動快照格式不正確' });
+      }
+      snapshot = { before: value.before, after: value.after };
+      if (value.fieldLabel !== undefined) {
+        if (typeof value.fieldLabel !== 'string' || !value.fieldLabel.trim() || value.fieldLabel.length > 100) {
+          return res.status(422).json({ message: '異動欄位名稱格式不正確' });
+        }
+        snapshot.fieldLabel = value.fieldLabel.trim();
+      }
+    }
+    const message = await ChatMessage.create({ sender, content, auto, ...(snapshot ? { snapshot } : {}) });
     emitChatMessage(message);
     res.status(201).json(message);
   } catch (err) {
