@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import ClinicalNote from '../models/ClinicalNote.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
@@ -17,6 +18,10 @@ petClinicalNotesRouter.get('/', async (req, res, next) => {
   try {
     const pagination = paginationOptions(req.query, { defaultLimit: 10, maxLimit: 50 });
     const filter = { petId: req.params.petId };
+    if (req.query.excludeAppointmentId !== undefined) {
+      if (!mongoose.isValidObjectId(req.query.excludeAppointmentId)) return res.status(422).json({ message: '掛號編號格式不正確' });
+      filter.appointmentId = { $ne: req.query.excludeAppointmentId };
+    }
     const [items, total] = await Promise.all([
       ClinicalNote.find(filter).sort({ entryDate: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit),
       ClinicalNote.countDocuments(filter),

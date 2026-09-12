@@ -8,6 +8,7 @@ import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { clinicalDraft, draftPatch, mergeClinicalUpdate } from '../lib/visitDraft';
 import { ageLabel, formatDateTime } from '../lib/datetime';
 import AppointmentMilestones from './AppointmentMilestones.vue';
+import Pagination from './Pagination.vue';
 import ModalDialog from './ModalDialog.vue';
 import { Button } from './ui/button';
 import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
@@ -36,6 +37,11 @@ const reopenError = ref('');
 const savedAt = ref(null);
 const pet = ref(null);
 const notes = ref([]);
+const notePage = ref(1);
+const noteTotalPages = ref(1);
+const notesLoading = ref(false);
+const notesError = ref('');
+let notesRequest = 0;
 const contextError = ref('');
 let timer;
 let disposed = false;
@@ -81,19 +87,40 @@ watch(() => props.appointment, incoming => receive(incoming));
 
 async function loadContext() {
   pet.value = null;
-  notes.value = [];
   if (!props.appointment.petId) return;
   const petId = props.appointment.petId;
   try {
-    const [{ data: patient }, { data: diary }] = await Promise.all([
+    const [{ data: patient }] = await Promise.all([
       http.get(`/pets/${petId}`),
-      http.get(`/pets/${petId}/clinical-notes`, { params: { limit: 8 } }),
+      loadNotes(notePage.value),
     ]);
     if (disposed || props.appointment.petId !== petId) return;
     pet.value = patient;
-    notes.value = (diary.items || []).filter(note => String(note.appointmentId) !== String(props.appointment._id));
     contextError.value = '';
   } catch { contextError.value = '病史或病歷日誌未能載入，請重新載入確認。'; }
+}
+async function loadNotes(page = 1) {
+  const token = ++notesRequest;
+  const petId = props.appointment.petId;
+  notes.value = [];
+  if (!petId) return;
+  notesLoading.value = true;
+  notesError.value = '';
+  try {
+    const { data } = await http.get(`/pets/${petId}/clinical-notes`, {
+      params: { page, limit: 5, excludeAppointmentId: props.appointment._id },
+    });
+    if (disposed || token !== notesRequest || petId !== props.appointment.petId) return;
+    const totalPages = data.totalPages || 1;
+    if (page > totalPages) return await loadNotes(totalPages);
+    notes.value = data.items || [];
+    notePage.value = page;
+    noteTotalPages.value = totalPages;
+  } catch {
+    if (!disposed && token === notesRequest) notesError.value = '病歷日誌未能載入，請重試。';
+  } finally {
+    if (token === notesRequest) notesLoading.value = false;
+  }
 }
 loadContext();
 
@@ -295,9 +322,15 @@ onBeforeUnmount(() => {
             </div>
             <article v-for="note in notes" :key="note._id" class="mt-3 border-t border-border pt-3">
               <p class="text-xs text-muted-foreground">{{ formatDateTime(note.entryDate) }}</p>
-              <p class="mt-0.5 line-clamp-4 whitespace-pre-wrap text-sm">{{ note.content }}</p>
+              <p class="mt-0.5 whitespace-pre-wrap wrap-anywhere text-sm">{{ note.content }}</p>
             </article>
-            <p v-if="!notes.length && !contextError" class="mt-3 text-sm text-muted-foreground">尚無其他病歷日誌</p>
+            <p v-if="notesLoading" class="mt-3 text-sm text-muted-foreground" role="status">載入病歷日誌中…</p>
+            <Alert v-else-if="notesError" variant="destructive" class="mt-3">
+              <AlertDescription>{{ notesError }}</AlertDescription>
+              <Button variant="secondary" size="sm" @click="loadNotes(notePage)">重試</Button>
+            </Alert>
+            <p v-else-if="!notes.length" class="mt-3 text-sm text-muted-foreground">尚無其他病歷日誌</p>
+            <Pagination v-if="noteTotalPages > 1" class="mt-4" :page="notePage" :total-pages="noteTotalPages" @update:page="loadNotes" />
           </section>
         </div>
 

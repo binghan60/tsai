@@ -31,6 +31,32 @@ describe('clinical notes routes', () => {
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 
+  it('歷次日誌排除本次掛號後以每頁五筆分頁，總數使用相同條件', async () => {
+    const appointmentId = '507f1f77bcf86cd799439011';
+    const petId = '507f1f77bcf86cd799439012';
+    const all = Array.from({ length: 12 }, (_, index) => ({ _id: String(index), content: `note ${index}` }));
+    all[0].appointmentId = appointmentId;
+    const filtered = all.slice(1);
+    const expectedFilter = { petId, appointmentId: { $ne: appointmentId } };
+    mock.method(ClinicalNote, 'find', filter => {
+      assert.deepEqual(filter, expectedFilter);
+      return { sort: () => ({ skip: offset => ({ limit: limit => Promise.resolve(filtered.slice(offset, offset + limit)) }) }) };
+    });
+    mock.method(ClinicalNote, 'countDocuments', async filter => {
+      assert.deepEqual(filter, expectedFilter);
+      return filtered.length;
+    });
+    for (const [page, count] of [[1, 5], [2, 5], [3, 1]]) {
+      const response = await fetch(`${origin}/api/pets/${petId}/clinical-notes?page=${page}&limit=5&excludeAppointmentId=${appointmentId}`);
+      assert.equal(response.status, 200);
+      const data = await response.json();
+      assert.equal(data.items.length, count);
+      assert.equal(data.total, 11);
+      assert.equal(data.totalPages, 3);
+      assert.equal(data.items[0]._id, String((page - 1) * 5 + 1));
+    }
+  });
+
   it('拒絕直接編輯關聯日誌，不回寫掛號', async () => {
     const originalFindByIdAndUpdate = ClinicalNote.findByIdAndUpdate;
     const originalAppointmentUpdate = Appointment.findByIdAndUpdate;
