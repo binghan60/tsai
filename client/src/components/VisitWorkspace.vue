@@ -17,9 +17,8 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Alert, AlertDescription } from './ui/alert';
 
-// ?怠葦?銝?撌乩???????隞嗉??舐蝡??ｇ??怠葦撣詨虜??餈賢末撟暸?
-// 嚗?銝?餌?瑼ａ?蝯?????銝?鳴?嚗那??????末撟曉車撌乩??嚗?
-// ?靽??芸摮?頛詨嚗???????蝛綽?閬?pages/VetConsolePage.vue嚗?
+// 就診工作區：在診療台右欄編輯單筆 appointment 的臨床欄位。
+// 這裡會同步病患資料、歷次病歷日誌與表單草稿入口。
 const props = defineProps({
   appointment: { type: Object, required: true },
 });
@@ -51,8 +50,7 @@ let savePromise = null;
 let queued = null;
 
 const state = computed(() => workflowState(props.appointment));
-// 瑹????????敺活撠梯那蝯?嚗摰嫣???對?隡箸??其???嚗?
-// 撠???那??靘炎閬??踹??芸??脣?隤日撠????閮箄???
+// 完成後的就診僅可瀏覽；需要修改時必須先送出申請。
 const editable = computed(() => state.value.started && !state.value.completed);
 const dirty = computed(() => Object.keys(draftPatch(draft, baseline.value)).length > 0);
 const owner = computed(() => (typeof pet.value?.ownerId === 'object' ? pet.value.ownerId : null));
@@ -76,7 +74,7 @@ const savedLabel = computed(() => {
   return '已儲存';
 });
 
-// ?乩犖嚗??唳??虫??啗?蝵殷??嫣?????銝?撣急迤?冽???瘣?嚗?銝甈?????銵???
+// 父層 appointment 更新時，保留使用者未儲存的草稿並標記衝突欄位。
 function receive(incoming) {
   if (disposed) return;
   if (busy.value) { queued = incoming; return; }
@@ -138,7 +136,7 @@ async function save() {
   savePromise = (async () => {
     try {
       const { data } = await http.post(`/appointments/${props.appointment._id}/workflow/clinical`, { version: props.appointment.__v ?? 0, ...patch });
-      // 隢??脰?銝剜???隞蝞?脣?嚗?隞交?撠??箸??舫?嗡??翰?扯??舀??啗?蝔踴?
+      // 後端回傳最新版 appointment，合併時保留本機仍未送出的輸入。
       const merged = mergeClinicalUpdate(draft, snapshot, data);
       Object.assign(draft, merged.draft);
       baseline.value = merged.baseline;
@@ -221,9 +219,6 @@ function handleHistoricalNoteSaved({ note, content }) {
   loadNotes(notePage.value);
 }
 
-// ?芸?摮???1.2 蝘? debounce嚗???撠梢??唳??????閰梢畾萄?????颯?
-// ?ㄐ銝?蝙?刻???鈭斤策?汗?典?銝甈∴???靘?閰?debounce 銋?鋆???
-// ???⊿??蝑摮??澆?鳴??賣?撠望???
 function beforeUnload(event) {
   if (!dirty.value && !busy.value) return;
   save();
@@ -231,11 +226,7 @@ function beforeUnload(event) {
   event.returnValue = '';
 }
 
-// 蝡??嚗?憒??湧?甈歲?餃秘?拚?嚗??孛??beforeunload嚗?質撌望???
-// ?ㄐ銝歲蝣箄?獢?獢??典???confirm嚗?閬??撖虫??胯?銝?銝???
-// ?胯?摮絲靘?敺絲靘停?曇?嚗???銝脣???典??堆??航炊撌脩?憿舐內?典極雿?銝??
 onBeforeRouteLeave(async () => {
-  // 瑹撌脣???????砌?撠勗?銝脣嚗撩???嚗????芣?霈犖韏唬???
   if (!dirty.value || !editable.value) return true;
   if (await save()) return true;
   toast.error(`「${props.appointment.petName}」還有內容沒有儲存成功，請先處理再離開`);
@@ -253,7 +244,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="flex min-h-0 flex-1 flex-col" :aria-label="`${appointment.petName} ??閮箏極雿?`">
+  <section class="flex min-h-0 flex-1 flex-col" :aria-label="`${appointment.petName} 就診工作區`">
     <header class="border-b border-border px-5 py-4 sm:px-6">
       <div class="sr-only">
         <h2 class="text-xl font-semibold">{{ appointment.petName }}</h2>
@@ -277,10 +268,10 @@ onBeforeUnmount(() => {
       </div>
 
       <div v-if="hasReminders" class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg bg-warning-surface px-3.5 py-2.5 text-sm text-warning">
-        <span class="inline-flex items-center gap-2 font-semibold"><ShieldAlert class="h-4 w-4" stroke-width="1.75" />?典???</span>
-        <span v-if="pet.allergies">??嚗{ pet.allergies }}</span>
-        <span v-if="pet.chronicConditions">?Ｘ抒?嚗{ pet.chronicConditions }}</span>
-        <span v-if="pet.currentMedications">?刻嚗{ pet.currentMedications }}</span>
+        <span class="inline-flex items-center gap-2 font-semibold"><ShieldAlert class="h-4 w-4" stroke-width="1.75" />重要提醒</span>
+        <span v-if="pet.allergies">過敏：{{ pet.allergies }}</span>
+        <span v-if="pet.chronicConditions">慢性病：{{ pet.chronicConditions }}</span>
+        <span v-if="pet.currentMedications">用藥：{{ pet.currentMedications }}</span>
       </div>
 
       <div class="mt-3"><AppointmentMilestones :appointment="appointment" /></div>
@@ -290,7 +281,7 @@ onBeforeUnmount(() => {
       <Alert v-if="error" variant="destructive" class="mb-4"><AlertDescription>{{ error }}</AlertDescription></Alert>
       <div v-if="contextError" class="mb-4 flex items-center gap-3 rounded-lg bg-warning-surface p-3 text-sm text-warning">
         <span class="flex-1">{{ contextError }}</span>
-        <Button variant="secondary" size="xs" @click="loadContext">?頛</Button>
+        <Button variant="secondary" size="xs" @click="loadContext">重新載入</Button>
       </div>
       <div v-if="conflicts.length" role="alert" class="mb-4 space-y-3 rounded-xl bg-warning-surface p-4 text-sm text-warning">
         <p>此筆就診資料與其他更新衝突：{{ conflicts.map(key => CONFLICT_LABELS[key]).join('、') }}。請選擇要保留的內容。</p>
