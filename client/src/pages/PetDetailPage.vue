@@ -502,7 +502,7 @@ async function addNote() {
 
 function startEditNote(note) {
   editingNoteId.value = note._id;
-  editingNoteContent.value = note.content;
+  editingNoteContent.value = note.editableContent ?? note.content;
   editingNoteDate.value = clinicDateInput(note.entryDate);
 }
 
@@ -905,11 +905,11 @@ watch(pet, async (value) => {
               <header class="flex flex-wrap items-start gap-x-2 gap-y-1">
                 <time class="text-xs font-semibold whitespace-nowrap text-foreground">{{ formatDate(note.entryDate) }}</time>
                 <span v-if="note.source === 'legacy_import'" class="text-xs text-muted-foreground">舊系統匯入</span>
-                <span v-else-if="note.appointmentId" class="text-xs text-muted-foreground">引用就診資料・請至醫師診療台修改</span>
+                <span v-else-if="note.appointmentId" class="text-xs text-muted-foreground">引用就診資料</span>
 
-                <span v-if="!note.appointmentId" class="ml-auto flex shrink-0 gap-1">
+                <span class="ml-auto flex shrink-0 gap-1">
                   <Button variant="secondary" size="icon-sm" aria-label="編輯日誌" @click="startEditNote(note)"><Pencil class="h-3.5 w-3.5" /></Button>
-                  <Button variant="destructive" size="icon-sm" aria-label="刪除日誌" @click="openRemoveNote(note)"><Trash2 class="h-3.5 w-3.5" /></Button>
+                  <Button v-if="!note.appointmentId" variant="destructive" size="icon-sm" aria-label="刪除日誌" @click="openRemoveNote(note)"><Trash2 class="h-3.5 w-3.5" /></Button>
                 </span>
               </header>
               <!-- 長日誌快捷導航按鈕：當日誌篇幅較長時，在右側提供跟隨滾動的精緻膠囊導航列 -->
