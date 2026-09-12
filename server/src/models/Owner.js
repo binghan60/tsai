@@ -8,6 +8,12 @@ const ownerSchema = new mongoose.Schema(
     email: { type: String, trim: true },
     address: { type: String, trim: true },
     notes: { type: String, trim: true },
+    attendanceSummary: {
+      lateCount: { type: Number, min: 0, default: 0 },
+      noShowCount: { type: Number, min: 0, default: 0 },
+      lastLateAt: { type: Date, default: null },
+      lastNoShowAt: { type: Date, default: null },
+    },
     // 子資料建立時會遞增，讓「新增寵物」與「刪除飼主」在 transaction 中產生寫入衝突。
     relationVersion: { type: Number, default: 0, select: false },
   },

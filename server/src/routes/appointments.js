@@ -133,6 +133,16 @@ function rememberCheckinNumber(appointment, number) {
   appointment.checkinNumberHistory = history;
 }
 
+async function recordAttendanceIncident(appointment, type, happenedAt, session = null) {
+  const field = type === 'late' ? 'late' : 'noShow';
+  const update = {
+    $inc: { [`attendanceSummary.${field}Count`]: 1 },
+    $set: { [`attendanceSummary.last${field[0].toUpperCase()}${field.slice(1)}At`]: happenedAt },
+  };
+  if (mongoose.isValidObjectId(appointment.petId)) await Pet.updateOne({ _id: appointment.petId }, update, session ? { session } : undefined);
+  if (mongoose.isValidObjectId(appointment.ownerId)) await Owner.updateOne({ _id: appointment.ownerId }, update, session ? { session } : undefined);
+}
+
 // 實體號碼牌只屬於持牌者；離開候診時歸還這張牌，不改動任何其他人的牌號。
 // 歸還前先寫入 history，確保同一天不會再次配發這個已叫過的號碼。
 async function saveLeavingQueue(appointment, wasQueued, session = null) {
@@ -243,7 +253,7 @@ router.post('/', async (req, res, next) => {
     if (petId !== undefined && petId !== null && petId !== '') {
       // 回診：不信任前端傳來的快照欄位，一律用資料庫當下的資料覆寫，避免快照與實際病患對不上。
       if (!mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '寵物編號格式不正確' });
-      const pet = await Pet.findById(petId).populate('ownerId', 'name phone');
+      const pet = await Pet.findById(petId).populate('ownerId', 'name phone attendanceSummary');
       if (!pet) return res.status(422).json({ message: '找不到指定的寵物' });
       ownerId = pet.ownerId?._id ?? null;
       ownerName = pet.ownerId?.name ?? '';
@@ -482,6 +492,7 @@ router.post('/:id/check-in', async (req, res, next) => {
       appointment.checkinNumber = nextAvailableCheckinNumber(issuedAppointments);
       rememberCheckinNumber(appointment, appointment.checkinNumber);
       await appointment.save({ session });
+      if (isLate) await recordAttendanceIncident(appointment, 'late', appointment.checkedInAt, session);
     }));
 
     // 報到讓這筆掛號進入候診佇列，醫生頁要立刻看到，不必等 60 秒輪詢。
@@ -522,9 +533,13 @@ router.post('/:id/no-show', async (req, res, next) => {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'no_show') });
     }
     const wasQueued = appointment.status === 'arrived';
+    const happenedAt = new Date();
     appointment.status = 'no_show';
     appointment.checkedInAt = null;
-    await saveLeavingQueue(appointment, wasQueued);
+    await withTransaction(async (session) => {
+      await saveLeavingQueue(appointment, wasQueued, session);
+      await recordAttendanceIncident(appointment, 'noShow', happenedAt, session);
+    });
     emitAppointmentUpdate(appointment);
     res.json(appointment);
   } catch (err) {

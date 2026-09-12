@@ -416,6 +416,46 @@ describe('appointments routes', () => {
     }
   });
 
+  it('遲到報到會累加寵物與飼主的出席摘要', async () => {
+    const original = { findById: Appointment.findById, updatePet: Pet.updateOne, updateOwner: Owner.updateOne };
+    const petId = '507f1f77bcf86cd799439012';
+    const ownerId = '507f1f77bcf86cd799439013';
+    const calls = [];
+    const appointment = {
+      _id: 'apt-late-summary',
+      status: 'scheduled',
+      petId,
+      ownerId,
+      date: '2026-08-26',
+      scheduledAt: new Date(Date.now() - 12 * 60 * 1000),
+      checkinNumber: null,
+      checkedInAt: null,
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    Pet.updateOne = async (filter, update) => { calls.push({ model: 'pet', filter, update }); };
+    Owner.updateOne = async (filter, update) => { calls.push({ model: 'owner', filter, update }); };
+    const queue = captureQueueWrites();
+    Appointment.find = () => stubQueue([]);
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-late-summary/check-in`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ isLate: true }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(calls.length, 2);
+      assert.deepEqual(calls.map((call) => call.model).sort(), ['owner', 'pet']);
+      assert.equal(calls[0].update.$inc['attendanceSummary.lateCount'], 1);
+      assert.ok(calls[0].update.$set['attendanceSummary.lastLateAt'] instanceof Date);
+    } finally {
+      Appointment.findById = original.findById;
+      Pet.updateOne = original.updatePet;
+      Owner.updateOne = original.updateOwner;
+      queue.restore();
+    }
+  });
+
   it('可修改已報到掛號的實體號碼牌，不改動其他人的牌號', async () => {
     const originalFindById = Appointment.findById;
     const appointment = {
@@ -558,6 +598,42 @@ describe('appointments routes', () => {
       assert.deepEqual(appointment.checkinNumberHistory, [4]);
     } finally {
       Appointment.findById = originalFindById;
+    }
+  });
+
+  it('標記未到會累加寵物與飼主的出席摘要', async () => {
+    const original = { findById: Appointment.findById, updatePet: Pet.updateOne, updateOwner: Owner.updateOne };
+    const petId = '507f1f77bcf86cd799439012';
+    const ownerId = '507f1f77bcf86cd799439013';
+    const calls = [];
+    const appointment = {
+      _id: 'apt-no-show-summary',
+      status: 'scheduled',
+      petId,
+      ownerId,
+      checkedInAt: null,
+      save: async () => {},
+    };
+    Appointment.findById = async () => appointment;
+    Pet.updateOne = async (filter, update) => { calls.push({ model: 'pet', filter, update }); };
+    Owner.updateOne = async (filter, update) => { calls.push({ model: 'owner', filter, update }); };
+    const queue = captureQueueWrites();
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-no-show-summary/no-show`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(calls.length, 2);
+      assert.deepEqual(calls.map((call) => call.model).sort(), ['owner', 'pet']);
+      assert.equal(calls[0].update.$inc['attendanceSummary.noShowCount'], 1);
+      assert.ok(calls[0].update.$set['attendanceSummary.lastNoShowAt'] instanceof Date);
+    } finally {
+      Appointment.findById = original.findById;
+      Pet.updateOne = original.updatePet;
+      Owner.updateOne = original.updateOwner;
+      queue.restore();
     }
   });
 

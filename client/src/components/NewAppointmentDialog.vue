@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useForm, useField } from 'vee-validate';
 import { ChevronRight, History, PawPrint, UserPlus } from '@lucide/vue';
 import ModalDialog from './ModalDialog.vue';
@@ -50,6 +50,17 @@ const selectedPet = ref(null);
 const petPickerOpen = ref(false);
 const pickPetError = ref('');
 const templateId = ref(props.defaultTemplateId || '');
+
+function attendanceSummaryText(entity, subject) {
+  const summary = entity?.attendanceSummary;
+  if (!summary) return '';
+  const parts = [];
+  if (summary.lateCount > 0) parts.push(`遲到 ${summary.lateCount} 次`);
+  if (summary.noShowCount > 0) parts.push(`未到 ${summary.noShowCount} 次`);
+  return parts.length ? `${subject}曾${parts.join('、')}，掛號時請提醒確認到院時間。` : '';
+}
+const selectedPetAttendanceText = computed(() => attendanceSummaryText(selectedPet.value, '此寵物'));
+const selectedOwnerAttendanceText = computed(() => attendanceSummaryText(selectedOwner.value, '此飼主'));
 
 // 回診跟初診共用同一份表單，只是要不要驗證寵物姓名視 mode 而定——
 // 切成兩份表單反而讓「預約時段」「來院原因」這兩個共用欄位要維護兩次。
@@ -143,6 +154,12 @@ const onSubmit = handleSubmit((values) => {
               </span>
             </button>
             <p v-if="pickPetError" class="text-xs font-medium text-destructive">{{ pickPetError }}</p>
+            <Alert v-if="selectedPetAttendanceText" class="border-warning/35 bg-warning-surface text-warning">
+              <AlertDescription>{{ selectedPetAttendanceText }}</AlertDescription>
+            </Alert>
+            <Alert v-if="selectedPet?.ownerId && attendanceSummaryText(selectedPet.ownerId, '此飼主')" class="border-warning/35 bg-warning-surface text-warning">
+              <AlertDescription>{{ attendanceSummaryText(selectedPet.ownerId, '此飼主') }}</AlertDescription>
+            </Alert>
           </div>
         </template>
 
@@ -154,6 +171,9 @@ const onSubmit = handleSubmit((values) => {
               <ChevronRight class="h-4 w-4" />
             </Button>
             <p v-if="pickOwnerError" class="text-xs font-medium text-destructive">{{ pickOwnerError }}</p>
+            <Alert v-if="selectedOwnerAttendanceText" class="border-warning/35 bg-warning-surface text-warning">
+              <AlertDescription>{{ selectedOwnerAttendanceText }}</AlertDescription>
+            </Alert>
             <p class="text-xs text-muted-foreground">報到時會將新寵物建檔於此飼主名下。</p>
           </div>
           <div class="grid gap-4 sm:grid-cols-2">

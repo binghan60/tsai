@@ -113,7 +113,7 @@ petsRouter.get('/', async (req, res, next) => {
         .sort({ updatedAt: -1, _id: -1 })
         .skip(pagination.skip)
         .limit(pagination.limit)
-        .populate('ownerId', 'name phone'),
+        .populate('ownerId', 'name phone attendanceSummary'),
       Pet.countDocuments(filter),
     ]);
     res.json(paginatedPayload(pets, total, pagination));
@@ -124,7 +124,7 @@ petsRouter.get('/', async (req, res, next) => {
 
 petsRouter.get('/:id', async (req, res, next) => {
   try {
-    const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone landline email address notes __v');
+    const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone landline email address notes attendanceSummary __v');
     if (!pet) return res.status(404).json({ message: '找不到寵物' });
     const pagination = paginationOptions(req.query, {
       defaultLimit: 10,

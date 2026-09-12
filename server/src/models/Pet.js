@@ -33,6 +33,12 @@ const petSchema = new mongoose.Schema(
     checkupStatus: { type: String, enum: ['unknown', 'none', 'done'], default: 'unknown' },
     checkupDate: { type: String, default: '', trim: true },
     notes: { type: String, default: '', trim: true },
+    attendanceSummary: {
+      lateCount: { type: Number, min: 0, default: 0 },
+      noShowCount: { type: Number, min: 0, default: 0 },
+      lastLateAt: { type: Date, default: null },
+      lastNoShowAt: { type: Date, default: null },
+    },
     relationVersion: { type: Number, default: 0, select: false },
   },
   { timestamps: true, optimisticConcurrency: true }

@@ -203,6 +203,20 @@ const alertFields = computed(() => filledFields([
   { label: '藥物過敏', value: allergyLabel.value },
   { label: '健檢', value: checkupLabel.value },
 ]));
+function attendanceSummaryText(entity, subject) {
+  const summary = entity?.attendanceSummary;
+  if (!summary) return '';
+  const parts = [];
+  if (summary.lateCount > 0) {
+    parts.push(`遲到 ${summary.lateCount} 次${summary.lastLateAt ? `，最近 ${formatDateTime(summary.lastLateAt)}` : ''}`);
+  }
+  if (summary.noShowCount > 0) {
+    parts.push(`未到 ${summary.noShowCount} 次${summary.lastNoShowAt ? `，最近 ${formatDateTime(summary.lastNoShowAt)}` : ''}`);
+  }
+  return parts.length ? `${subject}曾${parts.join('；')}。` : '';
+}
+const petAttendanceText = computed(() => attendanceSummaryText(pet.value, '此寵物'));
+const ownerAttendanceText = computed(() => attendanceSummaryText(pet.value?.ownerId, '此飼主'));
 const hasAnyPetDetail = computed(() => Boolean(
   identityFields.value.length || secondaryFields.value.length || alertFields.value.length || pet.value?.notes
 ));
@@ -615,6 +629,9 @@ watch(pet, async (value) => {
       </div>
 
       <Alert v-if="petEditing && petError" variant="destructive" class="mt-3"><AlertDescription>{{ petError }}</AlertDescription></Alert>
+      <Alert v-if="!petEditing && petAttendanceText" class="mt-3 border-warning/35 bg-warning-surface text-warning">
+        <AlertDescription>{{ petAttendanceText }}</AlertDescription>
+      </Alert>
 
       <!-- 編輯模式：直接畫在卡片裡，不彈 Modal。 -->
       <div v-if="petEditing" class="mt-4 space-y-4 border-t border-border pt-3">
@@ -782,6 +799,9 @@ watch(pet, async (value) => {
         </div>
 
         <Alert v-if="ownerEditing && ownerError" variant="destructive" class="mt-3"><AlertDescription>{{ ownerError }}</AlertDescription></Alert>
+        <Alert v-if="!ownerEditing && ownerAttendanceText" class="mt-3 border-warning/35 bg-warning-surface text-warning">
+          <AlertDescription>{{ ownerAttendanceText }}</AlertDescription>
+        </Alert>
 
         <div v-if="ownerEditing" class="mt-4 space-y-4 border-t border-border pt-3">
           <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2">
