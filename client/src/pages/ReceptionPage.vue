@@ -43,6 +43,7 @@ const lateCheckIn = ref(false);
 const confirmation = ref(null);
 const templates = ref([]);
 const defaultTemplate = ref('');
+const pendingIntakeCount = ref(0);
 const showFinished = ref(false);
 const now = ref(Date.now());
 let clock;
@@ -136,6 +137,13 @@ function onSheetUpdate(appointment, action, options = {}) {
   }
 }
 
+async function loadPendingIntakeCount() {
+  try {
+    const { data } = await http.get('/intake-submissions');
+    pendingIntakeCount.value = (data.items || []).length;
+  } catch { /* 初診審核數量載不到不影響既有櫃台工作。 */ }
+}
+
 // 行政操作（新增／編輯／報到／取消／未到／恢復）共用同一條送出路徑，
 // 差別只在打哪一支端點與事後要送哪一則聊天室通知。
 function admin(kind, appointment = null) {
@@ -195,6 +203,7 @@ async function loadTemplates() {
 onMounted(() => {
   clock = setInterval(() => { now.value = Date.now(); }, 30000);
   loadTemplates();
+  loadPendingIntakeCount();
   refresh();
 });
 onBeforeUnmount(() => { request += 1; clearInterval(clock); });
@@ -216,7 +225,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
         <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
         <Button variant="secondary" size="sm" :disabled="date === today" @click="date = today">今天</Button>
-        <Button variant="secondary" size="sm" as-child><router-link to="/reception/intakes">初診審核</router-link></Button>
+        <Button variant="secondary" size="sm" as-child><router-link to="/reception/intakes" class="relative">初診審核<span v-if="pendingIntakeCount" class="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-xs font-bold text-white ring-2 ring-background">{{ pendingIntakeCount > 99 ? '99+' : pendingIntakeCount }}</span></router-link></Button>
         <Button size="sm" @click="admin('new')"><Plus class="h-4 w-4" />新增掛號</Button>
       </div>
     </header>
