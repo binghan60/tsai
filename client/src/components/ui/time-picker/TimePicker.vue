@@ -4,7 +4,7 @@ import { Clock, X } from '@lucide/vue';
 import { Popover, PopoverContent, PopoverTrigger } from '../popover';
 import { cn } from '@/lib/utils';
 
-// 取代 <input type="time">，跟 DatePicker 取代 <input type="date"> 同一個理由：
+// 取代 <input type="time">，跟 DatePicker 取代 原生日期輸入欄位 同一個理由：
 // 原生時間選單各瀏覽器樣式不一，也套不進主題的明暗與品牌色。
 // 用自製的時／分兩欄選單（Popover + 按鈕列表），而不是固定間隔的下拉選單——
 // 兩欄各自獨立選才給得出任意時／分組合，不是只能點一份寫死的整段時間清單。

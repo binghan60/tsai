@@ -8,7 +8,7 @@ function toValidDate(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-// <input type="date"> 的值：診所時區下的 YYYY-MM-DD。
+// 原生日期輸入欄位 的值：診所時區下的 YYYY-MM-DD。
 //
 // 不要用 new Date().toISOString().slice(0, 10) —— 那是 UTC 的日期，
 // 台灣時間半夜到早上八點之間開一份報告，健檢日期會預設成昨天。
@@ -55,7 +55,7 @@ function zoneOffsetMs(instant, timeZone) {
 }
 
 // 把使用者選的 YYYY-MM-DD ＋ HH:MM（時間選填）換算成診所時區對應的實際時刻。
-// 用途：回診日期需要精確到分鐘，但 <input type="date"> 只給得出日期，時間另外用
+// 用途：回診日期需要精確到分鐘，但 原生日期輸入欄位 只給得出日期，時間另外用
 // TimePicker 收。沒填時間就當作診所時區當天 00:00。
 export function combineClinicDateTime(dateInput, timeInput) {
   const match = DATE_ONLY.exec(String(dateInput ?? '').trim());

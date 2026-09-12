@@ -23,6 +23,7 @@ const requiredRule = (value) => (value && String(value).trim() !== '') || '必�
 // 回診的三個身分欄位雖然隱藏，仍會參與表單驗證，必須明確回傳 true，
 // 否則送出會被靜默攔下。
 const patientFieldRule = (value) => (props.appointment.petId ? true : requiredRule(value));
+const ownerFieldRule = (value) => (props.appointment.ownerId ? true : patientFieldRule(value));
 const { handleSubmit } = useForm({
   initialValues: {
     ownerName: props.appointment.ownerName || '',
@@ -30,8 +31,8 @@ const { handleSubmit } = useForm({
     petName: props.appointment.petName || '',
   },
 });
-const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName', patientFieldRule);
-const { value: ownerPhone, errorMessage: ownerPhoneError } = useField('ownerPhone', patientFieldRule);
+const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName', ownerFieldRule);
+const { value: ownerPhone, errorMessage: ownerPhoneError } = useField('ownerPhone', ownerFieldRule);
 const { value: petName, errorMessage: petNameError } = useField('petName', patientFieldRule);
 const lateAt = ref(clinicTimeInput(new Date()));
 const latenessMinutes = computed(() => Math.max(0, Math.floor((new Date(`${props.appointment.date}T${lateAt.value}`).getTime() - new Date(props.appointment.scheduledAt).getTime()) / 60000)));
@@ -53,12 +54,15 @@ const onSubmit = handleSubmit((values) => emit('submit', { ...values, isLate: pr
 
     <form class="flex flex-col" @submit.prevent="onSubmit">
       <div class="space-y-4 p-6 pt-3 sm:p-7 sm:pt-3">
-        <div v-if="!appointment.petId" class="space-y-1.5">
+        <Alert v-if="!appointment.petId && appointment.ownerId">
+          <AlertDescription>新寵物將登記於既有飼主 {{ appointment.ownerName }}（{{ appointment.ownerPhone || '未填寫電話' }}）名下。</AlertDescription>
+        </Alert>
+        <div v-if="!appointment.petId && !appointment.ownerId" class="space-y-1.5">
           <Label for="checkin-owner-name" class="text-xs font-medium text-foreground">飼主姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <Input id="checkin-owner-name" v-model="ownerName" class="border-border" autofocus />
           <p v-if="ownerNameError" class="text-xs font-medium text-destructive">{{ ownerNameError }}</p>
         </div>
-        <div v-if="!appointment.petId" class="space-y-1.5">
+        <div v-if="!appointment.petId && !appointment.ownerId" class="space-y-1.5">
           <Label for="checkin-owner-phone" class="text-xs font-medium text-foreground">聯絡電話<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <Input id="checkin-owner-phone" v-model="ownerPhone" class="border-border" />
           <p v-if="ownerPhoneError" class="text-xs font-medium text-destructive">{{ ownerPhoneError }}</p>

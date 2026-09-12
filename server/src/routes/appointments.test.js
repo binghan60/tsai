@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { app } from '../app.js';
 import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
+import Owner from '../models/Owner.js';
 import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import ClinicalNote from '../models/ClinicalNote.js';
@@ -61,8 +62,8 @@ describe('appointments routes', () => {
     originalSettingsFindOne = ClinicSettings.findOne;
     originalRecordCreate = MedicalRecord.create;
     originalNoteCreate = ClinicalNote.create;
-    FormTemplate.findOne = async () => ({ _id: '507f1f77bcf86cd799439011', name: '預設表單', version: 1 });
-    ClinicSettings.findOne = () => ({ lean: async () => ({ defaultAppointmentTemplateId: '507f1f77bcf86cd799439011' }) });
+    FormTemplate.findOne = () => stubQueue({ _id: '507f1f77bcf86cd799439011', name: '預設表單', version: 1 });
+    ClinicSettings.findOne = () => ({ ...stubQueue({ defaultAppointmentTemplateId: '507f1f77bcf86cd799439011' }), lean: async () => ({ defaultAppointmentTemplateId: '507f1f77bcf86cd799439011' }) });
     MedicalRecord.create = async ([record]) => [{ _id: 'record-1', ...record }];
     ClinicalNote.create = async (note) => ({ _id: 'note-1', ...note });
     server = app.listen(0, '127.0.0.1');
@@ -97,6 +98,65 @@ describe('appointments routes', () => {
     } finally {
       Appointment.create = originalCreate;
     }
+  });
+
+  it('既有飼主的新寵物掛號與報到沿用飼主，不重複建檔', async () => {
+    const original = { create: Appointment.create, find: Appointment.findById, owner: Owner.findById, update: Owner.findOneAndUpdate, createOwner: Owner.create, pet: Pet.create };
+    const owner = { _id: '507f1f77bcf86cd799439022', name: '王小姐', phone: '0912345678' };
+    let appointment;
+    let createdPet;
+    const queue = captureQueueWrites();
+    Appointment.create = async (doc) => (appointment = { ...doc, _id: 'apt-new-pet', status: 'scheduled', save: async () => {} });
+    Owner.findById = async () => owner;
+    Owner.findOneAndUpdate = async (filter) => { assert.equal(filter._id, owner._id); return owner; };
+    Owner.create = async () => { assert.fail('不應建立新飼主'); };
+    Pet.create = async ([doc]) => { createdPet = doc; return [{ ...doc, _id: 'pet-new' }]; };
+    Appointment.findById = async () => appointment;
+    Appointment.find = () => stubQueue([]);
+    try {
+      const created = await fetch(`${origin}/api/appointments`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ ownerId: owner._id, ownerName: '錯誤姓名', petName: '小花', time: '10:00' }),
+      });
+      assert.equal(created.status, 201);
+      const body = await created.json();
+      assert.equal(body.ownerId, owner._id);
+      assert.equal(body.ownerName, owner.name);
+      assert.equal(body.ownerPhone, owner.phone);
+      assert.equal(body.petId, null);
+      assert.equal(body.visitType, 'new');
+      const checkedIn = await fetch(`${origin}/api/appointments/apt-new-pet/check-in`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ petName: '小花' }),
+      });
+      assert.equal(checkedIn.status, 200);
+      assert.equal(createdPet.ownerId, owner._id);
+      assert.equal(createdPet.name, '小花');
+      assert.equal(appointment.petId, 'pet-new');
+      assert.equal(appointment.visitType, 'new');
+    } finally {
+      Appointment.create = original.create;
+      Appointment.findById = original.find;
+      Owner.findById = original.owner;
+      Owner.findOneAndUpdate = original.update;
+      Owner.create = original.createOwner;
+      Pet.create = original.pet;
+      queue.restore();
+    }
+  });
+
+  it('掛號拒絕無效或不存在的既有飼主', async () => {
+    const original = Owner.findById;
+    Owner.findById = async () => null;
+    try {
+      for (const ownerId of ['invalid', '507f1f77bcf86cd799439022']) {
+        const response = await fetch(`${origin}/api/appointments`, {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ ownerId, petName: '小花', time: '10:00' }),
+        });
+        assert.equal(response.status, 422);
+      }
+    } finally { Owner.findById = original; }
   });
 
   it('沒帶日期就掛在今天', async () => {

@@ -13,6 +13,7 @@ import { TimePicker } from './ui/time-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import SegmentedControl from './SegmentedControl.vue';
 import PetPickerDialog from './PetPickerDialog.vue';
+import OwnerPickerDialog from './OwnerPickerDialog.vue';
 import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/appointmentTime';
 import { formatDate, weekdayLabel } from '../lib/datetime';
 
@@ -32,6 +33,19 @@ const MODE_OPTIONS = [
   { value: 'new', label: '初診', icon: UserPlus },
 ];
 const mode = ref('return');
+const ownerMode = ref('new');
+const OWNER_MODE_OPTIONS = [
+  { value: 'new', label: '新飼主' },
+  { value: 'existing', label: '既有飼主・新增寵物' },
+];
+const selectedOwner = ref(null);
+const ownerPickerOpen = ref(false);
+const pickOwnerError = ref('');
+function selectOwner(owner) {
+  selectedOwner.value = owner;
+  pickOwnerError.value = '';
+  ownerPickerOpen.value = false;
+}
 const selectedPet = ref(null);
 const petPickerOpen = ref(false);
 const pickPetError = ref('');
@@ -70,7 +84,12 @@ const onSubmit = handleSubmit((values) => {
     emit('submit', { date: props.date, visitType: 'return', petId: selectedPet.value._id, time: values.time, reason: values.reason, templateId: templateId.value });
     return;
   }
+  if (ownerMode.value === 'existing' && !selectedOwner.value) {
+    pickOwnerError.value = '請先選擇既有飼主';
+    return;
+  }
   emit('submit', {
+    ownerId: ownerMode.value === 'existing' ? selectedOwner.value._id : undefined,
     date: props.date,
     visitType: 'new',
     ownerName: values.ownerName,
@@ -128,18 +147,27 @@ const onSubmit = handleSubmit((values) => {
         </template>
 
         <template v-else>
+          <SegmentedControl v-model="ownerMode" :options="OWNER_MODE_OPTIONS" aria-label="飼主類型" full-width />
+          <div v-if="ownerMode === 'existing'" class="space-y-1.5">
+            <Button type="button" variant="secondary" class="w-full justify-between" @click="ownerPickerOpen = true">
+              <span>{{ selectedOwner ? `${selectedOwner.name} · ${selectedOwner.phone || '未填寫電話'}` : '搜尋並選擇既有飼主' }}</span>
+              <ChevronRight class="h-4 w-4" />
+            </Button>
+            <p v-if="pickOwnerError" class="text-xs font-medium text-destructive">{{ pickOwnerError }}</p>
+            <p class="text-xs text-muted-foreground">報到時會將新寵物建檔於此飼主名下。</p>
+          </div>
           <div class="grid gap-4 sm:grid-cols-2">
             <div class="space-y-1.5">
               <Label for="apt-pet-name" class="text-xs font-medium text-foreground">寵物姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
               <Input id="apt-pet-name" v-model="petName" class="border-border" placeholder="例：妞妞" />
               <p v-if="petNameError" class="text-xs font-medium text-destructive">{{ petNameError }}</p>
             </div>
-            <div class="space-y-1.5">
+            <div v-if="ownerMode === 'new'" class="space-y-1.5">
               <Label for="apt-owner-name" class="text-xs font-medium text-foreground">飼主姓名<span class="ml-1 font-normal text-muted-foreground">（選填）</span></Label>
               <Input id="apt-owner-name" v-model="ownerName" class="border-border" placeholder="例：王小姐" />
             </div>
           </div>
-          <div class="space-y-1.5">
+          <div v-if="ownerMode === 'new'" class="space-y-1.5">
             <Label for="apt-owner-phone" class="text-xs font-medium text-foreground">聯絡電話</Label>
             <Input id="apt-owner-phone" v-model="ownerPhone" class="border-border" placeholder="例：0912-345-678" />
           </div>
@@ -178,6 +206,7 @@ const onSubmit = handleSubmit((values) => {
       </DialogFooter>
     </form>
 
+    <OwnerPickerDialog :open="ownerPickerOpen" @close="ownerPickerOpen = false" @select="selectOwner" />
     <PetPickerDialog :open="petPickerOpen" @close="petPickerOpen = false" @select="selectPet" />
   </ModalDialog>
 </template>

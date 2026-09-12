@@ -256,6 +256,14 @@ router.post('/', async (req, res, next) => {
       ownerPhone = String(req.body.ownerPhone || '').trim();
       petName = String(req.body.petName || '').trim();
       species = String(req.body.species || '').trim();
+      if (req.body.ownerId !== undefined && req.body.ownerId !== null && req.body.ownerId !== '') {
+        if (!mongoose.isValidObjectId(req.body.ownerId)) return res.status(422).json({ message: '飼主編號格式不正確' });
+        const owner = await Owner.findById(req.body.ownerId);
+        if (!owner) return res.status(422).json({ message: '找不到指定的飼主' });
+        ownerId = owner._id;
+        ownerName = owner.name;
+        ownerPhone = owner.phone;
+      }
     }
 
     // 飼主姓名選填（電話掛號時常常只問得到寵物名），但一筆掛號至少要指得出是誰要來。
@@ -408,12 +416,13 @@ router.post('/:id/check-in', async (req, res, next) => {
     }
 
     const needsNewPatient = !appointment.petId;
+    const existingOwnerId = appointment.ownerId;
     // 舊掛號沒有 visitType；趁 petId 還沒因初診建檔而改變前補記，之後取消報到或
     // 再次報到都仍保有掛號當下的類型。新掛號本來就有值，不會被這裡覆寫。
     if (!appointment.visitType) appointment.visitType = needsNewPatient ? 'new' : 'return';
     if (needsNewPatient) {
-      if (!String(req.body.ownerName || '').trim()) return res.status(422).json({ message: '請填寫飼主姓名' });
-      if (!String(req.body.ownerPhone || '').trim()) return res.status(422).json({ message: '請填寫聯絡電話' });
+      if (!existingOwnerId && !String(req.body.ownerName || '').trim()) return res.status(422).json({ message: '請填寫飼主姓名' });
+      if (!existingOwnerId && !String(req.body.ownerPhone || '').trim()) return res.status(422).json({ message: '請填寫聯絡電話' });
       if (!String(req.body.petName || '').trim()) return res.status(422).json({ message: '請填寫寵物姓名' });
     }
 
@@ -434,10 +443,20 @@ router.post('/:id/check-in', async (req, res, next) => {
       appointment.recordId = originalRecordId;
       if (needsNewPatient) {
         const species = String(req.body.species || '').trim();
-        const [owner] = await Owner.create(
-          [{ name: String(req.body.ownerName).trim(), phone: String(req.body.ownerPhone).trim() }],
-          { session }
-        );
+        let owner;
+        if (existingOwnerId) {
+          owner = await Owner.findOneAndUpdate(
+            { _id: existingOwnerId },
+            { $inc: { relationVersion: 1 } },
+            { new: true, session }
+          );
+          if (!owner) throw Object.assign(new Error('找不到指定的飼主，請重新確認掛號資料'), { status: 422 });
+        } else {
+          [owner] = await Owner.create(
+            [{ name: String(req.body.ownerName).trim(), phone: String(req.body.ownerPhone).trim() }],
+            { session }
+          );
+        }
         const [pet] = await Pet.create(
           [{ name: String(req.body.petName).trim(), ownerId: owner._id, ...(species ? { species } : {}) }],
           { session }

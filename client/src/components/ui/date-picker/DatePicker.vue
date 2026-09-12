@@ -7,7 +7,7 @@ import { Calendar } from '../calendar';
 import { formatDate } from '@/lib/datetime';
 import { cn } from '@/lib/utils';
 
-// 取代 <input type="date">：原生日期選單各瀏覽器樣式不一，也套不進主題的明暗與品牌色。
+// 取代 原生日期輸入欄位：原生日期選單各瀏覽器樣式不一，也套不進主題的明暗與品牌色。
 // modelValue 一律是 'YYYY-MM-DD' 字串（或空字串），跟 useSearchQueryParam 存進網址的格式一致；
 // 元件內部才轉成 @internationalized/date 的 CalendarDate，那是純日曆值、不帶時區，
 // 挑選畫面上的哪一天不會因為時區換算跑掉。
