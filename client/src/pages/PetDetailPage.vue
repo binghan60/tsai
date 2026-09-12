@@ -41,12 +41,39 @@ const shareNotice = ref(null);
 const petEditing = ref(false);
 const petSaving = ref(false);
 const petError = ref('');
-const petForm = reactive({ name: '', species: '', breed: '', sex: 'unknown', neutered: 'unknown', birthDate: '', birthDateEstimated: false, weightKg: '', allergies: '', chronicConditions: '', currentMedications: '', notes: '' });
+const petForm = reactive({
+  name: '',
+  species: '',
+  breed: '',
+  color: '',
+  sex: 'unknown',
+  neutered: 'unknown',
+  birthDate: '',
+  birthDateEstimated: false,
+  weightKg: '',
+  householdCatCount: '',
+  diet: '',
+  foods: [],
+  feedingType: 'unknown',
+  mealsPerDay: '',
+  vaccineStatus: 'unknown',
+  vaccineDate: '',
+  medicalHistory: [],
+  medicalHistoryOther: '',
+  allergyStatus: 'unknown',
+  allergyType: '',
+  checkupStatus: 'unknown',
+  checkupDate: '',
+  allergies: '',
+  chronicConditions: '',
+  currentMedications: '',
+  notes: '',
+});
 
 const ownerEditing = ref(false);
 const ownerSaving = ref(false);
 const ownerError = ref('');
-const ownerForm = reactive({ name: '', phone: '', email: '', address: '', notes: '' });
+const ownerForm = reactive({ name: '', phone: '', landline: '', email: '', address: '', notes: '' });
 
 const SEX_OPTIONS = [
   { title: '未記錄', value: 'unknown' },
@@ -58,6 +85,28 @@ const NEUTERED_OPTIONS = [
   { title: '已絕育', value: 'yes' },
   { title: '未絕育', value: 'no' },
 ];
+const FEEDING_OPTIONS = [
+  { title: '未記錄', value: 'unknown' },
+  { title: '任食', value: 'free' },
+  { title: '定食定量', value: 'scheduled' },
+];
+const VACCINE_OPTIONS = [
+  { title: '未記錄', value: 'unknown' },
+  { title: '未注射', value: 'none' },
+  { title: '已注射', value: 'done' },
+];
+const CHECKUP_OPTIONS = [
+  { title: '未記錄', value: 'unknown' },
+  { title: '未健檢', value: 'none' },
+  { title: '有健檢', value: 'done' },
+];
+const ALLERGY_OPTIONS = [
+  { title: '未記錄', value: 'unknown' },
+  { title: '無過敏', value: 'none' },
+  { title: '有過敏', value: 'yes' },
+];
+const FOOD_OPTIONS = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧'];
+const HISTORY_OPTIONS = ['無', '心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題', '其他'];
 
 const recordToRemove = ref(null);
 const deletingRecordId = ref(null);
@@ -104,26 +153,58 @@ function scrollNoteTo(noteId, position) {
 const sexLabel = computed(() => ({ male: '公', female: '母' })[pet.value?.sex] ?? '');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育' })[pet.value?.neutered] ?? '');
 const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), ''));
+const feedingLabel = computed(() => ({ free: '任食', scheduled: `定食定量${pet.value?.mealsPerDay ? `，一日 ${pet.value.mealsPerDay} 餐` : ''}` })[pet.value?.feedingType] ?? '');
+const vaccineLabel = computed(() => ({ none: '未注射', done: `已注射${pet.value?.vaccineDate ? `，最後注射時間 ${pet.value.vaccineDate}` : ''}` })[pet.value?.vaccineStatus] ?? '');
+const allergyLabel = computed(() => ({ none: '無過敏', yes: `有${pet.value?.allergyType ? `，${pet.value.allergyType}` : ''}` })[pet.value?.allergyStatus] ?? '');
+const checkupLabel = computed(() => ({ none: '未健檢', done: `有${pet.value?.checkupDate ? `，上次健檢時間 ${pet.value.checkupDate}` : ''}` })[pet.value?.checkupStatus] ?? '');
 
 function filledFields(fields) {
   return fields.filter((field) => String(field.value).trim());
 }
 
+function togglePetArrayValue(key, value) {
+  const values = new Set(petForm[key] ?? []);
+  if (values.has(value)) values.delete(value);
+  else values.add(value);
+  petForm[key] = Array.from(values);
+}
+
+function togglePetMedicalHistory(value) {
+  if (value === '無') {
+    petForm.medicalHistory = petForm.medicalHistory.includes('無') ? [] : ['無'];
+    petForm.medicalHistoryOther = '';
+    return;
+  }
+
+  const values = new Set(petForm.medicalHistory ?? []);
+  values.delete('無');
+  if (values.has(value)) values.delete(value);
+  else values.add(value);
+  if (value === '其他' && !values.has('其他')) petForm.medicalHistoryOther = '';
+  petForm.medicalHistory = Array.from(values);
+}
+
 // 身分類欄位（品種／性別／絕育／年齡）一句話就能唸完，用一行 chip 呈現比逐格 dt/dd 更好掃視。
 const identityFields = computed(() => filledFields([
   { label: '品種', value: pet.value?.breed ?? '' },
+  { label: '花色', value: pet.value?.color ?? '' },
   { label: '性別', value: sexLabel.value },
-  { label: '絕育狀態', value: neuteredLabel.value },
+  { label: '結紮', value: neuteredLabel.value },
   { label: pet.value?.birthDateEstimated ? '預估年齡' : '年齡', value: ageLabel.value },
 ]));
 const secondaryFields = computed(() => filledFields([
   { label: '最近體重', value: pet.value?.weightKg != null ? `${pet.value.weightKg} kg` : '' },
+  { label: '家中貓口', value: pet.value?.householdCatCount != null ? `${pet.value.householdCatCount} 隻` : '' },
+  { label: '飲食', value: pet.value?.diet ?? '' },
+  { label: '主餐配菜', value: pet.value?.foods?.join('、') ?? '' },
+  { label: '放飯頻率', value: feedingLabel.value },
 ]));
 // 飲食習慣／既往病史／預防針紀錄是看診前必須先看到的臨床提醒，獨立成一塊警示樣式，不跟品種、體重這類一般資料混在同一個灰階列表裡。
 const alertFields = computed(() => filledFields([
-  { label: '飲食習慣', value: pet.value?.allergies ?? '' },
-  { label: '既往病史', value: pet.value?.chronicConditions ?? '' },
-  { label: '預防針紀錄', value: pet.value?.currentMedications ?? '' },
+  { label: '疫苗', value: vaccineLabel.value || pet.value?.currentMedications || '' },
+  { label: '病史', value: [pet.value?.medicalHistory?.join('、'), pet.value?.medicalHistoryOther, pet.value?.chronicConditions].filter(Boolean).join('；') },
+  { label: '藥物過敏', value: allergyLabel.value || pet.value?.allergies || '' },
+  { label: '健檢', value: checkupLabel.value },
 ]));
 const hasAnyPetDetail = computed(() => Boolean(
   identityFields.value.length || secondaryFields.value.length || alertFields.value.length || pet.value?.notes
@@ -186,11 +267,25 @@ function startPetEdit() {
     name: pet.value.name ?? '',
     species: pet.value.species ?? '',
     breed: pet.value.breed ?? '',
+    color: pet.value.color ?? '',
     sex: pet.value.sex ?? 'unknown',
     neutered: pet.value.neutered ?? 'unknown',
     birthDate: clinicDateInput(pet.value.birthDate) || '',
     birthDateEstimated: pet.value.birthDateEstimated ?? false,
     weightKg: pet.value.weightKg ?? '',
+    householdCatCount: pet.value.householdCatCount ?? '',
+    diet: pet.value.diet ?? '',
+    foods: [...(pet.value.foods ?? [])],
+    feedingType: pet.value.feedingType ?? 'unknown',
+    mealsPerDay: pet.value.mealsPerDay ?? '',
+    vaccineStatus: pet.value.vaccineStatus ?? 'unknown',
+    vaccineDate: pet.value.vaccineDate ?? '',
+    medicalHistory: [...(pet.value.medicalHistory ?? [])],
+    medicalHistoryOther: pet.value.medicalHistoryOther ?? '',
+    allergyStatus: pet.value.allergyStatus ?? 'unknown',
+    allergyType: pet.value.allergyType ?? '',
+    checkupStatus: pet.value.checkupStatus ?? 'unknown',
+    checkupDate: pet.value.checkupDate ?? '',
     allergies: pet.value.allergies ?? '',
     chronicConditions: pet.value.chronicConditions ?? '',
     currentMedications: pet.value.currentMedications ?? '',
@@ -215,6 +310,8 @@ async function submitPetEdit() {
       ...petForm,
       birthDate: petForm.birthDate || null,
       weightKg: petForm.weightKg === '' || petForm.weightKg == null ? null : Number(petForm.weightKg),
+      householdCatCount: petForm.householdCatCount === '' || petForm.householdCatCount == null ? null : Number(petForm.householdCatCount),
+      mealsPerDay: petForm.mealsPerDay === '' || petForm.mealsPerDay == null ? null : Number(petForm.mealsPerDay),
       expectedVersion: pet.value.__v,
     };
     await http.put(`/pets/${pet.value._id}`, payload);
@@ -240,6 +337,7 @@ function startOwnerEdit() {
   Object.assign(ownerForm, {
     name: owner?.name ?? '',
     phone: owner?.phone ?? '',
+    landline: owner?.landline ?? '',
     email: owner?.email ?? '',
     address: owner?.address ?? '',
     notes: owner?.notes ?? '',
@@ -526,7 +624,7 @@ watch(pet, async (value) => {
 
       <!-- 編輯模式：直接畫在卡片裡，不彈 Modal。 -->
       <div v-if="petEditing" class="mt-4 space-y-4 border-t border-border pt-3">
-        <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+        <div class="grid gap-x-4 gap-y-4 sm:grid-cols-3">
           <div class="space-y-1.5">
             <Label for="pet-edit-name" class="text-xs font-medium text-foreground">寵物名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
             <Input id="pet-edit-name" v-model="petForm.name" class="border-border focus:border-primary" placeholder="例：咪咪" />
@@ -534,6 +632,10 @@ watch(pet, async (value) => {
           <div class="space-y-1.5">
             <Label for="pet-edit-breed" class="text-xs font-medium text-foreground">品種</Label>
             <Input id="pet-edit-breed" v-model="petForm.breed" class="border-border focus:border-primary" placeholder="例：米克斯、美短" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pet-edit-color" class="text-xs font-medium text-foreground">花色</Label>
+            <Input id="pet-edit-color" v-model="petForm.color" class="border-border focus:border-primary" placeholder="例：橘白、虎斑" />
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-birth-date" class="text-xs font-medium text-foreground">{{ petForm.birthDateEstimated ? '預估生日' : '生日' }}</Label>
@@ -550,7 +652,7 @@ watch(pet, async (value) => {
             </Select>
           </div>
           <div class="space-y-1.5">
-            <Label for="pet-edit-neutered" class="text-xs font-medium text-foreground">絕育狀態</Label>
+            <Label for="pet-edit-neutered" class="text-xs font-medium text-foreground">結紮</Label>
             <Select v-model="petForm.neutered">
               <SelectTrigger id="pet-edit-neutered" class="w-full border-border"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -565,16 +667,76 @@ watch(pet, async (value) => {
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
-            <Label for="pet-edit-allergies" class="text-xs font-medium text-foreground">飲食習慣</Label>
-            <Textarea id="pet-edit-allergies" v-model="petForm.allergies" rows="2" class="border-border" placeholder="例：乾飼料為主、雞肉過敏、需低脂飲食" />
+            <Label for="pet-edit-household-cat-count" class="text-xs font-medium text-foreground">家中貓口</Label>
+            <Input id="pet-edit-household-cat-count" v-model="petForm.householdCatCount" type="number" min="0" class="border-border focus:border-primary" placeholder="例：1" />
           </div>
           <div class="space-y-1.5">
-            <Label for="pet-edit-chronic" class="text-xs font-medium text-foreground">既往病史</Label>
-            <Textarea id="pet-edit-chronic" v-model="petForm.chronicConditions" rows="2" class="border-border" placeholder="例：曾接受手術、慢性腎臟病二期" />
+            <Label for="pet-edit-diet" class="text-xs font-medium text-foreground">飲食</Label>
+            <Input id="pet-edit-diet" v-model="petForm.diet" class="border-border focus:border-primary" placeholder="例：品牌、配方、特殊飲食" />
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">主餐配菜</Label>
+          <div class="flex flex-wrap gap-2">
+            <button v-for="option in FOOD_OPTIONS" :key="option" type="button" class="rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:bg-accent hover:text-primary" :class="{ 'border-primary bg-accent font-medium text-primary': petForm.foods.includes(option) }" @click="togglePetArrayValue('foods', option)">
+              {{ option }}
+            </button>
+          </div>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="space-y-1.5">
+            <Label for="pet-edit-feeding-type" class="text-xs font-medium text-foreground">放飯頻率</Label>
+            <Select v-model="petForm.feedingType">
+              <SelectTrigger id="pet-edit-feeding-type" class="w-full border-border"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="option in FEEDING_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div v-if="petForm.feedingType === 'scheduled'" class="space-y-1.5">
+            <Label for="pet-edit-meals-per-day" class="text-xs font-medium text-foreground">一日餐數</Label>
+            <Input id="pet-edit-meals-per-day" v-model="petForm.mealsPerDay" type="number" min="1" class="border-border focus:border-primary" placeholder="例：2" />
+          </div>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="space-y-1.5">
+            <Label for="pet-edit-vaccine" class="text-xs font-medium text-foreground">疫苗</Label>
+            <Select v-model="petForm.vaccineStatus">
+              <SelectTrigger id="pet-edit-vaccine" class="w-full border-border"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="option in VACCINE_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input v-if="petForm.vaccineStatus === 'done'" v-model="petForm.vaccineDate" class="border-border focus:border-primary" placeholder="最後注射時間，例：8/10" />
           </div>
           <div class="space-y-1.5">
-            <Label for="pet-edit-medications" class="text-xs font-medium text-foreground">預防針紀錄</Label>
-            <Textarea id="pet-edit-medications" v-model="petForm.currentMedications" rows="2" class="border-border" placeholder="例：每年定期施打核心疫苗" />
+            <Label for="pet-edit-allergy" class="text-xs font-medium text-foreground">藥物過敏</Label>
+            <Select v-model="petForm.allergyStatus">
+              <SelectTrigger id="pet-edit-allergy" class="w-full border-border"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="option in ALLERGY_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input v-if="petForm.allergyStatus === 'yes'" v-model="petForm.allergyType" class="border-border focus:border-primary" placeholder="過敏類別" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="pet-edit-checkup" class="text-xs font-medium text-foreground">健檢</Label>
+            <Select v-model="petForm.checkupStatus">
+              <SelectTrigger id="pet-edit-checkup" class="w-full border-border"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="option in CHECKUP_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input v-if="petForm.checkupStatus === 'done'" v-model="petForm.checkupDate" class="border-border focus:border-primary" placeholder="上次健檢時間" />
+          </div>
+          <div class="space-y-1.5">
+            <Label class="text-xs font-medium text-foreground">病史</Label>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="option in HISTORY_OPTIONS" :key="option" type="button" class="rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:bg-accent hover:text-primary" :class="{ 'border-primary bg-accent font-medium text-primary': petForm.medicalHistory.includes(option) }" @click="togglePetMedicalHistory(option)">
+                {{ option }}
+              </button>
+            </div>
+            <Input v-if="petForm.medicalHistory.includes('其他')" v-model="petForm.medicalHistoryOther" class="border-border focus:border-primary" placeholder="其他病史" />
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-notes" class="text-xs font-medium text-foreground">其他備註</Label>
@@ -640,8 +802,12 @@ watch(pet, async (value) => {
               <Input id="owner-edit-name" v-model="ownerForm.name" class="border-border focus:border-primary" placeholder="例：王小明" />
             </div>
             <div class="space-y-1.5">
-              <Label for="owner-edit-phone" class="text-xs font-medium text-foreground">電話 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Label for="owner-edit-phone" class="text-xs font-medium text-foreground">手機 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
               <Input id="owner-edit-phone" v-model="ownerForm.phone" class="border-border focus:border-primary" placeholder="例：0912-345-678" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="owner-edit-landline" class="text-xs font-medium text-foreground">市話（選填）</Label>
+              <Input id="owner-edit-landline" v-model="ownerForm.landline" class="border-border focus:border-primary" placeholder="例：03-561-9595" />
             </div>
             <div class="space-y-1.5">
               <Label for="owner-edit-email" class="text-xs font-medium text-foreground">Email（選填）</Label>
@@ -658,10 +824,14 @@ watch(pet, async (value) => {
           </div>
         </div>
 
-        <dl v-else-if="pet.ownerId.phone || pet.ownerId.email || pet.ownerId.address || pet.ownerId.notes" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
+        <dl v-else-if="pet.ownerId.phone || pet.ownerId.landline || pet.ownerId.email || pet.ownerId.address || pet.ownerId.notes" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
           <div v-if="pet.ownerId.phone" class="min-w-0">
-            <dt class="text-xs font-medium text-muted-foreground">電話</dt>
+            <dt class="text-xs font-medium text-muted-foreground">手機</dt>
             <dd class="mt-1 tabular-nums text-foreground">{{ pet.ownerId.phone }}</dd>
+          </div>
+          <div v-if="pet.ownerId.landline" class="min-w-0">
+            <dt class="text-xs font-medium text-muted-foreground">市話</dt>
+            <dd class="mt-1 tabular-nums text-foreground">{{ pet.ownerId.landline }}</dd>
           </div>
           <div v-if="pet.ownerId.email" class="min-w-0">
             <dt class="text-xs font-medium text-muted-foreground">Email</dt>

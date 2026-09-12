@@ -169,6 +169,51 @@ const NEUTERED_OPTIONS = [
   { value: 'no', label: '未絕育' },
 ];
 
+const FEEDING_OPTIONS = [
+  { value: 'unknown', label: '未記錄' },
+  { value: 'free', label: '任食' },
+  { value: 'scheduled', label: '定食定量' },
+];
+const VACCINE_OPTIONS = [
+  { value: 'unknown', label: '未記錄' },
+  { value: 'none', label: '未注射' },
+  { value: 'done', label: '已注射' },
+];
+const CHECKUP_OPTIONS = [
+  { value: 'unknown', label: '未記錄' },
+  { value: 'none', label: '未健檢' },
+  { value: 'done', label: '有健檢' },
+];
+const ALLERGY_OPTIONS = [
+  { value: 'unknown', label: '未記錄' },
+  { value: 'none', label: '無過敏' },
+  { value: 'yes', label: '有過敏' },
+];
+const FOOD_OPTIONS = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧'];
+const HISTORY_OPTIONS = ['無', '心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題', '其他'];
+
+function toggleArrayValue(key, value) {
+  const values = new Set(petForm.value[key] ?? []);
+  if (values.has(value)) values.delete(value);
+  else values.add(value);
+  petForm.value[key] = Array.from(values);
+}
+
+function toggleMedicalHistory(value) {
+  if (value === '無') {
+    petForm.value.medicalHistory = petForm.value.medicalHistory.includes('無') ? [] : ['無'];
+    petForm.value.medicalHistoryOther = '';
+    return;
+  }
+
+  const values = new Set(petForm.value.medicalHistory ?? []);
+  values.delete('無');
+  if (values.has(value)) values.delete(value);
+  else values.add(value);
+  if (value === '其他' && !values.has('其他')) petForm.value.medicalHistoryOther = '';
+  petForm.value.medicalHistory = Array.from(values);
+}
+
 // ----------------------------------------------------
 // 生日與即時年齡換算器 (Age & Birthday Calculation)
 // 這頁走「一次攤平」——年齡推算器不再是展開/收合的面板，永遠顯示在生日欄位旁邊，
@@ -231,9 +276,10 @@ function applyAgeCalculation() {
 // ----------------------------------------------------
 const filledMedicalCount = computed(() => {
   let count = 0;
-  if (petForm.value.allergies?.trim()) count++;
-  if (petForm.value.chronicConditions?.trim()) count++;
-  if (petForm.value.currentMedications?.trim()) count++;
+  if (petForm.value.vaccineStatus !== 'unknown' || petForm.value.vaccineDate?.trim()) count++;
+  if (petForm.value.medicalHistory?.length || petForm.value.medicalHistoryOther?.trim()) count++;
+  if (petForm.value.allergyStatus !== 'unknown' || petForm.value.allergyType?.trim()) count++;
+  if (petForm.value.checkupStatus !== 'unknown' || petForm.value.checkupDate?.trim()) count++;
   if (petForm.value.notes?.trim()) count++;
   return count;
 });
@@ -335,6 +381,8 @@ async function submit() {
       ...petForm.value,
       birthDate: petForm.value.birthDate || null,
       weightKg: petForm.value.weightKg === '' || petForm.value.weightKg == null ? null : Number(petForm.value.weightKg),
+      householdCatCount: petForm.value.householdCatCount === '' || petForm.value.householdCatCount == null ? null : Number(petForm.value.householdCatCount),
+      mealsPerDay: petForm.value.mealsPerDay === '' || petForm.value.mealsPerDay == null ? null : Number(petForm.value.mealsPerDay),
     };
 
     const { data: pet } = ownerMode.value === 'existing'
@@ -533,7 +581,7 @@ onBeforeUnmount(() => {
 
         <!-- 模式 2：建立新飼主 -->
         <div v-else class="space-y-4">
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div class="space-y-1.5">
               <Label for="new-owner-name" class="text-xs font-medium text-foreground">飼主姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
               <Input
@@ -548,7 +596,7 @@ onBeforeUnmount(() => {
               <p v-if="errors.newOwnerName" class="text-xs text-destructive">{{ errors.newOwnerName }}</p>
             </div>
             <div class="space-y-1.5">
-              <Label for="new-owner-phone" class="text-xs font-medium text-foreground">聯絡電話 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Label for="new-owner-phone" class="text-xs font-medium text-foreground">手機 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
               <Input
                 id="new-owner-phone"
                 v-model="newOwner.phone"
@@ -561,6 +609,10 @@ onBeforeUnmount(() => {
                 @input="errors.newOwnerPhone = ''"
               />
               <p v-if="errors.newOwnerPhone" class="text-xs text-destructive">{{ errors.newOwnerPhone }}</p>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="new-owner-landline" class="text-xs font-medium text-foreground">市話（選填）</Label>
+              <Input id="new-owner-landline" v-model="newOwner.landline" type="tel" autocomplete="tel" inputmode="tel" class="h-9 text-sm" placeholder="例：03-561-9595" />
             </div>
             <div class="space-y-1.5">
               <Label for="new-owner-email" class="text-xs font-medium text-foreground">電子信箱（選填）</Label>
@@ -595,7 +647,7 @@ onBeforeUnmount(() => {
           <h2 class="text-xs font-semibold tracking-wide text-foreground uppercase">貓咪基本資料</h2>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 sm:grid-cols-3">
           <div class="space-y-1.5">
             <Label for="new-pet-name" class="text-xs font-medium text-foreground">貓咪名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
             <Input
@@ -612,6 +664,10 @@ onBeforeUnmount(() => {
           <div class="space-y-1.5">
             <Label for="new-pet-breed" class="text-xs font-medium text-foreground">品種</Label>
             <Input id="new-pet-breed" v-model="petForm.breed" class="h-9 text-sm" placeholder="例：米克斯、美短、布偶貓" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="new-pet-color" class="text-xs font-medium text-foreground">花色</Label>
+            <Input id="new-pet-color" v-model="petForm.color" class="h-9 text-sm" placeholder="例：橘白、玳瑁、虎斑" />
           </div>
         </div>
 
@@ -654,14 +710,10 @@ onBeforeUnmount(() => {
           <p v-if="petForm.birthDateEstimated" class="text-xs text-muted-foreground">此日期由概略年齡回推，僅代表預估月份；系統以該月 1 日儲存並標示為推估。</p>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-3">
+        <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
             <Label class="text-xs font-medium text-foreground">性別</Label>
             <SegmentedControl v-model="petForm.sex" :options="SEX_OPTIONS" aria-label="寵物性別" size="sm" full-width />
-          </div>
-          <div class="space-y-1.5">
-            <Label class="text-xs font-medium text-foreground">絕育狀態</Label>
-            <SegmentedControl v-model="petForm.neutered" :options="NEUTERED_OPTIONS" aria-label="絕育狀態" size="sm" full-width />
           </div>
           <div class="space-y-1.5">
             <Label for="new-pet-weight" class="text-xs font-medium text-foreground">目前體重</Label>
@@ -669,6 +721,42 @@ onBeforeUnmount(() => {
               <Input id="new-pet-weight" v-model="petForm.weightKg" type="number" step="0.05" min="0" class="h-9 pr-10 text-sm" placeholder="例：4.5" />
               <span class="pointer-events-none absolute right-3 text-xs font-semibold text-muted-foreground">kg</span>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 生活狀況 -->
+      <div class="space-y-4 border-t border-border pt-6">
+        <div class="flex items-center gap-2">
+          <PawPrint class="h-4 w-4 text-primary" stroke-width="2" />
+          <h2 class="text-xs font-semibold tracking-wide text-foreground uppercase">生活狀況</h2>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="space-y-1.5">
+            <Label for="new-pet-household-cat-count" class="text-xs font-medium text-foreground">家中貓口</Label>
+            <Input id="new-pet-household-cat-count" v-model="petForm.householdCatCount" type="number" min="0" class="h-9 text-sm" placeholder="例：1" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="new-pet-diet" class="text-xs font-medium text-foreground">飲食</Label>
+            <Input id="new-pet-diet" v-model="petForm.diet" class="h-9 text-sm" placeholder="例：品牌、配方、特殊飲食" />
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">主餐配菜</Label>
+          <div class="flex flex-wrap gap-2">
+            <button v-for="option in FOOD_OPTIONS" :key="option" type="button" class="rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:bg-accent hover:text-primary" :class="{ 'border-primary bg-accent font-medium text-primary': petForm.foods.includes(option) }" @click="toggleArrayValue('foods', option)">
+              {{ option }}
+            </button>
+          </div>
+        </div>
+        <div class="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div class="space-y-1.5">
+            <Label class="text-xs font-medium text-foreground">放飯頻率</Label>
+            <SegmentedControl v-model="petForm.feedingType" :options="FEEDING_OPTIONS" aria-label="放飯頻率" size="sm" full-width />
+          </div>
+          <div v-if="petForm.feedingType === 'scheduled'" class="space-y-1.5">
+            <Label for="new-pet-meals-per-day" class="text-xs font-medium text-foreground">一日餐數</Label>
+            <Input id="new-pet-meals-per-day" v-model="petForm.mealsPerDay" type="number" min="1" class="h-9 w-28 text-sm" placeholder="例：2" />
           </div>
         </div>
       </div>
@@ -684,16 +772,34 @@ onBeforeUnmount(() => {
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
-            <Label for="new-pet-allergies" class="text-xs font-medium text-foreground">飲食習慣</Label>
-            <Textarea id="new-pet-allergies" v-model="petForm.allergies" rows="2" class="text-sm" placeholder="例：乾飼料為主、雞肉過敏、需低脂飲食…" />
+            <Label class="text-xs font-medium text-foreground">結紮</Label>
+            <SegmentedControl v-model="petForm.neutered" :options="NEUTERED_OPTIONS" aria-label="結紮" size="sm" full-width />
           </div>
           <div class="space-y-1.5">
-            <Label for="new-pet-chronic" class="text-xs font-medium text-foreground">既往病史</Label>
-            <Textarea id="new-pet-chronic" v-model="petForm.chronicConditions" rows="2" class="text-sm" placeholder="例：曾接受手術、慢性腎病 (CKD)、肥厚型心肌病 (HCM)…" />
+            <Label class="text-xs font-medium text-foreground">疫苗</Label>
+            <SegmentedControl v-model="petForm.vaccineStatus" :options="VACCINE_OPTIONS" aria-label="疫苗" size="sm" full-width />
+            <Input v-if="petForm.vaccineStatus === 'done'" v-model="petForm.vaccineDate" class="h-9 text-sm" placeholder="最後注射時間，例：8/10" />
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">病史</Label>
+          <div class="flex flex-wrap gap-2">
+            <button v-for="option in HISTORY_OPTIONS" :key="option" type="button" class="rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:bg-accent hover:text-primary" :class="{ 'border-primary bg-accent font-medium text-primary': petForm.medicalHistory.includes(option) }" @click="toggleMedicalHistory(option)">
+              {{ option }}
+            </button>
+          </div>
+          <Input v-if="petForm.medicalHistory.includes('其他')" v-model="petForm.medicalHistoryOther" class="h-9 text-sm" placeholder="其他病史" />
+        </div>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="space-y-1.5">
+            <Label class="text-xs font-medium text-foreground">藥物過敏</Label>
+            <SegmentedControl v-model="petForm.allergyStatus" :options="ALLERGY_OPTIONS" aria-label="藥物過敏" size="sm" full-width />
+            <Input v-if="petForm.allergyStatus === 'yes'" v-model="petForm.allergyType" class="h-9 text-sm" placeholder="過敏類別" />
           </div>
           <div class="space-y-1.5">
-            <Label for="new-pet-medications" class="text-xs font-medium text-foreground">預防針紀錄</Label>
-            <Textarea id="new-pet-medications" v-model="petForm.currentMedications" rows="2" class="text-sm" placeholder="例：每年定期施打核心疫苗、狂犬病疫苗已完成…" />
+            <Label class="text-xs font-medium text-foreground">健檢</Label>
+            <SegmentedControl v-model="petForm.checkupStatus" :options="CHECKUP_OPTIONS" aria-label="健檢" size="sm" full-width />
+            <Input v-if="petForm.checkupStatus === 'done'" v-model="petForm.checkupDate" class="h-9 text-sm" placeholder="上次健檢時間" />
           </div>
           <div class="space-y-1.5">
             <Label for="new-pet-notes" class="text-xs font-medium text-foreground">其他備註與個性提醒</Label>

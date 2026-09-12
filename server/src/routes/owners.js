@@ -10,11 +10,25 @@ const PET_FIELDS = [
   'name',
   'species',
   'breed',
+  'color',
   'sex',
   'neutered',
   'birthDate',
   'birthDateEstimated',
   'weightKg',
+  'householdCatCount',
+  'diet',
+  'foods',
+  'feedingType',
+  'mealsPerDay',
+  'vaccineStatus',
+  'vaccineDate',
+  'medicalHistory',
+  'medicalHistoryOther',
+  'allergyStatus',
+  'allergyType',
+  'checkupStatus',
+  'checkupDate',
   'allergies',
   'chronicConditions',
   'currentMedications',
@@ -38,7 +52,7 @@ router.get('/', async (req, res, next) => {
     const { q } = req.query;
     const keyword = q ? new RegExp(escapeRegExp(String(q)), 'i') : null;
     const filter = keyword
-      ? { $or: [{ name: keyword }, { phone: keyword }] }
+      ? { $or: [{ name: keyword }, { phone: keyword }, { landline: keyword }] }
       : {};
     const pagination = paginationOptions(req.query, { defaultLimit: 10 });
     const [owners, total] = await Promise.all([
@@ -53,10 +67,10 @@ router.get('/', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
-    const { name, phone, email, address, notes } = req.body;
+    const { name, phone, landline, email, address, notes } = req.body;
     const validationError = validateOwnerInput({ name, phone, email });
     if (validationError) return res.status(422).json({ message: validationError });
-    const owner = await Owner.create({ name, phone, email, address, notes });
+    const owner = await Owner.create({ name, phone, landline, email, address, notes });
     res.status(201).json(owner);
   } catch (err) {
     next(err);
@@ -76,6 +90,7 @@ router.post('/with-pet', async (req, res, next) => {
       const [owner] = await Owner.create([{
         name: ownerInput.name,
         phone: ownerInput.phone,
+        landline: ownerInput.landline,
         email: ownerInput.email,
         address: ownerInput.address,
         notes: ownerInput.notes,
@@ -112,7 +127,7 @@ router.get('/:id', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, phone, email, address, notes } = req.body;
+    const { name, phone, landline, email, address, notes } = req.body;
     const validationError = validateOwnerInput({ name, phone, email });
     if (validationError) return res.status(422).json({ message: validationError });
     const expectedVersion = Number(req.body?.expectedVersion);
@@ -121,7 +136,7 @@ router.put('/:id', async (req, res, next) => {
     }
     const owner = await Owner.findOneAndUpdate(
       { _id: req.params.id, __v: expectedVersion },
-      { $set: { name, phone, email, address, notes }, $inc: { __v: 1 } },
+      { $set: { name, phone, landline, email, address, notes }, $inc: { __v: 1 } },
       { new: true, runValidators: true }
     );
     if (!owner) {

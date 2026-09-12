@@ -11,11 +11,25 @@ const PET_FIELDS = [
   'name',
   'species',
   'breed',
+  'color',
   'sex',
   'neutered',
   'birthDate',
   'birthDateEstimated',
   'weightKg',
+  'householdCatCount',
+  'diet',
+  'foods',
+  'feedingType',
+  'mealsPerDay',
+  'vaccineStatus',
+  'vaccineDate',
+  'medicalHistory',
+  'medicalHistoryOther',
+  'allergyStatus',
+  'allergyType',
+  'checkupStatus',
+  'checkupDate',
   'allergies',
   'chronicConditions',
   'currentMedications',
@@ -83,7 +97,7 @@ petsRouter.get('/', async (req, res, next) => {
       const pattern = new RegExp(escapeRegExp(query), 'i');
       const derivedRecordNumber = query.match(/^PET-([0-9A-F]{8})$/i);
       const owners = await Owner.find({
-        $or: [{ name: pattern }, { phone: pattern }],
+        $or: [{ name: pattern }, { phone: pattern }, { landline: pattern }],
       }).select('_id');
       filter = {
         $or: [
@@ -113,7 +127,7 @@ petsRouter.get('/', async (req, res, next) => {
 
 petsRouter.get('/:id', async (req, res, next) => {
   try {
-    const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone email address notes __v');
+    const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone landline email address notes __v');
     if (!pet) return res.status(404).json({ message: '找不到寵物' });
     const pagination = paginationOptions(req.query, {
       defaultLimit: 10,
