@@ -58,7 +58,12 @@ function tray(filter, sortKey) {
 }
 
 const handoffs = computed(() => tray('handoff', 'handoffAt'));
-const upcoming = computed(() => tray('scheduled', 'scheduledAt'));
+const waiting = computed(() => tray('waiting', 'checkedInAt'));
+const scheduled = computed(() => tray('scheduled', 'scheduledAt'));
+const upcoming = computed(() => scheduled.value);
+const closedAppointments = computed(() => items.value
+  .filter(item => ['cancelled', 'no_show'].includes(item.status) && matches(item))
+  .sort((a, b) => new Date(a.scheduledAt || 0) - new Date(b.scheduledAt || 0)));
 const followUps = computed(() => tray('followup', 'handoffAt').filter(item => workflowState(item).completed));
 const reopenRequests = computed(() => items.value
   .filter(item => workflowState(item).completed && item.reopenRequest?.requestedAt && !item.reopenRequest?.approvedAt && matches(item))
@@ -270,6 +275,33 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
           </div>
         </section>
 
+        <section class="overflow-hidden rounded-xl border border-border bg-card" aria-label="候診中">
+          <div class="flex items-center gap-3 border-b border-border px-5 py-3">
+            <h2 class="text-base font-semibold">候診中</h2>
+            <span class="inline-flex h-6 items-center rounded-full bg-muted px-3 text-xs font-medium leading-none">{{ waiting.length }} 位</span>
+            <p class="ml-auto text-xs text-muted-foreground">已報到，等待看診</p>
+          </div>
+          <p v-if="!waiting.length" class="px-5 py-6 text-center text-sm text-muted-foreground">目前沒有候診中的病患。</p>
+          <div v-for="item in waiting" :key="item._id" class="border-b border-border px-5 py-3.5 last:border-b-0">
+            <div class="flex flex-wrap items-center gap-4">
+              <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold tabular-nums text-primary-foreground">{{ item.checkinNumber ?? '—' }}</span>
+              <div class="w-40 shrink-0">
+                <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
+                <p class="truncate text-xs text-muted-foreground">{{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template></p>
+              </div>
+              <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template>
+              </p>
+              <RowActions
+                :actions="[{ key: 'edit', label: '修改掛號' }, { key: 'restore', label: '取消報到', danger: true }]"
+                :label="`${item.petName}的更多操作`"
+                @select="key => admin(key, item)"
+              />
+            </div>
+            <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-15 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+          </div>
+        </section>
+
         <section class="overflow-hidden rounded-xl border border-border bg-card" aria-label="待報到">
           <div class="flex items-center gap-3 border-b border-border px-5 py-3">
             <h2 class="text-base font-semibold">待報到</h2>
@@ -289,19 +321,47 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               </p>
               <div class="flex flex-wrap items-center gap-2">
                 <Button variant="secondary" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
+                <Button variant="secondary" size="sm" :disabled="busy" @click="admin('check-in-late', item)">遲到</Button>
                 <Button variant="secondary" size="sm" :disabled="busy" @click="admin('no-show', item)">標記未到</Button>
                 <Button variant="destructive" size="sm" :disabled="busy" @click="admin('cancel', item)">取消掛號</Button>
                 <RowActions
-                  :actions="[
-                    { key: 'check-in-late', label: '遲到報到' },
-                    { key: 'edit', label: '修改預約' },
-                  ]"
+                  :actions="[{ key: 'edit', label: '修改預約' }]"
                   :label="`${item.petName}的更多操作`"
                   @select="key => admin(key, item)"
                 />
               </div>
             </div>
-            <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-18 text-xs leading-snug text-muted-foreground">{{ item.reason }}</p>
+            <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-18 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+          </div>
+        </section>
+
+        <section class="overflow-hidden rounded-xl border border-border bg-card" aria-label="未到與取消">
+          <div class="flex items-center gap-3 border-b border-border px-5 py-3">
+            <h2 class="text-base font-semibold">未到／取消</h2>
+            <span class="inline-flex h-6 items-center rounded-full bg-muted px-3 text-xs font-medium leading-none">{{ closedAppointments.length }} 位</span>
+            <p class="ml-auto text-xs text-muted-foreground">已標記未到或取消</p>
+          </div>
+          <p v-if="!closedAppointments.length" class="px-5 py-6 text-center text-sm text-muted-foreground">目前沒有未到或取消的預約。</p>
+          <div v-for="item in closedAppointments" :key="item._id" class="border-b border-border px-5 py-3.5 last:border-b-0">
+            <div class="flex flex-wrap items-center gap-4">
+              <span class="w-14 shrink-0 text-sm font-semibold tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
+              <div class="w-40 shrink-0">
+                <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
+                <p class="truncate text-xs text-muted-foreground">{{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template></p>
+              </div>
+              <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template>
+              </p>
+              <div class="flex flex-wrap items-center gap-2">
+                <Button variant="secondary" size="sm" :disabled="busy" @click="admin('restore', item)">恢復待報到</Button>
+                <RowActions
+                  :actions="[{ key: 'edit', label: '修改預約' }]"
+                  :label="`${item.petName}的更多操作`"
+                  @select="key => admin(key, item)"
+                />
+              </div>
+            </div>
+            <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-18 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
           </div>
         </section>
 
@@ -372,8 +432,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
                 <span class="w-11 shrink-0 text-xs tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
                 <span class="h-2 w-2 shrink-0 rounded-full" :class="dotClass(item)"></span>
                 <span class="min-w-0 flex-1 truncate text-sm">{{ item.petName }}</span>
-                <!-- 報錯人、報錯時間的修正入口。候診中的人不在左邊任何一個匣子裡，
-                     這裡是他們唯一的行政操作出口，所以只在還沒開始看診時才出現。 -->
+                <!-- 時間軸保留候診中的行政操作入口，櫃台左側清單與右側時程都能就地修正。 -->
                 <RowActions
                   v-if="item.status === 'arrived' && !item.visitStartedAt"
                   :actions="[{ key: 'edit', label: '修改掛號' }, { key: 'restore', label: '取消報到', danger: true }]"
