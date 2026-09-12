@@ -119,11 +119,11 @@ const identityFields = computed(() => filledFields([
 const secondaryFields = computed(() => filledFields([
   { label: '最近體重', value: pet.value?.weightKg != null ? `${pet.value.weightKg} kg` : '' },
 ]));
-// 過敏／慢性病／用藥是看診前必須先看到的臨床提醒，獨立成一塊警示樣式，不跟品種、體重這類一般資料混在同一個灰階列表裡。
+// 飲食習慣／既往病史／預防針紀錄是看診前必須先看到的臨床提醒，獨立成一塊警示樣式，不跟品種、體重這類一般資料混在同一個灰階列表裡。
 const alertFields = computed(() => filledFields([
-  { label: '過敏紀錄', value: pet.value?.allergies ?? '' },
-  { label: '慢性病／重要病史', value: pet.value?.chronicConditions ?? '' },
-  { label: '目前用藥', value: pet.value?.currentMedications ?? '' },
+  { label: '飲食習慣', value: pet.value?.allergies ?? '' },
+  { label: '既往病史', value: pet.value?.chronicConditions ?? '' },
+  { label: '預防針紀錄', value: pet.value?.currentMedications ?? '' },
 ]));
 const hasAnyPetDetail = computed(() => Boolean(
   identityFields.value.length || secondaryFields.value.length || alertFields.value.length || pet.value?.notes
@@ -565,16 +565,16 @@ watch(pet, async (value) => {
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
-            <Label for="pet-edit-allergies" class="text-xs font-medium text-foreground">過敏紀錄</Label>
-            <Textarea id="pet-edit-allergies" v-model="petForm.allergies" rows="2" class="border-border" placeholder="例：對某類抗生素過敏" />
+            <Label for="pet-edit-allergies" class="text-xs font-medium text-foreground">飲食習慣</Label>
+            <Textarea id="pet-edit-allergies" v-model="petForm.allergies" rows="2" class="border-border" placeholder="例：乾飼料為主、雞肉過敏、需低脂飲食" />
           </div>
           <div class="space-y-1.5">
-            <Label for="pet-edit-chronic" class="text-xs font-medium text-foreground">慢性病／重要病史</Label>
-            <Textarea id="pet-edit-chronic" v-model="petForm.chronicConditions" rows="2" class="border-border" placeholder="例：慢性腎臟病二期" />
+            <Label for="pet-edit-chronic" class="text-xs font-medium text-foreground">既往病史</Label>
+            <Textarea id="pet-edit-chronic" v-model="petForm.chronicConditions" rows="2" class="border-border" placeholder="例：曾接受手術、慢性腎臟病二期" />
           </div>
           <div class="space-y-1.5">
-            <Label for="pet-edit-medications" class="text-xs font-medium text-foreground">目前用藥</Label>
-            <Textarea id="pet-edit-medications" v-model="petForm.currentMedications" rows="2" class="border-border" placeholder="例：每日降血壓藥物" />
+            <Label for="pet-edit-medications" class="text-xs font-medium text-foreground">預防針紀錄</Label>
+            <Textarea id="pet-edit-medications" v-model="petForm.currentMedications" rows="2" class="border-border" placeholder="例：每年定期施打核心疫苗" />
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-notes" class="text-xs font-medium text-foreground">其他備註</Label>

@@ -502,9 +502,9 @@ watch(
         </section>
 
         <section v-if="record.pet?.allergies || record.pet?.chronicConditions || record.pet?.currentMedications" class="mt-6 border-l-4 border-report-warning-accent bg-report-warning-surface px-4 py-3 text-sm text-report-warning-strong">
-          <p v-if="record.pet.allergies"><strong>過敏：</strong>{{ record.pet.allergies }}</p>
-          <p v-if="record.pet.chronicConditions"><strong>慢性病／重要病史：</strong>{{ record.pet.chronicConditions }}</p>
-          <p v-if="record.pet.currentMedications"><strong>目前用藥：</strong>{{ record.pet.currentMedications }}</p>
+          <p v-if="record.pet.allergies"><strong>飲食習慣：</strong>{{ record.pet.allergies }}</p>
+          <p v-if="record.pet.chronicConditions"><strong>既往病史：</strong>{{ record.pet.chronicConditions }}</p>
+          <p v-if="record.pet.currentMedications"><strong>預防針紀錄：</strong>{{ record.pet.currentMedications }}</p>
         </section>
 
         <ReportSection

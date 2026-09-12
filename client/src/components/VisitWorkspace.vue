@@ -271,9 +271,9 @@ onBeforeUnmount(() => {
 
       <div v-if="hasReminders" class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 rounded-lg bg-warning-surface px-3.5 py-2.5 text-sm text-warning">
         <span class="inline-flex items-center gap-2 font-semibold"><ShieldAlert class="h-4 w-4" stroke-width="1.75" />重要提醒</span>
-        <span v-if="pet.allergies">過敏：{{ pet.allergies }}</span>
-        <span v-if="pet.chronicConditions">慢性病：{{ pet.chronicConditions }}</span>
-        <span v-if="pet.currentMedications">用藥：{{ pet.currentMedications }}</span>
+        <span v-if="pet.allergies">飲食習慣：{{ pet.allergies }}</span>
+        <span v-if="pet.chronicConditions">既往病史：{{ pet.chronicConditions }}</span>
+        <span v-if="pet.currentMedications">預防針紀錄：{{ pet.currentMedications }}</span>
       </div>
 
       <div class="mt-3"><AppointmentMilestones :appointment="appointment" /></div>

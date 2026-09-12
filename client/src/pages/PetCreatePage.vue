@@ -684,16 +684,16 @@ onBeforeUnmount(() => {
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
-            <Label for="new-pet-allergies" class="text-xs font-medium text-foreground">過敏紀錄</Label>
-            <Textarea id="new-pet-allergies" v-model="petForm.allergies" rows="2" class="text-sm" placeholder="例：對某類抗生素或特定蛋白質過敏…" />
+            <Label for="new-pet-allergies" class="text-xs font-medium text-foreground">飲食習慣</Label>
+            <Textarea id="new-pet-allergies" v-model="petForm.allergies" rows="2" class="text-sm" placeholder="例：乾飼料為主、雞肉過敏、需低脂飲食…" />
           </div>
           <div class="space-y-1.5">
-            <Label for="new-pet-chronic" class="text-xs font-medium text-foreground">慢性病／重要病史</Label>
-            <Textarea id="new-pet-chronic" v-model="petForm.chronicConditions" rows="2" class="text-sm" placeholder="例：慢性腎病 (CKD)、肥厚型心肌病 (HCM)、貓愛滋/白血 (FIV/FeLV)…" />
+            <Label for="new-pet-chronic" class="text-xs font-medium text-foreground">既往病史</Label>
+            <Textarea id="new-pet-chronic" v-model="petForm.chronicConditions" rows="2" class="text-sm" placeholder="例：曾接受手術、慢性腎病 (CKD)、肥厚型心肌病 (HCM)…" />
           </div>
           <div class="space-y-1.5">
-            <Label for="new-pet-medications" class="text-xs font-medium text-foreground">目前用藥</Label>
-            <Textarea id="new-pet-medications" v-model="petForm.currentMedications" rows="2" class="text-sm" placeholder="例：每日服用降血壓藥 (Amodip)、定期皮下輸液、關節保養…" />
+            <Label for="new-pet-medications" class="text-xs font-medium text-foreground">預防針紀錄</Label>
+            <Textarea id="new-pet-medications" v-model="petForm.currentMedications" rows="2" class="text-sm" placeholder="例：每年定期施打核心疫苗、狂犬病疫苗已完成…" />
           </div>
           <div class="space-y-1.5">
             <Label for="new-pet-notes" class="text-xs font-medium text-foreground">其他備註與個性提醒</Label>
