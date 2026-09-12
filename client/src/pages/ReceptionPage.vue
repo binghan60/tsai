@@ -134,12 +134,6 @@ function admin(kind, appointment = null) {
   if (kind === 'edit' || kind === 'cancel') { dialog.value = kind; return; }
   if (kind === 'check-in' || kind === 'check-in-late') {
     lateCheckIn.value = kind === 'check-in-late';
-    // 回診身分已確認，按報到就是執行報到；不再多一道確認。
-    // 初診仍須開表單，現場補齊飼主與寵物資料以建立正式病歷。
-    if (appointment?.petId && kind === 'check-in') {
-      submit({ version: appointment.__v ?? 0 }, 'check-in');
-      return;
-    }
     dialog.value = 'check-in';
     return;
   }
@@ -292,11 +286,14 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
                 {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template>
               </p>
-              <RowActions
-                :actions="[{ key: 'edit', label: '修改掛號' }, { key: 'restore', label: '取消報到', danger: true }]"
-                :label="`${item.petName}的更多操作`"
-                @select="key => admin(key, item)"
-              />
+              <div class="flex flex-wrap items-center gap-2">
+                <Button variant="secondary" size="sm" :disabled="busy" @click="admin('restore', item)">取消報到</Button>
+                <RowActions
+                  :actions="[{ key: 'edit', label: '修改掛號' }]"
+                  :label="`${item.petName}的更多操作`"
+                  @select="key => admin(key, item)"
+                />
+              </div>
             </div>
             <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-15 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
           </div>
@@ -321,7 +318,6 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               </p>
               <div class="flex flex-wrap items-center gap-2">
                 <Button variant="secondary" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
-                <Button variant="secondary" size="sm" :disabled="busy" @click="admin('check-in-late', item)">遲到</Button>
                 <Button variant="secondary" size="sm" :disabled="busy" @click="admin('no-show', item)">標記未到</Button>
                 <Button variant="destructive" size="sm" :disabled="busy" @click="admin('cancel', item)">取消掛號</Button>
                 <RowActions
@@ -432,14 +428,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
                 <span class="w-11 shrink-0 text-xs tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
                 <span class="h-2 w-2 shrink-0 rounded-full" :class="dotClass(item)"></span>
                 <span class="min-w-0 flex-1 truncate text-sm">{{ item.petName }}</span>
-                <!-- 時間軸保留候診中的行政操作入口，櫃台左側清單與右側時程都能就地修正。 -->
-                <RowActions
-                  v-if="item.status === 'arrived' && !item.visitStartedAt"
-                  :actions="[{ key: 'edit', label: '修改掛號' }, { key: 'restore', label: '取消報到', danger: true }]"
-                  :label="`${item.petName}的更多操作`"
-                  @select="key => admin(key, item)"
-                />
-                <span v-else class="shrink-0 text-xs text-muted-foreground">{{ visitLabel(item) }}</span>
+                <span class="shrink-0 text-xs text-muted-foreground">{{ visitLabel(item) }}</span>
               </div>
             </template>
             <div v-if="nowPosition(group) === group.items.length" class="flex items-center gap-2 px-5 py-1.5">

@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
+import SegmentedControl from './SegmentedControl.vue';
 import { clinicTimeInput } from '../lib/datetime';
 
 const props = defineProps({
@@ -34,10 +35,16 @@ const { handleSubmit } = useForm({
 const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName', ownerFieldRule);
 const { value: ownerPhone, errorMessage: ownerPhoneError } = useField('ownerPhone', ownerFieldRule);
 const { value: petName, errorMessage: petNameError } = useField('petName', patientFieldRule);
+const arrivalMode = ref(props.late ? 'late' : 'on-time');
 const lateAt = ref(clinicTimeInput(new Date()));
+const isLate = computed(() => arrivalMode.value === 'late');
 const latenessMinutes = computed(() => Math.max(0, Math.floor((new Date(`${props.appointment.date}T${lateAt.value}`).getTime() - new Date(props.appointment.scheduledAt).getTime()) / 60000)));
+const ARRIVAL_MODE_OPTIONS = [
+  { value: 'on-time', label: '準時' },
+  { value: 'late', label: '遲到' },
+];
 
-const onSubmit = handleSubmit((values) => emit('submit', { ...values, isLate: props.late, lateAt: lateAt.value }));
+const onSubmit = handleSubmit((values) => emit('submit', { ...values, isLate: isLate.value, lateAt: lateAt.value }));
 </script>
 
 <template>
@@ -72,7 +79,11 @@ const onSubmit = handleSubmit((values) => emit('submit', { ...values, isLate: pr
           <Input id="checkin-pet-name" v-model="petName" class="border-border" />
           <p v-if="petNameError" class="text-xs font-medium text-destructive">{{ petNameError }}</p>
         </div>
-        <div v-if="late" class="space-y-2 rounded-xl bg-warning-surface p-3 text-sm text-warning"><label class="block space-y-1.5 font-medium">實際到院時間<Input v-model="lateAt" type="time" step="60" /></label><p>將依此時間記錄遲到 {{ latenessMinutes }} 分鐘。</p></div>
+        <div class="space-y-1.5">
+          <Label class="text-xs font-medium text-foreground">報到狀態</Label>
+          <SegmentedControl v-model="arrivalMode" :options="ARRIVAL_MODE_OPTIONS" aria-label="報到狀態" full-width />
+        </div>
+        <div v-if="isLate" class="space-y-2 rounded-xl bg-warning-surface p-3 text-sm text-warning"><label class="block space-y-1.5 font-medium">實際到院時間<Input v-model="lateAt" type="time" step="60" /></label><p>將依此時間記錄遲到 {{ latenessMinutes }} 分鐘。</p></div>
         <Alert v-if="errorMessage" variant="destructive" class="mt-2">
           <AlertDescription>{{ errorMessage }}</AlertDescription>
         </Alert>
