@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
+import { TimePicker } from './ui/time-picker';
 import SegmentedControl from './SegmentedControl.vue';
 import { clinicTimeInput } from '../lib/datetime';
 
@@ -38,7 +39,13 @@ const { value: petName, errorMessage: petNameError } = useField('petName', patie
 const arrivalMode = ref(props.late ? 'late' : 'on-time');
 const lateAt = ref(clinicTimeInput(new Date()));
 const isLate = computed(() => arrivalMode.value === 'late');
-const latenessMinutes = computed(() => Math.max(0, Math.floor((new Date(`${props.appointment.date}T${lateAt.value}`).getTime() - new Date(props.appointment.scheduledAt).getTime()) / 60000)));
+const latenessMinutes = computed(() => {
+  if (!/^\d{2}:\d{2}$/.test(lateAt.value || '')) return 0;
+  const arrivalMs = new Date(`${props.appointment.date}T${lateAt.value}`).getTime();
+  const scheduledMs = new Date(props.appointment.scheduledAt).getTime();
+  if (Number.isNaN(arrivalMs) || Number.isNaN(scheduledMs)) return 0;
+  return Math.max(0, Math.floor((arrivalMs - scheduledMs) / 60000));
+});
 const ARRIVAL_MODE_OPTIONS = [
   { value: 'on-time', label: '準時' },
   { value: 'late', label: '遲到' },
@@ -83,7 +90,13 @@ const onSubmit = handleSubmit((values) => emit('submit', { ...values, isLate: is
           <Label class="text-xs font-medium text-foreground">報到狀態</Label>
           <SegmentedControl v-model="arrivalMode" :options="ARRIVAL_MODE_OPTIONS" aria-label="報到狀態" full-width />
         </div>
-        <div v-if="isLate" class="space-y-2 rounded-xl bg-warning-surface p-3 text-sm text-warning"><label class="block space-y-1.5 font-medium">實際到院時間<Input v-model="lateAt" type="time" step="60" /></label><p>將依此時間記錄遲到 {{ latenessMinutes }} 分鐘。</p></div>
+        <div v-if="isLate" class="space-y-2 rounded-xl  p-3 text-sm">
+          <label class="block space-y-1.5 font-medium">
+            實際到院時間
+            <TimePicker v-model="lateAt" aria-label="實際到院時間" :minute-step="1" />
+          </label>
+          <p>將依此時間記錄遲到 {{ latenessMinutes }} 分鐘。</p>
+        </div>
         <Alert v-if="errorMessage" variant="destructive" class="mt-2">
           <AlertDescription>{{ errorMessage }}</AlertDescription>
         </Alert>

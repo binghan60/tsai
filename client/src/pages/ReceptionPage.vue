@@ -18,6 +18,7 @@ import CancelAppointmentDialog from '../components/CancelAppointmentDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FilterBar from '../components/FilterBar.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
+import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { DatePicker } from '../components/ui/date-picker';
@@ -90,6 +91,10 @@ function nowPosition(group) {
 }
 function excerpt(appointment) {
   return appointment.handoffNote || '醫師沒有留下交辦事項';
+}
+function closedStatusMeta(appointment) {
+  if (appointment.status === 'no_show') return { label: '未到診', class: 'bg-warning-surface text-warning' };
+  return { label: '已取消', class: 'bg-muted text-muted-foreground' };
 }
 
 async function refresh() {
@@ -340,7 +345,10 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
           <p v-if="!closedAppointments.length" class="px-5 py-6 text-center text-sm text-muted-foreground">目前沒有未到或取消的預約。</p>
           <div v-for="item in closedAppointments" :key="item._id" class="border-b border-border px-5 py-3.5 last:border-b-0">
             <div class="flex flex-wrap items-center gap-4">
-              <span class="w-14 shrink-0 text-sm font-semibold tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
+              <div class="flex w-28 shrink-0 flex-wrap items-center gap-2">
+                <span class="text-sm font-semibold tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
+                <Badge variant="status" :class="closedStatusMeta(item).class">{{ closedStatusMeta(item).label }}</Badge>
+              </div>
               <div class="w-40 shrink-0">
                 <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
                 <p class="truncate text-xs text-muted-foreground">{{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template></p>
