@@ -1,155 +1,165 @@
 ﻿<script setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { onBeforeRouteLeave } from 'vue-router';
-import { ArrowRight, FileText, Pencil, Undo2 } from '@lucide/vue';
-import { http } from '../api/http';
-import { useToast } from '../composables/useToast';
-import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
-import { workflowState } from '../../../shared/appointmentWorkflow.js';
-import { clinicalDraft, draftPatch, mergeClinicalUpdate } from '../lib/visitDraft';
-import { ageLabel } from '../lib/datetime';
-import AppointmentMilestones from './AppointmentMilestones.vue';
-import ClinicalNotesPanel from './ClinicalNotesPanel.vue';
-import MechanismTooltip from './MechanismTooltip.vue';
-import ModalDialog from './ModalDialog.vue';
-import { Button } from './ui/button';
-import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
-import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
-import { Alert, AlertDescription } from './ui/alert';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
+import { ArrowRight, FileText, Pencil, Undo2 } from '@lucide/vue'
+import { http } from '../api/http'
+import { useToast } from '../composables/useToast'
+import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
+import { workflowState } from '../../../shared/appointmentWorkflow.js'
+import { clinicalDraft, draftPatch, mergeClinicalUpdate } from '../lib/visitDraft'
+import { ageLabel } from '../lib/datetime'
+import AppointmentMilestones from './AppointmentMilestones.vue'
+import ClinicalNotesPanel from './ClinicalNotesPanel.vue'
+import MechanismTooltip from './MechanismTooltip.vue'
+import ModalDialog from './ModalDialog.vue'
+import { Button } from './ui/button'
+import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog'
+import { Input } from './ui/input'
+import { Textarea } from './ui/textarea'
+import { Alert, AlertDescription } from './ui/alert'
 
 // 就診工作區：在診療台右欄編輯單筆 appointment 的臨床欄位。
 // 這裡會同步病患資料、歷次病歷日誌與表單草稿入口。
 const props = defineProps({
   appointment: { type: Object, required: true },
-});
-const toast = useToast();
-const notifyChat = useAppointmentNotifier();
-const emit = defineEmits(['updated', 'open-record']);
+})
+const toast = useToast()
+const notifyChat = useAppointmentNotifier()
+const emit = defineEmits(['updated', 'open-record'])
 
-const draft = reactive(clinicalDraft(props.appointment));
-const baseline = ref(clinicalDraft(props.appointment));
-const conflicts = ref([]);
-const busy = ref(false);
-const committing = ref(false);
-const error = ref('');
-const reopenDialog = ref(false);
-const reopenReason = ref('');
-const reopenError = ref('');
-const savedAt = ref(null);
-const pet = ref(null);
-const notes = ref([]);
-const notePage = ref(1);
-const noteTotalPages = ref(1);
-const notesLoading = ref(false);
-const notesError = ref('');
-let notesRequest = 0;
-const contextError = ref('');
-const editingOwnerNote = ref(false);
-const ownerNoteDraft = ref('');
-const ownerNoteSaving = ref(false);
-const ownerNoteError = ref('');
-let timer;
-let disposed = false;
-let savePromise = null;
-let queued = null;
+const draft = reactive(clinicalDraft(props.appointment))
+const baseline = ref(clinicalDraft(props.appointment))
+const conflicts = ref([])
+const busy = ref(false)
+const committing = ref(false)
+const error = ref('')
+const reopenDialog = ref(false)
+const reopenReason = ref('')
+const reopenError = ref('')
+const savedAt = ref(null)
+const pet = ref(null)
+const notes = ref([])
+const notePage = ref(1)
+const noteTotalPages = ref(1)
+const notesLoading = ref(false)
+const notesError = ref('')
+let notesRequest = 0
+const contextError = ref('')
+const editingOwnerNote = ref(false)
+const ownerNoteDraft = ref('')
+const ownerNoteSaving = ref(false)
+const ownerNoteError = ref('')
+let timer
+let disposed = false
+let savePromise = null
+let queued = null
 
-const state = computed(() => workflowState(props.appointment));
+const state = computed(() => workflowState(props.appointment))
 // 送交櫃台後即鎖定；櫃台完成前可取回修改，完成後需申請核准。
-const editable = computed(() => state.value.started && !state.value.handedOff && !state.value.completed);
-const dirty = computed(() => Object.keys(draftPatch(draft, baseline.value)).length > 0);
-const owner = computed(() => (typeof pet.value?.ownerId === 'object' ? pet.value.ownerId : null));
+const editable = computed(() => state.value.started && !state.value.handedOff && !state.value.completed)
+const dirty = computed(() => Object.keys(draftPatch(draft, baseline.value)).length > 0)
+const owner = computed(() => (typeof pet.value?.ownerId === 'object' ? pet.value.ownerId : null))
 const ownerFields = computed(() => {
-  const data = owner.value;
-  const phone = data?.phone || props.appointment.ownerPhone || '';
+  const data = owner.value
+  const phone = data?.phone || props.appointment.ownerPhone || ''
   return [
     { label: '姓名', value: data?.name || props.appointment.ownerName || '' },
     { label: '手機', value: phone, class: phone ? 'tabular-nums' : '' },
     { label: '市話', value: data?.landline || '', class: data?.landline ? 'tabular-nums' : '' },
     { label: 'Email', value: data?.email || '', class: data?.email ? 'break-all' : '' },
     { label: '地址', value: data?.address || '' },
-  ].filter((field) => field.value);
-});
+  ].filter((field) => field.value)
+})
 const petSummary = computed(() => {
-  if (!pet.value) return props.appointment.species || '';
-  const sex = { male: '公', female: '母' }[pet.value.sex] || '';
-  const neutered = { yes: '已結紮', no: '未結紮' }[pet.value.neutered] || '';
-  return [pet.value.breed || props.appointment.species, sex && neutered ? `${sex} ${neutered}` : sex || neutered, ageLabel(pet.value.birthDate, new Date(), '')]
-    .filter(Boolean).join(' · ');
-});
-const latenessLabel = computed(() => props.appointment.latenessMinutes > 0 ? `遲到 ${props.appointment.latenessMinutes} 分` : '');
+  if (!pet.value) return props.appointment.species || ''
+  const sex = { male: '公', female: '母' }[pet.value.sex] || ''
+  const neutered = { yes: '已結紮', no: '未結紮' }[pet.value.neutered] || ''
+  return [pet.value.breed || props.appointment.species, sex && neutered ? `${sex} ${neutered}` : sex || neutered, ageLabel(pet.value.birthDate, new Date(), '')].filter(Boolean).join(' · ')
+})
+const latenessLabel = computed(() => (props.appointment.latenessMinutes > 0 ? `遲到 ${props.appointment.latenessMinutes} 分` : ''))
 const reminderFields = computed(() => {
-  if (!pet.value) return [];
-  const vaccine = { none: '未注射', done: `已注射${pet.value.vaccineDate ? `，最後注射時間 ${pet.value.vaccineDate}` : ''}` }[pet.value.vaccineStatus] || '';
-  const history = [pet.value.medicalHistory?.join('、'), pet.value.medicalHistoryOther].filter(Boolean).join('；');
-  const allergy = { none: '無過敏', yes: `有${pet.value.allergyType ? `，${pet.value.allergyType}` : ''}` }[pet.value.allergyStatus] || '';
-  const checkup = { none: '未健檢', done: `有${pet.value.checkupDate ? `，上次健檢時間 ${pet.value.checkupDate}` : ''}` }[pet.value.checkupStatus] || '';
+  if (!pet.value) return []
+  const vaccine = { none: '未注射', done: `已注射${pet.value.vaccineDate ? `，最後注射時間 ${pet.value.vaccineDate}` : ''}` }[pet.value.vaccineStatus] || ''
+  const history = [pet.value.medicalHistory?.join('、'), pet.value.medicalHistoryOther].filter(Boolean).join('；')
+  const allergy = { none: '無過敏', yes: `有${pet.value.allergyType ? `，${pet.value.allergyType}` : ''}` }[pet.value.allergyStatus] || ''
+  const checkup = { none: '未健檢', done: `有${pet.value.checkupDate ? `，上次健檢時間 ${pet.value.checkupDate}` : ''}` }[pet.value.checkupStatus] || ''
   return [
     { label: '疫苗', value: vaccine },
     { label: '病史', value: history },
     { label: '藥物過敏', value: allergy },
     { label: '健檢', value: checkup },
-  ].filter((field) => field.value);
-});
-const hasReminders = computed(() => reminderFields.value.length > 0);
+  ].filter((field) => field.value)
+})
+const hasReminders = computed(() => reminderFields.value.length > 0)
 const CONFLICT_LABELS = {
-  visitNote: '本次簡易紀錄', internalNote: '內部備註', handoffNote: '給櫃台的交辦', specialCareNote: '請轉告飼主',
-  followUpRecommendation: '回診建議', followUpReason: '回診原因', weightKg: '體重', temperatureC: '體溫',
-};
+  visitNote: '本次簡易紀錄',
+  internalNote: '內部備註',
+  handoffNote: '給櫃台的交辦',
+  specialCareNote: '請轉告飼主',
+  followUpRecommendation: '回診建議',
+  followUpReason: '回診原因',
+  weightKg: '體重',
+  temperatureC: '體溫',
+}
 const savedLabel = computed(() => {
-  if (busy.value) return '儲存中…';
-  if (conflicts.value.length) return '有資料衝突，請先選擇保留內容';
-  if (state.value.handedOff && !state.value.completed) return '已交櫃台，取回後才能編輯';
-  if (state.value.completed) return '已結案，核准修改後才能編輯';
-  if (dirty.value) return '尚未儲存';
-  if (savedAt.value) return `${savedAt.value.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} 已儲存`;
-  return '已儲存';
-});
+  if (busy.value) return '儲存中…'
+  if (conflicts.value.length) return '有資料衝突，請先選擇保留內容'
+  if (state.value.handedOff && !state.value.completed) return '已交櫃台，取回後才能編輯'
+  if (state.value.completed) return '已結案，核准修改後才能編輯'
+  if (dirty.value) return '尚未儲存'
+  if (savedAt.value) return `${savedAt.value.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })} 已儲存`
+  return '已儲存'
+})
 
 // 父層 appointment 更新時，保留使用者未儲存的草稿並標記衝突欄位。
 function receive(incoming) {
-  if (disposed) return;
-  if (busy.value) { queued = incoming; return; }
-  const merged = mergeClinicalUpdate(draft, baseline.value, incoming);
-  Object.assign(draft, merged.draft);
-  baseline.value = merged.baseline;
-  if (merged.conflicts.length) conflicts.value = [...new Set([...conflicts.value, ...merged.conflicts])];
+  if (disposed) return
+  if (busy.value) {
+    queued = incoming
+    return
+  }
+  const merged = mergeClinicalUpdate(draft, baseline.value, incoming)
+  Object.assign(draft, merged.draft)
+  baseline.value = merged.baseline
+  if (merged.conflicts.length) conflicts.value = [...new Set([...conflicts.value, ...merged.conflicts])]
 }
-watch(() => props.appointment, incoming => receive(incoming));
+watch(
+  () => props.appointment,
+  (incoming) => receive(incoming),
+)
 
 async function loadContext() {
-  pet.value = null;
-  if (!props.appointment.petId) return;
-  const petId = props.appointment.petId;
+  pet.value = null
+  if (!props.appointment.petId) return
+  const petId = props.appointment.petId
   try {
-    const [{ data: patient }] = await Promise.all([
-      http.get(`/pets/${petId}`),
-      loadNotes(notePage.value),
-    ]);
-    if (disposed || props.appointment.petId !== petId) return;
-    pet.value = patient;
-    if (!editingOwnerNote.value) ownerNoteDraft.value = patient?.ownerId?.notes || '';
-    contextError.value = '';
-  } catch { contextError.value = '病史或病歷日誌未能載入，請重新載入確認。'; }
+    const [{ data: patient }] = await Promise.all([http.get(`/pets/${petId}`), loadNotes(notePage.value)])
+    if (disposed || props.appointment.petId !== petId) return
+    pet.value = patient
+    if (!editingOwnerNote.value) ownerNoteDraft.value = patient?.ownerId?.notes || ''
+    contextError.value = ''
+  } catch {
+    contextError.value = '病史或病歷日誌未能載入，請重新載入確認。'
+  }
 }
 
 function startOwnerNoteEdit() {
-  ownerNoteDraft.value = owner.value?.notes || '';
-  ownerNoteError.value = '';
-  editingOwnerNote.value = true;
+  ownerNoteDraft.value = owner.value?.notes || ''
+  ownerNoteError.value = ''
+  editingOwnerNote.value = true
 }
 
 function cancelOwnerNoteEdit() {
-  ownerNoteDraft.value = owner.value?.notes || '';
-  ownerNoteError.value = '';
-  editingOwnerNote.value = false;
+  ownerNoteDraft.value = owner.value?.notes || ''
+  ownerNoteError.value = ''
+  editingOwnerNote.value = false
 }
 
 async function saveOwnerNote() {
-  const currentOwner = owner.value;
-  if (!currentOwner || ownerNoteSaving.value) return;
-  ownerNoteSaving.value = true;
-  ownerNoteError.value = '';
+  const currentOwner = owner.value
+  if (!currentOwner || ownerNoteSaving.value) return
+  ownerNoteSaving.value = true
+  ownerNoteError.value = ''
   try {
     const { data } = await http.put(`/owners/${currentOwner._id}`, {
       name: currentOwner.name,
@@ -159,165 +169,178 @@ async function saveOwnerNote() {
       address: currentOwner.address || '',
       notes: ownerNoteDraft.value.trim(),
       expectedVersion: currentOwner.__v,
-    });
-    pet.value = { ...pet.value, ownerId: data };
-    ownerNoteDraft.value = data.notes || '';
-    editingOwnerNote.value = false;
-    toast.success('已更新飼主備註');
+    })
+    pet.value = { ...pet.value, ownerId: data }
+    ownerNoteDraft.value = data.notes || ''
+    editingOwnerNote.value = false
+    toast.success('已更新飼主備註')
   } catch (err) {
-    ownerNoteError.value = err.response?.status === 409
-      ? '飼主資料已由其他人更新，請重新載入後再修改。'
-      : err.response?.data?.message || '飼主備註儲存失敗，請重試。';
+    ownerNoteError.value = err.response?.status === 409 ? '飼主資料已由其他人更新，請重新載入後再修改。' : err.response?.data?.message || '飼主備註儲存失敗，請重試。'
   } finally {
-    ownerNoteSaving.value = false;
+    ownerNoteSaving.value = false
   }
 }
 async function loadNotes(page = 1) {
-  const token = ++notesRequest;
-  const petId = props.appointment.petId;
-  notes.value = [];
-  if (!petId) return;
-  notesLoading.value = true;
-  notesError.value = '';
+  const token = ++notesRequest
+  const petId = props.appointment.petId
+  notes.value = []
+  if (!petId) return
+  notesLoading.value = true
+  notesError.value = ''
   try {
     const { data } = await http.get(`/pets/${petId}/clinical-notes`, {
       params: { page, limit: 5, excludeAppointmentId: props.appointment._id },
-    });
-    if (disposed || token !== notesRequest || petId !== props.appointment.petId) return;
-    const totalPages = data.totalPages || 1;
-    if (page > totalPages) return await loadNotes(totalPages);
-    notes.value = data.items || [];
-    notePage.value = page;
-    noteTotalPages.value = totalPages;
+    })
+    if (disposed || token !== notesRequest || petId !== props.appointment.petId) return
+    const totalPages = data.totalPages || 1
+    if (page > totalPages) return await loadNotes(totalPages)
+    notes.value = data.items || []
+    notePage.value = page
+    noteTotalPages.value = totalPages
   } catch {
-    if (!disposed && token === notesRequest) notesError.value = '病歷日誌未能載入，請重試。';
+    if (!disposed && token === notesRequest) notesError.value = '病歷日誌未能載入，請重試。'
   } finally {
-    if (token === notesRequest) notesLoading.value = false;
+    if (token === notesRequest) notesLoading.value = false
   }
 }
-loadContext();
+loadContext()
 
 async function save() {
-  clearTimeout(timer);
-  if (savePromise) { await savePromise; return dirty.value ? save() : true; }
-  if (!dirty.value) return true;
-  if (!editable.value || conflicts.value.length || busy.value) return false;
-  const snapshot = { ...draft };
-  const patch = draftPatch(snapshot, baseline.value);
-  busy.value = true;
-  error.value = '';
+  clearTimeout(timer)
+  if (savePromise) {
+    await savePromise
+    return dirty.value ? save() : true
+  }
+  if (!dirty.value) return true
+  if (!editable.value || conflicts.value.length || busy.value) return false
+  const snapshot = { ...draft }
+  const patch = draftPatch(snapshot, baseline.value)
+  busy.value = true
+  error.value = ''
   savePromise = (async () => {
     try {
-      const { data } = await http.post(`/appointments/${props.appointment._id}/workflow/clinical`, { version: props.appointment.__v ?? 0, ...patch });
+      const { data } = await http.post(`/appointments/${props.appointment._id}/workflow/clinical`, { version: props.appointment.__v ?? 0, ...patch })
       // 後端回傳最新版 appointment，合併時保留本機仍未送出的輸入。
-      const merged = mergeClinicalUpdate(draft, snapshot, data);
-      Object.assign(draft, merged.draft);
-      baseline.value = merged.baseline;
-      savedAt.value = new Date();
-      emit('updated', data);
-      return true;
+      const merged = mergeClinicalUpdate(draft, snapshot, data)
+      Object.assign(draft, merged.draft)
+      baseline.value = merged.baseline
+      savedAt.value = new Date()
+      emit('updated', data)
+      return true
     } catch (err) {
-      error.value = err.response?.data?.message || '儲存失敗，請重試。';
-      return false;
+      error.value = err.response?.data?.message || '儲存失敗，請重試。'
+      return false
     } finally {
-      savePromise = null;
-      busy.value = false;
-      if (queued) { const update = queued; queued = null; receive(update); }
+      savePromise = null
+      busy.value = false
+      if (queued) {
+        const update = queued
+        queued = null
+        receive(update)
+      }
     }
-  })();
-  return savePromise;
+  })()
+  return savePromise
 }
 
-watch(draft, () => {
-  clearTimeout(timer);
-  if (dirty.value && editable.value && !conflicts.value.length) timer = setTimeout(save, 1200);
-}, { deep: true });
+watch(
+  draft,
+  () => {
+    clearTimeout(timer)
+    if (dirty.value && editable.value && !conflicts.value.length) timer = setTimeout(save, 1200)
+  },
+  { deep: true },
+)
 
 function resolveConflict(keepLocal) {
-  if (!keepLocal) for (const key of conflicts.value) draft[key] = baseline.value[key];
-  conflicts.value = [];
-  error.value = '';
-  if (keepLocal) save();
+  if (!keepLocal) for (const key of conflicts.value) draft[key] = baseline.value[key]
+  conflicts.value = []
+  error.value = ''
+  if (keepLocal) save()
 }
 
 async function run(action, payload = {}) {
-  if (busy.value || conflicts.value.length) return false;
-  committing.value = true;
+  if (busy.value || conflicts.value.length) return false
+  committing.value = true
   try {
-    if (!await save()) return false;
-    if (dirty.value && !await save()) return false;
-    busy.value = true;
-    error.value = '';
+    if (!(await save())) return false
+    if (dirty.value && !(await save())) return false
+    busy.value = true
+    error.value = ''
     const { data } = await http.post(`/appointments/${props.appointment._id}/workflow/${action}`, {
       version: props.appointment.__v ?? 0,
       ...payload,
-    });
-    baseline.value = clinicalDraft(data);
-    Object.assign(draft, clinicalDraft(data));
-    emit('updated', data, action);
-    if (action === 'record' && data.recordId) emit('open-record', data);
-    return true;
+    })
+    baseline.value = clinicalDraft(data)
+    Object.assign(draft, clinicalDraft(data))
+    emit('updated', data, action)
+    if (action === 'record' && data.recordId) emit('open-record', data)
+    return true
   } catch (err) {
-    error.value = err.response?.data?.message || '操作失敗，請重試。';
-    return false;
+    error.value = err.response?.data?.message || '操作失敗，請重試。'
+    return false
   } finally {
-    busy.value = false;
-    committing.value = false;
-    if (queued) { const update = queued; queued = null; receive(update); }
+    busy.value = false
+    committing.value = false
+    if (queued) {
+      const update = queued
+      queued = null
+      receive(update)
+    }
   }
 }
 
 function openReopenRequest() {
-  reopenReason.value = '';
-  reopenError.value = '';
-  reopenDialog.value = true;
+  reopenReason.value = ''
+  reopenError.value = ''
+  reopenDialog.value = true
 }
 
 async function requestReopen() {
-  const reason = reopenReason.value.trim();
-  const submitted = await run('request-reopen', { reason });
+  const reason = reopenReason.value.trim()
+  const submitted = await run('request-reopen', { reason })
   if (!submitted) {
-    reopenError.value = error.value || '申請修改失敗，請重試。';
-    return;
+    reopenError.value = error.value || '申請修改失敗，請重試。'
+    return
   }
-  reopenDialog.value = false;
-  toast.success('已送出修改申請，等待櫃台核准。');
+  reopenDialog.value = false
+  toast.success('已送出修改申請，等待櫃台核准。')
 }
 
 function handleHistoricalNoteSaved({ note, content }) {
   notifyChat(props.appointment, 'visit_data', {
     changedParts: ['歷次病歷日誌'],
     snapshot: { fieldLabel: '歷次病歷日誌', before: note.content || '', after: content || '' },
-  });
-  loadNotes(notePage.value);
+  })
+  loadNotes(notePage.value)
 }
 
 function beforeUnload(event) {
-  if (!dirty.value && !busy.value) return;
-  save();
-  event.preventDefault();
-  event.returnValue = '';
+  if (!dirty.value && !busy.value) return
+  save()
+  event.preventDefault()
+  event.returnValue = ''
 }
 
 onBeforeRouteLeave(async () => {
-  if (!dirty.value || !editable.value) return true;
-  if (await save()) return true;
-  toast.error(`「${props.appointment.petName}」還有內容沒有儲存成功，請先處理再離開`);
-  return false;
-});
+  if (!dirty.value || !editable.value) return true
+  if (await save()) return true
+  toast.error(`「${props.appointment.petName}」還有內容沒有儲存成功，請先處理再離開`)
+  return false
+})
 
 onMounted(() => {
-  window.addEventListener('beforeunload', beforeUnload);
-});
+  window.addEventListener('beforeunload', beforeUnload)
+})
 onBeforeUnmount(() => {
-  disposed = true;
-  clearTimeout(timer);
-  window.removeEventListener('beforeunload', beforeUnload);
-});
+  disposed = true
+  clearTimeout(timer)
+  window.removeEventListener('beforeunload', beforeUnload)
+})
 </script>
 
 <template>
-  <section class="flex min-h-0 flex-1 flex-col" :aria-label="`${appointment.petName} 就診工作區`">
+  <section class="flex flex-col" :aria-label="`${appointment.petName} 就診工作區`">
     <header class="border-b border-border px-5 py-4 sm:px-6">
       <div class="sr-only">
         <h2 class="text-xl font-semibold">{{ appointment.petName }}</h2>
@@ -325,7 +348,9 @@ onBeforeUnmount(() => {
       </div>
       <p class="sr-only">
         {{ owner?.name || appointment.ownerName || '飼主待確認' }}
-        <template v-if="owner?.phone || appointment.ownerPhone"> · <span class="tabular-nums">{{ owner?.phone || appointment.ownerPhone }}</span></template>
+        <template v-if="owner?.phone || appointment.ownerPhone">
+          · <span class="tabular-nums">{{ owner?.phone || appointment.ownerPhone }}</span></template
+        >
         <template v-if="appointment.reason"> · {{ appointment.reason }}</template>
       </p>
 
@@ -337,12 +362,12 @@ onBeforeUnmount(() => {
             <span v-if="petSummary" class="font-normal text-muted-foreground">{{ petSummary }}</span>
             <span v-if="latenessLabel" class="ml-2 text-xs font-semibold text-danger">{{ latenessLabel }}</span>
           </p>
-                  <dl v-if="hasReminders" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-warning">
-                    <div v-for="field in reminderFields" :key="field.label" class="min-w-0">
-                      <dt class="font-semibold">{{ field.label }}</dt>
-                      <dd class="mt-0.5 whitespace-pre-wrap font-semibold">{{ field.value }}</dd>
-                    </div>
-                  </dl>
+          <dl v-if="hasReminders" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-warning">
+            <div v-for="field in reminderFields" :key="field.label" class="min-w-0">
+              <dt class="font-semibold">{{ field.label }}</dt>
+              <dd class="mt-0.5 whitespace-pre-wrap font-semibold">{{ field.value }}</dd>
+            </div>
+          </dl>
         </section>
         <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
           <div class="flex items-center justify-between gap-2">
@@ -362,7 +387,9 @@ onBeforeUnmount(() => {
             </div>
             <Textarea v-if="editingOwnerNote" v-model="ownerNoteDraft" class="mt-1.5" rows="3" maxlength="2000" :disabled="ownerNoteSaving" aria-label="飼主備註" placeholder="輸入飼主備註…" />
             <p v-else class="mt-1 whitespace-pre-wrap font-medium text-foreground">{{ owner.notes || '尚無備註' }}</p>
-            <Alert v-if="ownerNoteError" variant="destructive" class="mt-2"><AlertDescription>{{ ownerNoteError }}</AlertDescription></Alert>
+            <Alert v-if="ownerNoteError" variant="destructive" class="mt-2"
+              ><AlertDescription>{{ ownerNoteError }}</AlertDescription></Alert
+            >
             <div v-if="editingOwnerNote" class="mt-2 flex justify-end gap-2">
               <Button variant="secondary" size="xs" :disabled="ownerNoteSaving" @click="cancelOwnerNoteEdit">取消</Button>
               <Button size="xs" :disabled="ownerNoteSaving" @click="saveOwnerNote">儲存備註</Button>
@@ -375,14 +402,16 @@ onBeforeUnmount(() => {
       <div class="mt-3"><AppointmentMilestones :appointment="appointment" /></div>
     </header>
 
-    <div class="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6">
-      <Alert v-if="error" variant="destructive" class="mb-4"><AlertDescription>{{ error }}</AlertDescription></Alert>
+    <div class="px-5 py-4 sm:px-6">
+      <Alert v-if="error" variant="destructive" class="mb-4"
+        ><AlertDescription>{{ error }}</AlertDescription></Alert
+      >
       <div v-if="contextError" class="mb-4 flex items-center gap-3 rounded-lg bg-warning-surface p-3 text-sm text-warning">
         <span class="flex-1">{{ contextError }}</span>
         <Button variant="secondary" size="xs" @click="loadContext">重新載入</Button>
       </div>
       <div v-if="conflicts.length" role="alert" class="mb-4 space-y-3 rounded-xl bg-warning-surface p-4 text-sm text-warning">
-        <p>此筆就診資料與其他更新衝突：{{ conflicts.map(key => CONFLICT_LABELS[key]).join('、') }}。請選擇要保留的內容。</p>
+        <p>此筆就診資料與其他更新衝突：{{ conflicts.map((key) => CONFLICT_LABELS[key]).join('、') }}。請選擇要保留的內容。</p>
         <div v-for="key in conflicts" :key="key" class="rounded-lg bg-card p-3 text-foreground">
           <p class="text-xs font-medium text-muted-foreground">{{ CONFLICT_LABELS[key] }} · 目前內容</p>
           <p class="mt-1 whitespace-pre-wrap text-sm">{{ baseline[key] || '（空白）' }}</p>
@@ -393,77 +422,61 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <div class="grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
+      <div class="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
         <div class="space-y-4">
           <section class="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-            <h3 class="border-b border-border pb-1 text-sm font-semibold">看診資料</h3>
-          <div class="grid grid-cols-2 gap-3">
-            <label class="space-y-1.5 text-xs font-medium"><span class="flex items-center gap-1.5">體重（kg）<MechanismTooltip text="儲存後會顯示在這次就診的引用式病歷日誌；若已建立健檢草稿，也會同步更新該草稿的體重。" /></span>
-              <Input v-model="draft.weightKg" type="number" min="0" step="0.01" :disabled="!editable || committing" />
+            <h3 class="border-b border-border pb-1 text-sm font-semibold">看診資料、交辦與回診</h3>
+            <div class="grid grid-cols-2 gap-3">
+              <label class="space-y-1.5 text-xs font-medium"
+                ><span class="flex items-center gap-1.5">體重（kg）<MechanismTooltip text="儲存後會顯示在這次就診的引用式病歷日誌；若已建立健檢草稿，也會同步更新該草稿的體重。" /></span>
+                <Input v-model="draft.weightKg" type="number" min="0" step="0.01" :disabled="!editable || committing" />
+              </label>
+              <label class="space-y-1.5 text-xs font-medium"
+                ><span class="flex items-center gap-1.5">體溫（°C）<MechanismTooltip text="儲存後會顯示在這次就診的引用式病歷日誌；若已建立健檢草稿，也會同步更新該草稿的體溫。" /></span>
+                <Input v-model="draft.temperatureC" type="number" min="0" step="0.1" :disabled="!editable || committing" />
+              </label>
+            </div>
+            <label class="block space-y-1.5">
+              <span class="flex items-center gap-2 text-xs font-medium">本次簡易紀錄<MechanismTooltip text="此內容與櫃台共用，病歷日誌只保留對本次就診的引用，因此在任一處修改都會立即反映最新內容。" /><span class="ml-auto font-normal text-muted-foreground">自動存入病歷日誌</span></span>
+              <Textarea v-model="draft.visitNote" rows="12" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" />
             </label>
-            <label class="space-y-1.5 text-xs font-medium"><span class="flex items-center gap-1.5">體溫（°C）<MechanismTooltip text="儲存後會顯示在這次就診的引用式病歷日誌；若已建立健檢草稿，也會同步更新該草稿的體溫。" /></span>
-              <Input v-model="draft.temperatureC" type="number" min="0" step="0.1" :disabled="!editable || committing" />
+            <label class="block space-y-1.5">
+              <span class="flex items-center gap-2 text-xs font-medium">備註<MechanismTooltip text="僅供內部人員查看；儲存後會附在本次就診的引用式病歷日誌最後，不會出現在飼主報告。" /><span class="ml-auto font-normal text-muted-foreground">僅內部可見・附於病歷日誌最後</span></span>
+              <Textarea v-model="draft.internalNote" rows="4" maxlength="2000" :disabled="!editable || committing" placeholder="輸入僅供內部人員查看的備註…" />
             </label>
-          </div>
-          <label class="block space-y-1.5">
-            <span class="flex items-center gap-2 text-xs font-medium">本次簡易紀錄<MechanismTooltip text="此內容與櫃台共用，病歷日誌只保留對本次就診的引用，因此在任一處修改都會立即反映最新內容。" /><span class="ml-auto font-normal text-muted-foreground">自動存入病歷日誌</span></span>
-            <Textarea v-model="draft.visitNote" rows="12" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" />
-          </label>
-          <label class="block space-y-1.5">
-            <span class="flex items-center gap-2 text-xs font-medium">備註<MechanismTooltip text="僅供內部人員查看；儲存後會附在本次就診的引用式病歷日誌最後，不會出現在飼主報告。" /><span class="ml-auto font-normal text-muted-foreground">僅內部可見・附於病歷日誌最後</span></span>
-            <Textarea v-model="draft.internalNote" rows="4" maxlength="2000" :disabled="!editable || committing" placeholder="輸入僅供內部人員查看的備註…" />
-          </label>
 
+            <div class="space-y-4 border-t border-border pt-4">
+              <h4 class="text-sm font-semibold">交辦與回診</h4>
+              <label class="block space-y-1.5">
+                <span class="text-xs font-medium">給櫃台的交辦</span>
+                <Textarea v-model="draft.handoffNote" rows="6" maxlength="1000" :disabled="!editable || committing" placeholder="輸入櫃檯需要協助處理或轉告的事項…" />
+              </label>
+              <label class="block space-y-1.5">
+                <span class="text-xs font-medium text-warning">請轉告飼主</span>
+                <Textarea v-model="draft.specialCareNote" rows="3" maxlength="500" :disabled="!editable || committing" placeholder="輸入需要櫃檯轉告飼主的提醒…" />
+              </label>
+              <label class="block space-y-1.5">
+                <span class="flex items-center gap-1.5 text-xs font-medium">回診建議<MechanismTooltip text="這是給櫃台安排回診時看的建議文字；填寫本身不會自動建立掛號。" /></span>
+                <Textarea v-model="draft.followUpRecommendation" rows="2" maxlength="500" :disabled="!editable || committing" placeholder="輸入建議回診時間或原因…" />
+              </label>
+            </div>
           </section>
-
-          <ClinicalNotesPanel
-            :notes="notes"
-            :loading="notesLoading"
-            :error="notesError"
-            :page="notePage"
-            :total-pages="noteTotalPages"
-            :pet-id="appointment.petId"
-            full-record-label="完整病歷"
-            @load="loadNotes"
-            @saved="handleHistoricalNoteSaved"
-          />
         </div>
 
-        <section class="h-full space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-          <h3 class="border-b border-border pb-1 text-sm font-semibold">交辦與回診</h3>
-          <label class="block space-y-1.5">
-            <span class="text-xs font-medium">給櫃台的交辦</span>
-            <Textarea v-model="draft.handoffNote" rows="6" maxlength="1000" :disabled="!editable || committing" placeholder="輸入櫃檯需要協助處理或轉告的事項…" />
-          </label>
-          <label class="block space-y-1.5">
-            <span class="text-xs font-medium text-warning">請轉告飼主</span>
-            <Textarea v-model="draft.specialCareNote" rows="3" maxlength="500" :disabled="!editable || committing" placeholder="輸入需要櫃檯轉告飼主的提醒…" />
-          </label>
-          <label class="block space-y-1.5">
-            <span class="flex items-center gap-1.5 text-xs font-medium">回診建議<MechanismTooltip text="這是給櫃台安排回診時看的建議文字；填寫本身不會自動建立掛號。" /></span>
-            <Textarea v-model="draft.followUpRecommendation" rows="2" maxlength="500" :disabled="!editable || committing" placeholder="輸入建議回診時間或原因…" />
-          </label>
-
-        </section>
+        <ClinicalNotesPanel :notes="notes" :loading="notesLoading" :error="notesError" :page="notePage" :total-pages="noteTotalPages" :pet-id="appointment.petId" full-record-label="完整病歷" scrollable @load="loadNotes" @saved="handleHistoricalNoteSaved" />
       </div>
     </div>
 
     <footer class="flex flex-wrap items-center gap-3 border-t border-border bg-field/40 px-5 py-3 sm:px-6">
       <p class="text-xs text-muted-foreground" role="status">{{ savedLabel }}</p>
       <div class="ml-auto flex flex-wrap gap-2">
-        <Button variant="secondary" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')">
-          <FileText class="h-4 w-4" />{{ appointment.recordId ? '開啟表單草稿' : '建立表單草稿' }}
-        </Button>
+        <Button variant="secondary" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')"> <FileText class="h-4 w-4" />{{ appointment.recordId ? '開啟表單草稿' : '建立表單草稿' }} </Button>
         <MechanismTooltip label="查看表單草稿連動說明" text="首次建立時會帶入本次的來院原因、體重、體溫及已安排的回診時間。其後在此更新體重或體溫，也會同步到尚未結案的草稿。" />
         <Button v-if="state.completed" variant="secondary" :disabled="busy || !!appointment.reopenRequest?.requestedAt" @click="openReopenRequest">
           {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
         </Button>
-        <Button v-else-if="state.handedOff" variant="secondary" :disabled="busy" @click="run('reclaim')">
-          <Undo2 class="h-4 w-4" />取回修改
-        </Button>
-        <Button v-else-if="appointment.status === 'arrived' && !state.handedOff" :disabled="busy || !!conflicts.length" @click="run('handoff')">
-          交給櫃檯<ArrowRight class="h-4 w-4" />
-        </Button>
+        <Button v-else-if="state.handedOff" variant="secondary" :disabled="busy" @click="run('reclaim')"> <Undo2 class="h-4 w-4" />取回修改 </Button>
+        <Button v-else-if="appointment.status === 'arrived' && !state.handedOff" :disabled="busy || !!conflicts.length" @click="run('handoff')"> 交給櫃檯<ArrowRight class="h-4 w-4" /> </Button>
       </div>
     </footer>
 
@@ -478,7 +491,9 @@ onBeforeUnmount(() => {
             <span class="text-xs font-medium">修改原因（選填）</span>
             <Textarea v-model="reopenReason" rows="4" maxlength="500" autofocus placeholder="例如：補充用藥交辦、修正看診紀錄…" />
           </label>
-          <Alert v-if="reopenError" variant="destructive"><AlertDescription>{{ reopenError }}</AlertDescription></Alert>
+          <Alert v-if="reopenError" variant="destructive"
+            ><AlertDescription>{{ reopenError }}</AlertDescription></Alert
+          >
         </div>
         <DialogFooter>
           <Button type="button" variant="secondary" @click="reopenDialog = false">取消</Button>

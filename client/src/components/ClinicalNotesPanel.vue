@@ -1,15 +1,15 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Pencil } from '@lucide/vue';
-import { http } from '../api/http';
-import { getSocket } from '../api/socket';
-import { useToast } from '../composables/useToast';
-import { clinicDateInput, formatDateTime } from '../lib/datetime';
-import Pagination from './Pagination.vue';
-import { Button } from './ui/button';
-import { Alert, AlertDescription } from './ui/alert';
-import { DatePicker } from './ui/date-picker';
-import { Textarea } from './ui/textarea';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Pencil } from '@lucide/vue'
+import { http } from '../api/http'
+import { getSocket } from '../api/socket'
+import { useToast } from '../composables/useToast'
+import { clinicDateInput, formatDateTime } from '../lib/datetime'
+import Pagination from './Pagination.vue'
+import { Button } from './ui/button'
+import { Alert, AlertDescription } from './ui/alert'
+import { DatePicker } from './ui/date-picker'
+import { Textarea } from './ui/textarea'
 
 const props = defineProps({
   notes: { type: Array, default: () => [] },
@@ -22,66 +22,70 @@ const props = defineProps({
   emptyText: { type: String, default: '尚無其他病歷日誌' },
   unlinkedText: { type: String, default: '尚未連結病患資料，無法查看歷次日誌。' },
   fullRecordLabel: { type: String, default: '完整病歷' },
-});
+  scrollable: { type: Boolean, default: false },
+})
 
-const emit = defineEmits(['load', 'saved']);
-const toast = useToast();
-const socket = getSocket();
-const editingId = ref('');
-const editingContent = ref('');
-const editingDate = ref('');
-const savingId = ref('');
-const editError = ref('');
+const emit = defineEmits(['load', 'saved'])
+const toast = useToast()
+const socket = getSocket()
+const editingId = ref('')
+const editingContent = ref('')
+const editingDate = ref('')
+const savingId = ref('')
+const editError = ref('')
 
-watch(() => props.notes, () => {
-  if (!props.notes.some(note => String(note._id) === String(editingId.value))) cancelEdit();
-});
+watch(
+  () => props.notes,
+  () => {
+    if (!props.notes.some((note) => String(note._id) === String(editingId.value))) cancelEdit()
+  },
+)
 
 function noteBelongsToPanel(note) {
-  return props.petId && String(note?.petId || '') === String(props.petId);
+  return props.petId && String(note?.petId || '') === String(props.petId)
 }
 
 function handleRemoteNoteUpdate(note) {
-  if (noteBelongsToPanel(note)) emit('load', props.page);
+  if (noteBelongsToPanel(note)) emit('load', props.page)
 }
 
 onMounted(() => {
-  socket.on('clinical-note:updated', handleRemoteNoteUpdate);
-});
+  socket.on('clinical-note:updated', handleRemoteNoteUpdate)
+})
 
 onBeforeUnmount(() => {
-  socket.off('clinical-note:updated', handleRemoteNoteUpdate);
-});
+  socket.off('clinical-note:updated', handleRemoteNoteUpdate)
+})
 
 function startEdit(note) {
-  editingId.value = note._id;
-  editingContent.value = note.editableContent ?? note.content ?? '';
-  editingDate.value = clinicDateInput(note.entryDate) || '';
-  editError.value = '';
+  editingId.value = note._id
+  editingContent.value = note.editableContent ?? note.content ?? ''
+  editingDate.value = clinicDateInput(note.entryDate) || ''
+  editError.value = ''
 }
 
 function cancelEdit() {
-  editingId.value = '';
-  editingContent.value = '';
-  editingDate.value = '';
-  editError.value = '';
+  editingId.value = ''
+  editingContent.value = ''
+  editingDate.value = ''
+  editError.value = ''
 }
 
 async function saveEdit(note) {
-  const content = editingContent.value.trim();
-  if (!content || savingId.value) return;
-  savingId.value = note._id;
-  editError.value = '';
+  const content = editingContent.value.trim()
+  if (!content || savingId.value) return
+  savingId.value = note._id
+  editError.value = ''
   try {
-    const { data } = await http.put(`/clinical-notes/${note._id}`, { content, entryDate: editingDate.value || undefined });
-    cancelEdit();
-    toast.success('已更新病歷日誌');
-    emit('saved', { note, updated: data, content });
+    const { data } = await http.put(`/clinical-notes/${note._id}`, { content, entryDate: editingDate.value || undefined })
+    cancelEdit()
+    toast.success('已更新病歷日誌')
+    emit('saved', { note, updated: data, content })
   } catch (err) {
-    editError.value = err.response?.data?.message || '病歷日誌更新失敗，請重試。';
-    toast.error(editError.value);
+    editError.value = err.response?.data?.message || '病歷日誌更新失敗，請重試。'
+    toast.error(editError.value)
   } finally {
-    savingId.value = '';
+    savingId.value = ''
   }
 }
 </script>
@@ -102,7 +106,7 @@ async function saveEdit(note) {
       <Button variant="secondary" size="sm" @click="emit('load', page)">重試</Button>
     </Alert>
 
-    <template v-else>
+    <div v-else class="clinical-notes-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :class="{ 'clinical-notes-content--scrollable': scrollable }" :tabindex="scrollable ? 0 : undefined" :aria-label="scrollable ? title : undefined" :role="scrollable ? 'region' : undefined">
       <article v-for="note in notes" :key="note._id" class="mt-3 border-t border-border pt-3 first:border-t-0">
         <template v-if="editingId === note._id">
           <div class="grid gap-3 sm:grid-cols-[11rem_minmax(0,1fr)]">
@@ -115,7 +119,9 @@ async function saveEdit(note) {
               <Textarea v-model="editingContent" rows="5" :disabled="savingId === note._id" aria-label="病歷日誌內容" />
             </label>
           </div>
-          <Alert v-if="editError" variant="destructive" class="mt-3"><AlertDescription>{{ editError }}</AlertDescription></Alert>
+          <Alert v-if="editError" variant="destructive" class="mt-3"
+            ><AlertDescription>{{ editError }}</AlertDescription></Alert
+          >
           <div class="mt-3 flex justify-end gap-2">
             <Button variant="secondary" size="sm" :disabled="savingId === note._id" @click="cancelEdit">取消</Button>
             <Button size="sm" :disabled="savingId === note._id || !editingContent.trim()" @click="saveEdit(note)">儲存</Button>
@@ -130,7 +136,17 @@ async function saveEdit(note) {
         </template>
       </article>
       <p v-if="!notes.length" class="mt-3 text-sm text-muted-foreground">{{ emptyText }}</p>
-      <Pagination v-if="totalPages > 1" class="mt-4" :page="page" :total-pages="totalPages" @update:page="next => emit('load', next)" />
-    </template>
+      <Pagination v-if="totalPages > 1" class="mt-4" :page="page" :total-pages="totalPages" @update:page="(next) => emit('load', next)" />
+    </div>
   </section>
 </template>
+
+<style scoped>
+@media (min-width: 1024px) {
+  .clinical-notes-content--scrollable {
+    height: clamp(22rem, 45vh, 40rem);
+    overflow-y: auto;
+    padding-right: 0.5rem;
+  }
+}
+</style>
