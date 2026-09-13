@@ -106,21 +106,6 @@ appointmentSchema.index({ scheduledAt: 1 });
 // 依狀態篩選（例如把已取消/未到跟其餘分開），以及讀取當日候診佇列。
 appointmentSchema.index({ status: 1, scheduledAt: 1 });
 appointmentSchema.index({ intakeVerificationCode: 1, intakeVerificationExpiresAt: 1 });
-// 同一天仍持有號碼牌的人不能同時持有相同的實體號碼牌。兩人同時報到可能算到同一張
-// 可用牌號，由這個索引擋下後讓報到流程重試；離開候診的人號碼會清空，不受索引管理。
-// pending_checkout（醫師已交櫃台、櫃台還沒處理完）人還在診所、還沒歸還號碼牌，一併納入保護範圍，
-// 見 lib/appointmentStatus.js 的 holdsCheckinNumber。
-appointmentSchema.index(
-  { date: 1, checkinNumber: 1 },
-  {
-    unique: true,
-    partialFilterExpression: { status: { $in: ['arrived', 'pending_checkout'] }, checkinNumber: { $type: 'number' } },
-  }
-);
-// 同一天每個紙本牌號只能發出一次；即使已完成、取消報到或中途改號，舊號仍由 history 保留。
-appointmentSchema.index(
-  { date: 1, checkinNumberHistory: 1 },
-  { unique: true, partialFilterExpression: { checkinNumberHistory: { $type: 'number' } } }
-);
+// 號碼牌可由櫃台自行決定，允許同日重複與再次使用；history 僅保留異動紀錄。
 
 export default mongoose.model('Appointment', appointmentSchema);

@@ -107,7 +107,7 @@ const onSubmit = handleSubmit((values) => emit('submit', {
         <div class="space-y-1.5">
           <Label for="checkin-number" class="text-xs font-medium text-foreground">號碼牌</Label>
           <Input id="checkin-number" v-model.number="checkinNumber" type="number" min="1" step="1" class="border-border" />
-          <p class="text-xs text-muted-foreground">系統已配發建議號碼；可依現場實際發出的號碼修改。</p>
+          <p class="text-xs text-muted-foreground">系統已配發建議號碼；可輸入任何正整數，同號或曾使用過的號碼也可以。</p>
         </div>
         <Alert v-if="errorMessage" variant="destructive" class="mt-2">
           <AlertDescription>{{ errorMessage }}</AlertDescription>

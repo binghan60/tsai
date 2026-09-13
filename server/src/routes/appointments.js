@@ -381,8 +381,7 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-// 手動修改現場發出的實體號碼牌。牌號不是候診順位，不會改動其他病患；
-// 但同一時間不能把同一張紙本牌發給兩位仍在候診的人。
+// 手動修改現場發出的實體號碼牌。牌號不是候診順位，可由櫃台自行決定並重複使用。
 router.patch('/:id/check-in-number', async (req, res, next) => {
   try {
     const requestedNumber = Number(req.body?.checkinNumber);
@@ -399,15 +398,6 @@ router.patch('/:id/check-in-number', async (req, res, next) => {
     if (requestedNumber === appointment.checkinNumber) return res.json(appointment);
 
     await withTransaction(async (session) => {
-      const issuedAppointments = await appointmentsWithIssuedNumbers(appointment.date, session);
-      const duplicate = issuedAppointments.some((item) =>
-        item.checkinNumber === requestedNumber || (item.checkinNumberHistory ?? []).includes(requestedNumber)
-      );
-      if (duplicate) {
-        const error = new Error(`${requestedNumber} 號牌今天已經使用過`);
-        error.status = 409;
-        throw error;
-      }
       rememberCheckinNumber(appointment, appointment.checkinNumber);
       rememberCheckinNumber(appointment, requestedNumber);
       appointment.checkinNumber = requestedNumber;
@@ -416,10 +406,7 @@ router.patch('/:id/check-in-number', async (req, res, next) => {
 
     emitAppointmentUpdate(appointment);
     res.json(appointment);
-  } catch (err) {
-    if (err?.code === 11000) return res.status(409).json({ message: '這個號碼牌今天已經使用過' });
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 // scheduled → arrived。初診（petId 尚未確定）body 需帶 ownerName/ownerPhone/petName/species
@@ -525,12 +512,6 @@ router.post('/:id/check-in', async (req, res, next) => {
       // 報到時配一張今天從未發出過的實體號碼牌。候診先後仍由 checkedInAt 決定，
       // 所以這個數字之後即使人工修改，也不會改變誰先看診。
       const issuedAppointments = await appointmentsWithIssuedNumbers(appointment.date, session);
-      if (hasSuppliedNumber && issuedAppointments.some((item) =>
-        item.checkinNumber === requestedCheckinNumber || (item.checkinNumberHistory ?? []).includes(requestedCheckinNumber)
-      )) {
-        throw Object.assign(new Error(`${requestedCheckinNumber} 號牌今天已經使用過`), { status: 409 });
-      }
-
       appointment.status = 'arrived';
       appointment.checkedInAt = new Date();
       appointment.latenessMinutes = latenessMinutes;
@@ -543,10 +524,7 @@ router.post('/:id/check-in', async (req, res, next) => {
     // 報到讓這筆掛號進入候診佇列，醫生頁要立刻看到，不必等 60 秒輪詢。
     emitAppointmentUpdate(appointment);
     res.json(appointment);
-  } catch (err) {
-    if (err?.code === 11000) return res.status(409).json({ message: '這個號碼牌今天已經使用過' });
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
 router.post('/:id/cancel', async (req, res, next) => {

@@ -84,7 +84,7 @@ onMounted(loadSubmissions);
       <div class="space-y-1.5">
         <Label for="initial-checkin-number" class="text-xs font-medium">號碼牌</Label>
         <Input id="initial-checkin-number" v-model.number="checkinNumber" type="number" min="1" step="1" />
-        <p class="text-xs text-muted-foreground">系統已配發建議號碼；可依現場實際發出的號碼修改。</p>
+        <p class="text-xs text-muted-foreground">系統已配發建議號碼；可輸入任何正整數，同號或曾使用過的號碼也可以。</p>
       </div>
       <Alert v-if="errorMessage" variant="destructive"><AlertDescription>{{ errorMessage }}</AlertDescription></Alert>
       <DialogFooter><Button type="button" variant="secondary" @click="$emit('close')">取消</Button></DialogFooter>

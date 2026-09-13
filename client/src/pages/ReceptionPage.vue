@@ -53,7 +53,13 @@ const intakeAppointmentTime = ref('')
 const templates = ref([])
 const defaultTemplate = ref('')
 const pendingIntakeCount = ref(0)
-const showFinished = ref(false)
+const showReopenRequests = ref(true)
+const showHandoffs = ref(true)
+const showWaiting = ref(true)
+const showUpcoming = ref(true)
+const showClosedAppointments = ref(true)
+const showFollowUps = ref(true)
+const showFinished = ref(true)
 const now = ref(Date.now())
 let clock
 let request = 0
@@ -380,13 +386,15 @@ onBeforeUnmount(() => {
     <div v-else class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
       <div class="space-y-4">
         <section v-if="reopenRequests.length" class="overflow-hidden rounded-xl border border-warning/35 bg-card" aria-label="醫師申請修改">
-          <div class="flex flex-wrap items-center gap-3 border-b border-warning/25 bg-warning-surface px-5 py-3">
+          <button type="button" class="flex w-full flex-wrap items-center gap-3 border-b border-warning/25 bg-warning-surface px-5 py-3 text-left hover:bg-warning-surface/80" :aria-expanded="showReopenRequests" @click="showReopenRequests = !showReopenRequests">
             <ClipboardList class="h-5 w-5 text-warning" />
             <h2 class="text-base font-semibold text-warning">醫師申請修改</h2>
             <span class="inline-flex h-6 items-center rounded-full bg-card px-3 text-xs font-medium leading-none text-warning">{{ reopenRequests.length }} 筆</span>
             <p class="ml-auto text-xs text-warning/80">請確認後核准重新開啟就診</p>
-          </div>
-          <div v-for="item in reopenRequests" :key="item._id" class="flex flex-wrap items-center gap-4 border-b border-border px-5 py-3.5 last:border-b-0">
+            <ChevronDown class="h-4 w-4 text-warning/80 transition-transform" :class="{ '-rotate-90': !showReopenRequests }" />
+          </button>
+          <div v-show="showReopenRequests">
+            <div v-for="item in reopenRequests" :key="item._id" class="flex flex-wrap items-center gap-4 border-b border-border px-5 py-3.5 last:border-b-0">
             <div class="w-40 shrink-0">
               <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
               <p class="truncate text-xs text-muted-foreground">
@@ -395,16 +403,19 @@ onBeforeUnmount(() => {
             </div>
             <p class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ item.reopenRequest.reason || '未填寫申請原因' }}</p>
             <Button size="sm" class="shrink-0" @click="openSheet(item)">處理申請</Button>
+            </div>
           </div>
         </section>
 
         <section class="overflow-hidden rounded-xl border border-primary/35 bg-card" aria-label="醫師已交辦">
-          <div class="flex flex-wrap items-center gap-3 border-b border-primary/25 bg-accent px-5 py-3">
+          <button type="button" class="flex w-full flex-wrap items-center gap-3 border-b border-primary/25 bg-accent px-5 py-3 text-left hover:bg-accent/80" :aria-expanded="showHandoffs" @click="showHandoffs = !showHandoffs">
             <h2 class="text-base font-semibold text-accent-foreground">醫師已交辦 · 待處理</h2>
             <span class="inline-flex h-6 items-center rounded-full bg-card px-3 text-xs font-medium leading-none text-accent-foreground">{{ handoffs.length }} 位</span>
             <p class="ml-auto text-xs text-accent-foreground/80">飼主正在櫃台等，優先處理</p>
-          </div>
-          <p v-if="!handoffs.length" class="px-5 py-6 text-center text-sm text-muted-foreground">目前沒有等待處理的交辦。</p>
+            <ChevronDown class="h-4 w-4 text-accent-foreground/80 transition-transform" :class="{ '-rotate-90': !showHandoffs }" />
+          </button>
+          <div v-show="showHandoffs">
+            <p v-if="!handoffs.length" class="px-5 py-6 text-center text-sm text-muted-foreground">目前沒有等待處理的交辦。</p>
           <div v-for="item in handoffs" :key="item._id" class="border-b border-border px-5 py-3.5 last:border-b-0">
             <div class="flex flex-wrap items-center gap-4">
               <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold tabular-nums text-primary-foreground">{{ item.checkinNumber ?? '—' }}</span>
@@ -425,16 +436,19 @@ onBeforeUnmount(() => {
               <Button size="sm" class="shrink-0" @click="openSheet(item)">處理</Button>
             </div>
             <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-15 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+            </div>
           </div>
         </section>
 
         <section class="overflow-hidden rounded-xl border border-border bg-card" aria-label="候診中">
-          <div class="flex items-center gap-3 border-b border-border px-5 py-3">
+          <button type="button" class="flex w-full items-center gap-3 border-b border-border px-5 py-3 text-left hover:bg-field/40" :aria-expanded="showWaiting" @click="showWaiting = !showWaiting">
             <h2 class="text-base font-semibold">候診中</h2>
             <span class="inline-flex h-6 items-center rounded-full bg-muted px-3 text-xs font-medium leading-none">{{ waiting.length }} 位</span>
             <p class="ml-auto text-xs text-muted-foreground">已報到，等待看診</p>
-          </div>
-          <p v-if="!waiting.length" class="px-5 py-6 text-center text-sm text-muted-foreground">目前沒有候診中的病患。</p>
+            <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="{ '-rotate-90': !showWaiting }" />
+          </button>
+          <div v-show="showWaiting">
+            <p v-if="!waiting.length" class="px-5 py-6 text-center text-sm text-muted-foreground">目前沒有候診中的病患。</p>
           <div v-for="item in waiting" :key="item._id" class="border-b border-border px-5 py-3.5 last:border-b-0">
             <div class="flex flex-wrap items-center gap-4">
               <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold tabular-nums text-primary-foreground">{{ item.checkinNumber ?? '—' }}</span>
@@ -456,16 +470,19 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-15 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+            </div>
           </div>
         </section>
 
         <section class="overflow-hidden rounded-xl border border-border bg-card" aria-label="待報到">
-          <div class="flex items-center gap-3 border-b border-border px-5 py-3">
+          <button type="button" class="flex w-full items-center gap-3 border-b border-border px-5 py-3 text-left hover:bg-field/40" :aria-expanded="showUpcoming" @click="showUpcoming = !showUpcoming">
             <h2 class="text-base font-semibold">待報到</h2>
             <span class="inline-flex h-6 items-center rounded-full bg-muted px-3 text-xs font-medium leading-none">{{ upcoming.length }} 位</span>
             <p class="ml-auto text-xs text-muted-foreground">依預約時段</p>
-          </div>
-          <p v-if="!upcoming.length" class="px-5 py-6 text-center text-sm text-muted-foreground">今天沒有等待報到的預約。</p>
+            <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="{ '-rotate-90': !showUpcoming }" />
+          </button>
+          <div v-show="showUpcoming">
+            <p v-if="!upcoming.length" class="px-5 py-6 text-center text-sm text-muted-foreground">今天沒有等待報到的預約。</p>
           <div v-for="item in upcoming" :key="item._id" class="border-b border-border px-5 py-3.5 last:border-b-0">
             <div class="flex flex-wrap items-center gap-4">
               <span class="w-14 shrink-0 text-sm font-semibold tabular-nums">{{ item.time || '未定' }}</span>
@@ -490,16 +507,19 @@ onBeforeUnmount(() => {
             <p v-if="item.visitType === 'new'" class="mt-1.5 pl-18 text-xs text-muted-foreground">
               初診驗證碼：<span class="font-semibold tracking-[0.16em] text-foreground">{{ item.intakeVerificationUsedAt ? '已使用' : item.intakeVerificationCode || '未建立' }}</span>
             </p>
+            </div>
           </div>
         </section>
 
         <section class="overflow-hidden rounded-xl border border-border bg-card" aria-label="未到與取消">
-          <div class="flex items-center gap-3 border-b border-border px-5 py-3">
+          <button type="button" class="flex w-full items-center gap-3 border-b border-border px-5 py-3 text-left hover:bg-field/40" :aria-expanded="showClosedAppointments" @click="showClosedAppointments = !showClosedAppointments">
             <h2 class="text-base font-semibold">未到／取消</h2>
             <span class="inline-flex h-6 items-center rounded-full bg-muted px-3 text-xs font-medium leading-none">{{ closedAppointments.length }} 位</span>
             <p class="ml-auto text-xs text-muted-foreground">已標記未到或取消</p>
-          </div>
-          <p v-if="!closedAppointments.length" class="px-5 py-6 text-center text-sm text-muted-foreground">目前沒有未到或取消的預約。</p>
+            <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="{ '-rotate-90': !showClosedAppointments }" />
+          </button>
+          <div v-show="showClosedAppointments">
+            <p v-if="!closedAppointments.length" class="px-5 py-6 text-center text-sm text-muted-foreground">目前沒有未到或取消的預約。</p>
           <div v-for="item in closedAppointments" :key="item._id" class="border-b border-border px-5 py-3.5 last:border-b-0">
             <div class="flex flex-wrap items-center gap-4">
               <div class="flex w-28 shrink-0 flex-wrap items-center gap-2">
@@ -521,15 +541,18 @@ onBeforeUnmount(() => {
               </div>
             </div>
             <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-18 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+            </div>
           </div>
         </section>
 
         <section v-if="followUps.length" class="overflow-hidden rounded-xl border border-border bg-card" aria-label="待安排回診">
-          <div class="flex items-center gap-3 border-b border-border px-5 py-3">
+          <button type="button" class="flex w-full items-center gap-3 border-b border-border px-5 py-3 text-left hover:bg-field/40" :aria-expanded="showFollowUps" @click="showFollowUps = !showFollowUps">
             <h2 class="text-base font-semibold">待安排回診</h2>
             <span class="inline-flex h-6 items-center rounded-full bg-muted px-3 text-xs font-medium leading-none">{{ followUps.length }} 位</span>
-          </div>
-          <div v-for="item in followUps" :key="item._id" class="flex flex-wrap items-center gap-4 border-b border-border px-5 py-3.5 last:border-b-0">
+            <ChevronDown class="ml-auto h-4 w-4 text-muted-foreground transition-transform" :class="{ '-rotate-90': !showFollowUps }" />
+          </button>
+          <div v-show="showFollowUps">
+            <div v-for="item in followUps" :key="item._id" class="flex flex-wrap items-center gap-4 border-b border-border px-5 py-3.5 last:border-b-0">
             <div class="w-40 shrink-0">
               <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
               <p class="truncate text-xs text-muted-foreground">
@@ -541,6 +564,7 @@ onBeforeUnmount(() => {
             </div>
             <p class="min-w-0 flex-1 truncate text-sm">醫師建議：{{ item.followUpRecommendation || item.followUpReason }}</p>
             <Button variant="secondary" size="sm" class="shrink-0" @click="openSheet(item)"><CalendarPlus class="h-4 w-4" />安排回診</Button>
+            </div>
           </div>
         </section>
 

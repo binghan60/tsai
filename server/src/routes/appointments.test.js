@@ -403,9 +403,9 @@ describe('appointments routes', () => {
       assert.equal(response.status, 200);
       assert.equal(appointment.status, 'arrived');
       assert.equal(appointment.visitType, 'return');
-      assert.equal(appointment.checkinNumber, 3);
+      assert.equal(appointment.checkinNumber, 1);
       assert.equal(appointment.latenessMinutes, 12);
-      assert.deepEqual(appointment.checkinNumberHistory, [3]);
+      assert.deepEqual(appointment.checkinNumberHistory, [1]);
       // 實體牌號只寫在剛報到的人身上，不重編前面兩人的牌。
       assert.equal(queue.phases, 0);
       assert.ok(appointment.checkedInAt instanceof Date);
@@ -488,9 +488,9 @@ describe('appointments routes', () => {
     }
   });
 
-  it('不能把仍有人持有的實體號碼牌發給另一位候診者', async () => {
+  it('可把現有或曾使用的實體號碼牌發給另一位候診者', async () => {
     const originalFindById = Appointment.findById;
-    const appointment = { _id: 'b', status: 'arrived', date: '2026-08-26', checkinNumber: 2 };
+    const appointment = { _id: 'b', status: 'arrived', date: '2026-08-26', checkinNumber: 2, save: async () => {} };
     Appointment.findById = async () => appointment;
     const queue = captureQueueWrites();
     Appointment.find = () => stubQueue([
@@ -504,7 +504,9 @@ describe('appointments routes', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ checkinNumber: 3 }),
       });
-      assert.equal(response.status, 409);
+      assert.equal(response.status, 200);
+      assert.equal(appointment.checkinNumber, 3);
+      assert.deepEqual(appointment.checkinNumberHistory, [2, 3]);
       assert.equal(queue.phases, 0);
     } finally {
       Appointment.findById = originalFindById;
