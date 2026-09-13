@@ -1,7 +1,7 @@
 ﻿<script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave } from 'vue-router';
-import { ArrowRight, FileText, Undo2 } from '@lucide/vue';
+import { ArrowRight, FileText, Pencil, Undo2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
@@ -45,6 +45,10 @@ const notesLoading = ref(false);
 const notesError = ref('');
 let notesRequest = 0;
 const contextError = ref('');
+const editingOwnerNote = ref(false);
+const ownerNoteDraft = ref('');
+const ownerNoteSaving = ref(false);
+const ownerNoteError = ref('');
 let timer;
 let disposed = false;
 let savePromise = null;
@@ -64,7 +68,6 @@ const ownerFields = computed(() => {
     { label: '市話', value: data?.landline || '', class: data?.landline ? 'tabular-nums' : '' },
     { label: 'Email', value: data?.email || '', class: data?.email ? 'break-all' : '' },
     { label: '地址', value: data?.address || '' },
-    { label: '備註', value: data?.notes || '', class: data?.notes ? 'whitespace-pre-wrap' : '' },
   ].filter((field) => field.value);
 });
 const petSummary = computed(() => {
@@ -125,8 +128,49 @@ async function loadContext() {
     ]);
     if (disposed || props.appointment.petId !== petId) return;
     pet.value = patient;
+    if (!editingOwnerNote.value) ownerNoteDraft.value = patient?.ownerId?.notes || '';
     contextError.value = '';
   } catch { contextError.value = '病史或病歷日誌未能載入，請重新載入確認。'; }
+}
+
+function startOwnerNoteEdit() {
+  ownerNoteDraft.value = owner.value?.notes || '';
+  ownerNoteError.value = '';
+  editingOwnerNote.value = true;
+}
+
+function cancelOwnerNoteEdit() {
+  ownerNoteDraft.value = owner.value?.notes || '';
+  ownerNoteError.value = '';
+  editingOwnerNote.value = false;
+}
+
+async function saveOwnerNote() {
+  const currentOwner = owner.value;
+  if (!currentOwner || ownerNoteSaving.value) return;
+  ownerNoteSaving.value = true;
+  ownerNoteError.value = '';
+  try {
+    const { data } = await http.put(`/owners/${currentOwner._id}`, {
+      name: currentOwner.name,
+      phone: currentOwner.phone,
+      landline: currentOwner.landline || '',
+      email: currentOwner.email || '',
+      address: currentOwner.address || '',
+      notes: ownerNoteDraft.value.trim(),
+      expectedVersion: currentOwner.__v,
+    });
+    pet.value = { ...pet.value, ownerId: data };
+    ownerNoteDraft.value = data.notes || '';
+    editingOwnerNote.value = false;
+    toast.success('已更新飼主備註');
+  } catch (err) {
+    ownerNoteError.value = err.response?.status === 409
+      ? '飼主資料已由其他人更新，請重新載入後再修改。'
+      : err.response?.data?.message || '飼主備註儲存失敗，請重試。';
+  } finally {
+    ownerNoteSaving.value = false;
+  }
 }
 async function loadNotes(page = 1) {
   const token = ++notesRequest;
@@ -301,13 +345,29 @@ onBeforeUnmount(() => {
                   </dl>
         </section>
         <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
-          <p class="text-xs font-semibold text-muted-foreground">飼主資料</p>
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-xs font-semibold text-muted-foreground">飼主資料</p>
+            <Button v-if="owner && !editingOwnerNote" variant="secondary" size="xs" @click="startOwnerNoteEdit"><Pencil class="h-3.5 w-3.5" />編輯備註</Button>
+          </div>
           <dl v-if="ownerFields.length" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
             <div v-for="field in ownerFields" :key="field.label" class="min-w-0">
               <dt class="font-semibold text-muted-foreground">{{ field.label }}</dt>
               <dd class="mt-0.5 font-medium text-foreground" :class="field.class">{{ field.value }}</dd>
             </div>
           </dl>
+          <div v-if="owner" class="mt-2 border-t border-border/70 pt-2 text-xs">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-semibold text-muted-foreground">備註</span>
+              <span v-if="ownerNoteSaving" class="text-muted-foreground">儲存中…</span>
+            </div>
+            <Textarea v-if="editingOwnerNote" v-model="ownerNoteDraft" class="mt-1.5" rows="3" maxlength="2000" :disabled="ownerNoteSaving" aria-label="飼主備註" placeholder="輸入飼主備註…" />
+            <p v-else class="mt-1 whitespace-pre-wrap font-medium text-foreground">{{ owner.notes || '尚無備註' }}</p>
+            <Alert v-if="ownerNoteError" variant="destructive" class="mt-2"><AlertDescription>{{ ownerNoteError }}</AlertDescription></Alert>
+            <div v-if="editingOwnerNote" class="mt-2 flex justify-end gap-2">
+              <Button variant="secondary" size="xs" :disabled="ownerNoteSaving" @click="cancelOwnerNoteEdit">取消</Button>
+              <Button size="xs" :disabled="ownerNoteSaving" @click="saveOwnerNote">儲存備註</Button>
+            </div>
+          </div>
           <p v-else class="mt-0.5 text-sm font-medium text-muted-foreground">未提供飼主資料</p>
         </section>
       </div>
