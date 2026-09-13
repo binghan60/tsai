@@ -2,6 +2,9 @@
 import { computed, reactive, ref } from 'vue'
 import { useForm } from 'vee-validate'
 import { http } from '../api/http'
+import { Checkbox } from '../components/ui/checkbox'
+import { Input } from '../components/ui/input'
+import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group'
 
 const submitting = ref(false)
 const submitted = ref(false)
@@ -59,6 +62,13 @@ function estimatedBirthDate() {
   date.setHours(0, 0, 0, 0)
   date.setMonth(date.getMonth() - years * 12 - months)
   return date.toISOString()
+}
+
+function toggleList(list, option, checked) {
+  const next = new Set(list)
+  if (checked) next.add(option)
+  else next.delete(option)
+  return [...next]
 }
 
 async function submit() {
@@ -120,54 +130,54 @@ async function submit() {
           <div class="grid">
             <div>
               <div class="field-group-title section-emphasis">基本資料</div>
-              <div class="field"><label><span class="required-mark" aria-hidden="true">*</span>名字：</label><input v-model="pet.name" class="input-medium" :aria-invalid="attemptedSubmit && !!errors.petName" /><span v-if="attemptedSubmit && errors.petName" class="field-error">{{ errors.petName }}</span></div>
+              <div class="field"><label><span class="required-mark" aria-hidden="true">*</span>名字：</label><Input v-model="pet.name" class="input-medium" :aria-invalid="attemptedSubmit && !!errors.petName" /><span v-if="attemptedSubmit && errors.petName" class="field-error">{{ errors.petName }}</span></div>
               <div class="field">
-                <label>性別：</label><label class="option-label"><input v-model="pet.sex" type="radio" value="male" />男生</label><label class="option-label"><input v-model="pet.sex" type="radio" value="female" />女生</label>
+                <label>性別：</label><RadioGroup v-model="pet.sex" class="contents"><label class="option-label"><RadioGroupItem value="male" />男生</label><label class="option-label"><RadioGroupItem value="female" />女生</label></RadioGroup>
               </div>
-              <div class="field"><label>年齡：</label><input v-model="pet.ageYears" class="input-short" inputmode="numeric" /> 年 <input v-model="pet.ageMonths" class="input-short" inputmode="numeric" /> 個月<span v-if="attemptedSubmit && (errors.ageYears || errors.ageMonths)" class="field-error">{{ errors.ageYears || errors.ageMonths }}</span></div>
-              <div class="field"><label>品種：</label><input v-model="pet.breed" class="input-medium" /></div>
-              <div class="field"><label>花色：</label><input v-model="pet.color" class="input-medium" /></div>
+              <div class="field"><label>年齡：</label><Input v-model="pet.ageYears" class="input-short" inputmode="numeric" /> 年 <Input v-model="pet.ageMonths" class="input-short" inputmode="numeric" /> 個月<span v-if="attemptedSubmit && (errors.ageYears || errors.ageMonths)" class="field-error">{{ errors.ageYears || errors.ageMonths }}</span></div>
+              <div class="field"><label>品種：</label><Input v-model="pet.breed" class="input-medium" /></div>
+              <div class="field"><label>花色：</label><Input v-model="pet.color" class="input-medium" /></div>
             </div>
             <div>
               <div class="field-group-title section-emphasis">生活狀況</div>
-              <div class="field"><label>家中貓口：</label><input v-model="pet.householdCatCount" class="input-short" inputmode="numeric" /> 隻<span v-if="attemptedSubmit && errors.householdCatCount" class="field-error">{{ errors.householdCatCount }}</span></div>
-              <div class="field"><label>飲食：</label><input v-model="pet.diet" class="input-medium" /></div>
+              <div class="field"><label>家中貓口：</label><Input v-model="pet.householdCatCount" class="input-short" inputmode="numeric" /> 隻<span v-if="attemptedSubmit && errors.householdCatCount" class="field-error">{{ errors.householdCatCount }}</span></div>
+              <div class="field"><label>飲食：</label><Input v-model="pet.diet" class="input-medium" /></div>
               <div class="field">
-                <label>主餐配菜：</label><label v-for="option in foodOptions" :key="option" class="option-label"><input v-model="pet.foods" type="checkbox" :value="option" />{{ option }}</label
+                <label>主餐配菜：</label><label v-for="option in foodOptions" :key="option" class="option-label"><Checkbox :model-value="pet.foods.includes(option)" @update:model-value="pet.foods = toggleList(pet.foods, option, $event === true)" />{{ option }}</label
                 ><span class="hint">(以上可複選)</span>
               </div>
               <div class="field">
-                <label>放飯頻率：</label><label class="option-label"><input v-model="pet.feedingType" type="radio" value="free" />任食</label><label class="option-label"><input v-model="pet.feedingType" type="radio" value="scheduled" />定食定量：一日 <input v-model="pet.mealsPerDay" class="input-short" inputmode="numeric" /> 餐</label><span v-if="attemptedSubmit && errors.mealsPerDay" class="field-error">{{ errors.mealsPerDay }}</span>
+                <label>放飯頻率：</label><RadioGroup v-model="pet.feedingType" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" class="input-short" inputmode="numeric" /> 餐</label></RadioGroup><span v-if="attemptedSubmit && errors.mealsPerDay" class="field-error">{{ errors.mealsPerDay }}</span>
               </div>
             </div>
           </div>
           <div class="medical">
             <div class="field-group-title section-emphasis">醫療紀錄</div>
             <div class="field">
-              <label>結紮：</label><label class="option-label"><input v-model="pet.neutered" type="radio" value="no" />未結紮</label><label class="option-label"><input v-model="pet.neutered" type="radio" value="yes" />已結紮</label>
+              <label>結紮：</label><RadioGroup v-model="pet.neutered" class="contents"><label class="option-label"><RadioGroupItem value="no" />未結紮</label><label class="option-label"><RadioGroupItem value="yes" />已結紮</label></RadioGroup>
             </div>
             <div class="field">
-              <label>疫苗：</label><label class="option-label"><input v-model="pet.vaccineStatus" type="radio" value="none" />未注射</label><label class="option-label"><input v-model="pet.vaccineStatus" type="radio" value="done" />已注射：最後注射時間</label><input v-model="pet.vaccineDate" class="input-medium" placeholder="例：8/10" />
+              <label>疫苗：</label><RadioGroup v-model="pet.vaccineStatus" class="contents"><label class="option-label"><RadioGroupItem value="none" />未注射</label><label class="option-label"><RadioGroupItem value="done" />已注射：最後注射時間</label></RadioGroup><Input v-model="pet.vaccineDate" class="input-medium" placeholder="例：8/10" />
             </div>
             <div class="field">
-              <label>病史：</label><label v-for="option in historyOptions" :key="option" class="option-label"><input v-model="pet.medicalHistory" type="checkbox" :value="option" />{{ option }}</label
-              ><label class="option-label">其他</label><input v-model="pet.medicalHistoryOther" class="input-medium" />
+              <label>病史：</label><label v-for="option in historyOptions" :key="option" class="option-label"><Checkbox :model-value="pet.medicalHistory.includes(option)" @update:model-value="pet.medicalHistory = toggleList(pet.medicalHistory, option, $event === true)" />{{ option }}</label
+              ><label class="option-label">其他</label><Input v-model="pet.medicalHistoryOther" class="input-medium" />
             </div>
             <div class="field">
-              <label>藥物過敏：</label><label class="option-label"><input v-model="pet.allergyStatus" type="radio" value="none" />無過敏</label><label class="option-label"><input v-model="pet.allergyStatus" type="radio" value="yes" />有：過敏類別</label><input v-model="pet.allergyType" class="input-medium" />
+              <label>藥物過敏：</label><RadioGroup v-model="pet.allergyStatus" class="contents"><label class="option-label"><RadioGroupItem value="none" />無過敏</label><label class="option-label"><RadioGroupItem value="yes" />有：過敏類別</label></RadioGroup><Input v-model="pet.allergyType" class="input-medium" />
             </div>
             <div class="field">
-              <label>健檢：</label><label class="option-label"><input v-model="pet.checkupStatus" type="radio" value="none" />未健檢</label><label class="option-label"><input v-model="pet.checkupStatus" type="radio" value="done" />有：上次健檢時間</label><input v-model="pet.checkupDate" class="input-medium" />
+              <label>健檢：</label><RadioGroup v-model="pet.checkupStatus" class="contents"><label class="option-label"><RadioGroupItem value="none" />未健檢</label><label class="option-label"><RadioGroupItem value="done" />有：上次健檢時間</label></RadioGroup><Input v-model="pet.checkupDate" class="input-medium" />
             </div>
           </div>
         </div>
         <div class="section owner-section">
           <div class="section-title">家長</div>
           <div class="field-group-title section-emphasis">基本資料</div>
-          <div class="field"><label><span class="required-mark" aria-hidden="true">*</span>姓名：</label><input v-model="owner.name" class="input-medium" autocomplete="name" :aria-invalid="attemptedSubmit && !!errors.ownerName" /><span v-if="attemptedSubmit && errors.ownerName" class="field-error">{{ errors.ownerName }}</span></div>
-          <div class="field"><label>市話：</label><input v-model="owner.landline" class="input-medium" type="tel" /><label class="mobile-label"><span class="required-mark" aria-hidden="true">*</span>手機：</label><input v-model="owner.phone" class="input-medium" type="tel" autocomplete="tel" :aria-invalid="attemptedSubmit && !!errors.ownerPhone" /><span v-if="attemptedSubmit && errors.ownerPhone" class="field-error">{{ errors.ownerPhone }}</span></div>
-          <div class="field"><label>地址：</label><input v-model="owner.address" class="input-long" autocomplete="street-address" /></div>
-          <div class="field"><label>Email：</label><input v-model="owner.email" class="input-long" inputmode="email" autocomplete="email" :aria-invalid="attemptedSubmit && !!errors.ownerEmail" /><span v-if="attemptedSubmit && errors.ownerEmail" class="field-error">{{ errors.ownerEmail }}</span></div>
+          <div class="field"><label><span class="required-mark" aria-hidden="true">*</span>姓名：</label><Input v-model="owner.name" class="input-medium" autocomplete="name" :aria-invalid="attemptedSubmit && !!errors.ownerName" /><span v-if="attemptedSubmit && errors.ownerName" class="field-error">{{ errors.ownerName }}</span></div>
+          <div class="field"><label>市話：</label><Input v-model="owner.landline" class="input-medium" type="tel" /><label class="mobile-label"><span class="required-mark" aria-hidden="true">*</span>手機：</label><Input v-model="owner.phone" class="input-medium" type="tel" autocomplete="tel" :aria-invalid="attemptedSubmit && !!errors.ownerPhone" /><span v-if="attemptedSubmit && errors.ownerPhone" class="field-error">{{ errors.ownerPhone }}</span></div>
+          <div class="field"><label>地址：</label><Input v-model="owner.address" class="input-long" autocomplete="street-address" /></div>
+          <div class="field"><label>Email：</label><Input v-model="owner.email" class="input-long" inputmode="email" autocomplete="email" :aria-invalid="attemptedSubmit && !!errors.ownerEmail" /><span v-if="attemptedSubmit && errors.ownerEmail" class="field-error">{{ errors.ownerEmail }}</span></div>
         </div>
         <p v-if="error" class="error">{{ error }}</p>
         <div class="submit-btn-container">
@@ -265,10 +275,7 @@ async function submit() {
   color: var(--intake-label);
   font-weight: bold;
 }
-.field input[type='text'],
-.field input[type='number'],
-.field input[type='email'],
-.field input[type='tel'] {
+.field input[data-slot='input'] {
   border: none;
   border-bottom: 1px solid var(--intake-secondary);
   border-radius: 0;
@@ -277,9 +284,12 @@ async function submit() {
   color: var(--intake-text);
   font-family: inherit;
   font-size: 14px;
+  height: auto;
+  min-height: 0;
+  box-shadow: none;
   outline: none;
 }
-.field input:focus {
+.field input[data-slot='input']:focus {
   border-bottom: 2px solid var(--intake-focus);
   background-color: var(--intake-focus-surface);
 }
@@ -302,7 +312,8 @@ async function submit() {
   font-size: 14px;
   user-select: none;
 }
-.option-label input {
+.option-label [data-slot='checkbox'],
+.option-label [data-slot='radio-group-item'] {
   width: 16px;
   height: 16px;
   margin-right: 4px;

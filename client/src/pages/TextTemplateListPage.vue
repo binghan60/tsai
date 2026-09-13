@@ -16,6 +16,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
+import { Checkbox } from '../components/ui/checkbox';
 import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -342,12 +343,9 @@ onMounted(load);
               </div>
               <div class="mt-2 max-h-56 space-y-1 overflow-y-auto">
                 <label v-for="group in filteredFieldGroups" :key="group.label" class="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 hover:bg-muted/30">
-                  <input
-                    type="checkbox"
-                    class="h-4 w-4 accent-belle-600 dark:accent-brand-500"
-                    :checked="group.keys.every((key) => form.applicableItemKeys.includes(key))"
-                    :ref="(el) => { if (el) el.indeterminate = group.keys.some((key) => form.applicableItemKeys.includes(key)) && !group.keys.every((key) => form.applicableItemKeys.includes(key)); }"
-                    @change="toggleFieldGroup(group.keys, $event.target.checked)"
+                  <Checkbox
+                    :model-value="group.keys.every((key) => form.applicableItemKeys.includes(key)) ? true : group.keys.some((key) => form.applicableItemKeys.includes(key)) ? 'indeterminate' : false"
+                    @update:model-value="toggleFieldGroup(group.keys, $event === true)"
                   />
                   <span class="min-w-0">
                     <span class="block text-sm text-foreground">{{ group.label }}<span v-if="group.keys.length > 1" class="ml-1 text-xs text-muted-foreground">（同名 {{ group.keys.length }} 個欄位，一起套用）</span></span>
