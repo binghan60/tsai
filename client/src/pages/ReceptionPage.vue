@@ -625,12 +625,10 @@ onBeforeUnmount(() => {
         </section>
         <section class="rounded-xl border border-border p-4 text-sm">
           <h3 class="mb-3 text-base font-semibold">家長</h3>
-          <div class="space-y-2">
+          <div class="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
             <p>姓名：{{ intakeValue(intakeReviewTarget.owner?.name) }}</p>
-            <div class="grid grid-cols-2 gap-4">
-              <p>市話：{{ intakeValue(intakeReviewTarget.owner?.landline) }}</p>
-              <p>手機：{{ intakeValue(intakeReviewTarget.owner?.phone) }}</p>
-            </div>
+            <p>市話：{{ intakeValue(intakeReviewTarget.owner?.landline) }}</p>
+            <p>手機：{{ intakeValue(intakeReviewTarget.owner?.phone) }}</p>
             <p>地址：{{ intakeValue(intakeReviewTarget.owner?.address) }}</p>
             <p>Email：{{ intakeValue(intakeReviewTarget.owner?.email) }}</p>
           </div>

@@ -141,10 +141,13 @@ onMounted(refresh)
         <section class="paper-section paper-owner">
           <h4>家長</h4>
           <p class="paper-subtitle">基本資料</p>
-          <p class="paper-line"><b>姓名：</b>{{ value(item.owner.name) }}</p>
-          <div class="paper-grid"><p class="paper-line"><b>市話：</b>{{ value(item.owner.landline) }}</p><p class="paper-line"><b>手機：</b>{{ value(item.owner.phone) }}</p></div>
-          <p class="paper-line"><b>地址：</b>{{ value(item.owner.address) }}</p>
-          <p class="paper-line"><b>Email：</b>{{ value(item.owner.email) }}</p>
+          <div class="paper-grid">
+            <p class="paper-line"><b>姓名：</b>{{ value(item.owner.name) }}</p>
+            <p class="paper-line"><b>市話：</b>{{ value(item.owner.landline) }}</p>
+            <p class="paper-line"><b>手機：</b>{{ value(item.owner.phone) }}</p>
+            <p class="paper-line"><b>地址：</b>{{ value(item.owner.address) }}</p>
+            <p class="paper-line"><b>Email：</b>{{ value(item.owner.email) }}</p>
+          </div>
         </section>
       </article>
     </section>
