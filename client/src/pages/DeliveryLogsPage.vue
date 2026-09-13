@@ -133,7 +133,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="mx-auto max-w-7xl space-y-5">
+  <section class="space-y-5">
     <PageHeader title="寄送歷程" description="追查每一次寄送嘗試的收件信箱、最終結果與失敗原因；報告刪除後歷程仍會保留。" />
 
     <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,24rem)] xl:items-center">

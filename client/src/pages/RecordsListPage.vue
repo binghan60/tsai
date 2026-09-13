@@ -163,7 +163,7 @@ function actionLabel(record) {
 </script>
 
 <template>
-  <section class="mx-auto max-w-7xl space-y-5">
+  <section class="space-y-5">
     <PageHeader title="就診紀錄" description="依處理狀態篩選與追蹤每筆就診紀錄。">
       <template #actions>
         <Button type="button" @click="openPetPicker"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>

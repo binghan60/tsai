@@ -597,7 +597,7 @@ watch(pet, async (value) => {
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl">
+  <div>
   <section v-if="pet" class="space-y-5">
     <Breadcrumbs :items="[
       { label: '寵物', to: '/pets' },

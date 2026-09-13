@@ -210,7 +210,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
 </script>
 
 <template>
-  <div class="mx-auto max-w-[110rem] space-y-4 pb-8">
+  <div class="space-y-4 pb-8">
     <header class="flex flex-wrap items-center gap-4">
       <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-accent-foreground">
         <ClipboardList class="h-5 w-5" stroke-width="1.75" />

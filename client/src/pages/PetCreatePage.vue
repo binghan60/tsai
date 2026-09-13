@@ -452,7 +452,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="relative mx-auto max-w-5xl space-y-5 pb-28">
+  <section class="relative space-y-5 pb-28">
     <!-- 頂部導航 -->
     <Breadcrumbs :items="[{ label: '寵物列表', to: '/pets' }, { label: '新增貓咪檔案' }]" />
 

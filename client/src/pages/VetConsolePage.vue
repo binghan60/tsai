@@ -212,7 +212,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-[110rem] flex-col gap-4 lg:h-[calc(100vh-2.5rem)]">
+  <div class="flex flex-col gap-4 lg:h-[calc(100vh-2.5rem)]">
     <header class="flex flex-wrap items-center gap-4">
       <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-accent-foreground">
         <Stethoscope class="h-5 w-5" stroke-width="1.75" />

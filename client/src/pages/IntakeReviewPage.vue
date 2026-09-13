@@ -45,7 +45,7 @@ onMounted(refresh);
 </script>
 
 <template>
-  <div class="mx-auto max-w-5xl space-y-5 pb-8">
+  <div class="space-y-5 pb-8">
     <header class="flex flex-wrap items-center gap-4">
       <span class="flex h-11 w-11 items-center justify-center rounded-xl bg-accent text-accent-foreground"><ClipboardList class="h-5 w-5" /></span>
       <div><h1 class="text-xl font-semibold">初診表審核</h1><p class="mt-0.5 text-xs text-muted-foreground">核准後才建立正式飼主與寵物資料</p></div>

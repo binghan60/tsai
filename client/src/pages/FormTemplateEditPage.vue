@@ -484,10 +484,10 @@ function resolveLeave(confirmed) {
 </script>
 
 <template>
-  <section class="mx-auto max-w-350 space-y-5 pb-24">
+  <section class="space-y-5 pb-24">
     <!-- 不透明底色，不用 backdrop-blur：捲動時每一幀重算模糊是長表單最主要的掉幀來源。 -->
     <header class="-mx-4 border-b border-border bg-background px-4 py-3 sm:-mx-6 sm:px-6">
-      <div class="mx-auto flex max-w-350 flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <div class="min-w-0">
           <Breadcrumbs class="mb-1" :items="[{ label: '設定', to: '/settings/forms' }, { label: '健檢表單', to: '/settings/forms' }, { label: currentName || '健檢表單' }]" />
           <div class="flex min-w-0 items-center gap-3">

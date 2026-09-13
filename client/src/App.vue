@@ -218,7 +218,7 @@ watch(
           </SheetContent>
         </Sheet>
 
-        <main class="min-w-0 px-4 py-5 sm:px-6 lg:px-8">
+        <main class="mx-auto w-full max-w-360 min-w-0 px-4 py-5 sm:px-6 lg:px-8">
           <router-view :key="routeViewKey" />
         </main>
       </div>

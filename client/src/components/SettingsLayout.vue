@@ -8,7 +8,7 @@ defineProps({
 </script>
 
 <template>
-  <section class="mx-auto max-w-7xl space-y-5">
+  <section class="space-y-5">
     <div class="min-w-0 space-y-5">
       <PageHeader :title="title" :description="description">
         <template v-if="$slots.actions" #actions><slot name="actions" /></template>

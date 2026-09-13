@@ -906,7 +906,7 @@ function handleBeforeUnload(event) {
 </script>
 
 <template>
-  <section class="mx-auto max-w-6xl space-y-5 pb-48 sm:pb-32">
+  <section class="space-y-5 pb-48 sm:pb-32">
     <Button v-if="visitReturnTarget" as-child variant="secondary"><router-link :to="visitReturnTarget">返回診療台</router-link></Button>
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div><Breadcrumbs class="mb-2" :items="[{ label: '寵物', to: '/pets' }, { label: pet?.name || '寵物資料', to: petId ? `/pets/${petId}` : '/pets' }, { label: isEdit ? '編輯就診紀錄' : '新增就診紀錄' }]" /><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案就診紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯就診紀錄' : '新增就診紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
@@ -1164,7 +1164,7 @@ function handleBeforeUnload(event) {
 
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
       <div v-if="!isLocked" id="record-action-bar" class="bottom-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 lg:left-64">
-        <div class="mx-auto max-w-6xl">
+        <div class="mx-auto max-w-[1440px]">
           <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
           <div class="grid grid-cols-3 gap-2 sm:hidden">
             <Button type="button" variant="destructive" class="w-full px-2" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄</Button>
