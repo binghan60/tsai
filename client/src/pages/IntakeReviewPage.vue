@@ -8,6 +8,8 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import ListSkeleton from '../components/ListSkeleton.vue'
+import { TimePicker } from '../components/ui/time-picker'
+import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/appointmentTime'
 
 const toast = useToast()
 const items = ref([])
@@ -16,6 +18,7 @@ const error = ref('')
 const busy = ref(false)
 const confirmation = ref(null)
 const selectedId = ref('')
+const appointmentTime = ref('10:00')
 
 function value(value, fallback = '') {
   return value === null || value === undefined || value === '' ? fallback : value
@@ -42,7 +45,7 @@ async function decide() {
   const { item, action } = confirmation.value
   busy.value = true
   try {
-    const { data } = await http.post(`/intake-submissions/${item._id}/${action}`)
+    const { data } = await http.post(`/intake-submissions/${item._id}/${action}`, action === 'approve' ? { time: appointmentTime.value } : {})
     items.value = items.value.filter((current) => current._id !== item._id)
     selectedId.value = ''
     confirmation.value = null
@@ -81,7 +84,7 @@ onMounted(refresh)
         <span class="rounded-full bg-muted px-3 py-1 text-xs font-medium">{{ items.length }} 份</span>
       </div>
       <p v-if="!items.length" class="px-5 py-12 text-center text-sm text-muted-foreground">目前沒有待審核的初診表。</p>
-      <button v-for="item in items" :key="item._id" type="button" class="flex w-full flex-wrap items-center gap-4 border-b border-border px-5 py-4 text-left last:border-b-0 hover:bg-field" @click="selectedId = item._id">
+      <button v-for="item in items" :key="item._id" type="button" class="flex w-full flex-wrap items-center gap-4 border-b border-border px-5 py-4 text-left last:border-b-0 hover:bg-field" @click="selectedId = item._id; appointmentTime = '10:00'">
         <span class="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-base font-semibold text-accent-foreground">{{ item.pet.name?.slice(0, 1) || '?' }}</span>
         <span class="min-w-0 flex-1"
           ><span class="block truncate text-base font-semibold">{{ item.pet.name }}</span
@@ -102,7 +105,7 @@ onMounted(refresh)
           </div>
           <div class="paper-actions">
             <span>送出於 {{ formatDateTime(item.createdAt) }}</span
-            ><Button size="sm" :disabled="busy" @click="confirmation = { item, action: 'approve' }"><Check class="h-4 w-4" />核准並建立</Button><Button variant="secondary" size="sm" :disabled="busy" @click="confirmation = { item, action: 'reject' }"><X class="h-4 w-4" />退回</Button>
+            ><Button size="sm" :disabled="busy" @click="confirmation = { item, action: 'approve' }"><Check class="h-4 w-4" />核准並掛號</Button><Button variant="destructive" size="sm" :disabled="busy" @click="confirmation = { item, action: 'reject' }"><X class="h-4 w-4" />退回</Button>
           </div>
         </div>
         <section class="paper-section">
@@ -149,9 +152,14 @@ onMounted(refresh)
             <p class="paper-line"><b>Email：</b>{{ value(item.owner.email) }}</p>
           </div>
         </section>
+        <section class="paper-section">
+          <label class="block text-sm font-semibold">掛號時間
+            <TimePicker v-model="appointmentTime" class="mt-2" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" aria-label="初診掛號時間" />
+          </label>
+        </section>
       </article>
     </section>
-    <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.action === 'approve' ? '核准並建立正式資料？' : '退回這份初診表？'" :description="confirmation.action === 'approve' ? `會建立飼主「${confirmation.item.owner.name}」與寵物「${confirmation.item.pet.name}」，完成後不能再次核准。` : `「${confirmation.item.pet.name}」不會建立正式資料。`" :loading="busy" confirm-label="確認" @confirm="decide" @cancel="confirmation = null" />
+    <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.action === 'approve' ? '核准並掛號？' : '退回這份初診表？'" :description="confirmation.action === 'approve' ? `會建立飼主「${confirmation.item.owner.name}」與寵物「${confirmation.item.pet.name}」，並以選定時間建立掛號。` : `「${confirmation.item.pet.name}」不會建立正式資料。`" :loading="busy" :confirm-label="confirmation.action === 'approve' ? '核准並掛號' : '退回'" :destructive="confirmation.action === 'reject'" @confirm="decide" @cancel="confirmation = null" />
   </div>
 </template>
 

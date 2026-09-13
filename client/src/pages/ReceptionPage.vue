@@ -24,7 +24,10 @@ import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { DatePicker } from '../components/ui/date-picker'
+import { TimePicker } from '../components/ui/time-picker'
+import { Label } from '../components/ui/label'
 import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog'
+import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/appointmentTime'
 
 // 櫃台工作台：以「現在該做什麼」分匣，時間軸退到右欄當參考。
 // 三個匣子由上而下就是櫃台的優先順序——醫師已交辦的人正站在櫃台前面等，排最上面。
@@ -45,6 +48,7 @@ const target = ref(null)
 const lateCheckIn = ref(false)
 const confirmation = ref(null)
 const intakeReviewTarget = ref(null)
+const intakeAppointmentTime = ref('')
 const templates = ref([])
 const defaultTemplate = ref('')
 const pendingIntakeCount = ref(0)
@@ -123,6 +127,18 @@ function applyUpdate(item) {
   const index = items.value.findIndex((p) => String(p._id) === String(item._id))
   if (index < 0) items.value.push(item)
   else if ((item.__v ?? 0) >= (items.value[index].__v ?? 0)) items.value[index] = item
+}
+
+function suggestedCheckinNumber() {
+  const used = new Set();
+  for (const appointment of items.value) {
+    for (const number of [appointment.checkinNumber, ...(appointment.checkinNumberHistory ?? [])]) {
+      if (Number.isSafeInteger(number) && number > 0) used.add(number);
+    }
+  }
+  let candidate = 1;
+  while (used.has(candidate)) candidate += 1;
+  return candidate;
 }
 
 const { connected } = useClinicSync(date, refresh, applyUpdate)
@@ -229,13 +245,18 @@ async function issueIntakeCode() {
 
 async function approveIntake(appointment) {
   if (busy.value || !appointment.intakeSubmissionId) return
+  if (!intakeAppointmentTime.value) {
+    toast.error('請先選擇掛號時間')
+    return
+  }
   busy.value = true
   try {
-    const { data } = await http.post(`/intake-submissions/${appointment.intakeSubmissionId}/approve`)
+    const { data } = await http.post(`/intake-submissions/${appointment.intakeSubmissionId}/approve`, { time: intakeAppointmentTime.value })
     if (data.appointment) applyUpdate(data.appointment)
     else await refresh()
     await loadPendingIntakeCount()
     intakeReviewTarget.value = null
+    intakeAppointmentTime.value = ''
     toast.success('初診資料已核准並完成建檔')
   } catch (err) {
     toast.error(err.response?.data?.message || '核准初診資料失敗，請稍後再試')
@@ -261,6 +282,7 @@ async function openIntakeReview(appointment) {
   try {
     const { data } = await http.get(`/intake-submissions/${appointment.intakeSubmissionId}`)
     intakeReviewTarget.value = { ...appointment, owner: data.owner, pet: data.pet }
+    intakeAppointmentTime.value = appointment.time || ''
   } catch (err) {
     toast.error(err.response?.data?.message || '無法載入初診資料，請稍後再試')
   } finally {
@@ -447,8 +469,8 @@ onBeforeUnmount(() => {
                 {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template>
               </p>
               <div class="flex flex-wrap items-center gap-2">
-                <Button v-if="item.visitType === 'new' && item.intakeSubmissionId && !item.petId" size="sm" :disabled="busy" @click="openIntakeReview(item)">審核初診資料</Button>
-                <Button variant="secondary" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
+                <Button v-if="item.visitType === 'new' && item.intakeSubmissionId && !item.petId" size="sm" :disabled="busy" @click="openIntakeReview(item)">審核</Button>
+                <Button v-else variant="secondary" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
                 <Button variant="secondary" size="sm" :disabled="busy" @click="admin('no-show', item)">標記未到</Button>
                 <Button variant="destructive" size="sm" :disabled="busy" @click="admin('cancel', item)">取消掛號</Button>
                 <RowActions :actions="[{ key: 'edit', label: '修改預約' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
@@ -633,14 +655,19 @@ onBeforeUnmount(() => {
             <p>Email：{{ intakeValue(intakeReviewTarget.owner?.email) }}</p>
           </div>
         </section>
+        <section class="rounded-xl border border-border p-4">
+          <Label for="intake-appointment-time" class="text-sm font-semibold">掛號時間</Label>
+          <p class="mt-1 text-xs text-muted-foreground">核准後會以此時間建立正式掛號；完成審核後才能報到。</p>
+          <TimePicker id="intake-appointment-time" v-model="intakeAppointmentTime" class="mt-3" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" aria-label="初診掛號時間" />
+        </section>
       </div>
-      <DialogFooter><Button type="button" variant="secondary" :disabled="busy" @click="intakeReviewTarget = null">取消</Button><Button type="button" variant="secondary" :disabled="busy" @click="rejectIntake(intakeReviewTarget)">退回</Button><Button type="button" :disabled="busy" @click="approveIntake(intakeReviewTarget)">核准並建檔</Button></DialogFooter>
+      <DialogFooter><Button type="button" variant="secondary" :disabled="busy" @click="intakeReviewTarget = null">取消</Button><Button type="button" variant="destructive" :disabled="busy" @click="rejectIntake(intakeReviewTarget)">退回</Button><Button type="button" :disabled="busy" @click="approveIntake(intakeReviewTarget)">核准並掛號</Button></DialogFooter>
     </ModalDialog>
     <HandoffSheet v-if="activePatient" :key="activePatient._id" :appointment="activePatient" @updated="onSheetUpdate" @close="selected = ''" />
     <NewAppointmentDialog v-if="dialog === 'new'" :date="date" :is-today="date === today" :templates="templates" :default-template-id="defaultTemplate" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
     <EditAppointmentDialog v-if="dialog === 'edit'" :appointment="target" :templates="templates" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
-    <InitialCheckInDialog v-if="dialog === 'check-in' && !target?.petId" :appointment="target" :late="lateCheckIn" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
-    <CheckInDialog v-else-if="dialog === 'check-in'" :appointment="target" :late="lateCheckIn" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
+    <InitialCheckInDialog v-if="dialog === 'check-in' && !target?.petId" :appointment="target" :late="lateCheckIn" :suggested-checkin-number="suggestedCheckinNumber()" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
+    <CheckInDialog v-else-if="dialog === 'check-in'" :appointment="target" :late="lateCheckIn" :suggested-checkin-number="suggestedCheckinNumber()" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
     <CancelAppointmentDialog v-if="dialog === 'cancel'" :appointment="target" :submitting="busy" :error-message="dialogError" @submit="(reason) => submit({ cancelReason: reason })" @close="dialog = ''" />
     <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :description="`病患：${target.petName}`" :loading="busy" @confirm="submit({}, confirmation.kind)" @cancel="confirmation = null" />
   </div>

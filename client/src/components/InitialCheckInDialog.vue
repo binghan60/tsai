@@ -7,13 +7,14 @@ import { http } from '../api/http';
 import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
+import { Input } from './ui/input';
 import { Alert, AlertDescription } from './ui/alert';
 import { TimePicker } from './ui/time-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import SegmentedControl from './SegmentedControl.vue';
 import { clinicTimeInput } from '../lib/datetime';
 
-const props = defineProps({ appointment: { type: Object, required: true }, late: Boolean, submitting: Boolean, errorMessage: String });
+const props = defineProps({ appointment: { type: Object, required: true }, late: Boolean, suggestedCheckinNumber: { type: Number, default: 1 }, submitting: Boolean, errorMessage: String });
 const emit = defineEmits(['submit', 'close']);
 const source = ref('manual');
 const selectedId = ref('');
@@ -22,6 +23,7 @@ const loading = ref(true);
 const loadError = ref('');
 const arrivalMode = ref(props.late ? 'late' : 'on-time');
 const lateAt = ref(clinicTimeInput(new Date()));
+const checkinNumber = ref(props.suggestedCheckinNumber);
 const ownerDraft = reactive({ name: props.appointment.ownerName || '', phone: props.appointment.ownerPhone || '' });
 const petDraft = reactive({ name: props.appointment.petName || '', species: props.appointment.species || '貓' });
 
@@ -56,6 +58,7 @@ function submit({ owner, pet }) {
     intakeSubmissionId: source.value === 'submission' ? selectedId.value : undefined,
     isLate: arrivalMode.value === 'late',
     lateAt: lateAt.value,
+    ...(checkinNumber.value === props.suggestedCheckinNumber ? {} : { checkinNumber: checkinNumber.value }),
   });
 }
 onMounted(loadSubmissions);
@@ -78,6 +81,11 @@ onMounted(loadSubmissions);
       </div>
       <PetCreatePage embedded :owner-draft="ownerDraft" :pet-draft="petDraft" :existing-owner="appointment.ownerId ? { _id: appointment.ownerId, name: appointment.ownerName, phone: appointment.ownerPhone } : null" :submitting="submitting" @submit="submit" />
       <section class="border-t border-border pt-4"><Label class="mb-2 block">報到狀態</Label><SegmentedControl v-model="arrivalMode" :options="[{ value: 'on-time', label: '準時' }, { value: 'late', label: '遲到' }]" aria-label="報到狀態" full-width /><TimePicker v-if="arrivalMode === 'late'" v-model="lateAt" class="mt-3" aria-label="實際到院時間" :minute-step="1" /></section>
+      <div class="space-y-1.5">
+        <Label for="initial-checkin-number" class="text-xs font-medium">號碼牌</Label>
+        <Input id="initial-checkin-number" v-model.number="checkinNumber" type="number" min="1" step="1" />
+        <p class="text-xs text-muted-foreground">系統已配發建議號碼；可依現場實際發出的號碼修改。</p>
+      </div>
       <Alert v-if="errorMessage" variant="destructive"><AlertDescription>{{ errorMessage }}</AlertDescription></Alert>
       <DialogFooter><Button type="button" variant="secondary" @click="$emit('close')">取消</Button></DialogFooter>
     </div>

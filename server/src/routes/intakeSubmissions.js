@@ -5,6 +5,7 @@ import Appointment from '../models/Appointment.js';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import { withTransaction } from '../lib/transaction.js';
+import { combineClinicDateTime } from '../lib/clinicTime.js';
 import { createRateLimiter } from '../lib/rateLimit.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 
@@ -131,6 +132,10 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
       if (submission.linkedAppointmentId) {
         appointment = await Appointment.findById(submission.linkedAppointmentId).session(session);
         if (appointment && !appointment.petId) {
+          const time = String(req.body?.time || '').trim();
+          if (time && !/^\d{2}:\d{2}$/.test(time)) {
+            throw Object.assign(new Error('掛號時間格式不正確'), { status: 422 });
+          }
           appointment.ownerId = owner._id;
           appointment.petId = pet._id;
           appointment.ownerName = owner.name;
@@ -138,6 +143,10 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
           appointment.petName = pet.name;
           appointment.species = pet.species;
           appointment.intakeSubmissionId = submission._id;
+          if (time) {
+            appointment.time = time;
+            appointment.scheduledAt = combineClinicDateTime(appointment.date, time);
+          }
           await appointment.save({ session });
         }
       }

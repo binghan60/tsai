@@ -15,6 +15,7 @@ import { clinicTimeInput } from '../lib/datetime';
 const props = defineProps({
   appointment: { type: Object, required: true },
   late: { type: Boolean, default: false },
+  suggestedCheckinNumber: { type: Number, default: 1 },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
 });
@@ -38,6 +39,7 @@ const { value: ownerPhone, errorMessage: ownerPhoneError } = useField('ownerPhon
 const { value: petName, errorMessage: petNameError } = useField('petName', patientFieldRule);
 const arrivalMode = ref(props.late ? 'late' : 'on-time');
 const lateAt = ref(clinicTimeInput(new Date()));
+const checkinNumber = ref(props.suggestedCheckinNumber);
 const isLate = computed(() => arrivalMode.value === 'late');
 const latenessMinutes = computed(() => {
   if (!/^\d{2}:\d{2}$/.test(lateAt.value || '')) return 0;
@@ -51,7 +53,12 @@ const ARRIVAL_MODE_OPTIONS = [
   { value: 'late', label: '遲到' },
 ];
 
-const onSubmit = handleSubmit((values) => emit('submit', { ...values, isLate: isLate.value, lateAt: lateAt.value }));
+const onSubmit = handleSubmit((values) => emit('submit', {
+  ...values,
+  isLate: isLate.value,
+  lateAt: lateAt.value,
+  ...(checkinNumber.value === props.suggestedCheckinNumber ? {} : { checkinNumber: checkinNumber.value }),
+}));
 </script>
 
 <template>
@@ -96,6 +103,11 @@ const onSubmit = handleSubmit((values) => emit('submit', { ...values, isLate: is
             <TimePicker v-model="lateAt" aria-label="實際到院時間" :minute-step="1" />
           </label>
           <p>將依此時間記錄遲到 {{ latenessMinutes }} 分鐘。</p>
+        </div>
+        <div class="space-y-1.5">
+          <Label for="checkin-number" class="text-xs font-medium text-foreground">號碼牌</Label>
+          <Input id="checkin-number" v-model.number="checkinNumber" type="number" min="1" step="1" class="border-border" />
+          <p class="text-xs text-muted-foreground">系統已配發建議號碼；可依現場實際發出的號碼修改。</p>
         </div>
         <Alert v-if="errorMessage" variant="destructive" class="mt-2">
           <AlertDescription>{{ errorMessage }}</AlertDescription>

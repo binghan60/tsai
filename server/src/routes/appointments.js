@@ -435,6 +435,9 @@ router.post('/:id/check-in', async (req, res, next) => {
 
     const needsNewPatient = !appointment.petId;
     const existingOwnerId = appointment.ownerId;
+    if (appointment.intakeSubmissionId && needsNewPatient) {
+      return res.status(409).json({ message: '初診資料尚未審核，請先完成核准並掛號' });
+    }
     // 舊掛號沒有 visitType；趁 petId 還沒因初診建檔而改變前補記，之後取消報到或
     // 再次報到都仍保有掛號當下的類型。新掛號本來就有值，不會被這裡覆寫。
     if (!appointment.visitType) appointment.visitType = needsNewPatient ? 'new' : 'return';
@@ -448,6 +451,12 @@ router.post('/:id/check-in', async (req, res, next) => {
     const scheduledAt = new Date(appointment.scheduledAt);
     const lateAt = String(req.body?.lateAt || '');
     if (isLate && lateAt && !/^\d{2}:\d{2}$/.test(lateAt)) return res.status(422).json({ message: '實際到院時間格式不正確' });
+    const suppliedNumber = req.body?.checkinNumber;
+    const hasSuppliedNumber = suppliedNumber !== undefined && suppliedNumber !== null && String(suppliedNumber).trim() !== '';
+    const requestedCheckinNumber = hasSuppliedNumber ? Number(suppliedNumber) : null;
+    if (hasSuppliedNumber && (!Number.isSafeInteger(requestedCheckinNumber) || requestedCheckinNumber < 1)) {
+      return res.status(422).json({ message: '號碼牌必須是從 1 開始的整數' });
+    }
     const arrivalAt = isLate && lateAt ? combineClinicDateTime(appointment.date, lateAt) : new Date();
     const latenessMinutes = isLate && !Number.isNaN(scheduledAt.getTime())
       ? Math.max(0, Math.floor((arrivalAt.getTime() - scheduledAt.getTime()) / 60000))
@@ -516,11 +525,16 @@ router.post('/:id/check-in', async (req, res, next) => {
       // 報到時配一張今天從未發出過的實體號碼牌。候診先後仍由 checkedInAt 決定，
       // 所以這個數字之後即使人工修改，也不會改變誰先看診。
       const issuedAppointments = await appointmentsWithIssuedNumbers(appointment.date, session);
+      if (hasSuppliedNumber && issuedAppointments.some((item) =>
+        item.checkinNumber === requestedCheckinNumber || (item.checkinNumberHistory ?? []).includes(requestedCheckinNumber)
+      )) {
+        throw Object.assign(new Error(`${requestedCheckinNumber} 號牌今天已經使用過`), { status: 409 });
+      }
 
       appointment.status = 'arrived';
       appointment.checkedInAt = new Date();
       appointment.latenessMinutes = latenessMinutes;
-      appointment.checkinNumber = nextAvailableCheckinNumber(issuedAppointments);
+      appointment.checkinNumber = hasSuppliedNumber ? requestedCheckinNumber : nextAvailableCheckinNumber(issuedAppointments);
       rememberCheckinNumber(appointment, appointment.checkinNumber);
       await appointment.save({ session });
       if (isLate) await recordAttendanceIncident(appointment, 'late', appointment.checkedInAt, session);
@@ -530,6 +544,7 @@ router.post('/:id/check-in', async (req, res, next) => {
     emitAppointmentUpdate(appointment);
     res.json(appointment);
   } catch (err) {
+    if (err?.code === 11000) return res.status(409).json({ message: '這個號碼牌今天已經使用過' });
     next(err);
   }
 });
