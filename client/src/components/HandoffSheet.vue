@@ -8,6 +8,7 @@ import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { APPOINTMENT_TIME_RANGES, APPOINTMENT_TIME_MINUTE_STEP } from '../lib/appointmentTime';
 import AppointmentMilestones from './AppointmentMilestones.vue';
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue';
+import MechanismTooltip from './MechanismTooltip.vue';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { DatePicker } from './ui/date-picker';
@@ -228,7 +229,7 @@ async function approveReopen() {
 
           <section class="space-y-2">
             <div class="flex items-center justify-between gap-2">
-              <h3 class="text-base font-semibold">本次簡易紀錄</h3>
+              <h3 class="flex items-center gap-1.5 text-base font-semibold">本次簡易紀錄<MechanismTooltip text="此內容與醫師診療台共用，病歷日誌只保留對本次就診的引用，因此在任一處修改都會立即反映最新內容。" /></h3>
               <Button v-if="!editingNote && !state.completed" variant="secondary" size="sm" :disabled="busy" @click="startEditNote">編輯</Button>
             </div>
             <Textarea v-if="editingNote" id="desk-visit-note" v-model="visitNote" aria-label="本次簡易紀錄" rows="8" :disabled="busy || state.completed" placeholder="輸入本次看診紀錄…" />
@@ -259,7 +260,7 @@ async function approveReopen() {
             @saved="handleHistoricalNoteSaved"
           />
           <section class="space-y-3">
-            <h3 class="text-base font-semibold">回診安排</h3>
+            <h3 class="flex items-center gap-1.5 text-base font-semibold">回診安排<MechanismTooltip text="確認回診後，系統會建立下一筆回診掛號；若本次已經有回診掛號，更新日期或時間會同步更新那一筆掛號。" /></h3>
             <div v-if="needsFollowUp" class="rounded-xl bg-accent p-4">
               <p class="text-xs text-accent-foreground">醫師建議</p>
               <p class="text-sm text-accent-foreground">{{ appointment.followUpRecommendation || appointment.followUpReason }}</p>

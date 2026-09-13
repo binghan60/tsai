@@ -10,6 +10,7 @@ import { clinicalDraft, draftPatch, mergeClinicalUpdate } from '../lib/visitDraf
 import { ageLabel } from '../lib/datetime';
 import AppointmentMilestones from './AppointmentMilestones.vue';
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue';
+import MechanismTooltip from './MechanismTooltip.vue';
 import ModalDialog from './ModalDialog.vue';
 import { Button } from './ui/button';
 import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
@@ -337,19 +338,19 @@ onBeforeUnmount(() => {
           <section class="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
             <h3 class="border-b border-border pb-1 text-sm font-semibold">看診資料</h3>
           <div class="grid grid-cols-2 gap-3">
-            <label class="space-y-1.5 text-xs font-medium">體重（kg）
+            <label class="space-y-1.5 text-xs font-medium"><span class="flex items-center gap-1.5">體重（kg）<MechanismTooltip text="儲存後會顯示在這次就診的引用式病歷日誌；若已建立健檢草稿，也會同步更新該草稿的體重。" /></span>
               <Input v-model="draft.weightKg" type="number" min="0" step="0.01" :disabled="!editable || committing" />
             </label>
-            <label class="space-y-1.5 text-xs font-medium">體溫（°C）
+            <label class="space-y-1.5 text-xs font-medium"><span class="flex items-center gap-1.5">體溫（°C）<MechanismTooltip text="儲存後會顯示在這次就診的引用式病歷日誌；若已建立健檢草稿，也會同步更新該草稿的體溫。" /></span>
               <Input v-model="draft.temperatureC" type="number" min="0" step="0.1" :disabled="!editable || committing" />
             </label>
           </div>
           <label class="block space-y-1.5">
-            <span class="flex items-center gap-2 text-xs font-medium">本次簡易紀錄<span class="ml-auto font-normal text-muted-foreground">自動存入病歷日誌</span></span>
+            <span class="flex items-center gap-2 text-xs font-medium">本次簡易紀錄<MechanismTooltip text="此內容與櫃台共用，病歷日誌只保留對本次就診的引用，因此在任一處修改都會立即反映最新內容。" /><span class="ml-auto font-normal text-muted-foreground">自動存入病歷日誌</span></span>
             <Textarea v-model="draft.visitNote" rows="12" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" />
           </label>
           <label class="block space-y-1.5">
-            <span class="flex items-center gap-2 text-xs font-medium">備註<span class="ml-auto font-normal text-muted-foreground">僅內部可見・附於病歷日誌最後</span></span>
+            <span class="flex items-center gap-2 text-xs font-medium">備註<MechanismTooltip text="僅供內部人員查看；儲存後會附在本次就診的引用式病歷日誌最後，不會出現在飼主報告。" /><span class="ml-auto font-normal text-muted-foreground">僅內部可見・附於病歷日誌最後</span></span>
             <Textarea v-model="draft.internalNote" rows="4" maxlength="2000" :disabled="!editable || committing" placeholder="輸入僅供內部人員查看的備註…" />
           </label>
 
@@ -379,7 +380,7 @@ onBeforeUnmount(() => {
             <Textarea v-model="draft.specialCareNote" rows="3" maxlength="500" :disabled="!editable || committing" placeholder="輸入需要櫃檯轉告飼主的提醒…" />
           </label>
           <label class="block space-y-1.5">
-            <span class="text-xs font-medium">回診建議</span>
+            <span class="flex items-center gap-1.5 text-xs font-medium">回診建議<MechanismTooltip text="這是給櫃台安排回診時看的建議文字；填寫本身不會自動建立掛號。" /></span>
             <Textarea v-model="draft.followUpRecommendation" rows="2" maxlength="500" :disabled="!editable || committing" placeholder="輸入建議回診時間或原因…" />
           </label>
 
@@ -393,6 +394,7 @@ onBeforeUnmount(() => {
         <Button variant="secondary" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')">
           <FileText class="h-4 w-4" />{{ appointment.recordId ? '開啟表單草稿' : '建立表單草稿' }}
         </Button>
+        <MechanismTooltip label="查看表單草稿連動說明" text="首次建立時會帶入本次的來院原因、體重、體溫及已安排的回診時間。其後在此更新體重或體溫，也會同步到尚未結案的草稿。" />
         <Button v-if="state.completed" variant="secondary" :disabled="busy || !!appointment.reopenRequest?.requestedAt" @click="openReopenRequest">
           {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
         </Button>

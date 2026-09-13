@@ -13,6 +13,7 @@ import { familyOf } from '../lib/fieldFamily';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useTextTemplates } from '../composables/useTextTemplates';
 import Breadcrumbs from '../components/Breadcrumbs.vue';
+import MechanismTooltip from '../components/MechanismTooltip.vue';
 import { Button } from '../components/ui/button';
 import { DatePicker } from '../components/ui/date-picker';
 import { TimePicker } from '../components/ui/time-picker';
@@ -912,7 +913,7 @@ function handleBeforeUnload(event) {
       <div><Breadcrumbs class="mb-2" :items="[{ label: '寵物', to: '/pets' }, { label: pet?.name || '寵物資料', to: petId ? `/pets/${petId}` : '/pets' }, { label: isEdit ? '編輯就診紀錄' : '新增就診紀錄' }]" /><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案就診紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯就診紀錄' : '新增就診紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked" class="flex flex-wrap items-center justify-end gap-3">
         <Button v-if="!needsTypeChoice && finalizedSources.length" type="button" variant="secondary" size="sm" @click="openRecopyDialog"><Copy class="h-4 w-4" />重新帶入報告內容</Button>
-        <div v-if="recordId || isDirty || saveState === 'saving' || saveState === 'error'" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-danger' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}</div>
+        <div v-if="recordId || isDirty || saveState === 'saving' || saveState === 'error'" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-danger' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}<MechanismTooltip label="查看自動儲存說明" text="填寫中的變更會在停止輸入約 1.5 秒後自動儲存為草稿。若顯示儲存失敗，可用下方「儲存草稿並返回」重試。" /></div>
       </div>
     </div>
 
@@ -927,7 +928,7 @@ function handleBeforeUnload(event) {
       </p>
       <div v-if="finalizedSources.length" class="mt-4 rounded-xl border border-border bg-muted/20 p-4">
         <p class="text-sm font-medium text-foreground">開始方式</p>
-        <p class="mt-1 text-xs text-muted-foreground">可選擇任一份已結案報告，帶入其中的文字內容。</p>
+        <p class="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">可選擇任一份已結案報告，帶入其中的文字內容。<MechanismTooltip text="帶入會覆蓋目前草稿中可對應的欄位；理學檢查、檢驗、量測、牙齒圖、圖片、獸醫師與看診日期也會一併帶入。" /></p>
         <div class="mt-3 grid gap-2 sm:grid-cols-2">
           <button type="button" class="rounded-lg border px-3 py-3 text-left transition-colors" :class="startMode === 'blank' ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-muted/40'" :aria-pressed="startMode === 'blank'" @click="startMode = 'blank'">
             <span class="block text-sm font-medium text-foreground">從空白開始</span>
