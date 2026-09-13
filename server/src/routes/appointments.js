@@ -489,7 +489,7 @@ router.post('/:id/check-in', async (req, res, next) => {
         const [pet] = await Pet.create(
           [{
             name: String(req.body.petName).trim(), ownerId: owner._id, ...(species ? { species } : {}),
-            ...Object.fromEntries(['breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'].filter(key => petDetails[key] !== undefined).map(key => [key, petDetails[key]])),
+            ...Object.fromEntries(['breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'foodsOther', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'].filter(key => petDetails[key] !== undefined).map(key => [key, petDetails[key]])),
           }],
           { session }
         );

@@ -23,8 +23,8 @@ const pet = reactive({
   breed: '',
   color: '',
   householdCatCount: '',
-  diet: '',
   foods: [],
+  foodsOther: '',
   feedingType: 'unknown',
   mealsPerDay: '',
   neutered: 'unknown',
@@ -38,7 +38,7 @@ const pet = reactive({
   checkupDate: '',
 })
 const historyOptions = ['心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題']
-const foodOptions = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧']
+const foodOptions = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧', '其他']
 const hasAge = computed(() => pet.ageYears !== '' || pet.ageMonths !== '')
 const requiredText = (value) => String(value ?? '').trim() ? true : '此欄位必填'
 const optionalNonNegativeInteger = (value) => value === '' || value === null || value === undefined || /^\d+$/.test(String(value)) ? true : '請填寫 0 或正整數'
@@ -117,8 +117,8 @@ async function submit() {
         birthDate: estimatedBirthDate(),
         birthDateEstimated: hasAge.value,
         householdCatCount: pet.householdCatCount === '' ? null : Number(pet.householdCatCount),
-        diet: pet.diet,
         foods: pet.foods,
+        foodsOther: pet.foods.includes('其他') ? pet.foodsOther : '',
         feedingType: pet.feedingType,
         mealsPerDay: pet.mealsPerDay === '' ? null : Number(pet.mealsPerDay),
         vaccineStatus: pet.vaccineStatus,
@@ -188,10 +188,9 @@ async function submit() {
             <div>
               <div class="field-group-title section-emphasis">生活狀況</div>
               <div class="field"><label>家中貓口：</label><Input v-model="pet.householdCatCount" class="input-short" inputmode="numeric" /> 隻<span v-if="attemptedSubmit && errors.householdCatCount" class="field-error">{{ errors.householdCatCount }}</span></div>
-              <div class="field"><label>飲食：</label><Input v-model="pet.diet" class="input-medium" /></div>
               <div class="field">
-                <label>主餐配菜：</label><label v-for="option in foodOptions" :key="option" class="option-label"><Checkbox :model-value="pet.foods.includes(option)" @update:model-value="pet.foods = toggleList(pet.foods, option, $event === true)" />{{ option }}</label
-                ><span class="hint">(以上可複選)</span>
+                <label>主餐配菜：</label><label v-for="option in foodOptions" :key="option" class="option-label"><Checkbox :model-value="pet.foods.includes(option)" @update:model-value="pet.foods = toggleList(pet.foods, option, $event === true)" />{{ option }}<template v-if="option === '其他'">：</template></label
+                ><Input v-if="pet.foods.includes('其他')" v-model="pet.foodsOther" class="input-medium" placeholder="請填寫" /><span class="hint">(以上可複選)</span>
               </div>
               <div class="field">
                 <label>放飯頻率：</label><RadioGroup v-model="pet.feedingType" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" class="input-short" inputmode="numeric" /> 餐</label></RadioGroup><span v-if="attemptedSubmit && errors.mealsPerDay" class="field-error">{{ errors.mealsPerDay }}</span>
@@ -438,15 +437,16 @@ async function submit() {
   margin-right: 4px;
   cursor: pointer;
 }
-.option-label [data-slot='checkbox'][data-state='checked'] {
-  border-color: var(--intake-orange);
-  background-color: var(--intake-orange);
+.option-label :deep([data-slot='checkbox'][data-state='checked']) {
+  border-color: var(--intake-orange) !important;
+  background-color: var(--intake-orange) !important;
 }
-.option-label [data-slot='radio-group-item'][data-state='checked'] {
-  border-color: var(--intake-orange);
+.option-label :deep([data-slot='radio-group-item'][data-state='checked']) {
+  border-color: var(--intake-orange) !important;
+  background-color: var(--intake-orange) !important;
 }
-.option-label [data-slot='radio-group-indicator'] {
-  color: var(--intake-orange);
+.option-label :deep([data-slot='radio-group-indicator']) {
+  display: none !important;
 }
 .hint {
   color: var(--intake-hint);

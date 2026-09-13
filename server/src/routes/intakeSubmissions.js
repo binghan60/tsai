@@ -8,7 +8,7 @@ import { withTransaction } from '../lib/transaction.js';
 import { createRateLimiter } from '../lib/rateLimit.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 
-const PET_FIELDS = ['name', 'species', 'breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'];
+const PET_FIELDS = ['name', 'species', 'breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'foodsOther', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'];
 const pickPetFields = body => Object.fromEntries(PET_FIELDS.filter(field => body[field] !== undefined).map(field => [field, body[field]]));
 const publicSubmissionLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 const publicVerificationLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10 });

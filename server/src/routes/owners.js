@@ -19,6 +19,7 @@ const PET_FIELDS = [
   'householdCatCount',
   'diet',
   'foods',
+  'foodsOther',
   'feedingType',
   'mealsPerDay',
   'vaccineStatus',

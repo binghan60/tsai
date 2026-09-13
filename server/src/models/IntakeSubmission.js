@@ -22,6 +22,7 @@ const intakeSubmissionSchema = new mongoose.Schema(
       householdCatCount: { type: Number, min: 0, default: null },
       diet: { type: String, default: '', trim: true },
       foods: { type: [String], default: [] },
+      foodsOther: { type: String, default: '', trim: true },
       feedingType: { type: String, enum: ['unknown', 'free', 'scheduled'], default: 'unknown' },
       mealsPerDay: { type: Number, min: 1, default: null },
       vaccineStatus: { type: String, enum: ['unknown', 'none', 'done'], default: 'unknown' },
