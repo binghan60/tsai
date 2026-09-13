@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import { ArrowRight, PawPrint, Search } from '@lucide/vue';
 import { http } from '../api/http';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
+import { Input } from './ui/input';
 
 // 全站搜尋。刻意做成蓋在當前頁面上的面板，而不是導去工作台再 focus 那裡的搜尋框——
 // 搜尋是「查一下」，不是「換頁」。換頁會把使用者從正在看的資料上扯開，
@@ -112,7 +113,8 @@ onBeforeUnmount(() => {
 <template>
   <Dialog v-model:open="open">
     <DialogContent
-      class="top-24 max-w-xl translate-y-0 gap-0 p-0 sm:max-w-xl"
+      size="lg"
+      class="top-24 translate-y-0 gap-0 p-0"
       :show-close-button="false"
       @open-auto-focus.prevent
     >
@@ -121,13 +123,13 @@ onBeforeUnmount(() => {
 
       <div class="relative flex items-center gap-3 border-b border-border px-4">
         <Search class="h-5 w-5 shrink-0 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
-        <input
+        <Input
           ref="inputEl"
           v-model="query"
           type="text"
           autocomplete="off"
           placeholder="搜尋寵物、飼主或電話"
-          class="min-h-14 min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+          class="min-h-14 min-w-0 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
           @keydown="onKeydown"
         />
         <kbd class="hidden shrink-0 rounded border border-border px-1.5 py-0.5 text-xs text-muted-foreground sm:block">Esc</kbd>

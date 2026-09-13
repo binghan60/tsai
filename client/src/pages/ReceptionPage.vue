@@ -14,6 +14,7 @@ import RowActions from '../components/RowActions.vue';
 import NewAppointmentDialog from '../components/NewAppointmentDialog.vue';
 import EditAppointmentDialog from '../components/EditAppointmentDialog.vue';
 import CheckInDialog from '../components/CheckInDialog.vue';
+import InitialCheckInDialog from '../components/InitialCheckInDialog.vue';
 import CancelAppointmentDialog from '../components/CancelAppointmentDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FilterBar from '../components/FilterBar.vue';
@@ -469,7 +470,8 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
     <HandoffSheet v-if="activePatient" :key="activePatient._id" :appointment="activePatient" @updated="onSheetUpdate" @close="selected = ''" />
     <NewAppointmentDialog v-if="dialog === 'new'" :date="date" :is-today="date === today" :templates="templates" :default-template-id="defaultTemplate" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
     <EditAppointmentDialog v-if="dialog === 'edit'" :appointment="target" :templates="templates" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
-    <CheckInDialog v-if="dialog === 'check-in'" :appointment="target" :late="lateCheckIn" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
+    <InitialCheckInDialog v-if="dialog === 'check-in' && !target?.petId" :appointment="target" :late="lateCheckIn" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
+    <CheckInDialog v-else-if="dialog === 'check-in'" :appointment="target" :late="lateCheckIn" :submitting="busy" :error-message="dialogError" @submit="submit" @close="dialog = ''" />
     <CancelAppointmentDialog v-if="dialog === 'cancel'" :appointment="target" :submitting="busy" :error-message="dialogError" @submit="reason => submit({ cancelReason: reason })" @close="dialog = ''" />
     <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :description="`病患：${target.petName}`" :loading="busy" @confirm="submit({}, confirmation.kind)" @cancel="confirmation = null" />
   </div>

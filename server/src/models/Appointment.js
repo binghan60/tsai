@@ -30,6 +30,8 @@ const appointmentSchema = new mongoose.Schema(
     // 才不會因日後變更預設表單而讓已掛號病患用錯表單。
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'FormTemplate', default: null },
     recordId: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicalRecord', default: null },
+    // 初診表可先送達、也可在現場填寫；實際報到時才選擇是否與這筆掛號連結。
+    intakeSubmissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'IntakeSubmission', default: null },
 
     status: {
       type: String,

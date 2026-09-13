@@ -32,7 +32,7 @@ const props = defineProps({
     type: String,
     required: false,
     default: 'md',
-    validator: (v) => ['sm', 'md', 'lg'].includes(v),
+    validator: (v) => ['sm', 'md', 'lg', 'xl'].includes(v),
   },
 });
 
@@ -40,6 +40,8 @@ const SIZE_CLASS = {
   sm: 'sm:max-w-sm',
   md: 'sm:max-w-md',
   lg: 'sm:max-w-2xl',
+  // 長表單與工作台型對話框使用；仍保留視窗邊距，避免小螢幕滿版貼邊。
+  xl: 'sm:max-w-[min(80rem,calc(100vw-4rem))]',
 };
 const emits = defineEmits([
   "escapeKeyDown",

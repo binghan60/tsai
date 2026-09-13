@@ -842,7 +842,7 @@ function resolveLeave(confirmed) {
 
                   <div v-if="DEFAULT_VALUE_TYPES.has(selectedItem.type)" class="space-y-1.5">
                     <Label for="item-default-value" class="text-xs font-medium">預設值</Label>
-                    <textarea v-if="selectedItem.type === 'textarea'" id="item-default-value" v-model="selectedItem.defaultValue" rows="3" class="flex min-h-20 w-full rounded-xl border border-input bg-field px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30" placeholder="建立新表單時自動帶入（選填）" />
+                    <Textarea v-if="selectedItem.type === 'textarea'" id="item-default-value" v-model="selectedItem.defaultValue" rows="3" class="min-h-20" placeholder="建立新表單時自動帶入（選填）" />
                     <Input v-else id="item-default-value" v-model="selectedItem.defaultValue" placeholder="建立新表單時自動帶入（選填）" />
                     <p class="text-xs text-muted-foreground">{{ selectedItem.type === 'checkbox' ? '複選請用逗號分隔，例如：食慾正常、精神正常。' : '只會套用到新建立的表單，不會覆寫既有紀錄。' }}</p>
                   </div>

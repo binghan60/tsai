@@ -38,6 +38,7 @@ const intakeSubmissionSchema = new mongoose.Schema(
     reviewedAt: { type: Date, default: null },
     approvedOwnerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Owner', default: null },
     approvedPetId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', default: null },
+    linkedAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
   },
   { timestamps: true, optimisticConcurrency: true }
 );

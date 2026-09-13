@@ -94,6 +94,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 **四個文字欄位，各有各的讀者**（早期版本把批價／開藥擠成結構化清單又拆成三個欄位，後來確認診所根本不用系統計價，整組退場改回純文字）：
 
 - `visitNote` 本次簡易紀錄：醫師寫的病歷內容，跟 `clinicalNotes`（病歷日誌）**雙向同步**（見第二節 clinicalNotes）——`POST /workflow/clinical` 帶了 `visitNote`／`weightKg`／`temperatureC` 任一個就建立／更新／刪除對應日誌，反過來直接編輯那筆日誌也會回頭覆蓋這裡。飼主看不到，也不進健檢報告。
+- `internalNote` 內部備註：僅院內人員可見，不進健檢報告或飼主提醒；有內容時會附在同次病歷日誌的最後一段。
 - `handoffNote` 給櫃台的交辦：收費項目、領藥、要開的證明都寫這裡，**取代了早期逐項計價的批價清單**。系統不解析內容、不計價、不加總，也不記任何金額——櫃台讀這段文字自行收費。
 - `specialCareNote` 請轉告飼主：面向飼主的照護提醒（例如「傷口勿舔舐」）。跟 `handoffNote` 語意分開才能在櫃台端用警示樣式獨立呈現——那是最容易漏講的一件事。刻意不跟 `clinicalNotes` 同步，單一資料來源留在 `Appointment` 上。
 - `followUpRecommendation` 回診建議：醫師寫期間與原因，櫃台跟飼主敲定實際時段後才真的掛下一次的號。

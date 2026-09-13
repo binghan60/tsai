@@ -4,6 +4,7 @@ import { CalendarClock, Search, X } from '@lucide/vue';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { DatePicker } from './ui/date-picker';
+import { Input } from './ui/input';
 import { formatDate } from '@/lib/datetime';
 
 // 全站清單頁共用的搜尋膠囊，取代原本一張固定佔版面的表單（關鍵字＋兩個日期欄位＋
@@ -67,14 +68,14 @@ function applyDates() {
     <label class="flex min-w-0 flex-1 self-stretch items-center gap-2.5 pl-3.5">
       <span class="sr-only">{{ label }}</span>
       <Search class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.9" aria-hidden="true" />
-      <input
+      <Input
         :id="id"
         type="text"
         autocomplete="off"
         :placeholder="placeholder"
         :value="modelValue"
         :aria-label="label"
-        class="h-full min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+        class="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
         @input="emit('update:modelValue', $event.target.value)"
       />
     </label>

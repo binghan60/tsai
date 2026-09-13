@@ -24,6 +24,12 @@ const props = defineProps({
     required: false,
     skipCheck: true,
   },
+  size: {
+    type: String,
+    required: false,
+    default: 'md',
+    validator: (v) => ['sm', 'md', 'lg', 'xl'].includes(v),
+  },
 });
 const emits = defineEmits([
   "escapeKeyDown",
@@ -34,7 +40,14 @@ const emits = defineEmits([
   "closeAutoFocus",
 ]);
 
-const delegatedProps = reactiveOmit(props, "class");
+const SIZE_CLASS = {
+  sm: 'sm:max-w-sm',
+  md: 'sm:max-w-md',
+  lg: 'sm:max-w-2xl',
+  xl: 'sm:max-w-[min(80rem,calc(100vw-4rem))]',
+};
+
+const delegatedProps = reactiveOmit(props, "class", "size");
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
 </script>
@@ -47,7 +60,8 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
       <DialogContent
         :class="
           cn(
-            'relative z-50 grid w-full max-w-lg my-8 gap-4 border border-border bg-background p-6 shadow-lg duration-200 sm:rounded-lg md:w-full',
+            'relative z-50 grid w-full my-8 gap-4 border border-border bg-background p-6 shadow-lg duration-200 sm:rounded-lg md:w-full',
+            SIZE_CLASS[props.size],
             props.class,
           )
         "

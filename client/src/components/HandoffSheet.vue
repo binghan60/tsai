@@ -178,9 +178,9 @@ async function approveReopen() {
 <template>
   <Dialog :open="true" @update:open="value => !value && close()">
     <DialogContent
-      size="lg"
+      size="xl"
       :show-close-button="false"
-      class="h-[min(90vh,52rem)] gap-0 bg-card p-0 sm:max-w-[min(56rem,calc(100vw-2rem))]"
+      class="h-[min(90vh,52rem)] gap-0 bg-card p-0"
       @escape-key-down="event => busy && event.preventDefault()"
       @pointer-down-outside="event => busy && event.preventDefault()"
     >

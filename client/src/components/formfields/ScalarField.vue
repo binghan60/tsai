@@ -5,6 +5,8 @@ import { Input } from '../ui/input';
 import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { DatePicker } from '../ui/date-picker';
+import { Checkbox } from '../ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 
 // 文字／多行／日期／數字／下拉／單選／複選這幾種一般欄位共用同一個元件，
@@ -75,10 +77,10 @@ function toggle(option, checked) {
         <SelectItem v-for="(option, index) in options" :key="index" :value="option">{{ option }}</SelectItem>
       </SelectContent>
     </Select>
-    <div
-      v-else-if="item.type === 'radio' || item.type === 'checkbox'"
+    <RadioGroup
+      v-else-if="item.type === 'radio'"
+      v-model="value"
       class="flex flex-wrap gap-x-5 gap-y-1"
-      role="group"
       :aria-labelledby="`${inputId}-label`"
     >
       <p v-if="!options.length" class="min-h-11 py-3 text-sm text-muted-foreground">尚未設定選項</p>
@@ -87,17 +89,16 @@ function toggle(option, checked) {
         :key="index"
         class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-foreground"
       >
-        <input
+        <RadioGroupItem
           :id="index === 0 ? inputId : undefined"
-          :name="`${inputId}-choices`"
-          :type="item.type"
-          class="h-4 w-4 shrink-0 accent-belle-600 dark:accent-brand-500"
           :value="option"
-          :checked="isChecked(option)"
-          @change="toggle(option, $event.target.checked)"
         />
         {{ option }}
       </label>
+    </RadioGroup>
+    <div v-else-if="item.type === 'checkbox'" class="flex flex-wrap gap-x-5 gap-y-1" role="group" :aria-labelledby="`${inputId}-label`">
+      <p v-if="!options.length" class="min-h-11 py-3 text-sm text-muted-foreground">尚未設定選項</p>
+      <label v-for="(option, index) in options" :key="index" class="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-foreground"><Checkbox :id="index === 0 ? inputId : undefined" :name="`${inputId}-choices`" :model-value="isChecked(option)" @update:model-value="toggle(option, $event)" />{{ option }}</label>
     </div>
     <div v-else-if="item.type === 'text'" class="relative">
       <Input

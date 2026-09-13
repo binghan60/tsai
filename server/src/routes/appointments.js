@@ -2,6 +2,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
+import IntakeSubmission from '../models/IntakeSubmission.js';
 import Owner from '../models/Owner.js';
 import FormTemplate from '../models/FormTemplate.js';
 import ClinicSettings from '../models/ClinicSettings.js';
@@ -453,6 +454,14 @@ router.post('/:id/check-in', async (req, res, next) => {
       appointment.recordId = originalRecordId;
       if (needsNewPatient) {
         const species = String(req.body.species || '').trim();
+        const intake = req.body?.intakeSubmissionId
+          ? await IntakeSubmission.findById(req.body.intakeSubmissionId).session(session)
+          : null;
+        if (req.body?.intakeSubmissionId && (!intake || intake.status !== 'pending' || intake.linkedAppointmentId)) {
+          throw Object.assign(new Error('這份初診表已被處理或連結到其他掛號'), { status: 409 });
+        }
+        const ownerDetails = req.body?.owner ?? {};
+        const petDetails = req.body?.pet ?? {};
         let owner;
         if (existingOwnerId) {
           owner = await Owner.findOneAndUpdate(
@@ -463,12 +472,18 @@ router.post('/:id/check-in', async (req, res, next) => {
           if (!owner) throw Object.assign(new Error('找不到指定的飼主，請重新確認掛號資料'), { status: 422 });
         } else {
           [owner] = await Owner.create(
-            [{ name: String(req.body.ownerName).trim(), phone: String(req.body.ownerPhone).trim() }],
+            [{
+              name: String(req.body.ownerName).trim(), phone: String(req.body.ownerPhone).trim(),
+              landline: String(ownerDetails.landline || '').trim(), email: String(ownerDetails.email || '').trim(), address: String(ownerDetails.address || '').trim(),
+            }],
             { session }
           );
         }
         const [pet] = await Pet.create(
-          [{ name: String(req.body.petName).trim(), ownerId: owner._id, ...(species ? { species } : {}) }],
+          [{
+            name: String(req.body.petName).trim(), ownerId: owner._id, ...(species ? { species } : {}),
+            ...Object.fromEntries(['breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'].filter(key => petDetails[key] !== undefined).map(key => [key, petDetails[key]])),
+          }],
           { session }
         );
         appointment.ownerId = owner._id;
@@ -477,6 +492,15 @@ router.post('/:id/check-in', async (req, res, next) => {
         appointment.ownerPhone = owner.phone;
         appointment.petName = pet.name;
         appointment.species = pet.species;
+        if (intake) {
+          intake.status = 'approved';
+          intake.reviewedAt = new Date();
+          intake.approvedOwnerId = owner._id;
+          intake.approvedPetId = pet._id;
+          intake.linkedAppointmentId = appointment._id;
+          await intake.save({ session });
+          appointment.intakeSubmissionId = intake._id;
+        }
       }
 
       // 表單草稿在報到時建立，醫師進入診療台時已可直接編輯。

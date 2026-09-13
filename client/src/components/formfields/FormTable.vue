@@ -5,6 +5,7 @@ import FieldControl from './FieldControl.vue';
 import { Button } from '../ui/button';
 import { Label } from '../ui/label';
 import { Textarea } from '../ui/textarea';
+import { Input } from '../ui/input';
 import SelectableItem from './SelectableItem.vue';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import PreviousValue from './PreviousValue.vue';
@@ -65,14 +66,14 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                 <div class="space-y-1.5">
                   <Label :for="`record-lab-value-${finding.key}`" class="text-xs font-medium text-muted-foreground">{{ finding.numeric === false ? '結果描述' : '檢驗數值' }}</Label>
                   <div class="relative">
-                    <input
+                    <Input
                       :id="`record-lab-value-${finding.key}`"
                       v-model="finding.value"
                       type="text"
                       inputmode="decimal"
                       :aria-label="`${finding.label}數值`"
                       :placeholder="finding.numeric === false ? '選填' : labRanges[finding.key]?.unit ? `輸入數值（${labRanges[finding.key].unit}）` : '選填'"
-                      class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                      class="min-h-11 w-full scroll-mt-40 border-border bg-field text-sm text-foreground"
                       :class="finding.numeric === false ? 'pr-20' : ''"
                       @input="finding.numeric !== false ? autoJudgeLab(finding, $event.target.value) : autoJudgeLabText(finding, $event.target.value)"
                     />

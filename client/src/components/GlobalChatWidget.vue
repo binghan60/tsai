@@ -8,6 +8,7 @@ import { useToast } from '../composables/useToast';
 import { formatDateTime } from '../lib/datetime';
 import { useAppointmentNotificationPreferences } from '../lib/appointmentNotificationPreferences';
 import { Button } from './ui/button';
+import { Textarea } from './ui/textarea';
 import { Switch } from './ui/switch';
 import ChatChangeSnapshot from './ChatChangeSnapshot.vue';
 
@@ -151,11 +152,11 @@ async function submit() {
         </div>
       </div>
       <form class="flex items-end gap-2 border-t border-border p-3" @submit.prevent="submit">
-        <textarea
+        <Textarea
           v-model="draft"
           rows="1"
           placeholder="輸入訊息…"
-          class="flex-1 rounded-lg border border-input bg-field px-3 py-2 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+          class="min-h-10 flex-1 resize-none"
           @keydown.enter.exact.prevent="submit"
         ></textarea>
         <Button type="submit" size="icon" :disabled="!draft.trim() || sending" aria-label="送出訊息">

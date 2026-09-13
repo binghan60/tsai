@@ -38,6 +38,15 @@ import { useToast } from '../composables/useToast';
 const router = useRouter();
 const route = useRoute();
 const toast = useToast();
+// 這一頁同時是初診報到 Modal 的唯一表單核心；兩個入口絕不各自維護欄位或驗證。
+const props = defineProps({
+  embedded: { type: Boolean, default: false },
+  ownerDraft: { type: Object, default: null },
+  petDraft: { type: Object, default: null },
+  existingOwner: { type: Object, default: null },
+  submitting: { type: Boolean, default: false },
+});
+const emit = defineEmits(['submit']);
 
 // ----------------------------------------------------
 // 飼主管理模組 (Owner Module)
@@ -127,7 +136,11 @@ function switchModeToNewWithQuery() {
   }
 }
 
-const newOwner = ref(emptyOwnerDraft());
+const newOwner = ref({ ...emptyOwnerDraft(), ...(props.ownerDraft ?? {}) });
+if (props.embedded && props.existingOwner?._id) {
+  ownerMode.value = 'existing';
+  selectedOwner.value = props.existingOwner;
+}
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const activeOwnerName = computed(() => ownerMode.value === 'existing'
   ? selectedOwner.value?.name ?? ''
@@ -144,7 +157,22 @@ watch(ownerMode, (mode) => {
 const petForm = ref({
   ...emptyPetDraft(),
   species: '貓',
+  ...(props.petDraft ?? {}),
 });
+watch(() => props.ownerDraft, (draft) => {
+  if (!props.embedded || !draft) return;
+  ownerMode.value = 'new';
+  newOwner.value = { ...emptyOwnerDraft(), ...draft };
+}, { deep: true });
+watch(() => props.existingOwner, (owner) => {
+  if (!props.embedded || !owner?._id) return;
+  ownerMode.value = 'existing';
+  selectedOwner.value = owner;
+}, { deep: true });
+watch(() => props.petDraft, (draft) => {
+  if (!props.embedded || !draft) return;
+  petForm.value = { ...emptyPetDraft(), species: '貓', ...draft };
+}, { deep: true });
 
 // 常見貓咪品種推薦標籤（點擊一鍵填入）
 const CAT_BREED_RECOMMENDATIONS = [
@@ -354,6 +382,7 @@ function validateForm() {
 // 提交與離開防護 (Submit & Navigation Guard)
 // ----------------------------------------------------
 const submitting = ref(false);
+const isSubmitting = computed(() => props.embedded ? props.submitting : submitting.value);
 const submitError = ref('');
 const leavingAfterAction = ref(false);
 const pendingLeavePath = ref('');
@@ -384,6 +413,11 @@ async function submit() {
       householdCatCount: petForm.value.householdCatCount === '' || petForm.value.householdCatCount == null ? null : Number(petForm.value.householdCatCount),
       mealsPerDay: petForm.value.mealsPerDay === '' || petForm.value.mealsPerDay == null ? null : Number(petForm.value.mealsPerDay),
     };
+
+    if (props.embedded) {
+      emit('submit', { owner: ownerMode.value === 'existing' ? { ...selectedOwner.value } : { ...newOwner.value }, pet: payload });
+      return;
+    }
 
     const { data: pet } = ownerMode.value === 'existing'
       ? await http.post(`/owners/${selectedOwner.value._id}/pets`, payload)
@@ -452,12 +486,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="relative space-y-5 pb-28">
+  <section :class="embedded ? 'space-y-5' : 'relative space-y-5 pb-28'">
     <!-- 頂部導航 -->
-    <Breadcrumbs :items="[{ label: '寵物列表', to: '/pets' }, { label: '新增貓咪檔案' }]" />
+    <Breadcrumbs v-if="!embedded" :items="[{ label: '寵物列表', to: '/pets' }, { label: '新增貓咪檔案' }]" />
 
     <!-- 頁面標題列 -->
-    <div class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
+    <div v-if="!embedded" class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
       <div>
         <h1 class="flex items-center gap-2 text-xl font-semibold text-foreground">
           <PawPrint class="h-5 w-5 text-primary" />
@@ -465,7 +499,7 @@ onBeforeUnmount(() => {
         </h1>
         <p class="mt-1 text-sm text-muted-foreground">確認飼主身分、填寫貓咪基本資料與病史，一次送出建立檔案。</p>
       </div>
-      <Button type="button" variant="secondary" size="sm" class="self-start sm:self-auto" :disabled="submitting" @click="cancel">取消返回</Button>
+      <Button type="button" variant="secondary" size="sm" class="self-start sm:self-auto" :disabled="isSubmitting" @click="cancel">取消返回</Button>
     </div>
 
     <Alert v-if="submitError" variant="destructive">
@@ -492,7 +526,7 @@ onBeforeUnmount(() => {
           </Badge>
         </div>
 
-        <SegmentedControl v-model="ownerMode" :options="OWNER_MODE_OPTIONS" aria-label="飼主來源" full-width />
+        <SegmentedControl v-if="!embedded || !existingOwner?._id" v-model="ownerMode" :options="OWNER_MODE_OPTIONS" aria-label="飼主來源" full-width />
 
         <!-- 模式 1：選擇既有飼主 -->
         <template v-if="ownerMode === 'existing'">
@@ -816,16 +850,16 @@ onBeforeUnmount(() => {
           <span v-if="petForm.name">・貓咪：<strong class="font-medium text-foreground">{{ petForm.name }}</strong><span v-if="petForm.breed">（{{ petForm.breed }}）</span></span>
         </div>
         <div class="flex w-full items-center justify-end gap-3 sm:w-auto">
-          <Button type="button" variant="secondary" :disabled="submitting" @click="cancel">取消返回</Button>
-          <Button type="button" class="min-w-36 gap-1.5" :disabled="submitting" @click="submit">
+          <Button v-if="!embedded" type="button" variant="secondary" :disabled="isSubmitting" @click="cancel">取消返回</Button>
+          <Button type="button" class="min-w-36 gap-1.5" :disabled="isSubmitting" @click="submit">
             <Check class="h-4 w-4" />
-            {{ submitting ? '處理中…' : '確認新增貓咪' }}
+            {{ isSubmitting ? '處理中…' : embedded ? '確認資料並報到' : '確認新增貓咪' }}
           </Button>
         </div>
       </div>
     </div>
 
-    <ConfirmDialog
+    <ConfirmDialog v-if="!embedded"
       :open="Boolean(pendingLeavePath)"
       title="確定要離開新增頁面嗎？"
       description="您填寫的貓咪或飼主資料尚未送出儲存，離開後內容將會遺失。"

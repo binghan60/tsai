@@ -4,6 +4,7 @@ import { ImagePlus, LoaderCircle, Trash2 } from '@lucide/vue';
 import { http } from '../../api/http';
 import FieldShell from './FieldShell.vue';
 import { Button } from '../ui/button';
+import { Textarea } from '../ui/textarea';
 import { useRecordForm } from './context';
 
 let mountedImageUploaderCount = 0;
@@ -172,7 +173,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="border-t border-border bg-background p-3">
               <label :for="`${inputId}-caption-${index}`" class="mb-1 block text-xs font-medium text-muted-foreground">圖片說明</label>
-              <textarea :id="`${inputId}-caption-${index}`" :value="image.caption ?? ''" rows="2" maxlength="500" class="flex min-h-16 w-full rounded-lg border border-input bg-field px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30" placeholder="輸入圖片說明…" @input="updateCaption(index, $event.target.value)" />
+              <Textarea :id="`${inputId}-caption-${index}`" :model-value="image.caption ?? ''" rows="2" maxlength="500" class="min-h-16" placeholder="輸入圖片說明…" @update:model-value="updateCaption(index, $event)" />
             </div>
           </template>
         </div>
