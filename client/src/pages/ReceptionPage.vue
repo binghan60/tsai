@@ -48,6 +48,7 @@ const target = ref(null)
 const lateCheckIn = ref(false)
 const confirmation = ref(null)
 const intakeReviewTarget = ref(null)
+const intakeAppointmentDate = ref('')
 const intakeAppointmentTime = ref('')
 const templates = ref([])
 const defaultTemplate = ref('')
@@ -139,6 +140,13 @@ function suggestedCheckinNumber() {
   let candidate = 1;
   while (used.has(candidate)) candidate += 1;
   return candidate;
+}
+
+function isInitialDataPending(appointment) {
+  return appointment.visitType === 'new'
+    && !appointment.petId
+    && Boolean(appointment.intakeVerificationCode)
+    && !appointment.intakeSubmissionId;
 }
 
 const { connected } = useClinicSync(date, refresh, applyUpdate)
@@ -245,17 +253,18 @@ async function issueIntakeCode() {
 
 async function approveIntake(appointment) {
   if (busy.value || !appointment.intakeSubmissionId) return
-  if (!intakeAppointmentTime.value) {
-    toast.error('請先選擇掛號時間')
+  if (!intakeAppointmentDate.value || !intakeAppointmentTime.value) {
+    toast.error('請先選擇掛號日期與時間')
     return
   }
   busy.value = true
   try {
-    const { data } = await http.post(`/intake-submissions/${appointment.intakeSubmissionId}/approve`, { time: intakeAppointmentTime.value })
+    const { data } = await http.post(`/intake-submissions/${appointment.intakeSubmissionId}/approve`, { date: intakeAppointmentDate.value, time: intakeAppointmentTime.value })
     if (data.appointment) applyUpdate(data.appointment)
     else await refresh()
     await loadPendingIntakeCount()
     intakeReviewTarget.value = null
+    intakeAppointmentDate.value = ''
     intakeAppointmentTime.value = ''
     toast.success('初診資料已核准並完成建檔')
   } catch (err) {
@@ -282,6 +291,7 @@ async function openIntakeReview(appointment) {
   try {
     const { data } = await http.get(`/intake-submissions/${appointment.intakeSubmissionId}`)
     intakeReviewTarget.value = { ...appointment, owner: data.owner, pet: data.pet }
+    intakeAppointmentDate.value = appointment.date || date.value
     intakeAppointmentTime.value = appointment.time || ''
   } catch (err) {
     toast.error(err.response?.data?.message || '無法載入初診資料，請稍後再試')
@@ -345,7 +355,7 @@ onBeforeUnmount(() => {
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
         <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
         <Button variant="secondary" size="sm" :disabled="date === today" @click="date = today">今天</Button>
-        <Button variant="secondary" size="sm" as-child
+        <Button size="sm" class="bg-info-surface text-info hover:bg-info-surface/80" as-child
           ><router-link to="/reception/intakes" class="relative"
             >初診審核<span v-if="pendingIntakeCount" class="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-xs font-bold text-white ring-2 ring-background">{{ pendingIntakeCount > 99 ? '99+' : pendingIntakeCount }}</span></router-link
           ></Button
@@ -469,9 +479,9 @@ onBeforeUnmount(() => {
                 {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template>
               </p>
               <div class="flex flex-wrap items-center gap-2">
-                <Button v-if="item.visitType === 'new' && item.intakeSubmissionId && !item.petId" size="sm" :disabled="busy" @click="openIntakeReview(item)"><ClipboardCheck class="h-4 w-4" />審核</Button>
-                <Button v-else variant="secondary" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
-                <Button variant="secondary" size="sm" :disabled="busy" @click="admin('no-show', item)">標記未到</Button>
+                <Button v-if="item.visitType === 'new' && item.intakeSubmissionId && !item.petId" size="sm" class="bg-info-surface text-info hover:bg-info-surface/80" :disabled="busy" @click="openIntakeReview(item)"><ClipboardCheck class="h-4 w-4" />審核</Button>
+                <Button v-else-if="!isInitialDataPending(item)" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
+                <Button v-if="!isInitialDataPending(item)" variant="secondary" size="sm" :disabled="busy" @click="admin('no-show', item)">標記未到</Button>
                 <Button variant="destructive" size="sm" :disabled="busy" @click="admin('cancel', item)">取消掛號</Button>
                 <RowActions :actions="[{ key: 'edit', label: '修改預約' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
               </div>
@@ -656,9 +666,12 @@ onBeforeUnmount(() => {
           </div>
         </section>
         <section class="rounded-xl border border-border p-4">
-          <Label for="intake-appointment-time" class="text-sm font-semibold">掛號時間</Label>
-          <p class="mt-1 text-xs text-muted-foreground">核准後會以此時間建立正式掛號；完成審核後才能報到。</p>
-          <TimePicker id="intake-appointment-time" v-model="intakeAppointmentTime" class="mt-3" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" aria-label="初診掛號時間" />
+          <Label class="text-sm font-semibold">掛號安排</Label>
+          <p class="mt-1 text-xs text-muted-foreground">核准後會以此日期與時間建立正式掛號；完成審核後才能報到。</p>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <div><Label for="intake-appointment-date" class="text-xs">掛號日期</Label><DatePicker id="intake-appointment-date" v-model="intakeAppointmentDate" class="mt-1.5 w-full" aria-label="初診掛號日期" /></div>
+            <div><Label for="intake-appointment-time" class="text-xs">掛號時間</Label><TimePicker id="intake-appointment-time" v-model="intakeAppointmentTime" class="mt-1.5 w-full" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" aria-label="初診掛號時間" /></div>
+          </div>
         </section>
       </div>
       <DialogFooter><Button type="button" variant="secondary" :disabled="busy" @click="intakeReviewTarget = null">取消</Button><Button type="button" variant="destructive" :disabled="busy" @click="rejectIntake(intakeReviewTarget)">退回</Button><Button type="button" :disabled="busy" @click="approveIntake(intakeReviewTarget)">核准並掛號</Button></DialogFooter>

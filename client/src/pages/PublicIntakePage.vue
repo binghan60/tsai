@@ -1,15 +1,19 @@
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useForm } from 'vee-validate'
 import { http } from '../api/http'
 import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group'
 import { Button } from '../components/ui/button'
+import ModalDialog from '../components/ModalDialog.vue'
+import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog'
 
 const submitting = ref(false)
 const submitted = ref(false)
 const attemptedSubmit = ref(false)
+const missingRequiredDialog = ref(false)
+const highlightedField = ref('')
 const error = ref('')
 const verificationCode = ref('')
 const verifying = ref(false)
@@ -40,6 +44,17 @@ const pet = reactive({
 const historyOptions = ['心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題']
 const foodOptions = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧', '其他']
 const hasAge = computed(() => pet.ageYears !== '' || pet.ageMonths !== '')
+const missingRequiredLabels = computed(() => [
+  !pet.name.trim() ? '貓咪名字' : '',
+  !owner.name.trim() ? '飼主姓名' : '',
+  !owner.phone.trim() ? '飼主手機' : '',
+].filter(Boolean))
+const firstMissingRequiredField = computed(() => {
+  if (!pet.name.trim()) return 'intake-pet-name-field'
+  if (!owner.name.trim()) return 'intake-owner-name-field'
+  if (!owner.phone.trim()) return 'intake-owner-phone-field'
+  return ''
+})
 const estimatedBirthLabel = computed(() => {
   const date = estimatedBirthDate()
   if (!date) return ''
@@ -81,6 +96,27 @@ function toggleList(list, option, checked) {
   return [...next]
 }
 
+function clampInteger(target, key, min, max) {
+  const raw = String(target[key] ?? '').trim()
+  if (!raw || !/^\d+$/.test(raw)) return
+  target[key] = String(Math.min(max, Math.max(min, Number(raw))))
+}
+
+async function jumpToMissingRequired() {
+  missingRequiredDialog.value = false
+  const fieldId = firstMissingRequiredField.value
+  if (!fieldId) return
+
+  highlightedField.value = fieldId
+  await nextTick()
+  const field = document.getElementById(fieldId)
+  field?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  field?.querySelector('input')?.focus()
+  window.setTimeout(() => {
+    if (highlightedField.value === fieldId) highlightedField.value = ''
+  }, 1600)
+}
+
 watch(verificationCode, () => { verified.value = false })
 
 async function verifyCode() {
@@ -107,7 +143,15 @@ async function submit() {
   error.value = ''
   setValues({ petName: pet.name, ownerName: owner.name, ownerPhone: owner.phone, ownerEmail: owner.email, ageYears: pet.ageYears, ageMonths: pet.ageMonths, householdCatCount: pet.householdCatCount, mealsPerDay: pet.mealsPerDay })
   const { valid } = await validate()
-  if (!valid) { error.value = Object.values(errors.value)[0] || '請檢查填寫內容'; return }
+  if (!valid) {
+    if (missingRequiredLabels.value.length) {
+      error.value = `請完成必填欄位：${missingRequiredLabels.value.join('、')}`
+      missingRequiredDialog.value = true
+    } else {
+      error.value = Object.values(errors.value)[0] || '請檢查填寫內容'
+    }
+    return
+  }
   submitting.value = true
   try {
     await http.post('/public/intake-submissions', {
@@ -178,28 +222,31 @@ async function submit() {
         <div class="header">
           <h1>初診掛號單</h1>
         </div>
+        <div v-if="attemptedSubmit && missingRequiredLabels.length" class="required-summary" role="alert">
+          <strong>尚有必填欄位未完成</strong>：{{ missingRequiredLabels.join('、') }}
+        </div>
         <div class="section">
           <div class="section-title">貓孩兒</div>
           <div class="grid">
             <div>
               <div class="field-group-title section-emphasis">基本資料</div>
-              <div class="field"><label><span class="required-mark" aria-hidden="true">*</span>名字：</label><Input v-model="pet.name" class="input-medium" :aria-invalid="attemptedSubmit && !!errors.petName" /><span v-if="attemptedSubmit && errors.petName" class="field-error">{{ errors.petName }}</span></div>
+              <div id="intake-pet-name-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-name-field' }"><label><span class="required-mark" aria-hidden="true">*</span>名字：</label><Input v-model="pet.name" class="input-medium" aria-required="true" :aria-invalid="attemptedSubmit && !!errors.petName" /><span v-if="attemptedSubmit && errors.petName" class="field-error">{{ errors.petName }}</span></div>
               <div class="field">
                 <label>性別：</label><RadioGroup v-model="pet.sex" class="contents"><label class="option-label"><RadioGroupItem value="male" />男生</label><label class="option-label"><RadioGroupItem value="female" />女生</label></RadioGroup>
               </div>
-              <div class="field"><label>年齡：</label><Input v-model="pet.ageYears" class="input-short" inputmode="numeric" /> 年 <Input v-model="pet.ageMonths" class="input-short" inputmode="numeric" /> 個月<span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="attemptedSubmit && (errors.ageYears || errors.ageMonths)" class="field-error">{{ errors.ageYears || errors.ageMonths }}</span></div>
+              <div class="field"><label>年齡：</label><Input v-model="pet.ageYears" class="input-short" type="number" min="0" step="1" inputmode="numeric" @blur="clampInteger(pet, 'ageYears', 0, 99)" /> 年 <Input v-model="pet.ageMonths" class="input-short" type="number" min="0" max="11" step="1" inputmode="numeric" @blur="clampInteger(pet, 'ageMonths', 0, 11)" /> 個月<span class="hint">（月齡 0–11）</span><span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="attemptedSubmit && (errors.ageYears || errors.ageMonths)" class="field-error">{{ errors.ageYears || errors.ageMonths }}</span></div>
               <div class="field"><label>品種：</label><Input v-model="pet.breed" class="input-medium" /></div>
               <div class="field"><label>花色：</label><Input v-model="pet.color" class="input-medium" /></div>
             </div>
             <div>
               <div class="field-group-title section-emphasis">生活狀況</div>
-              <div class="field"><label>家中貓口：</label><Input v-model="pet.householdCatCount" class="input-short" inputmode="numeric" /> 隻<span v-if="attemptedSubmit && errors.householdCatCount" class="field-error">{{ errors.householdCatCount }}</span></div>
+              <div class="field"><label>家中貓口：</label><Input v-model="pet.householdCatCount" class="input-short" type="number" min="0" step="1" inputmode="numeric" @blur="clampInteger(pet, 'householdCatCount', 0, 99)" /> 隻<span v-if="attemptedSubmit && errors.householdCatCount" class="field-error">{{ errors.householdCatCount }}</span></div>
               <div class="field">
                 <label>主餐配菜：</label><label v-for="option in foodOptions" :key="option" class="option-label"><Checkbox :model-value="pet.foods.includes(option)" @update:model-value="pet.foods = toggleList(pet.foods, option, $event === true)" />{{ option }}<template v-if="option === '其他'">：</template></label
                 ><Input v-if="pet.foods.includes('其他')" v-model="pet.foodsOther" class="input-medium" placeholder="請填寫" /><span class="hint">(以上可複選)</span>
               </div>
               <div class="field">
-                <label>放飯頻率：</label><RadioGroup v-model="pet.feedingType" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" class="input-short" inputmode="numeric" /> 餐</label></RadioGroup><span v-if="attemptedSubmit && errors.mealsPerDay" class="field-error">{{ errors.mealsPerDay }}</span>
+                <label>放飯頻率：</label><RadioGroup v-model="pet.feedingType" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" class="input-short" type="number" min="1" max="20" step="1" inputmode="numeric" @blur="clampInteger(pet, 'mealsPerDay', 1, 20)" /> 餐</label></RadioGroup><span v-if="attemptedSubmit && errors.mealsPerDay" class="field-error">{{ errors.mealsPerDay }}</span>
               </div>
             </div>
           </div>
@@ -226,10 +273,10 @@ async function submit() {
         <div class="section owner-section">
           <div class="section-title">家長</div>
           <div class="field-group-title section-emphasis">基本資料</div>
-          <div class="field"><label><span class="required-mark" aria-hidden="true">*</span>姓名：</label><Input v-model="owner.name" class="input-medium" autocomplete="name" :aria-invalid="attemptedSubmit && !!errors.ownerName" /><span v-if="attemptedSubmit && errors.ownerName" class="field-error">{{ errors.ownerName }}</span></div>
+          <div id="intake-owner-name-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-owner-name-field' }"><label><span class="required-mark" aria-hidden="true">*</span>姓名：</label><Input v-model="owner.name" class="input-medium" autocomplete="name" aria-required="true" :aria-invalid="attemptedSubmit && !!errors.ownerName" /><span v-if="attemptedSubmit && errors.ownerName" class="field-error">{{ errors.ownerName }}</span></div>
           <div class="field contact-field">
             <div class="contact-item"><label>市話：</label><Input v-model="owner.landline" class="input-medium" type="tel" /></div>
-            <div class="contact-item"><label><span class="required-mark" aria-hidden="true">*</span>手機：</label><Input v-model="owner.phone" class="input-medium" type="tel" autocomplete="tel" :aria-invalid="attemptedSubmit && !!errors.ownerPhone" /><span v-if="attemptedSubmit && errors.ownerPhone" class="field-error">{{ errors.ownerPhone }}</span></div>
+            <div id="intake-owner-phone-field" class="contact-item" :class="{ 'field-highlight': highlightedField === 'intake-owner-phone-field' }"><label><span class="required-mark" aria-hidden="true">*</span>手機：</label><Input v-model="owner.phone" class="input-medium" type="tel" autocomplete="tel" aria-required="true" :aria-invalid="attemptedSubmit && !!errors.ownerPhone" /><span v-if="attemptedSubmit && errors.ownerPhone" class="field-error">{{ errors.ownerPhone }}</span></div>
           </div>
           <div class="field"><label>地址：</label><Input v-model="owner.address" class="input-long" autocomplete="street-address" /></div>
           <div class="field"><label>Email：</label><Input v-model="owner.email" class="input-long" inputmode="email" autocomplete="email" :aria-invalid="attemptedSubmit && !!errors.ownerEmail" /><span v-if="attemptedSubmit && errors.ownerEmail" class="field-error">{{ errors.ownerEmail }}</span></div>
@@ -249,6 +296,16 @@ async function submit() {
           </div>
         </div>
       </form>
+      <ModalDialog v-if="missingRequiredDialog" size="sm" @close="missingRequiredDialog = false">
+        <div class="space-y-2 p-6 pb-4 sm:p-7 sm:pb-4">
+          <DialogTitle>還有必填欄位未完成</DialogTitle>
+          <DialogDescription class="text-sm leading-relaxed">請填寫：{{ missingRequiredLabels.join('、') }}。按下按鈕後會直接帶您到第一個欄位。</DialogDescription>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="secondary" @click="missingRequiredDialog = false">留在這裡</Button>
+          <Button type="button" @click="jumpToMissingRequired">帶我去填寫</Button>
+        </DialogFooter>
+      </ModalDialog>
     </div>
   </main>
 </template>
@@ -463,6 +520,23 @@ async function submit() {
 }
 .field-error { color: var(--intake-red); font-size: 12px; }
 .required-mark { color: var(--intake-red); }
+.required-mark::after { content: '必填'; margin-left: 3px; font-size: 11px; font-weight: normal; }
+.field-highlight {
+  animation: required-field-flash 0.55s ease-in-out 3;
+  border-radius: 4px;
+}
+@keyframes required-field-flash {
+  50% { background: var(--intake-focus-surface); box-shadow: 0 0 0 3px var(--intake-focus-surface); }
+}
+.required-summary {
+  margin: 0 0 18px;
+  border: 1px solid var(--intake-red);
+  border-radius: 4px;
+  padding: 9px 12px;
+  color: var(--intake-red);
+  font-size: 14px;
+  line-height: 1.5;
+}
 .owner-section {
   border-top: 1px dashed var(--intake-dash);
   padding-top: 15px;
@@ -539,6 +613,9 @@ async function submit() {
 .submitted p {
   color: var(--intake-secondary);
   line-height: 1.8;
+}
+@media (prefers-reduced-motion: reduce) {
+  .field-highlight { animation: none; background: var(--intake-focus-surface); }
 }
 @media (max-width: 640px) {
   .intake-page {

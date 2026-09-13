@@ -3,12 +3,13 @@ import { onMounted, ref } from 'vue'
 import { ArrowLeft, Check, ClipboardList, RefreshCw, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
-import { formatDateTime } from '../lib/datetime'
+import { clinicDateInput, formatDateTime } from '../lib/datetime'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import { TimePicker } from '../components/ui/time-picker'
+import { DatePicker } from '../components/ui/date-picker'
 import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/appointmentTime'
 
 const toast = useToast()
@@ -19,6 +20,7 @@ const busy = ref(false)
 const confirmation = ref(null)
 const selectedId = ref('')
 const appointmentTime = ref('10:00')
+const appointmentDate = ref(clinicDateInput())
 
 function value(value, fallback = '') {
   return value === null || value === undefined || value === '' ? fallback : value
@@ -45,7 +47,7 @@ async function decide() {
   const { item, action } = confirmation.value
   busy.value = true
   try {
-    const { data } = await http.post(`/intake-submissions/${item._id}/${action}`, action === 'approve' ? { time: appointmentTime.value } : {})
+    const { data } = await http.post(`/intake-submissions/${item._id}/${action}`, action === 'approve' ? { date: appointmentDate.value, time: appointmentTime.value } : {})
     items.value = items.value.filter((current) => current._id !== item._id)
     selectedId.value = ''
     confirmation.value = null
@@ -84,7 +86,7 @@ onMounted(refresh)
         <span class="rounded-full bg-muted px-3 py-1 text-xs font-medium">{{ items.length }} 份</span>
       </div>
       <p v-if="!items.length" class="px-5 py-12 text-center text-sm text-muted-foreground">目前沒有待審核的初診表。</p>
-      <button v-for="item in items" :key="item._id" type="button" class="flex w-full flex-wrap items-center gap-4 border-b border-border px-5 py-4 text-left last:border-b-0 hover:bg-field" @click="selectedId = item._id; appointmentTime = '10:00'">
+      <button v-for="item in items" :key="item._id" type="button" class="flex w-full flex-wrap items-center gap-4 border-b border-border px-5 py-4 text-left last:border-b-0 hover:bg-field" @click="selectedId = item._id; appointmentDate = clinicDateInput(); appointmentTime = '10:00'">
         <span class="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-base font-semibold text-accent-foreground">{{ item.pet.name?.slice(0, 1) || '?' }}</span>
         <span class="min-w-0 flex-1"
           ><span class="block truncate text-base font-semibold">{{ item.pet.name }}</span
@@ -153,9 +155,15 @@ onMounted(refresh)
           </div>
         </section>
         <section class="paper-section">
-          <label class="block text-sm font-semibold">掛號時間
-            <TimePicker v-model="appointmentTime" class="mt-2" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" aria-label="初診掛號時間" />
-          </label>
+          <p class="text-sm font-semibold">掛號安排</p>
+          <div class="mt-2 grid gap-3 sm:grid-cols-2">
+            <label class="block text-sm font-medium">掛號日期
+              <DatePicker v-model="appointmentDate" class="mt-2" aria-label="初診掛號日期" />
+            </label>
+            <label class="block text-sm font-medium">掛號時間
+              <TimePicker v-model="appointmentTime" class="mt-2" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" aria-label="初診掛號時間" />
+            </label>
+          </div>
         </section>
       </article>
     </section>

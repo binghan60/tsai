@@ -132,7 +132,14 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
       if (submission.linkedAppointmentId) {
         appointment = await Appointment.findById(submission.linkedAppointmentId).session(session);
         if (appointment && !appointment.petId) {
+          const date = String(req.body?.date || '').trim();
           const time = String(req.body?.time || '').trim();
+          if (date) {
+            const parsedDate = new Date(`${date}T00:00:00Z`);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) {
+              throw Object.assign(new Error('掛號日期格式不正確'), { status: 422 });
+            }
+          }
           if (time && !/^\d{2}:\d{2}$/.test(time)) {
             throw Object.assign(new Error('掛號時間格式不正確'), { status: 422 });
           }
@@ -143,10 +150,11 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
           appointment.petName = pet.name;
           appointment.species = pet.species;
           appointment.intakeSubmissionId = submission._id;
+          if (date) appointment.date = date;
           if (time) {
             appointment.time = time;
-            appointment.scheduledAt = combineClinicDateTime(appointment.date, time);
           }
+          if (date || time) appointment.scheduledAt = combineClinicDateTime(appointment.date, appointment.time || '00:00');
           await appointment.save({ session });
         }
       }
