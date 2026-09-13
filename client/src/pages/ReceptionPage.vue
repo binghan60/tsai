@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Plus, RefreshCw, UserCheck } from '@lucide/vue'
+import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, ClipboardCheck, ClipboardList, Plus, RefreshCw, UserCheck } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useClinicSync } from '../composables/useClinicSync'
@@ -469,7 +469,7 @@ onBeforeUnmount(() => {
                 {{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template>
               </p>
               <div class="flex flex-wrap items-center gap-2">
-                <Button v-if="item.visitType === 'new' && item.intakeSubmissionId && !item.petId" size="sm" :disabled="busy" @click="openIntakeReview(item)">審核</Button>
+                <Button v-if="item.visitType === 'new' && item.intakeSubmissionId && !item.petId" size="sm" :disabled="busy" @click="openIntakeReview(item)"><ClipboardCheck class="h-4 w-4" />審核</Button>
                 <Button v-else variant="secondary" size="sm" :disabled="busy" @click="admin('check-in', item)"><UserCheck class="h-4 w-4" />報到</Button>
                 <Button variant="secondary" size="sm" :disabled="busy" @click="admin('no-show', item)">標記未到</Button>
                 <Button variant="destructive" size="sm" :disabled="busy" @click="admin('cancel', item)">取消掛號</Button>
