@@ -1,15 +1,19 @@
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useForm } from 'vee-validate'
 import { http } from '../api/http'
 import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group'
+import { Button } from '../components/ui/button'
 
 const submitting = ref(false)
 const submitted = ref(false)
 const attemptedSubmit = ref(false)
 const error = ref('')
+const verificationCode = ref('')
+const verifying = ref(false)
+const verified = ref(false)
 const owner = reactive({ name: '', phone: '', landline: '', email: '', address: '' })
 const pet = reactive({
   name: '',
@@ -71,6 +75,27 @@ function toggleList(list, option, checked) {
   return [...next]
 }
 
+watch(verificationCode, () => { verified.value = false })
+
+async function verifyCode() {
+  error.value = ''
+  const code = verificationCode.value.replace(/\D/g, '')
+  if (code.length !== 4) {
+    error.value = '請輸入櫃台提供的 4 位驗證碼'
+    return
+  }
+  verifying.value = true
+  try {
+    await http.post('/public/intake-submissions/verify', { verificationCode: code })
+    verificationCode.value = code
+    verified.value = true
+  } catch (err) {
+    error.value = err.response?.data?.message || '驗證失敗，請確認驗證碼後再試。'
+  } finally {
+    verifying.value = false
+  }
+}
+
 async function submit() {
   attemptedSubmit.value = true
   error.value = ''
@@ -80,6 +105,7 @@ async function submit() {
   submitting.value = true
   try {
     await http.post('/public/intake-submissions', {
+      verificationCode: verificationCode.value,
       owner,
       pet: {
         name: pet.name,
@@ -108,6 +134,7 @@ async function submit() {
     submitted.value = true
   } catch (err) {
     error.value = err.response?.data?.message || '送出失敗，請確認網路後再試。'
+    if (err.response?.status === 409) verified.value = false
   } finally {
     submitting.value = false
   }
@@ -115,12 +142,32 @@ async function submit() {
 </script>
 
 <template>
-  <main class="intake-page">
+  <main class="intake-page" :class="{ 'is-verification': !submitted && !verified }">
     <div class="container">
       <div v-if="submitted" class="submitted">
         <h1>已送出初診資料</h1>
         <p>櫃台人員會先核對資料，審核完成後才會建立正式病歷。謝謝您的填寫。</p>
       </div>
+      <section v-else-if="!verified" class="verification-card" aria-labelledby="intake-verification-title">
+        <h1 id="intake-verification-title">初診掛號單</h1>
+        <div class="verification-content">
+          <form class="verification-form" @submit.prevent="verifyCode">
+            <label for="intake-verification-code">請輸入驗證碼</label>
+            <Input id="intake-verification-code" v-model="verificationCode" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="4 位數字" class="verification-input" />
+            <p v-if="error" class="error">{{ error }}</p>
+            <Button type="submit" :disabled="verifying">{{ verifying ? '驗證中…' : '開始填寫' }}</Button>
+          </form>
+        </div>
+        <div class="verification-hospital-info">
+          <img src="/chien-hua-logo-mark-v2.png" alt="謙華動物醫院 Logo" />
+          <div>
+            <h2>謙華動物醫院</h2>
+            <p>CHIEN HUA Animal Hospital</p>
+            <p>門診時間：9:00–11:30、14:00–20:30</p>
+            <p>03-561-9595 · 新竹市東區公園路 226 號</p>
+          </div>
+        </div>
+      </section>
       <form v-else @submit.prevent="submit">
         <div class="header">
           <h1>初診掛號單</h1>
@@ -206,6 +253,15 @@ async function submit() {
   color: var(--intake-text);
   font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
 }
+.intake-page.is-verification {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.intake-page.is-verification .container {
+  display: flex;
+  min-height: calc(100vh - 40px);
+}
 .container {
   max-width: 750px;
   margin: 0 auto;
@@ -213,6 +269,69 @@ async function submit() {
   padding: 30px;
   border-radius: 8px;
   box-shadow: 0 4px 10px var(--intake-shadow);
+}
+.verification-card {
+  margin: 0 auto;
+  max-width: 420px;
+  display: flex;
+  width: 100%;
+  flex: 1;
+  flex-direction: column;
+  text-align: center;
+}
+.verification-content {
+  margin-top: auto;
+  margin-bottom: auto;
+}
+.verification-card h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 2px;
+}
+.verification-card > p {
+  margin: 14px 0 24px;
+  color: var(--intake-secondary);
+  line-height: 1.7;
+}
+.verification-form {
+  display: grid;
+  gap: 10px;
+  text-align: left;
+}
+.verification-form > label {
+  color: var(--intake-label);
+  font-weight: bold;
+}
+.verification-input {
+  text-align: center;
+  font-size: 20px;
+  letter-spacing: 0.3em;
+}
+.verification-hospital-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 0;
+  border-top: 1px solid var(--intake-border);
+  padding-top: 20px;
+  text-align: left;
+  color: var(--intake-secondary);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.verification-hospital-info img {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.verification-hospital-info h2,
+.verification-hospital-info p {
+  margin: 0;
+}
+.verification-hospital-info h2 {
+  color: var(--intake-text);
+  font-size: 14px;
 }
 .header {
   position: relative;
@@ -319,6 +438,16 @@ async function submit() {
   margin-right: 4px;
   cursor: pointer;
 }
+.option-label [data-slot='checkbox'][data-state='checked'] {
+  border-color: var(--intake-orange);
+  background-color: var(--intake-orange);
+}
+.option-label [data-slot='radio-group-item'][data-state='checked'] {
+  border-color: var(--intake-orange);
+}
+.option-label [data-slot='radio-group-indicator'] {
+  color: var(--intake-orange);
+}
 .hint {
   color: var(--intake-hint);
   font-size: 11px;
@@ -395,6 +524,9 @@ async function submit() {
     border-radius: 0;
     box-shadow: none;
     padding: 20px 16px;
+  }
+  .intake-page.is-verification .container {
+    min-height: 100vh;
   }
   .grid {
     grid-template-columns: 1fr;

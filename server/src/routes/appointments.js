@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomInt } from 'node:crypto';
 import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
@@ -39,6 +40,10 @@ const APPOINTMENT_TIME_RANGES = [
   ['14:00', '19:30'],
 ];
 const APPOINTMENT_TIME_ERROR = '預約時段僅限 10:00–11:30、14:00–19:30，且每 5 分鐘一格';
+
+function newIntakeVerificationCode() {
+  return String(randomInt(1000, 10000));
+}
 
 function minutesOfTime(value) {
   const match = /^(\d{2}):(\d{2})$/.exec(value);
@@ -308,6 +313,8 @@ router.post('/', async (req, res, next) => {
       species,
       reason: reason || '',
       templateId: template?._id || null,
+      intakeVerificationCode: petId ? '' : newIntakeVerificationCode(),
+      intakeVerificationExpiresAt: petId ? null : new Date(scheduledAt.getTime() + 24 * 60 * 60 * 1000),
     });
     emitAppointmentUpdate(appointment);
     res.status(201).json(appointment);
@@ -457,7 +464,7 @@ router.post('/:id/check-in', async (req, res, next) => {
         const intake = req.body?.intakeSubmissionId
           ? await IntakeSubmission.findById(req.body.intakeSubmissionId).session(session)
           : null;
-        if (req.body?.intakeSubmissionId && (!intake || intake.status !== 'pending' || intake.linkedAppointmentId)) {
+        if (req.body?.intakeSubmissionId && (!intake || intake.status !== 'pending' || (intake.linkedAppointmentId && String(intake.linkedAppointmentId) !== String(appointment._id)))) {
           throw Object.assign(new Error('這份初診表已被處理或連結到其他掛號'), { status: 409 });
         }
         const ownerDetails = req.body?.owner ?? {};

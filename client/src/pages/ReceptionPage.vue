@@ -183,10 +183,29 @@ async function submit(values, kind = dialog.value) {
     dialog.value = '';
     confirmation.value = null;
     lateCheckIn.value = false;
-    toast.success('診務資料已更新');
+    toast.success(kind === 'new' && data.visitType === 'new'
+      ? `初診掛號已建立，驗證碼：${data.intakeVerificationCode}`
+      : '診務資料已更新');
   } catch (err) {
     dialogError.value = err.response?.data?.message || '操作失敗，請稍後重試';
     if (!dialog.value) toast.error(dialogError.value);
+  } finally { busy.value = false; }
+}
+
+async function issueIntakeCode() {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    const { data } = await http.post('/appointments', {
+      date: date.value,
+      petName: '初診資料待填',
+      reason: '現場填寫初診資料',
+    });
+    applyUpdate(data);
+    notifyChat(data, 'create');
+    toast.success(`初診驗證碼：${data.intakeVerificationCode}`);
+  } catch (err) {
+    toast.error(err.response?.data?.message || '無法產生初診驗證碼，請稍後再試');
   } finally { busy.value = false; }
 }
 
@@ -227,6 +246,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
         <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
         <Button variant="secondary" size="sm" :disabled="date === today" @click="date = today">今天</Button>
         <Button variant="secondary" size="sm" as-child><router-link to="/reception/intakes" class="relative">初診審核<span v-if="pendingIntakeCount" class="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-xs font-bold text-white ring-2 ring-background">{{ pendingIntakeCount > 99 ? '99+' : pendingIntakeCount }}</span></router-link></Button>
+        <Button variant="secondary" size="sm" :disabled="busy" @click="issueIntakeCode">發初診碼</Button>
         <Button size="sm" @click="admin('new')"><Plus class="h-4 w-4" />新增掛號</Button>
       </div>
     </header>
@@ -351,6 +371,7 @@ onBeforeUnmount(() => { request += 1; clearInterval(clock); });
               </div>
             </div>
             <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-18 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+            <p v-if="item.visitType === 'new'" class="mt-1.5 pl-18 text-xs text-muted-foreground">初診驗證碼：<span class="font-semibold tracking-[0.16em] text-foreground">{{ item.intakeVerificationUsedAt ? '已使用' : item.intakeVerificationCode || '未建立' }}</span></p>
           </div>
         </section>
 

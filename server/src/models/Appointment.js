@@ -32,6 +32,10 @@ const appointmentSchema = new mongoose.Schema(
     recordId: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicalRecord', default: null },
     // 初診表可先送達、也可在現場填寫；實際報到時才選擇是否與這筆掛號連結。
     intakeSubmissionId: { type: mongoose.Schema.Types.ObjectId, ref: 'IntakeSubmission', default: null },
+    // 固定初診 QR Code 的短驗證碼。只給初診掛號使用，表單成功送出後立即失效。
+    intakeVerificationCode: { type: String, default: '', trim: true, match: /^$|^\d{4}$/ },
+    intakeVerificationExpiresAt: { type: Date, default: null },
+    intakeVerificationUsedAt: { type: Date, default: null },
 
     status: {
       type: String,
@@ -101,6 +105,7 @@ const appointmentSchema = new mongoose.Schema(
 appointmentSchema.index({ scheduledAt: 1 });
 // 依狀態篩選（例如把已取消/未到跟其餘分開），以及讀取當日候診佇列。
 appointmentSchema.index({ status: 1, scheduledAt: 1 });
+appointmentSchema.index({ intakeVerificationCode: 1, intakeVerificationExpiresAt: 1 });
 // 同一天仍持有號碼牌的人不能同時持有相同的實體號碼牌。兩人同時報到可能算到同一張
 // 可用牌號，由這個索引擋下後讓報到流程重試；離開候診的人號碼會清空，不受索引管理。
 // pending_checkout（醫師已交櫃台、櫃台還沒處理完）人還在診所、還沒歸還號碼牌，一併納入保護範圍，

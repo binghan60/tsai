@@ -1,14 +1,38 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import IntakeSubmission from '../models/IntakeSubmission.js';
+import Appointment from '../models/Appointment.js';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import { withTransaction } from '../lib/transaction.js';
 import { createRateLimiter } from '../lib/rateLimit.js';
+import { emitAppointmentUpdate } from '../lib/realtime.js';
 
 const PET_FIELDS = ['name', 'species', 'breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'];
 const pickPetFields = body => Object.fromEntries(PET_FIELDS.filter(field => body[field] !== undefined).map(field => [field, body[field]]));
 const publicSubmissionLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
+const publicVerificationLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10 });
+
+function intakeVerificationCode(value) {
+  const code = String(value ?? '').replace(/\D/g, '');
+  return /^\d{4}$/.test(code) ? code : '';
+}
+
+function invalidVerificationError() {
+  return Object.assign(new Error('驗證碼無效、已過期，或本次初診資料已送出'), { status: 409 });
+}
+
+function availableInitialAppointment(code) {
+  return Appointment.findOne({
+    intakeVerificationCode: code,
+    intakeVerificationExpiresAt: { $gt: new Date() },
+    intakeVerificationUsedAt: null,
+    intakeSubmissionId: null,
+    visitType: 'new',
+    petId: null,
+    status: { $in: ['scheduled', 'arrived'] },
+  });
+}
 
 function validationError(owner, pet) {
   if (!String(owner?.name || '').trim()) return '請填寫飼主姓名';
@@ -21,16 +45,41 @@ function validationError(owner, pet) {
 export const publicIntakeRouter = Router();
 export const intakeSubmissionsRouter = Router();
 
+publicIntakeRouter.post('/verify', publicVerificationLimiter, async (req, res, next) => {
+  try {
+    const code = intakeVerificationCode(req.body?.verificationCode);
+    if (!code || !await availableInitialAppointment(code)) return res.status(409).json({ message: '驗證碼無效、已過期，或本次初診資料已送出' });
+    res.json({ valid: true });
+  } catch (err) { next(err); }
+});
+
 publicIntakeRouter.post('/', publicSubmissionLimiter, async (req, res, next) => {
   try {
     const owner = req.body?.owner ?? {};
     const pet = req.body?.pet ?? {};
     const message = validationError(owner, pet);
     if (message) return res.status(422).json({ message });
-    const submission = await IntakeSubmission.create({
-      owner: { name: owner.name, phone: owner.phone, landline: owner.landline, email: owner.email, address: owner.address },
-      pet: pickPetFields(pet),
+    const code = intakeVerificationCode(req.body?.verificationCode);
+    if (!code) return res.status(422).json({ message: '請輸入櫃台提供的 4 位驗證碼' });
+    let submission;
+    let appointment;
+    await withTransaction(async (session) => {
+      appointment = await availableInitialAppointment(code).session(session);
+      if (!appointment) throw invalidVerificationError();
+      [submission] = await IntakeSubmission.create([{
+        owner: { name: owner.name, phone: owner.phone, landline: owner.landline, email: owner.email, address: owner.address },
+        pet: pickPetFields(pet),
+        linkedAppointmentId: appointment._id,
+      }], { session });
+      appointment.intakeSubmissionId = submission._id;
+      appointment.intakeVerificationUsedAt = new Date();
+      appointment.ownerName = String(owner.name).trim();
+      appointment.ownerPhone = String(owner.phone).trim();
+      appointment.petName = String(pet.name).trim();
+      appointment.species = String(pet.species || '貓').trim();
+      await appointment.save({ session });
     });
+    emitAppointmentUpdate(appointment);
     res.status(201).json({ id: submission._id, status: submission.status });
   } catch (err) { next(err); }
 });

@@ -33,7 +33,15 @@ function chooseSubmission() {
   replaceDraft(petDraft, item.pet);
 }
 async function loadSubmissions() {
-  try { submissions.value = (await http.get('/intake-submissions')).data.items || []; }
+  try {
+    submissions.value = (await http.get('/intake-submissions')).data.items || [];
+    const linked = submissions.value.find((item) => String(item.linkedAppointmentId || '') === String(props.appointment._id));
+    if (linked) {
+      source.value = 'submission';
+      selectedId.value = linked._id;
+      chooseSubmission();
+    }
+  }
   catch { loadError.value = '無法載入待審核初診表，請改為現場填寫。'; }
   finally { loading.value = false; }
 }
