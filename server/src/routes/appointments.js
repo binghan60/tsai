@@ -312,6 +312,7 @@ router.post('/', async (req, res, next) => {
       petName,
       species,
       reason: reason || '',
+      internalNote: String(req.body.internalNote || '').trim(),
       templateId: template?._id || null,
       intakeVerificationCode: petId ? '' : newIntakeVerificationCode(),
       intakeVerificationExpiresAt: petId ? null : new Date(scheduledAt.getTime() + 24 * 60 * 60 * 1000),

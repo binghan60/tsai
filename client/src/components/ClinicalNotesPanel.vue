@@ -144,7 +144,7 @@ async function saveEdit(note) {
 <style scoped>
 @media (min-width: 1024px) {
   .clinical-notes-content--scrollable {
-    height: clamp(22rem, 45vh, 40rem);
+    max-height: clamp(22rem, 45vh, 40rem);
     overflow-y: auto;
     padding-right: 0.5rem;
   }

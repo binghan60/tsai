@@ -435,7 +435,8 @@ onBeforeUnmount(() => {
               </div>
               <Button size="sm" class="shrink-0" @click="openSheet(item)">處理</Button>
             </div>
-            <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-15 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+              <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-15 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+              <p v-if="item.internalNote" class="mt-1.5 whitespace-pre-wrap wrap-anywhere pl-15 text-xs leading-snug text-muted-foreground"><span class="font-medium text-foreground">備註：</span>{{ item.internalNote }}</p>
             </div>
           </div>
         </section>
@@ -469,7 +470,8 @@ onBeforeUnmount(() => {
                 <RowActions :actions="[{ key: 'edit', label: '修改掛號' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
               </div>
             </div>
-            <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-15 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+              <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-15 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+              <p v-if="item.internalNote" class="mt-1.5 whitespace-pre-wrap wrap-anywhere pl-15 text-xs leading-snug text-muted-foreground"><span class="font-medium text-foreground">備註：</span>{{ item.internalNote }}</p>
             </div>
           </div>
         </section>
@@ -503,7 +505,8 @@ onBeforeUnmount(() => {
                 <RowActions :actions="[{ key: 'edit', label: '修改預約' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
               </div>
             </div>
-            <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-18 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+              <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-18 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+              <p v-if="item.internalNote" class="mt-1.5 whitespace-pre-wrap wrap-anywhere pl-18 text-xs leading-snug text-muted-foreground"><span class="font-medium text-foreground">備註：</span>{{ item.internalNote }}</p>
             <p v-if="item.visitType === 'new'" class="mt-1.5 pl-18 text-xs text-muted-foreground">
               初診驗證碼：<span class="font-semibold tracking-[0.16em] text-foreground">{{ item.intakeVerificationUsedAt ? '已使用' : item.intakeVerificationCode || '未建立' }}</span>
             </p>
@@ -540,7 +543,8 @@ onBeforeUnmount(() => {
                 <RowActions :actions="[{ key: 'edit', label: '修改預約' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
               </div>
             </div>
-            <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-18 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+              <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-18 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
+              <p v-if="item.internalNote" class="mt-1.5 whitespace-pre-wrap wrap-anywhere pl-18 text-xs leading-snug text-muted-foreground"><span class="font-medium text-foreground">備註：</span>{{ item.internalNote }}</p>
             </div>
           </div>
         </section>

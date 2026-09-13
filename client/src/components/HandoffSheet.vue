@@ -256,6 +256,7 @@ async function approveReopen() {
             :total-pages="noteTotalPages"
             :pet-id="appointment.petId"
             full-record-label="完整病歷"
+            scrollable
             @load="loadNotes"
             @saved="handleHistoricalNoteSaved"
           />

@@ -77,12 +77,13 @@ const requiredForNewPatient = (value) => {
 };
 const requiredTime = (value) => (value && String(value).trim() !== '') || '請選擇預約時段';
 
-const { handleSubmit } = useForm({ initialValues: { petName: '', ownerName: '', ownerPhone: '', time: '', reason: '' } });
+const { handleSubmit } = useForm({ initialValues: { petName: '', ownerName: '', ownerPhone: '', time: '', reason: '', internalNote: '' } });
 const { value: petName, errorMessage: petNameError } = useField('petName', requiredForNewPatient);
 const { value: ownerName } = useField('ownerName');
 const { value: ownerPhone } = useField('ownerPhone');
 const { value: time, errorMessage: timeError } = useField('time', requiredTime);
 const { value: reason } = useField('reason');
+const { value: internalNote } = useField('internalNote');
 
 function selectPet(pet) {
   selectedPet.value = pet;
@@ -96,7 +97,7 @@ const onSubmit = handleSubmit((values) => {
       pickPetError.value = '請先選擇寵物';
       return;
     }
-    emit('submit', { date: props.date, visitType: 'return', petId: selectedPet.value._id, time: values.time, reason: values.reason, templateId: templateId.value });
+    emit('submit', { date: props.date, visitType: 'return', petId: selectedPet.value._id, time: values.time, reason: values.reason, internalNote: values.internalNote, templateId: templateId.value });
     return;
   }
   if (ownerMode.value === 'existing' && !selectedOwner.value) {
@@ -112,6 +113,7 @@ const onSubmit = handleSubmit((values) => {
     petName: values.petName,
     time: values.time,
     reason: values.reason,
+    internalNote: values.internalNote,
     templateId: templateId.value,
   });
 });
@@ -217,6 +219,12 @@ const onSubmit = handleSubmit((values) => {
         <div class="space-y-1.5">
           <Label for="apt-reason" class="text-xs font-medium text-foreground">來院原因（選填）</Label>
           <Textarea id="apt-reason" v-model="reason" rows="2" class="border-border" placeholder="例：打疫苗、回診拿藥、不舒服" />
+        </div>
+
+        <div class="space-y-1.5">
+          <Label for="apt-internal-note" class="text-xs font-medium text-foreground">備註（選填）</Label>
+          <Textarea id="apt-internal-note" v-model="internalNote" rows="3" maxlength="2000" class="border-border" placeholder="醫師看診台會帶入同一則內部備註…" />
+          <p class="text-xs text-muted-foreground">僅供院內人員查看，可在醫師看診台繼續編輯。</p>
         </div>
 
         <Alert v-if="errorMessage" variant="destructive" class="mt-2">

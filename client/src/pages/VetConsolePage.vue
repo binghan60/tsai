@@ -285,7 +285,10 @@ onBeforeUnmount(() => {
                         <Button v-else-if="group.key === 'handoff'" variant="secondary" size="xs" :disabled="busy" @click.stop="reclaim(item)"> <Undo2 class="h-4 w-4" />取回 </Button>
                       </div>
                     </div>
-                    <p v-if="item.reason" class="mt-1.5 wrap-break-word text-xs leading-snug text-muted-foreground">{{ item.reason }}</p>
+              <div v-if="item.reason || item.internalNote" class="mt-1.5 space-y-1 text-xs leading-snug text-muted-foreground">
+                <p v-if="item.reason" class="wrap-break-word"><span class="font-medium text-foreground">來院原因：</span>{{ item.reason }}</p>
+                <p v-if="item.internalNote" class="whitespace-pre-wrap wrap-anywhere"><span class="font-medium text-foreground">備註：</span>{{ item.internalNote }}</p>
+              </div>
                   </div>
                 </div>
               </Transition>

@@ -88,11 +88,12 @@ describe('appointments routes', () => {
       const response = await fetch(`${origin}/api/appointments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ petName: '妞妞', date: '2026-09-01', time: '10:00' }),
+        body: JSON.stringify({ petName: '妞妞', date: '2026-09-01', time: '10:00', internalNote: 'appointment memo' }),
       });
       assert.equal(response.status, 201);
       const body = await response.json();
       assert.equal(body.date, '2026-09-01');
+      assert.equal(body.internalNote, 'appointment memo');
       // 10:00 台北 = 02:00 UTC。時段換算要用掛號那一天，不是今天。
       assert.equal(body.scheduledAt, '2026-09-01T02:00:00.000Z');
     } finally {
