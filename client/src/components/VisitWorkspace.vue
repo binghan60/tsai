@@ -49,6 +49,10 @@ const editingOwnerNote = ref(false)
 const ownerNoteDraft = ref('')
 const ownerNoteSaving = ref(false)
 const ownerNoteError = ref('')
+const editingPetNote = ref(false)
+const petNoteDraft = ref('')
+const petNoteSaving = ref(false)
+const petNoteError = ref('')
 let timer
 let disposed = false
 let savePromise = null
@@ -137,6 +141,7 @@ async function loadContext() {
     if (disposed || props.appointment.petId !== petId) return
     pet.value = patient
     if (!editingOwnerNote.value) ownerNoteDraft.value = patient?.ownerId?.notes || ''
+    if (!editingPetNote.value) petNoteDraft.value = patient?.notes || ''
     contextError.value = ''
   } catch {
     contextError.value = '病史或病歷日誌未能載入，請重新載入確認。'
@@ -153,6 +158,41 @@ function cancelOwnerNoteEdit() {
   ownerNoteDraft.value = owner.value?.notes || ''
   ownerNoteError.value = ''
   editingOwnerNote.value = false
+}
+
+function startPetNoteEdit() {
+  petNoteDraft.value = pet.value?.notes || ''
+  petNoteError.value = ''
+  editingPetNote.value = true
+}
+
+function cancelPetNoteEdit() {
+  petNoteDraft.value = pet.value?.notes || ''
+  petNoteError.value = ''
+  editingPetNote.value = false
+}
+
+async function savePetNote() {
+  const currentPet = pet.value
+  if (!currentPet || petNoteSaving.value) return
+  petNoteSaving.value = true
+  petNoteError.value = ''
+  try {
+    const { data } = await http.put(`/pets/${currentPet._id}`, {
+      notes: petNoteDraft.value.trim(),
+      expectedVersion: currentPet.__v,
+    })
+    pet.value = { ...pet.value, notes: data.notes || '', __v: data.__v }
+    petNoteDraft.value = data.notes || ''
+    editingPetNote.value = false
+    toast.success('已更新病患備註')
+  } catch (err) {
+    petNoteError.value = err.response?.status === 409
+      ? '病患資料已由其他人更新，請重新載入後再修改。'
+      : err.response?.data?.message || '病患備註儲存失敗，請重試。'
+  } finally {
+    petNoteSaving.value = false
+  }
 }
 
 async function saveOwnerNote() {
@@ -356,7 +396,10 @@ onBeforeUnmount(() => {
 
       <div class="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
-          <p class="text-xs font-semibold text-primary">病患資料</p>
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-xs font-semibold text-primary">病患資料</p>
+            <Button v-if="pet && !editingPetNote" variant="secondary" size="xs" @click="startPetNoteEdit"><Pencil class="h-3.5 w-3.5" />編輯備註</Button>
+          </div>
           <p class="mt-0.5 truncate text-sm font-semibold text-foreground">
             {{ appointment.petName }}
             <span v-if="petSummary" class="font-normal text-muted-foreground">{{ petSummary }}</span>
@@ -368,6 +411,19 @@ onBeforeUnmount(() => {
               <dd class="mt-0.5 whitespace-pre-wrap font-semibold">{{ field.value }}</dd>
             </div>
           </dl>
+          <div v-if="pet" class="mt-2 border-t border-border/70 pt-2 text-xs">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-semibold text-muted-foreground">備註</span>
+              <span v-if="petNoteSaving" class="text-muted-foreground">儲存中…</span>
+            </div>
+            <Textarea v-if="editingPetNote" v-model="petNoteDraft" class="mt-1.5" rows="3" maxlength="2000" :disabled="petNoteSaving" aria-label="病患備註" placeholder="輸入病患備註…" />
+            <p v-else class="mt-1 whitespace-pre-wrap font-medium text-foreground">{{ pet.notes || '尚無備註' }}</p>
+            <Alert v-if="petNoteError" variant="destructive" class="mt-2"><AlertDescription>{{ petNoteError }}</AlertDescription></Alert>
+            <div v-if="editingPetNote" class="mt-2 flex justify-end gap-2">
+              <Button variant="secondary" size="xs" :disabled="petNoteSaving" @click="cancelPetNoteEdit">取消</Button>
+              <Button size="xs" :disabled="petNoteSaving" @click="savePetNote">儲存備註</Button>
+            </div>
+          </div>
         </section>
         <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
           <div class="flex items-center justify-between gap-2">
