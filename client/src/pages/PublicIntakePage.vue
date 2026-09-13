@@ -40,6 +40,12 @@ const pet = reactive({
 const historyOptions = ['心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題']
 const foodOptions = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧', '其他']
 const hasAge = computed(() => pet.ageYears !== '' || pet.ageMonths !== '')
+const estimatedBirthLabel = computed(() => {
+  const date = estimatedBirthDate()
+  if (!date) return ''
+  const value = new Date(date)
+  return `西元 ${value.getUTCFullYear()} 年 ${value.getUTCMonth() + 1} 月生`
+})
 const requiredText = (value) => String(value ?? '').trim() ? true : '此欄位必填'
 const optionalNonNegativeInteger = (value) => value === '' || value === null || value === undefined || /^\d+$/.test(String(value)) ? true : '請填寫 0 或正整數'
 const monthAge = (value) => value === '' || value === null || value === undefined || /^(?:[0-9]|1[01])$/.test(String(value)) ? true : '月齡需為 0–11'
@@ -181,7 +187,7 @@ async function submit() {
               <div class="field">
                 <label>性別：</label><RadioGroup v-model="pet.sex" class="contents"><label class="option-label"><RadioGroupItem value="male" />男生</label><label class="option-label"><RadioGroupItem value="female" />女生</label></RadioGroup>
               </div>
-              <div class="field"><label>年齡：</label><Input v-model="pet.ageYears" class="input-short" inputmode="numeric" /> 年 <Input v-model="pet.ageMonths" class="input-short" inputmode="numeric" /> 個月<span v-if="attemptedSubmit && (errors.ageYears || errors.ageMonths)" class="field-error">{{ errors.ageYears || errors.ageMonths }}</span></div>
+              <div class="field"><label>年齡：</label><Input v-model="pet.ageYears" class="input-short" inputmode="numeric" /> 年 <Input v-model="pet.ageMonths" class="input-short" inputmode="numeric" /> 個月<span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="attemptedSubmit && (errors.ageYears || errors.ageMonths)" class="field-error">{{ errors.ageYears || errors.ageMonths }}</span></div>
               <div class="field"><label>品種：</label><Input v-model="pet.breed" class="input-medium" /></div>
               <div class="field"><label>花色：</label><Input v-model="pet.color" class="input-medium" /></div>
             </div>
@@ -221,7 +227,10 @@ async function submit() {
           <div class="section-title">家長</div>
           <div class="field-group-title section-emphasis">基本資料</div>
           <div class="field"><label><span class="required-mark" aria-hidden="true">*</span>姓名：</label><Input v-model="owner.name" class="input-medium" autocomplete="name" :aria-invalid="attemptedSubmit && !!errors.ownerName" /><span v-if="attemptedSubmit && errors.ownerName" class="field-error">{{ errors.ownerName }}</span></div>
-          <div class="field"><label>市話：</label><Input v-model="owner.landline" class="input-medium" type="tel" /><label class="mobile-label"><span class="required-mark" aria-hidden="true">*</span>手機：</label><Input v-model="owner.phone" class="input-medium" type="tel" autocomplete="tel" :aria-invalid="attemptedSubmit && !!errors.ownerPhone" /><span v-if="attemptedSubmit && errors.ownerPhone" class="field-error">{{ errors.ownerPhone }}</span></div>
+          <div class="field contact-field">
+            <div class="contact-item"><label>市話：</label><Input v-model="owner.landline" class="input-medium" type="tel" /></div>
+            <div class="contact-item"><label><span class="required-mark" aria-hidden="true">*</span>手機：</label><Input v-model="owner.phone" class="input-medium" type="tel" autocomplete="tel" :aria-invalid="attemptedSubmit && !!errors.ownerPhone" /><span v-if="attemptedSubmit && errors.ownerPhone" class="field-error">{{ errors.ownerPhone }}</span></div>
+          </div>
           <div class="field"><label>地址：</label><Input v-model="owner.address" class="input-long" autocomplete="street-address" /></div>
           <div class="field"><label>Email：</label><Input v-model="owner.email" class="input-long" inputmode="email" autocomplete="email" :aria-invalid="attemptedSubmit && !!errors.ownerEmail" /><span v-if="attemptedSubmit && errors.ownerEmail" class="field-error">{{ errors.ownerEmail }}</span></div>
         </div>
@@ -458,8 +467,24 @@ async function submit() {
   border-top: 1px dashed var(--intake-dash);
   padding-top: 15px;
 }
-.mobile-label {
-  margin-left: 20px;
+.contact-field {
+  align-items: flex-start;
+  gap: 12px 20px;
+}
+.contact-item {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 240px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.contact-item > label {
+  color: var(--intake-label);
+  font-weight: bold;
+}
+.contact-item .field-error {
+  flex-basis: 100%;
 }
 .submit-btn-container {
   margin-top: 25px;
@@ -544,9 +569,6 @@ async function submit() {
   }
   .option-label {
     margin-right: 8px;
-  }
-  .mobile-label {
-    margin-left: 0 !important;
   }
   .input-long {
     min-width: 150px;

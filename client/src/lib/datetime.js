@@ -152,5 +152,6 @@ export function ageLabel(birthDate, referenceDate = new Date(), fallback = '未�
     years -= 1;
     months += 12;
   }
-  return years > 0 ? `${years} 歲 ${months} 個月` : `${Math.max(months, 0)} 個月`;
+  const age = years > 0 ? `${years} 歲 ${months} 個月` : `${Math.max(months, 0)} 個月`;
+  return `${age}（西元 ${birth.year} 年 ${birth.month} 月生）`;
 }

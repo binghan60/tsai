@@ -257,6 +257,7 @@ const computedAgeText = computed(() => {
 
   const now = new Date();
   if (birth > now) return '尚未出生 / 未來日期';
+  const birthMonth = `（西元 ${birth.getFullYear()} 年 ${birth.getMonth() + 1} 月生）`;
 
   let years = now.getFullYear() - birth.getFullYear();
   let months = now.getMonth() - birth.getMonth();
@@ -270,12 +271,12 @@ const computedAgeText = computed(() => {
 
   if (years === 0 && months === 0) {
     const diffDays = Math.floor((now - birth) / (1000 * 60 * 60 * 24));
-    return diffDays <= 7 ? '新生幼寵' : `約 ${Math.max(Math.floor(diffDays / 7), 1)} 週大`;
+    return `${diffDays <= 7 ? '新生幼寵' : `約 ${Math.max(Math.floor(diffDays / 7), 1)} 週大`}${birthMonth}`;
   }
   if (years === 0) {
-    return `約 ${months} 個月大`;
+    return `約 ${months} 個月大${birthMonth}`;
   }
-  return months > 0 ? `現年 ${years} 歲 ${months} 個月` : `現年 ${years} 歲整`;
+  return `${months > 0 ? `現年 ${years} 歲 ${months} 個月` : `現年 ${years} 歲整`}${birthMonth}`;
 });
 
 function applyAgeCalculation() {

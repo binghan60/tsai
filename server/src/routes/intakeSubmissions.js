@@ -92,11 +92,21 @@ intakeSubmissionsRouter.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+intakeSubmissionsRouter.get('/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(422).json({ message: '初診表編號格式不正確' });
+    const submission = await IntakeSubmission.findById(req.params.id);
+    if (!submission) return res.status(404).json({ message: '找不到初診表' });
+    res.json(submission);
+  } catch (err) { next(err); }
+});
+
 intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(422).json({ message: '初診表編號格式不正確' });
     let submission;
     let pet;
+    let appointment;
     await withTransaction(async (session) => {
       submission = await IntakeSubmission.findById(req.params.id).session(session);
       if (!submission) throw Object.assign(new Error('找不到初診表'), { status: 404 });
@@ -118,9 +128,23 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
       submission.reviewedAt = new Date();
       submission.approvedOwnerId = owner._id;
       submission.approvedPetId = pet._id;
+      if (submission.linkedAppointmentId) {
+        appointment = await Appointment.findById(submission.linkedAppointmentId).session(session);
+        if (appointment && !appointment.petId) {
+          appointment.ownerId = owner._id;
+          appointment.petId = pet._id;
+          appointment.ownerName = owner.name;
+          appointment.ownerPhone = owner.phone;
+          appointment.petName = pet.name;
+          appointment.species = pet.species;
+          appointment.intakeSubmissionId = submission._id;
+          await appointment.save({ session });
+        }
+      }
       await submission.save({ session });
     });
-    res.json({ submission, pet });
+    if (appointment) emitAppointmentUpdate(appointment);
+    res.json({ submission, pet, appointment });
   } catch (err) { next(err); }
 });
 

@@ -17,8 +17,13 @@ const busy = ref(false)
 const confirmation = ref(null)
 const selectedId = ref('')
 
-function value(value, fallback = '未填寫') {
+function value(value, fallback = '') {
   return value === null || value === undefined || value === '' ? fallback : value
+}
+function birthMonth(value) {
+  if (!value) return '未填寫'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '未填寫' : `（西元 ${date.getUTCFullYear()} 年 ${date.getUTCMonth() + 1} 月生）`
 }
 async function refresh() {
   loading.value = true
@@ -107,6 +112,7 @@ onMounted(refresh)
               <p class="paper-subtitle">基本資料</p>
               <p class="paper-line"><b>名字：</b>{{ value(item.pet.name) }}</p>
               <p class="paper-line"><b>性別：</b>{{ { male: '男生', female: '女生' }[item.pet.sex] || '未填寫' }}</p>
+              <p class="paper-line"><b>年齡：</b>{{ birthMonth(item.pet.birthDate) }}</p>
               <p class="paper-line"><b>品種：</b>{{ value(item.pet.breed) }}</p>
               <p class="paper-line"><b>花色：</b>{{ value(item.pet.color) }}</p>
             </div>
@@ -121,20 +127,22 @@ onMounted(refresh)
           </div>
           <div class="paper-medical">
             <p class="paper-subtitle">醫療紀錄</p>
-            <p class="paper-line"><b>結紮：</b>{{ { yes: '已結紮', no: '未結紮' }[item.pet.neutered] || '未填寫' }}</p>
-            <p class="paper-line"><b>疫苗：</b>{{ item.pet.vaccineStatus === 'done' ? `已注射：${item.pet.vaccineDate || '未填最後注射時間'}` : item.pet.vaccineStatus === 'none' ? '未注射' : '未填寫' }}</p>
-            <p class="paper-line">
-              <b>病史：</b>{{ item.pet.medicalHistory?.join('、') || '無／未填寫' }}<template v-if="item.pet.medicalHistoryOther">；{{ item.pet.medicalHistoryOther }}</template>
-            </p>
-            <p class="paper-line"><b>藥物過敏：</b>{{ item.pet.allergyStatus === 'yes' ? `有：${item.pet.allergyType || '未填類別'}` : item.pet.allergyStatus === 'none' ? '無過敏' : '未填寫' }}</p>
-            <p class="paper-line"><b>健檢：</b>{{ item.pet.checkupStatus === 'done' ? `有：${item.pet.checkupDate || '未填時間'}` : item.pet.checkupStatus === 'none' ? '未健檢' : '未填寫' }}</p>
+            <div class="paper-grid">
+              <p class="paper-line"><b>結紮：</b>{{ { yes: '已結紮', no: '未結紮' }[item.pet.neutered] || '' }}</p>
+              <p class="paper-line"><b>疫苗：</b>{{ item.pet.vaccineStatus === 'done' ? `已注射：${item.pet.vaccineDate || ''}` : item.pet.vaccineStatus === 'none' ? '未注射' : '' }}</p>
+              <p class="paper-line">
+                <b>病史：</b>{{ item.pet.medicalHistory?.join('、') || '' }}<template v-if="item.pet.medicalHistoryOther">；{{ item.pet.medicalHistoryOther }}</template>
+              </p>
+              <p class="paper-line"><b>藥物過敏：</b>{{ item.pet.allergyStatus === 'yes' ? `有：${item.pet.allergyType || ''}` : item.pet.allergyStatus === 'none' ? '無過敏' : '' }}</p>
+              <p class="paper-line"><b>健檢：</b>{{ item.pet.checkupStatus === 'done' ? `有：${item.pet.checkupDate || ''}` : item.pet.checkupStatus === 'none' ? '未健檢' : '' }}</p>
+            </div>
           </div>
         </section>
         <section class="paper-section paper-owner">
           <h4>家長</h4>
           <p class="paper-subtitle">基本資料</p>
           <p class="paper-line"><b>姓名：</b>{{ value(item.owner.name) }}</p>
-          <p class="paper-line"><b>市話：</b>{{ value(item.owner.landline) }}　<b>手機：</b>{{ value(item.owner.phone) }}</p>
+          <div class="paper-grid"><p class="paper-line"><b>市話：</b>{{ value(item.owner.landline) }}</p><p class="paper-line"><b>手機：</b>{{ value(item.owner.phone) }}</p></div>
           <p class="paper-line"><b>地址：</b>{{ value(item.owner.address) }}</p>
           <p class="paper-line"><b>Email：</b>{{ value(item.owner.email) }}</p>
         </section>
