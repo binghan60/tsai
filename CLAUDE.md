@@ -62,6 +62,11 @@
 ### chatMessages 全站內部聊天
 `sender`（`vet` / `front_desk`）、`content`、`auto`（布林，預設 `false`）。醫生↔櫃台的全站即時聊天紀錄，跟任何掛號／病患都無關（例如「今天下午提早關診」），所以不像 `visitNote`／`clinicalNotes` 那樣掛在 `petId`／`appointmentId` 底下，也沒有雙向同步這回事——單純是一份不斷增長的訊息紀錄。前端用浮動視窗呈現（`GlobalChatWidget`，見第六節），身分是裝置固定的（`useStaffIdentity`，存在 `localStorage`），不是頁面固定或使用者帳號決定的。索引 `{createdAt: 1}`。**不是每一筆都是使用者手動打字送出的**：診療台與櫃台工作台（見第六節）每完成一個會改變掛號狀態或內容的動作，會自動用同一支 `POST /chat/messages` API 補一則描述動作內容的系統訊息（例如「「豆豆」已完成看診，交給櫃台處理」）。文案集中在 `lib/appointmentNotifications.js`，送出的共用進入點是 `composables/useAppointmentNotifier.js`，`sender` 一樣是操作當下那台裝置的固定身分，`auto` 標成 `true`。`auto` 純粹是顯示用的標記——聊天視窗靠它在訊息旁加一個「自動通知」小標籤，跟手動打字的訊息區分開來；也讓發出動作的那台裝置自己判斷要不要跳未讀紅點（見下）。
 
+`mentions`（選填陣列 `[{ petId, petName, ownerName }]`）是訊息裡用 `@` 標記的寵物。前端只送 `petId`，名字快照由伺服器查寵物文件後寫入（不採信前端文字），之後寵物改名或刪除舊訊息照樣顯示得出來。帶了 `mentions` 的訊息會在同一個 transaction 裡把這些寵物放進 `pinnedPets` 暫存區——訊息送出去了、暫存區卻沒放進去，對方就找不到那隻動物。
+
+### pinnedPets 寵物暫存區
+`petId`（unique）、`pinnedBy`（`vet` / `front_desk`）、`source`（`mention` / `manual`）、`messageId`、`pinnedAt`。櫃台接電話時要把某隻動物調出來問醫生，醫生得看病歷才能回答——暫存區就是「把這隻動物丟給對方看」的地方。**全站共用一份**（不是每台裝置各一份），**不隨日期清空、只能手動移除**。來源有兩個：聊天室 `@` 標記（`source: 'mention'`）與寵物詳情頁的「加入暫存區」（`manual`）。同一隻寵物重複放入是 upsert，只把 `pinnedAt` 推到最新、不會出現兩列。刪除寵物時一併刪掉它的暫存紀錄（暫存不是病歷，不擋刪除）。索引 `{petId}`(unique)、`{pinnedAt: -1}`。
+
 ### deliveryLogs 寄送流水帳
 append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
 
@@ -215,8 +220,14 @@ POST   .../workflow/record              建立／取得本次就診綁定的健�
 
 內部聊天（全站，不綁掛號／病患）
 GET    /api/chat/messages               最近訊息（?limit=，預設 100），依時間正序回傳
-POST   /api/chat/messages               新增一則訊息，body { sender: 'vet'|'front_desk', content }，
-                                       成功後透過 Socket.IO 廣播給所有連線
+POST   /api/chat/messages               新增一則訊息，body { sender: 'vet'|'front_desk', content, mentions?: [petId] }，
+                                       成功後透過 Socket.IO 廣播給所有連線；帶 mentions（最多 5 隻）時同一個
+                                       transaction 內把寵物放進暫存區，寵物不存在回 422
+
+寵物暫存區（全站一份，見第二節 pinnedPets）
+GET    /api/pinned-pets                 暫存清單，每筆帶 pet（name/species/breed/medicalRecordNumber/owner{name,phone}），新到舊
+POST   /api/pinned-pets                 手動加入，body { petId, pinnedBy }（upsert）
+DELETE /api/pinned-pets/:petId          手動移除；已不在暫存區也回 200
 
 即時通訊（Socket.IO，掛在 httpServer 上，沿用既有 cookie session 驗證）
 join-day / leave-day（client→server）  加入／離開 appointments:<date> 房間
@@ -224,6 +235,7 @@ appointment:updated（server→client）   掛號本身狀態／欄位變動時�
                                        號碼牌，以及 workflow 的每一支動作都會觸發），讓開著 `/appointments`
                                        診療台與 `/reception` 櫃台台的其他電腦即時反映新狀態，不用等 30 秒輪詢
 chat:new（server→client）              全站內部聊天新增一則訊息時廣播，不分房間、廣播給所有已連線的 socket
+pinned-pets:updated（server→client）   暫存區任何異動（@ 標記、手動加入／移除、刪除寵物）後廣播 { items } 完整清單，前端直接取代
 
 寄送紀錄
 GET    /api/delivery-logs               流水帳（?recordId= / ?event= / 分頁）
@@ -280,6 +292,7 @@ GET    /api/health
 - 各頁的返回連結走 `useBackTarget`，回到使用者真正的出發點（router 在 `afterEach` 記進 `history.state`），不是寫死的上層網址。標了 `meta.transient` 的路由不列入來源。
 - 列表頁的搜尋／佇列／頁碼用 `useSearchQueryParam` 同步進網址，配合 router 的 `scrollBehavior` 讓返回時狀態與捲動位置都還在。
 - 全站搜尋是蓋在當前頁面上的命令面板（`Ctrl/Cmd+K`），**不換路由**。
+- **寵物暫存區與病歷速覽**（見第二節 `pinnedPets`）：`/appointments` 候診佇列最上方、`/reception` 左欄「醫師已交辦」之下各有一個「暫存區」群組（共用 `PinnedPetsList.vue`，清單空的時候整段不顯示）；`/pets/:id` 標題列有「加入暫存區／從暫存區移除」。點暫存區的動物開的是**病歷速覽 Modal**（`PetQuickViewDialog.vue`，基本資料＋飼主電話＋病史／過敏警示＋病歷日誌／健檢報告頁籤），**不進診療台右欄分頁**——右欄留給正在看診的病患，速覽是一次只看一隻的唯讀查閱，所以這裡用 Modal 不違反「看診工作區不用 Modal」的原則。Modal 全站只在 `App.vue` 掛一份，由 `stores/pinnedPets.js` 的 `quickViewPetId` 開關，換頁時自動關閉。暫存清單跟聊天共用 `useGlobalChat` 那條連線（登入時載入、監聽 `pinned-pets:updated`、斷線重連後重讀）。聊天輸入框打 `@` 會跳出寵物候選清單（今日掛號優先，再補 `GET /api/pets?q=` 的結果；這是選人用的候選清單，邊打邊查，不受「搜尋一律提交式」約束），訊息裡的 `@名字` 顯示成可點標籤、點了開同一個速覽 Modal。字串比對邏輯在 `lib/chatMentions.js`。
 - **全站即時聊天是右下角常駐的浮動視窗**（`GlobalChatWidget.vue`），不是側邊欄徽章也不是頁首鈴鐺——早期版本做過側邊欄「看診」「櫃台」未讀徽章＋卡片紅點（把留言綁在單一掛號上），後來發現醫生／櫃台真正想聊的內容常常跟哪個病患無關（例如「今天下午提早關診」），逼著使用者為了聊天去點開一筆掛號，體驗本末倒置，所以拆成獨立、不綁任何掛號／病患的全站聊天，任何頁面都叫得出來（`route.meta.bare` 的公開頁除外，例如 `/report/:token`、登入頁）。訊息存在 Pinia store（`stores/chat.js`），只在記憶體裡、不持久化（歷史紀錄本身在後端 `chatMessages` collection）：`unreadCount` 給浮動泡泡顯示未讀數字，`isOpen` 放在 store 裡讓 `addMessage` 自己判斷要不要計未讀，視窗打開時呼叫 `store.open()` 直接歸零。**身分是裝置固定的**（`useStaffIdentity`，存在 `localStorage`）——這台電腦第一次用聊天室時選一次「醫生」或「櫃台」，之後記住；因為聊天不像掛號頁那樣有「目前在哪一頁」可以借來推斷身分。連線生命週期跟頁面內容脫鉤：`useGlobalChat`（`App.vue` 掛載時呼叫一次，取代舊版 `useGlobalAppointmentNotifications` 的角色）負責整個 App 存活期間的 Socket.IO 連線（登入才連、登出就斷並清空）；掛號頁面自己的 `useAppointmentRealtime` 只負責依使用者選的日期 join/leave 房間與訂閱 `appointment:updated`，**不再自己開關連線**——如果頁面卸載時呼叫 `disconnect()`，會把聊天視窗仍在用的同一條連線切斷。發送訊息不需要判斷「是不是自己發的」來排除自我通知——伺服器的 `chat:new` 廣播會送回發話者自己的裝置，`addMessage` 只看 `isOpen` 狀態決定要不要計未讀，跟身分無關，比舊版 `sentMessageTracker` 那套「送出前佔位、避免 socket 廣播搶先於 HTTP 回應」的機制單純很多。
 
 ## 七、UI／視覺設計規範

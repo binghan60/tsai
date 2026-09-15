@@ -54,6 +54,11 @@ export function emitAppointmentUpdate(appointment, previousDate) {
   if (previousDate && previousDate !== appointment.date) io?.to(dayRoom(previousDate)).emit('appointment:updated', payload);
 }
 
+// 寵物暫存區跟聊天一樣是全站一份，不分房間；payload 是完整清單。
+export function emitPinnedPetsUpdate(items) {
+  io?.emit('pinned-pets:updated', { items });
+}
+
 export function emitClinicalNoteUpdate(note) {
   const payload = typeof note.toObject === 'function' ? note.toObject() : note;
   io?.emit('clinical-note:updated', payload);

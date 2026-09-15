@@ -3,6 +3,8 @@ import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import ClinicalNote from '../models/ClinicalNote.js';
+import PinnedPet from '../models/PinnedPet.js';
+import { publishPinnedPets } from '../lib/pinnedPets.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
@@ -195,6 +197,7 @@ petsRouter.put('/:id', async (req, res, next) => {
 
 petsRouter.delete('/:id', async (req, res, next) => {
   try {
+    let removedPin = false;
     await withTransaction(async (session) => {
       const pet = await Pet.findById(req.params.id).session(session);
       if (!pet) {
@@ -218,7 +221,10 @@ petsRouter.delete('/:id', async (req, res, next) => {
         error.status = 409;
         throw error;
       }
+      // 暫存紀錄不是病歷，不擋刪除，跟著寵物一起消失。
+      removedPin = (await PinnedPet.deleteOne({ petId: pet._id }, { session })).deletedCount > 0;
     });
+    if (removedPin) await publishPinnedPets();
     res.status(204).end();
   } catch (err) {
     next(err);

@@ -9,7 +9,9 @@ import { useSearchQueryParam } from '../composables/useSearchQueryParam'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { clinicDateInput, shiftDateInput, weekdayLabel } from '../lib/datetime'
 import { workflowFilter } from '../../../shared/appointmentWorkflow.js'
+import { usePinnedPetsStore } from '../stores/pinnedPets'
 import VisitWorkspace from '../components/VisitWorkspace.vue'
+import PinnedPetsList from '../components/PinnedPetsList.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import { Button } from '../components/ui/button'
@@ -22,6 +24,9 @@ import { DatePicker } from '../components/ui/date-picker'
 const router = useRouter()
 const toast = useToast()
 const notifyChat = useAppointmentNotifier()
+const pinnedPets = usePinnedPetsStore()
+// 暫存區不綁日期，收合狀態也不跟著 collapsedGroups 在換日期時重置。
+const pinnedCollapsed = ref(false)
 const today = clinicDateInput()
 const date = useSearchQueryParam('date', today)
 
@@ -62,6 +67,9 @@ const active = computed(() => byId.value.get(activeId.value) || null)
 const scheduled = computed(() => queue('scheduled'))
 const waiting = computed(() => queue('waiting'))
 const visiting = computed(() => queue('visiting'))
+// 看診中的手術病患另外歸成一組，讓醫師在候診佇列上一眼跟一般看診中的病患分開。
+const visitingSurgery = computed(() => visiting.value.filter((item) => item.isSurgery))
+const visitingRegular = computed(() => visiting.value.filter((item) => !item.isSurgery))
 const handedOff = computed(() => queue('handoff'))
 const finished = computed(() => queue('completed'))
 const onsiteCount = computed(() => waiting.value.length + visiting.value.length + handedOff.value.length)
@@ -244,13 +252,27 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="flex-1 px-3 pb-2">
+          <!-- 暫存區：櫃台接電話時丟過來要問的動物，不跟著日期走、只能手動移除。
+               點開是病歷速覽 Modal，不進右欄分頁——那裡留給正在看診的病患。 -->
+          <template v-if="pinnedPets.items.length">
+            <button type="button" class="group flex w-full cursor-pointer items-center gap-2 rounded-lg px-2 py-2 text-left text-xs font-semibold text-muted-foreground transition-colors hover:bg-field hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:bg-accent" :aria-expanded="!pinnedCollapsed" @click="pinnedCollapsed = !pinnedCollapsed">
+              <ChevronDown class="h-3.5 w-3.5 rounded-sm transition-transform group-hover:bg-card" :class="pinnedCollapsed ? '-rotate-90' : ''" />
+              <span>暫存區</span><span class="font-normal">{{ pinnedPets.items.length }}</span>
+            </button>
+            <Transition name="queue-collapse">
+              <div v-if="!pinnedCollapsed" class="overflow-hidden pb-2">
+                <PinnedPetsList />
+              </div>
+            </Transition>
+          </template>
           <ListSkeleton v-if="loading" :rows="4" />
           <template v-else>
             <template
               v-for="group in [
                 { key: 'scheduled', label: '已掛號', list: scheduled },
                 { key: 'waiting', label: '候診中', list: waiting },
-                { key: 'visiting', label: '看診中', list: visiting },
+                { key: 'surgery', label: '手術', list: visitingSurgery },
+                { key: 'visiting', label: '看診中', list: visitingRegular },
                 { key: 'handoff', label: '已交櫃台', list: handedOff },
               ]"
               :key="group.key"
@@ -279,10 +301,10 @@ onBeforeUnmount(() => {
                           >
                         </span>
                       </div>
-                      <div v-if="group.key !== 'visiting' || openIds.includes(String(item._id))" class="flex shrink-0 items-center gap-2">
+                      <div v-if="!['visiting', 'surgery'].includes(group.key) || openIds.includes(String(item._id))" class="flex shrink-0 items-center gap-2">
                         <span v-if="group.key === 'scheduled'" class="text-xs tabular-nums text-muted-foreground">掛號 {{ item.time || '時間未指定' }}</span>
                         <span v-else-if="group.key === 'waiting' && waitedMinutes(item) !== null" class="text-xs tabular-nums text-muted-foreground">等候 {{ waitedMinutes(item) }} 分</span>
-                        <span v-else-if="group.key === 'visiting'" class="text-xs text-muted-foreground">已開啟</span>
+                        <span v-else-if="group.key === 'visiting' || group.key === 'surgery'" class="text-xs text-muted-foreground">已開啟</span>
                         <Button v-if="group.key === 'waiting'" size="xs" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope class="h-4 w-4" />看診</Button>
                         <Button v-else-if="group.key === 'handoff'" variant="secondary" size="xs" :disabled="busy" @click.stop="reclaim(item)"> <Undo2 class="h-4 w-4" />取回 </Button>
                       </div>

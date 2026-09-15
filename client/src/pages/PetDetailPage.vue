@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowDownToLine, ArrowUpToLine, CalendarDays, Check, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Share2, Trash2, User, X } from '@lucide/vue';
+import { ArrowDownToLine, ArrowUpToLine, CalendarDays, Check, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Pin, PinOff, Share2, Trash2, User, X } from '@lucide/vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
@@ -24,10 +24,34 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 
 import { useToast } from '../composables/useToast';
+import { useStaffIdentity } from '../composables/useStaffIdentity';
+import { usePinnedPetsStore } from '../stores/pinnedPets';
 
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
+const pinnedPets = usePinnedPetsStore();
+const { identity } = useStaffIdentity();
+const pinBusy = ref(false);
+const petPinned = computed(() => pinnedPets.isPinned(route.params.id));
+
+async function togglePin() {
+  if (pinBusy.value) return;
+  pinBusy.value = true;
+  try {
+    if (petPinned.value) {
+      await pinnedPets.unpin(route.params.id);
+      toast.success('已從暫存區移除');
+    } else {
+      await pinnedPets.pin(route.params.id, identity.value);
+      toast.success('已加入暫存區，診療台與櫃台都看得到');
+    }
+  } catch (err) {
+    toast.error(err.response?.data?.message || '暫存區更新失敗，請稍後再試');
+  } finally {
+    pinBusy.value = false;
+  }
+}
 const pet = ref(null);
 const recordPage = ref(1);
 const recordPagination = ref({ total: 0, page: 1, limit: 10, totalPages: 1 });
@@ -625,7 +649,12 @@ watch(pet, async (value) => {
             <Button type="button" :disabled="petSaving" @click="submitPetEdit"><Check class="h-4 w-4" />{{ petSaving ? '儲存中…' : '儲存' }}</Button>
           </div>
         </template>
-        <Button v-else type="button" variant="secondary" @click="startPetEdit"><Pencil class="h-4 w-4" />編輯資料</Button>
+        <div v-else class="flex shrink-0 flex-wrap gap-2">
+          <Button type="button" :variant="petPinned ? 'destructive' : 'secondary'" :disabled="pinBusy" @click="togglePin">
+            <component :is="petPinned ? PinOff : Pin" class="h-4 w-4" stroke-width="1.75" />{{ petPinned ? '從暫存區移除' : '加入暫存區' }}
+          </Button>
+          <Button type="button" variant="secondary" @click="startPetEdit"><Pencil class="h-4 w-4" />編輯資料</Button>
+        </div>
       </div>
 
       <Alert v-if="petEditing && petError" variant="destructive" class="mt-3"><AlertDescription>{{ petError }}</AlertDescription></Alert>

@@ -10,6 +10,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/
 import ToastContainer from './components/ToastContainer.vue';
 import GlobalSearchDialog from './components/GlobalSearchDialog.vue';
 import GlobalChatWidget from './components/GlobalChatWidget.vue';
+import PetQuickViewDialog from './components/PetQuickViewDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -225,6 +226,7 @@ watch(
     </div>
     <GlobalSearchDialog v-model:open="searchOpen" />
     <GlobalChatWidget />
+    <PetQuickViewDialog />
     <ToastContainer :placement="route.path.startsWith('/appointments') || route.path === '/reception' ? 'top' : 'bottom'" />
   </template>
 </template>

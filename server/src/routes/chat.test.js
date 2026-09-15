@@ -2,7 +2,10 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { app } from '../app.js';
+import mongoose from 'mongoose';
 import ChatMessage from '../models/ChatMessage.js';
+import Pet from '../models/Pet.js';
+import PinnedPet from '../models/PinnedPet.js';
 
 describe('chat routes', () => {
   let server;
@@ -104,6 +107,60 @@ describe('chat routes', () => {
     const response = await fetch(`${origin}/api/chat/messages`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ sender: 'front_desk', content: '更新', auto: true, snapshot: { before: {}, after: '' } }),
+    });
+    assert.equal(response.status, 422);
+  });
+
+  it('@ 標記寵物時由伺服器寫入名字快照，並放進暫存區', async () => {
+    const petId = '64b000000000000000000001';
+    const original = { create: ChatMessage.create, find: Pet.find, bulkWrite: PinnedPet.bulkWrite, pinFind: PinnedPet.find };
+    const originalStartSession = mongoose.startSession;
+    let createdDocs;
+    let pinOps;
+    mongoose.startSession = async () => ({ withTransaction: async (callback) => callback(), endSession: async () => {} });
+    Pet.find = () => ({ select: () => ({ populate: () => ({ lean: async () => [{ _id: petId, name: '豆豆', ownerId: { name: '王小明' } }] }) }) });
+    ChatMessage.create = async (docs) => { createdDocs = docs; return docs.map((doc) => ({ _id: '64b0000000000000000000aa', ...doc })); };
+    PinnedPet.bulkWrite = async (ops) => { pinOps = ops; };
+    PinnedPet.find = () => ({ sort: () => ({ populate: () => ({ lean: async () => [] }) }) });
+    try {
+      const response = await fetch(`${origin}/api/chat/messages`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sender: 'front_desk', content: '@假名字 飼主來電問藥', mentions: [petId, petId] }),
+      });
+      assert.equal(response.status, 201);
+      assert.deepEqual(createdDocs[0].mentions, [{ petId, petName: '豆豆', ownerName: '王小明' }]);
+      assert.equal(pinOps.length, 1);
+      assert.equal(pinOps[0].updateOne.filter.petId, petId);
+      assert.equal(pinOps[0].updateOne.update.$set.pinnedBy, 'front_desk');
+      assert.equal(pinOps[0].updateOne.update.$set.source, 'mention');
+      assert.equal(pinOps[0].updateOne.upsert, true);
+    } finally {
+      ChatMessage.create = original.create;
+      Pet.find = original.find;
+      PinnedPet.bulkWrite = original.bulkWrite;
+      PinnedPet.find = original.pinFind;
+      mongoose.startSession = originalStartSession;
+    }
+  });
+
+  it('標記不存在的寵物要回 422', async () => {
+    const originalFind = Pet.find;
+    Pet.find = () => ({ select: () => ({ populate: () => ({ lean: async () => [] }) }) });
+    try {
+      const response = await fetch(`${origin}/api/chat/messages`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sender: 'vet', content: '@豆豆', mentions: ['64b000000000000000000009'] }),
+      });
+      assert.equal(response.status, 422);
+    } finally {
+      Pet.find = originalFind;
+    }
+  });
+
+  it('標記格式不正確要回 422', async () => {
+    const response = await fetch(`${origin}/api/chat/messages`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sender: 'vet', content: '@豆豆', mentions: ['not-an-id'] }),
     });
     assert.equal(response.status, 422);
   });

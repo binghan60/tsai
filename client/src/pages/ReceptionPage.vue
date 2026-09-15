@@ -9,7 +9,9 @@ import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { clinicDateInput, clinicTimeInput, shiftDateInput, weekdayLabel } from '../lib/datetime'
 import { appointmentsForTimeline, groupBySession, SURGERY_BLOCK } from '../lib/appointmentTimeline'
 import { workflowFilter, workflowState, visitLabel } from '../../../shared/appointmentWorkflow.js'
+import { usePinnedPetsStore } from '../stores/pinnedPets'
 import HandoffSheet from '../components/HandoffSheet.vue'
+import PinnedPetsList from '../components/PinnedPetsList.vue'
 import RowActions from '../components/RowActions.vue'
 import NewAppointmentDialog from '../components/NewAppointmentDialog.vue'
 import EditAppointmentDialog from '../components/EditAppointmentDialog.vue'
@@ -33,6 +35,8 @@ import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/ap
 // 三個匣子由上而下就是櫃台的優先順序——醫師已交辦的人正站在櫃台前面等，排最上面。
 const toast = useToast()
 const notifyChat = useAppointmentNotifier()
+const pinnedPets = usePinnedPetsStore()
+const showPinned = ref(true)
 const today = clinicDateInput()
 const date = useSearchQueryParam('date', today)
 const search = useSearchQueryParam('q', '')
@@ -439,6 +443,20 @@ onBeforeUnmount(() => {
               <p v-if="item.reason" class="mt-1.5 wrap-break-word pl-15 text-xs leading-snug text-muted-foreground">來院原因：{{ item.reason }}</p>
               <p v-if="item.internalNote" class="mt-1.5 whitespace-pre-wrap wrap-anywhere pl-15 text-xs leading-snug text-muted-foreground"><span class="font-medium text-foreground">備註：</span>{{ item.internalNote }}</p>
             </div>
+          </div>
+        </section>
+
+        <!-- 暫存區：接電話時要問醫生的動物。排在交辦之後——人站在櫃台前的永遠優先；
+             清空時整段收起，不佔版面。 -->
+        <section v-if="pinnedPets.items.length" class="overflow-hidden rounded-xl border border-border bg-card" aria-label="暫存區">
+          <button type="button" class="flex w-full items-center gap-3 border-b border-border px-5 py-3 text-left hover:bg-field/40" :aria-expanded="showPinned" @click="showPinned = !showPinned">
+            <h2 class="text-base font-semibold">暫存區</h2>
+            <span class="inline-flex h-6 items-center rounded-full bg-muted px-3 text-xs font-medium leading-none">{{ pinnedPets.items.length }} 隻</span>
+            <p class="ml-auto text-xs text-muted-foreground">在聊天室打 @ 標記就會放進來</p>
+            <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="{ '-rotate-90': !showPinned }" />
+          </button>
+          <div v-show="showPinned" class="p-3">
+            <PinnedPetsList />
           </div>
         </section>
 

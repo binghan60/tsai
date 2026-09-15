@@ -3,6 +3,7 @@ import { getSocket } from '../api/socket';
 import { http } from '../api/http';
 import { useAuthStore } from '../stores/auth';
 import { useChatStore } from '../stores/chat';
+import { usePinnedPetsStore } from '../stores/pinnedPets';
 
 // 全站常駐：由 App.vue 呼叫一次，取代原本 useGlobalAppointmentNotifications
 // 「擁有連線生命週期」的角色——只要登入著就持續連線，不因切換頁面而斷線；
@@ -11,10 +12,12 @@ import { useChatStore } from '../stores/chat';
 //
 // 全站聊天沒有房間概念（見 server/src/lib/realtime.js 的 emitChatMessage），
 // 不需要 join/leave，登入後直接連線、載入歷史、監聽 chat:new 即可。
+// 寵物暫存區跟聊天綁在一起（@ 標記會放進暫存區），同一條連線一併負責。
 export function useGlobalChat() {
   const socket = getSocket();
   const auth = useAuthStore();
   const store = useChatStore();
+  const pinned = usePinnedPetsStore();
 
   async function loadHistory() {
     try {
@@ -29,8 +32,19 @@ export function useGlobalChat() {
     store.addMessage(message);
   }
 
+  function handlePinnedPets(payload) {
+    pinned.setItems(payload?.items);
+  }
+
+  // 斷線期間錯過的暫存區異動，重新連上時整份重讀補回來。
+  function handleReconnect() {
+    if (auth.isAuthenticated) pinned.load();
+  }
+
   onMounted(() => {
     socket.on('chat:new', handleMessage);
+    socket.on('pinned-pets:updated', handlePinnedPets);
+    socket.io.on('reconnect', handleReconnect);
   });
 
   // 開發環境預設不啟用登入（AUTH_ENABLED 沒開），後端 sessionUser 這時對任何
@@ -42,8 +56,10 @@ export function useGlobalChat() {
       if (loggedIn) {
         socket.connect();
         loadHistory();
+        pinned.load();
       } else {
         store.reset();
+        pinned.reset();
         socket.disconnect();
       }
     },
@@ -52,5 +68,7 @@ export function useGlobalChat() {
 
   onBeforeUnmount(() => {
     socket.off('chat:new', handleMessage);
+    socket.off('pinned-pets:updated', handlePinnedPets);
+    socket.io.off('reconnect', handleReconnect);
   });
 }

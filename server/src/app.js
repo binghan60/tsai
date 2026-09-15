@@ -14,6 +14,7 @@ import { petRecordsRouter, recordsRouter, publicReportsRouter } from './routes/r
 import { petClinicalNotesRouter, clinicalNotesRouter } from './routes/clinicalNotes.js';
 import appointmentsRouter from './routes/appointments.js';
 import chatRouter from './routes/chat.js';
+import pinnedPetsRouter from './routes/pinnedPets.js';
 import deliveryLogsRouter from './routes/deliveryLogs.js';
 import dashboardRouter from './routes/dashboard.js';
 import searchRouter from './routes/search.js';
@@ -77,6 +78,7 @@ app.use('/api/records', recordsRouter);
 app.use('/api/clinical-notes', clinicalNotesRouter);
 app.use('/api/appointments', appointmentsRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/pinned-pets', pinnedPetsRouter);
 app.use('/api/delivery-logs', deliveryLogsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/search', searchRouter);

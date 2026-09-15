@@ -15,6 +15,15 @@ const chatMessageSchema = new mongoose.Schema(
       type: new mongoose.Schema({ fieldLabel: { type: String, trim: true, maxlength: 100 }, before: { type: String, default: '' }, after: { type: String, default: '' } }, { _id: false }),
       default: undefined,
     },
+    // 訊息裡用 @ 標記的寵物；名字存成送出當下的快照，寵物之後改名或刪除舊訊息仍顯示得出來。
+    mentions: {
+      type: [new mongoose.Schema({
+        petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', required: true },
+        petName: { type: String, required: true },
+        ownerName: { type: String, default: '' },
+      }, { _id: false })],
+      default: undefined,
+    },
   },
   { timestamps: { createdAt: true, updatedAt: false } }
 );

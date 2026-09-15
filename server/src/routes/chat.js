@@ -1,6 +1,10 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import ChatMessage from '../models/ChatMessage.js';
+import Pet from '../models/Pet.js';
 import { emitChatMessage } from '../lib/realtime.js';
+import { withTransaction } from '../lib/transaction.js';
+import { MAX_MENTIONS, STAFF_SENDERS, publishPinnedPets, upsertPinnedPets } from '../lib/pinnedPets.js';
 
 const router = Router();
 
@@ -20,7 +24,7 @@ router.get('/messages', async (req, res, next) => {
 router.post('/messages', async (req, res, next) => {
   try {
     const sender = req.body?.sender;
-    if (!['vet', 'front_desk'].includes(sender)) return res.status(422).json({ message: '身分參數不正確' });
+    if (!STAFF_SENDERS.includes(sender)) return res.status(422).json({ message: '身分參數不正確' });
     const content = String(req.body?.content ?? '').trim();
     if (!content) return res.status(422).json({ message: '訊息內容不可為空' });
 
@@ -39,8 +43,38 @@ router.post('/messages', async (req, res, next) => {
         snapshot.fieldLabel = value.fieldLabel.trim();
       }
     }
-    const message = await ChatMessage.create({ sender, content, auto, ...(snapshot ? { snapshot } : {}) });
+    const mentionIds = req.body?.mentions;
+    if (mentionIds !== undefined) {
+      if (!Array.isArray(mentionIds) || mentionIds.length > MAX_MENTIONS || !mentionIds.every((id) => mongoose.isValidObjectId(id))) {
+        return res.status(422).json({ message: `標記的寵物格式不正確（一則訊息最多 ${MAX_MENTIONS} 隻）` });
+      }
+    }
+    const uniqueMentionIds = [...new Set((mentionIds ?? []).map(String))];
+    const baseDoc = { sender, content, auto, ...(snapshot ? { snapshot } : {}) };
+
+    if (!uniqueMentionIds.length) {
+      const message = await ChatMessage.create(baseDoc);
+      emitChatMessage(message);
+      return res.status(201).json(message);
+    }
+
+    // 名字快照由伺服器自己查，不採信前端送來的文字。
+    const pets = await Pet.find({ _id: { $in: uniqueMentionIds } }).select('name ownerId').populate('ownerId', 'name').lean();
+    if (pets.length !== uniqueMentionIds.length) return res.status(422).json({ message: '標記的寵物不存在，可能已被刪除' });
+    const petById = new Map(pets.map((pet) => [String(pet._id), pet]));
+    const mentions = uniqueMentionIds.map((id) => {
+      const pet = petById.get(id);
+      return { petId: pet._id, petName: pet.name, ownerName: pet.ownerId?.name ?? '' };
+    });
+
+    // 訊息與暫存區要嘛一起成功：訊息送出了暫存區卻沒放進去，對方就找不到那隻動物。
+    let message;
+    await withTransaction(async (session) => {
+      [message] = await ChatMessage.create([{ ...baseDoc, mentions }], { session });
+      await upsertPinnedPets(uniqueMentionIds, { pinnedBy: sender, source: 'mention', messageId: message._id, session });
+    });
     emitChatMessage(message);
+    await publishPinnedPets();
     res.status(201).json(message);
   } catch (err) {
     next(err);
