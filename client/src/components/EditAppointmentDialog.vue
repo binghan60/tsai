@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
+import { Checkbox } from './ui/checkbox';
 import { Alert, AlertDescription } from './ui/alert';
 import { TimePicker } from './ui/time-picker';
 import { DatePicker } from './ui/date-picker';
@@ -25,6 +26,7 @@ const emit = defineEmits(['submit', 'close']);
 
 const requiredRule = (value) => (value && String(value).trim() !== '') || '必填';
 const requiredTime = (value) => (value && String(value).trim() !== '') || '請選擇預約時段';
+const requiredForSurgery = (value) => (!isSurgery.value || (value && String(value).trim() !== '')) || '請填寫手術名稱';
 const { handleSubmit } = useForm({
   initialValues: {
     ownerName: props.appointment.ownerName ?? '',
@@ -33,6 +35,8 @@ const { handleSubmit } = useForm({
     species: props.appointment.species ?? '',
     time: props.appointment.time ?? '',
     reason: props.appointment.reason ?? '',
+    isSurgery: props.appointment.isSurgery ?? false,
+    surgeryName: props.appointment.surgeryName ?? '',
   },
 });
 // 飼主姓名選填（跟掛號對話框一致）——不然沒填飼主的初診掛號一打開編輯就存不回去。
@@ -42,6 +46,8 @@ const { value: petName, errorMessage: petNameError } = useField('petName', requi
 const { value: species } = useField('species');
 const { value: time, errorMessage: timeError } = useField('time', requiredTime);
 const { value: reason } = useField('reason');
+const { value: isSurgery } = useField('isSurgery');
+const { value: surgeryName, errorMessage: surgeryNameError } = useField('surgeryName', requiredForSurgery);
 const templateId = ref(String(props.appointment.templateId || props.defaultTemplateId || ''));
 const date = ref(props.appointment.date);
 
@@ -54,6 +60,8 @@ const onSubmit = handleSubmit((values) => {
   species: values.species?.trim() ?? '',
   time: values.time ?? '',
   reason: values.reason?.trim() ?? '',
+  isSurgery: values.isSurgery,
+  surgeryName: values.surgeryName?.trim() ?? '',
   ...(templateId.value ? { templateId: templateId.value } : {}),
   });
 });
@@ -116,6 +124,17 @@ const onSubmit = handleSubmit((values) => {
         <div class="space-y-1.5">
           <Label for="edit-apt-reason" class="text-xs font-medium text-foreground">來院原因（選填）</Label>
           <Textarea id="edit-apt-reason" v-model="reason" rows="2" class="border-border" placeholder="例：打疫苗、回診拿藥、不舒服" />
+        </div>
+
+        <div class="grid grid-cols-12 items-center gap-3">
+          <label for="edit-apt-is-surgery" class="col-span-3 flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-foreground">
+            <Checkbox id="edit-apt-is-surgery" v-model="isSurgery" />
+            手術
+          </label>
+          <div class="col-span-9 space-y-1">
+            <Input id="edit-apt-surgery-name" v-model="surgeryName" :disabled="!isSurgery" class="border-border" placeholder="手術名稱" aria-label="手術名稱" />
+            <p v-if="surgeryNameError" class="text-xs font-medium text-destructive">{{ surgeryNameError }}</p>
+          </div>
         </div>
 
         <Alert v-if="errorMessage" variant="destructive">

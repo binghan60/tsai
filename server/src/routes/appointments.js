@@ -33,7 +33,7 @@ function checkWorkflowCompatibility(appointment, path, version) {
   }
 }
 
-const EDITABLE_APPOINTMENT_FIELDS = ['date', 'time', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species', 'templateId'];
+const EDITABLE_APPOINTMENT_FIELDS = ['date', 'time', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species', 'templateId', 'isSurgery', 'surgeryName'];
 const EDITABLE_APPOINTMENT_STATUSES = new Set(['scheduled', 'arrived']);
 const APPOINTMENT_TIME_RANGES = [
   ['10:00', '11:30'],
@@ -63,6 +63,17 @@ function isValidAppointmentTime(value) {
     const endMinutes = minutesOfTime(end);
     return minutes >= startMinutes && minutes <= endMinutes;
   });
+}
+
+function normalizeSurgeryFields(body) {
+  const isSurgery = Boolean(body.isSurgery);
+  const surgeryName = String(body.surgeryName || '').trim();
+  if (isSurgery && !surgeryName) {
+    const error = new Error('請填寫手術名稱');
+    error.status = 422;
+    throw error;
+  }
+  return { isSurgery, surgeryName: isSurgery ? surgeryName : '' };
 }
 
 async function resolveAppointmentTemplate(templateId, { optional = false } = {}) {
@@ -299,6 +310,7 @@ router.post('/', async (req, res, next) => {
         : combineClinicDateTime(date, '');
 
     const template = await resolveAppointmentTemplate(req.body.templateId, { optional: true });
+    const { isSurgery, surgeryName } = normalizeSurgeryFields(req.body);
     const appointment = await Appointment.create({
       date,
       time: time || '',
@@ -312,6 +324,8 @@ router.post('/', async (req, res, next) => {
       petName,
       species,
       reason: reason || '',
+      isSurgery,
+      surgeryName,
       internalNote: String(req.body.internalNote || '').trim(),
       templateId: template?._id || null,
       intakeVerificationCode: petId ? '' : newIntakeVerificationCode(),
@@ -362,6 +376,14 @@ router.put('/:id', async (req, res, next) => {
       if (updates.templateId !== undefined) {
         const template = await resolveAppointmentTemplate(updates.templateId);
         updates.templateId = template._id;
+      }
+      if (updates.isSurgery !== undefined || updates.surgeryName !== undefined) {
+        const merged = normalizeSurgeryFields({
+          isSurgery: updates.isSurgery ?? appointment.isSurgery,
+          surgeryName: updates.surgeryName ?? appointment.surgeryName,
+        });
+        updates.isSurgery = merged.isSurgery;
+        updates.surgeryName = merged.surgeryName;
       }
       Object.assign(appointment, updates);
       const nextTime = updates.time ?? appointment.time;

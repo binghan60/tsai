@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
+import { Checkbox } from './ui/checkbox';
 import { Alert, AlertDescription } from './ui/alert';
 import { TimePicker } from './ui/time-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -76,14 +77,17 @@ const requiredForNewPatient = (value) => {
   return (value && String(value).trim() !== '') || '必填';
 };
 const requiredTime = (value) => (value && String(value).trim() !== '') || '請選擇預約時段';
+const requiredForSurgery = (value) => (!isSurgery.value || (value && String(value).trim() !== '')) || '請填寫手術名稱';
 
-const { handleSubmit } = useForm({ initialValues: { petName: '', ownerName: '', ownerPhone: '', time: '', reason: '', internalNote: '' } });
+const { handleSubmit } = useForm({ initialValues: { petName: '', ownerName: '', ownerPhone: '', time: '', reason: '', internalNote: '', isSurgery: false, surgeryName: '' } });
 const { value: petName, errorMessage: petNameError } = useField('petName', requiredForNewPatient);
 const { value: ownerName } = useField('ownerName');
 const { value: ownerPhone } = useField('ownerPhone');
 const { value: time, errorMessage: timeError } = useField('time', requiredTime);
 const { value: reason } = useField('reason');
 const { value: internalNote } = useField('internalNote');
+const { value: isSurgery } = useField('isSurgery');
+const { value: surgeryName, errorMessage: surgeryNameError } = useField('surgeryName', requiredForSurgery);
 
 function selectPet(pet) {
   selectedPet.value = pet;
@@ -97,7 +101,17 @@ const onSubmit = handleSubmit((values) => {
       pickPetError.value = '請先選擇寵物';
       return;
     }
-    emit('submit', { date: props.date, visitType: 'return', petId: selectedPet.value._id, time: values.time, reason: values.reason, internalNote: values.internalNote, templateId: templateId.value });
+    emit('submit', {
+      date: props.date,
+      visitType: 'return',
+      petId: selectedPet.value._id,
+      time: values.time,
+      reason: values.reason,
+      internalNote: values.internalNote,
+      templateId: templateId.value,
+      isSurgery: values.isSurgery,
+      surgeryName: values.surgeryName,
+    });
     return;
   }
   if (ownerMode.value === 'existing' && !selectedOwner.value) {
@@ -115,6 +129,8 @@ const onSubmit = handleSubmit((values) => {
     reason: values.reason,
     internalNote: values.internalNote,
     templateId: templateId.value,
+    isSurgery: values.isSurgery,
+    surgeryName: values.surgeryName,
   });
 });
 </script>
@@ -219,6 +235,17 @@ const onSubmit = handleSubmit((values) => {
         <div class="space-y-1.5">
           <Label for="apt-reason" class="text-xs font-medium text-foreground">來院原因（選填）</Label>
           <Textarea id="apt-reason" v-model="reason" rows="2" class="border-border" placeholder="例：打疫苗、回診拿藥、不舒服" />
+        </div>
+
+        <div class="grid grid-cols-12 items-center gap-3">
+          <label for="apt-is-surgery" class="col-span-3 flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium text-foreground">
+            <Checkbox id="apt-is-surgery" v-model="isSurgery" />
+            手術
+          </label>
+          <div class="col-span-9 space-y-1">
+            <Input id="apt-surgery-name" v-model="surgeryName" :disabled="!isSurgery" class="border-border" placeholder="手術名稱" aria-label="手術名稱" />
+            <p v-if="surgeryNameError" class="text-xs font-medium text-destructive">{{ surgeryNameError }}</p>
+          </div>
         </div>
 
         <div class="space-y-1.5">

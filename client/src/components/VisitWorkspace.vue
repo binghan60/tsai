@@ -403,6 +403,7 @@ onBeforeUnmount(() => {
           <p class="mt-0.5 truncate text-sm font-semibold text-foreground">
             {{ appointment.petName }}
             <span v-if="petSummary" class="font-normal text-muted-foreground">{{ petSummary }}</span>
+            <span v-if="appointment.isSurgery" class="ml-2 inline-flex h-5 items-center rounded-full bg-danger-surface px-2 text-xs font-semibold leading-none text-danger">手術{{ appointment.surgeryName ? '：' + appointment.surgeryName : '' }}</span>
             <span v-if="latenessLabel" class="ml-2 text-xs font-semibold text-danger">{{ latenessLabel }}</span>
           </p>
           <dl v-if="hasReminders" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-warning">

@@ -271,6 +271,8 @@ onBeforeUnmount(() => {
                           <span class="font-semibold">{{ item.petName }}</span>
                           <span class="text-xs text-muted-foreground">
                             · {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template
+                            ><template v-if="item.isSurgery">
+                              · <span class="font-semibold text-danger">手術{{ item.surgeryName ? '：' + item.surgeryName : '' }}</span></template
                             ><template v-if="latenessLabel(item)">
                               · <span class="font-medium text-danger">{{ latenessLabel(item) }}</span></template
                             ></span

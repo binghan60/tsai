@@ -77,6 +77,8 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ### appointments 掛號與候診
 只服務當日門診時間軸。`date`／`time` 是登記來源（`date` 由掛號時指定，預設今天），`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。
 
+`isSurgery`（布林）／`surgeryName`（文字）是掛號時可勾選的手術標記，跟 `reason`（來院原因）是兩個獨立欄位、互不覆蓋——勾選手術不會動到來院原因文字，兩者可以同時填。勾選時 `surgeryName` 必填（後端 422 擋，前端 vee-validate 同步擋），未勾選則清空。`/appointments`（醫師診療台，含 `VisitWorkspace` 工作區）與 `/reception`（櫃台工作台）的候診列表都會在勾選手術的那筆掛號旁標註紅色「手術」徽章（比照遲到提示的顏色），帶出 `surgeryName`。
+
 **一條四步流水線：預約 → 候診 → 看診 → 櫃台完成。** 真相是三個里程碑時間戳記，`status` 由它們推導出來，不是另一個獨立的維度（推導在 `lib/appointmentWorkflow.js` 的 `applyWorkflowAction` 尾端）：
 
 | 里程碑 | 寫入時機 | 對應 `status` |

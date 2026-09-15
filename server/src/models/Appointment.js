@@ -26,6 +26,9 @@ const appointmentSchema = new mongoose.Schema(
     species: { type: String, default: '', trim: true },
 
     reason: { type: String, default: '', trim: true },
+    // 手術標記——獨立於 reason，勾選後 UI 會在候診佇列與工作台標註「手術」徽章。
+    isSurgery: { type: Boolean, default: false },
+    surgeryName: { type: String, default: '', trim: true, maxlength: 200 },
     // 掛號時指定、看診完成時用來直接建立草稿的表單。保留在掛號上，
     // 才不會因日後變更預設表單而讓已掛號病患用錯表單。
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'FormTemplate', default: null },

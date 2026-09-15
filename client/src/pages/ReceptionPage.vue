@@ -429,6 +429,7 @@ onBeforeUnmount(() => {
                 <p class="truncate text-sm">{{ excerpt(item) }}</p>
                 <div class="mt-1 flex flex-wrap gap-2">
                   <span v-if="latenessLabel(item)" class="inline-flex h-6 items-center rounded-full bg-danger-surface px-2.5 text-xs font-medium leading-none text-danger">{{ latenessLabel(item) }}</span>
+                  <span v-if="item.isSurgery" class="inline-flex h-6 items-center rounded-full bg-danger-surface px-2.5 text-xs font-medium leading-none text-danger">手術{{ item.surgeryName ? '：' + item.surgeryName : '' }}</span>
                   <span v-if="item.specialCareNote" class="inline-flex h-6 items-center rounded-full bg-warning-surface px-2.5 text-xs font-medium leading-none text-warning">有飼主提醒</span>
                   <span v-if="item.followUpRecommendation" class="inline-flex h-6 items-center rounded-full bg-muted px-2.5 text-xs font-medium leading-none text-muted-foreground">建議回診</span>
                 </div>
@@ -457,6 +458,8 @@ onBeforeUnmount(() => {
                 <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
                 <p class="truncate text-xs text-muted-foreground">
                   {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template
+                  ><template v-if="item.isSurgery">
+                    · <span class="font-semibold text-danger">手術{{ item.surgeryName ? '：' + item.surgeryName : '' }}</span></template
                   ><template v-if="latenessLabel(item)">
                     · <span class="font-medium text-danger">{{ latenessLabel(item) }}</span></template
                   >
@@ -491,7 +494,8 @@ onBeforeUnmount(() => {
               <div class="w-40 shrink-0">
                 <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
                 <p class="truncate text-xs text-muted-foreground">
-                  {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template>
+                  {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template
+                  ><template v-if="item.isSurgery"> · <span class="font-semibold text-danger">手術{{ item.surgeryName ? '：' + item.surgeryName : '' }}</span></template>
                 </p>
               </div>
               <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
@@ -532,7 +536,8 @@ onBeforeUnmount(() => {
               <div class="w-40 shrink-0">
                 <p class="truncate text-sm font-semibold">{{ item.petName }}</p>
                 <p class="truncate text-xs text-muted-foreground">
-                  {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template>
+                  {{ item.species || '未填品種' }}<template v-if="item.visitType"> · {{ item.visitType === 'new' ? '初診' : '回診' }}</template
+                  ><template v-if="item.isSurgery"> · <span class="font-semibold text-danger">手術{{ item.surgeryName ? '：' + item.surgeryName : '' }}</span></template>
                 </p>
               </div>
               <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">
