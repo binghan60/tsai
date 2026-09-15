@@ -1,13 +1,14 @@
 ﻿<script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { ArrowRight, FileText, Pencil, Undo2 } from '@lucide/vue'
+import { ArrowLeft, ArrowRight, ChevronDown, FileText, Pencil, Stethoscope, Undo2, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { workflowState } from '../../../shared/appointmentWorkflow.js'
 import { clinicalDraft, draftPatch, mergeClinicalUpdate } from '../lib/visitDraft'
-import { ageLabel } from '../lib/datetime'
+import { ageLabel, clinicTimeInput } from '../lib/datetime'
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
 import AppointmentMilestones from './AppointmentMilestones.vue'
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue'
 import MechanismTooltip from './MechanismTooltip.vue'
@@ -25,7 +26,9 @@ const props = defineProps({
 })
 const toast = useToast()
 const notifyChat = useAppointmentNotifier()
-const emit = defineEmits(['updated', 'open-record'])
+// start：還沒開始看診時按「開始看診」；close：從佇列關掉這筆；dirty：有沒有未存內容（佇列顯示藍點）；
+// notes-updated：寵物／飼主備註改了，讓佇列上的備註標籤跟著更新。
+const emit = defineEmits(['updated', 'open-record', 'start', 'close', 'dirty', 'notes-updated'])
 
 const draft = reactive(clinicalDraft(props.appointment))
 const baseline = ref(clinicalDraft(props.appointment))
@@ -81,20 +84,34 @@ const petSummary = computed(() => {
   return [pet.value.breed || props.appointment.species, sex && neutered ? `${sex} ${neutered}` : sex || neutered, ageLabel(pet.value.birthDate, new Date(), '')].filter(Boolean).join(' · ')
 })
 const latenessLabel = computed(() => (props.appointment.latenessMinutes > 0 ? `遲到 ${props.appointment.latenessMinutes} 分` : ''))
-const reminderFields = computed(() => {
+// 醫療警示與一般紀錄分級：藥物過敏最高（實心紅）、病史次之（紅框），疫苗／健檢只是參考（灰）。
+// 舊版四項同一個警示色排成一格一格，「對某藥過敏」跟「去年健檢過」看起來一樣重。
+const medicalTags = computed(() => {
   if (!pet.value) return []
-  const vaccine = { none: '未注射', done: `已注射${pet.value.vaccineDate ? `，最後注射時間 ${pet.value.vaccineDate}` : ''}` }[pet.value.vaccineStatus] || ''
+  const tags = []
+  if (pet.value.allergyStatus === 'yes') tags.push({ key: 'allergy', label: `藥物過敏：${pet.value.allergyType || '有（未註明藥物）'}`, class: 'bg-danger-surface font-semibold text-danger' })
   const history = [pet.value.medicalHistory?.join('、'), pet.value.medicalHistoryOther].filter(Boolean).join('；')
-  const allergy = { none: '無過敏', yes: `有${pet.value.allergyType ? `，${pet.value.allergyType}` : ''}` }[pet.value.allergyStatus] || ''
-  const checkup = { none: '未健檢', done: `有${pet.value.checkupDate ? `，上次健檢時間 ${pet.value.checkupDate}` : ''}` }[pet.value.checkupStatus] || ''
-  return [
-    { label: '疫苗', value: vaccine },
-    { label: '病史', value: history },
-    { label: '藥物過敏', value: allergy },
-    { label: '健檢', value: checkup },
-  ].filter((field) => field.value)
+  if (history) tags.push({ key: 'history', label: `病史：${history}`, class: 'bg-card text-danger ring-1 ring-inset ring-danger/60' })
+  if (pet.value.allergyStatus === 'none') tags.push({ key: 'no-allergy', label: '無藥物過敏', class: 'bg-muted text-muted-foreground' })
+  if (pet.value.vaccineStatus) tags.push({ key: 'vaccine', label: pet.value.vaccineStatus === 'done' ? `疫苗 ${pet.value.vaccineDate || '已注射'}` : '未注射疫苗', class: 'bg-muted text-muted-foreground' })
+  if (pet.value.checkupStatus) tags.push({ key: 'checkup', label: pet.value.checkupStatus === 'done' ? `健檢 ${pet.value.checkupDate || '有'}` : '未健檢', class: 'bg-muted text-muted-foreground' })
+  return tags
 })
-const hasReminders = computed(() => reminderFields.value.length > 0)
+
+// 看診分兩步：先寫紀錄，按「完成看診」才進交辦。交辦變成送出前一定會經過的一頁，
+// 轉告飼主的事不會因為畫面上一直空著而被略過。已經交出去的就直接停在交辦那一步。
+const step = ref(workflowState(props.appointment).handedOff ? 'handoff' : 'record')
+watch(() => state.value.handedOff, (handedOff) => {
+  if (handedOff) step.value = 'handoff'
+})
+const now = ref(Date.now())
+const clock = setInterval(() => { now.value = Date.now() }, 30000)
+const timing = computed(() => {
+  const parts = []
+  if (props.appointment.checkedInAt) parts.push(`${clinicTimeInput(props.appointment.checkedInAt)} 報到`)
+  if (props.appointment.visitStartedAt && !state.value.handedOff) parts.push(`看診 ${Math.max(0, Math.floor((now.value - new Date(props.appointment.visitStartedAt).getTime()) / 60000))} 分`)
+  return parts.join(' · ')
+})
 const CONFLICT_LABELS = {
   visitNote: '本次簡易紀錄',
   internalNote: '內部備註',
@@ -184,6 +201,7 @@ async function savePetNote() {
     })
     pet.value = { ...pet.value, notes: data.notes || '', __v: data.__v }
     petNoteDraft.value = data.notes || ''
+    emit('notes-updated', { kind: 'pet', id: String(currentPet._id), notes: data.notes || '' })
     editingPetNote.value = false
     toast.success('已更新病患備註')
   } catch (err) {
@@ -212,6 +230,7 @@ async function saveOwnerNote() {
     })
     pet.value = { ...pet.value, ownerId: data }
     ownerNoteDraft.value = data.notes || ''
+    emit('notes-updated', { kind: 'owner', id: String(currentOwner._id), notes: data.notes || '' })
     editingOwnerNote.value = false
     toast.success('已更新飼主備註')
   } catch (err) {
@@ -291,6 +310,8 @@ watch(
   },
   { deep: true },
 )
+
+watch(dirty, (value) => emit('dirty', String(props.appointment._id), value), { immediate: true })
 
 function resolveConflict(keepLocal) {
   if (!keepLocal) for (const key of conflicts.value) draft[key] = baseline.value[key]
@@ -375,99 +396,100 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposed = true
   clearTimeout(timer)
+  clearInterval(clock)
+  emit('dirty', String(props.appointment._id), false)
   window.removeEventListener('beforeunload', beforeUnload)
 })
 </script>
 
 <template>
-  <section class="flex flex-col" :aria-label="`${appointment.petName} 就診工作區`">
-    <header class="border-b border-border px-5 py-4 sm:px-6">
-      <div class="sr-only">
+  <section class="flex min-h-0 flex-col" :aria-label="`${appointment.petName} 就診工作區`">
+    <header class="shrink-0 space-y-2.5 border-b border-border px-5 py-3">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold tabular-nums text-primary-foreground">{{ appointment.checkinNumber ?? '—' }}</span>
         <h2 class="text-xl font-semibold">{{ appointment.petName }}</h2>
-        <span class="text-sm text-muted-foreground">{{ petSummary }}</span>
-      </div>
-      <p class="sr-only">
-        {{ owner?.name || appointment.ownerName || '飼主待確認' }}
-        <template v-if="owner?.phone || appointment.ownerPhone">
-          · <span class="tabular-nums">{{ owner?.phone || appointment.ownerPhone }}</span></template
-        >
-        <template v-if="appointment.reason"> · {{ appointment.reason }}</template>
-      </p>
-
-      <div class="grid gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-xs font-semibold text-primary">病患資料</p>
-            <Button v-if="pet && !editingPetNote" variant="secondary" size="xs" @click="startPetNoteEdit"><Pencil class="h-3.5 w-3.5" />編輯備註</Button>
-          </div>
-          <p class="mt-0.5 truncate text-sm font-semibold text-foreground">
-            {{ appointment.petName }}
-            <span v-if="petSummary" class="font-normal text-muted-foreground">{{ petSummary }}</span>
-            <span v-if="appointment.isSurgery" class="ml-2 inline-flex h-5 items-center rounded-full bg-danger-surface px-2 text-xs font-semibold leading-none text-danger">手術{{ appointment.surgeryName ? '：' + appointment.surgeryName : '' }}</span>
-            <span v-if="latenessLabel" class="ml-2 text-xs font-semibold text-danger">{{ latenessLabel }}</span>
-          </p>
-          <dl v-if="hasReminders" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs text-warning">
-            <div v-for="field in reminderFields" :key="field.label" class="min-w-0">
-              <dt class="font-semibold">{{ field.label }}</dt>
-              <dd class="mt-0.5 whitespace-pre-wrap font-semibold">{{ field.value }}</dd>
-            </div>
-          </dl>
-          <div v-if="pet" class="mt-2 border-t border-border/70 pt-2 text-xs">
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-semibold text-muted-foreground">備註</span>
-              <span v-if="petNoteSaving" class="text-muted-foreground">儲存中…</span>
-            </div>
-            <Textarea v-if="editingPetNote" v-model="petNoteDraft" class="mt-1.5" rows="3" maxlength="2000" :disabled="petNoteSaving" aria-label="病患備註" placeholder="輸入病患備註…" />
-            <p v-else class="mt-1 whitespace-pre-wrap font-medium text-foreground">{{ pet.notes || '尚無備註' }}</p>
-            <Alert v-if="petNoteError" variant="destructive" class="mt-2"><AlertDescription>{{ petNoteError }}</AlertDescription></Alert>
-            <div v-if="editingPetNote" class="mt-2 flex justify-end gap-2">
-              <Button variant="secondary" size="xs" :disabled="petNoteSaving" @click="cancelPetNoteEdit">取消</Button>
-              <Button size="xs" :disabled="petNoteSaving" @click="savePetNote">儲存備註</Button>
-            </div>
-          </div>
-        </section>
-        <section class="min-w-0 rounded-lg border border-border bg-field/50 p-3">
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-xs font-semibold text-muted-foreground">飼主資料</p>
-            <Button v-if="owner && !editingOwnerNote" variant="secondary" size="xs" @click="startOwnerNoteEdit"><Pencil class="h-3.5 w-3.5" />編輯備註</Button>
-          </div>
-          <dl v-if="ownerFields.length" class="mt-2 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-            <div v-for="field in ownerFields" :key="field.label" class="min-w-0">
-              <dt class="font-semibold text-muted-foreground">{{ field.label }}</dt>
-              <dd class="mt-0.5 font-medium text-foreground" :class="field.class">{{ field.value }}</dd>
-            </div>
-          </dl>
-          <div v-if="owner" class="mt-2 border-t border-border/70 pt-2 text-xs">
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-semibold text-muted-foreground">備註</span>
-              <span v-if="ownerNoteSaving" class="text-muted-foreground">儲存中…</span>
-            </div>
-            <Textarea v-if="editingOwnerNote" v-model="ownerNoteDraft" class="mt-1.5" rows="3" maxlength="2000" :disabled="ownerNoteSaving" aria-label="飼主備註" placeholder="輸入飼主備註…" />
-            <p v-else class="mt-1 whitespace-pre-wrap font-medium text-foreground">{{ owner.notes || '尚無備註' }}</p>
-            <Alert v-if="ownerNoteError" variant="destructive" class="mt-2"
-              ><AlertDescription>{{ ownerNoteError }}</AlertDescription></Alert
-            >
-            <div v-if="editingOwnerNote" class="mt-2 flex justify-end gap-2">
-              <Button variant="secondary" size="xs" :disabled="ownerNoteSaving" @click="cancelOwnerNoteEdit">取消</Button>
-              <Button size="xs" :disabled="ownerNoteSaving" @click="saveOwnerNote">儲存備註</Button>
-            </div>
-          </div>
-          <p v-else class="mt-0.5 text-sm font-medium text-muted-foreground">未提供飼主資料</p>
-        </section>
+        <span v-if="petSummary" class="text-sm text-muted-foreground">{{ petSummary }}<template v-if="appointment.visitType"> · {{ appointment.visitType === 'new' ? '初診' : '回診' }}</template></span>
+        <span class="text-sm text-muted-foreground">
+          · 飼主 {{ owner?.name || appointment.ownerName || '待確認' }}<template v-if="owner?.phone || appointment.ownerPhone"> <span class="tabular-nums">{{ owner?.phone || appointment.ownerPhone }}</span></template>
+        </span>
+        <Popover>
+          <PopoverTrigger as-child>
+            <Button variant="secondary" size="xs">飼主與進度<ChevronDown class="h-3.5 w-3.5" stroke-width="1.75" /></Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" class="w-96 space-y-3 p-4">
+            <dl v-if="ownerFields.length" class="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+              <div v-for="field in ownerFields" :key="field.label" class="min-w-0">
+                <dt class="font-semibold text-muted-foreground">{{ field.label }}</dt>
+                <dd class="mt-0.5 font-medium text-foreground" :class="field.class">{{ field.value }}</dd>
+              </div>
+            </dl>
+            <p v-else class="text-sm text-muted-foreground">未提供飼主資料</p>
+            <AppointmentMilestones :appointment="appointment" />
+          </PopoverContent>
+        </Popover>
+        <span class="ml-auto text-xs text-muted-foreground">{{ timing }}</span>
+        <Button variant="secondary" size="icon-sm" :aria-label="`關閉 ${appointment.petName} 的工作區`" @click="emit('close')"><X class="h-4 w-4" /></Button>
       </div>
 
-      <div class="mt-3"><AppointmentMilestones :appointment="appointment" /></div>
+      <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span class="text-xs text-muted-foreground">來院原因</span>
+        <span class="text-base font-semibold" :class="appointment.reason ? '' : 'text-muted-foreground'">{{ appointment.reason || '掛號時沒有填寫' }}</span>
+        <span v-if="appointment.isSurgery" class="inline-flex h-6 items-center rounded-full bg-danger-surface px-2.5 text-xs font-semibold leading-none text-danger">手術{{ appointment.surgeryName ? '：' + appointment.surgeryName : '' }}</span>
+        <span v-if="latenessLabel" class="text-xs font-semibold text-danger">{{ latenessLabel }}</span>
+      </div>
+
+      <div v-if="medicalTags.length" class="flex flex-wrap gap-2">
+        <span v-for="tag in medicalTags" :key="tag.key" class="inline-flex min-h-7 items-center rounded-full px-3 text-xs leading-snug" :class="tag.class">{{ tag.label }}</span>
+      </div>
+
+      <!-- 寵物與飼主備註：會咬人、飼主難溝通這類事要在叫進診間前就看到，所以常駐顯示、不收合。 -->
+      <div v-if="pet" class="grid gap-2 lg:grid-cols-2">
+        <div class="min-w-0 rounded-lg px-3 py-2" :class="pet.notes || editingPetNote ? 'bg-warning-surface text-warning' : 'bg-field text-muted-foreground'">
+          <div class="flex items-start gap-3">
+            <span class="shrink-0 pt-0.5 text-xs font-semibold">寵物備註</span>
+            <Textarea v-if="editingPetNote" v-model="petNoteDraft" class="min-w-0 flex-1 bg-card text-foreground" rows="2" maxlength="2000" :disabled="petNoteSaving" aria-label="寵物備註" placeholder="例：會咬人，保定需兩人" />
+            <p v-else class="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere text-sm" :class="pet.notes ? 'font-medium' : ''">{{ pet.notes || '尚無備註' }}</p>
+            <Button v-if="!editingPetNote" variant="secondary" size="xs" class="shrink-0" @click="startPetNoteEdit"><Pencil class="h-3.5 w-3.5" />編輯</Button>
+          </div>
+          <Alert v-if="petNoteError" variant="destructive" class="mt-2"><AlertDescription>{{ petNoteError }}</AlertDescription></Alert>
+          <div v-if="editingPetNote" class="mt-2 flex justify-end gap-2">
+            <Button variant="secondary" size="xs" :disabled="petNoteSaving" @click="cancelPetNoteEdit">取消</Button>
+            <Button size="xs" :disabled="petNoteSaving" @click="savePetNote">{{ petNoteSaving ? '儲存中…' : '儲存備註' }}</Button>
+          </div>
+        </div>
+        <div class="min-w-0 rounded-lg px-3 py-2" :class="owner?.notes || editingOwnerNote ? 'bg-warning-surface text-warning' : 'bg-field text-muted-foreground'">
+          <div class="flex items-start gap-3">
+            <span class="shrink-0 pt-0.5 text-xs font-semibold">飼主備註</span>
+            <Textarea v-if="editingOwnerNote" v-model="ownerNoteDraft" class="min-w-0 flex-1 bg-card text-foreground" rows="2" maxlength="2000" :disabled="ownerNoteSaving" aria-label="飼主備註" placeholder="例：處置前先說明費用" />
+            <p v-else class="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere text-sm" :class="owner?.notes ? 'font-medium' : ''">{{ owner ? owner.notes || '尚無備註' : '未提供飼主資料' }}</p>
+            <Button v-if="owner && !editingOwnerNote" variant="secondary" size="xs" class="shrink-0" @click="startOwnerNoteEdit"><Pencil class="h-3.5 w-3.5" />編輯</Button>
+          </div>
+          <Alert v-if="ownerNoteError" variant="destructive" class="mt-2"><AlertDescription>{{ ownerNoteError }}</AlertDescription></Alert>
+          <div v-if="editingOwnerNote" class="mt-2 flex justify-end gap-2">
+            <Button variant="secondary" size="xs" :disabled="ownerNoteSaving" @click="cancelOwnerNoteEdit">取消</Button>
+            <Button size="xs" :disabled="ownerNoteSaving" @click="saveOwnerNote">{{ ownerNoteSaving ? '儲存中…' : '儲存備註' }}</Button>
+          </div>
+        </div>
+      </div>
     </header>
 
-    <div class="px-5 py-4 sm:px-6">
-      <Alert v-if="error" variant="destructive" class="mb-4"
-        ><AlertDescription>{{ error }}</AlertDescription></Alert
-      >
-      <div v-if="contextError" class="mb-4 flex items-center gap-3 rounded-lg bg-warning-surface p-3 text-sm text-warning">
+    <nav class="flex shrink-0 items-center gap-3 border-b border-border px-5 py-2" aria-label="看診步驟">
+      <button type="button" class="flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm" :class="step === 'record' ? 'bg-accent font-semibold text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-field'" :aria-current="step === 'record' ? 'step' : undefined" @click="step = 'record'">
+        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold" :class="step === 'record' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'">1</span>看診紀錄
+      </button>
+      <span class="h-px w-8 bg-border" aria-hidden="true"></span>
+      <button type="button" class="flex min-h-9 items-center gap-2 rounded-lg px-2 text-sm" :class="step === 'handoff' ? 'bg-accent font-semibold text-accent-foreground' : 'bg-card text-muted-foreground hover:bg-field'" :aria-current="step === 'handoff' ? 'step' : undefined" @click="step = 'handoff'">
+        <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold" :class="step === 'handoff' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'">2</span>交辦與送交
+      </button>
+    </nav>
+
+    <div v-if="error || contextError || conflicts.length" class="max-h-72 shrink-0 space-y-3 overflow-y-auto border-b border-border px-5 py-3">
+      <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+      <div v-if="contextError" class="flex items-center gap-3 rounded-lg bg-warning-surface p-3 text-sm text-warning">
         <span class="flex-1">{{ contextError }}</span>
         <Button variant="secondary" size="xs" @click="loadContext">重新載入</Button>
       </div>
-      <div v-if="conflicts.length" role="alert" class="mb-4 space-y-3 rounded-xl bg-warning-surface p-4 text-sm text-warning">
+      <div v-if="conflicts.length" role="alert" class="space-y-3 rounded-xl bg-warning-surface p-4 text-sm text-warning">
         <p>此筆就診資料與其他更新衝突：{{ conflicts.map((key) => CONFLICT_LABELS[key]).join('、') }}。請選擇要保留的內容。</p>
         <div v-for="key in conflicts" :key="key" class="rounded-lg bg-card p-3 text-foreground">
           <p class="text-xs font-medium text-muted-foreground">{{ CONFLICT_LABELS[key] }} · 目前內容</p>
@@ -478,62 +500,80 @@ onBeforeUnmount(() => {
           <Button variant="secondary" size="sm" @click="resolveConflict(true)">保留我的修改</Button>
         </div>
       </div>
+    </div>
 
-      <div class="grid gap-5 lg:grid-cols-[minmax(0,1.35fr)_minmax(20rem,0.85fr)]">
-        <div class="space-y-4">
-          <section class="space-y-4 rounded-xl border border-border bg-card p-4 sm:p-5">
-            <h3 class="border-b border-border pb-1 text-sm font-semibold">看診資料、交辦與回診</h3>
-            <div class="grid grid-cols-2 gap-3">
-              <label class="space-y-1.5 text-xs font-medium"
-                ><span class="flex items-center gap-1.5">體重（kg）<MechanismTooltip text="儲存後會顯示在這次就診的引用式病歷日誌；若已建立健檢草稿，也會同步更新該草稿的體重。" /></span>
-                <Input v-model="draft.weightKg" type="number" min="0" step="0.01" :disabled="!editable || committing" />
-              </label>
-              <label class="space-y-1.5 text-xs font-medium"
-                ><span class="flex items-center gap-1.5">體溫（°C）<MechanismTooltip text="儲存後會顯示在這次就診的引用式病歷日誌；若已建立健檢草稿，也會同步更新該草稿的體溫。" /></span>
-                <Input v-model="draft.temperatureC" type="number" min="0" step="0.1" :disabled="!editable || committing" />
-              </label>
-            </div>
-            <label class="block space-y-1.5">
-              <span class="flex items-center gap-2 text-xs font-medium">本次簡易紀錄<MechanismTooltip text="此內容與櫃台共用，病歷日誌只保留對本次就診的引用，因此在任一處修改都會立即反映最新內容。" /><span class="ml-auto font-normal text-muted-foreground">自動存入病歷日誌</span></span>
-              <Textarea v-model="draft.visitNote" rows="12" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" />
-            </label>
-            <label class="block space-y-1.5">
-              <span class="flex items-center gap-2 text-xs font-medium">備註<MechanismTooltip text="僅供內部人員查看；儲存後會附在本次就診的引用式病歷日誌最後，不會出現在飼主報告。" /><span class="ml-auto font-normal text-muted-foreground">僅內部可見・附於病歷日誌最後</span></span>
-              <Textarea v-model="draft.internalNote" rows="4" maxlength="2000" :disabled="!editable || committing" placeholder="輸入僅供內部人員查看的備註…" />
-            </label>
-
-            <div class="space-y-4 border-t border-border pt-4">
-              <h4 class="text-sm font-semibold">交辦與回診</h4>
-              <label class="block space-y-1.5">
-                <span class="text-xs font-medium">給櫃台的交辦</span>
-                <Textarea v-model="draft.handoffNote" rows="6" maxlength="1000" :disabled="!editable || committing" placeholder="輸入櫃檯需要協助處理或轉告的事項…" />
-              </label>
-              <label class="block space-y-1.5">
-                <span class="text-xs font-medium text-warning">請轉告飼主</span>
-                <Textarea v-model="draft.specialCareNote" rows="3" maxlength="500" :disabled="!editable || committing" placeholder="輸入需要櫃檯轉告飼主的提醒…" />
-              </label>
-              <label class="block space-y-1.5">
-                <span class="flex items-center gap-1.5 text-xs font-medium">回診建議<MechanismTooltip text="這是給櫃台安排回診時看的建議文字；填寫本身不會自動建立掛號。" /></span>
-                <Textarea v-model="draft.followUpRecommendation" rows="2" maxlength="500" :disabled="!editable || committing" placeholder="輸入建議回診時間或原因…" />
-              </label>
-            </div>
-          </section>
+    <!-- 第 1 步：看診紀錄＋歷次病歷日誌 -->
+    <div v-show="step === 'record'" class="grid min-h-0 flex-1 overflow-y-auto xl:grid-cols-[minmax(0,1fr)_26rem] xl:overflow-hidden xl:grid-rows-[minmax(0,1fr)]">
+      <div class="flex min-h-0 flex-col gap-4 p-5">
+        <div class="grid grid-cols-2 gap-3">
+          <label class="space-y-1.5 text-xs font-medium"
+            ><span class="flex items-center gap-1.5">體重（kg）<MechanismTooltip text="儲存後會顯示在這次就診的引用式病歷日誌；若已建立健檢草稿，也會同步更新該草稿的體重。" /></span>
+            <Input v-model="draft.weightKg" type="number" min="0" step="0.01" :disabled="!editable || committing" />
+          </label>
+          <label class="space-y-1.5 text-xs font-medium"
+            ><span class="flex items-center gap-1.5">體溫（°C）<MechanismTooltip text="儲存後會顯示在這次就診的引用式病歷日誌；若已建立健檢草稿，也會同步更新該草稿的體溫。" /></span>
+            <Input v-model="draft.temperatureC" type="number" min="0" step="0.1" :disabled="!editable || committing" />
+          </label>
         </div>
-
-        <ClinicalNotesPanel :notes="notes" :loading="notesLoading" :error="notesError" :page="notePage" :total-pages="noteTotalPages" :pet-id="appointment.petId" full-record-label="完整病歷" scrollable @load="loadNotes" @saved="handleHistoricalNoteSaved" />
+        <label class="flex min-h-72 flex-1 flex-col gap-1.5">
+          <span class="flex items-center gap-2 text-xs font-medium">本次簡易紀錄<MechanismTooltip text="此內容與櫃台共用，病歷日誌只保留對本次就診的引用，因此在任一處修改都會立即反映最新內容。" /><span class="ml-auto font-normal text-muted-foreground">自動存入病歷日誌</span></span>
+          <Textarea v-model="draft.visitNote" class="min-h-0 flex-1 resize-none field-sizing-fixed" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" />
+        </label>
+        <label class="block space-y-1.5">
+          <span class="flex items-center gap-2 text-xs font-medium">內部備註<MechanismTooltip text="僅供內部人員查看；儲存後會附在本次就診的引用式病歷日誌最後，不會出現在飼主報告。" /><span class="ml-auto font-normal text-muted-foreground">僅院內可見</span></span>
+          <Textarea v-model="draft.internalNote" rows="3" maxlength="2000" class="field-sizing-fixed" :disabled="!editable || committing" placeholder="輸入僅供內部人員查看的備註…" />
+        </label>
+      </div>
+      <div class="min-h-0 p-5 xl:pl-0">
+        <ClinicalNotesPanel :notes="notes" :loading="notesLoading" :error="notesError" :page="notePage" :total-pages="noteTotalPages" :pet-id="appointment.petId" full-record-label="完整病歷" fill class="h-full" @load="loadNotes" @saved="handleHistoricalNoteSaved" />
       </div>
     </div>
 
-    <footer class="flex flex-wrap items-center gap-3 border-t border-border bg-field/40 px-5 py-3 sm:px-6">
-      <p class="text-xs text-muted-foreground" role="status">{{ savedLabel }}</p>
-      <div class="ml-auto flex flex-wrap gap-2">
-        <Button variant="secondary" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')"> <FileText class="h-4 w-4" />{{ appointment.recordId ? '開啟表單草稿' : '建立表單草稿' }} </Button>
-        <MechanismTooltip label="查看表單草稿連動說明" text="首次建立時會帶入本次的來院原因、體重、體溫及已安排的回診時間。其後在此更新體重或體溫，也會同步到尚未結案的草稿。" />
+    <!-- 第 2 步：交辦與送交。左邊留紀錄摘要方便對照，要改就回第 1 步。 -->
+    <div v-show="step === 'handoff'" class="grid min-h-0 flex-1 overflow-y-auto xl:grid-cols-[26rem_minmax(0,1fr)] xl:overflow-hidden xl:grid-rows-[minmax(0,1fr)]">
+      <aside class="min-h-0 space-y-3 border-border bg-field p-5 xl:overflow-y-auto xl:border-r">
+        <h3 class="text-base font-semibold">本次紀錄摘要</h3>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <span class="inline-flex h-7 items-center rounded-full bg-card px-3">體重 {{ draft.weightKg || '—' }} kg</span>
+          <span class="inline-flex h-7 items-center rounded-full bg-card px-3">體溫 {{ draft.temperatureC || '—' }} °C</span>
+        </div>
+        <p class="whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed" :class="draft.visitNote ? '' : 'text-muted-foreground'">{{ draft.visitNote || '還沒有寫本次紀錄' }}</p>
+        <Button variant="secondary" size="sm" @click="step = 'record'"><ArrowLeft class="h-4 w-4" />回去修改紀錄</Button>
+      </aside>
+      <div class="flex min-h-0 flex-col gap-4 p-5">
+        <h3 class="text-base font-semibold">要交給櫃台什麼？</h3>
+        <label class="flex min-h-48 flex-1 flex-col gap-1.5">
+          <span class="flex items-center gap-2 text-xs font-medium">給櫃台的交辦<span class="font-normal text-muted-foreground">收費、領藥、要開的證明</span></span>
+          <Textarea v-model="draft.handoffNote" maxlength="1000" class="min-h-0 flex-1 resize-none field-sizing-fixed" :disabled="!editable || committing" placeholder="輸入櫃台需要協助處理的事項…" />
+        </label>
+        <div class="grid gap-4 lg:grid-cols-2">
+          <label class="block space-y-1.5">
+            <span class="text-xs font-medium text-warning">請轉告飼主</span>
+            <Textarea v-model="draft.specialCareNote" rows="4" maxlength="500" class="field-sizing-fixed" :disabled="!editable || committing" placeholder="輸入需要櫃台轉告飼主的提醒…" />
+          </label>
+          <label class="block space-y-1.5">
+            <span class="flex items-center gap-1.5 text-xs font-medium">回診建議<MechanismTooltip text="這是給櫃台安排回診時看的建議文字；填寫本身不會自動建立掛號。" /></span>
+            <Textarea v-model="draft.followUpRecommendation" rows="4" maxlength="500" class="field-sizing-fixed" :disabled="!editable || committing" placeholder="輸入建議回診時間或原因…" />
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <footer class="flex shrink-0 flex-wrap items-center gap-3 border-t border-border bg-field/40 px-5 py-3">
+      <Button v-if="step === 'handoff' && editable" variant="secondary" @click="step = 'record'"><ArrowLeft class="h-4 w-4" />返回紀錄</Button>
+      <p class="text-xs text-muted-foreground" role="status">{{ !state.started && appointment.status === 'arrived' ? '尚未開始看診，可以先看資料' : savedLabel }}</p>
+      <div class="ml-auto flex flex-wrap items-center gap-2">
+        <template v-if="step === 'record' || !editable">
+          <Button variant="secondary" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')"><FileText class="h-4 w-4" />{{ appointment.recordId ? '開啟表單草稿' : '建立表單草稿' }}</Button>
+          <MechanismTooltip label="查看表單草稿連動說明" text="首次建立時會帶入本次的來院原因、體重、體溫及已安排的回診時間。其後在此更新體重或體溫，也會同步到尚未結案的草稿。" />
+        </template>
         <Button v-if="state.completed" variant="secondary" :disabled="busy || !!appointment.reopenRequest?.requestedAt" @click="openReopenRequest">
           {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
         </Button>
-        <Button v-else-if="state.handedOff" variant="secondary" :disabled="busy" @click="run('reclaim')"> <Undo2 class="h-4 w-4" />取回修改 </Button>
-        <Button v-else-if="appointment.status === 'arrived' && !state.handedOff" :disabled="busy || !!conflicts.length" @click="run('handoff')"> 交給櫃檯<ArrowRight class="h-4 w-4" /> </Button>
+        <Button v-else-if="state.handedOff" variant="secondary" :disabled="busy" @click="run('reclaim')"><Undo2 class="h-4 w-4" />取回修改</Button>
+        <Button v-else-if="appointment.status === 'arrived' && !state.started" size="lg" :disabled="busy" @click="emit('start', appointment)"><Stethoscope class="h-4 w-4" />開始看診</Button>
+        <Button v-else-if="editable && step === 'record'" size="lg" :disabled="busy || !!conflicts.length" @click="step = 'handoff'">完成看診<ArrowRight class="h-4 w-4" /></Button>
+        <Button v-else-if="editable" size="lg" :disabled="busy || !!conflicts.length" @click="run('handoff')">送交櫃台<ArrowRight class="h-4 w-4" /></Button>
       </div>
     </footer>
 
@@ -548,9 +588,7 @@ onBeforeUnmount(() => {
             <span class="text-xs font-medium">修改原因（選填）</span>
             <Textarea v-model="reopenReason" rows="4" maxlength="500" autofocus placeholder="例如：補充用藥交辦、修正看診紀錄…" />
           </label>
-          <Alert v-if="reopenError" variant="destructive"
-            ><AlertDescription>{{ reopenError }}</AlertDescription></Alert
-          >
+          <Alert v-if="reopenError" variant="destructive"><AlertDescription>{{ reopenError }}</AlertDescription></Alert>
         </div>
         <DialogFooter>
           <Button type="button" variant="secondary" @click="reopenDialog = false">取消</Button>

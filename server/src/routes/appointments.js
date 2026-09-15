@@ -208,11 +208,26 @@ export function fillDailyCounts(dates, buckets) {
 
 // GET /api/appointments?date=YYYY-MM-DD（預設今天）
 // 目前畫面只做單日時間軸，量不大，直接回傳當天全部，不分頁。
+// 診療台的佇列要一眼看到「這隻會咬人」「這位飼主要小心應對」，而那兩段備註存在
+// Pet／Owner 主檔上、不在掛號快照裡。另外回一份以 id 為鍵的對照表，而不是塞進每筆
+// 掛號——即時廣播的 appointment:updated 只帶掛號本身，塞進去的欄位會在下一次廣播時被洗掉。
+async function patientNotesFor(appointments) {
+  const idsOf = (key) => [...new Set(appointments.map((item) => item[key]).filter((id) => mongoose.isValidObjectId(id)).map(String))];
+  const petIds = idsOf('petId');
+  const ownerIds = idsOf('ownerId');
+  const [pets, owners] = await Promise.all([
+    petIds.length ? Pet.find({ _id: { $in: petIds } }).select('notes').lean() : [],
+    ownerIds.length ? Owner.find({ _id: { $in: ownerIds } }).select('notes').lean() : [],
+  ]);
+  const toMap = (docs) => Object.fromEntries(docs.filter((doc) => doc.notes?.trim()).map((doc) => [String(doc._id), doc.notes.trim()]));
+  return { pets: toMap(pets), owners: toMap(owners) };
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? req.query.date : clinicToday();
     const items = await Appointment.find({ date }).sort({ scheduledAt: 1, createdAt: 1 });
-    res.json({ items, date });
+    res.json({ items, date, patientNotes: await patientNotesFor(items) });
   } catch (err) {
     next(err);
   }

@@ -23,6 +23,8 @@ const props = defineProps({
   unlinkedText: { type: String, default: '尚未連結病患資料，無法查看歷次日誌。' },
   fullRecordLabel: { type: String, default: '完整病歷' },
   scrollable: { type: Boolean, default: false },
+  // 撐滿父層高度、只有清單本身捲動（診療台工作區的右欄用）
+  fill: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['load', 'saved'])
@@ -91,7 +93,7 @@ async function saveEdit(note) {
 </script>
 
 <template>
-  <section class="rounded-xl border border-border bg-field/60 p-4">
+  <section class="rounded-xl border border-border bg-field/60 p-4" :class="fill ? 'flex h-full min-h-0 flex-col' : ''">
     <div class="flex items-center justify-between gap-2">
       <h3 class="text-sm font-semibold sm:text-base">{{ title }}</h3>
       <Button v-if="petId" as-child variant="secondary" size="xs">
@@ -106,7 +108,7 @@ async function saveEdit(note) {
       <Button variant="secondary" size="sm" @click="emit('load', page)">重試</Button>
     </Alert>
 
-    <div v-else class="clinical-notes-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :class="{ 'clinical-notes-content--scrollable': scrollable }" :tabindex="scrollable ? 0 : undefined" :aria-label="scrollable ? title : undefined" :role="scrollable ? 'region' : undefined">
+    <div v-else class="clinical-notes-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :class="{ 'clinical-notes-content--scrollable': scrollable && !fill, 'min-h-0 flex-1 overflow-y-auto pr-2': fill }" :tabindex="scrollable || fill ? 0 : undefined" :aria-label="scrollable || fill ? title : undefined" :role="scrollable || fill ? 'region' : undefined">
       <article v-for="note in notes" :key="note._id" class="mt-3 border-t border-border pt-3 first:border-t-0">
         <template v-if="editingId === note._id">
           <div class="grid gap-3 sm:grid-cols-[11rem_minmax(0,1fr)]">

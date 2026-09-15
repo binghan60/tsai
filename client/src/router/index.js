@@ -34,8 +34,8 @@ const router = createRouter({
     { path: '/login', component: LoginPage, meta: { bare: true, public: true, title: '登入' } },
     { path: '/intake', component: PublicIntakePage, meta: { bare: true, public: true, title: '初診資料填寫' } },
     { path: '/', component: DashboardPage, meta: { title: '儀表板' } },
-    { path: '/appointments', component: VetConsolePage, meta: { title: '醫師診療台' } },
-    // wide：看板四欄加右側抽屜，max-w-360 容不下，改用滿版寬度。
+    // wide：兩個工作台整頁不捲動、欄位並排（看板四欄＋抽屜／佇列＋工作區），max-w-360 容不下，改用滿版寬度。
+    { path: '/appointments', component: VetConsolePage, meta: { title: '醫師診療台', wide: true } },
     { path: '/reception', component: ReceptionPage, meta: { title: '櫃台工作台', wide: true } },
     { path: '/reception/intakes', component: IntakeReviewPage, meta: { title: '初診表審核', nav: '/reception' } },
     // 舊書籤：看診不再是獨立頁面，改成診療台右欄可以同時開多筆的工作區。

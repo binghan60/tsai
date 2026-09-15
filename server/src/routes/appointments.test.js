@@ -760,6 +760,47 @@ describe('appointments summary', () => {
     ]);
   });
 
+  // 診療台佇列靠這份對照表顯示「會咬人」之類的備註；空白備註不回傳，初診還沒建檔的掛號不查。
+  describe('GET /appointments', () => {
+    let server;
+    let origin;
+    before(async () => {
+      server = app.listen(0, '127.0.0.1');
+      if (!server.listening) await once(server, 'listening');
+      origin = `http://127.0.0.1:${server.address().port}`;
+    });
+    after(async () => {
+      if (server) await new Promise((resolve) => server.close(resolve));
+    });
+
+  it('附帶寵物與飼主備註對照表', async () => {
+    const original = { find: Appointment.find, pet: Pet.find, owner: Owner.find };
+    const petA = '507f1f77bcf86cd799439031';
+    const petB = '507f1f77bcf86cd799439032';
+    const ownerA = '507f1f77bcf86cd799439041';
+    const leanRows = (rows) => ({ select: () => ({ lean: async () => rows }) });
+    let petQuery;
+    Appointment.find = () => ({ sort: async () => [
+      { _id: 'a1', petId: petA, ownerId: ownerA },
+      { _id: 'a2', petId: petB, ownerId: ownerA },
+      { _id: 'a3', petId: null, ownerId: null },
+    ] });
+    Pet.find = (filter) => { petQuery = filter; return leanRows([{ _id: petA, notes: ' 會咬人 ' }, { _id: petB, notes: '' }]); };
+    Owner.find = () => leanRows([{ _id: ownerA, notes: '常質疑用藥' }]);
+    try {
+      const response = await fetch(`${origin}/api/appointments?date=2026-09-15`);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.deepEqual(petQuery._id.$in, [petA, petB]);
+      assert.deepEqual(body.patientNotes, { pets: { [petA]: '會咬人' }, owners: { [ownerA]: '常質疑用藥' } });
+    } finally {
+      Appointment.find = original.find;
+      Pet.find = original.pet;
+      Owner.find = original.owner;
+    }
+  });
+  });
+
   describe('GET /appointments/summary', () => {
     let server;
     let origin;
