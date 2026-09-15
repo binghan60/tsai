@@ -1,6 +1,7 @@
 <script setup>
 import { CheckCircle2, XCircle, Info, X } from '@lucide/vue';
 import { useToast } from '../composables/useToast';
+import { Button } from './ui/button';
 
 const { toasts, removeToast } = useToast();
 defineProps({ placement: { type: String, default: 'bottom' } });
@@ -59,6 +60,14 @@ const typeConfig = {
         <div class="min-w-0 flex-1 space-y-0.5 pr-2">
           <p class="text-sm font-semibold text-foreground">{{ toast.title }}</p>
           <p v-if="toast.message" class="text-xs leading-relaxed text-muted-foreground">{{ toast.message }}</p>
+          <Button
+            v-if="toast.action"
+            type="button"
+            variant="secondary"
+            size="xs"
+            class="mt-2"
+            @click="removeToast(toast.id); toast.action.handler()"
+          >{{ toast.action.label }}</Button>
         </div>
 
         <!-- Close button -->
