@@ -81,7 +81,7 @@ const onsiteCount = computed(() => items.value.filter((item) => workflowFilter(i
 const scheduledCount = computed(() => items.value.filter((item) => workflowFilter(item, 'scheduled')).length)
 
 const mainGroups = computed(() => [
-  { key: 'mine', label: '我手上的', list: openTabs.value },
+  { key: 'mine', label: '診療中', list: openTabs.value },
   { key: 'waiting', label: '候診中', list: waiting.value },
   { key: 'visiting', label: '看診中（未開啟）', list: visitingElsewhere.value, hideWhenEmpty: true },
   { key: 'scheduled', label: '今日排程 · 待報到', list: scheduled.value, hint: '依時段' },
