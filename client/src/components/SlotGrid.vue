@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import SurgeryBadge from './SurgeryBadge.vue';
 
 // 掛號時段格：一格一個可掛的時間，格內數字是已經約在這個時間的人數。
 // 取代 TimePicker 的原因是「兩點半有沒有空」這個問題，時間清單回答不了。
@@ -65,15 +66,17 @@ const selected = computed(() => {
         </div>
       </div>
     </div>
-    <p v-if="selected" class="rounded-lg bg-field px-3 py-2 text-sm">
-      {{ selected.time }}
+    <div v-if="selected" class="flex flex-wrap items-center gap-x-2 gap-y-1.5 rounded-lg bg-field px-3 py-2 text-sm">
+      <span>{{ selected.time }}</span>
       <template v-if="selected.entries.length">
-        已有 {{ selected.entries.length }} 位：
-        <template v-for="(entry, index) in selected.entries" :key="entry._id">
-          <span v-if="index">、</span><span class="font-medium">{{ entry.petName }}</span><span v-if="entry.isSurgery" class="text-danger">（手術{{ entry.surgeryName ? `：${entry.surgeryName}` : '' }}）</span>
-        </template>
+        <span>已有 {{ selected.entries.length }} 位：</span>
+        <span v-for="(entry, index) in selected.entries" :key="entry._id" class="inline-flex max-w-full items-center gap-1.5">
+          <span class="font-medium">{{ entry.petName }}</span>
+          <SurgeryBadge v-if="entry.isSurgery" :name="entry.surgeryName" />
+          <span v-if="index < selected.entries.length - 1">、</span>
+        </span>
       </template>
       <span v-else class="text-muted-foreground">尚無其他預約</span>
-    </p>
+    </div>
   </div>
 </template>

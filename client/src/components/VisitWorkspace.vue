@@ -1,6 +1,10 @@
 ﻿<script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
+import SurgeryBadge from './SurgeryBadge.vue'
+import LatenessBadge from './LatenessBadge.vue'
+import CheckinNumber from './CheckinNumber.vue'
+import { visitTypeLabel } from '../lib/appointmentDisplay'
 import { ArrowLeft, ArrowRight, ChevronDown, FileText, Pencil, Stethoscope, Undo2, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -83,7 +87,6 @@ const petSummary = computed(() => {
   const neutered = { yes: '已結紮', no: '未結紮' }[pet.value.neutered] || ''
   return [pet.value.breed || props.appointment.species, sex && neutered ? `${sex} ${neutered}` : sex || neutered, ageLabel(pet.value.birthDate, new Date(), '')].filter(Boolean).join(' · ')
 })
-const latenessLabel = computed(() => (props.appointment.latenessMinutes > 0 ? `遲到 ${props.appointment.latenessMinutes} 分` : ''))
 // 醫療警示與一般紀錄分級：藥物過敏最高（實心紅）、病史次之（紅框），疫苗／健檢只是參考（灰）。
 // 舊版四項同一個警示色排成一格一格，「對某藥過敏」跟「去年健檢過」看起來一樣重。
 const medicalTags = computed(() => {
@@ -406,9 +409,9 @@ onBeforeUnmount(() => {
   <section class="flex min-h-0 flex-col" :aria-label="`${appointment.petName} 就診工作區`">
     <header class="shrink-0 space-y-2.5 border-b border-border px-5 py-3">
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-base font-semibold tabular-nums text-primary-foreground">{{ appointment.checkinNumber ?? '—' }}</span>
+        <CheckinNumber :appointment="appointment" size="lg" />
         <h2 class="text-xl font-semibold">{{ appointment.petName }}</h2>
-        <span v-if="petSummary" class="text-sm text-muted-foreground">{{ petSummary }}<template v-if="appointment.visitType"> · {{ appointment.visitType === 'new' ? '初診' : '回診' }}</template></span>
+        <span v-if="petSummary || visitTypeLabel(appointment)" class="text-sm text-muted-foreground">{{ [petSummary, visitTypeLabel(appointment)].filter(Boolean).join(' · ') }}</span>
         <span class="text-sm text-muted-foreground">
           · 飼主 {{ owner?.name || appointment.ownerName || '待確認' }}<template v-if="owner?.phone || appointment.ownerPhone"> <span class="tabular-nums">{{ owner?.phone || appointment.ownerPhone }}</span></template>
         </span>
@@ -434,8 +437,8 @@ onBeforeUnmount(() => {
       <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span class="text-xs text-muted-foreground">來院原因</span>
         <span class="text-base font-semibold" :class="appointment.reason ? '' : 'text-muted-foreground'">{{ appointment.reason || '掛號時沒有填寫' }}</span>
-        <span v-if="appointment.isSurgery" class="inline-flex h-6 items-center rounded-full bg-danger-surface px-2.5 text-xs font-semibold leading-none text-danger">手術{{ appointment.surgeryName ? '：' + appointment.surgeryName : '' }}</span>
-        <span v-if="latenessLabel" class="text-xs font-semibold text-danger">{{ latenessLabel }}</span>
+        <SurgeryBadge v-if="appointment.isSurgery" :name="appointment.surgeryName" class="self-center" />
+        <LatenessBadge :minutes="appointment.latenessMinutes" class="self-center" />
       </div>
 
       <div v-if="medicalTags.length" class="flex flex-wrap gap-2">

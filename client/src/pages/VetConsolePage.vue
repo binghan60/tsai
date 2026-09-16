@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { CalendarClock, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Stethoscope, Ticket, Undo2, X } from '@lucide/vue'
+import { CalendarClock, ChevronDown, ChevronLeft, ChevronRight, RefreshCw, Stethoscope, Undo2, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useClinicSync } from '../composables/useClinicSync'
@@ -9,11 +9,17 @@ import { useSearchQueryParam } from '../composables/useSearchQueryParam'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { clinicDateInput, clinicTimeInput, shiftDateInput, weekdayLabel } from '../lib/datetime'
 import { workflowFilter, workflowState } from '../../../shared/appointmentWorkflow.js'
+import { patientNotesFor, visitTypeLabel } from '../lib/appointmentDisplay'
+import PatientNotes from '../components/PatientNotes.vue'
 import { usePinnedPetsStore } from '../stores/pinnedPets'
 import VisitWorkspace from '../components/VisitWorkspace.vue'
 import PinnedPetsList from '../components/PinnedPetsList.vue'
+import SurgeryBadge from '../components/SurgeryBadge.vue'
+import LatenessBadge from '../components/LatenessBadge.vue'
+import CheckinNumber from '../components/CheckinNumber.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
+import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { DatePicker } from '../components/ui/date-picker'
@@ -99,9 +105,6 @@ function minutesSince(value) {
   if (!value) return null
   return Math.max(0, Math.floor((now.value - new Date(value).getTime()) / 60000))
 }
-function latenessLabel(appointment) {
-  return appointment.latenessMinutes > 0 ? `遲到 ${appointment.latenessMinutes} 分` : ''
-}
 function statusMeta(item) {
   const state = workflowState(item)
   if (state.completed) return '已完成'
@@ -112,10 +115,7 @@ function statusMeta(item) {
   return ''
 }
 function notesFor(item) {
-  return [
-    { key: 'pet', label: '寵物', text: item.petId ? patientNotes.value.pets[String(item.petId)] : '' },
-    { key: 'owner', label: '飼主', text: item.ownerId ? patientNotes.value.owners[String(item.ownerId)] : '' },
-  ].filter((note) => note.text)
+  return patientNotesFor(item, patientNotes.value)
 }
 
 async function refresh() {
@@ -292,7 +292,7 @@ onBeforeUnmount(() => {
       <section class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card xl:w-100 xl:shrink-0" aria-label="今日病患">
         <header class="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
           <h2 class="text-base font-semibold">今日病患</h2>
-          <span class="ml-auto inline-flex h-6 items-center rounded-full bg-accent px-3 text-xs font-medium leading-none text-accent-foreground">在院 {{ onsiteCount }} · 待到 {{ scheduledCount }}</span>
+          <Badge variant="status" class="ml-auto bg-accent text-accent-foreground tabular-nums">在院 {{ onsiteCount }} · 待到 {{ scheduledCount }}</Badge>
         </header>
 
         <div class="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
@@ -303,7 +303,7 @@ onBeforeUnmount(() => {
                 <p class="flex items-center gap-2 px-1.5 pb-1.5 text-xs font-semibold text-muted-foreground">
                   {{ group.label }}<span class="font-normal">{{ group.list.length }}</span><span v-if="group.hint" class="ml-auto font-normal">{{ group.hint }}</span>
                 </p>
-                <p v-if="!group.list.length" class="px-1.5 pb-1 text-xs text-muted-foreground">{{ group.key === 'mine' ? '點下面任一位病患開啟工作區' : '目前沒有' }}</p>
+                <p v-if="!group.list.length" class="px-1.5 py-2 text-xs text-muted-foreground">{{ group.key === 'mine' ? '點下面任一位病患開啟工作區' : '目前沒有' }}</p>
                 <article
                   v-for="item in group.list"
                   :key="item._id"
@@ -318,23 +318,21 @@ onBeforeUnmount(() => {
                 >
                   <div class="flex items-start gap-2.5">
                     <span v-if="group.key === 'scheduled'" class="w-11 shrink-0 pt-0.5 text-sm font-semibold tabular-nums">{{ item.time || '未定' }}</span>
-                    <span v-else-if="item.checkinNumber != null" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold tabular-nums" :class="workflowState(item).started ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'">{{ item.checkinNumber }}</span>
-                    <span v-else class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground" title="未取號"><Ticket class="h-4 w-4" /><span class="sr-only">未取號</span></span>
+                    <CheckinNumber v-else :appointment="item" />
 
                     <div class="min-w-0 flex-1 space-y-1">
                       <div class="flex items-center gap-1.5">
                         <span class="truncate text-sm font-semibold" :class="String(item._id) === activeId ? 'text-accent-foreground' : ''">{{ item.petName }}</span>
-                        <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, item.visitType === 'new' ? '初診' : item.visitType === 'return' ? '回診' : ''].filter(Boolean).join(' · ') }}</span>
+                        <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
                         <span v-if="group.key !== 'scheduled'" class="ml-auto shrink-0 text-xs text-muted-foreground">{{ statusMeta(item) }}</span>
                         <span v-if="dirtyIds[String(item._id)]" class="h-2 w-2 shrink-0 rounded-full bg-primary" title="有尚未儲存的內容"><span class="sr-only">有尚未儲存的內容</span></span>
                       </div>
                       <p class="text-sm font-medium leading-snug" :class="item.reason ? 'text-foreground' : 'text-muted-foreground'">{{ item.reason || '未填來院原因' }}</p>
-                      <p v-if="item.isSurgery || latenessLabel(item)" class="text-xs font-semibold text-danger">
-                        <template v-if="item.isSurgery">手術{{ item.surgeryName ? '：' + item.surgeryName : '' }}</template><template v-if="item.isSurgery && latenessLabel(item)"> · </template>{{ latenessLabel(item) }}
-                      </p>
-                      <p v-for="note in notesFor(item)" :key="note.key" class="line-clamp-2 whitespace-pre-wrap wrap-anywhere rounded-md bg-warning-surface px-2 py-1 text-xs font-medium text-warning" :title="note.text">
-                        <span class="font-semibold">{{ note.label }}：</span>{{ note.text }}
-                      </p>
+                      <div v-if="item.isSurgery || item.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
+                        <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
+                        <LatenessBadge :minutes="item.latenessMinutes" />
+                      </div>
+                      <PatientNotes :notes="notesFor(item)" />
                       <p v-if="item.internalNote" class="line-clamp-1 text-xs text-muted-foreground" :title="item.internalNote"><span class="font-medium text-foreground">掛號備註：</span>{{ item.internalNote }}</p>
                     </div>
 
@@ -359,11 +357,11 @@ onBeforeUnmount(() => {
                 <div v-if="!collapsedGroups[group.key]" class="px-1 pb-1">
                   <PinnedPetsList v-if="group.key === 'pinned'" />
                   <template v-else>
-                    <p v-if="!group.count" class="px-2 py-2 text-xs text-muted-foreground">目前沒有</p>
+                    <p v-if="!group.count" class="px-1.5 py-2 text-xs text-muted-foreground">目前沒有</p>
                     <div v-for="item in group.key === 'handoff' ? handedOff : finished" :key="item._id" class="flex min-h-10 items-center gap-2 rounded-lg px-2 hover:bg-field">
                       <button type="button" class="min-w-0 flex-1 truncate bg-transparent text-left text-sm font-medium text-primary" @click="openPatient(item)">{{ item.petName }}<span class="ml-2 text-xs font-normal text-muted-foreground">{{ item.reason }}</span></button>
                       <Button v-if="group.key === 'handoff'" variant="secondary" size="xs" :disabled="busy" @click="reclaim(item)"><Undo2 class="h-4 w-4" />取回</Button>
-                      <span v-else-if="latenessLabel(item)" class="shrink-0 text-xs font-medium text-danger">{{ latenessLabel(item) }}</span>
+                      <LatenessBadge v-else :minutes="item.latenessMinutes" />
                     </div>
                   </template>
                 </div>

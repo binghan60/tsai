@@ -11,10 +11,15 @@ import { clinicDateInput, clinicTimeInput, shiftDateInput, weekdayLabel } from '
 import { appointmentsForTimeline, groupBySession, SURGERY_BLOCK } from '../lib/appointmentTimeline'
 import { isOverdue, minutesPastSchedule } from '../lib/receptionBoard'
 import { workflowFilter, workflowState, visitLabel } from '../../../shared/appointmentWorkflow.js'
+import { patientNotesFor, visitTypeLabel } from '../lib/appointmentDisplay'
+import PatientNotes from '../components/PatientNotes.vue'
 import { usePinnedPetsStore } from '../stores/pinnedPets'
 import HandoffSheet from '../components/HandoffSheet.vue'
 import PinnedPetsList from '../components/PinnedPetsList.vue'
 import RowActions from '../components/RowActions.vue'
+import SurgeryBadge from '../components/SurgeryBadge.vue'
+import LatenessBadge from '../components/LatenessBadge.vue'
+import CheckinNumber from '../components/CheckinNumber.vue'
 import SideDrawer from '../components/SideDrawer.vue'
 import AppointmentDrawer from '../components/AppointmentDrawer.vue'
 import CheckInDrawer from '../components/CheckInDrawer.vue'
@@ -50,6 +55,8 @@ const search = useSearchQueryParam('q', '')
 const selected = useSearchQueryParam('selected', '')
 
 const items = ref([])
+// 寵物／飼主備註存在主檔上、不在掛號快照裡，由列表 API 另外回一份以 id 為鍵的對照表。
+const patientNotes = ref({ pets: {}, owners: {} })
 const loading = ref(true)
 const error = ref('')
 const busy = ref(false)
@@ -110,14 +117,9 @@ function overdueMinutes(item) {
 function itemIsOverdue(item) {
   return isToday.value && isOverdue(item, new Date(now.value))
 }
-function visitTypeLabel(item) {
-  return item.visitType === 'new' ? '初診' : item.visitType === 'return' ? '回診' : ''
-}
-function surgeryLabel(item) {
-  return `手術${item.surgeryName ? `：${item.surgeryName}` : ''}`
-}
-function latenessLabel(appointment) {
-  return appointment.latenessMinutes > 0 ? `遲到 ${appointment.latenessMinutes} 分` : ''
+// 櫃台只看飼主備註——面對的是飼主本人；寵物備註（會咬人、保定方式）是給診間的。
+function notesFor(item) {
+  return patientNotesFor(item, patientNotes.value).filter((note) => note.key === 'owner')
 }
 function closedStatusMeta(appointment) {
   if (appointment.status === 'no_show') return { label: '未到診', class: 'bg-warning-surface text-warning' }
@@ -165,6 +167,7 @@ async function refresh() {
     const { data } = await http.get('/appointments', { params: { date: requested } })
     if (token !== request) return
     items.value = data.items || []
+    patientNotes.value = { pets: data.patientNotes?.pets || {}, owners: data.patientNotes?.owners || {} }
     error.value = ''
   } catch {
     if (token === request) error.value = '資料更新失敗，請重新載入；目前顯示的可能不是最新進度。'
@@ -521,19 +524,19 @@ onBeforeUnmount(() => {
           </header>
           <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
             <p v-if="!scheduled.length" class="px-2 py-6 text-center text-sm text-muted-foreground">沒有等待報到的預約</p>
-            <article v-for="item in scheduled" :key="item._id" class="space-y-2 rounded-lg border p-3" :class="itemIsOverdue(item) ? 'border-danger/45' : 'border-border'">
-              <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span class="text-sm font-semibold tabular-nums">{{ item.time || '未定' }}</span>
+            <article v-for="item in scheduled" :key="item._id" class="space-y-2 rounded-xl border p-3" :class="itemIsOverdue(item) ? 'border-danger/45' : 'border-border'">
+              <div class="flex items-center gap-2">
+                <span class="shrink-0 text-sm font-semibold tabular-nums">{{ item.time || '未定' }}</span>
                 <span class="min-w-0 truncate text-sm font-semibold">{{ item.petName }}</span>
-                <span class="text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
-                <span class="ml-auto flex flex-wrap gap-1.5">
-                  <Badge v-if="itemIsOverdue(item)" variant="status" class="bg-danger-surface text-danger">遲到 {{ overdueMinutes(item) }} 分</Badge>
-                  <Badge v-if="item.isSurgery" variant="status" class="bg-danger-surface text-danger">{{ surgeryLabel(item) }}</Badge>
-                </span>
+                <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
               </div>
-              <p v-if="item.reason || item.internalNote" class="line-clamp-2 text-xs text-muted-foreground">
-                <template v-if="item.reason">{{ item.reason }}</template><template v-if="item.reason && item.internalNote"> · </template><template v-if="item.internalNote"><span class="font-medium text-foreground">備註</span> {{ item.internalNote }}</template>
-              </p>
+              <p class="text-sm font-medium leading-snug" :class="item.reason ? 'text-foreground' : 'text-muted-foreground'">{{ item.reason || '未填來院原因' }}</p>
+              <div v-if="item.isSurgery || itemIsOverdue(item)" class="flex flex-wrap items-center gap-1.5">
+                <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
+                <LatenessBadge v-if="itemIsOverdue(item)" :minutes="overdueMinutes(item)" />
+              </div>
+              <PatientNotes :notes="notesFor(item)" />
+              <p v-if="item.internalNote" class="line-clamp-1 text-xs text-muted-foreground" :title="item.internalNote"><span class="font-medium text-foreground">掛號備註：</span>{{ item.internalNote }}</p>
               <p v-if="item.visitType === 'new' && !item.petId" class="text-xs text-muted-foreground">
                 初診驗證碼 <span class="font-semibold tracking-[0.16em] text-foreground">{{ item.intakeVerificationUsedAt ? '已使用' : item.intakeVerificationCode || '未建立' }}</span><template v-if="isInitialDataPending(item)"> · 等飼主填初診表</template>
               </p>
@@ -544,13 +547,13 @@ onBeforeUnmount(() => {
               </div>
             </article>
           </div>
-          <div class="shrink-0 border-t border-border">
-            <button type="button" class="flex min-h-11 w-full items-center gap-2 bg-card px-4 text-left text-xs font-medium text-muted-foreground hover:bg-field" :aria-expanded="showClosed" @click="showClosed = !showClosed">
-              未到／取消 {{ closedAppointments.length }}
-              <ChevronDown class="ml-auto h-4 w-4 transition-transform" :class="{ '-rotate-90': !showClosed }" />
+          <div class="shrink-0 border-t border-border p-2.5">
+            <button type="button" class="flex min-h-10 w-full items-center gap-2 rounded-lg bg-field px-3 text-left text-sm hover:bg-muted" :aria-expanded="showClosed" @click="showClosed = !showClosed">
+              <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="{ '-rotate-90': !showClosed }" />
+              未到／取消<span class="font-semibold tabular-nums">{{ closedAppointments.length }}</span>
             </button>
-            <div v-show="showClosed" class="max-h-64 space-y-1.5 overflow-y-auto px-2.5 pb-2.5">
-              <p v-if="!closedAppointments.length" class="px-2 py-3 text-center text-xs text-muted-foreground">沒有未到或取消的預約</p>
+            <div v-show="showClosed" class="max-h-64 space-y-1.5 overflow-y-auto pt-1.5">
+              <p v-if="!closedAppointments.length" class="px-1.5 py-2 text-xs text-muted-foreground">沒有未到或取消的預約</p>
               <div v-for="item in closedAppointments" :key="item._id" class="flex items-center gap-2 rounded-lg bg-field px-3 py-2">
                 <span class="text-xs tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
                 <span class="min-w-0 flex-1 truncate text-sm">{{ item.petName }}</span>
@@ -568,25 +571,33 @@ onBeforeUnmount(() => {
             <h2 id="col-onsite" class="text-base font-semibold">在院 · 看診／候診</h2>
           </header>
           <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
-            <p class="px-1.5 pt-1 text-xs font-medium text-muted-foreground">看診中 {{ visiting.length }}</p>
-            <p v-if="!visiting.length" class="px-2 py-2 text-xs text-muted-foreground">目前沒有人在看診</p>
-            <article v-for="item in visiting" :key="item._id" class="flex items-center gap-3 rounded-lg border border-border bg-field p-3">
-              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold tabular-nums text-primary-foreground">{{ item.checkinNumber ?? '—' }}</span>
-              <div class="min-w-0 flex-1">
+            <p class="flex items-center gap-2 px-1.5 pt-1 text-xs font-semibold text-muted-foreground">看診中<span class="font-normal">{{ visiting.length }}</span></p>
+            <p v-if="!visiting.length" class="px-1.5 py-2 text-xs text-muted-foreground">目前沒有人在看診</p>
+            <article v-for="item in visiting" :key="item._id" class="flex items-start gap-3 rounded-xl border border-border bg-field p-3">
+              <CheckinNumber :appointment="item" />
+              <div class="min-w-0 flex-1 space-y-1">
                 <p class="truncate text-sm font-semibold">{{ item.petName }}<span class="ml-2 text-xs font-normal text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span></p>
-                <p class="truncate text-xs text-muted-foreground">看診 {{ minutesSince(item.visitStartedAt) }} 分<template v-if="item.isSurgery"> · <span class="font-medium text-danger">{{ surgeryLabel(item) }}</span></template></p>
+                <p class="truncate text-xs text-muted-foreground">看診 {{ minutesSince(item.visitStartedAt) }} 分</p>
+                <div v-if="item.isSurgery || item.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
+                  <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
+                  <LatenessBadge :minutes="item.latenessMinutes" />
+                </div>
+                <PatientNotes :notes="notesFor(item)" />
               </div>
             </article>
 
-            <p class="px-1.5 pt-3 text-xs font-medium text-muted-foreground">候診中 {{ waiting.length }}</p>
-            <p v-if="!waiting.length" class="px-2 py-2 text-xs text-muted-foreground">目前沒有候診中的病患</p>
-            <article v-for="item in waiting" :key="item._id" class="flex items-center gap-3 rounded-lg border border-border p-3">
-              <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold tabular-nums">{{ item.checkinNumber ?? '—' }}</span>
-              <div class="min-w-0 flex-1">
+            <p class="flex items-center gap-2 px-1.5 pt-3 text-xs font-semibold text-muted-foreground">候診中<span class="font-normal">{{ waiting.length }}</span></p>
+            <p v-if="!waiting.length" class="px-1.5 py-2 text-xs text-muted-foreground">目前沒有候診中的病患</p>
+            <article v-for="item in waiting" :key="item._id" class="flex items-start gap-3 rounded-xl border border-border p-3">
+              <CheckinNumber :appointment="item" />
+              <div class="min-w-0 flex-1 space-y-1">
                 <p class="truncate text-sm font-semibold">{{ item.petName }}<span class="ml-2 text-xs font-normal text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span></p>
-                <p class="truncate text-xs text-muted-foreground">
-                  已等 {{ minutesSince(item.checkedInAt) }} 分<template v-if="latenessLabel(item)"> · <span class="font-medium text-danger">{{ latenessLabel(item) }}</span></template><template v-if="item.isSurgery"> · <span class="font-medium text-danger">{{ surgeryLabel(item) }}</span></template>
-                </p>
+                <p class="truncate text-xs text-muted-foreground">已等 {{ minutesSince(item.checkedInAt) }} 分</p>
+                <div v-if="item.isSurgery || item.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
+                  <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
+                  <LatenessBadge :minutes="item.latenessMinutes" />
+                </div>
+                <PatientNotes :notes="notesFor(item)" />
               </div>
               <RowActions :actions="[{ key: 'restore', label: '取消報到' }, { key: 'edit', label: '修改掛號' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
             </article>
@@ -602,20 +613,21 @@ onBeforeUnmount(() => {
           </header>
           <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
             <p v-if="!handoffs.length" class="px-2 py-6 text-center text-sm text-muted-foreground">目前沒有等待處理的交辦</p>
-            <article v-for="item in handoffs" :key="item._id" class="space-y-2.5 rounded-lg border border-border p-3">
+            <article v-for="item in handoffs" :key="item._id" class="space-y-2.5 rounded-xl border border-border p-3">
               <div class="flex items-center gap-3">
-                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-semibold tabular-nums text-primary-foreground">{{ item.checkinNumber ?? '—' }}</span>
+                <CheckinNumber :appointment="item" />
                 <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-semibold">{{ item.petName }}<span class="ml-2 text-xs font-normal text-muted-foreground">{{ item.species }}</span></p>
+                  <p class="truncate text-sm font-semibold">{{ item.petName }}<span class="ml-2 text-xs font-normal text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span></p>
                   <p class="truncate text-xs text-muted-foreground">{{ item.ownerName || '飼主待確認' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></p>
                 </div>
                 <span class="shrink-0 text-xs text-muted-foreground">交出 {{ minutesSince(item.handoffAt) }} 分</span>
               </div>
               <p class="line-clamp-2 text-sm" :class="item.handoffNote ? '' : 'text-muted-foreground'">{{ item.handoffNote || '醫師沒有留下交辦事項' }}</p>
-              <p v-if="item.specialCareNote" class="line-clamp-2 rounded-md bg-warning-surface px-2.5 py-1.5 text-xs text-warning"><span class="font-semibold">請轉告飼主：</span>{{ item.specialCareNote }}</p>
+              <p v-if="item.specialCareNote" class="line-clamp-2 rounded-md bg-warning-surface px-2 py-1 text-xs font-medium text-warning" :title="item.specialCareNote"><span class="font-semibold">請轉告飼主：</span>{{ item.specialCareNote }}</p>
+              <PatientNotes :notes="notesFor(item)" />
               <div class="flex flex-wrap items-center gap-1.5">
-                <Badge v-if="latenessLabel(item)" variant="status" class="bg-danger-surface text-danger">{{ latenessLabel(item) }}</Badge>
-                <Badge v-if="item.isSurgery" variant="status" class="bg-danger-surface text-danger">{{ surgeryLabel(item) }}</Badge>
+                <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
+                <LatenessBadge :minutes="item.latenessMinutes" />
                 <Badge v-if="item.followUpRecommendation" variant="status" class="bg-muted text-muted-foreground">建議回診</Badge>
                 <Button size="sm" class="ml-auto" @click="openSheet(item)">處理</Button>
               </div>
@@ -635,13 +647,14 @@ onBeforeUnmount(() => {
           </header>
           <div class="min-h-0 flex-1 overflow-y-auto p-2.5">
             <template v-if="followUps.length">
-              <p class="px-1.5 pb-2 pt-1 text-xs font-medium text-muted-foreground">待安排回診 {{ followUps.length }}</p>
-              <article v-for="item in followUps" :key="item._id" class="mb-2 space-y-2 rounded-lg border border-border p-3">
+              <p class="flex items-center gap-2 px-1.5 pb-2 pt-1 text-xs font-semibold text-muted-foreground">待安排回診<span class="font-normal">{{ followUps.length }}</span></p>
+              <article v-for="item in followUps" :key="item._id" class="mb-2 space-y-2 rounded-xl border border-border p-3">
                 <p class="truncate text-sm"><span class="font-semibold">{{ item.petName }}</span><span class="ml-2 text-xs text-muted-foreground">{{ item.ownerName || '飼主待確認' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></span></p>
                 <p class="line-clamp-2 text-xs text-muted-foreground">醫師建議：{{ item.followUpRecommendation || item.followUpReason }}</p>
+                <PatientNotes :notes="notesFor(item)" />
                 <div class="flex justify-end"><Button variant="secondary" size="sm" @click="openSheet(item)"><CalendarPlus class="h-4 w-4" />安排回診</Button></div>
               </article>
-              <p class="px-1.5 pb-1 pt-3 text-xs font-medium text-muted-foreground">已結束</p>
+              <p class="flex items-center gap-2 px-1.5 pb-1 pt-3 text-xs font-semibold text-muted-foreground">已結束<span class="font-normal">{{ finished.length }}</span></p>
             </template>
             <p v-if="!finished.length" class="px-2 py-6 text-center text-sm text-muted-foreground">還沒有完成的就診</p>
             <button v-for="item in finished" :key="item._id" type="button" class="flex min-h-11 w-full items-center gap-3 rounded-md bg-card px-2 text-left hover:bg-field" @click="openSheet(item)">
@@ -710,7 +723,8 @@ onBeforeUnmount(() => {
                 <span class="w-11 shrink-0 text-xs tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
                 <span class="h-2 w-2 shrink-0 rounded-full" :class="dotClass(item)"></span>
                 <span class="min-w-0 flex-1 truncate text-sm">{{ item.petName }}</span>
-                <span v-if="latenessLabel(item)" class="shrink-0 text-xs font-medium text-danger">{{ latenessLabel(item) }}</span>
+                <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" class="max-w-32" />
+                <LatenessBadge :minutes="item.latenessMinutes" />
                 <span class="shrink-0 text-xs text-muted-foreground">{{ visitLabel(item) }}</span>
               </div>
             </template>
@@ -784,7 +798,7 @@ onBeforeUnmount(() => {
       </div>
       <DialogFooter><Button type="button" variant="secondary" :disabled="busy" @click="intakeReviewTarget = null">取消</Button><Button type="button" variant="destructive" :disabled="busy" @click="rejectIntake(intakeReviewTarget)">退回</Button><Button type="button" :disabled="busy" @click="approveIntake(intakeReviewTarget)">核准並掛號</Button></DialogFooter>
     </ModalDialog>
-    <HandoffSheet v-if="activePatient" :key="activePatient._id" :appointment="activePatient" @updated="onSheetUpdate" @close="selected = ''" />
+    <HandoffSheet v-if="activePatient" :key="activePatient._id" :appointment="activePatient" :patient-notes="notesFor(activePatient)" @updated="onSheetUpdate" @close="selected = ''" />
     <CheckInDialog v-if="dialog === 'check-in-detail' && target" :appointment="target" :late="itemIsOverdue(target)" :suggested-checkin-number="suggestedCheckinNumber()" :submitting="busy" :error-message="dialogError" @submit="(values) => submit(values, 'check-in-detail')" @close="dialog = ''" />
     <CancelAppointmentDialog v-if="dialog === 'cancel' && target" :appointment="target" :submitting="busy" :error-message="dialogError" @submit="(reason) => submit({ cancelReason: reason }, 'cancel')" @close="dialog = ''" />
     <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :description="`病患：${target.petName}`" :loading="busy" @confirm="submit({}, confirmation.kind)" @cancel="confirmation = null" />

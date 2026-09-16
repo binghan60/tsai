@@ -9,6 +9,11 @@ import { APPOINTMENT_TIME_RANGES, APPOINTMENT_TIME_MINUTE_STEP } from '../lib/ap
 import AppointmentMilestones from './AppointmentMilestones.vue';
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue';
 import MechanismTooltip from './MechanismTooltip.vue';
+import CheckinNumber from './CheckinNumber.vue';
+import PatientNotes from './PatientNotes.vue';
+import LatenessBadge from './LatenessBadge.vue';
+import SurgeryBadge from './SurgeryBadge.vue';
+import { visitTypeLabel } from '../lib/appointmentDisplay';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { DatePicker } from './ui/date-picker';
@@ -18,7 +23,11 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dial
 
 // 櫃台處理醫師交辦的面板。段落順序是「請轉告飼主 → 醫師交辦 → 病歷內容 → 回診」，
 // 那就是櫃台當面對客人講話的順序；轉告事項最容易漏掉，所以放最上面並用警示底色。
-const props = defineProps({ appointment: { type: Object, required: true } });
+const props = defineProps({
+  appointment: { type: Object, required: true },
+  // 寵物／飼主備註（patientNotesFor 的回傳）。飼主就站在櫃台前，「處置前先說明費用」這類事要先看到。
+  patientNotes: { type: Array, default: () => [] },
+});
 const emit = defineEmits(['updated', 'close']);
 const notifyChat = useAppointmentNotifier();
 
@@ -43,7 +52,6 @@ const state = computed(() => workflowState(props.appointment));
 const booked = computed(() => Boolean(props.appointment.followUpAppointmentId));
 const needsFollowUp = computed(() => Boolean(props.appointment.followUpRecommendation || props.appointment.followUpReason));
 const canBook = computed(() => Boolean(date.value && time.value) && !booked.value);
-const latenessLabel = computed(() => props.appointment.latenessMinutes > 0 ? `遲到 ${props.appointment.latenessMinutes} 分` : '');
 
 watch(() => props.appointment._id, () => {
   date.value = props.appointment.followUpDate || '';
@@ -192,17 +200,16 @@ async function approveReopen() {
             <Button variant="secondary" size="icon-sm" aria-label="關閉就診詳情" :disabled="busy" @click="close"><X class="h-4 w-4" /></Button>
           </div>
           <div class="flex items-center gap-3">
-            <span class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-lg font-semibold tabular-nums text-accent-foreground">
-              {{ appointment.checkinNumber ?? '—' }}
-            </span>
-            <div class="min-w-0 flex-1">
+            <CheckinNumber :appointment="appointment" size="lg" />
+            <div class="min-w-0 flex-1 space-y-1">
               <DialogTitle class="text-xl font-semibold">
-                {{ appointment.petName }}<span class="ml-2 text-sm font-normal text-muted-foreground">{{ appointment.species }}</span>
+                {{ appointment.petName }}<span class="ml-2 text-sm font-normal text-muted-foreground">{{ [appointment.species, visitTypeLabel(appointment)].filter(Boolean).join(' · ') }}</span>
               </DialogTitle>
-              <p class="text-xs text-muted-foreground">
-                {{ appointment.ownerName || '飼主待確認' }}
-                <span v-if="latenessLabel" class="ml-2 font-semibold text-danger">{{ latenessLabel }}</span>
-              </p>
+              <p class="text-xs text-muted-foreground">{{ appointment.ownerName || '飼主待確認' }}</p>
+              <div v-if="appointment.isSurgery || appointment.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
+                <SurgeryBadge v-if="appointment.isSurgery" :name="appointment.surgeryName" />
+                <LatenessBadge :minutes="appointment.latenessMinutes" />
+              </div>
             </div>
             <a
               v-if="appointment.ownerPhone"
@@ -210,6 +217,7 @@ async function approveReopen() {
               class="inline-flex h-10 items-center gap-2 rounded-lg bg-field px-3 text-sm tabular-nums text-primary"
             ><Phone class="h-4 w-4" />{{ appointment.ownerPhone }}</a>
           </div>
+          <PatientNotes :notes="patientNotes" class="mt-3" />
           <div class="mt-3"><AppointmentMilestones :appointment="appointment" /></div>
         </header>
 
