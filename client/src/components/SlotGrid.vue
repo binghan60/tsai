@@ -12,12 +12,12 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 function selectable(cell) {
-  return cell.inRange && (!cell.past || cell.time === props.modelValue);
+  return cell.inRange;
 }
 
 function cellClass(cell) {
   if (cell.time === props.modelValue) return 'border-primary bg-primary text-primary-foreground font-semibold';
-  if (!selectable(cell)) return cell.inRange ? 'border-transparent bg-muted/40 text-muted-foreground/60' : 'invisible';
+  if (!cell.inRange) return 'invisible';
   if (cell.entries.length) return 'border-border bg-muted text-foreground font-medium hover:border-ring';
   return 'border-border bg-field text-muted-foreground hover:border-ring';
 }
@@ -37,6 +37,14 @@ const selected = computed(() => {
   <div class="space-y-3">
     <div v-for="session in sessions" :key="session.id" class="space-y-1.5">
       <p class="text-xs font-medium text-muted-foreground">{{ session.label }} {{ session.start }}–{{ session.end }}</p>
+      <div v-if="session.rows.length" class="flex items-center gap-2 select-none" aria-hidden="true">
+        <span class="w-11 shrink-0"></span>
+        <div class="grid flex-1 grid-cols-12 gap-1 text-center text-[11px] font-medium tabular-nums text-muted-foreground">
+          <span v-for="cell in session.rows[0].cells" :key="cell.time">
+            {{ cell.time.slice(3) }}
+          </span>
+        </div>
+      </div>
       <div v-for="row in session.rows" :key="row.hour" class="flex items-center gap-2">
         <span class="w-11 shrink-0 text-xs tabular-nums text-muted-foreground">{{ row.hour }}</span>
         <div class="grid flex-1 grid-cols-12 gap-1" :class="invalid && !modelValue ? 'rounded-md ring-2 ring-destructive/40' : ''">
@@ -57,7 +65,6 @@ const selected = computed(() => {
         </div>
       </div>
     </div>
-    <p class="text-xs text-muted-foreground">格內數字是已約人數；灰色是已經過去的時段。</p>
     <p v-if="selected" class="rounded-lg bg-field px-3 py-2 text-sm">
       {{ selected.time }}
       <template v-if="selected.entries.length">

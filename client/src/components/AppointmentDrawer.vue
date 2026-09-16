@@ -15,7 +15,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { DatePicker } from './ui/date-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { buildSlotGrid } from '../lib/receptionBoard';
-import { clinicDateInput, clinicTimeInput, formatDate, formatDateTime, weekdayLabel } from '../lib/datetime';
+import { clinicDateInput, formatDate, formatDateTime, weekdayLabel } from '../lib/datetime';
 
 // 新增與修改掛號共用的抽屜，取代原本的 NewAppointmentDialog／EditAppointmentDialog。
 // 送出的 payload 跟那兩個對話框完全一樣，後端沒有跟著改。
@@ -165,13 +165,9 @@ watch(slotDate, async (value) => {
     if (slotDate.value === value) otherDayItems.value = [];
   }
 });
-const now = ref(Date.now());
-const clock = setInterval(() => { now.value = Date.now(); }, 60000);
-onBeforeUnmount(() => clearInterval(clock));
 const slotSessions = computed(() => {
   const items = slotDate.value === props.date ? props.dayItems : otherDayItems.value ?? [];
-  const minTime = slotDate.value < today ? '23:59' : slotDate.value === today ? clinicTimeInput(new Date(now.value)) : '';
-  return buildSlotGrid(items, { excludeId: props.appointment?._id, minTime });
+  return buildSlotGrid(items, { excludeId: props.appointment?._id });
 });
 
 // ── 送出 ─────────────────────────────────────────────────────────────────
@@ -382,27 +378,20 @@ const onSubmit = handleSubmit((values) => {
           <p v-if="surgeryNameError" class="text-xs font-medium text-destructive">{{ surgeryNameError }}</p>
         </div>
       </div>
-
       <div class="space-y-4">
-        <Button type="button" variant="secondary" size="sm" :aria-expanded="showMore" @click="showMore = !showMore">
-          <ChevronDown class="h-4 w-4 transition-transform" :class="{ '-rotate-90': !showMore }" />{{ isEdit ? '正式表單' : '正式表單、內部備註' }}
-        </Button>
-        <div v-show="showMore" class="space-y-4">
-          <div class="space-y-1.5">
-            <Label for="drawer-template" class="text-xs font-medium">正式表單</Label>
-            <Select v-model="templateId">
-              <SelectTrigger id="drawer-template" class="w-full"><SelectValue placeholder="需要時可由醫師選擇" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="template in templates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
-              </SelectContent>
-            </Select>
-            <p class="text-xs text-muted-foreground">僅預選表單；醫師需要時才建立草稿。</p>
-          </div>
-          <div v-if="!isEdit" class="space-y-1.5">
-            <Label for="drawer-internal-note" class="text-xs font-medium">內部備註</Label>
-            <Textarea id="drawer-internal-note" v-model="internalNote" rows="3" maxlength="2000" placeholder="醫師看診台會帶入同一則內部備註…" />
-            <p class="text-xs text-muted-foreground">僅供院內人員查看，可在醫師看診台繼續編輯。</p>
-          </div>
+        <div class="space-y-1.5">
+          <Label for="drawer-template" class="text-xs font-medium">報告模板</Label>
+          <Select v-model="templateId">
+            <SelectTrigger id="drawer-template" class="w-full"><SelectValue placeholder="需要時可由醫師選擇" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="template in templates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div v-if="!isEdit" class="space-y-1.5">
+          <Label for="drawer-internal-note" class="text-xs font-medium">內部備註</Label>
+          <Textarea id="drawer-internal-note" v-model="internalNote" rows="3" maxlength="2000" placeholder="醫師看診台會帶入同一則內部備註…" />
+          <p class="text-xs text-muted-foreground">僅供院內人員查看，可在醫師看診台繼續編輯。</p>
         </div>
       </div>
 
@@ -410,7 +399,6 @@ const onSubmit = handleSubmit((values) => {
         <AlertDescription>{{ errorMessage }}</AlertDescription>
       </Alert>
     </form>
-
     <template #footer>
       <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ summary }}</p>
       <Button type="button" variant="secondary" :disabled="submitting" @click="emit('close')">取消</Button>
