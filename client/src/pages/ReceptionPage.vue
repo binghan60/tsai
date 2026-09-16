@@ -141,11 +141,13 @@ function isInitialDataPending(appointment) {
 }
 
 // 待報到卡片上唯一的主要按鈕。資料齊全的回診一鍵報到；初診要建檔，開抽屜。
+// 已超過寬限還沒報到的，報到鈕改成實心紅——在一整欄主色按鈕裡一眼挑得出來。
 function scheduledPrimary(item) {
   if (item.visitType === 'new' && item.intakeSubmissionId && !item.petId) return { label: '審核初診表', run: () => openIntakeReview(item) }
   if (isInitialDataPending(item)) return null
-  if (!item.petId) return { label: '報到…', run: () => openDrawer('check-in', item) }
-  return { label: itemIsOverdue(item) ? '報到（記遲到）' : '報到', run: () => quickCheckIn(item) }
+  const late = itemIsOverdue(item)
+  if (!item.petId) return { label: '報到…', late, run: () => openDrawer('check-in', item) }
+  return { label: late ? '遲到' : '報到', late, run: () => quickCheckIn(item) }
 }
 function scheduledActions(item) {
   const actions = []
@@ -537,7 +539,7 @@ onBeforeUnmount(() => {
               </p>
               <div class="flex items-center gap-2">
                 <span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></span>
-                <Button v-if="scheduledPrimary(item)" size="sm" class="shrink-0" :disabled="busy" @click="scheduledPrimary(item).run()">{{ scheduledPrimary(item).label }}</Button>
+                <Button v-if="scheduledPrimary(item)" size="sm" :variant="scheduledPrimary(item).late ? 'destructive-solid' : 'default'" class="shrink-0" :disabled="busy" @click="scheduledPrimary(item).run()">{{ scheduledPrimary(item).label }}</Button>
                 <RowActions :actions="scheduledActions(item)" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
               </div>
             </article>
