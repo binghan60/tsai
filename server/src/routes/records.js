@@ -5,6 +5,7 @@ import MedicalRecord from '../models/MedicalRecord.js';
 import DeliveryLog from '../models/DeliveryLog.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
+import Appointment from '../models/Appointment.js';
 import { enqueueReportPdf, readStoredPdf, streamStoredPdf } from '../lib/reportPdfJobs.js';
 import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from '../lib/mailer.js';
 import { hasPdfRenderAccess } from '../config/pdfAccess.js';
@@ -18,6 +19,7 @@ import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { enrichSectionsWithPreviousValues, getPetPreviousValues, plainSections } from '../lib/historyValues.js';
 import { clinicDayStart } from '../lib/clinicTime.js';
+import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -771,6 +773,7 @@ recordsRouter.post('/:id/revisions', async (req, res, next) => {
 
 recordsRouter.delete('/:id', async (req, res, next) => {
   let deletedImageIds = [];
+  let unlinkedAppointmentIds = [];
   try {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
@@ -856,7 +859,24 @@ recordsRouter.delete('/:id', async (req, res, next) => {
         error.status = 409;
         throw error;
       }
+
+      // 報到時建立的草稿綁在掛號的 recordId 上。不一起解除的話，診療台會拿著一個
+      // 已不存在的 id「開啟表單草稿」，workflow/record 也會因找不到原綁定表單而 409。
+      // 版本號一起遞增，開著舊畫面的工作區才不會拿舊的 recordId 蓋回去。
+      const linked = await Appointment.find({ recordId: current._id }).select('_id').session(session);
+      unlinkedAppointmentIds = linked.map((item) => item._id);
+      if (unlinkedAppointmentIds.length) {
+        await Appointment.updateMany(
+          { _id: { $in: unlinkedAppointmentIds } },
+          { $set: { recordId: null }, $inc: { __v: 1 } },
+          { session }
+        );
+      }
     });
+    if (unlinkedAppointmentIds.length) {
+      const appointments = await Appointment.find({ _id: { $in: unlinkedAppointmentIds } });
+      appointments.forEach((appointment) => emitAppointmentUpdate(appointment));
+    }
     await cleanUpImages(deletedImageIds, `record ${req.params.id} deleted`);
     res.status(204).end();
   } catch (err) {

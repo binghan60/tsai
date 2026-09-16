@@ -1,12 +1,15 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { AlertTriangle, ClipboardPlus, FileText, PawPrint, Pencil, User } from '@lucide/vue';
+import { AlertTriangle, ClipboardPlus, FileText, PawPrint, Pencil, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate } from '../lib/datetime';
-import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus } from '../lib/recordStatus';
+import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { useRoute, useRouter } from 'vue-router';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
+import { useToast } from '../composables/useToast';
 import PetPickerDialog from '../components/PetPickerDialog.vue';
+import ConfirmDialog from '../components/ConfirmDialog.vue';
+import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
 import FilterBar from '../components/FilterBar.vue';
 import PageHeader from '../components/PageHeader.vue';
@@ -34,6 +37,7 @@ const dateFrom = useSearchQueryParam('from');
 const dateTo = useSearchQueryParam('to');
 const route = useRoute();
 const router = useRouter();
+const toast = useToast();
 
 // 網址上的 view 是明確指定（書籤／分享連結）時最高優先；只有未指定時才套用個人偏好。
 // localStorage 可能被無痕模式或瀏覽器設定封鎖，因此讀寫都不能影響正常使用。
@@ -53,6 +57,9 @@ const limit = ref(10);
 const loading = ref(false);
 const error = ref('');
 const petPickerOpen = ref(false);
+const recordToRemove = ref(null);
+const deletingRecordId = ref(null);
+const removeError = ref('');
 
 let requestSequence = 0;
 
@@ -160,6 +167,38 @@ function actionLabel(record) {
   return record.status === 'draft' ? '繼續填寫' : '查看報告';
 }
 
+// 判準與後端刪除端點一致：已寄出、寄送中、結果待確認的報告不給刪，
+// 按鈕乾脆不出現，免得點了才被 409 擋回來。
+function canDelete(record) {
+  return !['sent', 'sending', 'uncertain'].includes(getDeliveryStatus(record));
+}
+
+function openRemoveRecord(record) {
+  if (deletingRecordId.value) return;
+  removeError.value = '';
+  recordToRemove.value = record;
+}
+
+async function removeRecord(confirmText) {
+  const record = recordToRemove.value;
+  if (!record) return;
+  deletingRecordId.value = record._id;
+  removeError.value = '';
+  try {
+    await http.delete(`/records/${record._id}`, { data: { confirmText } });
+    recordToRemove.value = null;
+    toast.success(`已刪除「${record.petId?.name || '寵物'}」${formatDate(record.visitDate)} 的就診紀錄`, '刪除紀錄成功');
+    // 刪掉這頁最後一筆時，fetchRecords 會自己退回有效頁碼。
+    await fetchRecords();
+  } catch (err) {
+    const msg = err.response?.data?.message ?? '刪除就診紀錄失敗';
+    removeError.value = msg;
+    toast.error(msg, '刪除失敗');
+  } finally {
+    deletingRecordId.value = null;
+  }
+}
+
 </script>
 
 <template>
@@ -198,7 +237,7 @@ function actionLabel(record) {
     <template v-else-if="records.length">
       <!-- 桌機：清單卡，不是傳統網格表格——每列是身分區塊＋類型日期＋狀態徽章＋一顆主要按鈕，
            沒有直線分隔，靠橫向髮線區隔列與列。寄送失敗的列左側加一條警示色條，不用額外圖示搶注意力。 -->
-      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(14rem, 1.3fr) minmax(14rem, 1fr) minmax(11rem, 0.8fr) 8.5rem">
+      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(14rem, 1.3fr) minmax(14rem, 1fr) minmax(11rem, 0.8fr) 13rem">
         <div class="desktop-data-header">
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物 / 飼主</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型．看診日</span>
@@ -231,12 +270,23 @@ function actionLabel(record) {
             <AlertTriangle v-if="record.deliveryError" class="h-3.5 w-3.5 shrink-0 text-danger" stroke-width="1.75" :title="record.deliveryError" />
           </span>
 
-          <span class="desktop-data-cell text-right">
+          <span class="desktop-data-cell flex items-center justify-end gap-1.5">
             <Button as-child variant="secondary" size="sm">
               <router-link :to="recordLink(record)">
                 <component :is="record.status === 'draft' ? Pencil : FileText" class="h-4 w-4" stroke-width="1.75" />
                 {{ actionLabel(record) }}
               </router-link>
+            </Button>
+            <Button
+              v-if="canDelete(record)"
+              type="button"
+              variant="destructive"
+              size="sm"
+              :disabled="deletingRecordId === record._id"
+              :aria-label="`刪除${record.petId?.name || '寵物'} ${formatDate(record.visitDate)} 的就診紀錄`"
+              @click="openRemoveRecord(record)"
+            >
+              <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除
             </Button>
           </span>
         </div>
@@ -270,12 +320,26 @@ function actionLabel(record) {
             <span class="min-w-0">{{ record.deliveryError }}</span>
           </p>
 
-          <Button as-child variant="secondary" size="sm" class="w-full">
-            <router-link :to="recordLink(record)">
-              <component :is="record.status === 'draft' ? Pencil : FileText" class="h-4 w-4" stroke-width="1.75" />
-              {{ actionLabel(record) }}
-            </router-link>
-          </Button>
+          <div class="flex items-center gap-2">
+            <Button as-child variant="secondary" size="sm" class="min-w-0 flex-1">
+              <router-link :to="recordLink(record)">
+                <component :is="record.status === 'draft' ? Pencil : FileText" class="h-4 w-4" stroke-width="1.75" />
+                {{ actionLabel(record) }}
+              </router-link>
+            </Button>
+            <Button
+              v-if="canDelete(record)"
+              type="button"
+              variant="destructive"
+              size="sm"
+              class="min-w-0 flex-1"
+              :disabled="deletingRecordId === record._id"
+              :aria-label="`刪除${record.petId?.name || '寵物'} ${formatDate(record.visitDate)} 的就診紀錄`"
+              @click="openRemoveRecord(record)"
+            >
+              <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除
+            </Button>
+          </div>
         </Card>
       </div>
 
@@ -283,4 +347,24 @@ function actionLabel(record) {
     </template>
   </section>
   <PetPickerDialog :open="petPickerOpen" @close="closePetPicker" @select="startRecordForPet" />
+  <!-- 草稿只要一般確認，已結案報告才要打字（與寵物詳情頁、後端刪除端點同一個判準）。 -->
+  <ConfirmDialog
+    :open="Boolean(recordToRemove) && !isFinalizedRecord(recordToRemove)"
+    title="捨棄健檢草稿"
+    :description="`確定要捨棄「${recordToRemove?.petId?.name || '寵物'}」${formatDate(recordToRemove?.visitDate)} 這筆草稿嗎？此操作無法復原。`"
+    confirm-label="捨棄草稿"
+    destructive
+    :loading="Boolean(deletingRecordId)"
+    @update:open="(value) => !value && (recordToRemove = null)"
+    @confirm="removeRecord()"
+  />
+  <DeleteRecordDialog
+    v-if="recordToRemove && isFinalizedRecord(recordToRemove)"
+    :record="recordToRemove"
+    :confirm-word="recordToRemove.petId?.name ?? ''"
+    :submitting="Boolean(deletingRecordId)"
+    :error-message="removeError"
+    @close="recordToRemove = null"
+    @submit="removeRecord"
+  />
 </template>

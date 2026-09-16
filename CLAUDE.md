@@ -267,7 +267,7 @@ GET    /api/health
 
 `GET /api/records` 的 `view` 是預設工作佇列：`todo`（預設）/ `drafts` / `pending` / `failed` / `sent` / `all`。回傳帶 `counts` 給前端佇列徽章。**儀錶板卡片的數字必須跟對應佇列的筆數對得起來**——卡片可以點進清單，兩邊算法不同會直接讓人困惑。
 
-刪除限制：`deliveryStatus` 為 `sent` 或 `sending` 的報告不給刪。
+刪除限制：`deliveryStatus` 為 `sent` 或 `sending` 的報告不給刪。刪除入口有兩個：`/pets/:id` 的報告頁籤（收在列上的 ⋯ 選單）與 `/records` 列表（列上直接一顆淡紅「刪除」鈕，跟主要按鈕並排）。報到時自動建立的草稿綁在掛號的 `recordId` 上，刪除報告會在同一個 transaction 內把指向它的掛號 `recordId` 清成 null（`__v` +1 並廣播 `appointment:updated`），否則診療台會開啟一份已不存在的草稿。
 
 刪除確認：**只有已結案報告要打字確認**（`confirmText` 必須等於寵物名稱），草稿直接刪。打字確認防的是誤刪正式報告——它產過 PDF、可能已經給過飼主連結；草稿是工作中狀態，多一道抄名字只會訓練使用者無視確認。前端也照這個判準分流：草稿走 `ConfirmDialog`，已結案走 `DeleteRecordDialog`。
 
