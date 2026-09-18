@@ -6,7 +6,9 @@ import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Button } from './ui/button';
 
-defineProps({ iconOnly: Boolean });
+// iconOnly：行動版頁首的圖示鈕（一般按鈕樣式、選單往下彈）；
+// compact：桌機側邊欄收合成只剩圖示時用的版本（側邊欄配色、選單往右彈）。
+defineProps({ iconOnly: Boolean, compact: Boolean });
 const emit = defineEmits(['logout']);
 const { isDark, toggleTheme } = useTheme();
 const { identity, setIdentity } = useStaffIdentity();
@@ -19,9 +21,10 @@ function logout() { open.value = false; emit('logout'); }
   <Popover v-model:open="open">
     <PopoverTrigger as-child>
       <Button v-if="iconOnly" variant="secondary" size="icon" aria-label="開啟設定選單"><Settings class="h-4 w-4" /></Button>
+      <button v-else-if="compact" type="button" class="flex h-11 w-full items-center justify-center rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" aria-label="開啟設定選單" title="設定"><Settings class="h-4 w-4" /></button>
       <button v-else type="button" class="flex min-h-11 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" aria-label="開啟設定選單"><Settings class="h-4 w-4" />設定</button>
     </PopoverTrigger>
-    <PopoverContent :side="iconOnly ? 'bottom' : 'top'" :align="iconOnly ? 'end' : 'start'" class="w-64 p-2">
+    <PopoverContent :side="iconOnly ? 'bottom' : compact ? 'right' : 'top'" :align="iconOnly || compact ? 'end' : 'start'" class="w-64 p-2">
       <p class="px-3 py-2 text-sm font-semibold">設定</p>
       <button type="button" class="settings-item" @click="changeIdentity"><UserRound class="h-4 w-4" /><span>{{ identity === 'vet' ? '切換為櫃台' : '切換為醫師' }}</span></button>
       <button type="button" class="settings-item mt-1" @click="toggleTheme"><Sun v-if="isDark" class="h-4 w-4" /><Moon v-else class="h-4 w-4" />{{ isDark ? '淺色模式' : '深色模式' }}</button>

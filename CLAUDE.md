@@ -289,6 +289,7 @@ GET    /api/health
 
 導覽與返回的幾個約定（`client/src/App.vue`、`router/index.js`）：
 
+- 桌機側邊欄可收合成只剩圖示的窄條（`App.vue` 的 `sidebarCollapsed`，存 `localStorage`，是裝置偏好），收合時導覽項目靠 `ui/tooltip` 在右側顯示名稱、設定選單改用 `AppSettingsMenu` 的 `compact` 版本往右彈。
 - 側邊欄 active 判斷用網址前綴，不用 `router-link` 內建的（那個比對路由記錄，抓不到獨立註冊的深層路由）。路由可以用 `meta.nav` 自己指定歸屬，網址前綴猜錯時以它為準。
 - 各頁的返回連結走 `useBackTarget`，回到使用者真正的出發點（router 在 `afterEach` 記進 `history.state`），不是寫死的上層網址。標了 `meta.transient` 的路由不列入來源。
 - 列表頁的搜尋／佇列／頁碼用 `useSearchQueryParam` 同步進網址，配合 router 的 `scrollBehavior` 讓返回時狀態與捲動位置都還在。

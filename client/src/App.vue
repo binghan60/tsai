@@ -1,12 +1,13 @@
 <script setup>
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CalendarClock, Cat, ClipboardList, FileText, LayoutDashboard, Mail, Menu, Search } from '@lucide/vue';
+import { CalendarClock, Cat, ChevronsLeft, ChevronsRight, ClipboardList, FileText, LayoutDashboard, Mail, Menu, Search } from '@lucide/vue';
 import AppSettingsMenu from './components/AppSettingsMenu.vue';
 import { useAuthStore } from './stores/auth';
 import { useGlobalChat } from './composables/useGlobalChat';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/ui/tooltip';
 import ToastContainer from './components/ToastContainer.vue';
 import GlobalSearchDialog from './components/GlobalSearchDialog.vue';
 import GlobalChatWidget from './components/GlobalChatWidget.vue';
@@ -17,6 +18,26 @@ const router = useRouter();
 
 const mobileOpen = ref(false);
 const searchOpen = ref(false);
+
+// 桌機側邊欄可以收合成只剩圖示的窄條，狀態記在這台裝置上（跟主題切換一樣是裝置偏好）。
+// localStorage 在無痕或封鎖站台資料時會丟例外，讀寫都包起來，讀不到就當展開。
+const SIDEBAR_KEY = 'sidebar-collapsed';
+function readCollapsed() {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+const sidebarCollapsed = ref(readCollapsed());
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value;
+  try {
+    localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed.value ? '1' : '0');
+  } catch {
+    /* 存不了就只在這次開著的頁面有效 */
+  }
+}
 const auth = useAuthStore();
 useGlobalChat();
 
@@ -106,50 +127,95 @@ watch(
 
   <template v-else>
     <div class="app-shell min-h-screen text-foreground lg:flex">
-      <aside class="belle-sidebar hidden min-h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-screen">
-        <div class="border-b border-sidebar-border p-3">
-          <router-link to="/" class="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 text-left text-sm font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-            <span class="flex h-12 w-12 shrink-0 items-center justify-center">
-              <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-full w-full object-contain" />
-            </span>
-            <span class="min-w-0 flex-1">
-              <span class="block truncate font-semibold">謙華動物醫院</span>
-              <span class="block truncate text-xs text-sidebar-foreground/70">健檢與報告</span>
-            </span>
-          </router-link>
-        </div>
-
-        <div class="space-y-2 border-b border-sidebar-border p-3">
-          <button
-            type="button"
-            class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-            aria-label="搜尋飼主、寵物或電話"
-            title="搜尋飼主、寵物或電話"
-            @click="openGlobalSearch"
-          >
-            <Search class="h-4 w-4 shrink-0" stroke-width="1.9" />
-            <span class="truncate">搜尋資料</span>
-            <kbd class="ml-auto shrink-0 rounded border border-sidebar-border px-1.5 py-0.5 text-xs text-sidebar-foreground/70">Ctrl K</kbd>
-          </button>
-        </div>
-
-        <nav class="flex-1 space-y-6 px-3 py-4" aria-label="主要導覽">
-          <div>
-            <p class="px-2 pb-2 text-xs font-medium text-sidebar-foreground/70">平台</p>
-            <router-link
-              v-for="item in navItems"
-              :key="item.to"
-              :to="item.to"
-              class="mb-1 flex min-h-10 items-center gap-3 rounded-lg border border-transparent bg-sidebar-accent/30 px-2.5 text-sm font-medium text-sidebar-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              :class="isNavActive(item) ? navActiveClass : ''"
-            >
-              <component :is="item.icon" class="h-4 w-4" stroke-width="1.9" />
-              <span>{{ item.label }}</span>
+      <aside
+        class="belle-sidebar hidden min-h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-150 lg:sticky lg:top-0 lg:flex lg:h-screen"
+        :class="sidebarCollapsed ? 'w-16' : 'w-64'"
+      >
+        <TooltipProvider :delay-duration="150">
+          <div class="border-b border-sidebar-border p-2">
+            <router-link to="/" class="flex min-h-14 w-full items-center gap-3 rounded-lg text-left text-sm font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" :class="sidebarCollapsed ? 'justify-center px-0' : 'px-2'" :title="sidebarCollapsed ? '謙華動物醫院' : undefined">
+              <span class="flex h-11 w-11 shrink-0 items-center justify-center">
+                <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-full w-full object-contain" />
+              </span>
+              <span v-if="!sidebarCollapsed" class="min-w-0 flex-1">
+                <span class="block truncate font-semibold">謙華動物醫院</span>
+                <span class="block truncate text-xs text-sidebar-foreground/70">健檢與報告</span>
+              </span>
             </router-link>
           </div>
-        </nav>
 
-        <div class="border-t border-sidebar-border p-3"><AppSettingsMenu @logout="logout" /></div>
+          <div class="space-y-2 border-b border-sidebar-border p-2">
+            <Tooltip v-if="sidebarCollapsed">
+              <TooltipTrigger as-child>
+                <button type="button" class="flex h-11 w-full items-center justify-center rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" aria-label="搜尋飼主、寵物或電話" @click="openGlobalSearch">
+                  <Search class="h-4 w-4 shrink-0" stroke-width="1.9" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">搜尋資料 · Ctrl K</TooltipContent>
+            </Tooltip>
+            <button
+              v-else
+              type="button"
+              class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              aria-label="搜尋飼主、寵物或電話"
+              title="搜尋飼主、寵物或電話"
+              @click="openGlobalSearch"
+            >
+              <Search class="h-4 w-4 shrink-0" stroke-width="1.9" />
+              <span class="truncate">搜尋資料</span>
+              <kbd class="ml-auto shrink-0 rounded border border-sidebar-border px-1.5 py-0.5 text-xs text-sidebar-foreground/70">Ctrl K</kbd>
+            </button>
+          </div>
+
+          <nav class="flex-1 px-2 py-4" aria-label="主要導覽">
+            <p v-if="!sidebarCollapsed" class="px-2 pb-2 text-xs font-medium text-sidebar-foreground/70">平台</p>
+            <template v-for="item in navItems" :key="item.to">
+              <Tooltip v-if="sidebarCollapsed">
+                <TooltipTrigger as-child>
+                  <router-link
+                    :to="item.to"
+                    class="mb-1 flex h-11 items-center justify-center rounded-lg border border-transparent bg-sidebar-accent/30 text-sidebar-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    :class="isNavActive(item) ? navActiveClass : ''"
+                    :aria-label="item.label"
+                    :aria-current="isNavActive(item) ? 'page' : undefined"
+                  >
+                    <component :is="item.icon" class="h-5 w-5" stroke-width="1.9" />
+                  </router-link>
+                </TooltipTrigger>
+                <TooltipContent side="right">{{ item.label }}</TooltipContent>
+              </Tooltip>
+              <router-link
+                v-else
+                :to="item.to"
+                class="mb-1 flex min-h-10 items-center gap-3 rounded-lg border border-transparent bg-sidebar-accent/30 px-2.5 text-sm font-medium text-sidebar-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                :class="isNavActive(item) ? navActiveClass : ''"
+                :aria-current="isNavActive(item) ? 'page' : undefined"
+              >
+                <component :is="item.icon" class="h-4 w-4 shrink-0" stroke-width="1.9" />
+                <span class="truncate">{{ item.label }}</span>
+              </router-link>
+            </template>
+          </nav>
+
+          <div class="space-y-2 border-t border-sidebar-border p-2">
+            <AppSettingsMenu :compact="sidebarCollapsed" @logout="logout" />
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <button
+                  type="button"
+                  class="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-sidebar-accent/30 text-xs font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                  :aria-label="sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'"
+                  :aria-expanded="!sidebarCollapsed"
+                  @click="toggleSidebar"
+                >
+                  <ChevronsRight v-if="sidebarCollapsed" class="h-4 w-4" stroke-width="1.9" />
+                  <template v-else><ChevronsLeft class="h-4 w-4" stroke-width="1.9" />收合側邊欄</template>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent v-if="sidebarCollapsed" side="right">展開側邊欄</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </aside>
 
       <div class="min-w-0 flex-1 lg:@container/content">
