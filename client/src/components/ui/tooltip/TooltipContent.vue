@@ -29,6 +29,8 @@ const props = defineProps({
   hideWhenDetached: { type: Boolean, required: false },
   positionStrategy: { type: String, required: false },
   updatePositionStrategy: { type: String, required: false },
+  arrow: { type: Boolean, default: true },
+  arrowClass: { type: String, default: "" },
   class: {
     type: [Boolean, null, String, Object, Array],
     required: false,
@@ -57,7 +59,8 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
       <slot />
 
       <TooltipArrow
-        class="size-2.5 rotate-45 rounded-xs bg-foreground fill-foreground z-50 translate-y-[calc(-50%_-_2px)]"
+        v-if="arrow"
+        :class="cn('size-2.5 rotate-45 rounded-xs bg-foreground fill-foreground z-50 translate-y-[calc(-50%_-_2px)]', arrowClass)"
       />
     </TooltipContent>
   </TooltipPortal>

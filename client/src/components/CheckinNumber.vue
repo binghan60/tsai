@@ -18,7 +18,12 @@ const TONE_CLASS = {
   done: 'bg-muted text-muted-foreground',
 };
 
-const sizeClass = computed(() => (props.size === 'lg' ? 'h-12 w-12 text-lg' : 'h-10 w-10 text-sm'));
+const sizeClass = computed(() => {
+  if (props.size === 'lg') return 'h-12 w-12 text-lg';
+  if (props.size === 'sm') return 'h-7 w-7 text-xs';
+  return 'h-10 w-10 text-sm';
+});
+const iconClass = computed(() => (props.size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'));
 const hasNumber = computed(() => props.appointment.checkinNumber != null);
 </script>
 
@@ -34,7 +39,7 @@ const hasNumber = computed(() => props.appointment.checkinNumber != null);
     :class="sizeClass"
     title="未取號"
   >
-    <Ticket class="h-4 w-4" stroke-width="1.75" aria-hidden="true" />
+    <Ticket :class="iconClass" stroke-width="1.75" aria-hidden="true" />
     <span class="sr-only">未取號</span>
   </span>
 </template>

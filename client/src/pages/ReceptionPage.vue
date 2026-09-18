@@ -19,7 +19,6 @@ import PinnedPetsList from '../components/PinnedPetsList.vue'
 import RowActions from '../components/RowActions.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
-import SideDrawer from '../components/SideDrawer.vue'
 import AppointmentDialog from '../components/AppointmentDialog.vue'
 import CheckInDrawer from '../components/CheckInDrawer.vue'
 import CheckInDialog from '../components/CheckInDialog.vue'
@@ -45,7 +44,7 @@ import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/ap
 //
 // 真正要人注意的例外（醫師申請修改、遲到還沒報到、待審初診）浮到流程列下方的警示列。
 // 新增／修改掛號改成置中的雙欄 Modal（AppointmentDialog），填到一半可「收起」讓出看板；
-// 初診報到與暫存區仍開在時間軸右側的 SideDrawer。
+// 初診報到仍開在時間軸右側的 SideDrawer（要一邊填一邊看看板）；暫存區是「看一批、看完就關」的查閱，走大 Modal。
 const router = useRouter()
 const toast = useToast()
 const notifyChat = useAppointmentNotifier()
@@ -104,7 +103,7 @@ const overdue = computed(() => (isToday.value ? scheduled.value.filter((item) =>
 const activePatient = computed(() => items.value.find((item) => String(item._id) === selected.value) || null)
 const currentTime = computed(() => clinicTimeInput(new Date(now.value)))
 const hasAlerts = computed(() => reopenRequests.value.length || overdue.value.length || pendingIntakeCount.value)
-const drawerVisible = computed(() => drawer.value === 'check-in' || drawer.value === 'pinned')
+const drawerVisible = computed(() => drawer.value === 'check-in')
 
 // ── 流程列與時間軸 ──────────────────────────────────────────────────────────
 // 流程列的四格就是四個篩選：點了只看那一段，再點一次清除。
@@ -845,8 +844,8 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <!-- 右側抽屜（初診報到、暫存區）：頁面版面裡的一欄，不蓋住時間軸 -->
-      <div v-if="drawerVisible" class="order-first flex min-h-0 shrink-0 flex-col xl:order-none" :class="drawer === 'check-in' ? 'xl:w-176' : 'xl:w-144'">
+      <!-- 右側抽屜（初診報到）：頁面版面裡的一欄，不蓋住時間軸——櫃台要一邊建檔一邊看得到看板。 -->
+      <div v-if="drawerVisible" class="order-first flex min-h-0 shrink-0 flex-col xl:order-none xl:w-176">
         <CheckInDrawer
           v-if="drawer === 'check-in' && target"
           :key="target._id"
@@ -859,10 +858,6 @@ onBeforeUnmount(() => {
           @submit="(values) => submit(values, 'check-in')"
           @close="closeDrawer"
         />
-        <SideDrawer v-if="drawer === 'pinned'" class="min-h-0 flex-1" title="暫存區" description="在聊天室打 @ 標記就會放進來" @close="closeDrawer">
-          <PinnedPetsList />
-          <p v-if="!pinnedPets.items.length" class="py-6 text-center text-sm text-muted-foreground">暫存區是空的</p>
-        </SideDrawer>
       </div>
     </div>
 
@@ -894,6 +889,21 @@ onBeforeUnmount(() => {
       @submit="(values) => submit(values, 'edit')"
       @close="closeDrawer"
     />
+
+    <!-- 暫存區：跟診療台同一個呈現方式，大面板一列放得下兩隻，看完就關。 -->
+    <ModalDialog v-if="drawer === 'pinned'" size="xl" @close="closeDrawer">
+      <div class="border-b border-border p-5 pr-16 sm:px-6">
+        <DialogTitle class="flex items-center gap-2">
+          <Pin class="h-4.5 w-4.5 text-muted-foreground" stroke-width="1.75" />暫存區
+          <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums">{{ pinnedPets.items.length }}</span>
+        </DialogTitle>
+
+      </div>
+      <div class="max-h-[min(68vh,48rem)] min-h-72 overflow-y-auto p-5 sm:p-6">
+        <PinnedPetsList />
+        <p v-if="!pinnedPets.items.length" class="py-10 text-center text-sm text-muted-foreground">暫存區是空的</p>
+      </div>
+    </ModalDialog>
 
     <ModalDialog v-if="intakeReviewTarget" size="xl" @close="intakeReviewTarget = null">
       <div class="border-b border-border p-5 pr-16 sm:px-6"><DialogTitle>審核初診資料</DialogTitle><DialogDescription class="mt-1 text-xs">確認資料後再建立正式飼主與寵物資料。</DialogDescription></div>

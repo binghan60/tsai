@@ -15,7 +15,7 @@ import { DatePicker } from './ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { buildSlotGrid, duplicateBookings } from '../lib/receptionBoard';
-import { clinicDateInput, clinicTimeInput, formatDate, formatDateTime, shiftDateInput, weekdayLabel } from '../lib/datetime';
+import { clinicDateInput, clinicTimeInput, formatDate, formatDateTime, weekdayLabel } from '../lib/datetime';
 
 // 新增與修改掛號共用的 Modal（取代原本的 AppointmentDrawer 側邊抽屜）。
 // 置中雙欄：左欄「誰・為什麼」（類型、寵物、來院原因、手術、報告模板、內部備註），
@@ -162,11 +162,8 @@ const attendanceWarnings = computed(() => {
 });
 
 // ── 日期與時段格 ────────────────────────────────────────────────────────────
-// 快選今天／明天／後天，更遠的日期用旁邊的日期選擇器；換到頁面沒載入的那天，才自己去抓那天的掛號。
-const quickDates = computed(() => [0, 1, 2].map((offset) => {
-  const value = shiftDateInput(today, offset);
-  return { value, label: ['今天', '明天', '後天'][offset], hint: `${Number(value.slice(5, 7))}/${Number(value.slice(8, 10))} ${weekdayLabel(value)}` };
-}));
+// 預設是頁面上的日期面板（新增掛號就是今天），換到別天直接在日期選單裡打字或翻日曆；
+// 換到頁面沒載入的那天，才自己去抓那天的掛號。
 const otherDayItems = ref(null);
 watch(slotDate, async (value) => {
   otherDayItems.value = null;
@@ -271,7 +268,7 @@ const onSubmit = handleSubmit((values) => {
       </header>
 
       <form id="appointment-dialog-form" class="min-h-0 flex-1 overflow-y-auto px-5 py-4" @submit.prevent="onSubmit">
-        <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
+        <div class="grid gap-6 lg:grid-cols-2">
           <!-- 左欄：誰、為什麼 -->
           <div class="space-y-5">
             <template v-if="!isEdit">
@@ -428,21 +425,8 @@ const onSubmit = handleSubmit((values) => {
           <div class="space-y-3">
             <div class="space-y-2">
               <Label class="text-xs font-medium">日期與時段<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <!-- 四等分一列：三個快選加一個日期選擇器，寬度用格子分而不是各自撐開，才不會把「其他日期」擠到第二排。 -->
-              <div class="grid grid-cols-4 gap-1.5" role="group" aria-label="預約日期">
-                <button
-                  v-for="quick in quickDates"
-                  :key="quick.value"
-                  type="button"
-                  class="inline-flex h-10 min-w-0 items-center justify-center gap-1 rounded-lg px-2 text-sm font-medium transition-colors"
-                  :class="slotDate === quick.value ? 'bg-accent text-accent-foreground' : 'bg-field text-foreground hover:bg-muted'"
-                  :aria-pressed="slotDate === quick.value"
-                  @click="slotDate = quick.value"
-                >
-                  {{ quick.label }}<span class="truncate text-xs tabular-nums" :class="slotDate === quick.value ? '' : 'text-muted-foreground'">{{ quick.hint }}</span>
-                </button>
-                <DatePicker v-model="slotDate" :clearable="false" aria-label="其他日期" class="w-full min-w-0" />
-              </div>
+              <!-- 預設就是今天（跟著頁面上的日期面板）；其他日子直接在這裡打字或翻日曆，不另外放快選鈕。 -->
+              <DatePicker v-model="slotDate" :clearable="false" aria-label="預約日期" class="w-full" />
             </div>
             <SlotGrid v-model="time" :sessions="slotSessions" :invalid="submitCount > 0 && Boolean(timeError)" />
             <p v-if="timeError && submitCount > 0" class="text-xs font-medium text-destructive">{{ timeError }}</p>
@@ -460,7 +444,7 @@ const onSubmit = handleSubmit((values) => {
       <footer class="flex shrink-0 flex-wrap items-center gap-2 border-t border-border px-5 py-3">
         <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ summary }}</p>
         <Button type="button" variant="secondary" :disabled="submitting" @click="emit('close')">取消</Button>
-        <Button type="submit" form="appointment-dialog-form" :disabled="submitting">{{ submitting ? '處理中…' : isEdit ? '儲存變更' : '確認掛號' }}</Button>
+        <Button type="submit" form="appointment-dialog-form" :disabled="submitting">{{ submitting ? '處理中…' : isEdit ? '儲存變更' : '掛號' }}</Button>
       </footer>
     </DialogContent>
   </Dialog>
