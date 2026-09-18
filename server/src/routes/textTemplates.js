@@ -34,10 +34,18 @@ function validationMessage(payload) {
   return '';
 }
 
+// 診療台看診工作區的三個文字欄不在任何健檢表單裡，用固定的 visit: 前綴 key 讓文字模板也能套用。
+// 醫師每天打的「拆線費＋消炎藥 5 天」「傷口勿舔舐」正是這裡。
+const VISIT_WORKSPACE_FIELDS = [
+  { key: 'visit:visitNote', label: '本次簡易紀錄（診療台）', role: null, forms: ['看診工作區'] },
+  { key: 'visit:handoffNote', label: '給櫃台的交辦（診療台）', role: null, forms: ['看診工作區'] },
+  { key: 'visit:specialCareNote', label: '請轉告飼主（診療台）', role: null, forms: ['看診工作區'] },
+];
+
 router.get('/fields', async (req, res, next) => {
   try {
     const formTemplates = await FormTemplate.find().select('name sections').sort({ order: 1, name: 1 }).lean();
-    const fields = new Map();
+    const fields = new Map(VISIT_WORKSPACE_FIELDS.map((field) => [field.key, { ...field, forms: [...field.forms] }]));
     formTemplates.forEach((formTemplate) => {
       (formTemplate.sections ?? []).forEach((section) => {
         (section.items ?? []).forEach((item) => {

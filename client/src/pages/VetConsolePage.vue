@@ -19,6 +19,8 @@ import LatenessBadge from '../components/LatenessBadge.vue'
 import CheckinNumber from '../components/CheckinNumber.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
+import TextTemplatePickerDialog from '../components/formfields/TextTemplatePickerDialog.vue'
+import { useTextTemplates } from '../composables/useTextTemplates'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
@@ -32,6 +34,7 @@ import { DatePicker } from '../components/ui/date-picker'
 // 「會咬人」「飼主很難溝通」要在叫進診間之前就知道，不能藏在點開之後。
 const router = useRouter()
 const toast = useToast()
+const { loadTemplates: loadTextTemplates } = useTextTemplates()
 const notifyChat = useAppointmentNotifier()
 const pinnedPets = usePinnedPetsStore()
 const today = clinicDateInput()
@@ -74,6 +77,7 @@ const now = ref(Date.now())
 let clock
 let request = 0
 
+const isToday = computed(() => date.value === today)
 const byId = computed(() => new Map(items.value.map((item) => [String(item._id), item])))
 const openTabs = computed(() => openIds.value.map((id) => byId.value.get(id)).filter(Boolean))
 const active = computed(() => byId.value.get(activeId.value) || null)
@@ -105,6 +109,18 @@ function minutesSince(value) {
   if (!value) return null
   return Math.max(0, Math.floor((now.value - new Date(value).getTime()) / 60000))
 }
+// 候診超過這個分鐘數，「已等 N 分」變紅——診間裡看不到候診區，數字要自己跳出來。
+const LONG_WAIT_MINUTES = 20
+function waitingTooLong(item) {
+  const state = workflowState(item)
+  return item.status === 'arrived' && !state.started && Boolean(item.checkedInAt) && minutesSince(item.checkedInAt) >= LONG_WAIT_MINUTES
+}
+// 待報到的手術卡片淡紫底（跟櫃台頁同一套）：醫師看排程是為了先備器材。
+function cardClass(item, groupKey) {
+  if (String(item._id) === activeId.value) return 'border-primary bg-accent'
+  if (groupKey === 'scheduled' && item.isSurgery) return 'border-surgery/35 bg-surgery-surface/60 hover:bg-surgery-surface'
+  return 'border-border bg-card hover:bg-field'
+}
 function statusMeta(item) {
   const state = workflowState(item)
   if (state.completed) return '已完成'
@@ -124,6 +140,9 @@ async function refresh() {
   try {
     const { data } = await http.get('/appointments', { params: { date: requested } })
     if (token !== request) return
+    // 輪詢整批換掉前先比對，斷線期間報到的也要講。
+    const previous = new Map(items.value.map((item) => [String(item._id), item]))
+    if (previous.size) for (const item of data.items || []) announceCheckIn(previous.get(String(item._id)) || null, item)
     items.value = data.items || []
     patientNotes.value = { pets: data.patientNotes?.pets || {}, owners: data.patientNotes?.owners || {} }
     error.value = ''
@@ -137,15 +156,30 @@ async function refresh() {
   }
 }
 
+// 醫師在診間裡看不到櫃台，有人報到要在這頁直接講：從「待報到」變成「已報到」（或新增時就是已報到的現場掛號）
+// 就跳一則提示。這頁的 toast 固定在上方，不用點開聊天室。只看今天，翻舊日期不吵。
+function announceCheckIn(previous, next) {
+  if (!isToday.value || next.status !== 'arrived' || workflowState(next).started) return
+  if (previous && previous.status !== 'scheduled') return
+  const detail = [next.checkinNumber ? `號碼牌 ${next.checkinNumber}` : '', next.reason].filter(Boolean).join(' · ')
+  toast.success(detail, `${next.petName} 已報到`)
+}
+
 function applyUpdate(item) {
   if (item.date !== date.value) {
     items.value = items.value.filter((p) => String(p._id) !== String(item._id))
     return
   }
   const index = items.value.findIndex((p) => String(p._id) === String(item._id))
-  if (index < 0) items.value.push(item)
+  if (index < 0) {
+    items.value.push(item)
+    announceCheckIn(null, item)
+    return
+  }
   // __v 只會往前走；比目前手上的舊就是遲到的廣播，丟掉。
-  else if ((item.__v ?? 0) >= (items.value[index].__v ?? 0)) items.value[index] = item
+  if ((item.__v ?? 0) < (items.value[index].__v ?? 0)) return
+  announceCheckIn(items.value[index], item)
+  items.value[index] = item
 }
 
 const { connected } = useClinicSync(date, refresh, applyUpdate)
@@ -257,6 +291,7 @@ onMounted(() => {
     now.value = Date.now()
   }, 30000)
   loadTemplates()
+  loadTextTemplates().catch(() => {})
   refresh()
 })
 onBeforeUnmount(() => {
@@ -308,7 +343,7 @@ onBeforeUnmount(() => {
                   v-for="item in group.list"
                   :key="item._id"
                   class="mb-2 cursor-pointer rounded-xl border p-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  :class="String(item._id) === activeId ? 'border-primary bg-accent' : 'border-border bg-card hover:bg-field'"
+                  :class="cardClass(item, group.key)"
                   role="button"
                   tabindex="0"
                   :aria-label="`開啟 ${item.petName}`"
@@ -324,7 +359,7 @@ onBeforeUnmount(() => {
                       <div class="flex items-center gap-1.5">
                         <span class="truncate text-sm font-semibold" :class="String(item._id) === activeId ? 'text-accent-foreground' : ''">{{ item.petName }}</span>
                         <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
-                        <span v-if="group.key !== 'scheduled'" class="ml-auto shrink-0 text-xs text-muted-foreground">{{ statusMeta(item) }}</span>
+                        <span v-if="group.key !== 'scheduled'" class="ml-auto shrink-0 text-xs" :class="waitingTooLong(item) ? 'font-semibold text-danger' : 'text-muted-foreground'">{{ statusMeta(item) }}</span>
                         <span v-if="dirtyIds[String(item._id)]" class="h-2 w-2 shrink-0 rounded-full bg-primary" title="有尚未儲存的內容"><span class="sr-only">有尚未儲存的內容</span></span>
                       </div>
                       <p class="text-sm font-medium leading-snug" :class="item.reason ? 'text-foreground' : 'text-muted-foreground'">{{ item.reason || '未填來院原因' }}</p>
@@ -391,5 +426,6 @@ onBeforeUnmount(() => {
         <EmptyState v-if="!active && !loading" :icon="CalendarClock" title="從左邊選一位病患" description="點卡片可以先看資料，按「看診」才會記錄開始時間。可以同時開好幾位，切換不會清空已輸入的內容。" inset />
       </section>
     </div>
+    <TextTemplatePickerDialog />
   </div>
 </template>

@@ -9,6 +9,7 @@ import { ArrowRight, ChevronDown, FileText, Pencil, Stethoscope, Undo2, X } from
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
+import { useTextTemplates } from '../composables/useTextTemplates'
 import { workflowState } from '../../../shared/appointmentWorkflow.js'
 import { clinicalDraft, draftPatch, mergeClinicalUpdate } from '../lib/visitDraft'
 import { ageLabel, clinicTimeInput } from '../lib/datetime'
@@ -30,6 +31,7 @@ const props = defineProps({
 })
 const toast = useToast()
 const notifyChat = useAppointmentNotifier()
+const { openPicker } = useTextTemplates()
 // start：還沒開始看診時按「開始看診」；close：從佇列關掉這筆；dirty：有沒有未存內容（佇列顯示藍點）；
 // notes-updated：寵物／飼主備註改了，讓佇列上的備註標籤跟著更新。
 const emit = defineEmits(['updated', 'open-record', 'start', 'close', 'dirty', 'notes-updated'])
@@ -100,6 +102,37 @@ const medicalTags = computed(() => {
   if (pet.value.checkupStatus) tags.push({ key: 'checkup', label: pet.value.checkupStatus === 'done' ? `健檢 ${pet.value.checkupDate || '有'}` : '未健檢', class: 'bg-muted text-muted-foreground' })
   return tags
 })
+
+// 文字模板：三個文字欄各一顆按鈕，key 用 visit: 前綴（後端 /text-templates/fields 也認得）。
+// 有選取範圍就取代選取，沒有就插在游標處；欄位是空的就直接放進去。
+const TEMPLATE_FIELDS = {
+  visitNote: { key: 'visit:visitNote', label: '本次簡易紀錄' },
+  handoffNote: { key: 'visit:handoffNote', label: '給櫃台的交辦' },
+  specialCareNote: { key: 'visit:specialCareNote', label: '請轉告飼主' },
+}
+function textareaId(field) {
+  return `visit-${field}-${props.appointment._id}`
+}
+function openTemplates(field) {
+  const meta = TEMPLATE_FIELDS[field]
+  const input = document.getElementById(textareaId(field))
+  const selection = input && Number.isInteger(input.selectionStart) ? { start: input.selectionStart, end: input.selectionEnd } : null
+  openPicker({
+    itemKey: meta.key,
+    label: meta.label,
+    currentText: String(draft[field] ?? ''),
+    onInsert(template, mode) {
+      const base = String(draft[field] ?? '')
+      if (mode === 'replace' || !base) {
+        draft[field] = template.content
+        return
+      }
+      const start = Math.min(selection?.start ?? base.length, base.length)
+      const end = Math.min(selection?.end ?? start, base.length)
+      draft[field] = `${base.slice(0, start)}${template.content}${base.slice(end)}`
+    },
+  })
+}
 
 const now = ref(Date.now())
 const clock = setInterval(() => { now.value = Date.now() }, 30000)
@@ -509,7 +542,10 @@ onBeforeUnmount(() => {
         </div>
         <label class="block space-y-1.5">
           <span class="flex items-center gap-2 text-xs font-medium">本次簡易紀錄<MechanismTooltip text="此內容與櫃台共用，病歷日誌只保留對本次就診的引用，因此在任一處修改都會立即反映最新內容。" /><span class="ml-auto font-normal text-muted-foreground">自動存入病歷日誌</span></span>
-          <Textarea v-model="draft.visitNote" rows="8" class="min-h-48 field-sizing-fixed" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" />
+          <span class="relative block">
+            <Textarea :id="textareaId('visitNote')" v-model="draft.visitNote" rows="8" class="min-h-48 field-sizing-fixed pr-10" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" />
+            <Button v-if="editable" type="button" variant="secondary" size="icon-xs" class="absolute right-2 top-2" aria-label="插入本次簡易紀錄的文字模板" title="文字模板" :disabled="committing" @click="openTemplates('visitNote')"><FileText class="h-3.5 w-3.5" stroke-width="1.75" /></Button>
+          </span>
         </label>
         <label class="block space-y-1.5">
           <span class="flex items-center gap-2 text-xs font-medium">內部備註<MechanismTooltip text="僅供內部人員查看；儲存後會附在本次就診的引用式病歷日誌最後，不會出現在飼主報告。" /><span class="ml-auto font-normal text-muted-foreground">僅院內可見</span></span>
@@ -520,12 +556,18 @@ onBeforeUnmount(() => {
           <h3 id="handoff-heading" class="text-base font-semibold">交給櫃台</h3>
           <label class="block space-y-1.5">
             <span class="flex items-center gap-2 text-xs font-medium">給櫃台的交辦<span class="font-normal text-muted-foreground">收費、領藥、要開的證明</span></span>
-            <Textarea v-model="draft.handoffNote" rows="4" maxlength="1000" class="field-sizing-fixed" :disabled="!editable || committing" placeholder="輸入櫃台需要協助處理的事項…" />
+            <span class="relative block">
+              <Textarea :id="textareaId('handoffNote')" v-model="draft.handoffNote" rows="4" maxlength="1000" class="field-sizing-fixed pr-10" :disabled="!editable || committing" placeholder="輸入櫃台需要協助處理的事項…" />
+              <Button v-if="editable" type="button" variant="secondary" size="icon-xs" class="absolute right-2 top-2" aria-label="插入給櫃台交辦的文字模板" title="文字模板" :disabled="committing" @click="openTemplates('handoffNote')"><FileText class="h-3.5 w-3.5" stroke-width="1.75" /></Button>
+            </span>
           </label>
           <div class="grid gap-4 lg:grid-cols-2">
             <label class="block space-y-1.5">
               <span class="text-xs font-medium text-warning">請轉告飼主</span>
-              <Textarea v-model="draft.specialCareNote" rows="4" maxlength="500" class="field-sizing-fixed" :disabled="!editable || committing" placeholder="輸入需要櫃台轉告飼主的提醒…" />
+              <span class="relative block">
+                <Textarea :id="textareaId('specialCareNote')" v-model="draft.specialCareNote" rows="4" maxlength="500" class="field-sizing-fixed pr-10" :disabled="!editable || committing" placeholder="輸入需要櫃台轉告飼主的提醒…" />
+                <Button v-if="editable" type="button" variant="secondary" size="icon-xs" class="absolute right-2 top-2" aria-label="插入請轉告飼主的文字模板" title="文字模板" :disabled="committing" @click="openTemplates('specialCareNote')"><FileText class="h-3.5 w-3.5" stroke-width="1.75" /></Button>
+              </span>
             </label>
             <label class="block space-y-1.5">
               <span class="flex items-center gap-1.5 text-xs font-medium">回診建議<MechanismTooltip text="這是給櫃台安排回診時看的建議文字；填寫本身不會自動建立掛號。" /></span>
