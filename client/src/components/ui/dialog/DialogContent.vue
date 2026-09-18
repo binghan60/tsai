@@ -32,7 +32,7 @@ const props = defineProps({
     type: String,
     required: false,
     default: 'md',
-    validator: (v) => ['sm', 'md', 'lg', 'xl'].includes(v),
+    validator: (v) => ['sm', 'md', 'lg', 'wide', 'xl'].includes(v),
   },
 });
 
@@ -40,6 +40,8 @@ const SIZE_CLASS = {
   sm: 'sm:max-w-sm',
   md: 'sm:max-w-md',
   lg: 'sm:max-w-2xl',
+  // 雙欄表單（掛號：左欄誰／為什麼、右欄時段格）；比 xl 窄，才不會把兩欄拉得太散。
+  wide: 'sm:max-w-[min(60rem,calc(100vw-4rem))]',
   // 長表單與工作台型對話框使用；仍保留視窗邊距，避免小螢幕滿版貼邊。
   xl: 'sm:max-w-[min(80rem,calc(100vw-4rem))]',
 };
@@ -67,16 +69,21 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
 // - 進場 150ms、離場 100ms：關閉要比開啟更快，才不會有「黏住」的感覺。
 // 陰影從 shadow-xl 降到 shadow-lg：遮罩已經從 /75 降到 /60，兩者原本都很重，
 // 疊起來對比過猛，面板像是浮在很遠的地方。
-const CONTENT_CLASS = 'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-lg shadow-black/20 dark:shadow-black/60 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-closed:duration-100 outline-none';
+const CONTENT_CLASS = 'fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-0 overflow-hidden rounded-2xl border border-border bg-card text-foreground shadow-lg shadow-black/20 dark:shadow-black/60 outline-none';
+// 進出場動畫只留給小對話框（確認框、短表單）。lg 以上的面板內容多（時段格、表單、工作台），
+// 縮放動畫每一幀都要把整塊面板重新光柵化，淡入淡出也會讓開關各多等 100–150ms，
+// 在診所的電腦上就是那種「開起來頓一下」；大面板直接出現、直接消失。
+const ANIMATE_CLASS = 'data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-open:duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 data-closed:duration-100';
+const ANIMATE_SIZES = new Set(['sm', 'md']);
 </script>
 
 <template>
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay :animate="ANIMATE_SIZES.has(props.size)" />
     <DialogContent
       data-slot="dialog-content"
       v-bind="{ ...$attrs, ...forwarded }"
-      :class="cn(CONTENT_CLASS, SIZE_CLASS[props.size], props.class)"
+      :class="cn(CONTENT_CLASS, ANIMATE_SIZES.has(props.size) ? ANIMATE_CLASS : '', SIZE_CLASS[props.size], props.class)"
     >
       <!-- 頂部飾線。兩個主題各用各的主色，不混色：
            淺色是 Belle Époque 的酒紅描金，深色是科技感的琥珀橘。 -->

@@ -203,6 +203,11 @@
   /* danger 是既有狀態 API 的相容名稱；錯誤、異常與刪除共用同一套紅色來源。 */
   --danger: var(--destructive);
   --danger-surface: var(--destructive-surface);
+  /* 手術是第五個狀態色，色相 H300 附近，跟主色 petrol(H218) 與四個狀態色都留足距離。
+     只給掛號的手術標記用（徽章、時間軸卡片底色、時段格的手術時段），不是「危險」——
+     遲到才是 danger，兩顆徽章常並排，色相分開才不會只剩圖示可辨。 */
+  --surgery: #5b2d9e;
+  --surgery-surface: #efe6fb;
 
   --chart-1: #007f98;
   --chart-2: #00a5b6;
@@ -324,6 +329,8 @@
   --info-surface: #212b42;
   --danger: var(--destructive);
   --danger-surface: var(--destructive-surface);
+  --surgery: #c9b3f5;
+  --surgery-surface: #2a1c48;
 
   --chart-1: #16a2c1;
   --chart-2: #51bccc;
@@ -380,6 +387,8 @@
   --color-info-surface: var(--info-surface);
   --color-danger: var(--danger);
   --color-danger-surface: var(--danger-surface);
+  --color-surgery: var(--surgery);
+  --color-surgery-surface: var(--surgery-surface);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

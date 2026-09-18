@@ -4,6 +4,8 @@ import { DialogOverlay } from "reka-ui";
 import { cn } from "@/lib/utils";
 
 const props = defineProps({
+  // 大對話框不做進出場動畫（見 DialogContent），遮罩跟著一起直接出現，否則面板先到、遮罩慢半拍。
+  animate: { type: Boolean, required: false, default: true },
   forceMount: { type: Boolean, required: false },
   asChild: { type: Boolean, required: false },
   as: { type: null, required: false },
@@ -14,20 +16,21 @@ const props = defineProps({
   },
 });
 
-const delegatedProps = reactiveOmit(props, "class");
+const delegatedProps = reactiveOmit(props, "class", "animate");
 
 // 純色遮罩，不帶任何 backdrop-filter。全螢幕的 backdrop blur 要每一幀把底下
 // 整個畫面重新模糊一次，是開關對話框最貴的一筆；純色只要合成一次，
 // 之後的淡入淡出純粹是 opacity 動畫，完全交給 GPU。
 // 少了模糊帶來的景深，改用更深的底色維持前後層次。
-const OVERLAY_CLASS = 'fixed inset-0 z-50 bg-black/50 dark:bg-black/70 data-open:animate-in data-open:fade-in-0 data-open:duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:duration-100';
+const OVERLAY_CLASS = 'fixed inset-0 z-50 bg-black/50 dark:bg-black/70';
+const OVERLAY_ANIMATE_CLASS = 'data-open:animate-in data-open:fade-in-0 data-open:duration-150 data-closed:animate-out data-closed:fade-out-0 data-closed:duration-100';
 </script>
 
 <template>
   <DialogOverlay
     data-slot="dialog-overlay"
     v-bind="delegatedProps"
-    :class="cn(OVERLAY_CLASS, props.class)"
+    :class="cn(OVERLAY_CLASS, props.animate ? OVERLAY_ANIMATE_CLASS : '', props.class)"
   >
     <slot />
   </DialogOverlay>

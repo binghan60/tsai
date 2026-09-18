@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ageLabel, clinicDateInput, clinicTimeInput, combineClinicDateTime, shiftDateInput, weekdayLabel, startOfWeek } from './datetime.js';
+import { ageLabel, clinicDateInput, clinicTimeInput, combineClinicDateTime, parseDateInput, shiftDateInput, weekdayLabel, startOfWeek } from './datetime.js';
 
 describe('clinic date helpers', () => {
   it('uses the Taipei calendar day around UTC midnight', () => {
@@ -99,5 +99,34 @@ describe('startOfWeek', () => {
   it('格式不對就回空字串', () => {
     assert.equal(startOfWeek('', ''), '');
     assert.equal(startOfWeek('2026/08/27', ''), '');
+  });
+});
+
+describe('parseDateInput', () => {
+  const today = '2026-09-18';
+
+  it('接受完整西元、民國三位數年與兩位數年', () => {
+    assert.equal(parseDateInput('2026-09-18', today), '2026-09-18');
+    assert.equal(parseDateInput('2026/9/8', today), '2026-09-08');
+    assert.equal(parseDateInput('2026.9.8', today), '2026-09-08');
+    assert.equal(parseDateInput('20260918', today), '2026-09-18');
+    assert.equal(parseDateInput('115/9/18', today), '2026-09-18');
+    assert.equal(parseDateInput('1150918', today), '2026-09-18');
+    assert.equal(parseDateInput('26/9/18', today), '2026-09-18');
+    assert.equal(parseDateInput('2019年3月5日', today), '2019-03-05');
+  });
+
+  it('沒有年份就用今年', () => {
+    assert.equal(parseDateInput('9/18', today), '2026-09-18');
+    assert.equal(parseDateInput('0918', today), '2026-09-18');
+    assert.equal(parseDateInput('12-1', today), '2026-12-01');
+  });
+
+  it('不是真實日期或看不懂的字串回空字串', () => {
+    assert.equal(parseDateInput('2026/2/30', today), '');
+    assert.equal(parseDateInput('2026/13/1', today), '');
+    assert.equal(parseDateInput('abc', today), '');
+    assert.equal(parseDateInput('', today), '');
+    assert.equal(parseDateInput('123', today), '');
   });
 });

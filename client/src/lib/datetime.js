@@ -155,3 +155,37 @@ export function ageLabel(birthDate, referenceDate = new Date(), fallback = '未�
   const age = years > 0 ? `${years} 歲 ${months} 個月` : `${Math.max(months, 0)} 個月`;
   return `${age}（西元 ${birth.year} 年 ${birth.month} 月生）`;
 }
+
+// 手打日期的解析：日期輸入框可以直接打字，年份差很多時比在日曆上一個月一個月翻快得多。
+// 接受的寫法（分隔可以是 - / . 或空白，也可以不分隔）：
+//   2026-09-18、2026/9/18、20260918   → 完整西元
+//   115/9/18、1150918                  → 三位數年份視為民國年（+1911）
+//   26/9/18                            → 兩位數年份視為 20xx
+//   9/18、0918                         → 沒有年份就用 today 的那一年
+// 回傳 'YYYY-MM-DD'，不是真實日期（例如 2/30）或看不懂的字串回空字串。
+export function parseDateInput(text, today = clinicDateInput()) {
+  const raw = String(text ?? '').trim().replace(/[年月]/g, '/').replace(/日/g, '');
+  if (!raw) return '';
+  let year;
+  let month;
+  let day;
+  const separated = /^(\d{1,4})[-/.\s]+(\d{1,2})[-/.\s]+(\d{1,2})$/.exec(raw);
+  const separatedNoYear = /^(\d{1,2})[-/.\s]+(\d{1,2})$/.exec(raw);
+  const digits = /^\d+$/.test(raw) ? raw : '';
+  if (separated) [, year, month, day] = separated;
+  else if (separatedNoYear) [, month, day] = separatedNoYear;
+  else if (digits.length === 8) [year, month, day] = [digits.slice(0, 4), digits.slice(4, 6), digits.slice(6)];
+  else if (digits.length === 7) [year, month, day] = [digits.slice(0, 3), digits.slice(3, 5), digits.slice(5)];
+  else if (digits.length === 4) [month, day] = [digits.slice(0, 2), digits.slice(2)];
+  else return '';
+
+  let y = year === undefined ? Number(today.slice(0, 4)) : Number(year);
+  if (year !== undefined && year.length <= 2) y += 2000;
+  else if (year !== undefined && year.length === 3) y += 1911;
+  const m = Number(month);
+  const d = Number(day);
+  if (y < 1900 || y > 2200 || m < 1 || m > 12 || d < 1 || d > 31) return '';
+  const candidate = new Date(Date.UTC(y, m - 1, d));
+  if (candidate.getUTCMonth() !== m - 1 || candidate.getUTCDate() !== d) return '';
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}

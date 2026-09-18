@@ -1,17 +1,17 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock3, Pin, Plus, RefreshCw } from '@lucide/vue'
+import { AlertTriangle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Pin, Plus, RefreshCw, User, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { clinicDateInput, clinicTimeInput, shiftDateInput, weekdayLabel } from '../lib/datetime'
-import { appointmentsForTimeline, groupBySession, SURGERY_BLOCK } from '../lib/appointmentTimeline'
-import { isOverdue, minutesPastSchedule } from '../lib/receptionBoard'
-import { workflowFilter, workflowState, visitLabel } from '../../../shared/appointmentWorkflow.js'
-import { patientNotesFor, visitTypeLabel } from '../lib/appointmentDisplay'
+import { appointmentsForTimeline, groupBySession, isIdentityConfirmed, nowIndexInSession, SURGERY_BLOCK, visitTypeMeta } from '../lib/appointmentTimeline'
+import { isOverdue, minutesPastSchedule, sessionAutoCollapsed } from '../lib/receptionBoard'
+import { workflowFilter, workflowState } from '../../../shared/appointmentWorkflow.js'
+import { patientNotesFor } from '../lib/appointmentDisplay'
 import PatientNotes from '../components/PatientNotes.vue'
 import { usePinnedPetsStore } from '../stores/pinnedPets'
 import HandoffSheet from '../components/HandoffSheet.vue'
@@ -19,9 +19,8 @@ import PinnedPetsList from '../components/PinnedPetsList.vue'
 import RowActions from '../components/RowActions.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
-import CheckinNumber from '../components/CheckinNumber.vue'
 import SideDrawer from '../components/SideDrawer.vue'
-import AppointmentDrawer from '../components/AppointmentDrawer.vue'
+import AppointmentDialog from '../components/AppointmentDialog.vue'
 import CheckInDrawer from '../components/CheckInDrawer.vue'
 import CheckInDialog from '../components/CheckInDialog.vue'
 import CancelAppointmentDialog from '../components/CancelAppointmentDialog.vue'
@@ -39,12 +38,14 @@ import { Label } from '../components/ui/label'
 import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog'
 import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/appointmentTime'
 
-// 櫃台工作台：照四步流水線排成四欄看板（待報到 → 在院 → 待櫃台處理 → 今日已完成），
-// 欄標題的數字就是現況，一個畫面看完不必捲動。真正要人注意的例外（醫師申請修改、
-// 遲到還沒報到、待審初診）才浮到最上面的警示列。
+// 櫃台工作台：上方一條橫式流程列（待報到 → 在院 → 待櫃台處理 → 今日已完成，一格一個數字，
+// 點一格只看那一段），下面整頁是看診時間軸——依預約時段排、左側軌道、時段可收合、「現在」虛線。
+// 早期版本是四欄看板（每個階段一欄各自捲），實際用起來視線要在四個地方跳，比時間軸還雜，
+// 所以改回時間軸當主體，階段只留一條數字列。
 //
-// 掛號、初診報到、時間軸、暫存區都開在看板右側的抽屜裡，而不是 Modal：
-// 櫃台講電話掛號講到一半，交辦的飼主就站到櫃台前了，看板必須照樣看得到、按得到。
+// 真正要人注意的例外（醫師申請修改、遲到還沒報到、待審初診）浮到流程列下方的警示列。
+// 新增／修改掛號改成置中的雙欄 Modal（AppointmentDialog），填到一半可「收起」讓出看板；
+// 初診報到與暫存區仍開在時間軸右側的 SideDrawer。
 const router = useRouter()
 const toast = useToast()
 const notifyChat = useAppointmentNotifier()
@@ -53,6 +54,7 @@ const today = clinicDateInput()
 const date = useSearchQueryParam('date', today)
 const search = useSearchQueryParam('q', '')
 const selected = useSearchQueryParam('selected', '')
+const stageFilter = useSearchQueryParam('stage', '')
 
 const items = ref([])
 // 寵物／飼主備註存在主檔上、不在掛號快照裡，由列表 API 另外回一份以 id 為鍵的對照表。
@@ -70,12 +72,12 @@ const intakeAppointmentTime = ref('')
 const templates = ref([])
 const defaultTemplate = ref('')
 const pendingIntakeCount = ref(0)
-const showClosed = ref(false)
 const now = ref(Date.now())
 let clock
 let request = 0
 
-// 右側抽屜一次只顯示一個。新增掛號收起來時元件仍保持掛載（v-show），填到一半的內容不會消失。
+// 右側抽屜（初診報到、暫存區）一次只顯示一個；掛號 Modal 也借這個狀態管開關。
+// 新增掛號收起來時元件仍保持掛載（v-if 看 newDraftOpen、open 看 drawer），填到一半的內容不會消失。
 const drawer = ref('')
 const newDraftOpen = ref(false)
 const newDraft = ref(null)
@@ -101,10 +103,85 @@ const finished = computed(() => tray('completed', 'deskCompletedAt').filter((ite
 const overdue = computed(() => (isToday.value ? scheduled.value.filter((item) => isOverdue(item, new Date(now.value))) : []))
 const activePatient = computed(() => items.value.find((item) => String(item._id) === selected.value) || null)
 const currentTime = computed(() => clinicTimeInput(new Date(now.value)))
-const timeline = computed(() => groupBySession(appointmentsForTimeline(items.value)))
 const hasAlerts = computed(() => reopenRequests.value.length || overdue.value.length || pendingIntakeCount.value)
-// 抽屜打開時「今日已完成」收成窄條，把寬度讓給前三欄——那三欄才是現在要做事的地方。
-const drawerVisible = computed(() => Boolean(drawer.value))
+const drawerVisible = computed(() => drawer.value === 'check-in' || drawer.value === 'pinned')
+
+// ── 流程列與時間軸 ──────────────────────────────────────────────────────────
+// 流程列的四格就是四個篩選：點了只看那一段，再點一次清除。
+// dot 是這一段在時間軸上的顏色（軌道上的點、卡片底色都用同一個），流程列的標籤旁帶同一顆點，
+// 流程列本身就是圖例，不用另外解釋「藍色是什麼」。
+const STAGES = [
+  { key: 'scheduled', label: '待報到', dot: 'bg-muted-foreground/60 ring-1 ring-border' },
+  { key: 'onsite', label: '在院', dot: 'bg-primary' },
+  { key: 'handoff', label: '待櫃台處理', dot: 'bg-warning' },
+  { key: 'completed', label: '今日已完成', dot: 'bg-muted-foreground/30' },
+]
+// 兩種不是階段的外框色：遲到未報到（紅）、手術（紫），只在還沒報到時當卡片底色。
+const LEGEND = [
+  { label: '遲到未報到', class: 'border-danger bg-danger-surface' },
+  { label: '手術', class: 'border-surgery bg-surgery-surface' },
+]
+const stageCounts = computed(() => ({
+  scheduled: scheduled.value.length,
+  onsite: waiting.value.length + visiting.value.length,
+  handoff: handoffs.value.length,
+  completed: finished.value.length,
+}))
+function stageHint(key) {
+  if (key === 'scheduled') return overdue.value.length ? `依預約時段 · ${overdue.value.length} 位已遲到` : '依預約時段'
+  if (key === 'onsite') return `看診中 ${visiting.value.length} · 候診中 ${waiting.value.length}`
+  if (key === 'handoff') return '飼主正在櫃台等'
+  return followUps.value.length ? `待安排回診 ${followUps.value.length}` : ''
+}
+function toggleStage(key) {
+  stageFilter.value = stageFilter.value === key ? '' : key
+}
+
+// 時間軸只放進行中的掛號（待報到、候診／看診中、待櫃台），依預約時間排；已完成與未到／取消收在下面。
+const timelineItems = computed(() => appointmentsForTimeline(items.value.filter((item) => matches(item) && (!stageFilter.value || workflowFilter(item, stageFilter.value)))))
+// 每張卡片要用到的階段外觀、徽章、按鈕先在這裡算好一次。模板裡逐項呼叫函式的話，
+// 頁面任何狀態一動（開 Modal、每 30 秒的時鐘）整條時間軸都會重算一遍，卡片多的日子開視窗會頓。
+const ARRIVED_ACTIONS = [{ key: 'restore', label: '取消報到' }, { key: 'edit', label: '修改掛號' }]
+function decorate(item) {
+  const kind = cardTone(item)
+  return {
+    ...item,
+    ui: {
+      kind,
+      tone: TONE[kind],
+      avatarClass: avatarClass(item),
+      visitType: visitTypeMeta(item),
+      chip: statusChip(item),
+      notes: notesFor(item),
+      primary: item.status === 'scheduled' ? scheduledPrimary(item) : null,
+      actions: item.status === 'scheduled' ? scheduledActions(item) : ARRIVED_ACTIONS,
+      lateMinutes: item.status === 'scheduled' ? (itemIsOverdue(item) ? overdueMinutes(item) : 0) : item.latenessMinutes,
+    },
+  }
+}
+const timeline = computed(() => groupBySession(timelineItems.value).map((group) => ({ ...group, rows: group.items.map(decorate) })))
+const timelineCount = computed(() => timelineItems.value.length)
+
+// 還要櫃台動手的：遲到未報到、待櫃台處理。時段結束後有這些就不自動收合。
+function isPending(item) {
+  return itemIsOverdue(item) || workflowFilter(item, 'handoff')
+}
+// 使用者手動開合過的時段以手動為準，其餘照「時段已結束且沒有待處理」自動收合。
+const manualCollapse = reactive({})
+function isCollapsed(group) {
+  if (group.session.id in manualCollapse) return manualCollapse[group.session.id]
+  return sessionAutoCollapsed(group, { now: new Date(now.value), isToday: isToday.value, isPending })
+}
+function toggleSession(group) {
+  manualCollapse[group.session.id] = !isCollapsed(group)
+}
+function pendingCount(group) {
+  return group.items.filter(isPending).length
+}
+function nowPosition(group) {
+  if (!isToday.value || currentTime.value < group.session.start || currentTime.value > group.session.end) return -1
+  return nowIndexInSession(group.items, new Date(now.value))
+}
 
 function minutesSince(value) {
   const time = new Date(value).getTime()
@@ -125,17 +202,58 @@ function closedStatusMeta(appointment) {
   if (appointment.status === 'no_show') return { label: '未到診', class: 'bg-warning-surface text-warning' }
   return { label: '已取消', class: 'bg-muted text-muted-foreground' }
 }
-function dotClass(appointment) {
-  const state = workflowState(appointment)
-  if (state.handedOff) return 'bg-warning'
-  if (state.started) return 'bg-info'
-  if (appointment.status === 'arrived') return 'bg-primary'
-  return 'bg-border'
+
+// 時間軸卡片的階段外觀：卡片底色、軌道上的點、頭像、狀態晶片走同一套判斷。
+// 還沒報到的卡片才用遲到（紅）／手術（紫）當底色；報到之後階段色接手，遲到／手術只留徽章。
+function cardTone(item) {
+  const state = workflowState(item)
+  if (item.status === 'pending_checkout' || (state.handedOff && !state.completed)) return 'handoff'
+  if (item.status === 'arrived') return state.started ? 'visiting' : 'waiting'
+  if (itemIsOverdue(item)) return 'late'
+  if (item.isSurgery) return 'surgery'
+  return 'scheduled'
 }
-function nowPosition(group) {
-  if (!isToday.value || currentTime.value < group.session.start || currentTime.value > group.session.end) return -1
-  const index = group.items.findIndex((item) => item.time && item.time > currentTime.value)
-  return index < 0 ? group.items.length : index
+const TONE = {
+  // 待櫃台處理不用琥珀底：卡片裡的「請轉告飼主」與飼主備註本身就是琥珀底，疊在一起會糊成一片，
+  // 改用白底加琥珀外框，裡面的提醒才浮得出來。
+  handoff: { card: 'border-warning/70 bg-card ring-1 ring-warning/40', dot: 'bg-warning ring-4 ring-warning/20', tick: 'bg-warning/60', avatar: 'bg-warning-surface text-warning ring-1 ring-warning/25', chip: 'bg-warning-surface text-warning', checkin: 'text-warning' },
+  visiting: { card: 'border-primary/25 bg-accent/40', dot: 'bg-primary ring-4 ring-primary/20', tick: 'bg-primary/60', avatar: 'bg-primary/10 text-primary ring-1 ring-primary/20', chip: 'bg-primary text-primary-foreground', checkin: 'text-primary' },
+  waiting: { card: 'border-primary/25 bg-accent/40', dot: 'bg-primary ring-4 ring-primary/20', tick: 'bg-primary/60', avatar: 'bg-primary/10 text-primary ring-1 ring-primary/20', chip: 'bg-accent text-accent-foreground ring-1 ring-primary/20', checkin: 'text-primary' },
+  late: { card: 'border-danger/35 bg-danger-surface/60', dot: 'bg-danger ring-4 ring-danger/20', tick: '', avatar: 'bg-accent text-accent-foreground', chip: '', checkin: '' },
+  surgery: { card: 'border-surgery/35 bg-surgery-surface/60', dot: 'bg-surgery ring-4 ring-surgery/20', tick: '', avatar: 'bg-accent text-accent-foreground', chip: 'bg-info-surface text-info ring-1 ring-info/20', checkin: '' },
+  scheduled: { card: 'border-transparent hover:bg-field/50', dot: 'bg-muted-foreground/60 ring-1 ring-border', tick: '', avatar: 'bg-accent text-accent-foreground', chip: 'bg-info-surface text-info ring-1 ring-info/20', checkin: '' },
+}
+function tone(item) {
+  return TONE[cardTone(item)]
+}
+function avatarClass(item) {
+  const key = cardTone(item)
+  if (['late', 'surgery', 'scheduled'].includes(key) && !isIdentityConfirmed(item)) return 'bg-muted text-muted-foreground'
+  return TONE[key].avatar
+}
+function statusChip(item) {
+  const key = cardTone(item)
+  const number = item.checkinNumber ? ` · 號碼牌 ${item.checkinNumber} 號` : ''
+  if (key === 'handoff') return `待櫃台處理${number}`
+  if (key === 'visiting') return `看診中${number}`
+  if (key === 'waiting') return `已報到${number}`
+  if (key === 'late') return ''
+  return '未報到'
+}
+// 整張卡片可點：已交櫃台／已完成開處理視窗，還沒交出去的開修改掛號。右側按鈕留給主要動作。
+function cardClick(item) {
+  const state = workflowState(item)
+  if (state.handedOff) return openSheet(item)
+  if (item.visitType === 'new' && item.intakeSubmissionId && !item.petId) return openIntakeReview(item)
+  return openDrawer('edit', item)
+}
+async function copyPhone(phone) {
+  try {
+    await navigator.clipboard.writeText(phone)
+    toast.success(phone, '已複製電話')
+  } catch {
+    toast.error('無法複製，請手動選取電話')
+  }
 }
 
 function isInitialDataPending(appointment) {
@@ -143,7 +261,7 @@ function isInitialDataPending(appointment) {
 }
 
 // 待報到卡片上唯一的主要按鈕。資料齊全的回診一鍵報到；初診要建檔，開抽屜。
-// 已超過寬限還沒報到的，報到鈕改成實心紅——在一整欄主色按鈕裡一眼挑得出來。
+// 已超過寬限還沒報到的，報到鈕改成實心紅——在一整排主色按鈕裡一眼挑得出來。
 function scheduledPrimary(item) {
   if (item.visitType === 'new' && item.intakeSubmissionId && !item.petId) return { label: '審核初診表', run: () => openIntakeReview(item) }
   if (isInitialDataPending(item)) return null
@@ -203,6 +321,7 @@ watch(date, () => {
   loading.value = true
   items.value = []
   selected.value = ''
+  for (const key of Object.keys(manualCollapse)) delete manualCollapse[key]
   if (drawer.value === 'edit' || drawer.value === 'check-in') drawer.value = ''
   refresh()
 })
@@ -246,7 +365,7 @@ async function loadPendingIntakeCount() {
   }
 }
 
-// 次要操作（⋯ 選單、候診卡片、未到／取消）共用同一個分派。
+// 次要操作（⋯ 選單、未到／取消）共用同一個分派。
 function admin(kind, appointment) {
   target.value = appointment
   dialogError.value = ''
@@ -292,7 +411,7 @@ async function undoCheckIn(id) {
     notifyChat(data, 'undo_check_in')
     toast.success(`${data.petName} 已退回待報到`, '已復原')
   } catch (err) {
-    toast.error(err.response?.data?.message || '復原失敗，請從候診卡片取消報到')
+    toast.error(err.response?.data?.message || '復原失敗，請從卡片取消報到')
   }
 }
 
@@ -317,7 +436,10 @@ async function submit(values, kind) {
     if (['new', 'edit', 'check-in'].includes(kind) && drawer.value === kind) drawer.value = ''
     dialog.value = ''
     confirmation.value = null
-    toast.success(kind === 'new' && data.visitType === 'new' ? `初診掛號已建立，驗證碼：${data.intakeVerificationCode}` : '診務資料已更新')
+    if (kind === 'new' && data.visitType === 'new') toast.success(`初診掛號已建立，驗證碼：${data.intakeVerificationCode}`)
+    // 掛到別天的不會出現在今天的時間軸上，提示要講清楚掛在哪一天。
+    else if (kind === 'new' || kind === 'edit') toast.success(`${data.date}（${weekdayLabel(data.date)}）${data.time}`, `${data.petName} 已掛號`)
+    else toast.success('診務資料已更新')
   } catch (err) {
     dialogError.value = err.response?.data?.message || '操作失敗，請稍後重試'
     if (confirmation.value) toast.error(dialogError.value)
@@ -458,7 +580,6 @@ onBeforeUnmount(() => {
           <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
           <Button variant="secondary" size="sm" :disabled="isToday" @click="date = today">今天</Button>
         </div>
-        <Button variant="secondary" size="sm" :aria-pressed="drawer === 'timeline'" @click="toggleDrawer('timeline')"><Clock3 class="h-4 w-4" stroke-width="1.75" />時間軸</Button>
         <Button variant="secondary" size="sm" :class="pinnedPets.items.length ? 'bg-accent text-accent-foreground hover:bg-accent/80' : ''" :aria-pressed="drawer === 'pinned'" @click="toggleDrawer('pinned')">
           <Pin class="h-4 w-4" stroke-width="1.75" />暫存區<span v-if="pinnedPets.items.length" class="tabular-nums">{{ pinnedPets.items.length }}</span>
         </Button>
@@ -487,6 +608,32 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <!-- 流程列：四段橫排，一格一個數字，點一格只看那一段；第三格列出正站在櫃台前的人 -->
+    <div v-if="!loading" class="grid overflow-hidden rounded-xl border border-border bg-card md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.4fr_1fr]" role="group" aria-label="今日流程">
+      <div
+        v-for="(stage, index) in STAGES"
+        :key="stage.key"
+        class="flex min-h-16 items-center gap-2 px-3 py-2"
+        :class="[
+          index < STAGES.length - 1 ? 'border-b border-border xl:border-b-0 xl:border-r' : '',
+          stageFilter === stage.key ? 'shadow-[inset_0_0_0_2px_var(--color-primary)]' : '',
+        ]"
+      >
+        <button type="button" class="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 text-left hover:bg-field" :aria-pressed="stageFilter === stage.key" :aria-label="`${stage.label} ${stageCounts[stage.key]} 筆，${stageFilter === stage.key ? '清除篩選' : '只看這一段'}`" @click="toggleStage(stage.key)">
+          <span class="text-2xl font-semibold leading-none tabular-nums">{{ stageCounts[stage.key] }}</span>
+          <span class="min-w-0">
+            <span class="flex items-center gap-1.5 text-sm font-semibold leading-tight"><span class="h-2.5 w-2.5 shrink-0 rounded-full" :class="stage.dot" aria-hidden="true"></span>{{ stage.label }}</span>
+            <span v-if="stageHint(stage.key)" class="block truncate text-xs leading-tight text-muted-foreground">{{ stageHint(stage.key) }}</span>
+          </span>
+        </button>
+        <div v-if="stage.key === 'handoff' && handoffs.length" class="flex shrink-0 flex-wrap justify-end gap-1.5">
+          <button v-for="item in handoffs.slice(0, 4)" :key="item._id" type="button" class="inline-flex h-7 items-center gap-1.5 rounded-full bg-warning-surface pl-1 pr-2.5 text-xs font-medium text-warning hover:bg-muted" :aria-label="`處理 ${item.petName}`" @click="openSheet(item)">
+            <span class="flex h-5 w-5 items-center justify-center rounded-full bg-warning text-xs font-semibold text-card tabular-nums">{{ item.checkinNumber || '·' }}</span>{{ item.petName }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- 警示列：只放「現在要有人看一眼」的例外，沒事時整條不出現。 -->
     <div v-if="!loading && hasAlerts" class="grid gap-2 md:grid-cols-3" aria-label="需要注意">
       <div v-if="reopenRequests.length" class="flex min-h-13 items-center gap-3 rounded-xl bg-danger-surface py-2 pl-4 pr-2 text-danger">
@@ -514,189 +661,192 @@ onBeforeUnmount(() => {
     <ListSkeleton v-if="loading" :rows="5" />
 
     <div v-else class="flex min-h-0 flex-1 flex-col gap-3 xl:flex-row">
-      <div class="grid min-h-0 flex-1 gap-3 md:grid-cols-2 xl:grid-rows-[minmax(0,1fr)]" :class="drawerVisible ? 'xl:grid-cols-[repeat(3,minmax(0,1fr))_3.5rem]' : 'xl:grid-cols-4'">
-        <!-- 1. 待報到 -->
-        <section class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card" aria-labelledby="col-scheduled">
-          <header class="flex shrink-0 items-baseline gap-2.5 border-b border-border px-4 py-3">
-            <span class="text-2xl font-semibold leading-none tabular-nums">{{ scheduled.length }}</span>
-            <h2 id="col-scheduled" class="text-base font-semibold">待報到</h2>
-            <span class="ml-auto text-xs text-muted-foreground">依預約時段</span>
-          </header>
-          <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
-            <p v-if="!scheduled.length" class="px-2 py-6 text-center text-sm text-muted-foreground">沒有等待報到的預約</p>
-            <article v-for="item in scheduled" :key="item._id" class="space-y-2 rounded-xl border p-3" :class="itemIsOverdue(item) ? 'border-danger/45' : 'border-border'">
-              <div class="flex items-center gap-2">
-                <span class="shrink-0 text-sm font-semibold tabular-nums">{{ item.time || '未定' }}</span>
-                <span class="min-w-0 truncate text-sm font-semibold">{{ item.petName }}</span>
-                <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
-              </div>
-              <p class="text-sm font-medium leading-snug" :class="item.reason ? 'text-foreground' : 'text-muted-foreground'">{{ item.reason || '未填來院原因' }}</p>
-              <div v-if="item.isSurgery || itemIsOverdue(item)" class="flex flex-wrap items-center gap-1.5">
-                <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
-                <LatenessBadge v-if="itemIsOverdue(item)" :minutes="overdueMinutes(item)" />
-              </div>
-              <PatientNotes :notes="notesFor(item)" />
-              <p v-if="item.internalNote" class="line-clamp-1 text-xs text-muted-foreground" :title="item.internalNote"><span class="font-medium text-foreground">掛號備註：</span>{{ item.internalNote }}</p>
-              <p v-if="item.visitType === 'new' && !item.petId" class="text-xs text-muted-foreground">
-                初診驗證碼 <span class="font-semibold tracking-[0.16em] text-foreground">{{ item.intakeVerificationUsedAt ? '已使用' : item.intakeVerificationCode || '未建立' }}</span><template v-if="isInitialDataPending(item)"> · 等飼主填初診表</template>
-              </p>
-              <div class="flex items-center gap-2">
-                <span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ item.ownerName || '未留飼主姓名' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></span>
-                <Button v-if="scheduledPrimary(item)" size="sm" :variant="scheduledPrimary(item).late ? 'destructive-solid' : 'default'" class="shrink-0" :disabled="busy" @click="scheduledPrimary(item).run()">{{ scheduledPrimary(item).label }}</Button>
-                <RowActions :actions="scheduledActions(item)" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
-              </div>
-            </article>
+      <!-- 時間軸：整頁的主體。依預約時段排、報到後仍保留原位置。 -->
+      <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card" aria-labelledby="timeline-title">
+        <div class="flex shrink-0 items-start justify-between gap-3 px-4 pb-3 pt-4">
+          <div>
+            <h2 id="timeline-title" class="text-base font-semibold">{{ isToday ? '今日看診時間軸' : '看診時間軸' }}</h2>
+            <p class="mt-0.5 text-xs text-muted-foreground">依預約時段排列；報到後仍保留原位置<template v-if="stageFilter"> · 只看「{{ STAGES.find((s) => s.key === stageFilter)?.label }}」</template></p>
+            <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-label="顏色說明">
+              <span v-for="stage in STAGES.slice(0, 3)" :key="stage.key" class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full" :class="stage.dot" aria-hidden="true"></span>{{ stage.label }}</span>
+              <span v-for="item in LEGEND" :key="item.label" class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm border" :class="item.class" aria-hidden="true"></span>{{ item.label }}</span>
+            </p>
           </div>
-          <div class="shrink-0 border-t border-border p-2.5">
-            <button type="button" class="flex min-h-10 w-full items-center gap-2 rounded-lg bg-field px-3 text-left text-sm hover:bg-muted" :aria-expanded="showClosed" @click="showClosed = !showClosed">
-              <ChevronDown class="h-4 w-4 text-muted-foreground transition-transform" :class="{ '-rotate-90': !showClosed }" />
-              未到／取消<span class="font-semibold tabular-nums">{{ closedAppointments.length }}</span>
+          <div class="flex items-center gap-2">
+            <Button v-if="stageFilter" variant="secondary" size="xs" @click="stageFilter = ''"><X class="h-4 w-4" stroke-width="1.75" />清除篩選</Button>
+            <span class="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums">{{ timelineCount }}</span>
+          </div>
+        </div>
+
+        <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+          <div v-if="!timelineCount" class="mb-3 rounded-xl border border-dashed border-border bg-muted px-3.5 py-4 text-center" role="status">
+            <p class="text-sm font-medium">{{ stageFilter ? '這一段目前沒有掛號' : `${isToday ? '今天' : date}${items.length ? '沒有待報到或候診中的掛號' : '還沒有任何掛號'}` }}</p>
+            <p v-if="!stageFilter" class="mt-1 text-xs text-muted-foreground">點右上方「新增掛號」，資料會依預約時段顯示在時間軸上。</p>
+          </div>
+
+          <template v-for="(group, groupIndex) in timeline" :key="group.session.id">
+            <div v-if="groupIndex === 1" class="my-2 flex items-center gap-2.5" :aria-label="`${SURGERY_BLOCK.label} ${SURGERY_BLOCK.start} 到 ${SURGERY_BLOCK.end}`">
+              <span class="h-px flex-1 bg-border" aria-hidden="true"></span>
+              <span class="shrink-0 text-xs font-medium text-muted-foreground">{{ SURGERY_BLOCK.label }} {{ SURGERY_BLOCK.start }}–{{ SURGERY_BLOCK.end }}</span>
+              <span class="h-px flex-1 bg-border" aria-hidden="true"></span>
+            </div>
+
+            <button
+              type="button"
+              class="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-border/70 bg-field/50 px-3.5 text-left text-sm font-semibold hover:bg-accent/40"
+              :aria-expanded="!isCollapsed(group)"
+              :aria-controls="`reception-session-${group.session.id}`"
+              @click="toggleSession(group)"
+            >
+              <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-card text-muted-foreground ring-1 ring-border/80"><Clock class="h-4 w-4" stroke-width="1.75" /></span>
+              <span>{{ group.session.label }} · {{ group.session.start }}–{{ group.session.end }}</span>
+              <span class="ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums text-muted-foreground">{{ group.items.length }}</span>
+              <span v-if="isCollapsed(group) && pendingCount(group)" class="inline-flex h-6 items-center rounded-full bg-danger-surface px-2 text-xs font-semibold tabular-nums text-danger">{{ pendingCount(group) }} 待處理</span>
+              <span class="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg bg-card px-2.5 text-xs font-semibold text-primary ring-1 ring-border/80">
+                {{ isCollapsed(group) ? '展開' : '收合' }}
+                <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': !isCollapsed(group) }" stroke-width="1.9" />
+              </span>
             </button>
-            <div v-show="showClosed" class="max-h-64 space-y-1.5 overflow-y-auto pt-1.5">
-              <p v-if="!closedAppointments.length" class="px-1.5 py-2 text-xs text-muted-foreground">沒有未到或取消的預約</p>
-              <div v-for="item in closedAppointments" :key="item._id" class="flex items-center gap-2 rounded-lg bg-field px-3 py-2">
-                <span class="text-xs tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
-                <span class="min-w-0 flex-1 truncate text-sm">{{ item.petName }}</span>
-                <Badge variant="status" :class="closedStatusMeta(item).class">{{ closedStatusMeta(item).label }}</Badge>
-                <RowActions :actions="[{ key: 'restore', label: '恢復待報到' }, { key: 'edit', label: '修改預約' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
+
+            <div v-show="!isCollapsed(group)" :id="`reception-session-${group.session.id}`" class="ml-2 border-l-2 border-border/80 pl-3 sm:ml-20 sm:pl-5">
+              <div v-if="!group.items.length" class="relative py-3">
+                <span class="absolute left-[-9px] top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card bg-muted-foreground/60 ring-1 ring-border sm:left-[-21px]" aria-hidden="true"></span>
+                <p class="rounded-xl border border-dashed border-border bg-field/30 px-3 py-4 text-center text-sm text-muted-foreground">此時段尚無掛號</p>
+              </div>
+
+              <template v-for="(item, index) in group.rows" :key="item._id">
+                <div v-if="nowPosition(group) === index" class="my-1.5 flex items-center gap-2.5">
+                  <span class="h-0 flex-1 border-t-2 border-dashed border-primary"></span>
+                  <span class="shrink-0 rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground">現在 · {{ currentTime }}</span>
+                </div>
+
+                <div class="relative py-1">
+                  <span class="mb-1 block text-xs font-semibold tabular-nums text-muted-foreground sm:absolute sm:left-[-36px] sm:top-4 sm:mb-0 sm:w-14 sm:-translate-x-full sm:text-right sm:text-sm">{{ item.time || '未定' }}</span>
+                  <span class="absolute left-[-9px] top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card sm:left-[-21px]" :class="item.ui.tone.dot" aria-hidden="true"></span>
+                  <span v-if="item.ui.tone.tick" class="absolute left-[-9px] top-1/2 h-0.5 w-[9px] -translate-y-1/2 sm:left-[-21px] sm:w-[21px]" :class="item.ui.tone.tick" aria-hidden="true"></span>
+
+                  <!-- 整張卡片可點（開詳情／處理視窗）；裡面的按鈕各自 stop，不會連帶觸發。 -->
+                  <article class="cursor-pointer rounded-xl border px-3 py-2 transition-colors" :class="item.ui.tone.card" @click="cardClick(item)">
+                    <div class="flex flex-wrap items-center gap-2.5">
+                      <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" :class="item.ui.avatarClass"><User class="h-4 w-4" stroke-width="1.75" /></span>
+
+                      <div class="min-w-0 flex-1">
+                        <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                          <span class="inline-flex h-6 shrink-0 items-center rounded-md px-2 text-xs font-semibold ring-1" :class="item.ui.visitType.classes">{{ item.ui.visitType.label }}</span>
+                          <span class="truncate text-sm font-semibold">{{ item.petName || '—' }}</span>
+                          <span v-if="item.species" class="text-xs text-muted-foreground">{{ item.species }}</span>
+                          <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
+                          <LatenessBadge :minutes="item.ui.lateMinutes" />
+                        </div>
+                        <div class="flex min-w-0 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                          <span>{{ item.ownerName || '未留飼主姓名' }}</span>
+                          <template v-if="item.ownerPhone">
+                            <span class="text-border">·</span>
+                            <span class="tabular-nums">{{ item.ownerPhone }}</span>
+                            <button type="button" class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-field text-muted-foreground hover:bg-muted hover:text-foreground" :aria-label="`複製 ${item.ownerName || item.petName} 的電話`" @click.stop="copyPhone(item.ownerPhone)"><Copy class="h-3.5 w-3.5" stroke-width="1.75" /></button>
+                          </template>
+                          <template v-if="item.checkedInAt && item.status !== 'scheduled'">
+                            <span class="text-border">·</span>
+                            <span class="inline-flex items-center gap-1 font-medium" :class="item.ui.tone.checkin"><Clock class="h-3 w-3" stroke-width="1.9" />{{ clinicTimeInput(item.checkedInAt) }} 報到</span>
+                          </template>
+                          <template v-if="item.ui.kind === 'handoff'">
+                            <span class="text-border">·</span>
+                            <span>交出 {{ minutesSince(item.handoffAt) }} 分</span>
+                          </template>
+                          <template v-else-if="item.ui.kind === 'visiting'">
+                            <span class="text-border">·</span>
+                            <span>看診 {{ minutesSince(item.visitStartedAt) }} 分</span>
+                          </template>
+                          <template v-else-if="item.ui.kind === 'waiting'">
+                            <span class="text-border">·</span>
+                            <span>已等 {{ minutesSince(item.checkedInAt) }} 分</span>
+                          </template>
+                        </div>
+                        <p class="mt-0.5 truncate text-xs" :class="item.reason ? 'text-foreground' : 'text-muted-foreground'" :title="item.reason">{{ item.reason || '未填來院原因' }}<template v-if="item.ui.kind === 'handoff' && item.handoffNote"><span class="text-muted-foreground"> · 交辦：{{ item.handoffNote }}</span></template></p>
+                        <p v-if="item.ui.kind === 'handoff' && item.specialCareNote" class="mt-1 truncate rounded-md bg-warning-surface px-2 py-0.5 text-xs font-medium text-warning" :title="item.specialCareNote"><span class="font-semibold">請轉告飼主：</span>{{ item.specialCareNote }}</p>
+                        <PatientNotes :notes="item.ui.notes" class="mt-1" />
+                        <p v-if="item.internalNote && item.status === 'scheduled'" class="mt-0.5 truncate text-xs text-muted-foreground" :title="item.internalNote"><span class="font-medium text-foreground">掛號備註：</span>{{ item.internalNote }}</p>
+                        <p v-if="item.visitType === 'new' && !item.petId" class="mt-0.5 text-xs text-muted-foreground">
+                          初診驗證碼 <span class="font-semibold tracking-[0.16em] text-foreground">{{ item.intakeVerificationUsedAt ? '已使用' : item.intakeVerificationCode || '未建立' }}</span><template v-if="isInitialDataPending(item)"> · 等飼主填初診表</template>
+                        </p>
+                      </div>
+
+                      <div class="ml-auto flex shrink-0 items-center gap-1.5" @click.stop>
+                        <span v-if="item.ui.chip" class="inline-flex min-h-7 items-center rounded-md px-2.5 text-xs font-semibold" :class="item.ui.tone.chip">{{ item.ui.chip }}</span>
+                        <template v-if="item.ui.kind === 'handoff'">
+                          <Button size="sm" @click="openSheet(item)">處理</Button>
+                        </template>
+                        <template v-else-if="item.status === 'scheduled'">
+                          <Button v-if="item.ui.primary" size="sm" :variant="item.ui.primary.late ? 'destructive-solid' : 'default'" :disabled="busy" @click="item.ui.primary.run()">{{ item.ui.primary.label }}</Button>
+                          <RowActions :actions="item.ui.actions" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
+                        </template>
+                        <template v-else>
+                          <RowActions :actions="ARRIVED_ACTIONS" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
+                        </template>
+                      </div>
+                    </div>
+                  </article>
+                </div>
+              </template>
+
+              <!-- 「現在」晚於這個時段全部項目時，指示線落在最後面。 -->
+              <div v-if="group.items.length && nowPosition(group) === group.items.length" class="my-1.5 flex items-center gap-2.5">
+                <span class="h-0 flex-1 border-t-2 border-dashed border-primary"></span>
+                <span class="shrink-0 rounded-full bg-primary px-3 py-0.5 text-xs font-bold text-primary-foreground">現在 · {{ currentTime }}</span>
               </div>
             </div>
-          </div>
-        </section>
+          </template>
 
-        <!-- 2. 在院：看診中＋候診中 -->
-        <section class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card" aria-labelledby="col-onsite">
-          <header class="flex shrink-0 items-baseline gap-2.5 border-b border-border px-4 py-3">
-            <span class="text-2xl font-semibold leading-none tabular-nums">{{ visiting.length + waiting.length }}</span>
-            <h2 id="col-onsite" class="text-base font-semibold">在院 · 看診／候診</h2>
-          </header>
-          <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
-            <p class="flex items-center gap-2 px-1.5 pt-1 text-xs font-semibold text-muted-foreground">看診中<span class="font-normal">{{ visiting.length }}</span></p>
-            <p v-if="!visiting.length" class="px-1.5 py-2 text-xs text-muted-foreground">目前沒有人在看診</p>
-            <article v-for="item in visiting" :key="item._id" class="flex items-start gap-3 rounded-xl border border-border bg-field p-3">
-              <CheckinNumber :appointment="item" />
-              <div class="min-w-0 flex-1 space-y-1">
-                <p class="truncate text-sm font-semibold">{{ item.petName }}<span class="ml-2 text-xs font-normal text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span></p>
-                <p class="truncate text-xs text-muted-foreground">看診 {{ minutesSince(item.visitStartedAt) }} 分</p>
-                <div v-if="item.isSurgery || item.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
-                  <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
-                  <LatenessBadge :minutes="item.latenessMinutes" />
-                </div>
-                <PatientNotes :notes="notesFor(item)" />
+          <!-- 已完成與未到／取消：跟進行中的軌道分開，收在最下面。 -->
+          <div v-if="!stageFilter || stageFilter === 'completed'" class="mt-4 grid gap-3 sm:grid-cols-2">
+            <section class="min-w-0 rounded-xl bg-muted/40 p-3" aria-label="今日已完成">
+              <div class="mb-2 flex items-center justify-between gap-3">
+                <h3 class="text-sm font-semibold">今日已完成</h3>
+                <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-card px-2 text-xs font-semibold tabular-nums">{{ finished.length }}</span>
               </div>
-            </article>
-
-            <p class="flex items-center gap-2 px-1.5 pt-3 text-xs font-semibold text-muted-foreground">候診中<span class="font-normal">{{ waiting.length }}</span></p>
-            <p v-if="!waiting.length" class="px-1.5 py-2 text-xs text-muted-foreground">目前沒有候診中的病患</p>
-            <article v-for="item in waiting" :key="item._id" class="flex items-start gap-3 rounded-xl border border-border p-3">
-              <CheckinNumber :appointment="item" />
-              <div class="min-w-0 flex-1 space-y-1">
-                <p class="truncate text-sm font-semibold">{{ item.petName }}<span class="ml-2 text-xs font-normal text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span></p>
-                <p class="truncate text-xs text-muted-foreground">已等 {{ minutesSince(item.checkedInAt) }} 分</p>
-                <div v-if="item.isSurgery || item.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
-                  <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
-                  <LatenessBadge :minutes="item.latenessMinutes" />
-                </div>
-                <PatientNotes :notes="notesFor(item)" />
+              <div class="space-y-2">
+                <article v-for="item in followUps" :key="`fu-${item._id}`" class="grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2.5">
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><CalendarPlus class="h-4 w-4" stroke-width="1.75" /></span>
+                  <div class="min-w-0">
+                    <p class="truncate text-sm font-semibold">{{ item.petName }}<span class="ml-2 text-xs font-normal text-muted-foreground">{{ item.ownerName || '飼主待確認' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></span></p>
+                    <p class="truncate text-xs text-muted-foreground">待安排回診 · 醫師建議：{{ item.followUpRecommendation || item.followUpReason }}</p>
+                  </div>
+                  <Button variant="secondary" size="xs" @click="openSheet(item)"><CalendarPlus class="h-4 w-4" />安排回診</Button>
+                </article>
+                <p v-if="!finished.length" class="px-1 py-2 text-xs text-muted-foreground">還沒有完成的就診</p>
+                <button v-for="item in finished" :key="item._id" type="button" class="grid min-h-11 w-full min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-card px-3 py-2 text-left hover:bg-field" @click="openSheet(item)">
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"><Check class="h-4 w-4" stroke-width="1.75" /></span>
+                  <span class="min-w-0">
+                    <span class="block truncate text-sm font-medium text-primary">{{ item.petName }}</span>
+                    <span class="block truncate text-xs text-muted-foreground">飼主 {{ item.ownerName || '未填' }} · 原訂 {{ item.time || '未定' }}<template v-if="item.deskCompletedAt"> · {{ clinicTimeInput(item.deskCompletedAt) }} 完成</template></span>
+                  </span>
+                  <span v-if="item.followUpAppointmentId" class="shrink-0 text-xs text-muted-foreground">已約 {{ item.followUpDate?.slice(5) }}</span>
+                </button>
               </div>
-              <RowActions :actions="[{ key: 'restore', label: '取消報到' }, { key: 'edit', label: '修改掛號' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
-            </article>
-          </div>
-        </section>
-
-        <!-- 3. 待櫃台處理：飼主人就站在櫃台前，用主色框起來 -->
-        <section class="flex min-h-0 flex-col overflow-hidden rounded-xl border-2 border-primary bg-card" aria-labelledby="col-handoff">
-          <header class="flex shrink-0 items-baseline gap-2.5 bg-accent px-4 py-3 text-accent-foreground">
-            <span class="text-2xl font-semibold leading-none tabular-nums">{{ handoffs.length }}</span>
-            <h2 id="col-handoff" class="text-base font-semibold">待櫃台處理</h2>
-            <span class="ml-auto text-xs">飼主正在櫃台等</span>
-          </header>
-          <div class="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
-            <p v-if="!handoffs.length" class="px-2 py-6 text-center text-sm text-muted-foreground">目前沒有等待處理的交辦</p>
-            <article v-for="item in handoffs" :key="item._id" class="space-y-2.5 rounded-xl border border-border p-3">
-              <div class="flex items-center gap-3">
-                <CheckinNumber :appointment="item" />
-                <div class="min-w-0 flex-1">
-                  <p class="truncate text-sm font-semibold">{{ item.petName }}<span class="ml-2 text-xs font-normal text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span></p>
-                  <p class="truncate text-xs text-muted-foreground">{{ item.ownerName || '飼主待確認' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></p>
-                </div>
-                <span class="shrink-0 text-xs text-muted-foreground">交出 {{ minutesSince(item.handoffAt) }} 分</span>
+            </section>
+            <section class="min-w-0 rounded-xl bg-muted/40 p-3" aria-label="未到與取消">
+              <div class="mb-2 flex items-center justify-between gap-3">
+                <h3 class="text-sm font-semibold">未到／取消</h3>
+                <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-card px-2 text-xs font-semibold tabular-nums">{{ closedAppointments.length }}</span>
               </div>
-              <p class="line-clamp-2 text-sm" :class="item.handoffNote ? '' : 'text-muted-foreground'">{{ item.handoffNote || '醫師沒有留下交辦事項' }}</p>
-              <p v-if="item.specialCareNote" class="line-clamp-2 rounded-md bg-warning-surface px-2 py-1 text-xs font-medium text-warning" :title="item.specialCareNote"><span class="font-semibold">請轉告飼主：</span>{{ item.specialCareNote }}</p>
-              <PatientNotes :notes="notesFor(item)" />
-              <div class="flex flex-wrap items-center gap-1.5">
-                <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
-                <LatenessBadge :minutes="item.latenessMinutes" />
-                <Badge v-if="item.followUpRecommendation" variant="status" class="bg-muted text-muted-foreground">建議回診</Badge>
-                <Button size="sm" class="ml-auto" @click="openSheet(item)">處理</Button>
+              <div class="space-y-2">
+                <p v-if="!closedAppointments.length" class="px-1 py-2 text-xs text-muted-foreground">沒有未到或取消的預約</p>
+                <article v-for="item in closedAppointments" :key="item._id" class="grid min-w-0 grid-cols-[2.25rem_minmax(0,1fr)_auto] items-center gap-3 rounded-lg border border-border/70 bg-card px-3 py-2.5">
+                  <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"><X class="h-4 w-4" stroke-width="1.75" /></span>
+                  <div class="min-w-0">
+                    <p class="flex min-w-0 items-center gap-2 text-sm"><span class="truncate font-semibold">{{ item.petName }}</span><Badge variant="status" :class="closedStatusMeta(item).class">{{ closedStatusMeta(item).label }}</Badge></p>
+                    <p class="truncate text-xs text-muted-foreground">飼主 {{ item.ownerName || '未填' }} · 原訂 {{ item.time || '未定' }}<template v-if="item.cancelReason"> · {{ item.cancelReason }}</template></p>
+                  </div>
+                  <RowActions :actions="[{ key: 'restore', label: '恢復待報到' }, { key: 'edit', label: '修改預約' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
+                </article>
               </div>
-            </article>
+            </section>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <!-- 4. 今日已完成（抽屜打開時收成窄條） -->
-        <button v-if="drawerVisible" type="button" class="hidden min-h-0 flex-col items-center gap-2 rounded-xl border border-border bg-card py-3 hover:bg-field xl:flex" aria-label="關閉抽屜並顯示今日已完成" @click="drawer = ''">
-          <span class="text-base font-semibold tabular-nums">{{ finished.length }}</span>
-          <span class="text-xs tracking-widest text-muted-foreground [writing-mode:vertical-rl]">今日已完成</span>
-        </button>
-        <section class="min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card" :class="drawerVisible ? 'flex xl:hidden' : 'flex'" aria-labelledby="col-finished">
-          <header class="flex shrink-0 items-baseline gap-2.5 border-b border-border px-4 py-3">
-            <span class="text-2xl font-semibold leading-none tabular-nums">{{ finished.length }}</span>
-            <h2 id="col-finished" class="text-base font-semibold">今日已完成</h2>
-          </header>
-          <div class="min-h-0 flex-1 overflow-y-auto p-2.5">
-            <template v-if="followUps.length">
-              <p class="flex items-center gap-2 px-1.5 pb-2 pt-1 text-xs font-semibold text-muted-foreground">待安排回診<span class="font-normal">{{ followUps.length }}</span></p>
-              <article v-for="item in followUps" :key="item._id" class="mb-2 space-y-2 rounded-xl border border-border p-3">
-                <p class="truncate text-sm"><span class="font-semibold">{{ item.petName }}</span><span class="ml-2 text-xs text-muted-foreground">{{ item.ownerName || '飼主待確認' }}<template v-if="item.ownerPhone"> · {{ item.ownerPhone }}</template></span></p>
-                <p class="line-clamp-2 text-xs text-muted-foreground">醫師建議：{{ item.followUpRecommendation || item.followUpReason }}</p>
-                <PatientNotes :notes="notesFor(item)" />
-                <div class="flex justify-end"><Button variant="secondary" size="sm" @click="openSheet(item)"><CalendarPlus class="h-4 w-4" />安排回診</Button></div>
-              </article>
-              <p class="flex items-center gap-2 px-1.5 pb-1 pt-3 text-xs font-semibold text-muted-foreground">已結束<span class="font-normal">{{ finished.length }}</span></p>
-            </template>
-            <p v-if="!finished.length" class="px-2 py-6 text-center text-sm text-muted-foreground">還沒有完成的就診</p>
-            <button v-for="item in finished" :key="item._id" type="button" class="flex min-h-11 w-full items-center gap-3 rounded-md bg-card px-2 text-left hover:bg-field" @click="openSheet(item)">
-              <span class="w-11 shrink-0 text-xs tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
-              <span class="min-w-0 flex-1 truncate text-sm font-medium text-primary">{{ item.petName }}</span>
-              <span v-if="item.followUpAppointmentId" class="shrink-0 text-xs text-muted-foreground">已約 {{ item.followUpDate?.slice(5) }}</span>
-            </button>
-          </div>
-        </section>
-      </div>
-
-      <!-- 右側抽屜：頁面版面裡的一欄，不蓋住看板 -->
-      <div v-if="drawer || newDraftOpen" v-show="drawer" class="order-first flex min-h-0 shrink-0 flex-col xl:order-none" :class="drawer === 'check-in' ? 'xl:w-176' : 'xl:w-144'">
-        <AppointmentDrawer
-          v-if="newDraftOpen"
-          v-show="drawer === 'new'"
-          ref="newDraft"
-          class="min-h-0 flex-1"
-          :date="date"
-          :day-items="items"
-          :templates="templates"
-          :default-template-id="defaultTemplate"
-          :submitting="busy"
-          :error-message="drawer === 'new' ? dialogError : ''"
-          @submit="(values) => submit(values, 'new')"
-          @minimize="drawer = ''"
-          @close="closeDrawer"
-        />
-        <AppointmentDrawer
-          v-if="drawer === 'edit' && target"
-          :key="target._id"
-          class="min-h-0 flex-1"
-          :appointment="target"
-          :date="date"
-          :day-items="items"
-          :templates="templates"
-          :default-template-id="defaultTemplate"
-          :submitting="busy"
-          :error-message="dialogError"
-          @submit="(values) => submit(values, 'edit')"
-          @close="closeDrawer"
-        />
+      <!-- 右側抽屜（初診報到、暫存區）：頁面版面裡的一欄，不蓋住時間軸 -->
+      <div v-if="drawerVisible" class="order-first flex min-h-0 shrink-0 flex-col xl:order-none" :class="drawer === 'check-in' ? 'xl:w-176' : 'xl:w-144'">
         <CheckInDrawer
           v-if="drawer === 'check-in' && target"
           :key="target._id"
@@ -709,37 +859,41 @@ onBeforeUnmount(() => {
           @submit="(values) => submit(values, 'check-in')"
           @close="closeDrawer"
         />
-        <SideDrawer v-if="drawer === 'timeline'" class="min-h-0 flex-1" title="看診時間軸" :description="`${date}（${weekdayLabel(date)}）`" @close="closeDrawer">
-          <div v-for="(group, groupIndex) in timeline" :key="group.session.id" class="-mx-5 py-1">
-            <p v-if="groupIndex === 1" class="px-5 py-2 text-xs text-muted-foreground">{{ SURGERY_BLOCK.start }}–{{ SURGERY_BLOCK.end }} · {{ SURGERY_BLOCK.label }}</p>
-            <p class="flex items-center gap-2 px-5 py-1.5 text-xs font-semibold text-muted-foreground">
-              {{ group.session.label }}<span class="font-normal">{{ group.session.start }}–{{ group.session.end }}</span>
-            </p>
-            <template v-for="(item, index) in group.items" :key="item._id">
-              <div v-if="nowPosition(group) === index" class="flex items-center gap-2 px-5 py-1.5">
-                <span class="text-xs text-primary">現在 {{ currentTime }}</span><span class="h-px flex-1 border-t border-dashed border-primary"></span>
-              </div>
-              <div class="flex items-center gap-3 px-5 py-1.5">
-                <span class="w-11 shrink-0 text-xs tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
-                <span class="h-2 w-2 shrink-0 rounded-full" :class="dotClass(item)"></span>
-                <span class="min-w-0 flex-1 truncate text-sm">{{ item.petName }}</span>
-                <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" class="max-w-32" />
-                <LatenessBadge :minutes="item.latenessMinutes" />
-                <span class="shrink-0 text-xs text-muted-foreground">{{ visitLabel(item) }}</span>
-              </div>
-            </template>
-            <div v-if="nowPosition(group) === group.items.length" class="flex items-center gap-2 px-5 py-1.5">
-              <span class="text-xs text-primary">現在 {{ currentTime }}</span><span class="h-px flex-1 border-t border-dashed border-primary"></span>
-            </div>
-            <p v-if="!group.items.length" class="px-5 py-2 text-xs text-muted-foreground">此時段尚無預約</p>
-          </div>
-        </SideDrawer>
         <SideDrawer v-if="drawer === 'pinned'" class="min-h-0 flex-1" title="暫存區" description="在聊天室打 @ 標記就會放進來" @close="closeDrawer">
           <PinnedPetsList />
           <p v-if="!pinnedPets.items.length" class="py-6 text-center text-sm text-muted-foreground">暫存區是空的</p>
         </SideDrawer>
       </div>
     </div>
+
+    <!-- 掛號 Modal：新增的那份元件在收起時仍掛載（open=false），填到一半的內容不會消失。 -->
+    <AppointmentDialog
+      v-if="newDraftOpen"
+      ref="newDraft"
+      :open="drawer === 'new'"
+      :date="date"
+      :day-items="items"
+      :templates="templates"
+      :default-template-id="defaultTemplate"
+      :submitting="busy"
+      :error-message="drawer === 'new' ? dialogError : ''"
+      @submit="(values) => submit(values, 'new')"
+      @minimize="drawer = ''"
+      @close="closeDrawer"
+    />
+    <AppointmentDialog
+      v-if="drawer === 'edit' && target"
+      :key="target._id"
+      :appointment="target"
+      :date="date"
+      :day-items="items"
+      :templates="templates"
+      :default-template-id="defaultTemplate"
+      :submitting="busy"
+      :error-message="dialogError"
+      @submit="(values) => submit(values, 'edit')"
+      @close="closeDrawer"
+    />
 
     <ModalDialog v-if="intakeReviewTarget" size="xl" @close="intakeReviewTarget = null">
       <div class="border-b border-border p-5 pr-16 sm:px-6"><DialogTitle>審核初診資料</DialogTitle><DialogDescription class="mt-1 text-xs">確認資料後再建立正式飼主與寵物資料。</DialogDescription></div>

@@ -318,8 +318,8 @@ describe('appointments routes', () => {
     }
   });
 
-  it('掛號時段只接受診所時段內的五分鐘刻度', async () => {
-    for (const time of ['09:55', '11:35', '12:00', '14:02', '19:35']) {
+  it('掛號時段只接受診所時段內的十五分鐘刻度', async () => {
+    for (const time of ['09:45', '11:45', '12:00', '14:05', '14:10', '19:45']) {
       const response = await fetch(`${origin}/api/appointments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -327,7 +327,22 @@ describe('appointments routes', () => {
       });
       assert.equal(response.status, 422, time);
       assert.deepEqual(await response.json(), {
-        message: '預約時段僅限 10:00–11:30、14:00–19:30，且每 5 分鐘一格',
+        message: '預約時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格',
+      });
+    }
+  });
+
+  // 勾了手術才開放中午的手術時段；刻度與門診邊界一樣要守。
+  it('手術掛號可以落在 11:45–13:45 的手術時段，一般掛號不行', async () => {
+    for (const time of ['11:40', '13:50', '12:05']) {
+      const response = await fetch(`${origin}/api/appointments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ time, isSurgery: true, surgeryName: '洗牙' }),
+      });
+      assert.equal(response.status, 422, time);
+      assert.deepEqual(await response.json(), {
+        message: '手術時段僅限 10:00–13:45、14:00–19:30，且每 15 分鐘一格',
       });
     }
   });

@@ -39,7 +39,11 @@ const APPOINTMENT_TIME_RANGES = [
   ['10:00', '11:30'],
   ['14:00', '19:30'],
 ];
-const APPOINTMENT_TIME_ERROR = '預約時段僅限 10:00–11:30、14:00–19:30，且每 5 分鐘一格';
+// 手術掛在門診中間的手術時段。只有勾了手術的掛號能落在這裡，一般門診不開放。
+const SURGERY_TIME_RANGE = ['11:45', '13:45'];
+const APPOINTMENT_TIME_STEP = 15;
+const APPOINTMENT_TIME_ERROR = '預約時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格';
+const SURGERY_TIME_ERROR = '手術時段僅限 10:00–13:45、14:00–19:30，且每 15 分鐘一格';
 
 function newIntakeVerificationCode() {
   return String(randomInt(1000, 10000));
@@ -54,15 +58,20 @@ function minutesOfTime(value) {
   return hour * 60 + minute;
 }
 
-function isValidAppointmentTime(value) {
+function isValidAppointmentTime(value, { surgery = false } = {}) {
   if (!value) return true;
   const minutes = minutesOfTime(value);
-  if (minutes == null || minutes % 5 !== 0) return false;
-  return APPOINTMENT_TIME_RANGES.some(([start, end]) => {
+  if (minutes == null || minutes % APPOINTMENT_TIME_STEP !== 0) return false;
+  const ranges = surgery ? [...APPOINTMENT_TIME_RANGES, SURGERY_TIME_RANGE] : APPOINTMENT_TIME_RANGES;
+  return ranges.some(([start, end]) => {
     const startMinutes = minutesOfTime(start);
     const endMinutes = minutesOfTime(end);
     return minutes >= startMinutes && minutes <= endMinutes;
   });
+}
+
+function appointmentTimeError(surgery) {
+  return surgery ? SURGERY_TIME_ERROR : APPOINTMENT_TIME_ERROR;
 }
 
 function normalizeSurgeryFields(body) {
@@ -275,7 +284,8 @@ router.post('/', async (req, res, next) => {
   try {
     const { reason, petId } = req.body;
     const time = String(req.body.time || '').trim();
-    if (!isValidAppointmentTime(time)) return res.status(422).json({ message: APPOINTMENT_TIME_ERROR });
+    const surgery = Boolean(req.body.isSurgery);
+    if (!isValidAppointmentTime(time, { surgery })) return res.status(422).json({ message: appointmentTimeError(surgery) });
     let ownerId = null;
     let ownerName;
     let ownerPhone;
@@ -378,9 +388,12 @@ router.put('/:id', async (req, res, next) => {
       for (const field of EDITABLE_APPOINTMENT_FIELDS) {
         if (req.body[field] !== undefined) updates[field] = req.body[field];
       }
-      if (updates.time !== undefined) {
-        updates.time = String(updates.time || '').trim();
-        if (!isValidAppointmentTime(updates.time)) return res.status(422).json({ message: APPOINTMENT_TIME_ERROR });
+      // 時段跟手術要一起看：取消手術勾選後，原本掛在手術時段的時間就不再合法。
+      const surgery = updates.isSurgery !== undefined ? Boolean(updates.isSurgery) : Boolean(appointment.isSurgery);
+      if (updates.time !== undefined || updates.isSurgery !== undefined) {
+        const time = updates.time !== undefined ? String(updates.time || '').trim() : appointment.time;
+        if (updates.time !== undefined) updates.time = time;
+        if (!isValidAppointmentTime(time, { surgery })) return res.status(422).json({ message: appointmentTimeError(surgery) });
       }
       if (updates.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(updates.date))) {
         return res.status(422).json({ message: '請填寫預約日期' });

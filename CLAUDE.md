@@ -82,7 +82,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ### appointments 掛號與候診
 只服務當日門診時間軸。`date`／`time` 是登記來源（`date` 由掛號時指定，預設今天），`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。
 
-`isSurgery`（布林）／`surgeryName`（文字）是掛號時可勾選的手術標記，跟 `reason`（來院原因）是兩個獨立欄位、互不覆蓋——勾選手術不會動到來院原因文字，兩者可以同時填。勾選時 `surgeryName` 必填（後端 422 擋，前端 vee-validate 同步擋），未勾選則清空。`/appointments`（醫師診療台，含 `VisitWorkspace` 工作區）與 `/reception`（櫃台工作台）的候診列表都會在勾選手術的那筆掛號旁標註紅色「手術」徽章（`SurgeryBadge`，`danger`；遲到徽章刻意用琥珀色跟它區分），帶出 `surgeryName`。
+`isSurgery`（布林）／`surgeryName`（文字）是掛號時可勾選的手術標記，跟 `reason`（來院原因）是兩個獨立欄位、互不覆蓋——勾選手術不會動到來院原因文字，兩者可以同時填。勾選時 `surgeryName` 必填（後端 422 擋，前端 vee-validate 同步擋），未勾選則清空。`/appointments`（醫師診療台，含 `VisitWorkspace` 工作區）與 `/reception`（櫃台工作台）都會在勾選手術的那筆掛號旁標註紫色「手術」徽章（`SurgeryBadge`，`surgery` token；遲到徽章是紅色 `danger`，兩者刻意分開色相），帶出 `surgeryName`。**時段刻度是 15 分鐘**（`APPOINTMENT_TIME_STEP`，前端 `lib/appointmentTime.js` 同一組數字），門診時段 10:00–11:30、14:00–19:30；**勾了手術才多開放中午的手術時段 11:45–13:45**（後端 `SURGERY_TIME_RANGE`，前端時段格勾選手術時多出一組紫色格子），取消手術勾選後原本掛在手術時段的時間就不再合法，`PUT` 會回 422。
 
 **一條四步流水線：預約 → 候診 → 看診 → 櫃台完成。** 真相是三個里程碑時間戳記，`status` 由它們推導出來，不是另一個獨立的維度（推導在 `lib/appointmentWorkflow.js` 的 `applyWorkflowAction` 尾端）：
 
@@ -108,7 +108,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 
 這四欄加上 `weightKg`／`temperatureC` 是同一支 `POST /workflow/clinical` 的可選欄位，前端自動存檔（1.2 秒 debounce）。**櫃台按下完成處理之後就整組鎖定**（回 409）。醫生↔櫃台真正想聊、跟哪個病患無關的內容（例如「今天下午提早關診」），走全站聊天浮動視窗，不是這些欄位——見第六節 `GlobalChatWidget` 與第二節 `chatMessages`。
 
-`followUpDate`（`YYYY-MM-DD`）與 `followUpTime`（`HH:MM`）分開存，理由跟 `date`／`time` 一樣是避免日期因伺服器時區偏移。它們只由 `POST /workflow/followup` 寫入——那是櫃台跟飼主敲定時段的那一刻，會在同一個 transaction 裡建立（或就地改期）下一筆掛號（`visitType: 'return'`、身分快照與 `templateId` 都照抄這次掛號，`reason` 取 `followUpReason`，沒填則用「回診」墊底），新掛號的 `_id` 記在 `followUpAppointmentId` 上。回診時段有驗證（10:00–11:30、14:00–19:30，每 5 分鐘一格，且不得早於本次就診）；已經被現場另外處理過（不再是 `scheduled`）的下一筆掛號不回頭改期，改回 409 要求從那筆掛號本身處理。
+`followUpDate`（`YYYY-MM-DD`）與 `followUpTime`（`HH:MM`）分開存，理由跟 `date`／`time` 一樣是避免日期因伺服器時區偏移。它們只由 `POST /workflow/followup` 寫入——那是櫃台跟飼主敲定時段的那一刻，會在同一個 transaction 裡建立（或就地改期）下一筆掛號（`visitType: 'return'`、身分快照與 `templateId` 都照抄這次掛號，`reason` 取 `followUpReason`，沒填則用「回診」墊底），新掛號的 `_id` 記在 `followUpAppointmentId` 上。回診時段有驗證（10:00–11:30、14:00–19:30，每 15 分鐘一格，且不得早於本次就診）；已經被現場另外處理過（不再是 `scheduled`）的下一筆掛號不回頭改期，改回 409 要求從那筆掛號本身處理。
 
 **`checkinNumber` 是發給飼主的實體號碼牌，不是佇列位置。** 報到時後端配一張「當天從未發出過」的號碼（`checkinNumberHistory` 記下每一張發過的牌，歸還後也不會再配發），櫃台可以在報到時或事後（`PATCH /:id/check-in-number`）改成手上實際發出去的號碼。**候診先後由 `checkedInAt` 決定，跟號碼大小無關**，所以改號碼不會改變誰先看診。離開佇列（完成／取消／未到／取消報到）就把自己的號碼清成 null，不動其他人的號碼。**送交櫃台轉入 `pending_checkout` 時不歸還號碼牌**——人還要去櫃台領藥付錢，號碼牌代表「現場還在」，不是「還沒看診」。兩人同時報到算到同一張牌時由唯一索引擋下、後端自動重試（`routes/appointments.js` 的 `withQueueRetry`）。配號與候診排序規則在 `lib/appointmentQueue.js`（`nextAvailableCheckinNumber`／`queueOrder`，純邏輯，可測）。
 
@@ -196,7 +196,7 @@ POST   /api/records/:id/send-email      寄送 PDF + 連結給飼主
 GET    /api/appointments                當日掛號時間軸（?date=YYYY-MM-DD，預設今天）；另回 patientNotes { pets, owners }，
                                        以 id 為鍵的寵物／飼主備註（空白不回），給診療台佇列顯示「會咬人」之類的提醒（櫃台看板／處理視窗只用其中的飼主備註）
 GET    /api/appointments/summary        週檢視用的日期範圍內每日掛號數（?start=&end=，最多 31 天）
-POST   /api/appointments                新增掛號（body 可帶 date，省略＝今天）
+POST   /api/appointments                新增掛號（body 可帶 date，省略＝今天；time 每 15 分鐘一格，isSurgery 才能落在 11:45–13:45）
 GET    /api/appointments/:id
 PUT    /api/appointments/:id            更新掛號資料（時段／來院原因／身分快照）
 POST   /api/appointments/:id/check-in   報到；初診同時建立飼主與寵物（自動接到候診佇列尾端）
@@ -277,7 +277,7 @@ GET    /api/health
 |---|---|---|
 | `/` | 工作台 | 全站綜覽儀表板，由粗到細三層：**現在**（寄送異常橫幅）→ **分佈與趨勢**（報告流程四格、近 6 週健檢量長條、本月與累計數字）→ **明細**（待辦清單、最近完成）。**同一個數字只在其中一層出現一次**——之前草稿數同時出現在優先處理卡、workStage 卡、待辦清單與狀態長條四個地方，那是這頁最主要的雜訊來源。每一格數字都要能點進對應清單 |
 | `/appointments` | 醫師診療台 | **左欄「今日病患」＋右欄可同時開多筆的看診工作區**（`VetConsolePage` ＋ `VisitWorkspace`，路由 `meta.wide`，xl 以上整頁不捲動）。左欄由上而下：**我手上的**（開著的工作區，取代舊的分頁列；標出看診時間，藍點＝有未存內容）→ **候診中**（每筆一顆「看診」）→ 看診中（未開啟，有才出現）→ **今日排程·待報到**（依時段）→ 最下面收合的暫存區／已交櫃台（可取回）／今日已完成。**每張卡片都直接列出來院原因**（醫師看排程是為了先準備器材）與**寵物／飼主備註**（`bg-warning-surface`，最多兩行，資料來自列表 API 的 `patientNotes`）——「會咬人」「飼主難溝通」要在叫進診間前就看到。點卡片只開啟工作區，按「看診」才寫 `visitStartedAt`。**刻意不換頁也不用 Modal**：醫師手上常常同時有好幾隻動物在跑，工作區各自獨立掛載（`v-show` 切換，不是換 props），切回來未儲存的輸入還在；還在自動存檔的工作區不給關。工作區標頭：號碼、名字、品種性別年齡、飼主姓名電話（其餘資料與就診進度收進「飼主與進度」）；**來院原因獨立一行放大**；醫療警示分級（藥物過敏實心紅、病史紅框、疫苗／健檢灰）；寵物備註與飼主備註並排常駐、可就地編輯。**紀錄與交辦在同一頁**：左欄由上而下是體重體溫 → 本次簡易紀錄 → 內部備註 → 「交給櫃台」區塊（給櫃台的交辦／請轉告飼主／回診建議，用標題與分隔線獨立），右欄是歷次病歷日誌；底部一顆「完成看診，送交櫃台」。早期拆成「看診紀錄 → 交辦與送交」兩步，但第 2 步左邊只是把第 1 步的內容唯讀再顯示一次，多一次換頁沒有換到東西，所以合回一頁。已交出去的改成「取回修改」。1.2 秒 debounce 自動存檔，別人同時改到同一欄才跳衝突提示。 |
-| `/reception` | 櫃台工作台 | **照流水線排成四欄看板**（`ReceptionPage`，路由 `meta.wide` 滿版寬度），xl 以上整頁不捲動、各欄自己捲：**待報到**（底部收合「未到／取消」）→ **在院·看診／候診** → **待櫃台處理**（人正站在櫃台前，主色外框）→ **今日已完成**（上方是「待安排回診」）。欄標題的數字就是現況，不另做統計卡。**警示列**只在有例外時出現：醫師申請修改、遲到未報到（超過寬限才算）、待審初診表。每張卡片只有一顆主要按鈕，其他收進 `RowActions`。卡片與 `HandoffSheet` 標頭常駐顯示**飼主備註**（共用 `PatientNotes.vue`，資料同樣來自列表 API 的 `patientNotes`）——飼主站到櫃台前之前就要知道「處置前先說明費用」。寵物備註刻意不顯示，那是給診間的（會咬人、保定方式）。**資料齊全的回診一鍵報到**：號碼牌自動配發，超過預約時間 `LATE_GRACE_MINUTES`（10 分，`lib/receptionBoard.js`）自動記遲到，提示上可「復原」（打 `restore`）；要改到院時間或號碼牌走 ⋯ 裡的 `CheckInDialog`。**新增／修改掛號、初診報到、時間軸、暫存區都開在看板右側的 `SideDrawer`，不是 Modal**——櫃台講電話掛號到一半，交辦的飼主就走到櫃台前了，看板必須照樣可操作；抽屜打開時「今日已完成」收成窄條讓出寬度。掛號抽屜（`AppointmentDrawer`）把寵物／飼主搜尋直接放在裡面（不再疊選擇對話框），時段用 `SlotGrid` 格子挑（每格顯示已約人數，`buildSlotGrid`），新增時可「收起，稍後繼續」保留草稿（Esc 也是收起）。點「處理」開 `HandoffSheet`（目前仍是置中 Dialog），段落順序刻意是「請轉告飼主 → 醫師交辦 → 本次簡易紀錄（收起）→ 回診安排」——那就是櫃台當面講話的順序。「完成處理」一顆按鈕收尾：還沒掛號的回診先掛上再結束這次就診。取消、標記未到、恢復仍用確認對話框。 |
+| `/reception` | 櫃台工作台 | **上方一條橫式流程列＋整頁的看診時間軸**（`ReceptionPage`，路由 `meta.wide` 滿版寬度）。流程列四格「待報到 → 在院 → 待櫃台處理 → 今日已完成」一格一個數字，點一格只看那一段（`?stage=`），第三格直接列出正站在櫃台前的人名晶片、點了就開處理視窗。下面整頁是時間軸：依預約時段排、左側軌道、時間在軌外、上午診／下午診可收合（**時段結束且沒有待處理時自動收合**，`lib/receptionBoard.js` 的 `sessionAutoCollapsed`；收合列保留「N 待處理」紅字）、「現在」虛線、手術時間分隔線；已完成與未到／取消收在時間軸最下面兩個灰底區塊。早期版本是四欄看板（每個階段一欄各自捲），實際用起來視線要在四個地方跳、比時間軸還雜，所以改回時間軸當主體。**卡片底色只在還沒報到時用遲到（紅）／手術（紫）**，報到之後階段色接手（已報到主色淡底、待櫃台處理琥珀底），遲到／手術只留徽章。**整張卡片可點**：已交櫃台／已完成開 `HandoffSheet`，還沒交出去的開修改掛號；右側按鈕留給主要動作（報到／遲到／處理），其他收進 `RowActions`。飼主電話旁有複製鈕（桌機用複製不用 `tel:`）。**警示列**只在有例外時出現：醫師申請修改、遲到未報到（超過寬限才算）、待審初診表。卡片與 `HandoffSheet` 標頭常駐顯示**飼主備註**（共用 `PatientNotes.vue`，資料來自列表 API 的 `patientNotes`）；寵物備註刻意不顯示，那是給診間的。**資料齊全的回診一鍵報到**：號碼牌自動配發，超過預約時間 `LATE_GRACE_MINUTES`（10 分）自動記遲到，提示上可「復原」（打 `restore`）；要改到院時間或號碼牌走 ⋯ 裡的 `CheckInDialog`。**新增／修改掛號是置中的雙欄 Modal（`AppointmentDialog`，`DialogContent size="wide"`）**：左欄「誰・為什麼」（回診／初診、寵物或飼主搜尋直接放在裡面、來院原因、手術、報告模板、內部備註），右欄「什麼時候」（今天／明天／後天快選＋日期選擇器，`SlotGrid` 15 分鐘時段格，格內直接列已約的寵物名字、三人以上顯示前兩位 +N，已過的格子不可選，勾手術多出紫色的手術時段）。同一隻寵物那天已有掛號時在格子下方提醒（`duplicateBookings`）。**新增時可「收起，稍後繼續」**：元件仍掛載、內容保留，頁首按鈕變成「繼續掛號：名字」，Esc 與點遮罩在新增模式也是收起不是丟掉——這就是「講電話掛到一半飼主走到櫃台前」的出路，Modal 才能取代原本的側邊抽屜。初診報到（`CheckInDrawer`）與暫存區仍開在時間軸右側的 `SideDrawer`。點「處理」開 `HandoffSheet`（置中 Dialog），段落順序刻意是「請轉告飼主 → 醫師交辦 → 本次簡易紀錄（收起）→ 回診安排」——那就是櫃台當面講話的順序。「完成處理」一顆按鈕收尾：還沒掛號的回診先掛上再結束這次就診。取消、標記未到、恢復仍用確認對話框。 |
 | `/pets`、`/pets/:id` | 寵物列表／詳情 | **飼主不是獨立可瀏覽的實體**——沒有 `/owners` 或 `/owners/:id`，飼主資料一律以附帶資訊的形式跟著寵物出現。詳情頁把寵物資料與飼主資料合併在同一張卡片裡、中間用分隔線隔開（`pets.ownerId` populate 出 `name/phone/email/address/__v`），而不是兩張並排的卡片——報到時兩邊資料要一眼同時看到，兩張卡片在視覺上等於多切一刀。兩邊各自獨立「編輯」後直接就地變成輸入框、儲存/取消，不彈 Modal，互不影響彼此的編輯狀態。下方病歷日誌（隨手記事，見第二節 `clinicalNotes`）與歷次健檢報告用頁籤（`FilterTabs`）切換，不會同時整段展開——避免兩份可能很長的清單同時佔滿版面 |
 | `/pets/new` | 新增寵物 | 飼主與寵物欄位合併成同一頁（不是 Modal）——欄位量（飼主搜尋/新增＋完整寵物資料）已經跟健檢表單一樣值得有自己的網址，塞進 Modal 只會逼出內部再捲動一層。飼主段用 `SegmentedControl` 切「選擇既有飼主」（搜尋清單）或「新增飼主資料」，跟寵物欄位一次送出；有離開頁面前的未儲存提示。送出成功導去新寵物的 `/pets/:id` |
 | `/records` | 就診紀錄清單 | 跨寵物，佇列切換 |
@@ -305,7 +305,7 @@ GET    /api/health
   - **深色的表面明度是一條排過的梯子**，不要隨手插新的一層：頁面底 16.5 → 卡片 20.5 → `field` 22.8 → `popover` 24.6 → `accent` 26.7 → 狀態底 29 → `muted` 31 → `secondary` 35 → 邊框 38。梯子的頂端由主色反推：`petrol-400` 是固定的，主色文字站在任何表面上都要有 4.5，因此**會承載 `text-primary` 的表面不能亮過 L24.6**（`field`、`popover` 都受這條限制）。舊版 accent/field/destructive-surface/muted 四層全擠在 3 個明度點內，畫面上就是同一塊「比卡片亮一點的東西」。
   - `belle`／`cream`／`ink` 已經退位成報告紙面與側邊欄專用，**後台頁面不要再碰**。
 - **一律用語意 token，不要在頁面手寫色票。** `bg-card`／`bg-field`／`text-foreground`／`text-muted-foreground`／`border-border`／`bg-muted`／`bg-accent` 這組已經自己處理明暗兩態，寫 `text-ink-900 dark:text-white` 這種雙寫只會製造出第二套色彩系統——兩套並行正是「配色沒問題但細節很髒」的來源。需要新的語意角色時，加 token 到 `style.css`，不要在使用端硬寫。
-  - **狀態語意有四組 token**：`--success`／`--warning`／`--info`／`--danger`，每組各配一個 `-surface` 底色，使用端寫 `bg-success-surface text-success`。**不要用 Tailwind 的 `emerald-50`／`amber-50` 那類固定色階**——它們是冷調亮白，疊在卡片上對比只有 1.00–1.02，底色等於沒畫出來，狀態實際上只剩文字顏色在傳達。
+  - **狀態語意有四組 token**：`--success`／`--warning`／`--info`／`--danger`，每組各配一個 `-surface` 底色，使用端寫 `bg-success-surface text-success`。另有第五組 `--surgery`（紫，H300 附近，淺 `#5b2d9e`/`#efe6fb`、深 `#c9b3f5`/`#2a1c48`）**只給掛號的手術標記用**（徽章、時間軸卡片底色、時段格的手術時段）——它是「另一種掛號」不是警示，遲到才是 `danger`；跟主色與四個狀態色都留足 40° 以上的色相距離。**不要用 Tailwind 的 `emerald-50`／`amber-50` 那類固定色階**——它們是冷調亮白，疊在卡片上對比只有 1.00–1.02，底色等於沒畫出來，狀態實際上只剩文字顏色在傳達。
   - **四個狀態色的明度是刻意錯開的，看起來不整齊是對的，不要「順手對齊」。** 紅綠色盲（約占男性 8%）下紅與綠會塌到同一色相上，唯一還留著的線索就是明度差。舊版四個狀態色明度全擠在 L47–52，模擬紅綠色盲後「已寄送」與「寄送失敗」的 ΔE 只有 1.6，等於同一個顏色；現在三個暖／綠色相在可用區間內拉開（淺色 danger L38 / warning L44 / success L50，深色方向相反 danger L84 / warning L77 / success L70），最小 ΔE 6.2。**兩個主題共通的原則是：四個狀態色裡，危險永遠是對比最高的那一個。**
   - 狀態色的明度上限由「徽章文字站在自己的 `-surface` 上要有 5:1」決定，淺色約 L50 就到頂。注意 **WCAG 亮度對綠色加權特別高**，同樣的 OKLCH 明度下綠色實際對比會比琥珀色低一截，`--success` 因此不能再往上抬。
   - `--info` 是 H266 而不是更接近主色的藍：舊值 H237 跟 petrol 主色（H218）只差 19°，「寄送中」的徽章和主色連結在畫面上是同一種藍，違反「狀態不會被誤讀成主色」。**新增狀態色時要跟主色留 40° 以上的色相距離。**
@@ -353,10 +353,10 @@ GET    /api/health
   | 清單載入中 | `<ListSkeleton :rows>` | 不要用「載入中…」一行字（版面會塌陷再彈開） |
   | 錯誤訊息 | `<Alert variant="destructive"><AlertDescription>` | 不要手寫紅框 |
   | 對話框 | `<DialogContent size="sm|md|lg">` | 不要用 `class="sm:max-w-*"` 覆寫寬度 |
-  | 工作台旁的表單（掛號、報到建檔） | `<SideDrawer>`：頁面版面裡的一欄，非 modal | 使用者填表時還得看著、操作著背後的看板時，不要用 Modal 或 `ui/sheet`（兩者都會遮住並鎖住背景） |
+  | 工作台旁的表單（初診報到建檔、暫存區） | `<SideDrawer>`：頁面版面裡的一欄，非 modal | 使用者填表時還得看著、操作著背後的看板時，不要用 Modal 或 `ui/sheet`（兩者都會遮住並鎖住背景） |
   | 狀態徽章 | `<Badge variant="status">` | 不要覆寫 padding／圓角 |
-  | 掛號的手術標記 | `<SurgeryBadge :name="item.surgeryName">` | 不要在使用端手寫「手術：…」紅字或膠囊——之前櫃台、診療台、工作區、時段格四處各一種樣式 |
-  | 掛號的遲到標記 | `<LatenessBadge :minutes>`：已報到傳 `latenessMinutes`，還沒報到的逾時掛號傳即時算出的分鐘數 | 不要寫紅字「遲到 N 分」。顏色是 `warning`（琥珀），刻意跟手術徽章的 `danger` 分開色相——兩顆常並排，同色只剩圖示可辨。跟手術徽章同放一列，順序固定「手術 → 遲到」，放在來院原因之後 |
+  | 掛號的手術標記 | `<SurgeryBadge :name="item.surgeryName">` | 不要在使用端手寫「手術：…」紫字或膠囊——之前櫃台、診療台、工作區、時段格四處各一種樣式。顏色是 `surgery`（紫），跟遲到徽章的 `danger` 分開色相 |
+  | 掛號的遲到標記 | `<LatenessBadge :minutes>`：已報到傳 `latenessMinutes`，還沒報到的逾時掛號傳即時算出的分鐘數 | 不要手寫紅字「遲到 N 分」。顏色是 `danger`（紅），刻意跟手術徽章的 `surgery`（紫）分開色相——兩顆常並排，同色只剩圖示可辨。跟手術徽章同放一列，順序固定「手術 → 遲到」 |
   | 號碼牌圓圈 | `<CheckinNumber :appointment size="md|lg">`（清單 40px／工作區與處理視窗標頭 48px） | 不要手刻圓圈。顏色依階段（`lib/appointmentDisplay.js` 的 `checkinTone`）：候診灰、看診中主色實心、待櫃台 `bg-accent`、已完成淡灰；沒號碼時是虛線票券圖示。初診／回診文字一律用同檔的 `visitTypeLabel` |
   | 刪除等危險操作確認 | `<ConfirmDialog>` | **禁止用瀏覽器原生 `confirm()`／`alert()`**——樣式跳出主題、行動裝置體驗差、也擋不住連點 |
   | 操作結果提示（成功／失敗） | `useToast()`（`success`／`error`） | 同上，不要用 `alert()` |
@@ -409,6 +409,8 @@ npm run dev            # 使用者自己開
 4. **最後使用者確認診所根本不用系統計價**：批價、開藥、要開的證明全部併回一段給櫃台看的純文字（`handoffNote`），金額完全不記也不統計。這一刀把 `billingItems`／`billingSubtotal`／`checkoutTotal`／`paymentMethod`／`billingRevision`／付款方式／折讓原因／當日營收統計、以及「待批價」「待收款」兩個狀態全部移除，狀態機從五步收成四步。同一次也修掉三個一直卡著的問題：醫師端本來就沒有批價輸入介面（`AppointmentBillingEditor` 是孤兒元件）、批完價無法反悔、各分頁數字加總對不上當日總數。
 
 第 4 步同時重做了版面，這次**是重新拆成兩頁，但拆的方式跟第 1 步不同**：不是用路由鎖身分（那正是第 1 步失敗的原因），而是兩頁看同一份資料的不同切片，任何裝置都能開任何一頁、按任何按鈕。醫師頁解掉的是「一次只能停在一筆病患上」——舊版點一筆會整頁跳到 `/appointments/:id/visit`，比更早的 Modal 版更封閉；現在右欄是可以同時開多筆的工作區（各自獨立掛載、`v-show` 切換，未儲存的輸入不會因為切分頁而消失）。櫃台頁解掉的是「要自己在時間軸上掃描誰該處理」——改成三個依優先順序排列的待辦匣，時間軸降為右欄參考。醫師「送交櫃台」之後仍可**取回這筆**（`POST /workflow/reclaim`），直到櫃台按下「完成處理」為止，這是刻意補上的回頭路。
+
+5. **櫃台頁的四欄看板再改回時間軸。** 第 4 步的櫃台頁後來又做成四欄看板（待報到／在院／待櫃台處理／今日已完成各一欄、各自捲動），實際使用回饋是視線要在四個地方跳、比早期的時間軸還雜。現在是「上方一條橫式流程列（四格數字＋篩選）＋整頁的原版時間軸」，時段結束自動收合。同一次把掛號表單從側邊抽屜改成雙欄 Modal（時間軸佔滿寬度後抽屜擠不下），時段格改成 15 分鐘並在格內直接列名字，手術掛號開放中午的手術時段，遲到徽章改紅、手術徽章改紫。
 
 一併清掉的死代碼：`AppointmentsPage.vue`（1880 行，早已無路由引用，但 `appointmentNotifications.test.js` 還在讀它的原始碼當斷言來源，等於測試在測一個下線的頁面）、`AppointmentWorkspacePage.vue`、`AppointmentVisitPage.vue`、`AppointmentDeskPanel.vue`、`AppointmentListRow.vue`、`AppointmentRowActions.vue`、`AppointmentQueueCardItem.vue`、`AppointmentBillingEditor.vue`、`lib/appointmentBilling.js`，以及 `routes/appointments.js` 裡的 `/send-to-checkout`、`/reopen-visit`、`/complete`、`/visit-data` 四支舊端點與 `syncFollowUpAppointment`（回診掛號改由 `POST /workflow/followup` 在 transaction 內處理）。
 

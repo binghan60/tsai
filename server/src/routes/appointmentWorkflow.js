@@ -20,8 +20,8 @@ function validateFollowUp(date, time, appointmentDate) {
   if (!/^\d{2}:\d{2}$/.test(time)) throw workflowError('請選擇回診時間');
   const [hour, minute] = time.split(':').map(Number);
   const minutes = hour * 60 + minute;
-  if (hour > 23 || minute > 59 || minute % 5 || !((minutes >= 600 && minutes <= 690) || (minutes >= 840 && minutes <= 1170))) {
-    throw workflowError('回診時段僅限 10:00–11:30、14:00–19:30，且每 5 分鐘一格');
+  if (hour > 23 || minute > 59 || minute % 15 || !((minutes >= 600 && minutes <= 690) || (minutes >= 840 && minutes <= 1170))) {
+    throw workflowError('回診時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格');
   }
 }
 
