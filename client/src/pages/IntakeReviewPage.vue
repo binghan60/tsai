@@ -6,6 +6,8 @@ import { useToast } from '../composables/useToast'
 import { clinicDateInput, formatDateTime } from '../lib/datetime'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Textarea } from '../components/ui/textarea'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import { TimePicker } from '../components/ui/time-picker'
@@ -21,6 +23,16 @@ const confirmation = ref(null)
 const selectedId = ref('')
 const appointmentTime = ref('10:00')
 const appointmentDate = ref(clinicDateInput())
+const appointmentReason = ref('')
+const appointmentInternalNote = ref('')
+
+function selectSubmission(item) {
+  selectedId.value = item._id
+  appointmentDate.value = item.linkedAppointmentId?.date || clinicDateInput()
+  appointmentTime.value = item.linkedAppointmentId?.time || '10:00'
+  appointmentReason.value = item.linkedAppointmentId?.reason || ''
+  appointmentInternalNote.value = item.linkedAppointmentId?.internalNote || ''
+}
 
 function value(value, fallback = '') {
   return value === null || value === undefined || value === '' ? fallback : value
@@ -47,7 +59,12 @@ async function decide() {
   const { item, action } = confirmation.value
   busy.value = true
   try {
-    const { data } = await http.post(`/intake-submissions/${item._id}/${action}`, action === 'approve' ? { date: appointmentDate.value, time: appointmentTime.value } : {})
+    const { data } = await http.post(`/intake-submissions/${item._id}/${action}`, action === 'approve' ? {
+      date: appointmentDate.value,
+      time: appointmentTime.value,
+      reason: appointmentReason.value,
+      internalNote: appointmentInternalNote.value,
+    } : {})
     items.value = items.value.filter((current) => current._id !== item._id)
     selectedId.value = ''
     confirmation.value = null
@@ -86,7 +103,7 @@ onMounted(refresh)
         <span class="rounded-full bg-muted px-3 py-1 text-xs font-medium">{{ items.length }} 份</span>
       </div>
       <p v-if="!items.length" class="px-5 py-12 text-center text-sm text-muted-foreground">目前沒有待審核的初診表。</p>
-      <button v-for="item in items" :key="item._id" type="button" class="flex w-full flex-wrap items-center gap-4 border-b border-border px-5 py-4 text-left last:border-b-0 hover:bg-field" @click="selectedId = item._id; appointmentDate = clinicDateInput(); appointmentTime = '10:00'">
+      <button v-for="item in items" :key="item._id" type="button" class="flex w-full flex-wrap items-center gap-4 border-b border-border px-5 py-4 text-left last:border-b-0 hover:bg-field" @click="selectSubmission(item)">
         <span class="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-base font-semibold text-accent-foreground">{{ item.pet.name?.slice(0, 1) || '?' }}</span>
         <span class="min-w-0 flex-1"
           ><span class="block truncate text-base font-semibold">{{ item.pet.name }}</span
@@ -162,6 +179,14 @@ onMounted(refresh)
             </label>
             <label class="block text-sm font-medium">掛號時間
               <TimePicker v-model="appointmentTime" class="mt-2" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" aria-label="初診掛號時間" />
+            </label>
+          </div>
+          <div class="mt-3 grid gap-3 sm:grid-cols-2">
+            <label class="block text-sm font-medium">來院原因
+              <Input v-model="appointmentReason" class="mt-2" placeholder="例：打疫苗、不舒服、初診檢查" />
+            </label>
+            <label class="block text-sm font-medium">內部備註
+              <Textarea v-model="appointmentInternalNote" class="mt-2" rows="3" maxlength="2000" placeholder="僅院內人員可見" />
             </label>
           </div>
         </section>

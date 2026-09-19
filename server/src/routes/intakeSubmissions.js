@@ -94,7 +94,10 @@ publicIntakeRouter.post('/', publicSubmissionLimiter, async (req, res, next) => 
 intakeSubmissionsRouter.get('/', async (req, res, next) => {
   try {
     const status = ['pending', 'approved', 'rejected'].includes(req.query.status) ? req.query.status : 'pending';
-    const items = await IntakeSubmission.find({ status }).sort({ createdAt: 1, _id: 1 }).limit(100);
+    const items = await IntakeSubmission.find({ status })
+      .populate('linkedAppointmentId', 'date time reason internalNote')
+      .sort({ createdAt: 1, _id: 1 })
+      .limit(100);
     res.json({ items });
   } catch (err) { next(err); }
 });
@@ -160,6 +163,8 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
           if (time) {
             appointment.time = time;
           }
+          if (req.body?.reason !== undefined) appointment.reason = String(req.body.reason || '').trim();
+          if (req.body?.internalNote !== undefined) appointment.internalNote = String(req.body.internalNote || '').trim();
           if (date || time) appointment.scheduledAt = combineClinicDateTime(appointment.date, appointment.time || '00:00');
           await appointment.save({ session });
         }
