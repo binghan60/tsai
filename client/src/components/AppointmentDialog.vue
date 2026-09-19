@@ -15,6 +15,7 @@ import { DatePicker } from './ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { buildSlotGrid, duplicateBookings } from '../lib/receptionBoard';
+import { DEFAULT_ESTIMATED_DURATION_MINUTES, MAX_ESTIMATED_DURATION_MINUTES } from '../lib/appointmentTime';
 import { clinicDateInput, clinicTimeInput, formatDate, formatDateTime, weekdayLabel } from '../lib/datetime';
 
 // 新增與修改掛號共用的 Modal（取代原本的 AppointmentDrawer 側邊抽屜）。
@@ -72,6 +73,7 @@ const { handleSubmit, submitCount } = useForm({
     ownerName: props.appointment?.ownerName ?? '',
     ownerPhone: props.appointment?.ownerPhone ?? '',
     time: props.appointment?.time ?? '',
+    estimatedDurationMinutes: props.appointment?.estimatedDurationMinutes ?? DEFAULT_ESTIMATED_DURATION_MINUTES,
     reason: props.appointment?.reason ?? '',
     internalNote: '',
     isSurgery: props.appointment?.isSurgery ?? false,
@@ -83,6 +85,7 @@ const { value: species } = useField('species');
 const { value: ownerName } = useField('ownerName');
 const { value: ownerPhone } = useField('ownerPhone');
 const { value: time, errorMessage: timeError } = useField('time', requiredTime);
+const { value: estimatedDurationMinutes } = useField('estimatedDurationMinutes');
 const { value: reason } = useField('reason');
 const { value: internalNote } = useField('internalNote');
 const { value: isSurgery } = useField('isSurgery');
@@ -178,9 +181,24 @@ watch(slotDate, async (value) => {
 const slotItems = computed(() => (slotDate.value === props.date ? props.dayItems : otherDayItems.value ?? []));
 const slotSessions = computed(() => buildSlotGrid(slotItems.value, {
   excludeId: props.appointment?._id,
-  surgery: Boolean(isSurgery.value),
   minTime: slotDate.value === today ? clinicTimeInput(new Date()) : '',
 }));
+const durationError = computed(() => {
+  if (!time.value) return '';
+  const start = Number(time.value.slice(0, 2)) * 60 + Number(time.value.slice(3, 5));
+  for (const session of slotSessions.value) {
+    const sessionStart = Number(session.start.slice(0, 2)) * 60 + Number(session.start.slice(3, 5));
+    const sessionEnd = Number(session.end.slice(0, 2)) * 60 + Number(session.end.slice(3, 5)) + 15;
+    if (start >= sessionStart && start < sessionEnd) {
+      return start + Number(estimatedDurationMinutes.value) <= sessionEnd ? '' : '預估診療時間超出可掛號時段，請縮短時間或改選其他時段';
+    }
+  }
+  return '';
+});
+
+function changeDuration(delta) {
+  estimatedDurationMinutes.value = Math.min(MAX_ESTIMATED_DURATION_MINUTES, Math.max(15, Number(estimatedDurationMinutes.value) + delta));
+}
 
 // 同一隻寵物那天已經有掛號時先提醒——電話裡飼主常忘記早上已經掛過。
 const duplicatePetId = computed(() => (isEdit.value ? props.appointment.petId : mode.value === 'return' ? selectedPet.value?._id : null));
@@ -198,7 +216,7 @@ const description = computed(() => (isEdit.value ? '只更新這筆掛號，不�
 const summary = computed(() => {
   const name = isEdit.value ? petName.value : mode.value === 'return' ? selectedPet.value?.name : petName.value;
   const when = time.value ? `${formatDate(slotDate.value)}（${weekdayLabel(slotDate.value)}）${time.value}` : '';
-  return [name, when, reason.value?.trim()].filter(Boolean).join(' · ');
+  return [name, when, `預估 ${estimatedDurationMinutes.value} 分鐘`, reason.value?.trim()].filter(Boolean).join(' · ');
 });
 // 新增掛號收起來之後，頁首按鈕要叫得出「繼續掛號：豆豆」——只放名字，日期時段放不下。
 const draftName = computed(() => (mode.value === 'return' ? selectedPet.value?.name : petName.value?.trim()) || '');
@@ -211,8 +229,10 @@ function onOpenChange(value) {
 }
 
 const onSubmit = handleSubmit((values) => {
+  if (durationError.value) return;
   const shared = {
     time: values.time,
+    estimatedDurationMinutes: Number(values.estimatedDurationMinutes),
     reason: values.reason?.trim() ?? '',
     isSurgery: values.isSurgery,
     surgeryName: values.surgeryName?.trim() ?? '',
@@ -425,11 +445,28 @@ const onSubmit = handleSubmit((values) => {
           <div class="space-y-3">
             <div class="space-y-2">
               <Label class="text-xs font-medium">日期與時段<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <!-- 預設就是今天（跟著頁面上的日期面板）；其他日子直接在這裡打字或翻日曆，不另外放快選鈕。 -->
-              <DatePicker v-model="slotDate" :clearable="false" aria-label="預約日期" class="w-full" />
+              <!-- 預設跟著頁面日期；可一鍵回到今天，其他日子直接在日期選單裡輸入或翻日曆。 -->
+              <div class="flex items-center gap-2">
+                <DatePicker v-model="slotDate" :clearable="false" aria-label="預約日期" class="min-w-0 flex-1" />
+                <Button type="button" class="h-10 shrink-0 px-5 font-semibold shadow-sm" @click="slotDate = today">今天</Button>
+              </div>
             </div>
-            <SlotGrid v-model="time" :sessions="slotSessions" :invalid="submitCount > 0 && Boolean(timeError)" />
+            <div class="space-y-2 rounded-lg border border-border bg-field/40 p-3">
+              <div class="flex items-center justify-between gap-3">
+                <Label class="text-xs font-medium">預估診療時間</Label>
+                <div class="flex items-center gap-2">
+                  <Button type="button" variant="secondary" size="sm" class="h-9 min-w-12 px-2 text-xs font-bold shadow-sm" :disabled="estimatedDurationMinutes <= 15" aria-label="減少 15 分鐘" @click="changeDuration(-15)">−</Button>
+                  <span class="min-w-16 text-center text-xs font-semibold tabular-nums">{{ estimatedDurationMinutes }} 分鐘</span>
+                  <Button type="button" variant="secondary" size="sm" class="h-9 min-w-12 px-2 text-xs font-bold shadow-sm" :disabled="estimatedDurationMinutes >= MAX_ESTIMATED_DURATION_MINUTES" aria-label="增加 15 分鐘" @click="changeDuration(15)">＋</Button>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                <Button v-for="minutes in [15, 30, 45, 60, 90, 120]" :key="minutes" type="button" size="sm" class="h-9 min-w-12 px-2 text-xs font-semibold shadow-sm" :variant="estimatedDurationMinutes === minutes ? 'default' : 'secondary'" @click="estimatedDurationMinutes = minutes">{{ minutes }}</Button>
+              </div>
+            </div>
+            <SlotGrid v-model="time" :sessions="slotSessions" :duration-minutes="Number(estimatedDurationMinutes)" :invalid="submitCount > 0 && Boolean(timeError || durationError)" />
             <p v-if="timeError && submitCount > 0" class="text-xs font-medium text-destructive">{{ timeError }}</p>
+            <p v-if="durationError" class="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{{ durationError }}</p>
             <Alert v-if="duplicateWarning" class="border-warning/35 bg-warning-surface text-warning">
               <AlertDescription>{{ duplicateWarning }}</AlertDescription>
             </Alert>

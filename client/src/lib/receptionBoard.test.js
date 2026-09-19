@@ -54,6 +54,17 @@ describe('buildSlotGrid', () => {
     assert.deepEqual(cell.entries.map((item) => item.petName), ['布丁', '小白']);
   });
 
+  it('預估診療時間會占用後續的 15 分鐘格，舊資料預設只占一格', () => {
+    const [, afternoon] = buildSlotGrid([
+      { _id: 'a', time: '14:00', estimatedDurationMinutes: 45, status: 'scheduled', petName: '布丁' },
+      { _id: 'b', time: '14:45', status: 'scheduled', petName: '小白' },
+    ], { sessions });
+    const cells = afternoon.rows[0].cells;
+    assert.deepEqual(cells.find((cell) => cell.time === '14:30').entries.map((item) => item.petName), ['布丁']);
+    assert.equal(cells.find((cell) => cell.time === '14:30').entries[0].isContinuation, true);
+    assert.deepEqual(cells.find((cell) => cell.time === '14:45').entries.map((item) => item.petName), ['小白']);
+  });
+
   it('minTime 之前的格子標為已過', () => {
     const [, afternoon] = buildSlotGrid([], { sessions, minTime: '14:20' });
     const cells = afternoon.rows[0].cells;

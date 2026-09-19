@@ -88,16 +88,30 @@ describe('appointments routes', () => {
       const response = await fetch(`${origin}/api/appointments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ petName: '妞妞', date: '2026-09-01', time: '10:00', internalNote: 'appointment memo' }),
+        body: JSON.stringify({ petName: '妞妞', date: '2026-09-01', time: '10:00', estimatedDurationMinutes: 45, internalNote: 'appointment memo' }),
       });
       assert.equal(response.status, 201);
       const body = await response.json();
       assert.equal(body.date, '2026-09-01');
       assert.equal(body.internalNote, 'appointment memo');
+      assert.equal(body.estimatedDurationMinutes, 45);
       // 10:00 台北 = 02:00 UTC。時段換算要用掛號那一天，不是今天。
       assert.equal(body.scheduledAt, '2026-09-01T02:00:00.000Z');
     } finally {
       Appointment.create = originalCreate;
+    }
+  });
+
+  it('預估診療時間須為 15 分鐘倍數，且不可超出診別', async () => {
+    for (const payload of [
+      { petName: '妞妞', time: '10:00', estimatedDurationMinutes: 20 },
+      { petName: '妞妞', time: '11:30', estimatedDurationMinutes: 30 },
+      { petName: '妞妞', time: '19:30', estimatedDurationMinutes: 30 },
+    ]) {
+      const response = await fetch(`${origin}/api/appointments`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
+      });
+      assert.equal(response.status, 422);
     }
   });
 

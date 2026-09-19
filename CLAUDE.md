@@ -82,7 +82,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ### appointments 掛號與候診
 只服務當日門診時間軸。`date`／`time` 是登記來源（`date` 由掛號時指定，預設今天），`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。
 
-`isSurgery`（布林）／`surgeryName`（文字）是掛號時可勾選的手術標記，跟 `reason`（來院原因）是兩個獨立欄位、互不覆蓋——勾選手術不會動到來院原因文字，兩者可以同時填。勾選時 `surgeryName` 必填（後端 422 擋，前端 vee-validate 同步擋），未勾選則清空。`/appointments`（醫師診療台，含 `VisitWorkspace` 工作區）與 `/reception`（櫃台工作台）都會在勾選手術的那筆掛號旁標註紫色「手術」徽章（`SurgeryBadge`，`surgery` token；遲到徽章是紅色 `danger`，兩者刻意分開色相），帶出 `surgeryName`。**時段刻度是 15 分鐘**（`APPOINTMENT_TIME_STEP`，前端 `lib/appointmentTime.js` 同一組數字），門診時段 10:00–11:30、14:00–19:30；**勾了手術才多開放中午的手術時段 11:45–13:45**（後端 `SURGERY_TIME_RANGE`，前端時段格勾選手術時多出一組紫色格子），取消手術勾選後原本掛在手術時段的時間就不再合法，`PUT` 會回 422。
+`isSurgery`（布林）／`surgeryName`（文字）是掛號時可勾選的手術標記，跟 `reason`（來院原因）是兩個獨立欄位、互不覆蓋——勾選手術不會動到來院原因文字，兩者可以同時填。勾選時 `surgeryName` 必填（後端 422 擋，前端 vee-validate 同步擋），未勾選則清空。`estimatedDurationMinutes` 是預估診療時間，預設 15、限 15–240 且為 15 的倍數；整段必須落在同一診別內，Modal 會把開始格與後續占用格醒目標出，但與其他掛號重疊時只提醒、不阻擋。`/appointments`（醫師診療台，含 `VisitWorkspace` 工作區）與 `/reception`（櫃台工作台）都會在勾選手術的那筆掛號旁標註紫色「手術」徽章（`SurgeryBadge`，`surgery` token；遲到徽章是紅色 `danger`，兩者刻意分開色相），帶出 `surgeryName`。**時段刻度是 15 分鐘**（`APPOINTMENT_TIME_STEP`，前端 `lib/appointmentTime.js` 同一組數字），門診時段 10:00–11:30、14:00–19:30；**勾了手術才多開放中午的手術時段 11:45–13:45**（後端 `SURGERY_TIME_RANGE`，前端時段格勾選手術時多出一組紫色格子），取消手術勾選後原本掛在手術時段的時間就不再合法，`PUT` 會回 422。
 
 **一條四步流水線：預約 → 候診 → 看診 → 櫃台完成。** 真相是三個里程碑時間戳記，`status` 由它們推導出來，不是另一個獨立的維度（推導在 `lib/appointmentWorkflow.js` 的 `applyWorkflowAction` 尾端）：
 

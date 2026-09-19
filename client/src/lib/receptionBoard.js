@@ -2,7 +2,7 @@
 // 而這些都有「差一格就會算錯」的邊界（寬限分鐘數、時段頭尾、現在是否已過時段）。
 
 import { SESSIONS } from './appointmentTimeline.js';
-import { APPOINTMENT_TIME_MINUTE_STEP, SURGERY_TIME_RANGE } from './appointmentTime.js';
+import { APPOINTMENT_TIME_MINUTE_STEP, DEFAULT_ESTIMATED_DURATION_MINUTES, SURGERY_TIME_RANGE } from './appointmentTime.js';
 
 // 一鍵報到時超過預約時間多久才記成遲到。遲到會累計到飼主與寵物的出席紀錄，
 // 下次掛號會跳「曾遲到 N 次」提醒——晚兩三分鐘就記一筆，那個提醒很快就沒人看了。
@@ -57,8 +57,13 @@ export function buildSlotGrid(appointments = [], { sessions, step = APPOINTMENT_
   for (const appointment of appointments ?? []) {
     if (!appointment?.time || INACTIVE_STATUSES.has(appointment.status)) continue;
     if (excludeId && String(appointment._id) === String(excludeId)) continue;
-    if (!byTime.has(appointment.time)) byTime.set(appointment.time, []);
-    byTime.get(appointment.time).push(appointment);
+    const start = toMinutes(appointment.time);
+    const duration = Number(appointment.estimatedDurationMinutes) || DEFAULT_ESTIMATED_DURATION_MINUTES;
+    for (let minute = start; minute < start + duration; minute += step) {
+      const occupiedTime = toTime(minute);
+      if (!byTime.has(occupiedTime)) byTime.set(occupiedTime, []);
+      byTime.get(occupiedTime).push({ ...appointment, occupiesFrom: appointment.time, isContinuation: minute !== start });
+    }
   }
   const min = toMinutes(minTime);
 

@@ -33,7 +33,7 @@ function checkWorkflowCompatibility(appointment, path, version) {
   }
 }
 
-const EDITABLE_APPOINTMENT_FIELDS = ['date', 'time', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species', 'templateId', 'isSurgery', 'surgeryName'];
+const EDITABLE_APPOINTMENT_FIELDS = ['date', 'time', 'estimatedDurationMinutes', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species', 'templateId', 'isSurgery', 'surgeryName'];
 const EDITABLE_APPOINTMENT_STATUSES = new Set(['scheduled', 'arrived']);
 const APPOINTMENT_TIME_RANGES = [
   ['10:00', '11:30'],
@@ -42,6 +42,7 @@ const APPOINTMENT_TIME_RANGES = [
 // 手術掛在門診中間的手術時段。只有勾了手術的掛號能落在這裡，一般門診不開放。
 const SURGERY_TIME_RANGE = ['11:45', '13:45'];
 const APPOINTMENT_TIME_STEP = 15;
+const MAX_ESTIMATED_DURATION_MINUTES = 240;
 const APPOINTMENT_TIME_ERROR = '預約時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格';
 const SURGERY_TIME_ERROR = '手術時段僅限 10:00–13:45、14:00–19:30，且每 15 分鐘一格';
 
@@ -68,6 +69,25 @@ function isValidAppointmentTime(value, { surgery = false } = {}) {
     const endMinutes = minutesOfTime(end);
     return minutes >= startMinutes && minutes <= endMinutes;
   });
+}
+
+function normalizeEstimatedDuration(value) {
+  const duration = value === undefined || value === null || value === '' ? APPOINTMENT_TIME_STEP : Number(value);
+  if (!Number.isSafeInteger(duration) || duration < APPOINTMENT_TIME_STEP || duration > MAX_ESTIMATED_DURATION_MINUTES || duration % APPOINTMENT_TIME_STEP !== 0) {
+    throw Object.assign(new Error('預估診療時間須為 15–240 分鐘，且以 15 分鐘為單位'), { status: 422 });
+  }
+  return duration;
+}
+
+function validateAppointmentDuration(time, duration, { surgery = false } = {}) {
+  if (!time) return;
+  const startAt = minutesOfTime(time);
+  const ranges = surgery ? [...APPOINTMENT_TIME_RANGES, SURGERY_TIME_RANGE] : APPOINTMENT_TIME_RANGES;
+  const valid = ranges.some(([start, end]) => (
+    startAt >= minutesOfTime(start)
+    && startAt + duration <= minutesOfTime(end) + APPOINTMENT_TIME_STEP
+  ));
+  if (!valid) throw Object.assign(new Error('預估診療時間超出可掛號時段，請縮短時間或改選其他時段'), { status: 422 });
 }
 
 function appointmentTimeError(surgery) {
@@ -336,9 +356,12 @@ router.post('/', async (req, res, next) => {
 
     const template = await resolveAppointmentTemplate(req.body.templateId, { optional: true });
     const { isSurgery, surgeryName } = normalizeSurgeryFields(req.body);
+    const estimatedDurationMinutes = normalizeEstimatedDuration(req.body.estimatedDurationMinutes);
+    validateAppointmentDuration(time, estimatedDurationMinutes, { surgery: isSurgery });
     const appointment = await Appointment.create({
       date,
       time: time || '',
+      estimatedDurationMinutes,
       scheduledAt,
       ownerId,
       petId: petId || null,
@@ -395,6 +418,11 @@ router.put('/:id', async (req, res, next) => {
         if (updates.time !== undefined) updates.time = time;
         if (!isValidAppointmentTime(time, { surgery })) return res.status(422).json({ message: appointmentTimeError(surgery) });
       }
+      const duration = updates.estimatedDurationMinutes !== undefined
+        ? normalizeEstimatedDuration(updates.estimatedDurationMinutes)
+        : normalizeEstimatedDuration(appointment.estimatedDurationMinutes);
+      updates.estimatedDurationMinutes = duration;
+      validateAppointmentDuration(updates.time !== undefined ? updates.time : appointment.time, duration, { surgery });
       if (updates.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(updates.date))) {
         return res.status(422).json({ message: '請填寫預約日期' });
       }

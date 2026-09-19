@@ -6,6 +6,8 @@ const appointmentSchema = new mongoose.Schema(
     date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
     // 選填：接電話時常常還沒決定精確時段，只是先卡一個「今天要來」。
     time: { type: String, default: '', trim: true },
+    // 預估診療時間，以 15 分鐘為一格。
+    estimatedDurationMinutes: { type: Number, default: 15, min: 15, max: 240 },
     // date+time 換算出的實際時刻，只服務排序/範圍查詢，不是使用者輸入的來源真相。
     scheduledAt: { type: Date, required: true },
 
