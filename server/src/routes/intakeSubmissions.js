@@ -58,6 +58,12 @@ publicIntakeRouter.post('/', publicSubmissionLimiter, async (req, res, next) => 
   try {
     const owner = req.body?.owner ?? {};
     const pet = req.body?.pet ?? {};
+    if (!String(owner.address || '').trim()) return res.status(422).json({ message: '請填寫飼主地址' });
+    if (!String(owner.email || '').trim()) return res.status(422).json({ message: '請填寫 Email' });
+    if (!String(pet.breed || '').trim()) return res.status(422).json({ message: '請填寫品種' });
+    if (!['male', 'female'].includes(pet.sex)) return res.status(422).json({ message: '請選擇性別' });
+    if (!['yes', 'no'].includes(pet.neutered)) return res.status(422).json({ message: '請選擇結紮狀態' });
+    if (!pet.birthDate || Number.isNaN(new Date(pet.birthDate).getTime())) return res.status(422).json({ message: '請填寫有效年齡' });
     const message = validationError(owner, pet);
     if (message) return res.status(422).json({ message });
     const code = intakeVerificationCode(req.body?.verificationCode);
