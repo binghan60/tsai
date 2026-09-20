@@ -1,8 +1,10 @@
 <script setup>
+import MedicationWorkspace from '../components/MedicationWorkspace.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, ArrowRight, CalendarClock, Check, ChevronLeft, ChevronRight, Clock, LayoutList, List, Pin, RefreshCw, Scissors, Stethoscope, Undo2, X } from '@lucide/vue'
+import { AlertTriangle, ArrowRight, CalendarClock, Check, ChevronLeft, ChevronRight, Clock, LayoutList, List, PackageCheck, Pin, RefreshCw, Scissors, Stethoscope, Undo2, X } from '@lucide/vue'
 import { http } from '../api/http'
+import { getSocket } from '../api/socket'
 import { useToast } from '../composables/useToast'
 import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
@@ -42,6 +44,10 @@ const notifyChat = useAppointmentNotifier()
 const pinnedPets = usePinnedPetsStore()
 const today = clinicDateInput()
 const date = useSearchQueryParam('date', today)
+const medicationCounts = ref({})
+const medicationActive = computed(() => ['review', 'approved', 'ready'].reduce((sum, key) => sum + (medicationCounts.value[key] || 0), 0))
+const medicationSocket = getSocket()
+let medicationCountRequest = 0
 
 const items = ref([])
 const loading = ref(true)
@@ -322,6 +328,16 @@ async function loadTemplates() {
   }
 }
 
+async function refreshMedicationCounts() {
+  const requestId = ++medicationCountRequest
+  try {
+    const { data } = await http.get('/medications', { params: { status: 'review', limit: 1 } })
+    if (requestId === medicationCountRequest) medicationCounts.value = data.counts || {}
+  } catch {
+    /* 計數更新失敗時保留目前數字，下一次即時事件或重新連線會再同步。 */
+  }
+}
+
 onMounted(() => {
   clock = setInterval(() => {
     now.value = Date.now()
@@ -329,10 +345,16 @@ onMounted(() => {
   loadTemplates()
   loadTextTemplates().catch(() => {})
   refresh()
+  refreshMedicationCounts()
+  medicationSocket.on('medication:updated', refreshMedicationCounts)
+  medicationSocket.on('connect', refreshMedicationCounts)
 })
 onBeforeUnmount(() => {
   request += 1
+  medicationCountRequest += 1
   clearInterval(clock)
+  medicationSocket.off('medication:updated', refreshMedicationCounts)
+  medicationSocket.off('connect', refreshMedicationCounts)
 })
 </script>
 
@@ -361,6 +383,17 @@ onBeforeUnmount(() => {
         >
           <component :is="entry.icon" class="h-4 w-4" stroke-width="1.75" />{{ entry.label }}<span class="tabular-nums">{{ entry.count }}</span>
         </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          :class="['relative', drawer === 'medications' ? 'bg-accent text-accent-foreground hover:bg-accent/80' : '']"
+          :aria-pressed="drawer === 'medications'"
+          :aria-label="`包藥，${medicationCounts.review || 0} 筆藥單待確認`"
+          @click="toggleDrawer('medications')"
+        >
+          <PackageCheck class="h-4 w-4" stroke-width="1.75" />包藥
+          <span v-if="medicationCounts.review" class="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-[11px] font-bold leading-none text-white ring-2 ring-background tabular-nums">{{ medicationCounts.review > 99 ? '99+' : medicationCounts.review }}</span>
+        </Button>
       </div>
       <div class="flex items-center gap-1">
         <Button variant="secondary" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft class="h-4 w-4" /></Button>
@@ -369,6 +402,8 @@ onBeforeUnmount(() => {
         <Button variant="secondary" size="sm" :disabled="date === today" @click="date = today">今天</Button>
       </div>
     </header>
+
+    <div class="flex min-h-0 flex-1 flex-col gap-3">
 
     <Alert v-if="error" variant="destructive" class="flex items-center justify-between gap-3">
       <AlertDescription>{{ error }}</AlertDescription>
@@ -633,6 +668,21 @@ onBeforeUnmount(() => {
         </template>
       </div>
     </ModalDialog>
+    <!-- 包藥是一次處理一批藥單的工作，跟暫存區一樣從頁首開大型 Modal，
+         關閉後仍留在原本的看診工作區，不需要切換整個頁面。 -->
+    <ModalDialog v-if="drawer === 'medications'" size="xl" @close="drawer = ''">
+      <div class="border-b border-border p-5 pr-16 sm:px-6">
+        <DialogTitle class="flex items-center gap-2">
+          <PackageCheck class="h-4.5 w-4.5 text-muted-foreground" stroke-width="1.75" />包藥
+          <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums">{{ medicationActive }}</span>
+        </DialogTitle>
+        <DialogDescription class="mt-1 text-xs">查看未完成藥單，並依目前進度完成可執行的處理。</DialogDescription>
+      </div>
+      <div class="flex h-[min(72vh,52rem)] min-h-96 flex-col p-5 sm:p-6">
+        <MedicationWorkspace mode="doctor" initial-filter="review" :stages="['review', 'approved', 'ready']" @counts="medicationCounts = $event" />
+      </div>
+    </ModalDialog>
     <TextTemplatePickerDialog />
+    </div>
   </div>
 </template>

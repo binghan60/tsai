@@ -9,6 +9,7 @@
     "audit:colors": "node scripts/audit-colors.mjs",
     "test": "node --test",
     "test:workflow-browser": "node scripts/check-appointment-workflow.mjs",
+    "test:medication-browser": "node scripts/check-medication-workflow.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

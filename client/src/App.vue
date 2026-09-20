@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CalendarClock, Cat, ChevronsLeft, ChevronsRight, ClipboardList, FileText, LayoutDashboard, Mail, Menu, Search } from '@lucide/vue';
+import { CalendarClock, Cat, ChevronsLeft, ChevronsRight, ClipboardList, FileText, LayoutDashboard, Mail, Menu, PackageCheck, Search } from '@lucide/vue';
 import AppSettingsMenu from './components/AppSettingsMenu.vue';
 import { useAuthStore } from './stores/auth';
 import { useGlobalChat } from './composables/useGlobalChat';
@@ -62,7 +62,8 @@ const routeViewKey = computed(() => {
 const navItems = [
   { to: '/', label: '儀表板', exact: true, icon: LayoutDashboard },
   { to: '/appointments', label: '醫師診療台', exact: false, icon: CalendarClock },
-  { to: '/reception', label: '櫃台工作台', exact: false, icon: ClipboardList },
+  { to: '/reception', label: '櫃檯工作台', exact: false, icon: ClipboardList },
+  { to: '/medications', label: '領藥', exact: false, icon: PackageCheck },
   { to: '/pets', label: '寵物', exact: false, icon: Cat },
   { to: '/records', label: '就診紀錄', exact: false, icon: FileText },
   { to: '/records/deliveries', label: '寄送歷程', exact: false, icon: Mail },

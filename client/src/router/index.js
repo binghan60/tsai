@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth';
 const DashboardPage = () => import('../pages/DashboardPage.vue');
 const VetConsolePage = () => import('../pages/VetConsolePage.vue');
 const ReceptionPage = () => import('../pages/ReceptionPage.vue');
+const MedicationPickupPage = () => import('../pages/MedicationPickupPage.vue');
 const PetsListPage = () => import('../pages/PetsListPage.vue');
 const PetCreatePage = () => import('../pages/PetCreatePage.vue');
 const PetDetailPage = () => import('../pages/PetDetailPage.vue');
@@ -36,7 +37,8 @@ const router = createRouter({
     { path: '/', component: DashboardPage, meta: { title: '儀表板' } },
     // wide：兩個工作台整頁不捲動、欄位並排（看板四欄＋抽屜／佇列＋工作區），max-w-360 容不下，改用滿版寬度。
     { path: '/appointments', component: VetConsolePage, meta: { title: '醫師診療台', wide: true } },
-    { path: '/reception', component: ReceptionPage, meta: { title: '櫃台工作台', wide: true } },
+    { path: '/reception', component: ReceptionPage, meta: { title: '掛號台', wide: true } },
+    { path: '/medications', component: MedicationPickupPage, meta: { title: '領藥', wide: true } },
     { path: '/reception/intakes', component: IntakeReviewPage, meta: { title: '初診表審核', nav: '/reception' } },
     // 舊書籤：看診不再是獨立頁面，改成診療台右欄可以同時開多筆的工作區。
     { path: '/appointments/:id/visit', redirect: '/appointments' },

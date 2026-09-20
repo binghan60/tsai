@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Pin, Plus, RefreshCw, User, X } from '@lucide/vue'
+import { AlertTriangle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, PackageCheck, Pin, Plus, RefreshCw, User, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useClinicSync } from '../composables/useClinicSync'
@@ -15,6 +15,7 @@ import { patientNotesFor } from '../lib/appointmentDisplay'
 import PatientNotes from '../components/PatientNotes.vue'
 import { usePinnedPetsStore } from '../stores/pinnedPets'
 import HandoffSheet from '../components/HandoffSheet.vue'
+import MedicationWorkspace from '../components/MedicationWorkspace.vue'
 import PinnedPetsList from '../components/PinnedPetsList.vue'
 import RowActions from '../components/RowActions.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
@@ -54,6 +55,10 @@ const date = useSearchQueryParam('date', today)
 const search = useSearchQueryParam('q', '')
 const selected = useSearchQueryParam('selected', '')
 const stageFilter = useSearchQueryParam('stage', '')
+const medicationCounts = ref({})
+const newMedicationWorkspace = ref(null)
+const medicationPacking = computed(() => medicationCounts.value.approved || 0)
+const medicationActive = computed(() => ['review', 'approved', 'ready'].reduce((sum, key) => sum + (medicationCounts.value[key] || 0), 0))
 
 const items = ref([])
 // 寵物／飼主備註存在主檔上、不在掛號快照裡，由列表 API 另外回一份以 id 為鍵的對照表。
@@ -355,6 +360,10 @@ function toggleDrawer(kind) {
   drawer.value = drawer.value === kind ? '' : kind
 }
 
+function openNewMedication() {
+  newMedicationWorkspace.value?.create()
+}
+
 async function loadPendingIntakeCount() {
   try {
     const { data } = await http.get('/intake-submissions')
@@ -547,12 +556,22 @@ async function loadTemplates() {
   }
 }
 
+async function loadMedicationCounts() {
+  try {
+    const { data } = await http.get('/medications', { params: { status: 'active', limit: 1 } })
+    medicationCounts.value = data.counts || {}
+  } catch {
+    /* 包藥數量載不到不影響掛號台；打開包藥面板時會再重新載入。 */
+  }
+}
+
 onMounted(() => {
   clock = setInterval(() => {
     now.value = Date.now()
   }, 30000)
   loadTemplates()
   loadPendingIntakeCount()
+  loadMedicationCounts()
   refresh()
 })
 onBeforeUnmount(() => {
@@ -565,7 +584,7 @@ onBeforeUnmount(() => {
   <div class="flex flex-col gap-3 xl:h-[calc(100dvh-2.5rem)]">
     <header class="flex flex-wrap items-center gap-x-4 gap-y-3">
       <div class="min-w-0">
-        <h1 class="text-xl font-semibold">櫃台工作台</h1>
+        <h1 class="text-xl font-semibold">櫃檯掛號台</h1>
         <p class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
           <span>{{ date }}（{{ weekdayLabel(date) }}）<template v-if="isToday"> · 現在 {{ currentTime }}</template></span>
           <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full" :class="connected ? 'bg-success' : 'bg-warning'"></span>{{ connected ? '即時同步' : '重新連線中' }}</span>
@@ -581,6 +600,9 @@ onBeforeUnmount(() => {
         </div>
         <Button variant="secondary" size="sm" :class="pinnedPets.items.length ? 'bg-accent text-accent-foreground hover:bg-accent/80' : ''" :aria-pressed="drawer === 'pinned'" @click="toggleDrawer('pinned')">
           <Pin class="h-4 w-4" stroke-width="1.75" />暫存區<span v-if="pinnedPets.items.length" class="tabular-nums">{{ pinnedPets.items.length }}</span>
+        </Button>
+        <Button variant="secondary" size="sm" :class="drawer === 'medications' ? 'bg-accent text-accent-foreground hover:bg-accent/80' : ''" :aria-pressed="drawer === 'medications'" @click="toggleDrawer('medications')">
+          <PackageCheck class="h-4 w-4" stroke-width="1.75" />包藥<span v-if="medicationPacking" class="tabular-nums">{{ medicationPacking }}</span>
         </Button>
         <Popover v-model:open="intakeMenuOpen">
           <PopoverTrigger as-child>
@@ -599,13 +621,18 @@ onBeforeUnmount(() => {
             </button>
           </PopoverContent>
         </Popover>
+        <Button size="sm" @click="openNewMedication">
+          <PackageCheck class="h-4 w-4" />領藥
+        </Button>
         <Button size="sm" @click="openDrawer('new')">
           <Plus class="h-4 w-4" />
           <template v-if="newDraftOpen && drawer !== 'new'">繼續掛號<span v-if="newDraft?.draftName" class="max-w-32 truncate">：{{ newDraft.draftName }}</span></template>
-          <template v-else>新增掛號</template>
+          <template v-else>掛號</template>
         </Button>
       </div>
     </header>
+
+    <div class="flex min-h-0 flex-1 flex-col gap-3">
 
     <!-- 流程列：四段橫排，一格一個數字，點一格只看那一段；第三格列出正站在櫃台前的人 -->
     <div v-if="!loading" class="grid overflow-hidden rounded-xl border border-border bg-card md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.4fr_1fr]" role="group" aria-label="今日流程">
@@ -665,7 +692,6 @@ onBeforeUnmount(() => {
         <div class="flex shrink-0 items-start justify-between gap-3 px-4 pb-3 pt-4">
           <div>
             <h2 id="timeline-title" class="text-base font-semibold">{{ isToday ? '今日看診時間軸' : '看診時間軸' }}</h2>
-            <p class="mt-0.5 text-xs text-muted-foreground">依預約時段排列；報到後仍保留原位置<template v-if="stageFilter"> · 只看「{{ STAGES.find((s) => s.key === stageFilter)?.label }}」</template></p>
             <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground" aria-label="顏色說明">
               <span v-for="stage in STAGES.slice(0, 3)" :key="stage.key" class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-full" :class="stage.dot" aria-hidden="true"></span>{{ stage.label }}</span>
               <span v-for="item in LEGEND" :key="item.label" class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm border" :class="item.class" aria-hidden="true"></span>{{ item.label }}</span>
@@ -905,6 +931,23 @@ onBeforeUnmount(() => {
       </div>
     </ModalDialog>
 
+    <!-- 包藥跟暫存區一樣是從看板叫出的批次工作面板；完成包藥後，藥單會進到上方同層級的領藥工作區。 -->
+    <ModalDialog v-if="drawer === 'medications'" size="xl" @close="closeDrawer">
+      <div class="border-b border-border p-5 pr-16 sm:px-6">
+        <DialogTitle class="flex items-center gap-2">
+          <PackageCheck class="h-4.5 w-4.5 text-muted-foreground" stroke-width="1.75" />包藥
+          <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums">{{ medicationActive }}</span>
+        </DialogTitle>
+        <DialogDescription class="mt-1 text-xs">查看未完成藥單，並依目前進度完成可執行的處理。</DialogDescription>
+      </div>
+      <div class="flex h-[min(72vh,52rem)] min-h-96 flex-col p-5 sm:p-6">
+        <MedicationWorkspace mode="reception" initial-filter="review" :stages="['review', 'approved', 'ready']" :appointments="items" @counts="medicationCounts = $event" />
+      </div>
+    </ModalDialog>
+
+    <!-- 「領藥」是快速登記入口，只開新增藥單，不連帶打開後方的包藥工作區。 -->
+    <MedicationWorkspace ref="newMedicationWorkspace" mode="reception" :appointments="items" :show-list="false" />
+
     <ModalDialog v-if="intakeReviewTarget" size="xl" @close="intakeReviewTarget = null">
       <div class="border-b border-border p-5 pr-16 sm:px-6"><DialogTitle>審核初診資料</DialogTitle><DialogDescription class="mt-1 text-xs">確認資料後再建立正式飼主與寵物資料。</DialogDescription></div>
       <div class="max-h-[min(68vh,48rem)] space-y-5 overflow-y-auto p-5 sm:p-6">
@@ -966,5 +1009,6 @@ onBeforeUnmount(() => {
     <CheckInDialog v-if="dialog === 'check-in-detail' && target" :appointment="target" :late="itemIsOverdue(target)" :suggested-checkin-number="suggestedCheckinNumber()" :submitting="busy" :error-message="dialogError" @submit="(values) => submit(values, 'check-in-detail')" @close="dialog = ''" />
     <CancelAppointmentDialog v-if="dialog === 'cancel' && target" :appointment="target" :submitting="busy" :error-message="dialogError" @submit="(reason) => submit({ cancelReason: reason }, 'cancel')" @close="dialog = ''" />
     <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :description="`病患：${target.petName}`" :loading="busy" @confirm="submit({}, confirmation.kind)" @cancel="confirmation = null" />
+    </div>
   </div>
 </template>

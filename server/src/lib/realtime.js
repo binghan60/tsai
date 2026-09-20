@@ -63,3 +63,8 @@ export function emitClinicalNoteUpdate(note) {
   const payload = typeof note.toObject === 'function' ? note.toObject() : note;
   io?.emit('clinical-note:updated', payload);
 }
+
+// 藥單跨天保留，向所有已登入的工作台推送失效通知，再依各自篩選重新讀取。
+export function emitMedicationUpdate(order) {
+  io?.emit('medication:updated', { _id: String(order._id), version: order.__v });
+}
