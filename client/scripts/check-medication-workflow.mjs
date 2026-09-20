@@ -97,6 +97,8 @@ try {
   async function waitRow(page, status) { await page.waitForFunction(status => [...document.querySelectorAll('tbody tr')].some(row => row.textContent.includes('安安') && row.textContent.includes(status)), {}, status); }
   async function open(page) {
     await page.bringToFront();
+    // 切換階段後清單是非同步重抓的，不等就會在列還沒畫出來時拿到 null。
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(el => ['開啟', '修改'].some(prefix => el.getAttribute('aria-label')?.startsWith(`${prefix} 安安`))));
     const handle = await page.evaluateHandle(() => [...document.querySelectorAll('button')].find(el => ['開啟', '修改'].some(prefix => el.getAttribute('aria-label')?.startsWith(`${prefix} 安安`))));
     await handle.asElement().asLocator().click(); await handle.dispose();
     await page.waitForSelector('#med-prescription');
@@ -105,16 +107,23 @@ try {
     try { await page.waitForSelector('#med-prescription', { hidden: true }); }
     catch (err) { console.error(await page.evaluate(() => document.body.innerText)); throw err; }
   }
+  // 「藥單」是頁首 chip（文字是「藥單」加上待辦徽章數字，所以用 prefix 比對）；
+  // 「領藥」在面板內的清單工具列上，不再是頁首的獨立按鈕。
+  async function openMedicationPanel(page) { await clickPrefix(page, '藥單'); }
+  // 每份清單只顯示一個階段，所以藥單一往前走，還要看它的那一端就得自己切格子。
+  // 階段鈕的文字帶著筆數（「待包藥 1」），用 prefix 比對。
+  async function stage(page, label) { await clickPrefix(page, label); }
   await doctor.goto(`${origin}/appointments?tab=medications`);
   await desk.goto(`${origin}/reception?tab=medications`);
+  await openMedicationPanel(desk);
   await click(desk, '領藥');
   await desk.type('#med-pet-search', '安安');
-  await click(desk, '安安 · 陳小姐 · 0912345678');
+  await clickPrefix(desk, '安安');
   assert.equal(await desk.$('#med-prescription'), null, 'desk registration does not show prescription fields');
   await desk.type('#med-condition', '食慾下降，精神正常');
-  await click(desk, '送交醫師確認'); await closed(desk);
-  await clickPrefix(doctor, '包藥');
-  await clickPrefix(desk, '包藥');
+  await click(desk, '建立並送醫師確認'); await closed(desk);
+  // 櫃台的面板從登記那一步就開著了，這裡再點一次 chip 只會把它關掉。
+  await openMedicationPanel(doctor);
   await waitRow(doctor, '待醫師確認');
   const created = [...orders.values()].find(item => item.status === 'review');
   assert.ok(created, 'desk registration persisted');
@@ -129,46 +138,48 @@ try {
   await waitRow(doctor, '待醫師確認'); await open(doctor);
   await click(doctor, '確認藥單並送交包藥'); await closed(doctor);
   await waitRow(desk, '待包藥');
-  await open(desk); await desk.type('#med-storage', 'A 櫃第 2 格');
+  await open(desk);
   await click(desk, '完成包藥'); await closed(desk);
-  await waitRow(desk, '待領藥');
+  await stage(desk, '待領藥'); await waitRow(desk, '待領藥');
   await desk.screenshot({ path: join(tmpdir(), 'tsai-medications-reception.png'), fullPage: true });
 
   // Keep an old ready order open at the desk while the doctor changes it.
   await open(desk);
-  await click(doctor, '未完成 1'); await waitRow(doctor, '待領藥'); await open(doctor);
+  await stage(doctor, '待領藥'); await waitRow(doctor, '待領藥'); await open(doctor);
   await fill(doctor, '#med-prescription', '重新確認的藥單');
   await click(doctor, '修改並重新送審'); await click(doctor, '確認'); await closed(doctor);
   await desk.waitForFunction(() => document.body.textContent.includes('藥單已被其他工作台更新'));
   assert.equal(await desk.$eval('button', () => [...document.querySelectorAll('button')].find(el => el.textContent.trim() === '確認領藥').disabled), true);
   await click(desk, '載入最新藥單'); await click(desk, '確認');
   await desk.waitForFunction(() => document.body.textContent.includes('藥單在包藥完成後曾修改'));
-  await click(desk, '關閉'); await closed(desk);
-  await open(doctor); await click(doctor, '確認藥單並送交包藥'); await closed(doctor);
-  await waitRow(desk, '待包藥'); await open(desk);
-  await fill(desk, '#med-storage', 'B 櫃'); await click(desk, '完成重新包藥'); await click(desk, '確認'); await closed(desk);
-  await open(desk); await click(desk, '確認領藥'); await click(desk, '確認'); await closed(desk);
+  await click(desk, '返回清單'); await closed(desk);
+  await stage(doctor, '待醫師確認'); await open(doctor); await click(doctor, '確認藥單並送交包藥'); await closed(doctor);
+  await stage(desk, '待包藥'); await waitRow(desk, '待包藥'); await open(desk);
+  await click(desk, '完成重新包藥'); await click(desk, '確認'); await closed(desk);
+  await stage(desk, '待領藥'); await open(desk); await click(desk, '確認領藥'); await click(desk, '確認'); await closed(desk);
   assert.equal(orders.get(String(created._id)).status, 'collected');
+  // 已領藥的歷史在 /medications 全頁版（stages ready+collected）：櫃台頁首的藥單面板只做到「待領藥」，
+  // 交付完就離開那份待辦清單，歷史查詢是另一件事、在另一頁。
+  await desk.goto(`${origin}/medications`);
   await click(desk, '已領藥 2');
   await desk.waitForFunction(() => document.querySelectorAll('tbody tr').length === 2);
   await fill(desk, '[aria-label="搜尋藥單"]', '0912345678');
   await desk.click('[aria-label="搜尋搜尋藥單"]');
   await desk.waitForFunction(() => document.querySelectorAll('tbody tr').length === 2);
-  await desk.keyboard.press('Escape');
+  await desk.goto(`${origin}/reception`);
+  await openMedicationPanel(desk);
   await click(desk, '領藥');
   await desk.type('#med-pet-search', '安安');
-  await click(desk, '安安 · 陳小姐 · 0912345678');
+  await clickPrefix(desk, '安安');
   await desk.type('#med-condition', '飼主來電續藥');
-  await click(desk, '關閉'); await click(desk, '取消');
+  await click(desk, '返回清單'); await click(desk, '取消');
   assert.equal(await desk.$eval('#med-condition', el => el.value), '飼主來電續藥', 'cancel discard retains draft');
-  await click(desk, '送交醫師確認'); await closed(desk);
-  await clickPrefix(desk, '包藥');
+  await click(desk, '建立並送醫師確認'); await closed(desk);
   await click(desk, '待醫師確認 1'); await open(desk);
   await click(desk, '取消藥單');
   await click(desk, '確認'); await closed(desk);
-  await click(desk, '已取消 1'); await waitRow(desk, '已取消');
+  // 已取消同樣不在任何一頁的階段篩選裡（那顆只在不限制 stages 時出現），所以直接查資料。
   assert.equal([...orders.values()].find(item => item.status === 'cancelled').history.at(-1).reason, '');
-  await click(desk, '已領藥 2');
   await desk.setViewport({ width: 390, height: 844 });
   await desk.screenshot({ path: join(tmpdir(), 'tsai-medications-mobile.png'), fullPage: true });
   assert.deepEqual(errors, []);

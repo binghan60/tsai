@@ -1,8 +1,10 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, PackageCheck, Pin, Plus, RefreshCw, User, X } from '@lucide/vue'
+import { AlertTriangle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Pill, Pin, Plus, RefreshCw, User, X } from '@lucide/vue'
 import { http } from '../api/http'
+import { getSocket } from '../api/socket'
+import { medicationTodoCount } from '../../../shared/medicationWorkflow.js'
 import { useToast } from '../composables/useToast'
 import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
@@ -26,6 +28,8 @@ import CheckInDialog from '../components/CheckInDialog.vue'
 import CancelAppointmentDialog from '../components/CancelAppointmentDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import ModalDialog from '../components/ModalDialog.vue'
+import ConsoleChip from '../components/ConsoleChip.vue'
+import ConsoleChipBar from '../components/ConsoleChipBar.vue'
 import FilterBar from '../components/FilterBar.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import { Badge } from '../components/ui/badge'
@@ -35,7 +39,7 @@ import { DatePicker } from '../components/ui/date-picker'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import { TimePicker } from '../components/ui/time-picker'
 import { Label } from '../components/ui/label'
-import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog'
+import { DialogFooter } from '../components/ui/dialog'
 import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/appointmentTime'
 
 // 櫃台工作台：上方一條橫式流程列（待報到 → 在院 → 待櫃台處理 → 今日已完成，一格一個數字，
@@ -56,9 +60,11 @@ const search = useSearchQueryParam('q', '')
 const selected = useSearchQueryParam('selected', '')
 const stageFilter = useSearchQueryParam('stage', '')
 const medicationCounts = ref({})
-const newMedicationWorkspace = ref(null)
-const medicationPacking = computed(() => medicationCounts.value.approved || 0)
-const medicationActive = computed(() => ['review', 'approved', 'ready'].reduce((sum, key) => sum + (medicationCounts.value[key] || 0), 0))
+// 櫃台在等的是「待包藥 + 待領藥」，不是未完成總數，也不是醫師那段的待確認。
+// 口徑統一在 shared/medicationWorkflow.js，面板標題不再另外算一次。
+const medicationTodo = computed(() => medicationTodoCount(medicationCounts.value, 'reception'))
+const medicationSocket = getSocket()
+let medicationCountRequest = 0
 
 const items = ref([])
 // 寵物／飼主備註存在主檔上、不在掛號快照裡，由列表 API 另外回一份以 id 為鍵的對照表。
@@ -83,6 +89,8 @@ let request = 0
 // 右側抽屜（初診報到、暫存區）一次只顯示一個；掛號 Modal 也借這個狀態管開關。
 // 新增掛號收起來時元件仍保持掛載（v-if 看 newDraftOpen、open 看 drawer），填到一半的內容不會消失。
 const drawer = ref('')
+// 頁首 chip 開的查閱／工作面板（暫存區、藥單），跟上面的 drawer 各管各的，一次只開一個。
+const panel = ref('')
 const newDraftOpen = ref(false)
 const newDraft = ref(null)
 
@@ -356,12 +364,10 @@ function closeDrawer() {
   drawer.value = ''
   dialogError.value = ''
 }
-function toggleDrawer(kind) {
-  drawer.value = drawer.value === kind ? '' : kind
-}
-
-function openNewMedication() {
-  newMedicationWorkspace.value?.create()
+// 面板（暫存區／藥單）跟掛號流程是兩回事，所以是兩個 ref：closeDrawer 要處理「丟掉掛號草稿」，
+// 關掉暫存區不該經過那段邏輯。之前兩者共用一個 drawer，那支函式就同時管了兩件不相干的事。
+function togglePanel(kind) {
+  panel.value = panel.value === kind ? '' : kind
 }
 
 async function loadPendingIntakeCount() {
@@ -557,11 +563,12 @@ async function loadTemplates() {
 }
 
 async function loadMedicationCounts() {
+  const requestId = ++medicationCountRequest
   try {
     const { data } = await http.get('/medications', { params: { status: 'active', limit: 1 } })
-    medicationCounts.value = data.counts || {}
+    if (requestId === medicationCountRequest) medicationCounts.value = data.counts || {}
   } catch {
-    /* 包藥數量載不到不影響掛號台；打開包藥面板時會再重新載入。 */
+    /* 藥單數量載不到不影響掛號台；下一次即時事件或重新連線會再同步。 */
   }
 }
 
@@ -572,61 +579,61 @@ onMounted(() => {
   loadTemplates()
   loadPendingIntakeCount()
   loadMedicationCounts()
+  // 跟診療台一樣接即時事件：只在 onMounted 抓一次的話，面板關掉後 chip 上的數字就凍住了，
+  // 而醫師在另一台電腦確認藥單正是櫃台最需要立刻看到的變化。
+  medicationSocket.on('medication:updated', loadMedicationCounts)
+  medicationSocket.on('connect', loadMedicationCounts)
   refresh()
 })
 onBeforeUnmount(() => {
   request += 1
+  medicationCountRequest += 1
   clearInterval(clock)
+  medicationSocket.off('medication:updated', loadMedicationCounts)
+  medicationSocket.off('connect', loadMedicationCounts)
 })
 </script>
 
 <template>
   <div class="flex flex-col gap-3 xl:h-[calc(100dvh-2.5rem)]">
     <header class="flex flex-wrap items-center gap-x-4 gap-y-3">
-      <div class="min-w-0">
-        <h1 class="text-xl font-semibold">櫃檯掛號台</h1>
-        <p class="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-          <span>{{ date }}（{{ weekdayLabel(date) }}）<template v-if="isToday"> · 現在 {{ currentTime }}</template></span>
-          <span class="inline-flex items-center gap-1.5"><span class="h-1.5 w-1.5 rounded-full" :class="connected ? 'bg-success' : 'bg-warning'"></span>{{ connected ? '即時同步' : '重新連線中' }}</span>
-        </p>
+
+      <div class="flex shrink-0 items-baseline gap-2">
+        <h1 class="text-xl font-semibold">掛號工作台</h1>
       </div>
-      <div class="ml-auto flex flex-wrap items-center gap-2">
-        <FilterBar id="reception-search" v-model="search" label="搜尋診務" placeholder="病患、飼主、電話" class="w-64" />
-        <div class="flex items-center gap-1">
-          <Button variant="secondary" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft class="h-4 w-4" /></Button>
-          <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
-          <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
-          <Button variant="secondary" size="sm" :disabled="isToday" @click="date = today">今天</Button>
-        </div>
-        <Button variant="secondary" size="sm" :class="pinnedPets.items.length ? 'bg-accent text-accent-foreground hover:bg-accent/80' : ''" :aria-pressed="drawer === 'pinned'" @click="toggleDrawer('pinned')">
-          <Pin class="h-4 w-4" stroke-width="1.75" />暫存區<span v-if="pinnedPets.items.length" class="tabular-nums">{{ pinnedPets.items.length }}</span>
-        </Button>
-        <Button variant="secondary" size="sm" :class="drawer === 'medications' ? 'bg-accent text-accent-foreground hover:bg-accent/80' : ''" :aria-pressed="drawer === 'medications'" @click="toggleDrawer('medications')">
-          <PackageCheck class="h-4 w-4" stroke-width="1.75" />包藥<span v-if="medicationPacking" class="tabular-nums">{{ medicationPacking }}</span>
-        </Button>
-        <Popover v-model:open="intakeMenuOpen">
-          <PopoverTrigger as-child>
-            <Button variant="secondary" size="sm" :aria-label="pendingIntakeCount ? `初診，${pendingIntakeCount} 份初診表待審核` : '初診'">
-              <ClipboardList class="h-4 w-4" stroke-width="1.75" />初診
-              <Badge v-if="pendingIntakeCount" variant="status" class="bg-danger-surface text-danger tabular-nums">{{ pendingIntakeCount }}</Badge>
-              <ChevronDown class="h-4 w-4 text-muted-foreground" stroke-width="1.75" />
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" class="w-56 space-y-1 p-1">
+      <!-- 面板群置中，跟診療台同一個骨架與同一組位置——兩頁常常是同一個人在兩台電腦上輪流開，
+           同一顆「暫存區」在兩頁長得不一樣、位置也不一樣，是這條工具列最花時間找東西的地方。 -->
+      <div class="flex flex-1 items-center justify-center">
+        <ConsoleChipBar aria-label="工作面板">
+          <ConsoleChip :icon="Pin" label="暫存區" :count="pinnedPets.items.length" :active="panel === 'pinned'" @click="togglePanel('pinned')" />
+          <span class="mx-0.5 h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
+          <ConsoleChip :icon="Pill" label="藥單" :count="medicationTodo" tone="todo" :active="panel === 'medications'" @click="togglePanel('medications')" />
+          <Popover v-model:open="intakeMenuOpen">
+            <PopoverTrigger as-child>
+              <ConsoleChip :icon="ClipboardList" label="初診" :count="pendingIntakeCount" tone="todo" :active="intakeMenuOpen">
+                <ChevronDown class="h-3.5 w-3.5" stroke-width="1.75" aria-hidden="true" />
+              </ConsoleChip>
+            </PopoverTrigger>
+            <PopoverContent align="end" class="w-56 space-y-1 p-1">
             <button type="button" class="flex min-h-10 w-full items-center gap-2 rounded-md bg-muted/60 px-2.5 text-left text-sm font-medium hover:bg-secondary" @click="intakeMenu('review')">
               初診表審核<Badge v-if="pendingIntakeCount" variant="status" class="ml-auto bg-danger-surface text-danger tabular-nums">{{ pendingIntakeCount }}</Badge>
             </button>
-            <button type="button" class="flex min-h-10 w-full items-center gap-2 rounded-md bg-muted/60 px-2.5 text-left text-sm font-medium hover:bg-secondary disabled:pointer-events-none disabled:opacity-50" :disabled="busy" @click="intakeMenu('issue-code')">
-              發初診碼
-            </button>
-          </PopoverContent>
-        </Popover>
-        <Button size="sm" @click="openNewMedication">
-          <PackageCheck class="h-4 w-4" />領藥
-        </Button>
-        <Button size="sm" @click="openDrawer('new')">
+              <button type="button" class="flex min-h-10 w-full items-center gap-2 rounded-md bg-muted/60 px-2.5 text-left text-sm font-medium hover:bg-secondary disabled:pointer-events-none disabled:opacity-50" :disabled="busy" @click="intakeMenu('issue-code')">
+                發初診碼
+              </button>
+            </PopoverContent>
+          </Popover>
+        </ConsoleChipBar>
+      </div>
+      <div class="flex shrink-0 items-center gap-1">
+        <Button variant="secondary" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft class="h-4 w-4" /></Button>
+        <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-36" />
+        <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
+        <!-- 只在不是今天時出現：當天它一直是 disabled，留著等於白佔 80px，而這一行沒有 80px 可以浪費。 -->
+        <Button v-if="!isToday" variant="secondary" size="sm" @click="date = today">今天</Button>
+        <Button size="sm" class="ml-1" @click="openDrawer('new')">
           <Plus class="h-4 w-4" />
-          <template v-if="newDraftOpen && drawer !== 'new'">繼續掛號<span v-if="newDraft?.draftName" class="max-w-32 truncate">：{{ newDraft.draftName }}</span></template>
+          <template v-if="newDraftOpen && drawer !== 'new'">繼續掛號<span v-if="newDraft?.draftName" class="max-w-24 truncate">：{{ newDraft.draftName }}</span></template>
           <template v-else>掛號</template>
         </Button>
       </div>
@@ -697,7 +704,10 @@ onBeforeUnmount(() => {
               <span v-for="item in LEGEND" :key="item.label" class="inline-flex items-center gap-1.5"><span class="h-2.5 w-2.5 rounded-sm border" :class="item.class" aria-hidden="true"></span>{{ item.label }}</span>
             </p>
           </div>
-          <div class="flex items-center gap-2">
+          <div class="flex shrink-0 items-center gap-2">
+            <!-- 搜尋從頁首搬到這裡：它篩的本來就是這條時間軸，放在時間軸自己的標頭才講得通，
+                 頁首也因此空出 256px，單行工具列才擠得進 960px。 -->
+            <FilterBar id="reception-search" v-model="search" label="搜尋診務" placeholder="病患、飼主、電話" class="w-56" />
             <Button v-if="stageFilter" variant="secondary" size="xs" @click="stageFilter = ''"><X class="h-4 w-4" stroke-width="1.75" />清除篩選</Button>
             <span class="inline-flex h-7 min-w-7 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums">{{ timelineCount }}</span>
           </div>
@@ -706,7 +716,7 @@ onBeforeUnmount(() => {
         <div class="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
           <div v-if="!timelineCount" class="mb-3 rounded-xl border border-dashed border-border bg-muted px-3.5 py-4 text-center" role="status">
             <p class="text-sm font-medium">{{ stageFilter ? '這一段目前沒有掛號' : `${isToday ? '今天' : date}${items.length ? '沒有待報到或候診中的掛號' : '還沒有任何掛號'}` }}</p>
-            <p v-if="!stageFilter" class="mt-1 text-xs text-muted-foreground">點右上方「新增掛號」，資料會依預約時段顯示在時間軸上。</p>
+            <p v-if="!stageFilter" class="mt-1 text-xs text-muted-foreground">點右上方「掛號」，資料會依預約時段顯示在時間軸上。</p>
           </div>
 
           <template v-for="(group, groupIndex) in timeline" :key="group.session.id">
@@ -917,39 +927,38 @@ onBeforeUnmount(() => {
     />
 
     <!-- 暫存區：跟診療台同一個呈現方式，大面板一列放得下兩隻，看完就關。 -->
-    <ModalDialog v-if="drawer === 'pinned'" size="xl" @close="closeDrawer">
-      <div class="border-b border-border p-5 pr-16 sm:px-6">
-        <DialogTitle class="flex items-center gap-2">
-          <Pin class="h-4.5 w-4.5 text-muted-foreground" stroke-width="1.75" />暫存區
-          <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums">{{ pinnedPets.items.length }}</span>
-        </DialogTitle>
-
-      </div>
+    <ModalDialog
+      v-if="panel === 'pinned'"
+      size="xl"
+      title="暫存區"
+      description="在聊天室打 @ 標記就會放進來，只能手動移除、不隨日期清空。"
+      :icon="Pin"
+      :count="pinnedPets.items.length"
+      @close="panel = ''"
+    >
       <div class="max-h-[min(68vh,48rem)] min-h-72 overflow-y-auto p-5 sm:p-6">
         <PinnedPetsList />
         <p v-if="!pinnedPets.items.length" class="py-10 text-center text-sm text-muted-foreground">暫存區是空的</p>
       </div>
     </ModalDialog>
 
-    <!-- 包藥跟暫存區一樣是從看板叫出的批次工作面板；完成包藥後，藥單會進到上方同層級的領藥工作區。 -->
-    <ModalDialog v-if="drawer === 'medications'" size="xl" @close="closeDrawer">
-      <div class="border-b border-border p-5 pr-16 sm:px-6">
-        <DialogTitle class="flex items-center gap-2">
-          <PackageCheck class="h-4.5 w-4.5 text-muted-foreground" stroke-width="1.75" />包藥
-          <span class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums">{{ medicationActive }}</span>
-        </DialogTitle>
-        <DialogDescription class="mt-1 text-xs">查看未完成藥單，並依目前進度完成可執行的處理。</DialogDescription>
-      </div>
+    <!-- 藥單：從看板叫出的批次工作面板。預設落在「待包藥」——待醫師確認那一段是醫師的佇列，
+         櫃台在上面只能改跟取消，一開啟就停在做不了事的那一格沒有道理。
+         標題不帶數字：底下的階段篩選鈕本來就逐段標了。 -->
+    <ModalDialog
+      v-if="panel === 'medications'"
+      size="xl"
+      title="藥單"
+      description="查看未完成藥單，並依目前進度完成可執行的處理。"
+      :icon="Pill"
+      @close="panel = ''"
+    >
       <div class="flex h-[min(72vh,52rem)] min-h-96 flex-col p-5 sm:p-6">
-        <MedicationWorkspace mode="reception" initial-filter="review" :stages="['review', 'approved', 'ready']" :appointments="items" @counts="medicationCounts = $event" />
+        <MedicationWorkspace mode="reception" initial-filter="approved" :stages="['review', 'approved', 'ready']" :appointments="items" @counts="medicationCounts = $event" />
       </div>
     </ModalDialog>
 
-    <!-- 「領藥」是快速登記入口，只開新增藥單，不連帶打開後方的包藥工作區。 -->
-    <MedicationWorkspace ref="newMedicationWorkspace" mode="reception" :appointments="items" :show-list="false" />
-
-    <ModalDialog v-if="intakeReviewTarget" size="xl" @close="intakeReviewTarget = null">
-      <div class="border-b border-border p-5 pr-16 sm:px-6"><DialogTitle>審核初診資料</DialogTitle><DialogDescription class="mt-1 text-xs">確認資料後再建立正式飼主與寵物資料。</DialogDescription></div>
+    <ModalDialog v-if="intakeReviewTarget" size="xl" title="審核初診資料" description="確認資料後再建立正式飼主與寵物資料。" @close="intakeReviewTarget = null">
       <div class="max-h-[min(68vh,48rem)] space-y-5 overflow-y-auto p-5 sm:p-6">
         <section class="rounded-xl border border-border p-4">
           <h3 class="mb-3 text-base font-semibold">貓孩兒</h3>

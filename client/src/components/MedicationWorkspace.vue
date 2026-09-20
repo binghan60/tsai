@@ -5,7 +5,6 @@ import { http } from '../api/http';
 import { getSocket } from '../api/socket';
 import { formatDateTime } from '../lib/datetime';
 import { MEDICATION_ACTIVE, MEDICATION_STAGES, medicationLabel } from '../../../shared/medicationWorkflow.js';
-import ModalDialog from './ModalDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
 import FilterBar from './FilterBar.vue';
 import Pagination from './Pagination.vue';
@@ -15,15 +14,17 @@ import { Textarea } from './ui/textarea';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
-import { DialogTitle, DialogDescription, DialogFooter } from './ui/dialog';
-import { ClipboardPlus, Search } from '@lucide/vue';
+import { ArrowLeft, ClipboardPlus, Plus, Search } from '@lucide/vue';
 
+// 藥單工作區。清單與單筆詳情是同一個容器內的兩個檢視（opened 切換），不是兩層 Modal——
+// 舊版在 xl 的面板裡再開一個 xl 的 Modal，同尺寸疊同尺寸畫面幾乎不變、看起來像沒反應，
+// 而詳情是有未儲存內容的表單，兩層遮罩疊著時按 Esc 會關掉哪一層沒有任何線索。
+// 包藥本來就是「處理一筆、回清單、接下一筆」的批次工作，同容器切換正好是這個節奏。
 const props = defineProps({
   mode: { type: String, required: true },
   appointments: { type: Array, default: () => [] },
   initialFilter: { type: String, default: '' },
   stages: { type: Array, default: null },
-  showList: { type: Boolean, default: true },
 });
 const emit = defineEmits(['counts']);
 const doctor = computed(() => props.mode === 'doctor');
@@ -41,7 +42,7 @@ const busy = ref(false);
 const opened = ref(false);
 const selected = ref(null);
 const pet = ref(null);
-const form = reactive({ condition: '', prescription: '', note: '', storageLocation: '', appointmentId: '' });
+const form = reactive({ condition: '', prescription: '', note: '', appointmentId: '' });
 const initial = ref('');
 const modalError = ref('');
 const stale = ref(false);
@@ -140,7 +141,6 @@ function create() {
   resetForm(null);
   opened.value = true;
 }
-defineExpose({ create });
 async function loadNotes(petId, sequence) {
   notesError.value = '';
   clinicalNotes.value = [];
@@ -202,7 +202,7 @@ async function usePrevious() {
 }
 function close() {
   if (busy.value || previousLoading.value) return;
-  if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', description: '關閉後，本次尚未儲存的輸入會清除。', run: () => { opened.value = false; } };
+  if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', description: '返回清單後，本次尚未儲存的輸入會清除。', run: () => { opened.value = false; } };
   else opened.value = false;
 }
 function reload() {
@@ -255,10 +255,14 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section v-if="showList" class="flex min-h-0 flex-1 flex-col gap-3" aria-label="領藥工作區">
+  <section class="flex min-h-0 flex-1 flex-col gap-3" aria-label="藥單工作區">
+    <template v-if="!opened">
     <div class="flex flex-wrap items-center gap-2">
       <FilterBar id="medication-search" v-model="queryInput" label="搜尋藥單" placeholder="寵物、飼主、電話或病歷號" class="min-w-56 flex-1 sm:max-w-80" @submit="applySearch" />
-      <p class="text-xs text-muted-foreground sm:ml-auto">未完成的藥單持續保留，不受診務日期篩選影響</p>
+      <p class="text-xs text-muted-foreground">未完成的藥單持續保留，不受診務日期篩選影響</p>
+      <!-- 領藥收在這裡，不在頁首：它建立的藥單就是這份清單裡的資料，
+           之前是頁首一顆獨立按鈕，跟側邊欄的「領藥」全頁版看起來像同一個入口、其實不是。 -->
+      <Button v-if="!doctor" class="ml-auto" @click="create"><Plus class="h-4 w-4" />領藥</Button>
     </div>
     <div class="flex flex-wrap gap-1.5" role="group" aria-label="藥單狀態篩選">
       <Button v-if="!stages?.length" size="sm" :variant="filter === 'active' ? 'default' : 'secondary'" :aria-pressed="filter === 'active'" @click="setFilter('active')">未完成 {{ activeCount }}</Button>
@@ -268,7 +272,7 @@ onBeforeUnmount(() => {
     <div class="min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-card">
       <table class="w-full min-w-240 text-left text-sm">
         <thead class="sticky top-0 z-10 bg-muted text-xs text-muted-foreground"><tr>
-          <th class="p-3">狀態／登記時間</th><th class="p-3">寵物／飼主</th><th class="w-1/5 p-3">近況回報</th><th class="w-1/3 p-3">藥單內容</th><th class="p-3">備註／放置位置</th><th class="p-3">操作</th>
+          <th class="p-3">狀態／登記時間</th><th class="p-3">寵物／飼主</th><th class="w-1/5 p-3">近況回報</th><th class="w-1/3 p-3">藥單內容</th><th class="p-3">備註</th><th class="p-3">操作</th>
         </tr></thead>
         <tbody>
           <tr v-if="loading && !items.length"><td colspan="6" class="p-10 text-center text-muted-foreground">載入藥單中…</td></tr>
@@ -278,7 +282,7 @@ onBeforeUnmount(() => {
             <td class="p-3"><p class="font-semibold">{{ item.petName }}</p><p>{{ item.ownerName }}</p><p class="text-xs text-muted-foreground">{{ item.ownerPhone }}</p></td>
             <td class="whitespace-pre-wrap break-words p-3">{{ item.condition || '—' }}</td>
             <td class="whitespace-pre-wrap break-words p-3 font-medium">{{ item.prescription }}</td>
-            <td class="whitespace-pre-wrap break-words p-3"><p>{{ item.note || '—' }}</p><p v-if="item.storageLocation" class="mt-2 font-semibold text-primary">放置：{{ item.storageLocation }}</p></td>
+            <td class="whitespace-pre-wrap break-words p-3">{{ item.note || '—' }}</td>
             <td class="p-3">
               <div v-if="!doctor && !['collected', 'cancelled'].includes(item.status)" class="flex flex-nowrap gap-2 whitespace-nowrap">
                 <Button class="shrink-0" size="sm" variant="secondary" :disabled="busy" :aria-label="`修改 ${item.petName} 的藥單`" @click="openOrder(item)">修改</Button>
@@ -291,18 +295,22 @@ onBeforeUnmount(() => {
       </table>
     </div>
     <Pagination :page="page" :total-pages="totalPages" @update:page="page = $event" />
-  </section>
+    </template>
 
-  <ModalDialog v-if="opened" :size="selected ? 'xl' : 'wide'" @close="close">
-      <div class="sticky top-0 z-10 border-b border-border bg-card p-5 pr-16 sm:px-6">
-        <DialogTitle class="flex items-center gap-2">
-          <ClipboardPlus v-if="!selected" class="h-5 w-5 text-primary" stroke-width="1.75" aria-hidden="true" />
-          {{ selected ? `${selected.petName} 的藥單` : '登記續藥' }}
-          <Badge v-if="selected" variant="status" :class="tone(selected.status)">{{ medicationLabel(selected.status) }}</Badge>
-        </DialogTitle>
-        <DialogDescription class="mt-1 text-xs">{{ selected ? `${selected.ownerName} · ${selected.ownerPhone}` : '記錄飼主需求並建立藥單，送交醫師確認後再進行包藥。' }}</DialogDescription>
+    <template v-else>
+      <div class="flex shrink-0 flex-wrap items-center gap-3 border-b border-border pb-3">
+        <Button variant="secondary" :disabled="busy || previousLoading" @click="close"><ArrowLeft class="h-4 w-4" stroke-width="1.75" />返回清單</Button>
+        <div class="min-w-0">
+          <p class="flex items-center gap-2 text-base font-semibold">
+            <ClipboardPlus v-if="!selected" class="h-5 w-5 text-primary" stroke-width="1.75" aria-hidden="true" />
+            {{ selected ? `${selected.petName} 的藥單` : '領藥' }}
+            <Badge v-if="selected" variant="status" :class="tone(selected.status)">{{ medicationLabel(selected.status) }}</Badge>
+          </p>
+          <p class="text-xs text-muted-foreground">{{ selected ? `${selected.ownerName} · ${selected.ownerPhone}` : '記錄飼主需求並建立藥單，送交醫師確認後再進行包藥。' }}</p>
+        </div>
+        <Badge v-if="dirty" variant="status" class="ml-auto bg-warning-surface text-warning">有未儲存內容</Badge>
       </div>
-      <div class="space-y-5 p-5 sm:p-6">
+      <div class="min-h-0 flex-1 space-y-5 overflow-y-auto pr-1">
         <Alert v-if="stale" variant="destructive"><AlertDescription>藥單已被其他工作台更新，目前輸入已保留。請載入最新內容後再操作。<Button size="sm" variant="secondary" class="ml-2" @click="reload">載入最新藥單</Button></AlertDescription></Alert>
         <Alert v-if="selected?.needsRepack" variant="destructive"><AlertDescription>藥單在包藥完成後曾修改，請停止使用原藥包。待醫師重新確認後，請依最新藥單重新包藥。</AlertDescription></Alert>
         <Alert v-if="modalError" variant="destructive"><AlertDescription>{{ modalError }}</AlertDescription></Alert>
@@ -375,7 +383,6 @@ onBeforeUnmount(() => {
           <div class="space-y-4">
             <div class="space-y-1.5"><Label for="med-condition">飼主回報</Label><Textarea id="med-condition" v-model="form.condition" rows="5" maxlength="5000" :disabled="busy || !clinicalEditable" placeholder="食慾、精神、症狀變化…" /></div>
             <div class="space-y-1.5"><Label for="med-note">處理備註</Label><Textarea id="med-note" v-model="form.note" rows="3" maxlength="3000" :disabled="busy || !clinicalEditable" placeholder="預計領藥時間、需向飼主確認的事項…" /></div>
-            <div v-if="selected && !doctor" class="space-y-1.5"><Label for="med-storage">放置位置</Label><Input id="med-storage" v-model="form.storageLocation" maxlength="200" :disabled="busy || terminal || !['approved', 'ready'].includes(selected.status)" placeholder="例如 A 櫃第 2 格" /></div>
           </div>
           <div class="space-y-4">
             <div v-if="selected || doctor" class="space-y-1.5"><div class="flex items-center justify-between gap-2"><Label for="med-prescription">藥單內容</Label><Button v-if="!selected && pet" size="sm" variant="secondary" :disabled="busy || previousLoading" @click="usePrevious">{{ previousLoading ? '讀取中…' : '帶入上一筆藥單' }}</Button></div><Textarea id="med-prescription" v-model="form.prescription" rows="14" maxlength="10000" :disabled="busy || !clinicalEditable" placeholder="請輸入藥品名稱、劑量、頻次、天數及用藥指示" /><p v-if="!terminal" class="text-xs text-muted-foreground">{{ doctor ? '請核對藥單內容後送交包藥。後續若修改內容，須重新進行醫師確認。' : '藥單經醫師確認後，包藥人員即可開始處理。' }}</p></div>
@@ -384,8 +391,7 @@ onBeforeUnmount(() => {
         </div>
         <div v-if="returning" class="space-y-2"><Label for="med-return">給醫師的意見</Label><Input id="med-return" v-model="returnReason" maxlength="500" :disabled="busy" placeholder="請說明需要重新確認的內容" /><p class="text-xs text-muted-foreground">送出後狀態會回到待醫師確認。</p></div>
       </div>
-      <DialogFooter class="sticky bottom-0 z-10 flex-wrap">
-        <Button variant="secondary" :disabled="busy" @click="close">關閉</Button>
+      <div class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
         <template v-if="!terminal">
           <Button v-if="selected && !doctor && !returning" variant="secondary" :disabled="busy || stale" @click="requestAction('cancel')">取消藥單</Button>
           <template v-if="returning"><Button variant="secondary" :disabled="busy" @click="returning = false">返回</Button><Button :disabled="busy || stale || !returnReason.trim()" @click="execute('return', { reason: returnReason })">送回醫師重審</Button></template>
@@ -398,7 +404,10 @@ onBeforeUnmount(() => {
             <Button v-if="!doctor && selected?.status === 'ready'" :disabled="busy || stale || dirty" @click="requestAction('collect')">確認領藥</Button>
           </template>
         </template>
-      </DialogFooter>
-    </ModalDialog>
+        <p v-else class="text-xs text-muted-foreground">這筆藥單已結束，內容唯讀。</p>
+      </div>
+    </template>
+  </section>
+
   <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :description="confirmation.description" @confirm="runConfirmation" @cancel="cancelConfirmation" />
 </template>

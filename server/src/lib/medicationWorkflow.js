@@ -1,5 +1,5 @@
 const fail = (message, status = 422) => { throw Object.assign(new Error(message), { status }); };
-const limits = { condition: 5000, prescription: 10000, note: 3000, storageLocation: 200 };
+const limits = { condition: 5000, prescription: 10000, note: 3000 };
 
 export function medicationFields(body) {
   const fields = {};
@@ -13,7 +13,7 @@ export function medicationFields(body) {
 
 export function recordMedicationEvent(order, action, actor, from, reason = '', now = new Date()) {
   order.history.push({ action, actor, at: now, from, to: order.status, reason,
-    condition: order.condition, prescription: order.prescription, note: order.note, storageLocation: order.storageLocation });
+    condition: order.condition, prescription: order.prescription, note: order.note });
 }
 
 export function applyMedicationAction(order, action, body, actor, now = new Date()) {
@@ -31,7 +31,6 @@ export function applyMedicationAction(order, action, body, actor, now = new Date
       order.approvedBy = '';
       order.packedAt = null;
       order.packedBy = '';
-      order.storageLocation = '';
     }
   } else if (action === 'approve') {
     if (from !== 'review') fail('僅待醫師確認的藥單可送交包藥', 409);
@@ -48,7 +47,6 @@ export function applyMedicationAction(order, action, body, actor, now = new Date
     order.approvedBy = '';
     order.packedAt = null;
     order.packedBy = '';
-    order.storageLocation = '';
   } else if (action === 'cancel') {
     order.status = 'cancelled';
   } else {
@@ -61,7 +59,6 @@ export function applyMedicationAction(order, action, body, actor, now = new Date
       if (order.needsRepack && body.acknowledgeRepack !== true) fail('請先確認已停止使用舊藥包，依新藥單重新包藥');
       order.packedBy = actor;
       order.needsRepack = false;
-      order.storageLocation = fields.storageLocation ?? order.storageLocation;
       order.packedAt = now;
     }
     if (action === 'collect') order.collectedAt = now;

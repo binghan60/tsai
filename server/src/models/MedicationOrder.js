@@ -12,7 +12,6 @@ const schema = new mongoose.Schema({
   condition: { type: String, default: '', maxlength: 5000 },
   prescription: { type: String, default: '', maxlength: 10000 },
   note: { type: String, default: '', maxlength: 3000 },
-  storageLocation: { type: String, default: '', maxlength: 200 },
   status: { type: String, enum: MEDICATION_STAGES.map(stage => stage.key), default: 'review' },
   needsRepack: { type: Boolean, default: false },
   approvedBy: { type: String, default: '' },
@@ -32,7 +31,6 @@ const schema = new mongoose.Schema({
     condition: String,
     prescription: String,
     note: String,
-    storageLocation: String,
   }],
 }, { timestamps: true, optimisticConcurrency: true });
 

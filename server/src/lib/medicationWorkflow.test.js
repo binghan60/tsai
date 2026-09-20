@@ -4,7 +4,7 @@ import MedicationOrder from '../models/MedicationOrder.js';
 import { applyMedicationAction, medicationFields } from './medicationWorkflow.js';
 
 function order() {
-  return { status: 'review', condition: '食慾正常', prescription: '原藥單', note: '', storageLocation: '', __v: 0, history: [] };
+  return { status: 'review', condition: '食慾正常', prescription: '原藥單', note: '', __v: 0, history: [] };
 }
 function action(item, name, fields = {}, actor = '測試人員') {
   applyMedicationAction(item, name, { version: item.__v, ...fields }, actor);
@@ -17,10 +17,9 @@ describe('領藥狀態與藥單版本', () => {
     action(item, 'approve', { prescription: '醫師修改後的藥單' }, '醫師');
     assert.equal(item.approvedBy, '醫師');
     assert.throws(() => action(item, 'collect'), { status: 409 });
-    action(item, 'ready', { storageLocation: 'A 櫃 2 格' }, '包藥人員');
+    action(item, 'ready', {}, '包藥人員');
     action(item, 'collect', {}, '櫃檯');
     assert.equal(item.status, 'collected');
-    assert.equal(item.storageLocation, 'A 櫃 2 格');
     assert.equal(item.packedBy, '包藥人員');
     assert.ok(item.collectedAt);
     assert.deepEqual(item.history.map(entry => entry.actor), ['醫師', '包藥人員', '櫃檯']);
@@ -31,12 +30,11 @@ describe('領藥狀態與藥單版本', () => {
     it(`${stage} 修改後使醫師確認失效，已完成包藥則強制確認重包`, () => {
       const item = order();
       action(item, 'approve');
-      if (stage === 'ready') action(item, 'ready', { storageLocation: '舊位置' });
+      if (stage === 'ready') action(item, 'ready');
       const staleVersion = item.__v;
       action(item, 'edit', { prescription: '新藥單' });
       assert.equal(item.status, 'review');
       assert.equal(item.approvedAt, null);
-      assert.equal(item.storageLocation, '');
       assert.equal(item.needsRepack, stage !== 'approved');
       assert.throws(() => applyMedicationAction(item, 'ready', { version: staleVersion }, '另一人'), { status: 409 });
       action(item, 'approve');
@@ -46,10 +44,11 @@ describe('領藥狀態與藥單版本', () => {
       assert.equal(item.status, 'ready');
     });
   }
-  it('只修改放置位置不取消醫師確認；包藥時不能夾帶處方修改', () => {
+  it('內容沒有實際變更的 edit 不取消醫師確認；包藥時不能夾帶處方修改', () => {
     const item = order();
     action(item, 'approve'); action(item, 'ready');
-    action(item, 'edit', { storageLocation: 'B 櫃' });
+    // 前端自動送出時常常整包欄位一起帶，內容跟現況相同就不該把藥單打回重審。
+    action(item, 'edit', { condition: '食慾正常', note: '' });
     assert.equal(item.status, 'ready');
     assert.throws(() => action(item, 'collect', { prescription: '未審核內容' }), { status: 409 });
     assert.equal(item.prescription, '原藥單');
