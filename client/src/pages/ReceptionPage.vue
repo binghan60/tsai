@@ -599,7 +599,7 @@ onBeforeUnmount(() => {
     <header class="flex flex-wrap items-center gap-x-4 gap-y-3">
 
       <div class="flex shrink-0 items-baseline gap-2">
-        <h1 class="text-xl font-semibold">掛號工作台</h1>
+        <h1 class="text-xl font-semibold">櫃檯工作台</h1>
       </div>
       <!-- 面板群置中，跟診療台同一個骨架與同一組位置——兩頁常常是同一個人在兩台電腦上輪流開，
            同一顆「暫存區」在兩頁長得不一樣、位置也不一樣，是這條工具列最花時間找東西的地方。 -->
