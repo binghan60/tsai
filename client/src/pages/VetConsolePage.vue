@@ -2,7 +2,7 @@
 import MedicationWorkspace from '../components/MedicationWorkspace.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, ArrowRight, CalendarClock, Check, ChevronLeft, ChevronRight, Clock, LayoutList, List, Pill, Pin, RefreshCw, Scissors, Stethoscope, Undo2, X } from '@lucide/vue'
+import { AlertTriangle, ArrowRight, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, LayoutList, List, Pill, Pin, RefreshCw, Scissors, Stethoscope, Undo2, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { getSocket } from '../api/socket'
 import { useToast } from '../composables/useToast'
@@ -33,7 +33,7 @@ import { DatePicker } from '../components/ui/date-picker'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { medicationTodoCount } from '../../../shared/medicationWorkflow.js'
 
-// 醫師診療台：左欄是今日病患（手上的、候診、今日排程），右欄是可以同時開好幾筆的就診工作區。
+// 醫師診療台：左欄是今日病患（在院、今日排程；順序固定，點擊不會改變），右欄是可以同時開好幾筆的就診工作區。
 // 刻意不做成「點一筆就換頁」——醫師手上常常同時有好幾隻動物在跑（等一隻的檢驗結果
 // 時先看下一隻），換頁或 Modal 都會擋住這種來回切換。
 //
@@ -78,7 +78,27 @@ function setCompact(val) {
   } catch {}
 }
 
-// 同時開著的病患，順序就是「我手上的」的順序，各自的未儲存輸入留在各自的工作區元件裡。
+// 左欄的「在院」「今日排程」可以各自收合；收合只是藏起卡片（v-show，不重新排序也不卸載），
+// 是這台電腦的顯示偏好，跟 isCompact 一樣存 localStorage。
+const GROUPS_STORAGE_KEY = 'clinic.vetConsoleCollapsedGroups'
+function restoreCollapsed() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(GROUPS_STORAGE_KEY) || '{}')
+    return saved && typeof saved === 'object' ? saved : {}
+  } catch {
+    return {}
+  }
+}
+const collapsedGroups = reactive(restoreCollapsed())
+const isCollapsed = (key) => Boolean(collapsedGroups[key])
+function toggleGroup(key) {
+  collapsedGroups[key] = !collapsedGroups[key]
+  try {
+    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(collapsedGroups))
+  } catch {}
+}
+
+// 同時開著的病患（左欄卡片就地標示，不另成群組），各自的未儲存輸入留在各自的工作區元件裡。
 //
 // 存進 localStorage 是必要的：診間電腦被重新整理、當掉重開、或不小心關掉分頁時，
 // 醫師手上那幾隻動物不能跟著消失——留在畫面上的工作區就是他的待辦清單。
@@ -113,18 +133,17 @@ const byId = computed(() => new Map(items.value.map((item) => [String(item._id),
 const openTabs = computed(() => openIds.value.map((id) => byId.value.get(id)).filter(Boolean))
 const active = computed(() => byId.value.get(activeId.value) || null)
 const isOpen = (item) => openIds.value.includes(String(item._id))
-const waiting = computed(() => queue('waiting').filter((item) => !isOpen(item)))
-const visitingElsewhere = computed(() => queue('visiting').filter((item) => !isOpen(item)))
-const scheduled = computed(() => items.value.filter((item) => workflowFilter(item, 'scheduled') && !isOpen(item)).sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt)))
+// 左欄的順序只由掛號資料決定（在院依報到時間、待報到依預約時段），跟「有沒有點開」「有沒有按看診」無關：
+// 點開、切換、關閉、開始看診都只改卡片的底色與標籤，不會讓卡片換位置或換群組。
+const onsite = computed(() => queue('onsite'))
+const scheduled = computed(() => items.value.filter((item) => workflowFilter(item, 'scheduled')).sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt)))
 const handedOff = computed(() => queue('handoff'))
 const finished = computed(() => queue('completed'))
 const onsiteCount = computed(() => items.value.filter((item) => workflowFilter(item, 'onsite') || workflowFilter(item, 'handoff')).length)
 const scheduledCount = computed(() => items.value.filter((item) => workflowFilter(item, 'scheduled')).length)
 
 const mainGroups = computed(() => [
-  { key: 'mine', label: '診療中', list: openTabs.value },
-  { key: 'waiting', label: '候診中', list: waiting.value },
-  { key: 'visiting', label: '看診中（未開啟）', list: visitingElsewhere.value, hideWhenEmpty: true },
+  { key: 'onsite', label: '在院', list: onsite.value, hint: '依報到順序' },
   { key: 'scheduled', label: '今日排程 · 待報到', list: scheduled.value, hint: '依時段' },
 ])
 
@@ -164,6 +183,8 @@ function waitingTooLong(item) {
 // 待報到的手術卡片淡紫底（跟櫃台頁同一套）：醫師看排程是為了先備器材。
 function cardClass(item, groupKey) {
   if (String(item._id) === activeId.value) return 'border-primary bg-accent'
+  // 開著但不是目前這一筆：留在原位、只加一圈主色淡框，切換分頁靠點卡片。
+  if (isOpen(item)) return 'border-primary/40 bg-card hover:bg-field'
   if (groupKey === 'scheduled' && item.isSurgery) return 'border-surgery/35 bg-surgery-surface/60 hover:bg-surgery-surface'
   return 'border-border bg-card hover:bg-field'
 }
@@ -419,12 +440,14 @@ onBeforeUnmount(() => {
             <template v-else>
               <template v-for="group in mainGroups" :key="group.key">
                 <div v-if="group.list.length || !group.hideWhenEmpty" class="pt-2">
-                  <p class="flex items-center gap-2 px-1.5 pb-1.5 text-xs font-semibold text-muted-foreground">
-                    {{ group.label }}<span class="font-normal">{{ group.list.length }}</span
-                    ><span v-if="group.hint" class="ml-auto font-normal">{{ group.hint }}</span>
-                  </p>
-                  <p v-if="!group.list.length" class="px-1.5 py-2 text-xs text-muted-foreground">{{ group.key === 'mine' ? '點下面任一位病患開啟工作區' : '目前沒有' }}</p>
-                  <article v-for="item in group.list" :key="item._id" class="cursor-pointer rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :class="[cardClass(item, group.key), isCompact ? 'mb-1.5 p-2' : 'mb-2 p-3']" role="button" tabindex="0" :aria-label="`開啟 ${item.petName}`" @click="openPatient(item)" @keydown.enter.self.prevent="openPatient(item)" @keydown.space.self.prevent="openPatient(item)">
+                  <button type="button" class="mb-1.5 flex w-full items-center gap-2 rounded-md bg-transparent px-1.5 py-1 text-left text-xs font-semibold text-muted-foreground transition-colors hover:bg-field focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :aria-expanded="!isCollapsed(group.key)" :aria-label="`${isCollapsed(group.key) ? '展開' : '收合'}${group.label}`" @click="toggleGroup(group.key)">
+                    <ChevronDown class="h-3.5 w-3.5 shrink-0 transition-transform" :class="isCollapsed(group.key) ? '-rotate-90' : ''" stroke-width="2" aria-hidden="true" />
+                    {{ group.label }}<span class="font-normal">{{ group.list.length }}</span>
+                    <span v-if="isCollapsed(group.key) && group.list.some((item) => dirtyIds[String(item._id)])" class="h-2 w-2 shrink-0 rounded-full bg-primary" title="收合的病患有尚未儲存的內容"><span class="sr-only">收合的病患有尚未儲存的內容</span></span>
+                    <span v-if="group.hint" class="ml-auto font-normal">{{ group.hint }}</span>
+                  </button>
+                  <p v-if="!isCollapsed(group.key) && !group.list.length" class="px-1.5 py-2 text-xs text-muted-foreground">目前沒有</p>
+                  <article v-for="item in group.list" v-show="!isCollapsed(group.key)" :key="item._id" class="cursor-pointer rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :class="[cardClass(item, group.key), isCompact ? 'mb-1.5 p-2' : 'mb-2 p-3']" role="button" tabindex="0" :aria-label="`開啟 ${item.petName}`" @click="openPatient(item)" @keydown.enter.self.prevent="openPatient(item)" @keydown.space.self.prevent="openPatient(item)">
                     <!-- 精簡版內容：緊湊兩行式佈局，高度縮減 60%，單行截斷原因，安全警示微標籤（不含 emoji） -->
                     <div v-if="isCompact" class="flex items-start gap-2">
                       <span v-if="group.key === 'scheduled'" class="w-9 shrink-0 pt-0.5 text-xs font-semibold tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
@@ -488,8 +511,8 @@ onBeforeUnmount(() => {
                         </p>
                       </div>
 
-                      <Button v-if="group.key === 'waiting'" size="xs" class="h-7 shrink-0 px-2 text-xs" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope class="h-3.5 w-3.5" />看診</Button>
-                      <Button v-else-if="group.key === 'mine'" variant="secondary" size="icon-xs" class="h-7 w-7 shrink-0" :aria-label="`關閉 ${item.petName}`" @click.stop="closeTab(String(item._id))"><X class="h-3.5 w-3.5" /></Button>
+                      <Button v-if="group.key === 'onsite' && !workflowState(item).started" size="xs" class="h-7 shrink-0 px-2 text-xs" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope class="h-3.5 w-3.5" />看診</Button>
+                      <Button v-if="isOpen(item)" variant="secondary" size="icon-xs" class="h-7 w-7 shrink-0" :aria-label="`關閉 ${item.petName}`" @click.stop="closeTab(String(item._id))"><X class="h-3.5 w-3.5" /></Button>
                     </div>
 
                     <!-- 詳細版內容：完整展開所有備註、徽章與掛號紀錄 -->
@@ -513,8 +536,8 @@ onBeforeUnmount(() => {
                         <p v-if="item.internalNote" class="line-clamp-1 text-xs text-muted-foreground" :title="item.internalNote"><span class="font-medium text-foreground">掛號備註：</span>{{ item.internalNote }}</p>
                       </div>
 
-                      <Button v-if="group.key === 'waiting'" size="xs" class="shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope class="h-4 w-4" />看診</Button>
-                      <Button v-else-if="group.key === 'mine'" variant="secondary" size="icon-xs" class="shrink-0" :aria-label="`關閉 ${item.petName}`" @click.stop="closeTab(String(item._id))"><X class="h-3.5 w-3.5" /></Button>
+                      <Button v-if="group.key === 'onsite' && !workflowState(item).started" size="xs" class="shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope class="h-4 w-4" />看診</Button>
+                      <Button v-if="isOpen(item)" variant="secondary" size="icon-xs" class="shrink-0" :aria-label="`關閉 ${item.petName}`" @click.stop="closeTab(String(item._id))"><X class="h-3.5 w-3.5" /></Button>
                     </div>
                   </article>
                 </div>
