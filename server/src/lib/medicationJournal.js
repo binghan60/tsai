@@ -5,11 +5,17 @@ import { emitClinicalNoteUpdate } from './realtime.js';
 // 所以這裡只負責「有沒有這筆日誌」與「歸在哪天」，藥單內容之後怎麼改都不必再同步。
 // 一張藥單一筆日誌，跟看診（掛號）那筆各自獨立，不會併進去。
 //
-// 建立藥單時就開始有這筆日誌（標題會標明「待醫師確認」等階段），跟掛號日誌在看診中就出現一致；
-// 藥單取消就刪掉——取消的藥單沒有真的開出去，不該留在病歷裡。
+// 不變式：日誌存在 ⇔ 這張藥單**曾經被醫師審核過**，而且沒有取消。
+//   - 審核之前（櫃台剛登記、醫師還沒看）不進病歷：病歷記的是醫師確認過的內容，不是草稿。
+//   - 審核之後就一直在：之後被退回、修改、重新審核，日誌只是標題階段回到「待醫師確認」，不會消失又出現。
+//   - 取消就刪掉：取消的藥單沒有真的開出去，不該留在病歷裡。
+// 「曾經審核過」看 history，不看 approvedAt——退回與修改會把 approvedAt 清掉，history 不會。
 // 必須跟藥單本身的儲存放在同一個 transaction，呼叫端傳入 session。
+export const hasBeenApproved = (order) => (order.history ?? []).some((event) => event.action === 'approve');
+
 export async function syncMedicationJournal(order, { session } = {}) {
-  if (order.status === 'cancelled') {
+  if (order.status === 'cancelled' || !hasBeenApproved(order)) {
+    // 該不存在的一律刪：取消是正常路徑；未審核時通常本來就沒有，刪除是無害的空操作。
     await ClinicalNote.deleteOne({ medicationOrderId: order._id }, { session });
     return;
   }
