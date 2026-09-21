@@ -4,6 +4,7 @@ import { http } from '../api/http';
 import { useAuthStore } from '../stores/auth';
 import { useChatStore } from '../stores/chat';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
+import { useTodosStore } from '../stores/todos';
 
 // 全站常駐：由 App.vue 呼叫一次，取代原本 useGlobalAppointmentNotifications
 // 「擁有連線生命週期」的角色——只要登入著就持續連線，不因切換頁面而斷線；
@@ -12,12 +13,14 @@ import { usePinnedPetsStore } from '../stores/pinnedPets';
 //
 // 全站聊天沒有房間概念（見 server/src/lib/realtime.js 的 emitChatMessage），
 // 不需要 join/leave，登入後直接連線、載入歷史、監聽 chat:new 即可。
-// 寵物暫存區跟聊天綁在一起（@ 標記會放進暫存區），同一條連線一併負責。
+// 寵物暫存區跟聊天綁在一起（# 標記會放進暫存區），同一條連線一併負責；
+// 院內待辦一樣是全站一份、不分房間，也搭這條連線。
 export function useGlobalChat() {
   const socket = getSocket();
   const auth = useAuthStore();
   const store = useChatStore();
   const pinned = usePinnedPetsStore();
+  const todos = useTodosStore();
 
   async function loadHistory() {
     try {
@@ -36,14 +39,21 @@ export function useGlobalChat() {
     pinned.setItems(payload?.items);
   }
 
-  // 斷線期間錯過的暫存區異動，重新連上時整份重讀補回來。
+  function handleTodos(payload) {
+    todos.setItems(payload?.items);
+  }
+
+  // 斷線期間錯過的暫存區與待辦異動，重新連上時整份重讀補回來。
   function handleReconnect() {
-    if (auth.isAuthenticated) pinned.load();
+    if (!auth.isAuthenticated) return;
+    pinned.load();
+    todos.load();
   }
 
   onMounted(() => {
     socket.on('chat:new', handleMessage);
     socket.on('pinned-pets:updated', handlePinnedPets);
+    socket.on('todos:updated', handleTodos);
     socket.io.on('reconnect', handleReconnect);
   });
 
@@ -57,9 +67,11 @@ export function useGlobalChat() {
         socket.connect();
         loadHistory();
         pinned.load();
+        todos.load();
       } else {
         store.reset();
         pinned.reset();
+        todos.reset();
         socket.disconnect();
       }
     },
@@ -69,6 +81,7 @@ export function useGlobalChat() {
   onBeforeUnmount(() => {
     socket.off('chat:new', handleMessage);
     socket.off('pinned-pets:updated', handlePinnedPets);
+    socket.off('todos:updated', handleTodos);
     socket.io.off('reconnect', handleReconnect);
   });
 }

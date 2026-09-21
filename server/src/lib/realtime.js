@@ -59,6 +59,11 @@ export function emitPinnedPetsUpdate(items) {
   io?.emit('pinned-pets:updated', { items });
 }
 
+// 院內待辦跟聊天、暫存區一樣是全站一份；payload 是完整清單。
+export function emitTodosUpdate(items) {
+  io?.emit('todos:updated', { items });
+}
+
 export function emitClinicalNoteUpdate(note) {
   const payload = typeof note.toObject === 'function' ? note.toObject() : note;
   io?.emit('clinical-note:updated', payload);

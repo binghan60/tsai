@@ -4,7 +4,9 @@ import Owner from '../models/Owner.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import PinnedPet from '../models/PinnedPet.js';
+import Todo from '../models/Todo.js';
 import { publishPinnedPets } from '../lib/pinnedPets.js';
+import { publishTodos } from '../lib/todos.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
@@ -198,6 +200,7 @@ petsRouter.put('/:id', async (req, res, next) => {
 petsRouter.delete('/:id', async (req, res, next) => {
   try {
     let removedPin = false;
+    let unlinkedTodos = false;
     await withTransaction(async (session) => {
       const pet = await Pet.findById(req.params.id).session(session);
       if (!pet) {
@@ -223,8 +226,15 @@ petsRouter.delete('/:id', async (req, res, next) => {
       }
       // 暫存紀錄不是病歷，不擋刪除，跟著寵物一起消失。
       removedPin = (await PinnedPet.deleteOne({ petId: pet._id }, { session })).deletedCount > 0;
+      // 待辦同理不擋刪除：只把標記裡的 petId 清成 null，petName／ownerName 快照留著，那筆待辦仍讀得懂。
+      unlinkedTodos = (await Todo.updateMany(
+        { 'mentions.petId': pet._id },
+        { $set: { 'mentions.$[m].petId': null } },
+        { session, arrayFilters: [{ 'm.petId': pet._id }] }
+      )).modifiedCount > 0;
     });
     if (removedPin) await publishPinnedPets();
+    if (unlinkedTodos) await publishTodos();
     res.status(204).end();
   } catch (err) {
     next(err);

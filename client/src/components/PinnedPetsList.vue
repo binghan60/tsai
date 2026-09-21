@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue';
-import { AtSign, X } from '@lucide/vue';
+import { Hash, X } from '@lucide/vue';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 import { useToast } from '../composables/useToast';
 import { clinicDateInput, formatDateTime } from '../lib/datetime';
@@ -54,7 +54,7 @@ async function remove(item) {
           <span class="text-xs text-muted-foreground"> · {{ item.pet.species || '未填物種' }}<template v-if="item.pet.owner?.name"> · {{ item.pet.owner.name }}</template></span>
         </p>
         <p class="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-          <AtSign v-if="item.source === 'mention'" class="h-3 w-3" stroke-width="1.75" />
+          <Hash v-if="item.source === 'mention'" class="h-3 w-3" stroke-width="1.75" />
           {{ pinnedByLabel(item) }}{{ item.source === 'mention' ? '在聊天標記' : '加入' }} · {{ pinnedAtLabel(item.pinnedAt) }}
         </p>
       </div>

@@ -111,7 +111,7 @@ describe('chat routes', () => {
     assert.equal(response.status, 422);
   });
 
-  it('@ 標記寵物時由伺服器寫入名字快照，並放進暫存區', async () => {
+  it('# 標記寵物時由伺服器寫入名字快照，並放進暫存區', async () => {
     const petId = '64b000000000000000000001';
     const original = { create: ChatMessage.create, find: Pet.find, bulkWrite: PinnedPet.bulkWrite, pinFind: PinnedPet.find };
     const originalStartSession = mongoose.startSession;
@@ -125,7 +125,7 @@ describe('chat routes', () => {
     try {
       const response = await fetch(`${origin}/api/chat/messages`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ sender: 'front_desk', content: '@假名字 飼主來電問藥', mentions: [petId, petId] }),
+        body: JSON.stringify({ sender: 'front_desk', content: '#假名字 飼主來電問藥', mentions: [petId, petId] }),
       });
       assert.equal(response.status, 201);
       assert.deepEqual(createdDocs[0].mentions, [{ petId, petName: '豆豆', ownerName: '王小明' }]);

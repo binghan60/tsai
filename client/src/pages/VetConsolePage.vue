@@ -2,7 +2,7 @@
 import MedicationWorkspace from '../components/MedicationWorkspace.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, ArrowRight, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, LayoutList, List, Pill, Pin, RefreshCw, Scissors, Stethoscope, Undo2, X } from '@lucide/vue'
+import { AlertTriangle, ArrowRight, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, LayoutList, List, ListTodo, Pill, Pin, RefreshCw, Scissors, Stethoscope, Undo2, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { getSocket } from '../api/socket'
 import { useToast } from '../composables/useToast'
@@ -14,8 +14,10 @@ import { workflowFilter, workflowState } from '../../../shared/appointmentWorkfl
 import { patientNotesFor, visitTypeLabel } from '../lib/appointmentDisplay'
 import PatientNotes from '../components/PatientNotes.vue'
 import { usePinnedPetsStore } from '../stores/pinnedPets'
+import { useTodosStore } from '../stores/todos'
 import VisitWorkspace from '../components/VisitWorkspace.vue'
 import PinnedPetsList from '../components/PinnedPetsList.vue'
+import TodoPanel from '../components/TodoPanel.vue'
 import ModalDialog from '../components/ModalDialog.vue'
 import ConsoleChip from '../components/ConsoleChip.vue'
 import ConsoleChipBar from '../components/ConsoleChipBar.vue'
@@ -44,6 +46,7 @@ const toast = useToast()
 const { loadTemplates: loadTextTemplates } = useTextTemplates()
 const notifyChat = useAppointmentNotifier()
 const pinnedPets = usePinnedPetsStore()
+const todos = useTodosStore()
 const today = clinicDateInput()
 const date = useSearchQueryParam('date', today)
 const medicationCounts = ref({})
@@ -148,12 +151,14 @@ const mainGroups = computed(() => [
 ])
 
 const referenceDrawers = computed(() => [
-  { key: 'pinned', label: '暫存區', icon: Pin, count: pinnedPets.items.length, description: '在聊天室打 @ 標記就會放進來' },
+  { key: 'pinned', label: '暫存區', icon: Pin, count: pinnedPets.items.length, description: '在聊天室打 # 標記就會放進來' },
   { key: 'handoff', label: '已交櫃台', icon: ArrowRight, count: handedOff.value.length, description: '櫃台還沒完成處理，可以取回補資料' },
   { key: 'completed', label: '已完成', icon: Check, count: finished.value.length, description: '櫃台已完成處理，點名字可查看內容' },
   // 藥單跟前三顆不同類：那三份是查閱，這一顆是待辦，所以走 todo（紅徽章、0 就不畫），
   // chip 群裡也用一條分隔線隔開。它現在跟其他三顆共用同一個面板，不再是頁面上的第二個 ModalDialog 特例。
   { key: 'medications', label: '藥單', icon: Pill, count: medicationTodo.value, tone: 'todo', description: '查看未完成藥單，並依目前進度完成可執行的處理' },
+  // 待辦也是待辦讀法（紅徽章、0 就不畫），跟藥單同屬分隔線右側那一群。
+  { key: 'todos', label: '待辦', icon: ListTodo, count: todos.openCount, tone: 'todo', description: '院內共用的待辦事項，醫生與櫃台即時同步' },
 ])
 const activeDrawer = computed(() => referenceDrawers.value.find((entry) => entry.key === drawer.value) || null)
 const drawerList = computed(() => (drawer.value === 'handoff' ? handedOff.value : drawer.value === 'completed' ? finished.value : []))
@@ -396,7 +401,7 @@ onBeforeUnmount(() => {
       <div class="flex flex-1 items-center justify-center">
         <ConsoleChipBar aria-label="工作面板">
           <template v-for="(entry, index) in referenceDrawers" :key="entry.key">
-            <span v-if="entry.tone === 'todo' && index" class="mx-0.5 h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
+            <span v-if="entry.tone === 'todo' && index && referenceDrawers[index - 1].tone !== 'todo'" class="mx-0.5 h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
             <ConsoleChip :icon="entry.icon" :label="entry.label" :count="entry.count" :tone="entry.tone" :active="drawer === entry.key" @click="toggleDrawer(entry.key)" />
           </template>
         </ConsoleChipBar>
@@ -562,6 +567,7 @@ onBeforeUnmount(() => {
         <div v-if="drawer === 'medications'" class="flex h-[min(72vh,52rem)] min-h-96 flex-col p-5 sm:p-6">
           <MedicationWorkspace mode="doctor" initial-filter="review" :stages="['review', 'approved', 'ready', 'collected']" @counts="medicationCounts = $event" />
         </div>
+        <TodoPanel v-else-if="drawer === 'todos'" />
         <div v-else class="max-h-[min(68vh,48rem)] min-h-72 overflow-y-auto p-5 sm:p-6">
           <template v-if="drawer === 'pinned'">
             <PinnedPetsList />

@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, ClipboardPlus, Clock, Copy, Pill, Pin, Plus, RefreshCw, User, X } from '@lucide/vue'
+import { AlertTriangle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, ClipboardPlus, Clock, Copy, ListTodo, Pill, Pin, Plus, RefreshCw, User, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { getSocket } from '../api/socket'
 import { medicationTodoCount } from '../../../shared/medicationWorkflow.js'
@@ -16,7 +16,9 @@ import { workflowFilter, workflowState } from '../../../shared/appointmentWorkfl
 import { patientNotesFor } from '../lib/appointmentDisplay'
 import PatientNotes from '../components/PatientNotes.vue'
 import { usePinnedPetsStore } from '../stores/pinnedPets'
+import { useTodosStore } from '../stores/todos'
 import HandoffSheet from '../components/HandoffSheet.vue'
+import TodoPanel from '../components/TodoPanel.vue'
 import MedicationWorkspace from '../components/MedicationWorkspace.vue'
 import PinnedPetsList from '../components/PinnedPetsList.vue'
 import RowActions from '../components/RowActions.vue'
@@ -54,6 +56,7 @@ const router = useRouter()
 const toast = useToast()
 const notifyChat = useAppointmentNotifier()
 const pinnedPets = usePinnedPetsStore()
+const todos = useTodosStore()
 const today = clinicDateInput()
 const date = useSearchQueryParam('date', today)
 const search = useSearchQueryParam('q', '')
@@ -602,6 +605,7 @@ onBeforeUnmount(() => {
           <ConsoleChip :icon="Pin" label="暫存區" :count="pinnedPets.items.length" :active="panel === 'pinned'" @click="togglePanel('pinned')" />
           <span class="mx-0.5 h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
           <ConsoleChip :icon="Pill" label="藥單" :count="medicationTodo" tone="todo" :active="panel === 'medications'" @click="togglePanel('medications')" />
+          <ConsoleChip :icon="ListTodo" label="待辦" :count="todos.openCount" tone="todo" :active="panel === 'todos'" @click="togglePanel('todos')" />
           <Popover v-model:open="intakeMenuOpen">
             <PopoverTrigger as-child>
               <ConsoleChip :icon="ClipboardList" label="初診" :count="pendingIntakeCount" tone="todo" :active="intakeMenuOpen">
@@ -925,7 +929,7 @@ onBeforeUnmount(() => {
       v-if="panel === 'pinned'"
       size="xl"
       title="暫存區"
-      description="在聊天室打 @ 標記就會放進來，只能手動移除、不隨日期清空。"
+      description="在聊天室打 # 標記就會放進來，只能手動移除、不隨日期清空。"
       :icon="Pin"
       :count="pinnedPets.items.length"
       @close="panel = ''"
@@ -934,6 +938,19 @@ onBeforeUnmount(() => {
         <PinnedPetsList />
         <p v-if="!pinnedPets.items.length" class="py-10 text-center text-sm text-muted-foreground">暫存區是空的</p>
       </div>
+    </ModalDialog>
+
+    <!-- 待辦：院內共用、醫生與櫃台即時同步，跟診療台是同一個 TodoPanel。 -->
+    <ModalDialog
+      v-if="panel === 'todos'"
+      size="xl"
+      title="待辦"
+      description="院內共用的待辦事項，醫生與櫃台即時同步。"
+      :icon="ListTodo"
+      :count="todos.openCount"
+      @close="panel = ''"
+    >
+      <TodoPanel />
     </ModalDialog>
 
     <!-- 藥單：從看板叫出的批次工作面板。預設落在「待包藥」——待醫師確認那一段是醫師的佇列，
