@@ -124,7 +124,7 @@ onMounted(refresh)
           </div>
           <div class="paper-actions">
             <span>送出於 {{ formatDateTime(item.createdAt) }}</span
-            ><Button size="sm" :disabled="busy" @click="confirmation = { item, action: 'approve' }"><Check class="h-4 w-4" />核准並掛號</Button><Button variant="destructive" size="sm" :disabled="busy" @click="confirmation = { item, action: 'reject' }"><X class="h-4 w-4" />退回</Button>
+            ><Button size="sm" :disabled="busy" @click="confirmation = { item, action: 'approve' }"><Check class="h-4 w-4" />掛號</Button><Button variant="destructive" size="sm" :disabled="busy" @click="confirmation = { item, action: 'reject' }"><X class="h-4 w-4" />退回</Button>
           </div>
         </div>
         <section class="paper-section">
@@ -192,7 +192,7 @@ onMounted(refresh)
         </section>
       </article>
     </section>
-    <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.action === 'approve' ? '核准並掛號？' : '退回這份初診表？'" :description="confirmation.action === 'approve' ? `會建立飼主「${confirmation.item.owner.name}」與寵物「${confirmation.item.pet.name}」，並以選定時間建立掛號。` : `「${confirmation.item.pet.name}」不會建立正式資料。`" :loading="busy" :confirm-label="confirmation.action === 'approve' ? '核准並掛號' : '退回'" :destructive="confirmation.action === 'reject'" @confirm="decide" @cancel="confirmation = null" />
+    <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.action === 'approve' ? '掛號？' : '退回這份初診表？'" :description="confirmation.action === 'approve' ? `會建立飼主「${confirmation.item.owner.name}」與寵物「${confirmation.item.pet.name}」，並以選定時間建立掛號。` : `「${confirmation.item.pet.name}」不會建立正式資料。`" :loading="busy" :confirm-label="confirmation.action === 'approve' ? '掛號' : '退回'" :destructive="confirmation.action === 'reject'" @confirm="decide" @cancel="confirmation = null" />
   </div>
 </template>
 

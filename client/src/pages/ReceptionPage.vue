@@ -272,7 +272,7 @@ function isInitialDataPending(appointment) {
 // 待報到卡片上唯一的主要按鈕。資料齊全的回診一鍵報到；初診要建檔，開抽屜。
 // 已超過寬限還沒報到的，報到鈕改成實心紅——在一整排主色按鈕裡一眼挑得出來。
 function scheduledPrimary(item) {
-  if (item.visitType === 'new' && item.intakeSubmissionId && !item.petId) return { label: '審核初診表', run: () => openIntakeReview(item) }
+  if (item.visitType === 'new' && item.intakeSubmissionId && !item.petId) return { label: '審核', run: () => openIntakeReview(item) }
   if (isInitialDataPending(item)) return null
   const late = itemIsOverdue(item)
   if (!item.petId) return { label: '報到…', late, run: () => openDrawer('check-in', item) }
@@ -1005,7 +1005,7 @@ onBeforeUnmount(() => {
           </div>
         </section>
       </div>
-      <DialogFooter><Button type="button" variant="secondary" :disabled="busy" @click="intakeReviewTarget = null">取消</Button><Button type="button" variant="destructive" :disabled="busy" @click="rejectIntake(intakeReviewTarget)">退回</Button><Button type="button" :disabled="busy" @click="approveIntake(intakeReviewTarget)">核准並掛號</Button></DialogFooter>
+      <DialogFooter><Button type="button" variant="secondary" :disabled="busy" @click="intakeReviewTarget = null">取消</Button><Button type="button" variant="destructive" :disabled="busy" @click="rejectIntake(intakeReviewTarget)">退回</Button><Button type="button" :disabled="busy" @click="approveIntake(intakeReviewTarget)">掛號</Button></DialogFooter>
     </ModalDialog>
     <HandoffSheet v-if="activePatient" :key="activePatient._id" :appointment="activePatient" :patient-notes="notesFor(activePatient)" @updated="onSheetUpdate" @close="selected = ''" />
     <CheckInDialog v-if="dialog === 'check-in-detail' && target" :appointment="target" :late="itemIsOverdue(target)" :suggested-checkin-number="suggestedCheckinNumber()" :submitting="busy" :error-message="dialogError" @submit="(values) => submit(values, 'check-in-detail')" @close="dialog = ''" />
