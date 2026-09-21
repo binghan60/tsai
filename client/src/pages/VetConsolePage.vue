@@ -560,7 +560,7 @@ onBeforeUnmount(() => {
         <!-- 藥單面板自己要撐滿高度（裡面有清單與詳情兩個檢視要切換），查閱清單則是內容多高就多高、
            min-h 只是不讓「目前沒有」塌成一條窄橫幅——xl 面板有 1280px 寬，內容 100px 高時比例會像壞掉。 -->
         <div v-if="drawer === 'medications'" class="flex h-[min(72vh,52rem)] min-h-96 flex-col p-5 sm:p-6">
-          <MedicationWorkspace mode="doctor" initial-filter="review" :stages="['review', 'approved', 'ready']" @counts="medicationCounts = $event" />
+          <MedicationWorkspace mode="doctor" initial-filter="review" :stages="['review', 'approved', 'ready', 'collected']" @counts="medicationCounts = $event" />
         </div>
         <div v-else class="max-h-[min(68vh,48rem)] min-h-72 overflow-y-auto p-5 sm:p-6">
           <template v-if="drawer === 'pinned'">

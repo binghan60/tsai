@@ -948,7 +948,7 @@ onBeforeUnmount(() => {
       @close="panel = ''"
     >
       <div class="flex h-[min(72vh,52rem)] min-h-96 flex-col p-5 sm:p-6">
-        <MedicationWorkspace mode="reception" initial-filter="approved" :stages="['review', 'approved', 'ready']" @counts="medicationCounts = $event" />
+        <MedicationWorkspace mode="reception" initial-filter="approved" :stages="['review', 'approved', 'ready', 'collected']" @counts="medicationCounts = $event" />
       </div>
     </ModalDialog>
 
