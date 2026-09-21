@@ -216,6 +216,7 @@
 
   /* Data-visualization colors are centralized here because canvas/SVG cannot use
      Tailwind utility classes. These tokens describe domain categories, not actions. */
+  /* 正常牙齒固定為白色，避免主題切換改變牙齒狀態的辨識色。 */
   --dental-normal: #ffffff;
   --dental-missing: #8b5e3c;
   --dental-calculus: #d49a18;
@@ -337,7 +338,6 @@
   --chart-3: #7dd5d8;
   --chart-area: rgb(22 162 193 / 0.22);
 
-  --dental-normal: #1c2831;
   --dental-outline: #c4c4cc;
   --dental-guide: #59656e;
   --dental-field-border: #59656e;
