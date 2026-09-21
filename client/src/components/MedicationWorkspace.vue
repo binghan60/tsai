@@ -22,11 +22,13 @@ import { ArrowLeft, ClipboardPlus, Plus, Search } from '@lucide/vue';
 // 包藥本來就是「處理一筆、回清單、接下一筆」的批次工作，同容器切換正好是這個節奏。
 const props = defineProps({
   mode: { type: String, required: true },
-  appointments: { type: Array, default: () => [] },
   initialFilter: { type: String, default: '' },
   stages: { type: Array, default: null },
+  // 只開「領藥」建立表單、不顯示清單：櫃台頁首的「領藥」鈕用它把同一份表單放進獨立的 Modal。
+  // 標題與關閉交給外層 Modal，建立成功或使用者離開時 emit('close') 讓外層關掉。
+  createOnly: { type: Boolean, default: false },
 });
-const emit = defineEmits(['counts']);
+const emit = defineEmits(['counts', 'close']);
 const doctor = computed(() => props.mode === 'doctor');
 const filter = ref(props.initialFilter || (doctor.value ? 'review' : 'active'));
 const queryInput = ref('');
@@ -39,10 +41,10 @@ const counts = ref({});
 const loading = ref(true);
 const error = ref('');
 const busy = ref(false);
-const opened = ref(false);
+const opened = ref(props.createOnly);
 const selected = ref(null);
 const pet = ref(null);
-const form = reactive({ condition: '', prescription: '', note: '', appointmentId: '' });
+const form = reactive({ condition: '', prescription: '', note: '' });
 const initial = ref('');
 const modalError = ref('');
 const stale = ref(false);
@@ -66,7 +68,6 @@ const displayedStages = computed(() => props.stages?.length ? MEDICATION_STAGES.
 const terminal = computed(() => ['collected', 'cancelled'].includes(selected.value?.status));
 const dirty = computed(() => opened.value && JSON.stringify(form) !== initial.value);
 const clinicalEditable = computed(() => !terminal.value && (!selected.value || doctor.value || selected.value.status === 'review'));
-const matchingAppointments = computed(() => props.appointments.filter(item => String(item.petId) === String(pet.value?._id)));
 const changedClinical = computed(() => selected.value && ['condition', 'prescription', 'note'].some(key => form[key].trim() !== selected.value[key]));
 function tone(status) {
   return { review: 'bg-warning-surface text-warning', approved: 'bg-success-surface text-success', ready: 'bg-accent text-accent-foreground' }[status] || 'bg-muted text-muted-foreground';
@@ -176,7 +177,6 @@ function openCancel(item) {
 }
 function pickPet(value) {
   pet.value = value;
-  form.appointmentId = '';
   petQuery.value = '';
   loadNotes(value._id, ++detailSequence);
 }
@@ -200,11 +200,16 @@ async function usePrevious() {
   } catch { modalError.value = '無法讀取上一筆藥單'; }
   finally { previousLoading.value = false; }
 }
+function leave() {
+  opened.value = false;
+  if (props.createOnly) emit('close');
+}
 function close() {
   if (busy.value || previousLoading.value) return;
-  if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', description: '返回清單後，本次尚未儲存的輸入會清除。', run: () => { opened.value = false; } };
-  else opened.value = false;
+  if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', description: props.createOnly ? '關閉後，本次尚未儲存的輸入會清除。' : '返回清單後，本次尚未儲存的輸入會清除。', run: leave };
+  else leave();
 }
+defineExpose({ close });
 function reload() {
   confirmation.value = { title: '載入最新藥單？', description: '會以最新藥單取代目前輸入，請先保留需要的文字。', run: () => openOrder(selected.value) };
 }
@@ -216,7 +221,7 @@ async function execute(action, extra = {}) {
   try {
     if (!selected.value) await http.post('/medications', { ...form, petId: pet.value._id });
     else await http.post(`/medications/${selected.value._id}/actions/${action}`, { ...form, version: selected.value.__v, ...extra });
-    opened.value = false;
+    leave();
     selected.value = null;
     await refresh();
   } catch (err) {
@@ -237,6 +242,7 @@ function requestAction(action) {
 }
 function runConfirmation() { const run = confirmation.value?.run; confirmation.value = null; run?.(); }
 function cancelConfirmation() { confirmation.value?.cancel?.(); confirmation.value = null; }
+if (props.createOnly) create();
 onBeforeRouteLeave(() => {
   if (busy.value) return false;
   if (!dirty.value) return true;
@@ -298,7 +304,7 @@ onBeforeUnmount(() => {
     </template>
 
     <template v-else>
-      <div class="flex shrink-0 flex-wrap items-center gap-3 border-b border-border pb-3">
+      <div v-if="!createOnly" class="flex shrink-0 flex-wrap items-center gap-3 border-b border-border pb-3">
         <Button variant="secondary" :disabled="busy || previousLoading" @click="close"><ArrowLeft class="h-4 w-4" stroke-width="1.75" />返回清單</Button>
         <div class="min-w-0">
           <p class="flex items-center gap-2 text-base font-semibold">
@@ -355,27 +361,21 @@ onBeforeUnmount(() => {
               <Label for="med-condition" class="text-xs font-medium">本次續藥需求／飼主回報</Label>
               <Textarea id="med-condition" v-model="form.condition" rows="5" maxlength="5000" :disabled="busy" placeholder="例如：原藥即將用完，近期食慾正常；希望續開一個月份量。" />
             </div>
-            <div class="grid gap-4 sm:grid-cols-2">
-              <div class="space-y-1.5">
-                <Label for="med-appointment" class="text-xs font-medium">關聯就診（選填）</Label>
-                <select id="med-appointment" v-model="form.appointmentId" class="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
-                  <option value="">未關聯就診／電話續藥</option>
-                  <option v-for="appointment in matchingAppointments" :key="appointment._id" :value="appointment._id">{{ appointment.date }} {{ appointment.time }} · {{ appointment.reason || '本次就診' }}</option>
-                </select>
-              </div>
-              <div class="space-y-1.5">
-                <Label for="med-note" class="text-xs font-medium">預計領藥／櫃檯備註（選填）</Label>
-                <Input id="med-note" v-model="form.note" maxlength="3000" :disabled="busy" placeholder="例如：今天 17:00 後領取" />
-              </div>
+            <div class="space-y-1.5">
+              <Label for="med-note" class="text-xs font-medium">預計領藥／櫃檯備註（選填）</Label>
+              <Input id="med-note" v-model="form.note" maxlength="3000" :disabled="busy" placeholder="例如：今天 17:00 後領取" />
             </div>
-            <details class="group rounded-xl border border-border bg-muted/20">
-              <summary class="cursor-pointer list-none px-4 py-3 text-sm font-medium marker:hidden">最近一次病歷<span class="ml-2 text-xs font-normal text-muted-foreground">點擊查看參考內容</span></summary>
-              <div class="border-t border-border px-4 py-3 text-sm">
+            <!-- 選好寵物就直接列出，不做收合：櫃台登記續藥時要對照最近一次病歷，多一層點開就等於沒帶出來
+                 （早期用 <details> 收著，使用者回報還是得手動展開）。內容可能很長（舊系統匯入的是整段病歷），
+                 限高後在框內捲動，不把下面的欄位推出畫面。 -->
+            <section class="rounded-xl border border-border bg-muted/20" aria-labelledby="med-recent-note-title">
+              <h3 id="med-recent-note-title" class="px-4 py-3 text-sm font-medium">最近一次病歷</h3>
+              <div class="max-h-64 overflow-y-auto border-t border-border px-4 py-3 text-sm">
                 <p v-if="notesError" class="text-danger">{{ notesError }}</p>
                 <p v-else-if="!clinicalNotes.length" class="text-muted-foreground">目前沒有可顯示的紀錄</p>
                 <article v-else><p class="text-xs text-muted-foreground">{{ formatDateTime(clinicalNotes[0].entryDate) }}</p><p class="mt-1 whitespace-pre-wrap">{{ clinicalNotes[0].content }}</p></article>
               </div>
-            </details>
+            </section>
           </section>
         </template>
 

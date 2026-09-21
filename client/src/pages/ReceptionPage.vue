@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Clock, Copy, Pill, Pin, Plus, RefreshCw, User, X } from '@lucide/vue'
+import { AlertTriangle, CalendarPlus, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, ClipboardPlus, Clock, Copy, Pill, Pin, Plus, RefreshCw, User, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { getSocket } from '../api/socket'
 import { medicationTodoCount } from '../../../shared/medicationWorkflow.js'
@@ -90,6 +90,7 @@ let request = 0
 const drawer = ref('')
 // 頁首 chip 開的查閱／工作面板（暫存區、藥單），跟上面的 drawer 各管各的，一次只開一個。
 const panel = ref('')
+const pickupWorkspace = ref(null)
 
 const keyword = computed(() => search.value.trim().toLowerCase())
 function matches(appointment) {
@@ -624,7 +625,7 @@ onBeforeUnmount(() => {
         <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
         <!-- 只在不是今天時出現：當天它一直是 disabled，留著等於白佔 80px，而這一行沒有 80px 可以浪費。 -->
         <Button v-if="!isToday" variant="secondary" size="sm" @click="date = today">今天</Button>
-        <Button size="sm" class="ml-1" @click="router.push('/medications')">
+        <Button size="sm" class="ml-1" @click="panel = 'pickup'">
           <Pill class="h-4 w-4" />
           領藥
         </Button>
@@ -947,7 +948,22 @@ onBeforeUnmount(() => {
       @close="panel = ''"
     >
       <div class="flex h-[min(72vh,52rem)] min-h-96 flex-col p-5 sm:p-6">
-        <MedicationWorkspace mode="reception" initial-filter="approved" :stages="['review', 'approved', 'ready']" :appointments="items" @counts="medicationCounts = $event" />
+        <MedicationWorkspace mode="reception" initial-filter="approved" :stages="['review', 'approved', 'ready']" @counts="medicationCounts = $event" />
+      </div>
+    </ModalDialog>
+
+    <!-- 領藥：跟藥單面板清單工具列上的「領藥」是同一份建立表單，這裡直接開在獨立 Modal 裡，
+         不用先開藥單面板、也不跳頁。關閉走工作區自己的 close()，有未儲存內容時會先問要不要捨棄。 -->
+    <ModalDialog
+      v-if="panel === 'pickup'"
+      size="xl"
+      title="領藥"
+      description="記錄飼主需求並建立藥單，送交醫師確認後再進行包藥。"
+      :icon="ClipboardPlus"
+      @close="pickupWorkspace ? pickupWorkspace.close() : (panel = '')"
+    >
+      <div class="flex h-[min(72vh,52rem)] min-h-96 flex-col p-5 sm:p-6">
+        <MedicationWorkspace ref="pickupWorkspace" mode="reception" create-only @close="panel = ''" />
       </div>
     </ModalDialog>
 

@@ -115,14 +115,23 @@ try {
   async function stage(page, label) { await clickPrefix(page, label); }
   await doctor.goto(`${origin}/appointments?tab=medications`);
   await desk.goto(`${origin}/reception?tab=medications`);
-  await openMedicationPanel(desk);
+  // 頁首的「領藥」直接開建立表單的獨立 Modal（createOnly），不必先開藥單面板。
   await click(desk, '領藥');
   await desk.type('#med-pet-search', '安安');
   await clickPrefix(desk, '安安');
   assert.equal(await desk.$('#med-prescription'), null, 'desk registration does not show prescription fields');
+  // 選好寵物「最近一次病歷」就要直接可見，不能還得手動展開。
+  await desk.waitForFunction(() => {
+    const title = document.getElementById('med-recent-note-title');
+    const box = title?.parentElement.querySelector('div');
+    return Boolean(box) && box.getBoundingClientRect().height > 0 && box.textContent.includes('上次回診：精神正常');
+  });
+  assert.equal(await desk.evaluate(() => [...document.querySelectorAll('button')].some(el => el.textContent.trim() === '返回清單')), false, 'create-only modal has no list to return to');
   await desk.type('#med-condition', '食慾下降，精神正常');
-  await click(desk, '建立並送醫師確認'); await closed(desk);
-  // 櫃台的面板從登記那一步就開著了，這裡再點一次 chip 只會把它關掉。
+  await click(desk, '建立並送醫師確認');
+  await desk.waitForSelector('#med-condition', { hidden: true });
+  // 建立成功後 Modal 自己關掉；藥單面板另外開，後面要在櫃台端看清單。
+  await openMedicationPanel(desk);
   await openMedicationPanel(doctor);
   await waitRow(doctor, '待醫師確認');
   const created = [...orders.values()].find(item => item.status === 'review');
@@ -168,7 +177,9 @@ try {
   await desk.waitForFunction(() => document.querySelectorAll('tbody tr').length === 2);
   await desk.goto(`${origin}/reception`);
   await openMedicationPanel(desk);
-  await click(desk, '領藥');
+  // 面板裡的「領藥」在工作區的清單工具列上；頁首另有一顆同名的鈕（開獨立 Modal），所以限定範圍。
+  await desk.waitForFunction(() => [...document.querySelectorAll('[aria-label="藥單工作區"] button')].some(el => el.textContent.trim() === '領藥'));
+  await (await desk.evaluateHandle(() => [...document.querySelectorAll('[aria-label="藥單工作區"] button')].find(el => el.textContent.trim() === '領藥'))).asElement().asLocator().click();
   await desk.type('#med-pet-search', '安安');
   await clickPrefix(desk, '安安');
   await desk.type('#med-condition', '飼主來電續藥');
