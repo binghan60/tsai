@@ -1,10 +1,12 @@
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
+import mongoose from 'mongoose';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { app } from '../app.js';
 import MedicationOrder from '../models/MedicationOrder.js';
 import Pet from '../models/Pet.js';
 import Appointment from '../models/Appointment.js';
+import ClinicalNote from '../models/ClinicalNote.js';
 
 const petId = '507f1f77bcf86cd799439011';
 const ownerId = '507f1f77bcf86cd799439012';
@@ -12,13 +14,20 @@ describe('領藥 API', () => {
   let server;
   let origin;
   let saved;
+  let noteUpserts;
+  let noteDeletes;
+  const fakeSession = { withTransaction: async () => {}, endSession: async () => {} };
   before(async () => {
     server = app.listen(0, '127.0.0.1');
     if (!server.listening) await once(server, 'listening');
     origin = `http://127.0.0.1:${server.address().port}/api/medications`;
   });
   beforeEach(() => {
-    mock.restoreAll(); saved = null;
+    mock.restoreAll(); saved = null; noteUpserts = []; noteDeletes = [];
+    // 藥單與日誌同一個 transaction：測試不連真的資料庫，session 換成直接執行 callback 的替身。
+    mock.method(mongoose, 'startSession', async () => ({ ...fakeSession, withTransaction: async callback => callback() }));
+    mock.method(ClinicalNote, 'findOneAndUpdate', async (filter, update, options) => { noteUpserts.push({ filter, update, options }); return {}; });
+    mock.method(ClinicalNote, 'deleteOne', async (filter, options) => { noteDeletes.push({ filter, options }); return { deletedCount: 1 }; });
     mock.method(Pet, 'findById', () => ({ populate: async () => ({ _id: petId, name: '安安', medicalRecordNumber: 'P001', ownerId: { _id: ownerId, name: '陳小姐', phone: '0912345678' } }) }));
     mock.method(MedicationOrder.prototype, 'save', async function () { await this.validate(); saved = this; return this; });
   });
@@ -35,6 +44,36 @@ describe('領藥 API', () => {
     assert.equal(data.history[0].action, 'create');
     assert.equal(data.history[0].actor, 'development');
     assert.equal(saved.prescription, '原藥單');
+  });
+  it('登記藥單時同一個 transaction 建立獨立的病歷日誌，只存關聯不存內文', async () => {
+    const response = await post('', { petId, prescription: '原藥單' });
+    assert.equal(response.status, 201);
+    assert.equal(noteUpserts.length, 1);
+    const [{ filter, update, options }] = noteUpserts;
+    assert.equal(String(filter.medicationOrderId), String(saved._id));
+    assert.equal(update.$set.source, 'medication');
+    assert.equal(String(update.$set.petId), petId);
+    assert.deepEqual(update.$unset, { content: '' });
+    assert.equal(options.upsert, true);
+    // session 一定要帶上，日誌寫入才會跟藥單同一個 transaction。
+    assert.ok(options.session, '日誌寫入沒帶 session');
+  });
+  it('藥單往後每個動作都重新同步日誌，取消則把日誌刪掉', async () => {
+    const order = new MedicationOrder({ petId, ownerId, petName: '安安', __v: 2, prescription: '原藥單' });
+    mock.method(MedicationOrder, 'findById', async () => order);
+    assert.equal((await post(`/${petId}/actions/approve`, { version: 2 })).status, 200);
+    assert.equal(noteUpserts.length, 1);
+    assert.equal(noteDeletes.length, 0);
+
+    assert.equal((await post(`/${petId}/actions/cancel`, { version: 2, reason: '取消' })).status, 200);
+    assert.equal(noteDeletes.length, 1);
+    assert.equal(String(noteDeletes[0].filter.medicationOrderId), String(order._id));
+    assert.ok(noteDeletes[0].options.session, '日誌刪除沒帶 session');
+    assert.equal(noteUpserts.length, 1);
+  });
+  it('日誌同步失敗時整個請求失敗（交給 transaction 回滾）', async () => {
+    mock.method(ClinicalNote, 'findOneAndUpdate', async () => { throw new Error('note write failed'); });
+    assert.equal((await post('', { petId, prescription: '原藥單' })).status, 500);
   });
   it('拒絕不存在的病患及不符的就診關聯', async () => {
     mock.method(Appointment, 'findById', async () => ({ petId: ownerId }));

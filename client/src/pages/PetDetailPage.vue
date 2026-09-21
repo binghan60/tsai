@@ -935,8 +935,10 @@ watch(pet, async (value) => {
                 <time class="text-xs font-semibold whitespace-nowrap text-foreground">{{ formatDate(note.entryDate) }}</time>
                 <span v-if="note.source === 'legacy_import'" class="text-xs text-muted-foreground">舊系統匯入</span>
                 <span v-else-if="note.appointmentId" class="text-xs text-muted-foreground">引用就診資料</span>
+                <span v-else-if="note.medicationOrderId" class="text-xs text-muted-foreground">領藥紀錄</span>
 
-                <span class="ml-auto flex shrink-0 gap-1">
+                <!-- 藥單日誌內容由藥單組成，要改請回藥單；刪除也一樣，藥單取消時才會一併移除。 -->
+                <span v-if="!note.medicationOrderId" class="ml-auto flex shrink-0 gap-1">
                   <Button variant="secondary" size="icon-sm" aria-label="編輯日誌" @click="startEditNote(note)"><Pencil class="h-3.5 w-3.5" /></Button>
                   <Button v-if="!note.appointmentId" variant="destructive" size="icon-sm" aria-label="刪除日誌" @click="openRemoveNote(note)"><Trash2 class="h-3.5 w-3.5" /></Button>
                 </span>

@@ -1,4 +1,27 @@
+import { medicationLabel } from '../../../shared/medicationWorkflow.js';
+
 const fail = (message, status = 422) => { throw Object.assign(new Error(message), { status }); };
+
+const collectedAtParts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+
+// 不直接用 format()：ICU 版本不同時日期與時間之間會夾特殊空白字元，看不出來但會跑進病歷內文，
+// 所以取各個欄位自己組成「9/22 14:30」。
+function collectedAtLabel(value) {
+  const part = (type) => collectedAtParts.formatToParts(new Date(value)).find((item) => item.type === type)?.value;
+  return `${part('month')}/${part('day')} ${part('hour')}:${part('minute')}`;
+}
+
+// 領藥紀錄在病歷日誌裡的內文，每次讀取都由藥單即時組成（日誌本身只存 medicationOrderId）。
+// 第一行標題帶目前階段，讀日誌的人一眼看得出這張藥單走到哪、是不是已經領走。
+export function medicationJournalContent(order) {
+  const stage = medicationLabel(order.status);
+  const collected = order.status === 'collected' && order.collectedAt ? ` ${collectedAtLabel(order.collectedAt)}` : '';
+  const field = (label, value) => {
+    const text = String(value || '').trim();
+    return text ? `${label}：${text}` : '';
+  };
+  return [`領藥（${stage}${collected}）`, field('病況', order.condition), field('藥單', order.prescription), field('備註', order.note)].filter(Boolean).join('\n\n');
+}
 const limits = { condition: 5000, prescription: 10000, note: 3000 };
 
 export function medicationFields(body) {

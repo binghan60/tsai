@@ -131,8 +131,9 @@ async function saveEdit(note) {
         </template>
         <template v-else>
           <div class="flex items-start justify-between gap-3">
-            <p class="text-xs text-muted-foreground">{{ formatDateTime(note.entryDate) }}</p>
-            <Button variant="secondary" size="xs" @click="startEdit(note)"><Pencil class="h-3.5 w-3.5" />修改</Button>
+            <p class="text-xs text-muted-foreground">{{ formatDateTime(note.entryDate) }}<span v-if="note.medicationOrderId"> · 領藥紀錄</span></p>
+            <!-- 藥單日誌內容由藥單組成，要改請回藥單，這裡不給修改鈕。 -->
+            <Button v-if="!note.medicationOrderId" variant="secondary" size="xs" @click="startEdit(note)"><Pencil class="h-3.5 w-3.5" />修改</Button>
           </div>
           <p class="mt-1 whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed">{{ note.content }}</p>
         </template>

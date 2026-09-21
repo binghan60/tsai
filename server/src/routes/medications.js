@@ -6,10 +6,18 @@ import Appointment from '../models/Appointment.js';
 import { MEDICATION_ACTIVE, MEDICATION_STAGES } from '../../../shared/medicationWorkflow.js';
 import { applyMedicationAction, medicationFields, recordMedicationEvent } from '../lib/medicationWorkflow.js';
 import { emitMedicationUpdate } from '../lib/realtime.js';
+import { announceMedicationJournal, syncMedicationJournal } from '../lib/medicationJournal.js';
+import { withTransaction } from '../lib/transaction.js';
 import { escapeRegExp } from '../lib/regex.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 
 const router = Router();
+
+// 藥單與它的病歷日誌要嘛一起成功、要嘛一起回滾：藥單存了、日誌卻沒建起來，病歷上就查不到這次領藥。
+const saveWithJournal = (order) => withTransaction(async (session) => {
+  await order.save({ session });
+  await syncMedicationJournal(order, { session });
+});
 router.get('/', async (req, res, next) => {
   try {
     const status = req.query.status || 'active';
@@ -58,8 +66,9 @@ router.post('/', async (req, res, next) => {
     const order = new MedicationOrder({ ...fields, petId: pet._id, ownerId: pet.ownerId._id, appointmentId,
       petName: pet.name, ownerName: pet.ownerId.name, ownerPhone: pet.ownerId.phone, medicalRecordNumber: pet.medicalRecordNumber || '' });
     recordMedicationEvent(order, 'create', req.user.username, '');
-    await order.save();
+    await saveWithJournal(order);
     emitMedicationUpdate(order);
+    announceMedicationJournal(order);
     res.status(201).json(order);
   } catch (err) { next(err); }
 });
@@ -69,8 +78,9 @@ router.post('/:id/actions/:action', async (req, res, next) => {
     const order = await MedicationOrder.findById(req.params.id);
     if (!order) return res.status(404).json({ message: '找不到藥單' });
     applyMedicationAction(order, req.params.action, req.body, req.user.username);
-    await order.save();
+    await saveWithJournal(order);
     emitMedicationUpdate(order);
+    announceMedicationJournal(order);
     res.json(order);
   } catch (err) { next(err); }
 });

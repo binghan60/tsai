@@ -53,6 +53,7 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
     let appointment;
     await withTransaction(async session => {
       const existing = await ClinicalNote.findById(req.params.id).session(session);
+      if (existing?.medicationOrderId) throw Object.assign(new Error('此日誌引用藥單資料，請從藥單修改'), { status: 409 });
       if (existing?.appointmentId) {
         appointment = await Appointment.findById(existing.appointmentId).session(session);
         if (!appointment) throw Object.assign(new Error('找不到對應的就診資料'), { status: 404 });
@@ -84,6 +85,7 @@ clinicalNotesRouter.delete('/:id', async (req, res, next) => {
     await withTransaction(async session => {
       const existing = await ClinicalNote.findById(req.params.id).session(session);
       if (existing?.appointmentId) throw Object.assign(new Error('此日誌引用就診資料，不能單獨刪除'), { status: 409 });
+      if (existing?.medicationOrderId) throw Object.assign(new Error('此日誌引用藥單資料，不能單獨刪除；藥單取消時會一併移除'), { status: 409 });
       deleted = await ClinicalNote.findByIdAndDelete(req.params.id, { session });
     });
     if (!deleted) return res.status(404).json({ message: '找不到病歷日誌' });

@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { app } from '../app.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import Appointment from '../models/Appointment.js';
+import MedicationOrder from '../models/MedicationOrder.js';
 import mongoose from 'mongoose';
 
 // 關聯日誌編輯會回寫掛號；手動日誌保留原有操作。
@@ -22,7 +23,7 @@ describe('clinical notes routes', () => {
 
   beforeEach(() => {
     mock.restoreAll();
-    mock.method(ClinicalNote, 'findById', id => ({ session: async () => id.includes('linked') ? { appointmentId: 'apt-linked' } : { appointmentId: null } }));
+    mock.method(ClinicalNote, 'findById', id => ({ session: async () => id.includes('med') ? { appointmentId: null, medicationOrderId: 'order-1' } : id.includes('linked') ? { appointmentId: 'apt-linked' } : { appointmentId: null } }));
     mock.method(Appointment, 'find', () => ({ lean: async () => [] }));
   });
 
@@ -152,5 +153,43 @@ describe('clinical notes routes', () => {
       ClinicalNote.findByIdAndDelete = originalFindByIdAndDelete;
       Appointment.findByIdAndUpdate = originalAppointmentUpdate;
     }
+  });
+
+  it('藥單日誌是唯讀的：不能改內容、也不能單獨刪除', async () => {
+    const put = await fetch(`${origin}/api/clinical-notes/note-med`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: '想改內文' }),
+    });
+    assert.equal(put.status, 409);
+    assert.match((await put.json()).message, /藥單/);
+    const del = await fetch(`${origin}/api/clinical-notes/note-med`, { method: 'DELETE' });
+    assert.equal(del.status, 409);
+  });
+
+  it('列出寵物日誌時，藥單日誌的內文由藥單即時組成並標成唯讀，掛號日誌與手動日誌不受影響', async () => {
+    const petId = '507f1f77bcf86cd799439012';
+    const notes = [
+      { _id: 'n1', petId, entryDate: '2026-09-22T02:00:00Z', source: 'medication', medicationOrderId: '507f1f77bcf86cd7994390aa' },
+      { _id: 'n2', petId, entryDate: '2026-09-21T02:00:00Z', source: 'manual', content: '手動記事' },
+      { _id: 'n3', petId, entryDate: '2026-09-20T02:00:00Z', source: 'medication', medicationOrderId: '507f1f77bcf86cd7994390bb' },
+    ];
+    let orderQuery;
+    mock.method(ClinicalNote, 'find', () => ({ sort: () => ({ skip: () => ({ limit: async () => notes }) }) }));
+    mock.method(ClinicalNote, 'countDocuments', async () => notes.length);
+    mock.method(MedicationOrder, 'find', (filter) => {
+      orderQuery = filter;
+      return { select: (projection) => ({ lean: async () => { orderQuery.projection = projection; return [{ _id: '507f1f77bcf86cd7994390aa', status: 'approved', condition: '咳嗽', prescription: '止咳藥', note: '' }]; } }) };
+    });
+    const response = await fetch(`${origin}/api/pets/${petId}/clinical-notes`);
+    assert.equal(response.status, 200);
+    const { items } = await response.json();
+    assert.equal(items[0].content, '領藥（待包藥）\n\n病況：咳嗽\n\n藥單：止咳藥');
+    assert.equal(items[0].readOnly, true);
+    assert.equal(items[1].content, '手動記事');
+    assert.equal(items[1].readOnly, undefined);
+    // 藥單被刪掉（或撈不到）時不讓整頁壞掉。
+    assert.equal(items[2].content, '找不到對應的藥單資料');
+    // 只撈需要的藥單，且不帶異動軌跡。
+    assert.equal(orderQuery.projection, '-history');
+    assert.equal(orderQuery._id.$in.length, 2);
   });
 });

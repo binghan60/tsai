@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import MedicationOrder from '../models/MedicationOrder.js';
-import { applyMedicationAction, medicationFields } from './medicationWorkflow.js';
+import { applyMedicationAction, medicationFields, medicationJournalContent } from './medicationWorkflow.js';
 
 function order() {
   return { status: 'review', condition: '食慾正常', prescription: '原藥單', note: '', __v: 0, history: [] };
@@ -75,5 +75,22 @@ describe('領藥狀態與藥單版本', () => {
     assert.throws(() => medicationFields({ condition: 'x'.repeat(5001) }), { status: 422 });
     assert.deepEqual(medicationFields({ note: ' 備註 ', status: 'approved', approvedBy: '偽造' }), { note: '備註' });
     assert.equal(MedicationOrder.schema.options.optimisticConcurrency, true);
+  });
+});
+
+describe('領藥紀錄的病歷日誌內文', () => {
+  it('標題帶目前階段，依序列出病況、藥單、備註，空欄位不出現', () => {
+    assert.equal(
+      medicationJournalContent({ status: 'review', condition: '食慾差', prescription: '抗生素 每日兩次', note: '' }),
+      '領藥（待醫師確認）\n\n病況：食慾差\n\n藥單：抗生素 每日兩次'
+    );
+    assert.equal(medicationJournalContent({ status: 'approved', condition: '  ', prescription: '', note: '飼主要求磨粉' }), '領藥（待包藥）\n\n備註：飼主要求磨粉');
+  });
+
+  it('已領藥會在標題帶診所時區的領藥時間，其他階段不帶', () => {
+    // 2026-09-22T06:30Z ＝ 台北 14:30
+    const collected = medicationJournalContent({ status: 'collected', prescription: '藥', collectedAt: '2026-09-22T06:30:00Z' });
+    assert.match(collected.split('\n')[0], /^領藥（已領藥 9\/22 14:30）$/);
+    assert.equal(medicationJournalContent({ status: 'ready', prescription: '藥', collectedAt: '2026-09-22T06:30:00Z' }).split('\n')[0], '領藥（待領藥）');
   });
 });

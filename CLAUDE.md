@@ -55,9 +55,11 @@
 `name`、`content`、`availableForAllFields`、`applicableItemKeys`、`enabled`、`usageCount`。填表時可插入文字欄位的長篇內容，取代了早期的 quickPhrases 常用語（該 collection 與其路由已移除）。
 
 ### clinicalNotes 病歷日誌
-`petId`、`entryDate`、`content`、`source`（`manual` / `legacy_import` / `appointment`）。醫師看診或拿藥時隨手記的自由文字記事，不用填表、不用結案，跟 `medicalRecords`（結案才鎖定的正式健檢報告）是兩條平行的軌道——日誌給日常記事用，健檢報告給需要 PDF／分享的正式場合用。`source: 'legacy_import'` 的記事來自舊系統資料遷移（見 `server/scripts/legacy-migration/`），內容是舊系統逐年累加的病歷全文，整段當一筆記事匯入，不逐筆拆分（舊資料格式不一致，拆分風險高於價值）。
+`petId`、`entryDate`、`content`、`source`（`manual` / `legacy_import` / `appointment` / `medication`）。醫師看診或拿藥時隨手記的自由文字記事，不用填表、不用結案，跟 `medicalRecords`（結案才鎖定的正式健檢報告）是兩條平行的軌道——日誌給日常記事用，健檢報告給需要 PDF／分享的正式場合用。`source: 'legacy_import'` 的記事來自舊系統資料遷移（見 `server/scripts/legacy-migration/`），內容是舊系統逐年累加的病歷全文，整段當一筆記事匯入，不逐筆拆分（舊資料格式不一致，拆分風險高於價值）。
 
 `source: 'appointment'` 的記事跟掛號的 `visitNote`（見第二節 appointments）是**同一份資料、雙向同步**：`POST /api/appointments/:id/workflow/clinical` 帶了 `visitNote`／`weightKg`／`temperatureC` 任一個而內容非空時，會建立（或更新）一筆用 `appointmentId` 連結的日誌（見 `routes/appointmentWorkflow.js`，內容由 `lib/appointmentWorkflow.js` 的 `appointmentJournalContent` 把量測值與紀錄併起來）；反過來，`PUT /api/clinical-notes/:id` 若這筆日誌的 `appointmentId` 有值且 body 帶了 `content`，會回頭把新內容寫回該筆掛號的 `visitNote`（見 `routes/clinicalNotes.js`）；`DELETE` 也會把對應掛號的 `visitNote` 清空，避免兩邊資料分岔。一筆掛號最多對應一筆日誌（`appointmentId` 唯一索引），`manual`／`legacy_import` 兩種來源沒有這個欄位、不受影響，一樣可自由編輯/刪除、沒有唯讀鎖定。索引 `{petId, entryDate, _id}`、`{appointmentId}`（partial unique）。刪除寵物前會檢查 `ClinicalNote.exists({petId})`，跟 `medicalRecords` 一樣擋刪除。
+
+`source: 'medication'` 的日誌是**藥單（領藥紀錄，`medicationOrders`）自動生成的獨立日誌**：跟看診（掛號）那筆各自獨立、不併進去，一張藥單一筆（`medicationOrderId`，partial unique 索引）。做法跟掛號日誌一樣：日誌**只存關聯、不存內文**（`content` 不必填），每次讀取時由 `lib/clinicalNoteView.js` 依藥單的最新欄位即時組成（`lib/medicationWorkflow.js` 的 `medicationJournalContent`：第一行 `領藥（階段）`，已領藥另帶診所時區的領藥時間，接著是病況／藥單／備註，空欄位不出現）。**建立藥單時就開始有這筆日誌**（跟掛號日誌在看診中就出現一致，標題標明「待醫師確認」等階段），之後藥單任何動作都由 `lib/medicationJournal.js` 的 `syncMedicationJournal` 重新同步（`entryDate` 是藥單建立時間），**藥單取消就刪掉**——取消的藥單沒有真的開出去，不該留在病歷裡。日誌與藥單的儲存在同一個 transaction（`routes/medications.js` 的 `saveWithJournal`），任一邊失敗整筆回滾。**藥單日誌唯讀**：`PUT`／`DELETE` 一律回 409，內容要回藥單改，前端不給修改與刪除鈕、標成「領藥紀錄」。舊藥單不做回填，下一次有動作時才會補出日誌。
 
 ### chatMessages 全站內部聊天
 `sender`（`vet` / `front_desk`）、`content`、`auto`（布林，預設 `false`）。醫生↔櫃台的全站即時聊天紀錄，跟任何掛號／病患都無關（例如「今天下午提早關診」），所以不像 `visitNote`／`clinicalNotes` 那樣掛在 `petId`／`appointmentId` 底下，也沒有雙向同步這回事——單純是一份不斷增長的訊息紀錄。前端用浮動視窗呈現（`GlobalChatWidget`，見第六節），身分是裝置固定的（`useStaffIdentity`，存在 `localStorage`），不是頁面固定或使用者帳號決定的。索引 `{createdAt: 1}`。**不是每一筆都是使用者手動打字送出的**：診療台與櫃台工作台（見第六節）每完成一個會改變掛號狀態或內容的動作，會自動用同一支 `POST /chat/messages` API 補一則描述動作內容的系統訊息（例如「「豆豆」已完成看診，交給櫃台處理」）。文案集中在 `lib/appointmentNotifications.js`，送出的共用進入點是 `composables/useAppointmentNotifier.js`，`sender` 一樣是操作當下那台裝置的固定身分，`auto` 標成 `true`。`auto` 純粹是顯示用的標記——聊天視窗靠它在訊息旁加一個「自動通知」小標籤，跟手動打字的訊息區分開來；也讓發出動作的那台裝置自己判斷要不要跳未讀紅點（見下）。
@@ -181,8 +183,8 @@ DELETE /api/pets/:id                    刪除（寵物仍有報告或病歷日�
 病歷日誌
 GET    /api/pets/:petId/clinical-notes  該寵物的日誌列表（分頁）
 POST   /api/pets/:petId/clinical-notes  新增一則日誌
-PUT    /api/clinical-notes/:id          編輯日誌內容／日期；來自掛號同步的日誌（appointmentId 有值）改 content 會回寫掛號的 visitNote
-DELETE /api/clinical-notes/:id          刪除日誌；來自掛號同步的日誌會一併清空掛號的 visitNote
+PUT    /api/clinical-notes/:id          編輯日誌內容／日期（藥單日誌唯讀，回 409）；來自掛號同步的日誌（appointmentId 有值）改 content 會回寫掛號的 visitNote
+DELETE /api/clinical-notes/:id          刪除手動／舊系統匯入的日誌；掛號日誌與藥單日誌一律回 409（掛號日誌隨掛號存在、藥單日誌隨藥單取消移除）
 
 報告
 GET    /api/pets/:petId/records         該寵物的報告
