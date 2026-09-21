@@ -48,7 +48,7 @@ import { APPOINTMENT_TIME_MINUTE_STEP, APPOINTMENT_TIME_RANGES } from '../lib/ap
 // 所以改回時間軸當主體，階段只留一條數字列。
 //
 // 真正要人注意的例外（醫師申請修改、遲到還沒報到、待審初診）浮到流程列下方的警示列。
-// 新增／修改掛號改成置中的雙欄 Modal（AppointmentDialog），填到一半可「收起」讓出看板；
+// 新增／修改掛號使用置中的雙欄 Modal（AppointmentDialog）；
 // 初診報到仍開在時間軸右側的 SideDrawer（要一邊填一邊看看板）；暫存區是「看一批、看完就關」的查閱，走大 Modal。
 const router = useRouter()
 const toast = useToast()
@@ -86,13 +86,10 @@ const now = ref(Date.now())
 let clock
 let request = 0
 
-// 右側抽屜（初診報到、暫存區）一次只顯示一個；掛號 Modal 也借這個狀態管開關。
-// 新增掛號收起來時元件仍保持掛載（v-if 看 newDraftOpen、open 看 drawer），填到一半的內容不會消失。
+// 右側抽屜（初診報到）一次只顯示一個；掛號 Modal 也借這個狀態管開關。
 const drawer = ref('')
 // 頁首 chip 開的查閱／工作面板（暫存區、藥單），跟上面的 drawer 各管各的，一次只開一個。
 const panel = ref('')
-const newDraftOpen = ref(false)
-const newDraft = ref(null)
 
 const keyword = computed(() => search.value.trim().toLowerCase())
 function matches(appointment) {
@@ -356,16 +353,13 @@ function onSheetUpdate(appointment, action, options = {}) {
 function openDrawer(kind, appointment = null) {
   dialogError.value = ''
   target.value = appointment
-  if (kind === 'new') newDraftOpen.value = true
   drawer.value = kind
 }
 function closeDrawer() {
-  if (drawer.value === 'new') newDraftOpen.value = false
   drawer.value = ''
   dialogError.value = ''
 }
-// 面板（暫存區／藥單）跟掛號流程是兩回事，所以是兩個 ref：closeDrawer 要處理「丟掉掛號草稿」，
-// 關掉暫存區不該經過那段邏輯。之前兩者共用一個 drawer，那支函式就同時管了兩件不相干的事。
+// 面板（暫存區／藥單）跟掛號流程是兩回事，所以是兩個 ref。
 function togglePanel(kind) {
   panel.value = panel.value === kind ? '' : kind
 }
@@ -446,7 +440,6 @@ async function submit(values, kind) {
     // 從已取消／未到回來叫「恢復掛號」，聊天室要講得出差別。
     const action = kind === 'new' ? 'create' : kind === 'restore' ? (previousStatus === 'arrived' ? 'undo_check_in' : 'restore') : NOTIFICATIONS[kind]
     if (action) notifyChat(data, action)
-    if (kind === 'new') newDraftOpen.value = false
     if (['new', 'edit', 'check-in'].includes(kind) && drawer.value === kind) drawer.value = ''
     dialog.value = ''
     confirmation.value = null
@@ -631,10 +624,13 @@ onBeforeUnmount(() => {
         <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
         <!-- 只在不是今天時出現：當天它一直是 disabled，留著等於白佔 80px，而這一行沒有 80px 可以浪費。 -->
         <Button v-if="!isToday" variant="secondary" size="sm" @click="date = today">今天</Button>
-        <Button size="sm" class="ml-1" @click="openDrawer('new')">
+        <Button size="sm" class="ml-1" @click="router.push('/medications')">
+          <Pill class="h-4 w-4" />
+          領藥
+        </Button>
+        <Button size="sm" @click="openDrawer('new')">
           <Plus class="h-4 w-4" />
-          <template v-if="newDraftOpen && drawer !== 'new'">繼續掛號<span v-if="newDraft?.draftName" class="max-w-24 truncate">：{{ newDraft.draftName }}</span></template>
-          <template v-else>掛號</template>
+          掛號
         </Button>
       </div>
     </header>
@@ -897,19 +893,16 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <!-- 掛號 Modal：新增的那份元件在收起時仍掛載（open=false），填到一半的內容不會消失。 -->
+    <!-- 掛號 Modal：關閉即捨棄尚未送出的內容。 -->
     <AppointmentDialog
-      v-if="newDraftOpen"
-      ref="newDraft"
-      :open="drawer === 'new'"
+      v-if="drawer === 'new'"
       :date="date"
       :day-items="items"
       :templates="templates"
       :default-template-id="defaultTemplate"
       :submitting="busy"
-      :error-message="drawer === 'new' ? dialogError : ''"
+      :error-message="dialogError"
       @submit="(values) => submit(values, 'new')"
-      @minimize="drawer = ''"
       @close="closeDrawer"
     />
     <AppointmentDialog

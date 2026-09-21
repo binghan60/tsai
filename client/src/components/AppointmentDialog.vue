@@ -23,9 +23,7 @@ import { clinicDateInput, clinicTimeInput, formatDate, formatDateTime, weekdayLa
 // 右欄「什麼時候」（日期快選＋時段格）。時段格拿到自己的一欄就不用捲動。
 //
 // 抽屜改成 Modal 的原因：櫃台頁改成整寬的時間軸後，再從右邊擠一個 576px 的抽屜進來，
-// 時間軸卡片右側的狀態與按鈕會被壓壞。「講電話掛到一半飼主走到櫃台前」這件事改由
-// 「收起，稍後繼續」承接：整筆收成頁首一顆按鈕（元件仍掛載、內容保留），看板全部露出來。
-// Esc 與點遮罩在新增模式也是收起，不是丟掉。
+// 時間軸卡片右側的狀態與按鈕會被壓壞。關閉 Modal 時直接捨棄尚未送出的內容。
 //
 // 送出的 payload 跟舊抽屜一樣，只多了新增模式也能帶 date——電話裡「我明天帶來」是常態。
 const props = defineProps({
@@ -39,10 +37,9 @@ const props = defineProps({
   defaultTemplateId: { type: String, default: '' },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
-  // false＝收起（Modal 關閉但元件留著，填到一半的內容不會消失）
   open: { type: Boolean, default: true },
 });
-const emit = defineEmits(['submit', 'close', 'minimize']);
+const emit = defineEmits(['submit', 'close']);
 
 const isEdit = computed(() => Boolean(props.appointment));
 const today = clinicDateInput();
@@ -218,14 +215,9 @@ const summary = computed(() => {
   const when = time.value ? `${formatDate(slotDate.value)}（${weekdayLabel(slotDate.value)}）${time.value}` : '';
   return [name, when, `預估 ${estimatedDurationMinutes.value} 分鐘`, reason.value?.trim()].filter(Boolean).join(' · ');
 });
-// 新增掛號收起來之後，頁首按鈕要叫得出「繼續掛號：豆豆」——只放名字，日期時段放不下。
-const draftName = computed(() => (mode.value === 'return' ? selectedPet.value?.name : petName.value?.trim()) || '');
-defineExpose({ draftName });
-
-// 新增模式按 Esc／點遮罩是收起不是丟掉；修改模式關掉就是取消修改。
 function onOpenChange(value) {
   if (value) return;
-  emit(isEdit.value ? 'close' : 'minimize');
+  emit('close');
 }
 
 const onSubmit = handleSubmit((values) => {
@@ -281,7 +273,6 @@ const onSubmit = handleSubmit((values) => {
           <DialogTitle class="text-base font-semibold">{{ title }}</DialogTitle>
           <DialogDescription class="mt-0.5 text-xs">{{ description }}</DialogDescription>
         </div>
-        <Button v-if="!isEdit" type="button" variant="secondary" size="sm" :disabled="submitting" @click="emit('minimize')">收起，稍後繼續</Button>
         <Button type="button" variant="secondary" size="icon-sm" :aria-label="isEdit ? '取消修改' : '捨棄這筆掛號'" :disabled="submitting" @click="emit('close')">
           <X class="h-4 w-4" stroke-width="1.75" />
         </Button>

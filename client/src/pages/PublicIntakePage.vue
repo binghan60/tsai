@@ -1,37 +1,55 @@
 <script setup>
-import { computed, nextTick, reactive, ref, watch } from 'vue'
-import { useForm } from 'vee-validate'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { useField, useForm } from 'vee-validate'
 import { http } from '../api/http'
 import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group'
 import { Button } from '../components/ui/button'
-import ModalDialog from '../components/ModalDialog.vue'
-import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog'
 
 const submitting = ref(false)
 const submitted = ref(false)
 const attemptedSubmit = ref(false)
-const missingRequiredDialog = ref(false)
 const highlightedField = ref('')
 const error = ref('')
 const verificationCode = ref('')
 const verifying = ref(false)
 const verified = ref(false)
-const owner = reactive({ name: '', phone: '', landline: '', email: '', address: '' })
+const required = value => String(value ?? '').trim() ? true : '此欄位必填'
+const integer = (value, min, max) => /^\d+$/.test(String(value)) && Number(value) >= min && Number(value) <= max
+const optionalInteger = (value, min, max) => value === '' || value == null || integer(value, min, max) || `請填寫 ${min}–${max} 的整數`
+const { validate, errors } = useForm({
+  validationSchema: {
+    petName: required,
+    petSex: value => ['male', 'female'].includes(value) || '請選擇性別',
+    ageYears: value => optionalInteger(value, 0, 99),
+    ageMonths: value => optionalInteger(value, 0, 11),
+    petAge: value => value || '請填寫歲數或月數',
+    petBreed: required,
+    householdCatCount: value => optionalInteger(value, 0, 99),
+    mealsPerDay: value => pet.feedingType !== 'scheduled' || integer(value, 1, 20) || '請填寫每日 1–20 餐的整數',
+    petNeutered: value => ['yes', 'no'].includes(value) || '請選擇結紮狀態',
+    ownerName: required,
+    ownerPhone: required,
+    ownerAddress: required,
+    ownerEmail: value => required(value) !== true ? '此欄位必填' : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim()) || 'Email 格式不正確',
+  },
+})
+const field = (name, initialValue = '') => useField(name, undefined, { initialValue }).value
+const owner = reactive({ name: field('ownerName'), phone: field('ownerPhone'), landline: '', email: field('ownerEmail'), address: field('ownerAddress') })
 const pet = reactive({
-  name: '',
-  sex: 'unknown',
-  ageYears: '',
-  ageMonths: '',
-  breed: '',
+  name: field('petName'),
+  sex: field('petSex', 'unknown'),
+  ageYears: field('ageYears'),
+  ageMonths: field('ageMonths'),
+  breed: field('petBreed'),
   color: '',
-  householdCatCount: '',
+  householdCatCount: field('householdCatCount'),
   foods: [],
   foodsOther: '',
   feedingType: 'unknown',
-  mealsPerDay: '',
-  neutered: 'unknown',
+  mealsPerDay: field('mealsPerDay'),
+  neutered: field('petNeutered', 'unknown'),
   vaccineStatus: 'unknown',
   vaccineDate: '',
   medicalHistory: [],
@@ -44,59 +62,24 @@ const pet = reactive({
 const historyOptions = ['心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題']
 const foodOptions = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧', '其他']
 const hasAge = computed(() => pet.ageYears !== '' || pet.ageMonths !== '')
-const missingRequiredLabels = computed(() => [
-  !pet.name.trim() ? '貓咪名字' : '',
-  !['male', 'female'].includes(pet.sex) ? '性別' : '',
-  !hasAge.value ? '年齡' : '',
-  !pet.breed.trim() ? '品種' : '',
-  !['yes', 'no'].includes(pet.neutered) ? '結紮' : '',
-  !owner.name.trim() ? '飼主姓名' : '',
-  !owner.phone.trim() ? '飼主手機' : '',
-  !owner.address.trim() ? '飼主地址' : '',
-  !owner.email.trim() ? 'Email' : '',
-].filter(Boolean))
-const firstMissingRequiredField = computed(() => {
-  if (!pet.name.trim()) return 'intake-pet-name-field'
-  if (!['male', 'female'].includes(pet.sex)) return 'intake-pet-sex-field'
-  if (!hasAge.value) return 'intake-pet-age-field'
-  if (!pet.breed.trim()) return 'intake-pet-breed-field'
-  if (!['yes', 'no'].includes(pet.neutered)) return 'intake-pet-neutered-field'
-  if (!owner.name.trim()) return 'intake-owner-name-field'
-  if (!owner.phone.trim()) return 'intake-owner-phone-field'
-  if (!owner.address.trim()) return 'intake-owner-address-field'
-  if (!owner.email.trim()) return 'intake-owner-email-field'
-  return ''
-})
+const agePresent = field('petAge', false)
+watch(hasAge, value => { agePresent.value = value }, { flush: 'sync' })
+watch(() => pet.feedingType, () => { if (attemptedSubmit.value) validate() })
+const fieldTargets = {
+  petName: 'pet-name', petSex: 'pet-sex', petAge: 'pet-age', ageYears: 'pet-age', ageMonths: 'pet-age',
+  petBreed: 'pet-breed', householdCatCount: 'household-count', mealsPerDay: 'meals',
+  petNeutered: 'pet-neutered', ownerName: 'owner-name', ownerPhone: 'owner-phone',
+  ownerAddress: 'owner-address', ownerEmail: 'owner-email',
+}
 const estimatedBirthLabel = computed(() => {
   const date = estimatedBirthDate()
   if (!date) return ''
   const value = new Date(date)
   return `西元 ${value.getUTCFullYear()} 年 ${value.getUTCMonth() + 1} 月生`
 })
-const requiredText = (value) => String(value ?? '').trim() ? true : '此欄位必填'
-const optionalNonNegativeInteger = (value) => value === '' || value === null || value === undefined || /^\d+$/.test(String(value)) ? true : '請填寫 0 或正整數'
-const monthAge = (value) => value === '' || value === null || value === undefined || /^(?:[0-9]|1[01])$/.test(String(value)) ? true : '月齡需為 0–11'
-const email = (value) => !String(value ?? '').trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim()) ? true : 'Email 格式不正確'
-const { validate, setValues, errors } = useForm({
-  validationSchema: {
-    petName: requiredText,
-    ownerName: requiredText,
-    ownerPhone: requiredText,
-    ownerEmail: (value) => requiredText(value) === true ? email(value) : '此欄位必填',
-    ownerAddress: requiredText,
-    petBreed: requiredText,
-    petSex: (value) => ['male', 'female'].includes(value) || '請選擇性別',
-    petNeutered: (value) => ['yes', 'no'].includes(value) || '請選擇結紮狀態',
-    petAge: () => hasAge.value || '請填寫年齡',
-    ageYears: optionalNonNegativeInteger,
-    ageMonths: monthAge,
-    householdCatCount: optionalNonNegativeInteger,
-    mealsPerDay: (value) => pet.feedingType !== 'scheduled' || /^([1-9]\d*)$/.test(String(value ?? '')) || '請填寫每日餐次',
-  },
-})
 
 function estimatedBirthDate() {
-  if (!hasAge.value) return null
+  if (!hasAge.value || errors.value.petAge) return null
   const years = Number(pet.ageYears || 0)
   const months = Number(pet.ageMonths || 0)
   if (!Number.isInteger(years) || !Number.isInteger(months) || years < 0 || months < 0 || months > 11) return null
@@ -113,22 +96,31 @@ function toggleList(list, option, checked) {
   return [...next]
 }
 
-function clampInteger(target, key, min, max) {
-  const raw = String(target[key] ?? '').trim()
-  if (!raw || !/^\d+$/.test(raw)) return
-  target[key] = String(Math.min(max, Math.max(min, Number(raw))))
-}
+let cancelScrollFocus = () => {}
+onBeforeUnmount(() => cancelScrollFocus())
 
-async function jumpToMissingRequired() {
-  missingRequiredDialog.value = false
-  const fieldId = firstMissingRequiredField.value
+async function jumpToIssue() {
+  cancelScrollFocus()
+  const key = Object.keys(fieldTargets).find(key => errors.value[key])
+  const fieldId = key && `intake-${fieldTargets[key]}-field`
   if (!fieldId) return
 
   highlightedField.value = fieldId
   await nextTick()
   const field = document.getElementById(fieldId)
+  if (!field) return
+  // 等平滑捲動結束再聚焦，避免手機鍵盤或焦點行為打斷滑動。
+  const finish = () => {
+    cancelScrollFocus()
+    if (field.isConnected) field.querySelector('input:not([type=hidden]):not(:disabled), [role=radio]')?.focus({ preventScroll: true })
+  }
+  const fallback = window.setTimeout(finish, 1200)
+  document.addEventListener('scrollend', finish, { once: true })
+  cancelScrollFocus = () => {
+    window.clearTimeout(fallback)
+    document.removeEventListener('scrollend', finish)
+  }
   field?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  field?.querySelector('input:not([type=hidden]), [role=radio]')?.focus()
   window.setTimeout(() => {
     if (highlightedField.value === fieldId) highlightedField.value = ''
   }, 1600)
@@ -137,6 +129,7 @@ async function jumpToMissingRequired() {
 watch(verificationCode, () => { verified.value = false })
 
 async function verifyCode() {
+  if (verifying.value) return
   error.value = ''
   const code = verificationCode.value.replace(/\D/g, '')
   if (code.length !== 4) {
@@ -156,17 +149,12 @@ async function verifyCode() {
 }
 
 async function submit() {
+  if (submitting.value || !verified.value) return
   attemptedSubmit.value = true
   error.value = ''
-  setValues({ petAge: hasAge.value, petBreed: pet.breed, petSex: pet.sex, petNeutered: pet.neutered, ownerAddress: owner.address, petName: pet.name, ownerName: owner.name, ownerPhone: owner.phone, ownerEmail: owner.email, ageYears: pet.ageYears, ageMonths: pet.ageMonths, householdCatCount: pet.householdCatCount, mealsPerDay: pet.mealsPerDay })
   const { valid } = await validate()
   if (!valid) {
-    if (missingRequiredLabels.value.length) {
-      error.value = `請完成必填欄位：${missingRequiredLabels.value.join('、')}`
-      missingRequiredDialog.value = true
-    } else {
-      error.value = Object.values(errors.value)[0] || '請檢查填寫內容'
-    }
+    await jumpToIssue()
     return
   }
   submitting.value = true
@@ -187,7 +175,7 @@ async function submit() {
         foods: pet.foods,
         foodsOther: pet.foods.includes('其他') ? pet.foodsOther : '',
         feedingType: pet.feedingType,
-        mealsPerDay: pet.mealsPerDay === '' ? null : Number(pet.mealsPerDay),
+        mealsPerDay: pet.feedingType === 'scheduled' ? Number(pet.mealsPerDay) : null,
         vaccineStatus: pet.vaccineStatus,
         vaccineDate: pet.vaccineDate,
         medicalHistory: pet.medicalHistory,
@@ -235,13 +223,11 @@ async function submit() {
           </div>
         </div>
       </section>
-      <form v-else @submit.prevent="submit">
+      <form v-else novalidate @submit.prevent="submit">
         <div class="header">
           <h1>初診掛號單</h1>
         </div>
-        <div v-if="attemptedSubmit && missingRequiredLabels.length" class="required-summary" role="alert">
-          <strong>尚有必填欄位未完成</strong>：{{ missingRequiredLabels.join('、') }}
-        </div>
+        <p class="hint">標示 * 的欄位必填；年齡可填歲數或月數，未滿一歲可填 0 歲。</p>
         <div class="section">
           <div class="section-title">貓孩兒</div>
           <div class="grid">
@@ -251,19 +237,19 @@ async function submit() {
               <div id="intake-pet-sex-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-sex-field' }">
                 <label><span class="required-mark" aria-hidden="true">*</span>性別：</label><RadioGroup v-model="pet.sex" aria-required="true" class="contents"><label class="option-label"><RadioGroupItem value="male" />男生</label><label class="option-label"><RadioGroupItem value="female" />女生</label></RadioGroup><span v-if="attemptedSubmit && errors.petSex" class="field-error">{{ errors.petSex }}</span>
               </div>
-              <div id="intake-pet-age-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-age-field' }"><label><span class="required-mark" aria-hidden="true">*</span>年齡：</label><Input v-model="pet.ageYears" aria-required="true" class="input-short" type="number" min="0" step="1" inputmode="numeric" @blur="clampInteger(pet, 'ageYears', 0, 99)" /> 年 <Input v-model="pet.ageMonths" class="input-short" type="number" min="0" max="11" step="1" inputmode="numeric" @blur="clampInteger(pet, 'ageMonths', 0, 11)" /> 個月<span class="hint">（月齡 0–11）</span><span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="attemptedSubmit && (errors.petAge || errors.ageYears || errors.ageMonths)" class="field-error">{{ errors.petAge || errors.ageYears || errors.ageMonths }}</span></div>
+              <div id="intake-pet-age-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-age-field' }"><label><span class="required-mark" aria-hidden="true">*</span>年齡：</label><Input v-model="pet.ageYears" aria-required="true" class="input-short" type="number" min="0" step="1" inputmode="numeric" /> 年 <Input v-model="pet.ageMonths" class="input-short" type="number" min="0" max="11" step="1" inputmode="numeric" /> 個月<span class="hint">（月齡 0–11）</span><span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="attemptedSubmit && (errors.petAge || errors.ageYears || errors.ageMonths)" class="field-error">{{ errors.petAge || errors.ageYears || errors.ageMonths }}</span></div>
               <div id="intake-pet-breed-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-breed-field' }"><label><span class="required-mark" aria-hidden="true">*</span>品種：</label><Input v-model="pet.breed" aria-required="true" class="input-medium" /><span v-if="attemptedSubmit && errors.petBreed" class="field-error">{{ errors.petBreed }}</span></div>
               <div class="field"><label>花色：</label><Input v-model="pet.color" class="input-medium" /></div>
             </div>
             <div>
               <div class="field-group-title section-emphasis">生活狀況</div>
-              <div class="field"><label>家中貓口：</label><Input v-model="pet.householdCatCount" class="input-short" type="number" min="0" step="1" inputmode="numeric" @blur="clampInteger(pet, 'householdCatCount', 0, 99)" /> 隻<span v-if="attemptedSubmit && errors.householdCatCount" class="field-error">{{ errors.householdCatCount }}</span></div>
+              <div id="intake-household-count-field" class="field"><label>家中貓口：</label><Input v-model="pet.householdCatCount" class="input-short" type="number" min="0" step="1" inputmode="numeric" /> 隻<span v-if="attemptedSubmit && errors.householdCatCount" class="field-error">{{ errors.householdCatCount }}</span></div>
               <div class="field">
                 <label>主餐配菜：</label><label v-for="option in foodOptions" :key="option" class="option-label"><Checkbox :model-value="pet.foods.includes(option)" @update:model-value="pet.foods = toggleList(pet.foods, option, $event === true)" />{{ option }}<template v-if="option === '其他'">：</template></label
                 ><Input v-if="pet.foods.includes('其他')" v-model="pet.foodsOther" class="input-medium" placeholder="請填寫" /><span class="hint">(以上可複選)</span>
               </div>
-              <div class="field">
-                <label>放飯頻率：</label><RadioGroup v-model="pet.feedingType" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" class="input-short" type="number" min="1" max="20" step="1" inputmode="numeric" @blur="clampInteger(pet, 'mealsPerDay', 1, 20)" /> 餐</label></RadioGroup><span v-if="attemptedSubmit && errors.mealsPerDay" class="field-error">{{ errors.mealsPerDay }}</span>
+              <div id="intake-meals-field" class="field">
+                <label>放飯頻率：</label><RadioGroup v-model="pet.feedingType" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" :disabled="pet.feedingType !== 'scheduled'" class="input-short" type="number" min="1" max="20" step="1" inputmode="numeric" /> 餐</label></RadioGroup><span v-if="attemptedSubmit && errors.mealsPerDay" class="field-error">{{ errors.mealsPerDay }}</span>
               </div>
             </div>
           </div>
@@ -313,16 +299,6 @@ async function submit() {
           </div>
         </div>
       </form>
-      <ModalDialog v-if="missingRequiredDialog" size="sm" @close="missingRequiredDialog = false">
-        <div class="space-y-2 p-6 pb-4 sm:p-7 sm:pb-4">
-          <DialogTitle>還有必填欄位未完成</DialogTitle>
-          <DialogDescription class="text-sm leading-relaxed">請填寫：{{ missingRequiredLabels.join('、') }}。按下按鈕後會直接帶您到第一個欄位。</DialogDescription>
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="secondary" @click="missingRequiredDialog = false">留在這裡</Button>
-          <Button type="button" @click="jumpToMissingRequired">帶我去填寫</Button>
-        </DialogFooter>
-      </ModalDialog>
     </div>
   </main>
 </template>
