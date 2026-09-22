@@ -11,15 +11,23 @@ export function workflowError(message, status = 422) {
 const CLINICAL_TEXT_FIELDS = ['visitNote', 'internalNote', 'handoffNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
 const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC'];
 
-// 來院原因、「本次簡易紀錄」與當次量測需在病歷日誌中一同閱讀；也同步成
-// 同一筆自動日誌，避免醫師日後只能看到文字卻缺少看診當下的體重／體溫。
+// 來院原因、「本次簡易紀錄」、給飼主的照護提醒、回診建議與當次量測需在病歷日誌中一同閱讀；
+// 也同步成同一筆自動日誌，避免醫師日後只能看到本次簡易紀錄卻缺少看診當下交辦飼主的內容。
+// internalNote 刻意不放進來——那是僅院內人員可見的備註，不該進入病歷日誌。
 export function appointmentJournalContent(appointment) {
   const reason = String(appointment.reason || '').trim();
   const measurements = [];
   if (appointment.weightKg !== null && appointment.weightKg !== undefined) measurements.push(`體重：${appointment.weightKg} kg`);
   if (appointment.temperatureC !== null && appointment.temperatureC !== undefined) measurements.push(`體溫：${appointment.temperatureC} °C`);
-  const internalNote = String(appointment.internalNote || '').trim();
-  return [reason ? `來院原因：${reason}` : '', measurements.join('　'), String(appointment.visitNote || '').trim(), internalNote ? `內部備註：${internalNote}` : ''].filter(Boolean).join('\n\n');
+  const specialCareNote = String(appointment.specialCareNote || '').trim();
+  const followUpRecommendation = String(appointment.followUpRecommendation || '').trim();
+  return [
+    reason ? `來院原因：${reason}` : '',
+    measurements.join('　'),
+    String(appointment.visitNote || '').trim(),
+    specialCareNote ? `請轉告飼主：${specialCareNote}` : '',
+    followUpRecommendation ? `回診建議：${followUpRecommendation}` : '',
+  ].filter(Boolean).join('\n\n');
 }
 
 export function assertWorkflowVersion(appointment, version) {

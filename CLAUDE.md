@@ -57,7 +57,7 @@
 ### clinicalNotes 病歷日誌
 `petId`、`entryDate`、`content`、`source`（`manual` / `legacy_import` / `appointment` / `medication`）。醫師看診或拿藥時隨手記的自由文字記事，不用填表、不用結案，跟 `medicalRecords`（結案才鎖定的正式健檢報告）是兩條平行的軌道——日誌給日常記事用，健檢報告給需要 PDF／分享的正式場合用。`source: 'legacy_import'` 的記事來自舊系統資料遷移（見 `server/scripts/legacy-migration/`），內容是舊系統逐年累加的病歷全文，整段當一筆記事匯入，不逐筆拆分（舊資料格式不一致，拆分風險高於價值）。
 
-`source: 'appointment'` 的記事跟掛號的 `visitNote`（見第二節 appointments）是**同一份資料、雙向同步**：`POST /api/appointments/:id/workflow/clinical` 帶了 `visitNote`／`weightKg`／`temperatureC` 任一個而內容非空時，會建立（或更新）一筆用 `appointmentId` 連結的日誌（見 `routes/appointmentWorkflow.js`，內容由 `lib/appointmentWorkflow.js` 的 `appointmentJournalContent` 把量測值與紀錄併起來）；反過來，`PUT /api/clinical-notes/:id` 若這筆日誌的 `appointmentId` 有值且 body 帶了 `content`，會回頭把新內容寫回該筆掛號的 `visitNote`（見 `routes/clinicalNotes.js`）；`DELETE` 也會把對應掛號的 `visitNote` 清空，避免兩邊資料分岔。一筆掛號最多對應一筆日誌（`appointmentId` 唯一索引），`manual`／`legacy_import` 兩種來源沒有這個欄位、不受影響，一樣可自由編輯/刪除、沒有唯讀鎖定。索引 `{petId, entryDate, _id}`、`{appointmentId}`（partial unique）。刪除寵物前會檢查 `ClinicalNote.exists({petId})`，跟 `medicalRecords` 一樣擋刪除。
+`source: 'appointment'` 的記事跟掛號的 `visitNote`（見第二節 appointments）是**同一份資料、雙向同步**：`POST /api/appointments/:id/workflow/clinical` 或 `.../workflow/handoff` 之後，只要這筆掛號目前組出來的日誌內容非空，就會建立（或更新）一筆用 `appointmentId` 連結的日誌（見 `routes/appointmentWorkflow.js`，內容由 `lib/appointmentWorkflow.js` 的 `appointmentJournalContent` 即時組成：來院原因、體重／體溫、本次簡易紀錄、請轉告飼主、回診建議，依序併成一段文字，不是只寫入時的那幾個欄位；`internalNote` 刻意不算進來，見第二節 appointments 的 `internalNote`）；反過來，`PUT /api/clinical-notes/:id` 若這筆日誌的 `appointmentId` 有值且 body 帶了 `content`，只會把新內容寫回該筆掛號的 `visitNote`（見 `routes/clinicalNotes.js`）——**雙向同步只到 `visitNote` 這一格，其餘幾段是唯讀顯示，要改請轉告飼主／回診建議得回診療台工作區改**；`DELETE` 也會把對應掛號的 `visitNote` 清空，避免兩邊資料分岔。一筆掛號最多對應一筆日誌（`appointmentId` 唯一索引），`manual`／`legacy_import` 兩種來源沒有這個欄位、不受影響，一樣可自由編輯/刪除、沒有唯讀鎖定。索引 `{petId, entryDate, _id}`、`{appointmentId}`（partial unique）。刪除寵物前會檢查 `ClinicalNote.exists({petId})`，跟 `medicalRecords` 一樣擋刪除。
 
 `source: 'medication'` 的日誌是**藥單（領藥紀錄，`medicationOrders`）自動生成的獨立日誌**：跟看診（掛號）那筆各自獨立、不併進去，一張藥單一筆（`medicationOrderId`，partial unique 索引）。做法跟掛號日誌一樣：日誌**只存關聯、不存內文**（`content` 不必填），每次讀取時由 `lib/clinicalNoteView.js` 依藥單的最新欄位即時組成（`lib/medicationWorkflow.js` 的 `medicationJournalContent`：第一行 `領藥（階段）`，已領藥另帶診所時區的領藥時間，接著是病況／藥單／備註，空欄位不出現）。**不變式：日誌存在 ⇔ 這張藥單曾經被醫師審核過，而且沒有取消**（`lib/medicationJournal.js` 的 `syncMedicationJournal`，藥單每個動作後都會重新同步）。審核之前（櫃台剛登記、醫師還沒看）不進病歷——病歷記的是醫師確認過的內容，不是草稿；審核之後一直在，之後被退回或修改只是標題回到「待醫師確認」，日誌不會消失又出現；**藥單取消就刪掉**——取消的藥單沒有真的開出去，不該留在病歷裡。「曾經審核過」看 `history` 有沒有 `approve`，不看 `approvedAt`（退回與修改會把它清掉）。`entryDate` 是藥單建立時間。日誌與藥單的儲存在同一個 transaction（`routes/medications.js` 的 `saveWithJournal`），任一邊失敗整筆回滾。**藥單日誌唯讀**：`PUT`／`DELETE` 一律回 409，內容要回藥單改，前端不給修改與刪除鈕、標成「領藥紀錄」。舊藥單不做回填，下一次有動作時才會補出日誌。
 
@@ -110,7 +110,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 **四個文字欄位，各有各的讀者**（早期版本把批價／開藥擠成結構化清單又拆成三個欄位，後來確認診所根本不用系統計價，整組退場改回純文字）：
 
 - `visitNote` 本次簡易紀錄：醫師寫的病歷內容，跟 `clinicalNotes`（病歷日誌）**雙向同步**（見第二節 clinicalNotes）——`POST /workflow/clinical` 帶了 `visitNote`／`weightKg`／`temperatureC` 任一個就建立／更新／刪除對應日誌，反過來直接編輯那筆日誌也會回頭覆蓋這裡。飼主看不到，也不進健檢報告。
-- `internalNote` 內部備註：僅院內人員可見，不進健檢報告或飼主提醒；有內容時會附在同次病歷日誌的最後一段。
+- `internalNote` 內部備註：僅院內人員可見，不進健檢報告或飼主提醒，也刻意不併入病歷日誌（見第二節 `clinicalNotes` 的 `appointmentJournalContent`）——病歷日誌是「當次紀錄」的呈現，內部備註是行政備忘，兩者讀者不同。
 - `handoffNote` 給櫃台的交辦：收費項目、領藥、要開的證明都寫這裡，**取代了早期逐項計價的批價清單**。系統不解析內容、不計價、不加總，也不記任何金額——櫃台讀這段文字自行收費。
 - `specialCareNote` 請轉告飼主：面向飼主的照護提醒（例如「傷口勿舔舐」）。跟 `handoffNote` 語意分開才能在櫃台端用警示樣式獨立呈現——那是最容易漏講的一件事。刻意不跟 `clinicalNotes` 同步，單一資料來源留在 `Appointment` 上。
 - `followUpRecommendation` 回診建議：醫師寫期間與原因，櫃台跟飼主敲定實際時段後才真的掛下一次的號。
@@ -376,7 +376,7 @@ GET    /api/health
   | 對話框 | `<DialogContent size="sm|md|lg">` | 不要用 `class="sm:max-w-*"` 覆寫寬度 |
   | 工作台旁的表單（初診報到建檔、暫存區） | `<SideDrawer>`：頁面版面裡的一欄，非 modal | 使用者填表時還得看著、操作著背後的看板時，不要用 Modal 或 `ui/sheet`（兩者都會遮住並鎖住背景） |
   | 狀態徽章 | `<Badge variant="status">` | 不要覆寫 padding／圓角 |
-  | 頁首開面板的按鈕 | `<ConsoleChipBar>` 包 `<ConsoleChip :icon :label :count :tone :active>` | 不要手寫絕對定位的紅點徽章（那曾是全站唯一一顆），也不要在使用端各寫一套數字樣式。數字只有兩種讀法：`tone="neutral"` 灰數字＝狀態讀數（0 也照顯示），`tone="todo"` 紅徽章＝待辦（0 就整個不畫）。軌道刻意沒有 `overflow-x-auto`——橫向捲動會把 chip 連同數字默默裁掉，放不下要讓頁首換行 |
+  | 頁首開面板的按鈕 | `<ConsoleChipBar>` 包 `<ConsoleChip :icon :label :count :tone :active>` | 不要在使用端各寫一套數字樣式，改在 `ConsoleChip` 內部調整。數字只有兩種讀法：`tone="neutral"` 灰數字＝狀態讀數，跟在文字後面、inline，0 也照顯示；`tone="todo"` 紅徽章＝待辦，疊在按鈕右上角（FB 通知樣式：實心紅底、白字、`ring-muted` 蓋掉底下的角，跟 `GlobalChatWidget` 未讀泡泡同一套視覺語彙），0 就整個不畫。軌道刻意沒有 `overflow-x-auto`——橫向捲動會把 chip 連同數字默默裁掉，放不下要讓頁首換行 |
   | 掛號的手術標記 | `<SurgeryBadge :name="item.surgeryName">` | 不要在使用端手寫「手術：…」紫字或膠囊——之前櫃台、診療台、工作區、時段格四處各一種樣式。顏色是 `surgery`（紫），跟遲到徽章的 `danger` 分開色相 |
   | 掛號的遲到標記 | `<LatenessBadge :minutes>`：已報到傳 `latenessMinutes`，還沒報到的逾時掛號傳即時算出的分鐘數 | 不要手寫紅字「遲到 N 分」。顏色是 `danger`（紅），刻意跟手術徽章的 `surgery`（紫）分開色相——兩顆常並排，同色只剩圖示可辨。跟手術徽章同放一列，順序固定「手術 → 遲到」 |
   | 號碼牌圓圈 | `<CheckinNumber :appointment size="md|lg">`（清單 40px／工作區與處理視窗標頭 48px） | 不要手刻圓圈。顏色依階段（`lib/appointmentDisplay.js` 的 `checkinTone`）：候診灰、看診中主色實心、待櫃台 `bg-accent`、已完成淡灰；沒號碼時是虛線票券圖示。初診／回診文字一律用同檔的 `visitTypeLabel` |

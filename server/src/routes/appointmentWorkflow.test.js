@@ -99,7 +99,7 @@ describe('independent appointment workflow HTTP routes', () => {
   it('keeps the visit reason in the same diary through edits and handoff', async () => {
     store.get(id).reason = '咳嗽三天';
     assert.equal((await post('clinical', { visitNote: '安排檢查', internalNote: '院內追蹤', weightKg: 4.2 })).status, 200);
-    assert.equal(await diaryContent(), '來院原因：咳嗽三天\n\n體重：4.2 kg\n\n安排檢查\n\n內部備註：院內追蹤');
+    assert.equal(await diaryContent(), '來院原因：咳嗽三天\n\n體重：4.2 kg\n\n安排檢查');
     assert.equal((await post('clinical', { visitNote: '', internalNote: '', weightKg: null })).status, 200);
     assert.equal(await diaryContent(), '來院原因：咳嗽三天');
     assert.equal((await post('handoff')).status, 200);

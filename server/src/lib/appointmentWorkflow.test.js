@@ -7,11 +7,22 @@ const appointment = () => ({ __v: 0, status: 'arrived', petId: 'pet-1', checkinN
 
 test('appointment journal combines the simple note with this visit’s measurements', () => {
   assert.equal(appointmentJournalContent({ reason: ' 咳嗽三天 ', visitNote: '安排檢查', weightKg: 4.2, temperatureC: 38.5 }), '來院原因：咳嗽三天\n\n體重：4.2 kg　體溫：38.5 °C\n\n安排檢查');
-  assert.equal(appointmentJournalContent({ visitNote: '安排檢查', internalNote: '院內追蹤用' }), '安排檢查\n\n內部備註：院內追蹤用');
   assert.equal(appointmentJournalContent({ reason: '定期回診' }), '來院原因：定期回診');
   assert.equal(appointmentJournalContent({ reason: '  ', visitNote: '' }), '');
   assert.equal(appointmentJournalContent({ visitNote: '皮膚狀況穩定', weightKg: 4.2, temperatureC: 38.5 }), '體重：4.2 kg　體溫：38.5 °C\n\n皮膚狀況穩定');
   assert.equal(appointmentJournalContent({ visitNote: '', weightKg: null, temperatureC: 38.1 }), '體溫：38.1 °C');
+});
+
+test('appointment journal also carries the owner-facing care note and the follow-up recommendation, but never the internal note', () => {
+  assert.equal(
+    appointmentJournalContent({ visitNote: '安排檢查', specialCareNote: ' 傷口勿舔舐 ', followUpRecommendation: ' 兩週後回診拆線 ' }),
+    '安排檢查\n\n請轉告飼主：傷口勿舔舐\n\n回診建議：兩週後回診拆線'
+  );
+  assert.equal(
+    appointmentJournalContent({ visitNote: '安排檢查', specialCareNote: '傷口勿舔舐', followUpRecommendation: '兩週後回診拆線', internalNote: '院內追蹤用' }),
+    '安排檢查\n\n請轉告飼主：傷口勿舔舐\n\n回診建議：兩週後回診拆線'
+  );
+  assert.equal(appointmentJournalContent({ visitNote: '安排檢查', specialCareNote: '  ', followUpRecommendation: '' }), '安排檢查');
 });
 
 test('the four steps run in order and only the desk releases the queue number', () => {
