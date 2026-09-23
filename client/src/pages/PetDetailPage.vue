@@ -2,6 +2,7 @@
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ArrowDownToLine, ArrowUpToLine, CalendarDays, Check, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, PawPrint, Pencil, Pin, PinOff, Share2, Trash2, User, X } from '@lucide/vue';
+import ClinicalNoteEntry from '../components/ClinicalNoteEntry.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
@@ -149,9 +150,6 @@ const newNoteContent = ref('');
 const newNoteDate = ref(clinicDateInput());
 const noteSaving = ref(false);
 const noteError = ref('');
-const editingNoteId = ref(null);
-const editingNoteContent = ref('');
-const editingNoteDate = ref('');
 const noteToRemove = ref(null);
 const deletingNoteId = ref(null);
 const NOTE_QUICK_NAV_THRESHOLD = 700;
@@ -524,32 +522,6 @@ async function addNote() {
   }
 }
 
-function startEditNote(note) {
-  editingNoteId.value = note._id;
-  editingNoteContent.value = note.editableContent ?? note.content;
-  editingNoteDate.value = clinicDateInput(note.entryDate);
-}
-
-function cancelEditNote() {
-  editingNoteId.value = null;
-}
-
-async function saveEditNote(note) {
-  const content = editingNoteContent.value.trim();
-  if (!content) return;
-  noteSaving.value = true;
-  try {
-    await http.put(`/clinical-notes/${note._id}`, { content, entryDate: editingNoteDate.value || undefined });
-    editingNoteId.value = null;
-    toast.success('已更新病歷日誌', '更新成功');
-    await fetchPet();
-  } catch (err) {
-    toast.error(err.response?.data?.message ?? '更新病歷日誌失敗', '更新失敗');
-  } finally {
-    noteSaving.value = false;
-  }
-}
-
 function openRemoveNote(note) {
   if (deletingNoteId.value) return;
   noteToRemove.value = note;
@@ -599,7 +571,6 @@ watch(
     shareToRevoke.value = null;
     recordToRemove.value = null;
     noteToRemove.value = null;
-    editingNoteId.value = null;
     fetchPet(petId);
   },
   { immediate: true }
@@ -916,168 +887,145 @@ watch(pet, async (value) => {
           <Alert v-if="noteError" variant="destructive"><AlertDescription>{{ noteError }}</AlertDescription></Alert>
         </Card>
 
-        <!-- 接成一篇連續病歷，不是逐則卡片：日期只當行內時間戳記，內容直接接續成段落，
-             整段用細分隔線斷開而不是各自獨立的卡片外框，讀起來像在翻病歷全文而不是滑條列清單。 -->
-        <Card v-if="clinicalNotes.length" class="divide-y divide-border p-0 shadow-sm dark:shadow-none">
-          <article :id="`clinical-note-${note._id}`" v-for="note in clinicalNotes" :key="note._id" class="relative px-5 py-3">
-            <template v-if="editingNoteId === note._id">
-              <Textarea v-model="editingNoteContent" rows="3" />
-              <div class="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <DatePicker v-model="editingNoteDate" aria-label="日期" class="w-40" :clearable="false" />
-                <div class="flex gap-2">
-                  <Button variant="secondary" size="sm" @click="cancelEditNote">取消</Button>
-                  <Button size="sm" :disabled="noteSaving" @click="saveEditNote(note)">儲存</Button>
-                </div>
-              </div>
-            </template>
-            <template v-else>
-              <header class="flex flex-wrap items-start gap-x-2 gap-y-1">
-                <time class="text-xs font-semibold whitespace-nowrap text-foreground">{{ formatDate(note.entryDate) }}</time>
-                <span v-if="note.source === 'legacy_import'" class="text-xs text-muted-foreground">舊系統匯入</span>
-                <span v-else-if="note.appointmentId" class="text-xs text-muted-foreground">引用就診資料</span>
-                <span v-else-if="note.medicationOrderId" class="text-xs text-muted-foreground">領藥紀錄</span>
-
-                <!-- 藥單日誌內容由藥單組成，要改請回藥單；刪除也一樣，藥單取消時才會一併移除。 -->
-                <span v-if="!note.medicationOrderId" class="ml-auto flex shrink-0 gap-1">
-                  <Button variant="secondary" size="icon-sm" aria-label="編輯日誌" @click="startEditNote(note)"><Pencil class="h-3.5 w-3.5" /></Button>
-                  <Button v-if="!note.appointmentId" variant="destructive" size="icon-sm" aria-label="刪除日誌" @click="openRemoveNote(note)"><Trash2 class="h-3.5 w-3.5" /></Button>
-                </span>
-              </header>
-              <!-- 長日誌快捷導航按鈕：當日誌篇幅較長時，在右側提供跟隨滾動的精緻膠囊導航列 -->
-              <div
-                v-if="isLongNote(note)"
-                class="pointer-events-none absolute inset-y-2 right-2.5 z-10 flex w-8 flex-col justify-center sm:right-3.5"
+        <!-- 每則日誌是一張小報告（ClinicalNoteEntry）：標頭是日期與類型，內容是「標籤｜內容」列，修改也在卡片內就地進行。 -->
+        <div v-if="clinicalNotes.length" class="space-y-3">
+          <div v-for="note in clinicalNotes" :id="`clinical-note-${note._id}`" :key="note._id" class="relative">
+            <ClinicalNoteEntry :note="note" :body-class="{ 'pr-12 sm:pr-14': isLongNote(note) }" @saved="fetchPet()">
+              <!-- 掛號日誌隨掛號存在、藥單日誌隨藥單取消移除，都不能單獨刪。 -->
+              <template v-if="!note.appointmentId && !note.medicationOrderId" #actions>
+                <Button variant="destructive" size="icon-xs" aria-label="刪除日誌" @click="openRemoveNote(note)"><Trash2 class="h-3.5 w-3.5" stroke-width="1.75" /></Button>
+              </template>
+            </ClinicalNoteEntry>
+            <!-- 長日誌快捷導航按鈕：當日誌篇幅較長時，在右側提供跟隨滾動的精緻膠囊導航列 -->
+            <div
+              v-if="isLongNote(note)"
+              class="pointer-events-none absolute inset-y-2 right-2.5 z-10 flex w-8 flex-col justify-center sm:right-3.5"
+            >
+              <nav
+                class="pointer-events-auto sticky top-1/2 flex -translate-y-1/2 flex-col items-center rounded-full border border-border/80 bg-card/95 p-1 shadow-md backdrop-blur-md transition-all duration-200 hover:border-primary/30 hover:shadow-lg dark:bg-card/90"
+                aria-label="日誌快速跳轉導航"
               >
-                <nav
-                  class="pointer-events-auto sticky top-1/2 flex -translate-y-1/2 flex-col items-center rounded-full border border-border/80 bg-card/95 p-1 shadow-md backdrop-blur-md transition-all duration-200 hover:border-primary/30 hover:shadow-lg dark:bg-card/90"
-                  aria-label="日誌快速跳轉導航"
+                <button
+                  type="button"
+                  class="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="移至日誌最上面"
+                  title="移至日誌頂部"
+                  @click="scrollNoteTo(note._id, 'start')"
                 >
-                  <button
-                    type="button"
-                    class="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label="移至日誌最上面"
-                    title="移至日誌頂部"
-                    @click="scrollNoteTo(note._id, 'start')"
-                  >
-                    <ArrowUpToLine class="h-3.5 w-3.5" stroke-width="2" />
-                  </button>
-                  <div class="my-0.5 h-px w-3.5 bg-border/70"></div>
-                  <button
-                    type="button"
-                    class="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label="移至日誌最下面"
-                    title="移至日誌底部"
-                    @click="scrollNoteTo(note._id, 'end')"
-                  >
-                    <ArrowDownToLine class="h-3.5 w-3.5" stroke-width="2" />
-                  </button>
-                </nav>
-              </div>
-              <p
-                class="mt-1.5 text-sm whitespace-pre-wrap wrap-anywhere text-foreground"
-                :class="{ 'pr-8 sm:pr-9': isLongNote(note) }"
-              >{{ note.content }}</p>
-            </template>
-          </article>
-        </Card>
-        <EmptyState v-else :icon="NotebookPen" title="尚無病歷日誌" description="在上方輸入框新增第一則記事。" />
-
-        <Pagination v-if="clinicalNotes.length" :page="notePage" :total-pages="totalNotePages" @update:page="goToNotePage" />
-      </template>
-
-      <template v-else>
-        <p class="text-xs text-muted-foreground">依健檢日期排序，草稿可繼續編輯。</p>
-
-        <Card v-if="shareNotice" class="border-success/35 bg-success-surface p-4 text-sm text-success shadow-none">
-          <p class="font-medium">{{ shareNotice.copied ? '分享連結已複製' : '分享連結已建立' }}</p>
-          <p class="mt-1 break-all">{{ shareNotice.url }}</p>
-          <p class="mt-1 text-xs opacity-80">連結有效至 {{ formatDate(shareNotice.expiresAt) }}，到期或手動撤銷後即無法開啟</p>
-        </Card>
-
-        <Card v-if="pet.medicalRecords.length" class="hidden overflow-hidden p-0 shadow-sm lg:block dark:shadow-none" style="--data-columns: minmax(9rem, 1.15fr) minmax(8rem, 1fr) minmax(10rem, 1fr) 10.5rem">
-          <div class="desktop-data-header">
-            <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">看診日期</span>
-            <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型</span>
-            <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">狀態</span>
-            <span class="desktop-data-cell"></span>
-          </div>
-          <div v-for="record in pet.medicalRecords" :key="record._id" class="desktop-data-row">
-            <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ formatDate(record.visitDate) }}</span>
-            <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> · 第 {{ record.reportVersion }} 版</span></span>
-            <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap"><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge></span>
-            <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的就診紀錄`" @select="(action) => handleRowAction(record, action)" /></span>
-          </div>
-        </Card>
-
-        <ul v-if="pet.medicalRecords.length" class="space-y-3 lg:hidden">
-          <li v-for="record in pet.medicalRecords" :key="record._id">
-            <Card class="p-4 shadow-sm dark:shadow-none">
-            <div class="flex flex-wrap items-start justify-between gap-3">
-              <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 text-xs text-muted-foreground">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
-              <div class="flex shrink-0 items-center gap-1.5 text-sm">
-                <Button v-if="record.status === 'draft'" as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
-                <Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
-                <RowActions
-                  v-if="rowActions(record).length"
-                  :actions="rowActions(record)"
-                  :label="`${formatDate(record.visitDate)} 的更多操作`"
-                  @select="(action) => handleRowAction(record, action)"
-                />
+                  <ArrowUpToLine class="h-3.5 w-3.5" stroke-width="2" />
+                </button>
+                <div class="my-0.5 h-px w-3.5 bg-border/70"></div>
+                <button
+                  type="button"
+                  class="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label="移至日誌最下面"
+                  title="移至日誌底部"
+                  @click="scrollNoteTo(note._id, 'end')"
+                >
+                  <ArrowDownToLine class="h-3.5 w-3.5" stroke-width="2" />
+                </button>
+              </nav>
+            </div>
               </div>
             </div>
+            <EmptyState v-else :icon="NotebookPen" title="尚無病歷日誌" description="在上方輸入框新增第一則記事。" />
+    
+            <Pagination v-if="clinicalNotes.length" :page="notePage" :total-pages="totalNotePages" @update:page="goToNotePage" />
+          </template>
+    
+          <template v-else>
+            <p class="text-xs text-muted-foreground">依健檢日期排序，草稿可繼續編輯。</p>
+    
+            <Card v-if="shareNotice" class="border-success/35 bg-success-surface p-4 text-sm text-success shadow-none">
+              <p class="font-medium">{{ shareNotice.copied ? '分享連結已複製' : '分享連結已建立' }}</p>
+              <p class="mt-1 break-all">{{ shareNotice.url }}</p>
+              <p class="mt-1 text-xs opacity-80">連結有效至 {{ formatDate(shareNotice.expiresAt) }}，到期或手動撤銷後即無法開啟</p>
             </Card>
-          </li>
-        </ul>
-        <EmptyState v-else :icon="PawPrint" title="尚無就診紀錄" description="點右上角「新增健檢」建立第一份報告。" />
-
-        <Pagination v-if="pet.medicalRecords.length" :page="recordPage" :total-pages="totalRecordPages" @update:page="goToRecordPage" />
-      </template>
-    </div>
-
-    <ConfirmDialog
-      :open="Boolean(noteToRemove)"
-      title="刪除病歷日誌"
-      :description="removeNoteDescription"
-      confirm-label="刪除"
-      destructive
-      :loading="Boolean(deletingNoteId)"
-      @update:open="(value) => !value && (noteToRemove = null)"
-      @confirm="removeNote"
-    />
-    <ConfirmDialog
-      :open="Boolean(shareToRevoke)"
-      title="撤銷分享連結"
-      description="確定要撤銷這份報告的分享連結嗎？已取得連結的人將無法再開啟。"
-      confirm-label="撤銷"
-      destructive
-      :loading="Boolean(revokingId)"
-      @update:open="(value) => !value && (shareToRevoke = null)"
-      @confirm="revokeShare(shareToRevoke)"
-    />
-    <!-- 草稿只要一般確認，已結案報告才要打字。判準與後端刪除端點一致：
-         打字確認防的是誤刪正式報告，草稿是工作中狀態，多一道抄名字只會讓人學會無視確認。 -->
-    <ConfirmDialog
-      :open="Boolean(recordToRemove) && !isFinalizedRecord(recordToRemove)"
-      title="捨棄健檢草稿"
-      :description="`確定要捨棄「${formatDate(recordToRemove?.visitDate)}」這筆草稿嗎？此操作無法復原。`"
-      confirm-label="捨棄草稿"
-      destructive
-      :loading="Boolean(deletingRecordId)"
-      @update:open="(value) => !value && (recordToRemove = null)"
-      @confirm="removeRecord()"
-    />
-    <DeleteRecordDialog
-      v-if="recordToRemove && isFinalizedRecord(recordToRemove)"
-      :record="recordToRemove"
-      :confirm-word="pet?.name ?? ''"
-      :submitting="Boolean(deletingRecordId)"
-      :error-message="removeError"
-      @close="recordToRemove = null"
-      @submit="removeRecord"
-    />
-  </section>
-
-  <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
-  <ListSkeleton v-else :rows="5" />
-  </div>
-</template>
+    
+            <Card v-if="pet.medicalRecords.length" class="hidden overflow-hidden p-0 shadow-sm lg:block dark:shadow-none" style="--data-columns: minmax(9rem, 1.15fr) minmax(8rem, 1fr) minmax(10rem, 1fr) 10.5rem">
+              <div class="desktop-data-header">
+                <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">看診日期</span>
+                <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型</span>
+                <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">狀態</span>
+                <span class="desktop-data-cell"></span>
+              </div>
+              <div v-for="record in pet.medicalRecords" :key="record._id" class="desktop-data-row">
+                <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ formatDate(record.visitDate) }}</span>
+                <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> · 第 {{ record.reportVersion }} 版</span></span>
+                <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap"><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge></span>
+                <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的就診紀錄`" @select="(action) => handleRowAction(record, action)" /></span>
+              </div>
+            </Card>
+    
+            <ul v-if="pet.medicalRecords.length" class="space-y-3 lg:hidden">
+              <li v-for="record in pet.medicalRecords" :key="record._id">
+                <Card class="p-4 shadow-sm dark:shadow-none">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                  <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 text-xs text-muted-foreground">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
+                  <div class="flex shrink-0 items-center gap-1.5 text-sm">
+                    <Button v-if="record.status === 'draft'" as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
+                    <Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
+                    <RowActions
+                      v-if="rowActions(record).length"
+                      :actions="rowActions(record)"
+                      :label="`${formatDate(record.visitDate)} 的更多操作`"
+                      @select="(action) => handleRowAction(record, action)"
+                    />
+                  </div>
+                </div>
+                </Card>
+              </li>
+            </ul>
+            <EmptyState v-else :icon="PawPrint" title="尚無就診紀錄" description="點右上角「新增健檢」建立第一份報告。" />
+    
+            <Pagination v-if="pet.medicalRecords.length" :page="recordPage" :total-pages="totalRecordPages" @update:page="goToRecordPage" />
+          </template>
+        </div>
+    
+        <ConfirmDialog
+          :open="Boolean(noteToRemove)"
+          title="刪除病歷日誌"
+          :description="removeNoteDescription"
+          confirm-label="刪除"
+          destructive
+          :loading="Boolean(deletingNoteId)"
+          @update:open="(value) => !value && (noteToRemove = null)"
+          @confirm="removeNote"
+        />
+        <ConfirmDialog
+          :open="Boolean(shareToRevoke)"
+          title="撤銷分享連結"
+          description="確定要撤銷這份報告的分享連結嗎？已取得連結的人將無法再開啟。"
+          confirm-label="撤銷"
+          destructive
+          :loading="Boolean(revokingId)"
+          @update:open="(value) => !value && (shareToRevoke = null)"
+          @confirm="revokeShare(shareToRevoke)"
+        />
+        <!-- 草稿只要一般確認，已結案報告才要打字。判準與後端刪除端點一致：
+             打字確認防的是誤刪正式報告，草稿是工作中狀態，多一道抄名字只會讓人學會無視確認。 -->
+        <ConfirmDialog
+          :open="Boolean(recordToRemove) && !isFinalizedRecord(recordToRemove)"
+          title="捨棄健檢草稿"
+          :description="`確定要捨棄「${formatDate(recordToRemove?.visitDate)}」這筆草稿嗎？此操作無法復原。`"
+          confirm-label="捨棄草稿"
+          destructive
+          :loading="Boolean(deletingRecordId)"
+          @update:open="(value) => !value && (recordToRemove = null)"
+          @confirm="removeRecord()"
+        />
+        <DeleteRecordDialog
+          v-if="recordToRemove && isFinalizedRecord(recordToRemove)"
+          :record="recordToRemove"
+          :confirm-word="pet?.name ?? ''"
+          :submitting="Boolean(deletingRecordId)"
+          :error-message="removeError"
+          @close="recordToRemove = null"
+          @submit="removeRecord"
+        />
+      </section>
+    
+      <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
+      <ListSkeleton v-else :rows="5" />
+      </div>
+    </template>

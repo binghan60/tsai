@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import MedicationOrder from '../models/MedicationOrder.js';
-import { applyMedicationAction, medicationFields, medicationJournalContent } from './medicationWorkflow.js';
+import { applyMedicationAction, applyMedicationJournalEdit, medicationFields, medicationJournalContent } from './medicationWorkflow.js';
 
 function order() {
   return { status: 'review', condition: '食慾正常', prescription: '原藥單', note: '', __v: 0, history: [] };
@@ -92,5 +92,35 @@ describe('領藥紀錄的病歷日誌內文', () => {
     const collected = medicationJournalContent({ status: 'collected', prescription: '藥', collectedAt: '2026-09-22T06:30:00Z' });
     assert.match(collected.split('\n')[0], /^領藥（已領藥 9\/22 14:30）$/);
     assert.equal(medicationJournalContent({ status: 'ready', prescription: '藥', collectedAt: '2026-09-22T06:30:00Z' }).split('\n')[0], '領藥（待領藥）');
+  });
+});
+
+describe('從病歷日誌更正藥單', () => {
+  it('已領藥的藥單直接更正內容、不動階段，並留下 journal_edit 軌跡', () => {
+    const item = { ...order(), status: 'collected', history: [{ action: 'approve' }] };
+    assert.equal(applyMedicationJournalEdit(item, { note: ' 飼主說藥粉太苦 ' }, '醫師'), true);
+    assert.equal(item.status, 'collected');
+    assert.equal(item.note, '飼主說藥粉太苦');
+    assert.deepEqual({ ...item.history.at(-1), at: undefined }, {
+      action: 'journal_edit', actor: '醫師', at: undefined, from: 'collected', to: 'collected', reason: '',
+      condition: '食慾正常', prescription: '原藥單', note: '飼主說藥粉太苦',
+    });
+  });
+
+  it('還在流程中的藥單改了內容就退回待醫師確認，已包好的要重新包藥', () => {
+    const item = { ...order(), status: 'ready', approvedAt: new Date(), approvedBy: '醫師', packedAt: new Date(), packedBy: '櫃台' };
+    applyMedicationJournalEdit(item, { prescription: '新藥單' }, '醫師');
+    assert.equal(item.status, 'review');
+    assert.equal(item.needsRepack, true);
+    assert.equal(item.approvedAt, null);
+    assert.equal(item.packedAt, null);
+  });
+
+  it('沒有實際變動不留軌跡；不能清空藥單；已取消的不能改', () => {
+    const item = order();
+    assert.equal(applyMedicationJournalEdit(item, { prescription: '原藥單' }, '醫師'), false);
+    assert.equal(item.history.length, 0);
+    assert.throws(() => applyMedicationJournalEdit(order(), { prescription: '  ' }, '醫師'), /不能清空/);
+    assert.throws(() => applyMedicationJournalEdit({ ...order(), status: 'cancelled' }, { note: 'x' }, '醫師'), /已取消/);
   });
 });

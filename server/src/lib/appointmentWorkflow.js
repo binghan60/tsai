@@ -14,20 +14,60 @@ const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC'];
 // 來院原因、「本次簡易紀錄」、給飼主的照護提醒、回診建議與當次量測需在病歷日誌中一同閱讀；
 // 也同步成同一筆自動日誌，避免醫師日後只能看到本次簡易紀錄卻缺少看診當下交辦飼主的內容。
 // internalNote 刻意不放進來——那是僅院內人員可見的備註，不該進入病歷日誌。
-export function appointmentJournalContent(appointment) {
-  const reason = String(appointment.reason || '').trim();
-  const measurements = [];
-  if (appointment.weightKg !== null && appointment.weightKg !== undefined) measurements.push(`體重：${appointment.weightKg} kg`);
-  if (appointment.temperatureC !== null && appointment.temperatureC !== undefined) measurements.push(`體溫：${appointment.temperatureC} °C`);
-  const specialCareNote = String(appointment.specialCareNote || '').trim();
-  const followUpRecommendation = String(appointment.followUpRecommendation || '').trim();
+// 回傳分欄的段落（空的不回），前端依 key 分段呈現；純文字版 appointmentJournalContent 由它串成。
+export function appointmentJournalSections(appointment) {
+  const text = value => String(value ?? '').trim();
+  const measured = value => value !== null && value !== undefined;
   return [
-    reason ? `來院原因：${reason}` : '',
-    measurements.join('　'),
-    String(appointment.visitNote || '').trim(),
-    specialCareNote ? `請轉告飼主：${specialCareNote}` : '',
-    followUpRecommendation ? `回診建議：${followUpRecommendation}` : '',
+    { key: 'reason', label: '來院原因', text: text(appointment.reason) },
+    { key: 'weightKg', label: '體重', text: measured(appointment.weightKg) ? `${appointment.weightKg} kg` : '' },
+    { key: 'temperatureC', label: '體溫', text: measured(appointment.temperatureC) ? `${appointment.temperatureC} °C` : '' },
+    { key: 'visitNote', label: '本次簡易紀錄', text: text(appointment.visitNote) },
+    { key: 'specialCareNote', label: '請轉告飼主', text: text(appointment.specialCareNote) },
+    { key: 'followUpRecommendation', label: '回診建議', text: text(appointment.followUpRecommendation) },
+  ].filter(section => section.text);
+}
+
+// 純文字版：量測併成一行，本次簡易紀錄不帶標籤，其餘段落帶「標籤：」前綴。
+export function appointmentJournalContent(appointment) {
+  const byKey = new Map(appointmentJournalSections(appointment).map(section => [section.key, section]));
+  const labelled = key => (byKey.has(key) ? `${byKey.get(key).label}：${byKey.get(key).text}` : '');
+  return [
+    labelled('reason'),
+    [labelled('weightKg'), labelled('temperatureC')].filter(Boolean).join('　'),
+    byKey.get('visitNote')?.text || '',
+    labelled('specialCareNote'),
+    labelled('followUpRecommendation'),
   ].filter(Boolean).join('\n\n');
+}
+
+// 日誌編輯表單要的原始值（量測是數字，不是「4.2 kg」這種顯示字串）。
+export const APPOINTMENT_JOURNAL_FIELDS = ['reason', 'weightKg', 'temperatureC', 'visitNote', 'specialCareNote', 'followUpRecommendation'];
+const JOURNAL_TEXT_LIMITS = { reason: 500, visitNote: 10000, specialCareNote: 500, followUpRecommendation: 500 };
+
+export function appointmentJournalFields(appointment) {
+  return Object.fromEntries(APPOINTMENT_JOURNAL_FIELDS.map(key => [key, appointment[key] ?? (key === 'weightKg' || key === 'temperatureC' ? null : '')]));
+}
+
+// 從病歷日誌直接改這次就診的內容。跟 workflow 的 clinical 不同，這裡**不看流程階段**：
+// 病歷日誌是事後回頭更正紀錄的地方，櫃台完成處理之後照樣要改得動（看診工作區那邊仍然鎖著）。
+// 只收日誌看得到的欄位，internalNote／handoffNote 不在這裡改。
+export function applyJournalFields(appointment, body) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) throw workflowError('日誌欄位格式不正確');
+  for (const [key, max] of Object.entries(JOURNAL_TEXT_LIMITS)) {
+    if (body[key] === undefined) continue;
+    if (body[key] !== null && typeof body[key] !== 'string') throw workflowError('日誌欄位格式不正確');
+    const text = String(body[key] ?? '').trim();
+    if (text.length > max) throw workflowError(`內容過長（最多 ${max} 字）`);
+    appointment[key] = text;
+  }
+  for (const key of ['weightKg', 'temperatureC']) {
+    if (body[key] === undefined) continue;
+    const value = body[key] === '' || body[key] === null ? null : Number(body[key]);
+    if (value !== null && (!Number.isFinite(value) || value < 0)) throw workflowError('量測值必須是有效的非負數');
+    appointment[key] = value;
+  }
+  if (!appointmentJournalSections(appointment).length) throw workflowError('日誌內容不能全部清空');
 }
 
 export function assertWorkflowVersion(appointment, version) {

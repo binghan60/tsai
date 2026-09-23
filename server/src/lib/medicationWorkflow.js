@@ -12,15 +12,31 @@ function collectedAtLabel(value) {
 }
 
 // 領藥紀錄在病歷日誌裡的內文，每次讀取都由藥單即時組成（日誌本身只存 medicationOrderId）。
-// 第一行標題帶目前階段，讀日誌的人一眼看得出這張藥單走到哪、是不是已經領走。
-export function medicationJournalContent(order) {
-  const stage = medicationLabel(order.status);
+// 標題帶目前階段，讀日誌的人一眼看得出這張藥單走到哪、是不是已經領走。
+export function medicationJournalStage(order) {
   const collected = order.status === 'collected' && order.collectedAt ? ` ${collectedAtLabel(order.collectedAt)}` : '';
-  const field = (label, value) => {
-    const text = String(value || '').trim();
-    return text ? `${label}：${text}` : '';
-  };
-  return [`領藥（${stage}${collected}）`, field('病況', order.condition), field('藥單', order.prescription), field('備註', order.note)].filter(Boolean).join('\n\n');
+  return `${medicationLabel(order.status)}${collected}`;
+}
+
+export function medicationJournalTitle(order) {
+  return `領藥（${medicationJournalStage(order)}）`;
+}
+
+export function medicationJournalSections(order) {
+  return [
+    { key: 'condition', label: '病況', text: String(order.condition || '').trim() },
+    { key: 'prescription', label: '藥單', text: String(order.prescription || '').trim() },
+    { key: 'note', label: '備註', text: String(order.note || '').trim() },
+  ].filter(section => section.text);
+}
+
+export function medicationJournalContent(order) {
+  const fields = medicationJournalSections(order).map(section => `${section.label}：${section.text}`);
+  return [medicationJournalTitle(order), ...fields].join('\n\n');
+}
+
+export function medicationJournalFields(order) {
+  return { condition: order.condition || '', prescription: order.prescription || '', note: order.note || '' };
 }
 const limits = { condition: 5000, prescription: 10000, note: 3000 };
 
@@ -37,6 +53,31 @@ export function medicationFields(body) {
 export function recordMedicationEvent(order, action, actor, from, reason = '', now = new Date()) {
   order.history.push({ action, actor, at: now, from, to: order.status, reason,
     condition: order.condition, prescription: order.prescription, note: order.note });
+}
+
+// 從病歷日誌更正藥單內容。任何階段都能改（已領藥也可以——那是事後更正紀錄），
+// 每次有實際變動都在 history 記一筆 journal_edit，連同改後內容，事後查得到誰在何時改了什麼。
+// 還在流程中的藥單照「修改藥單」的規則退回待醫師確認：藥已經包好卻偷偷換了藥單，櫃台會交出錯的藥。
+// 回傳 false 代表沒有任何變動（不留軌跡、不必儲存）。
+export function applyMedicationJournalEdit(order, body, actor, now = new Date()) {
+  if (order.status === 'cancelled') fail('已取消的藥單不在病歷中，不能修改', 409);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) fail('日誌欄位格式不正確');
+  const fields = medicationFields(body);
+  const changed = Object.keys(fields).some(key => fields[key] !== order[key]);
+  if (!changed) return false;
+  const from = order.status;
+  Object.assign(order, fields);
+  if (!order.prescription?.trim()) fail('藥單內容不能清空');
+  if (from !== 'collected') {
+    order.needsRepack ||= from === 'ready';
+    order.status = 'review';
+    order.approvedAt = null;
+    order.approvedBy = '';
+    order.packedAt = null;
+    order.packedBy = '';
+  }
+  recordMedicationEvent(order, 'journal_edit', actor, from, '', now);
+  return true;
 }
 
 export function applyMedicationAction(order, action, body, actor, now = new Date()) {

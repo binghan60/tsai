@@ -15,7 +15,9 @@ test('linked journals read current appointment fields instead of legacy copied c
     assert.equal(result[0].content, '來院原因：追蹤檢查\n\n最新紀錄');
     assert.equal(result[0].readOnly, false);
     assert.equal(result[0].editableContent, '最新紀錄');
+    assert.deepEqual(result[0].sections.map(section => section.key), ['reason', 'visitNote']);
     assert.equal(result[1].content, '手動記事');
+    assert.equal(result[1].sections, undefined);
     assert.equal(notes[0].content, '過期的副本');
   } finally { find.mock.restore(); }
 });
@@ -23,7 +25,9 @@ test('linked journals read current appointment fields instead of legacy copied c
 test('missing legacy appointment preserves its diary text', async () => {
   const find = mock.method(Appointment, 'find', () => ({ lean: async () => [] }));
   try {
-    assert.equal((await clinicalNoteViews([{ appointmentId: 'missing', content: '歷史紀錄' }]))[0].content, '歷史紀錄');
+    const [view] = await clinicalNoteViews([{ appointmentId: 'missing', content: '歷史紀錄' }]);
+    assert.equal(view.content, '歷史紀錄');
+    assert.equal(view.sections, undefined);
   } finally { find.mock.restore(); }
 });
 

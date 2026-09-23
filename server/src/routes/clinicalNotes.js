@@ -2,10 +2,14 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import ClinicalNote from '../models/ClinicalNote.js';
+import MedicationOrder from '../models/MedicationOrder.js';
+import { applyJournalFields } from '../lib/appointmentWorkflow.js';
+import { applyMedicationJournalEdit } from '../lib/medicationWorkflow.js';
+import { syncMedicationJournal } from '../lib/medicationJournal.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { withTransaction } from '../lib/transaction.js';
-import { emitAppointmentUpdate, emitClinicalNoteUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitMedicationUpdate } from '../lib/realtime.js';
 
 const NOTE_FIELDS = ['content', 'entryDate'];
 
@@ -46,18 +50,36 @@ petClinicalNotesRouter.post('/', async (req, res, next) => {
 // 掛載於 /api/clinical-notes
 export const clinicalNotesRouter = Router();
 
+// 掛號日誌與藥單日誌只存關聯，編輯是寫回來源文件：
+//   - 掛號：body.fields 可帶來院原因、體重、體溫、本次簡易紀錄、請轉告飼主、回診建議（見 applyJournalFields）；
+//     只帶 content 的舊呼叫方式仍等同改 visitNote。
+//   - 藥單：body.fields 可帶病況、藥單、備註，寫回藥單並在 history 記 journal_edit（見 applyMedicationJournalEdit）。
+//     藥單日誌的日期跟著藥單建立時間走，不接受 entryDate。
 clinicalNotesRouter.put('/:id', async (req, res, next) => {
   try {
     const fields = pickNoteFields(req.body);
     let note;
     let appointment;
+    let order;
     await withTransaction(async session => {
       const existing = await ClinicalNote.findById(req.params.id).session(session);
-      if (existing?.medicationOrderId) throw Object.assign(new Error('此日誌引用藥單資料，請從藥單修改'), { status: 409 });
+      if (existing?.medicationOrderId) {
+        order = await MedicationOrder.findById(existing.medicationOrderId).session(session);
+        if (!order) throw Object.assign(new Error('找不到對應的藥單資料'), { status: 404 });
+        if (applyMedicationJournalEdit(order, req.body.fields ?? {}, req.user?.username || '')) {
+          await order.save({ session });
+          await syncMedicationJournal(order, { session });
+        } else {
+          order = null;
+        }
+        note = existing;
+        return;
+      }
       if (existing?.appointmentId) {
         appointment = await Appointment.findById(existing.appointmentId).session(session);
         if (!appointment) throw Object.assign(new Error('找不到對應的就診資料'), { status: 404 });
-        if (fields.content !== undefined) appointment.visitNote = String(fields.content ?? '').trim();
+        if (req.body.fields !== undefined) applyJournalFields(appointment, req.body.fields);
+        else if (fields.content !== undefined) appointment.visitNote = String(fields.content ?? '').trim();
         appointment.increment();
         await appointment.save({ session });
         const noteFields = {};
@@ -71,6 +93,7 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
     });
     if (!note) return res.status(404).json({ message: '找不到病歷日誌' });
     if (appointment) emitAppointmentUpdate(appointment);
+    if (order) emitMedicationUpdate(order);
     const [view] = await clinicalNoteViews([note]);
     emitClinicalNoteUpdate(view ?? note);
     res.json(view ?? note);

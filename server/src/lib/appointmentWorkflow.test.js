@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyWorkflowAction, appointmentJournalContent, assertWorkflowVersion } from './appointmentWorkflow.js';
+import { applyJournalFields, applyWorkflowAction, appointmentJournalContent, appointmentJournalSections, assertWorkflowVersion } from './appointmentWorkflow.js';
 import { workflowState, workflowFilter, visitLabel } from '../../../shared/appointmentWorkflow.js';
 
 const appointment = () => ({ __v: 0, status: 'arrived', petId: 'pet-1', checkinNumber: 3, checkinNumberHistory: [3] });
@@ -23,6 +23,32 @@ test('appointment journal also carries the owner-facing care note and the follow
     '安排檢查\n\n請轉告飼主：傷口勿舔舐\n\n回診建議：兩週後回診拆線'
   );
   assert.equal(appointmentJournalContent({ visitNote: '安排檢查', specialCareNote: '  ', followUpRecommendation: '' }), '安排檢查');
+});
+
+test('appointment journal sections keep each field separate, in reading order, without empty or internal fields', () => {
+  assert.deepEqual(
+    appointmentJournalSections({ reason: ' 咳嗽 ', weightKg: 4.2, temperatureC: null, visitNote: '安排檢查', internalNote: '院內追蹤用', specialCareNote: '  ', followUpRecommendation: '兩週後回診' }),
+    [
+      { key: 'reason', label: '來院原因', text: '咳嗽' },
+      { key: 'weightKg', label: '體重', text: '4.2 kg' },
+      { key: 'visitNote', label: '本次簡易紀錄', text: '安排檢查' },
+      { key: 'followUpRecommendation', label: '回診建議', text: '兩週後回診' },
+    ]
+  );
+  assert.deepEqual(appointmentJournalSections({ weightKg: 0 }), [{ key: 'weightKg', label: '體重', text: '0 kg' }]);
+});
+
+test('journal edits write every journal field back regardless of workflow stage, but never internal notes', () => {
+  const visit = { status: 'completed', deskCompletedAt: new Date(), reason: '舊', visitNote: '紀錄', internalNote: '院內', weightKg: 3 };
+  applyJournalFields(visit, { reason: ' 新原因 ', weightKg: '4.5', temperatureC: '', internalNote: '不該被改', handoffNote: '也不該' });
+  assert.equal(visit.reason, '新原因');
+  assert.equal(visit.weightKg, 4.5);
+  assert.equal(visit.temperatureC, null);
+  assert.equal(visit.internalNote, '院內');
+  assert.equal(visit.handoffNote, undefined);
+  assert.throws(() => applyJournalFields(visit, { weightKg: -1 }), /非負數/);
+  assert.throws(() => applyJournalFields(visit, { specialCareNote: 'x'.repeat(501) }), /最多 500 字/);
+  assert.throws(() => applyJournalFields({}, { reason: '' }), /不能全部清空/);
 });
 
 test('the four steps run in order and only the desk releases the queue number', () => {

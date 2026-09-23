@@ -1,15 +1,10 @@
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Pencil } from '@lucide/vue'
-import { http } from '../api/http'
+import { onBeforeUnmount, onMounted } from 'vue'
 import { getSocket } from '../api/socket'
-import { useToast } from '../composables/useToast'
-import { clinicDateInput, formatDateTime } from '../lib/datetime'
+import ClinicalNoteEntry from './ClinicalNoteEntry.vue'
 import Pagination from './Pagination.vue'
 import { Button } from './ui/button'
 import { Alert, AlertDescription } from './ui/alert'
-import { DatePicker } from './ui/date-picker'
-import { Textarea } from './ui/textarea'
 
 const props = defineProps({
   notes: { type: Array, default: () => [] },
@@ -28,25 +23,13 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['load', 'saved'])
-const toast = useToast()
 const socket = getSocket()
-const editingId = ref('')
-const editingContent = ref('')
-const editingDate = ref('')
-const savingId = ref('')
-const editError = ref('')
-
-watch(
-  () => props.notes,
-  () => {
-    if (!props.notes.some((note) => String(note._id) === String(editingId.value))) cancelEdit()
-  },
-)
 
 function noteBelongsToPanel(note) {
   return props.petId && String(note?.petId || '') === String(props.petId)
 }
 
+// 別台電腦改了日誌就重讀；正在修改的那一則由 ClinicalNoteEntry 自己保留輸入（以 _id 為 key，重讀不會卸載）。
 function handleRemoteNoteUpdate(note) {
   if (noteBelongsToPanel(note)) emit('load', props.page)
 }
@@ -58,38 +41,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   socket.off('clinical-note:updated', handleRemoteNoteUpdate)
 })
-
-function startEdit(note) {
-  editingId.value = note._id
-  editingContent.value = note.editableContent ?? note.content ?? ''
-  editingDate.value = clinicDateInput(note.entryDate) || ''
-  editError.value = ''
-}
-
-function cancelEdit() {
-  editingId.value = ''
-  editingContent.value = ''
-  editingDate.value = ''
-  editError.value = ''
-}
-
-async function saveEdit(note) {
-  const content = editingContent.value.trim()
-  if (!content || savingId.value) return
-  savingId.value = note._id
-  editError.value = ''
-  try {
-    const { data } = await http.put(`/clinical-notes/${note._id}`, { content, entryDate: editingDate.value || undefined })
-    cancelEdit()
-    toast.success('已更新病歷日誌')
-    emit('saved', { note, updated: data, content })
-  } catch (err) {
-    editError.value = err.response?.data?.message || '病歷日誌更新失敗，請重試。'
-    toast.error(editError.value)
-  } finally {
-    savingId.value = ''
-  }
-}
 </script>
 
 <template>
@@ -109,35 +60,9 @@ async function saveEdit(note) {
     </Alert>
 
     <div v-else class="clinical-notes-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :class="{ 'clinical-notes-content--scrollable': scrollable && !fill, 'min-h-0 flex-1 overflow-y-auto pr-2': fill }" :tabindex="scrollable || fill ? 0 : undefined" :aria-label="scrollable || fill ? title : undefined" :role="scrollable || fill ? 'region' : undefined">
-      <article v-for="note in notes" :key="note._id" class="mt-3 border-t border-border pt-3 first:border-t-0">
-        <template v-if="editingId === note._id">
-          <div class="grid gap-3 sm:grid-cols-[11rem_minmax(0,1fr)]">
-            <label class="block space-y-1.5 text-xs font-medium">
-              日期
-              <DatePicker v-model="editingDate" aria-label="病歷日誌日期" />
-            </label>
-            <label class="block space-y-1.5 text-xs font-medium">
-              內容
-              <Textarea v-model="editingContent" rows="5" :disabled="savingId === note._id" aria-label="病歷日誌內容" />
-            </label>
-          </div>
-          <Alert v-if="editError" variant="destructive" class="mt-3"
-            ><AlertDescription>{{ editError }}</AlertDescription></Alert
-          >
-          <div class="mt-3 flex justify-end gap-2">
-            <Button variant="secondary" size="sm" :disabled="savingId === note._id" @click="cancelEdit">取消</Button>
-            <Button size="sm" :disabled="savingId === note._id || !editingContent.trim()" @click="saveEdit(note)">儲存</Button>
-          </div>
-        </template>
-        <template v-else>
-          <div class="flex items-start justify-between gap-3">
-            <p class="text-xs text-muted-foreground">{{ formatDateTime(note.entryDate) }}<span v-if="note.medicationOrderId"> · 領藥紀錄</span></p>
-            <!-- 藥單日誌內容由藥單組成，要改請回藥單，這裡不給修改鈕。 -->
-            <Button v-if="!note.medicationOrderId" variant="secondary" size="xs" @click="startEdit(note)"><Pencil class="h-3.5 w-3.5" />修改</Button>
-          </div>
-          <p class="mt-1 whitespace-pre-wrap wrap-anywhere text-sm leading-relaxed">{{ note.content }}</p>
-        </template>
-      </article>
+      <div class="space-y-3 pt-3">
+        <ClinicalNoteEntry v-for="note in notes" :key="note._id" :note="note" @saved="(payload) => emit('saved', payload)" />
+      </div>
       <p v-if="!notes.length" class="mt-3 text-sm text-muted-foreground">{{ emptyText }}</p>
       <Pagination v-if="totalPages > 1" class="mt-4" :page="page" :total-pages="totalPages" @update:page="(next) => emit('load', next)" />
     </div>

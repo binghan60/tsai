@@ -155,17 +155,43 @@ describe('clinical notes routes', () => {
     }
   });
 
-  it('藥單日誌是唯讀的：不能改內容、也不能單獨刪除', async () => {
-    const put = await fetch(`${origin}/api/clinical-notes/note-med`, {
-      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content: '想改內文' }),
+  it('編輯掛號日誌可以一次改全部欄位，全部清空則擋下', async () => {
+    const appointment = { _id: 'apt-linked', reason: '舊原因', visitNote: '舊內容', weightKg: 3, increment() {}, async save() {} };
+    mock.method(Appointment, 'findById', () => ({ session: async () => appointment }));
+    const put = body => fetch(`${origin}/api/clinical-notes/note-linked`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
     });
-    assert.equal(put.status, 409);
-    assert.match((await put.json()).message, /藥單/);
+    const response = await put({ fields: { reason: '咳嗽', weightKg: '4.2', temperatureC: '', specialCareNote: '按時餵藥', followUpRecommendation: '一週後' } });
+    assert.equal(response.status, 200);
+    assert.deepEqual(
+      [appointment.reason, appointment.weightKg, appointment.temperatureC, appointment.visitNote, appointment.specialCareNote, appointment.followUpRecommendation],
+      ['咳嗽', 4.2, null, '舊內容', '按時餵藥', '一週後']
+    );
+    const cleared = await put({ fields: { reason: '', weightKg: null, visitNote: '', specialCareNote: '', followUpRecommendation: '' } });
+    assert.equal(cleared.status, 422);
+  });
+
+  it('藥單日誌可以更正內容（寫回藥單並留軌跡），但不能單獨刪除', async () => {
+    const order = {
+      _id: 'order-1', petId: 'pet-1', status: 'collected', condition: '咳嗽', prescription: '止咳藥', note: '',
+      history: [{ action: 'approve' }], saved: false, async save() { this.saved = true; },
+    };
+    mock.method(MedicationOrder, 'findById', () => ({ session: async () => order }));
+    mock.method(ClinicalNote, 'findOneAndUpdate', async () => ({}));
+    mock.method(MedicationOrder, 'find', () => ({ select: () => ({ lean: async () => [order] }) }));
+    const put = await fetch(`${origin}/api/clinical-notes/note-med`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ fields: { prescription: '止咳藥 每日兩次' } }),
+    });
+    assert.equal(put.status, 200);
+    assert.equal(order.saved, true);
+    assert.equal(order.prescription, '止咳藥 每日兩次');
+    assert.equal(order.status, 'collected');
+    assert.equal(order.history.at(-1).action, 'journal_edit');
     const del = await fetch(`${origin}/api/clinical-notes/note-med`, { method: 'DELETE' });
     assert.equal(del.status, 409);
   });
 
-  it('列出寵物日誌時，藥單日誌的內文由藥單即時組成並標成唯讀，掛號日誌與手動日誌不受影響', async () => {
+  it('列出寵物日誌時，藥單日誌的內文由藥單即時組成，找不到藥單的標成唯讀，手動日誌不受影響', async () => {
     const petId = '507f1f77bcf86cd799439012';
     const notes = [
       { _id: 'n1', petId, entryDate: '2026-09-22T02:00:00Z', source: 'medication', medicationOrderId: '507f1f77bcf86cd7994390aa' },
@@ -183,11 +209,14 @@ describe('clinical notes routes', () => {
     assert.equal(response.status, 200);
     const { items } = await response.json();
     assert.equal(items[0].content, '領藥（待包藥）\n\n病況：咳嗽\n\n藥單：止咳藥');
-    assert.equal(items[0].readOnly, true);
+    assert.equal(items[0].readOnly, false);
+    assert.deepEqual(items[0].fields, { condition: '咳嗽', prescription: '止咳藥', note: '' });
+    assert.equal(items[0].medicationStatus, 'approved');
     assert.equal(items[1].content, '手動記事');
     assert.equal(items[1].readOnly, undefined);
-    // 藥單被刪掉（或撈不到）時不讓整頁壞掉。
+    // 藥單被刪掉（或撈不到）時不讓整頁壞掉，也沒有東西可以改。
     assert.equal(items[2].content, '找不到對應的藥單資料');
+    assert.equal(items[2].readOnly, true);
     // 只撈需要的藥單，且不帶異動軌跡。
     assert.equal(orderQuery.projection, '-history');
     assert.equal(orderQuery._id.$in.length, 2);
