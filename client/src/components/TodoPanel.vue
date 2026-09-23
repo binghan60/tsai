@@ -36,12 +36,28 @@ const editingId = ref('');
 const editText = ref('');
 const editMentions = ref([]);
 
+// 「全部」放最左邊（跟藥單面板同一個順序）：未完成照期限排在前面，接著是最近完成的。
+// 預設仍停在「未完成」——打開面板多半是來做事的。
 const tabs = [
+  { key: 'all', label: '全部' },
   { key: 'open', label: '未完成' },
   { key: 'done', label: '最近完成' },
 ];
-const counts = computed(() => ({ open: store.openItems.length, done: store.doneItems.length }));
-const shown = computed(() => (view.value === 'open' ? store.openItems : store.doneItems));
+const counts = computed(() => ({
+  all: store.openItems.length + store.doneItems.length,
+  open: store.openItems.length,
+  done: store.doneItems.length,
+}));
+const shown = computed(() => {
+  if (view.value === 'open') return store.openItems;
+  if (view.value === 'done') return store.doneItems;
+  return [...store.openItems, ...store.doneItems];
+});
+const EMPTY_TEXT = {
+  all: { title: '還沒有任何待辦', description: '在上面輸入就能新增，打 # 可以標記寵物，兩邊的電腦會即時同步' },
+  open: { title: '沒有未完成的待辦', description: '在上面輸入就能新增，打 # 可以標記寵物，兩邊的電腦會即時同步' },
+  done: { title: '還沒有完成的待辦', description: '只保留最近 50 筆' },
+};
 
 function staffLabel(value) {
   return value === 'front_desk' ? '櫃台' : '醫生';
@@ -80,7 +96,8 @@ async function submit() {
     content.value = '';
     dueDate.value = '';
     mentions.value = [];
-    view.value = 'open';
+    // 新增的一定是未完成；停在「最近完成」會看不到它，停在「全部」就留著。
+    if (view.value === 'done') view.value = 'open';
   } catch (err) {
     toast.error(err.response?.data?.message || '新增失敗，請稍後再試');
   } finally {
@@ -136,12 +153,14 @@ async function saveEdit(item) {
     <EmptyState
       v-else-if="!shown.length"
       :icon="ListTodo"
-      :title="view === 'open' ? '沒有未完成的待辦' : '還沒有完成的待辦'"
-      :description="view === 'open' ? '在上面輸入就能新增，打 # 可以標記寵物，兩邊的電腦會即時同步' : '只保留最近 50 筆'"
+      :title="EMPTY_TEXT[view].title"
+      :description="EMPTY_TEXT[view].description"
       inset
     />
-    <ul v-else class="grid gap-2 lg:grid-cols-2">
-      <li v-for="item in shown" :key="item._id" class="flex items-start gap-3 rounded-xl border border-border bg-card p-3">
+    <!-- 單欄清單：待辦有先後（期限早的在上面），兩欄卡片的 Z 字讀序看不出來。
+         列高隨內容，不套 desktop-data-row 的固定 56px——待辦內文最長 500 字，要能完整換行。 -->
+    <ul v-else class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
+      <li v-for="item in shown" :key="item._id" class="grid min-h-14 grid-cols-[2.25rem_minmax(0,1fr)_7rem_auto] items-center gap-3 px-4 py-2.5">
         <Button
           v-if="item.status === 'open'"
           type="button"
@@ -165,7 +184,7 @@ async function saveEdit(item) {
           <Undo2 class="h-4 w-4" stroke-width="1.75" />
         </Button>
 
-        <div class="min-w-0 flex-1 space-y-1">
+        <div class="min-w-0 space-y-0.5">
           <form v-if="editingId === item._id" class="flex items-center gap-1.5" @submit.prevent="saveEdit(item)">
             <TodoMentionInput v-model="editText" v-model:mentions="editMentions" class="min-w-0 flex-1" maxlength="500" aria-label="編輯待辦內容" />
             <Button type="submit" variant="secondary" size="icon-xs" :disabled="!editText.trim() || busyId === item._id" aria-label="儲存"><Check class="h-4 w-4" stroke-width="1.75" /></Button>
@@ -174,11 +193,12 @@ async function saveEdit(item) {
           <!-- 標籤緊貼標籤寫在同一行：p 是 whitespace-pre-wrap，標籤之間多一個換行就會多一個空格。 -->
           <p v-else class="wrap-break-word text-sm leading-snug whitespace-pre-wrap" :class="item.status === 'done' ? 'text-muted-foreground line-through' : ''"><template v-for="(segment, index) in segments(item)" :key="index"><button v-if="segment.type === 'mention' && segment.mention.petId" type="button" class="mx-0.5 inline-flex items-center rounded-full bg-accent px-1.5 font-medium text-accent-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :title="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined" @click="pinned.openQuickView(segment.mention.petId)">#{{ segment.mention.petName }}</button><span v-else-if="segment.type === 'mention'" class="text-muted-foreground" title="寵物資料已刪除">#{{ segment.mention.petName }}</span><template v-else>{{ segment.text }}</template></template></p>
 
-          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            <Badge v-if="item.status === 'open' && dueStatus(item.dueDate, today)" variant="status" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, today).tone]">{{ dueStatus(item.dueDate, today).label }}</Badge>
-            <span>{{ metaLabel(item) }}</span>
-          </div>
+          <p class="text-xs text-muted-foreground">{{ metaLabel(item) }}</p>
         </div>
+
+        <span class="flex justify-end">
+          <Badge v-if="item.status === 'open' && dueStatus(item.dueDate, today)" variant="status" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, today).tone]">{{ dueStatus(item.dueDate, today).label }}</Badge>
+        </span>
 
         <div class="flex shrink-0 items-center gap-1.5">
           <Button v-if="item.status === 'open' && editingId !== item._id" type="button" variant="secondary" size="icon-xs" :aria-label="`編輯：${item.content}`" @click="startEdit(item)">

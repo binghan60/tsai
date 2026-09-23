@@ -924,7 +924,7 @@ onBeforeUnmount(() => {
       @close="closeDrawer"
     />
 
-    <!-- 暫存區：跟診療台同一個呈現方式，大面板一列放得下兩隻，看完就關。 -->
+    <!-- 暫存區：跟診療台同一個呈現方式（一隻一列的清單），看完就關。 -->
     <ModalDialog
       v-if="panel === 'pinned'"
       size="xl"

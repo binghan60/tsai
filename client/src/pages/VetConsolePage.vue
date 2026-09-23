@@ -2,7 +2,7 @@
 import MedicationWorkspace from '../components/MedicationWorkspace.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, ArrowRight, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, LayoutList, List, ListTodo, Pill, Pin, RefreshCw, Scissors, Stethoscope, Undo2, X } from '@lucide/vue'
+import { ArrowRight, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, LayoutList, List, ListTodo, Pill, Pin, RefreshCw, Scissors, Stethoscope, Undo2, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { getSocket } from '../api/socket'
 import { useToast } from '../composables/useToast'
@@ -13,6 +13,8 @@ import { clinicDateInput, clinicTimeInput, shiftDateInput, weekdayLabel } from '
 import { workflowFilter, workflowState } from '../../../shared/appointmentWorkflow.js'
 import { patientNotesFor, visitTypeLabel } from '../lib/appointmentDisplay'
 import PatientNotes from '../components/PatientNotes.vue'
+import PatientNotesTip from '../components/PatientNotesTip.vue'
+import { Card } from '../components/ui/card'
 import { usePinnedPetsStore } from '../stores/pinnedPets'
 import { useTodosStore } from '../stores/todos'
 import VisitWorkspace from '../components/VisitWorkspace.vue'
@@ -161,7 +163,18 @@ const referenceDrawers = computed(() => [
   { key: 'todos', label: '待辦', icon: ListTodo, count: todos.openCount, tone: 'todo', description: '院內共用的待辦事項，醫生與櫃台即時同步' },
 ])
 const activeDrawer = computed(() => referenceDrawers.value.find((entry) => entry.key === drawer.value) || null)
-const drawerList = computed(() => (drawer.value === 'handoff' ? handedOff.value : drawer.value === 'completed' ? finished.value : []))
+// 查閱清單的排序依面板標題那件事：已交櫃台＝最早交出的在上面（在櫃台前等最久），已完成＝最近完成的在上面。
+const drawerList = computed(() => {
+  const byTime = (key, direction) => (a, b) => direction * (new Date(a[key] || 0) - new Date(b[key] || 0))
+  if (drawer.value === 'handoff') return [...handedOff.value].sort(byTime('handoffAt', 1))
+  if (drawer.value === 'completed') return [...finished.value].sort(byTime('deskCompletedAt', -1))
+  return []
+})
+const DRAWER_COLUMNS = '3rem minmax(11rem, 1fr) minmax(0, 2.4fr) 5.5rem'
+const DRAWER_COLUMNS_WITH_ACTION = `${DRAWER_COLUMNS} 5.5rem`
+function drawerTime(item) {
+  return clinicTimeInput(drawer.value === 'handoff' ? item.handoffAt : item.deskCompletedAt) || '—'
+}
 function toggleDrawer(key) {
   drawer.value = drawer.value === key ? '' : key
 }
@@ -463,21 +476,7 @@ onBeforeUnmount(() => {
                           <span class="truncate text-sm font-semibold" :class="String(item._id) === activeId ? 'text-accent-foreground' : ''">{{ item.petName }}</span>
                           <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
 
-                          <TooltipProvider v-if="notesFor(item).length" :delay-duration="100">
-                            <Tooltip>
-                              <TooltipTrigger as-child>
-                                <button type="button" class="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded bg-warning-surface px-1.5 py-0.5 text-[11px] font-semibold text-warning transition-colors hover:bg-warning/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-warning" :aria-label="notesFor(item).some((n) => n.text.includes('咬') || n.text.includes('凶')) ? '注意備註' : '提醒備註'" @click.stop>
-                                  <AlertTriangle class="h-3 w-3" stroke-width="2" aria-hidden="true" />
-                                  <span>{{ notesFor(item).some((n) => n.text.includes('咬') || n.text.includes('凶')) ? '注意' : '提醒' }}</span>
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" align="start" :arrow="false" class="flex flex-col gap-1.5 max-w-xs whitespace-normal rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
-                                <div v-for="note in notesFor(item)" :key="note.key" class="whitespace-pre-wrap break-words rounded-md bg-warning-surface px-2.5 py-1.5 text-xs font-medium text-warning leading-relaxed">
-                                  <span class="font-semibold">{{ note.label }}備註：</span>{{ note.text }}
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <PatientNotesTip :notes="notesFor(item)" />
 
                           <TooltipProvider v-if="item.isSurgery" :delay-duration="100">
                             <Tooltip>
@@ -575,25 +574,44 @@ onBeforeUnmount(() => {
           </template>
           <template v-else>
             <p v-if="!drawerList.length" class="py-10 text-center text-sm text-muted-foreground">目前沒有</p>
-            <div v-else class="grid gap-2.5 lg:grid-cols-2">
-              <article v-for="item in drawerList" :key="item._id" class="flex items-start gap-3 rounded-xl border border-border p-3">
-                <CheckinNumber :appointment="item" />
-                <div class="min-w-0 flex-1 space-y-1">
-                  <div class="flex items-center gap-1.5">
-                    <button type="button" class="min-w-0 truncate bg-transparent text-left text-sm font-semibold text-primary" @click="openFromDrawer(item)">{{ item.petName }}</button>
-                    <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
-                    <span class="ml-auto shrink-0 text-xs text-muted-foreground">{{ statusMeta(item) }}</span>
-                  </div>
-                  <p class="text-sm leading-snug" :class="item.reason ? '' : 'text-muted-foreground'">{{ item.reason || '未填來院原因' }}</p>
-                  <div v-if="item.isSurgery || item.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
-                    <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
-                    <LatenessBadge :minutes="item.latenessMinutes" />
-                  </div>
-                  <PatientNotes :notes="notesFor(item)" />
-                </div>
-                <Button v-if="drawer === 'handoff'" variant="secondary" size="xs" class="shrink-0" :disabled="busy" @click="reclaim(item)"><Undo2 class="h-4 w-4" />取回</Button>
-              </article>
-            </div>
+            <!-- 一筆一列、欄位對齊：這份清單是拿來「掃一遍、找某一隻」的，兩欄卡片的 Z 字讀序與忽高忽低的卡片都會拖慢掃視。
+                 備註收成「注意／提醒」小標籤（滑過看全文），不讓整段備註把列撐高。 -->
+            <Card v-else class="overflow-hidden p-0" :style="{ '--data-columns': drawer === 'handoff' ? DRAWER_COLUMNS_WITH_ACTION : DRAWER_COLUMNS }">
+              <div class="desktop-data-header text-xs font-semibold text-muted-foreground">
+                <span class="desktop-data-cell">號碼</span>
+                <span class="desktop-data-cell">寵物</span>
+                <span class="desktop-data-cell">來院原因</span>
+                <span class="desktop-data-cell text-right">{{ drawer === 'handoff' ? '交出時間' : '完成時間' }}</span>
+                <span v-if="drawer === 'handoff'" class="desktop-data-cell"></span>
+              </div>
+              <div
+                v-for="item in drawerList"
+                :key="item._id"
+                class="desktop-data-row cursor-pointer transition-colors hover:bg-field focus-visible:bg-field focus-visible:outline-none"
+                role="button"
+                tabindex="0"
+                :aria-label="`開啟 ${item.petName}`"
+                @click="openFromDrawer(item)"
+                @keydown.enter.self.prevent="openFromDrawer(item)"
+                @keydown.space.self.prevent="openFromDrawer(item)"
+              >
+                <span class="desktop-data-cell"><CheckinNumber :appointment="item" /></span>
+                <span class="desktop-data-cell flex items-baseline gap-1.5">
+                  <span class="min-w-0 truncate text-sm font-semibold text-primary">{{ item.petName }}</span>
+                  <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
+                </span>
+                <span class="desktop-data-cell flex items-center gap-1.5">
+                  <span class="min-w-0 truncate text-sm" :class="item.reason ? '' : 'text-muted-foreground'" :title="item.reason || undefined">{{ item.reason || '未填來院原因' }}</span>
+                  <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" class="shrink-0" />
+                  <LatenessBadge :minutes="item.latenessMinutes" class="shrink-0" />
+                  <PatientNotesTip :notes="notesFor(item)" />
+                </span>
+                <span class="desktop-data-cell text-right text-sm tabular-nums text-muted-foreground">{{ drawerTime(item) }}</span>
+                <span v-if="drawer === 'handoff'" class="desktop-data-cell text-right">
+                  <Button variant="secondary" size="xs" :disabled="busy" @click.stop="reclaim(item)" @keydown.stop><Undo2 class="h-4 w-4" stroke-width="1.75" />取回</Button>
+                </span>
+              </div>
+            </Card>
           </template>
         </div>
       </ModalDialog>
