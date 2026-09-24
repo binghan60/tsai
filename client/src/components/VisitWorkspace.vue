@@ -527,8 +527,10 @@ onBeforeUnmount(() => {
 
     <!-- 看診紀錄與交辦在同一頁：左欄由上而下是紀錄 → 交給櫃台，右欄是歷次病歷日誌。
          早期拆成兩步，第二步左邊只是把紀錄再唯讀顯示一次；交辦區改成緊接在紀錄下方、
-         用標題與分隔線獨立出來，寫完紀錄往下就會經過，不必多一次換頁。 -->
-    <div class="grid xl:grid-cols-[minmax(0,1fr)_26rem]">
+         用標題與分隔線獨立出來，寫完紀錄往下就會經過，不必多一次換頁。
+         兩欄按 65:35 分配而不是把日誌欄寫死寬度：收合側邊欄多出來的寬度要兩欄一起分，
+         不然全被紀錄欄吃掉、日誌欄動也不動。日誌欄保底 20rem，窄螢幕上報告卡才不會被擠爛。 -->
+    <div class="grid xl:grid-cols-[minmax(0,65fr)_minmax(20rem,35fr)]">
       <div class="flex flex-col gap-4 p-5">
         <div class="grid grid-cols-2 gap-3">
           <label class="space-y-1.5 text-xs font-medium"
