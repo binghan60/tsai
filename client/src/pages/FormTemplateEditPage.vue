@@ -38,6 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Switch } from '../components/ui/switch';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FormSectionPreview from '../components/formfields/FormSectionPreview.vue';
+import { DEFAULT_VALUE_TYPES } from '../../../shared/formDefaults';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
@@ -105,7 +106,6 @@ const GENERAL_TYPES = ['text', 'textarea', 'image', 'number', 'date', 'select', 
 // 狀態切換、參考範圍與分組表格，放進別種版式只會被當成普通文字框。
 // 這三種都是「從固定選項裡挑」，差別只在呈現方式，共用同一份選項設定。
 const OPTION_TYPES = new Set(['select', 'radio', 'checkbox']);
-const DEFAULT_VALUE_TYPES = new Set(['text', 'textarea', 'number', 'date', 'select', 'radio', 'checkbox']);
 
 const SPAN_OPTIONS = [
   { value: 'auto', title: '自動', hint: '跟著版式的預設欄寬' },

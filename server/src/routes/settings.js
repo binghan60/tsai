@@ -5,7 +5,7 @@ import MedicalRecord from '../models/MedicalRecord.js';
 import ClinicSettings from '../models/ClinicSettings.js';
 import { buildDefaultSections } from '../config/formTemplateSeed.js';
 import {
-  listTemplates, missingRoles, sanitizeSections, serializeTemplate, serializeTemplateSummary,
+  listTemplates, missingRoles, sanitizePresets, sanitizeSections, serializeTemplate, serializeTemplateSummary,
 } from '../lib/formTemplate.js';
 import { withTransaction } from '../lib/transaction.js';
 
@@ -88,6 +88,17 @@ router.post('/form-templates', async (req, res, next) => {
       if (cleaned.error) return res.status(422).json({ message: `來源表單結構有問題：${cleaned.error}` });
       sections = cleaned.sections;
     }
+    // 複製表單連預填模板一起帶過去；識別碼重新產生（沒有 existing），值對著新結構清洗。
+    let presets = [];
+    if (source) {
+      const copied = sanitizePresets(
+        (source.toObject().presets ?? []).map(({ key, ...preset }) => preset),
+        sections,
+        null
+      );
+      if (copied.error) return res.status(422).json({ message: `來源表單的預填模板有問題：${copied.error}` });
+      presets = copied.presets;
+    }
 
     const template = await FormTemplate.create({
       name,
@@ -97,6 +108,7 @@ router.post('/form-templates', async (req, res, next) => {
       order,
       version: 1,
       sections,
+      presets,
     });
     res.status(201).json(serializeTemplate(template, { includeDisabled: true }));
   } catch (err) {
@@ -155,6 +167,16 @@ router.put('/form-templates/:id', async (req, res, next) => {
       template.sections = sections;
       template.retiredKeys = retiredKeys;
       template.version += 1;
+    }
+
+    // 預填模板不影響表單結構，不動 version。只改了 sections 沒帶 presets 時，
+    // 也要把既有的預填值對著新結構重新清洗，刪掉的項目不留殘值。
+    if (Array.isArray(req.body?.presets) || Array.isArray(req.body?.sections)) {
+      const current = template.toObject();
+      const rawPresets = Array.isArray(req.body?.presets) ? req.body.presets : current.presets;
+      const { presets, error } = sanitizePresets(rawPresets, current.sections, current);
+      if (error) return res.status(422).json({ message: error });
+      template.presets = presets;
     }
 
     await template.save();

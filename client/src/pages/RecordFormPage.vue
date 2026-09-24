@@ -1,12 +1,13 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, LockKeyhole, PawPrint, Save, Trash2, User } from '@lucide/vue';
+import { Activity, AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, LockKeyhole, PawPrint, Save, Settings2, Trash2, User } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, clinicTimeInput, combineClinicDateTime, formatDate } from '../lib/datetime';
 import { collectPreviewIssues } from '../lib/recordFormValidation';
 import { defaultValueForItem } from '../../../shared/formDefaults';
+import { planPresetApplication } from '../lib/formPresets';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomId, sectionKeyForItem } from '../lib/formTemplate';
 import { familyOf } from '../lib/fieldFamily';
@@ -20,6 +21,7 @@ import { TimePicker } from '../components/ui/time-picker';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import FormSection from '../components/formfields/FormSection.vue';
@@ -225,6 +227,7 @@ async function applyTemplate(templateId, fallback = {}) {
   chosenTemplateId.value = loadedTemplate._id ? String(loadedTemplate._id) : '';
   examTypeName.value = loadedTemplate.name || fallback.name || '';
   activeSectionId.value = '';
+  appliedPreset.value = null;
   applyTemplateDefaults({ includeItemDefaults: !recordId.value });
   return loadedTemplate;
 }
@@ -334,6 +337,47 @@ async function confirmRecopy() {
   } finally {
     recopying.value = false;
   }
+}
+
+// 預填模板：同一份表單的另一組預填值（例如「預防針」「牙齒」），疊在項目預設值之上。
+// 套過哪一個只記在頁面記憶體裡，用來在切換時把「上一個模板帶入、使用者沒動過」的欄位退回預設。
+const presets = computed(() => template.value?.presets ?? []);
+const presetMenuOpen = ref(false);
+const appliedPreset = ref(null);
+
+// 模板沒設定、要退回時的底：項目預設值，沒有就清空。日期與獸醫師不在模板範圍內，不會走到這裡。
+function presetBaseValue(item) {
+  return defaultValueForItem(item) ?? (item.type === 'checkbox' ? [] : '');
+}
+
+const copyValue = (value) => (Array.isArray(value) ? [...value] : value);
+
+function applyPreset(preset) {
+  presetMenuOpen.value = false;
+  const previous = appliedPreset.value;
+  const { changes, applied } = planPresetApplication({
+    items: TEMPLATE_SECTIONS.value.flatMap((section) => section.items ?? []),
+    preset,
+    previous,
+    currentValue: valueFor,
+    baseValue: presetBaseValue,
+  });
+  const before = changes.map(({ item }) => ({ item, value: copyValue(valueFor(item)) }));
+  for (const { item, value } of changes) setValue(item, copyValue(value));
+  appliedPreset.value = { key: preset.key, applied };
+  if (!changes.length) {
+    toast.info('目前表單的內容已經跟這組模板一致，沒有欄位需要變更。', `已套用「${preset.name}」`);
+    return;
+  }
+  toast.success(`已帶入 ${changes.length} 個欄位。`, `已套用「${preset.name}」`, {
+    action: {
+      label: '復原',
+      handler: () => {
+        for (const { item, value } of before) setValue(item, value);
+        appliedPreset.value = previous;
+      },
+    },
+  });
 }
 
 const loading = ref(true);
@@ -912,6 +956,30 @@ function handleBeforeUnload(event) {
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div><Breadcrumbs class="mb-2" :items="[{ label: '寵物', to: '/pets' }, { label: pet?.name || '寵物資料', to: petId ? `/pets/${petId}` : '/pets' }, { label: isEdit ? '編輯就診紀錄' : '新增就診紀錄' }]" /><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案就診紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯就診紀錄' : '新增就診紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked" class="flex flex-wrap items-center justify-end gap-3">
+        <Popover v-if="!needsTypeChoice && chosenTemplateId" v-model:open="presetMenuOpen">
+          <PopoverTrigger as-child>
+            <Button type="button" variant="secondary" size="sm"><Layers class="h-4 w-4" />套用預填模板<ChevronDown class="h-4 w-4" /></Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" class="w-64 p-2">
+            <p class="px-3 pb-1 pt-2 text-xs text-muted-foreground">{{ presets.length ? '只覆寫模板有設定的欄位，其餘維持目前內容。' : `「${examTypeName}」還沒有預填模板。` }}</p>
+            <button
+              v-for="preset in presets"
+              :key="preset.key"
+              type="button"
+              class="mt-1 flex min-h-11 w-full items-center gap-2 rounded-lg bg-field px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              @click="applyPreset(preset)"
+            >
+              <span class="min-w-0 flex-1 truncate">{{ preset.name }}</span>
+              <Check v-if="appliedPreset?.key === preset.key" class="h-4 w-4 shrink-0 text-primary" stroke-width="1.75" /><span v-if="appliedPreset?.key === preset.key" class="sr-only">（目前套用中）</span>
+            </button>
+            <div class="my-2 border-t border-border"></div>
+            <router-link
+              :to="presets.length ? { path: '/settings/presets', query: { form: chosenTemplateId } } : `/settings/presets/${chosenTemplateId}/new`"
+              class="flex min-h-11 w-full items-center gap-2 rounded-lg bg-field px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              @click="presetMenuOpen = false"
+            ><Settings2 class="h-4 w-4" stroke-width="1.75" />{{ presets.length ? '管理預填模板' : '新增預填模板' }}</router-link>
+          </PopoverContent>
+        </Popover>
         <Button v-if="!needsTypeChoice && finalizedSources.length" type="button" variant="secondary" size="sm" @click="openRecopyDialog"><Copy class="h-4 w-4" />重新帶入報告內容</Button>
         <div v-if="recordId || isDirty || saveState === 'saving' || saveState === 'error'" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-danger' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}<MechanismTooltip label="查看自動儲存說明" text="填寫中的變更會在停止輸入約 1.5 秒後自動儲存為草稿。若顯示儲存失敗，可用下方「儲存草稿並返回」重試。" /></div>
       </div>

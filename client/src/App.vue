@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CalendarClock, Cat, ChevronsLeft, ChevronsRight, ClipboardList, FileText, LayoutDashboard, Mail, Menu, PackageCheck, Search } from '@lucide/vue';
+import { CalendarClock, Cat, ChevronsLeft, ChevronsRight, ClipboardList, FileText, Layers, LayoutDashboard, Mail, Menu, PackageCheck, Search } from '@lucide/vue';
 import AppSettingsMenu from './components/AppSettingsMenu.vue';
 import { useAuthStore } from './stores/auth';
 import { useGlobalChat } from './composables/useGlobalChat';
@@ -69,6 +69,7 @@ const navItems = [
   { to: '/records/deliveries', label: '寄送歷程', exact: false, icon: Mail },
   { to: '/settings/forms', label: '表單管理', exact: false, icon: ClipboardList },
   { to: '/settings/text-templates', label: '文字模板', exact: false, icon: FileText },
+  { to: '/settings/presets', label: '預填模板', exact: false, icon: Layers },
 ];
 
 const activeTitle = computed(() => route.meta.title ?? navItems.find(isNavActive)?.label ?? '儀表板');

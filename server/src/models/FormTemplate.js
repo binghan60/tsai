@@ -59,6 +59,19 @@ const formSectionSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// 預填模板：同一份表單的另一組預填值（例如「預防針」「牙齒」），填表時手動一鍵套用。
+// 疊在項目 defaultValue 之上，只覆寫自己有設定的欄位；不影響表單結構，所以存檔不動 version，
+// 也不進報告快照。values 以項目 key 為鍵，複選存字串陣列，其餘存字串。
+const formPresetSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true, trim: true },
+    name: { type: String, required: true, trim: true },
+    order: { type: Number, default: 0 },
+    values: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
+  },
+  { _id: false, minimize: false }
+);
+
 const formTemplateSchema = new mongoose.Schema(
   {
     // 一份範本就是一種健檢類型，name 會顯示在建立報告的類型選單與報告頁首。
@@ -72,6 +85,7 @@ const formTemplateSchema = new mongoose.Schema(
     order: { type: Number, default: 0 },
     version: { type: Number, min: 1, default: 1 },
     sections: { type: [formSectionSchema], default: [] },
+    presets: { type: [formPresetSchema], default: [] },
     // 已刪除過的 key 不再重複使用，避免新項目繼承到舊項目的歷史語意。
     retiredKeys: { type: [String], default: [] },
     relationVersion: { type: Number, default: 0, select: false },

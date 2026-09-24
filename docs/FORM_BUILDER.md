@@ -222,3 +222,18 @@ sections: [                      // 完整快照
 4. **已結案報告永遠不重新套用範本**。只有草稿會在載入時合併最新範本定義。
 5. 現有的 [`mergeFindings`](../client/src/pages/RecordFormPage.vue#L110) 已經會保留「存檔有、定義沒有」的孤兒項目，這個容錯行為要延續到新架構 —— 使用者刪掉某項目後，正在編輯中的草稿不會突然掉資料。
 6. 範本每次儲存 `version` +1，報告記錄用的是哪一版，方便日後追查。
+
+---
+
+## 八、預填模板（presets）
+
+同一份表單常有幾種固定的填法（例如「預防針」「牙齒」），項目的 `defaultValue` 只能放一組。`FormTemplate.presets[]` 讓每份表單再存多組預填值：
+
+```js
+presets: [{ key: 'preset_ab12cd', name: '預防針', order: 0, values: { chiefComplaint: '年度預防針', custom_xxx: ['三合一'] } }]
+```
+
+- **範圍**：只收 `text`／`textarea`／`number`／`select`／`radio`／`checkbox`，再排除獸醫師（`role: 'vet'`）；日期（回診日期、健檢日期）每次看診才決定，不收——`date` 型別之外，名稱含「日期」的欄位也排除，因為自訂的回診日期常被建成文字欄位（`shared/formDefaults.js` 的 `presetEligible`／`normalizeTemplateValue` 前後端共用）。理學檢查、檢驗、量測、牙齒圖、圖片是每次實際看診的結果，不放進模板。
+- **跟預設值的關係**：預設值是底，新建報告時照舊自動帶入；模板是醫師手動套上去的一層，只覆寫自己有設定的欄位。切換模板時，上一組帶入、醫師沒動過的欄位退回預設值，動過的保留（`client/src/lib/formPresets.js`）。
+- **不影響結構**：存檔不動 `version`、不進報告快照。後端每次存檔都對著新的 sections 清洗（`sanitizePresets`），刪掉的項目、改掉的選項，對應的模板值一起消失。
+- **編輯**：獨立的設定頁 `/settings/presets`（不在表單設計頁裡，免得新增一組模板還要先進整份表單的結構編輯），先選表單，再用填表時同一套控制項逐欄設定。表單設計頁存檔不送 `presets`，兩頁不會互相覆蓋。

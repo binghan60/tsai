@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultRecordFields, missingRoles, sanitizeSections, storageFor } from './formTemplate.js';
+import { defaultRecordFields, missingRoles, sanitizePresets, sanitizeSections, storageFor } from './formTemplate.js';
 
 // 這裡測的是表單範本的「身分制度」。
 //
@@ -272,5 +272,60 @@ describe('storageFor：這個項目的作答存在哪裡', () => {
 
   it('沒有對應具名欄位的自訂項目一律 custom', () => {
     assert.equal(storageFor({ type: 'text', key: 'custom_ab12cd' }), 'custom');
+  });
+});
+
+describe('sanitizePresets：預填模板', () => {
+  const sections = [
+    section('basic', '基本資料', [
+      item('chiefComplaint', '主訴', 'textarea'),
+      item('custom_choices', '狀態', 'checkbox', { options: ['食慾正常', '精神正常'] }),
+      item('custom_result', '結果', 'radio', { options: ['正常', '異常'] }),
+      item('oral', '口腔', 'finding'),
+      item('vet', '獸醫師', 'text', { role: 'vet' }),
+      item('custom_followup', '回診日期', 'date'),
+      item('custom_followup_text', '回診日期', 'text'),
+      item('custom_off', '停用', 'text', { enabled: false }),
+    ]),
+    { ...section('hidden', '停用區塊', [item('custom_hidden', '隱藏', 'text')]), enabled: false },
+  ];
+
+  it('只留下目前表單裡可預填的欄位與合法值', () => {
+    const { presets } = sanitizePresets([{
+      name: ' 牙齒 ',
+      values: {
+        chiefComplaint: '  洗牙評估 ',
+        custom_choices: ['食慾正常', '不存在'],
+        custom_result: '不存在',
+        oral: '異常',
+        vet: '王醫師',
+        custom_followup: '2026-10-01',
+        custom_followup_text: '兩週後',
+        custom_off: '停用項目的值',
+        custom_hidden: '停用區塊的值',
+        custom_deleted: '已刪除項目的值',
+      },
+    }], sections, null);
+
+    assert.equal(presets[0].name, '牙齒');
+    assert.match(presets[0].key, /^preset_/);
+    assert.deepEqual(presets[0].values, { chiefComplaint: '洗牙評估', custom_choices: ['食慾正常'] });
+  });
+
+  it('既有模板的 key 沿用，前端捏造的 key 不採用', () => {
+    const current = { presets: [{ key: 'preset_keep', name: '預防針', values: {} }] };
+    const { presets } = sanitizePresets(
+      [{ key: 'preset_keep', name: '預防針', values: {} }, { key: 'preset_fake', name: '牙齒', values: {} }],
+      sections,
+      current
+    );
+    assert.equal(presets[0].key, 'preset_keep');
+    assert.notEqual(presets[1].key, 'preset_fake');
+    assert.deepEqual(presets.map((preset) => preset.order), [0, 1]);
+  });
+
+  it('名稱空白或重複時拒收', () => {
+    assert.ok(sanitizePresets([{ name: '  ', values: {} }], sections, null).error);
+    assert.ok(sanitizePresets([{ name: '牙齒', values: {} }, { name: '牙齒 ', values: {} }], sections, null).error);
   });
 });

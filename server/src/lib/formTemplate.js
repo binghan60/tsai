@@ -2,7 +2,7 @@ import FormTemplate, { ITEM_ROLES, ITEM_TYPES, PRESENTATIONS } from '../models/F
 import MedicalRecord from '../models/MedicalRecord.js';
 import { buildSeedTemplates } from '../config/formTemplateSeed.js';
 import { normalizeSpecies } from '../config/labTests.js';
-import { defaultValueForItem } from '../../../shared/formDefaults.js';
+import { defaultValueForItem, normalizeTemplateValue, presetEligible } from '../../../shared/formDefaults.js';
 
 // 這個型別填出來的值長什麼樣，以及 schema 欄位收的是什麼值。
 const TYPE_VALUE_KIND = {
@@ -111,6 +111,12 @@ export function serializeTemplate(template, { includeDisabled = false } = {}) {
     documentVersion: doc.__v ?? 0,
     updatedAt: doc.updatedAt,
     sections,
+    presets: sortByOrder(doc.presets ?? []).map((preset) => ({
+      key: preset.key,
+      name: preset.name,
+      order: preset.order ?? 0,
+      values: preset.values ?? {},
+    })),
   };
 }
 
@@ -127,6 +133,12 @@ export function serializeTemplateSummary(template) {
     order: doc.order ?? 0,
     sectionCount: (doc.sections ?? []).length,
     itemCount: (doc.sections ?? []).reduce((sum, section) => sum + (section.items ?? []).length, 0),
+    // 預填模板頁以表單分組列出每組模板，只需要名稱與設定了幾欄。
+    presets: sortByOrder(doc.presets ?? []).map((preset) => ({
+      key: preset.key,
+      name: preset.name,
+      fieldCount: Object.keys(preset.values ?? {}).length,
+    })),
   };
 }
 
@@ -237,6 +249,52 @@ export function sanitizeSections(rawSections, existing) {
     ...[...knownItemKeys].filter((key) => !survivingItems.has(key)),
   ];
   return { sections, retiredKeys: [...new Set([...retired, ...newlyRetired])] };
+}
+
+// ── 預填模板 ──
+export const MAX_PRESETS = 30;
+
+// 對著「這次存檔後的」sections 清洗：刪掉或改成不可預填型別的項目，對應的值一起消失，
+// 不留下指向不存在欄位的殘值。停用的區塊／項目也不收——填表時根本看不到它們。
+export function sanitizePresets(rawPresets, sections, existing) {
+  const list = Array.isArray(rawPresets) ? rawPresets : [];
+  if (list.length > MAX_PRESETS) return { error: `預填模板最多 ${MAX_PRESETS} 組` };
+
+  const items = new Map(
+    (sections ?? [])
+      .filter((section) => section.enabled !== false)
+      .flatMap((section) => (section.items ?? []).map((item) => [item.key, item]))
+  );
+  const knownKeys = new Set((existing?.presets ?? []).map((preset) => preset.key));
+  const incomingKeys = collectKeys(list.map((preset) => preset?.key));
+  if (incomingKeys.duplicates.size) return { error: '預填模板有重複的識別碼' };
+  const taken = new Set([...incomingKeys.seen].filter((key) => knownKeys.has(key)));
+
+  const names = new Set();
+  const presets = [];
+  for (const [index, raw] of list.entries()) {
+    const name = String(raw?.name ?? '').trim();
+    if (!name) return { error: '請為每一組預填模板命名' };
+    if (names.has(name)) return { error: `預填模板「${name}」重複了` };
+    names.add(name);
+
+    const values = {};
+    const rawValues = raw?.values && typeof raw.values === 'object' && !Array.isArray(raw.values) ? raw.values : {};
+    for (const [itemKey, rawValue] of Object.entries(rawValues)) {
+      const item = items.get(itemKey);
+      if (!presetEligible(item)) continue;
+      const value = normalizeTemplateValue(item, rawValue);
+      if (value !== undefined) values[itemKey] = value;
+    }
+
+    presets.push({
+      key: raw?.key && knownKeys.has(raw.key) ? raw.key : nextKey('preset', taken),
+      name,
+      order: index,
+      values,
+    });
+  }
+  return { presets };
 }
 
 // 帶 role 的項目消失會讓對應的系統功能失效，儲存前先擋下來。
