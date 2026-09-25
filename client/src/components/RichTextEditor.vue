@@ -54,9 +54,14 @@ const Tint = Mark.create({
 });
 
 // Tiptap 的粗體預設會把 **x**、__x__ 自動變粗，打 __init__ 這種字會被誤判，關掉；用按鈕或 Ctrl+B。
+// Ctrl+B 跟按鈕走同一個 toggleBold，反白後按下去一樣會取消反白（見 applyFormatting）。
 const PlainBold = Bold.extend({
   addInputRules: () => [],
   addPasteRules: () => [],
+  addKeyboardShortcuts: () => ({
+    'Mod-b': () => { toggleBold(); return true; },
+    'Mod-B': () => { toggleBold(); return true; },
+  }),
 }).configure({ HTMLAttributes: { class: BOLD_CLASS } });
 
 // 字數上限：新文件的純文字超過上限、而且比原本更長時，整筆輸入不接受。
@@ -140,17 +145,35 @@ watch(() => props.modelValue, (value) => {
 watch(() => props.disabled, (disabled) => editor.value?.setEditable(!disabled));
 onBeforeUnmount(() => editor.value?.destroy());
 
+// 操作方式是「反白 → 按粗體／顏色 → 套用並自動取消反白」：套完把游標收到那段文字後面，
+// 讓人一眼看到效果，不必自己再點一下取消反白。游標後面接著打的字刻意不延續格式
+// （清掉 stored marks）——標的是那一段重點，不是之後打的每個字。
+// 沒有反白時按下去，則是切換「接下來要打的字」的格式。
+function applyFormatting(apply) {
+  const instance = editor.value;
+  if (!instance) return;
+  const { empty, to } = instance.state.selection;
+  let chain = apply(instance.chain().focus());
+  if (!empty) {
+    chain = chain.setTextSelection(to).command(({ tr }) => {
+      tr.setStoredMarks([]);
+      return true;
+    });
+  }
+  chain.run();
+}
 function toggleBold() {
-  editor.value?.chain().focus().toggleBold().run();
+  applyFormatting((chain) => chain.toggleBold());
 }
 function toggleTint(color) {
-  const chain = editor.value?.chain().focus();
-  if (!chain) return;
-  if (editor.value.isActive('tint', { color })) chain.unsetMark('tint').run();
-  else chain.setMark('tint', { color }).run();
+  const active = editor.value?.isActive('tint', { color });
+  applyFormatting((chain) => (active ? chain.unsetMark('tint') : chain.setMark('tint', { color })));
 }
 function clearFormatting() {
-  editor.value?.chain().focus().unsetAllMarks().run();
+  applyFormatting((chain) => chain.unsetAllMarks().command(({ tr }) => {
+    tr.setStoredMarks([]);
+    return true;
+  }));
 }
 
 // 把純文字插進游標處（文字模板用）；mode 為 'replace' 或目前是空的就整段取代。
