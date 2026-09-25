@@ -199,7 +199,8 @@ try {
   await clickPrefix(desk, '安安');
   await desk.type('#med-condition', '飼主來電續藥');
   await click(desk, '返回清單'); await click(desk, '取消');
-  assert.equal(await desk.$eval('#med-condition', el => el.value), '飼主來電續藥', 'cancel discard retains draft');
+  // 病況是可上色的編輯器（contenteditable），沒有 value，讀畫面上的文字。
+  assert.equal(await desk.$eval('#med-condition', el => el.textContent), '飼主來電續藥', 'cancel discard retains draft');
   await click(desk, '建立並送醫師確認'); await closed(desk);
   await click(desk, '待醫師確認 1'); await open(desk);
   await click(desk, '取消藥單');

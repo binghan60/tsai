@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { MEDICATION_STAGES } from '../../../shared/medicationWorkflow.js';
+import { richTextMaxLength } from '../lib/richTextSchema.js';
 
 const schema = new mongoose.Schema({
   petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', required: true },
@@ -9,9 +10,10 @@ const schema = new mongoose.Schema({
   ownerName: { type: String, default: '' },
   ownerPhone: { type: String, default: '' },
   medicalRecordNumber: { type: String, default: '' },
-  condition: { type: String, default: '', maxlength: 5000 },
-  prescription: { type: String, default: '', maxlength: 10000 },
-  note: { type: String, default: '', maxlength: 3000 },
+  // 可以上色、加粗（shared/richText.js），字數上限算純文字。
+  condition: { type: String, default: '', validate: richTextMaxLength(5000) },
+  prescription: { type: String, default: '', validate: richTextMaxLength(10000) },
+  note: { type: String, default: '', validate: richTextMaxLength(3000) },
   status: { type: String, enum: MEDICATION_STAGES.map(stage => stage.key), default: 'review' },
   needsRepack: { type: Boolean, default: false },
   approvedBy: { type: String, default: '' },

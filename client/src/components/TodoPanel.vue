@@ -15,6 +15,8 @@ import EmptyState from './EmptyState.vue';
 import FilterTabs from './FilterTabs.vue';
 import ListSkeleton from './ListSkeleton.vue';
 import TodoMentionInput from './TodoMentionInput.vue';
+import RichText from './RichText.vue';
+import { richTextToPlain } from '../../../shared/richText.js';
 
 // 院內待辦面板，診療台與櫃台共用，內容整個放在頁首「待辦」chip 開的 ModalDialog 裡。
 // 面板只在開著的時候才掛載，所以 today 每次打開都是新的。
@@ -87,9 +89,12 @@ async function run(id, action, fallback) {
   }
 }
 
+// 內文可以上色、加粗（shared/richText.js）。空白判斷、#標記比對、aria-label 一律看純文字。
+const plain = (value) => richTextToPlain(value).trim();
+
 async function submit() {
   const text = content.value.trim();
-  if (!text || adding.value) return;
+  if (!plain(text) || adding.value) return;
   adding.value = true;
   try {
     await store.add({ content: text, createdBy: identity.value, dueDate: dueDate.value, mentions: mentionIds(text, mentions.value) });
@@ -107,13 +112,7 @@ async function submit() {
 
 // 只送內文裡還看得到 #名字 的標記——選了之後又把字刪掉，就不該留著連結。
 function mentionIds(text, list) {
-  return mentionsStillInContent(text, list).map((item) => item.petId);
-}
-
-// 把 #名字 換成可點的寵物標籤（點了開病歷速覽）。petId 是 null 代表寵物資料已被刪除，
-// 只留下當時的名字，畫面上不可點。
-function segments(item) {
-  return splitMentionSegments(item.content, item.mentions);
+  return mentionsStillInContent(plain(text), list).map((item) => item.petId);
 }
 
 function startEdit(item) {
@@ -131,7 +130,7 @@ function cancelEdit() {
 
 async function saveEdit(item) {
   const text = editText.value.trim();
-  if (!text) return;
+  if (!plain(text)) return;
   await run(item._id, async () => {
     await store.update(item._id, { content: text, mentions: mentionIds(text, editMentions.value) });
     cancelEdit();
@@ -142,9 +141,9 @@ async function saveEdit(item) {
 <template>
   <div class="max-h-[min(68vh,48rem)] min-h-72 space-y-4 overflow-y-auto p-5 sm:p-6">
     <form class="flex flex-wrap items-start gap-2" @submit.prevent="submit">
-      <TodoMentionInput v-model="content" v-model:mentions="mentions" class="min-w-56 flex-1" placeholder="要做的事，打 # 可以標記寵物" aria-label="待辦內容" maxlength="500" />
+      <TodoMentionInput v-model="content" v-model:mentions="mentions" class="min-w-56 flex-1" placeholder="要做的事，打 # 可以標記寵物" aria-label="待辦內容" maxlength="500" @submit="submit" />
       <DatePicker v-model="dueDate" class="w-40" placeholder="期限（選填）" aria-label="期限" />
-      <Button type="submit" :disabled="!content.trim() || adding"><Plus class="h-4 w-4" stroke-width="1.75" />新增</Button>
+      <Button type="submit" :disabled="!plain(content) || adding"><Plus class="h-4 w-4" stroke-width="1.75" />新增</Button>
     </form>
 
     <FilterTabs v-model="view" :items="tabs" :counts="counts" aria-label="待辦狀態" />
@@ -167,7 +166,7 @@ async function saveEdit(item) {
           variant="secondary"
           size="icon-xs"
           :disabled="busyId === item._id"
-          :aria-label="`完成：${item.content}`"
+          :aria-label="`完成：${plain(item.content)}`"
           @click="run(item._id, () => store.complete(item._id, identity), '操作失敗，請稍後再試')"
         >
           <Circle class="h-4 w-4" stroke-width="1.75" />
@@ -178,7 +177,7 @@ async function saveEdit(item) {
           variant="secondary"
           size="icon-xs"
           :disabled="busyId === item._id"
-          :aria-label="`改回未完成：${item.content}`"
+          :aria-label="`改回未完成：${plain(item.content)}`"
           @click="run(item._id, () => store.reopen(item._id), '操作失敗，請稍後再試')"
         >
           <Undo2 class="h-4 w-4" stroke-width="1.75" />
@@ -186,12 +185,14 @@ async function saveEdit(item) {
 
         <div class="min-w-0 space-y-0.5">
           <form v-if="editingId === item._id" class="flex items-center gap-1.5" @submit.prevent="saveEdit(item)">
-            <TodoMentionInput v-model="editText" v-model:mentions="editMentions" class="min-w-0 flex-1" maxlength="500" aria-label="編輯待辦內容" />
-            <Button type="submit" variant="secondary" size="icon-xs" :disabled="!editText.trim() || busyId === item._id" aria-label="儲存"><Check class="h-4 w-4" stroke-width="1.75" /></Button>
+            <TodoMentionInput v-model="editText" v-model:mentions="editMentions" class="min-w-0 flex-1" maxlength="500" aria-label="編輯待辦內容" @submit="saveEdit(item)" />
+            <Button type="submit" variant="secondary" size="icon-xs" :disabled="!plain(editText) || busyId === item._id" aria-label="儲存"><Check class="h-4 w-4" stroke-width="1.75" /></Button>
             <Button type="button" variant="secondary" size="icon-xs" aria-label="取消編輯" @click="cancelEdit"><X class="h-4 w-4" stroke-width="1.75" /></Button>
           </form>
-          <!-- 標籤緊貼標籤寫在同一行：p 是 whitespace-pre-wrap，標籤之間多一個換行就會多一個空格。 -->
-          <p v-else class="wrap-break-word text-sm leading-snug whitespace-pre-wrap" :class="item.status === 'done' ? 'text-muted-foreground line-through' : ''"><template v-for="(segment, index) in segments(item)" :key="index"><button v-if="segment.type === 'mention' && segment.mention.petId" type="button" class="mx-0.5 inline-flex items-center rounded-full bg-accent px-1.5 font-medium text-accent-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :title="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined" @click="pinned.openQuickView(segment.mention.petId)">#{{ segment.mention.petName }}</button><span v-else-if="segment.type === 'mention'" class="text-muted-foreground" title="寵物資料已刪除">#{{ segment.mention.petName }}</span><template v-else>{{ segment.text }}</template></template></p>
+          <!-- 標籤緊貼標籤寫在同一行：RichText 是 whitespace-pre-wrap，標籤之間多一個換行就會多一個空格。
+               RichText 先把粗體／顏色拆成片段，每個片段裡再把 #名字 換成可點的寵物標籤（點了開病歷速覽）；
+               petId 是 null 代表寵物資料已被刪除，只留下當時的名字、不可點。 -->
+          <RichText v-else v-slot="{ text }" tag="p" :text="item.content" class="text-sm leading-snug" :class="item.status === 'done' ? 'text-muted-foreground line-through' : ''"><template v-for="(segment, index) in splitMentionSegments(text, item.mentions)" :key="index"><button v-if="segment.type === 'mention' && segment.mention.petId" type="button" class="mx-0.5 inline-flex items-center rounded-full bg-accent px-1.5 font-medium text-accent-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :title="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined" @click="pinned.openQuickView(segment.mention.petId)">#{{ segment.mention.petName }}</button><span v-else-if="segment.type === 'mention'" class="text-muted-foreground" title="寵物資料已刪除">#{{ segment.mention.petName }}</span><template v-else>{{ segment.text }}</template></template></RichText>
 
           <p class="text-xs text-muted-foreground">{{ metaLabel(item) }}</p>
         </div>
@@ -201,10 +202,10 @@ async function saveEdit(item) {
         </span>
 
         <div class="flex shrink-0 items-center gap-1.5">
-          <Button v-if="item.status === 'open' && editingId !== item._id" type="button" variant="secondary" size="icon-xs" :aria-label="`編輯：${item.content}`" @click="startEdit(item)">
+          <Button v-if="item.status === 'open' && editingId !== item._id" type="button" variant="secondary" size="icon-xs" :aria-label="`編輯：${plain(item.content)}`" @click="startEdit(item)">
             <Pencil class="h-4 w-4" stroke-width="1.75" />
           </Button>
-          <Button type="button" variant="destructive" size="icon-xs" :disabled="busyId === item._id" :aria-label="`刪除：${item.content}`" @click="run(item._id, () => store.remove(item._id), '刪除失敗，請稍後再試')">
+          <Button type="button" variant="destructive" size="icon-xs" :disabled="busyId === item._id" :aria-label="`刪除：${plain(item.content)}`" @click="run(item._id, () => store.remove(item._id), '刪除失敗，請稍後再試')">
             <Trash2 class="h-4 w-4" stroke-width="1.75" />
           </Button>
         </div>

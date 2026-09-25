@@ -1,4 +1,5 @@
 import { medicationLabel } from '../../../shared/medicationWorkflow.js';
+import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 
 const fail = (message, status = 422) => { throw Object.assign(new Error(message), { status }); };
 
@@ -22,16 +23,20 @@ export function medicationJournalTitle(order) {
   return `領藥（${medicationJournalStage(order)}）`;
 }
 
+// 病況／藥單／備註可以上色、加粗（shared/richText.js）。段落保留格式標記給日誌卡片呈現，
+// 串成的 content 則是純文字（差異比對、聊天快照用）。
+const hasText = value => Boolean(richTextToPlain(value).trim());
+
 export function medicationJournalSections(order) {
   return [
     { key: 'condition', label: '病況', text: String(order.condition || '').trim() },
     { key: 'prescription', label: '藥單', text: String(order.prescription || '').trim() },
     { key: 'note', label: '備註', text: String(order.note || '').trim() },
-  ].filter(section => section.text);
+  ].filter(section => hasText(section.text));
 }
 
 export function medicationJournalContent(order) {
-  const fields = medicationJournalSections(order).map(section => `${section.label}：${section.text}`);
+  const fields = medicationJournalSections(order).map(section => `${section.label}：${richTextToPlain(section.text)}`);
   return [medicationJournalTitle(order), ...fields].join('\n\n');
 }
 
@@ -44,8 +49,11 @@ export function medicationFields(body) {
   const fields = {};
   for (const [key, max] of Object.entries(limits)) {
     if (body[key] === undefined) continue;
-    if (typeof body[key] !== 'string' || body[key].length > max) fail(`${key} 格式或長度不正確`);
-    fields[key] = body[key].trim();
+    if (typeof body[key] !== 'string') fail(`${key} 格式或長度不正確`);
+    const text = normalizeRichText(body[key]).trim();
+    // 字數算純文字，格式標記不佔額度。
+    if (richTextLength(text) > max) fail(`${key} 格式或長度不正確`);
+    fields[key] = text;
   }
   return fields;
 }
@@ -67,7 +75,7 @@ export function applyMedicationJournalEdit(order, body, actor, now = new Date())
   if (!changed) return false;
   const from = order.status;
   Object.assign(order, fields);
-  if (!order.prescription?.trim()) fail('藥單內容不能清空');
+  if (!hasText(order.prescription)) fail('藥單內容不能清空');
   if (from !== 'collected') {
     order.needsRepack ||= from === 'ready';
     order.status = 'review';
@@ -99,7 +107,7 @@ export function applyMedicationAction(order, action, body, actor, now = new Date
   } else if (action === 'approve') {
     if (from !== 'review') fail('僅待醫師確認的藥單可送交包藥', 409);
     Object.assign(order, fields);
-    if (!order.prescription?.trim()) fail('請填寫藥單內容後再送交包藥');
+    if (!hasText(order.prescription)) fail('請填寫藥單內容後再送交包藥');
     order.status = 'approved';
     order.approvedAt = now;
     order.approvedBy = actor;

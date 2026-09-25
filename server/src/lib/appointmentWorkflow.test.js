@@ -181,3 +181,16 @@ test('follow-up bucket only holds visits the vet asked to return that have no bo
   assert.equal(workflowFilter({ ...base, followUpRecommendation: '兩週後複查', followUpAppointmentId: 'a1' }, 'followup'), false);
   assert.equal(workflowFilter(base, 'followup'), false);
 });
+
+test('本次簡易紀錄的格式標記：存檔時標準化、日誌段落保留、純文字 content 拿掉、字數只算純文字', () => {
+  const item = appointment();
+  applyWorkflowAction(item, 'clinical', { version: 0, visitNote: ' **[red]不可舔舐[/red]** 傷口 ' }, {});
+  assert.equal(item.visitNote, '[red]**不可舔舐**[/red] 傷口');
+  assert.equal(appointmentJournalSections(item).find(section => section.key === 'visitNote').text, '[red]**不可舔舐**[/red] 傷口');
+  assert.equal(appointmentJournalContent(item), '不可舔舐 傷口');
+
+  const edited = appointment();
+  applyJournalFields(edited, { visitNote: `[red]${'字'.repeat(10000)}[/red]` });
+  assert.equal(edited.visitNote.length, 10000 + '[red][/red]'.length);
+  assert.throws(() => applyJournalFields(appointment(), { visitNote: '字'.repeat(10001) }), /最多 10000 字/);
+});

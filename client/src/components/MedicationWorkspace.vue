@@ -11,7 +11,9 @@ import FilterBar from './FilterBar.vue';
 import Pagination from './Pagination.vue';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Textarea } from './ui/textarea';
+import RichText from './RichText.vue';
+import RichTextEditor from './RichTextEditor.vue';
+import { richTextToPlain } from '../../../shared/richText.js';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
@@ -314,9 +316,9 @@ onBeforeUnmount(() => {
           <tr v-for="item in items" :key="item._id" class="border-t border-border align-top hover:bg-muted/30">
             <td class="whitespace-nowrap p-3 text-xs text-muted-foreground">{{ formatDateTime(item.createdAt) }}</td>
             <td class="p-3"><p class="font-semibold">{{ item.petName }}</p><p>{{ item.ownerName }}</p><p class="text-xs text-muted-foreground">{{ item.ownerPhone }}</p></td>
-            <td class="whitespace-pre-wrap break-words p-3">{{ item.condition || '—' }}</td>
-            <td class="whitespace-pre-wrap break-words p-3 font-medium">{{ item.prescription }}</td>
-            <td class="whitespace-pre-wrap break-words p-3">{{ item.note || '—' }}</td>
+            <td class="break-words p-3"><RichText v-if="item.condition" :text="item.condition" /><template v-else>—</template></td>
+            <td class="break-words p-3 font-medium"><RichText :text="item.prescription" /></td>
+            <td class="break-words p-3"><RichText v-if="item.note" :text="item.note" /><template v-else>—</template></td>
             <td class="space-y-2 p-3"><Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge><p v-if="item.needsRepack" class="text-xs font-semibold text-danger">暫停處理・需重新包藥</p></td>
             <td class="p-3">
               <div v-if="!doctor && !['collected', 'cancelled'].includes(item.status)" class="flex flex-nowrap gap-2 whitespace-nowrap">
@@ -396,24 +398,24 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="space-y-1.5">
                   <Label for="med-condition" class="text-xs font-medium">本次續藥需求／飼主回報</Label>
-                  <Textarea id="med-condition" v-model="form.condition" rows="5" maxlength="5000" :disabled="busy" placeholder="例如：原藥即將用完，近期食慾正常；希望續開一個月份量。" />
+                  <RichTextEditor id="med-condition" v-model="form.condition" aria-label="本次續藥需求／飼主回報" :min-rows="5" :maxlength="5000" :disabled="busy" placeholder="例如：原藥即將用完，近期食慾正常；希望續開一個月份量。" />
                 </div>
                 <div class="space-y-1.5">
                   <Label for="med-prescription" class="text-xs font-medium">藥單內容（選填）</Label>
-                  <Textarea id="med-prescription" v-model="form.prescription" rows="8" maxlength="10000" :disabled="busy" placeholder="請輸入藥品名稱、劑量、頻次、天數及用藥指示" />
+                  <RichTextEditor id="med-prescription" v-model="form.prescription" aria-label="藥單內容" :min-rows="8" :maxlength="10000" :disabled="busy" placeholder="請輸入藥品名稱、劑量、頻次、天數及用藥指示" />
                   <p class="text-xs text-muted-foreground">送出後由醫師核對，內容可以由醫師再修改；還不確定可以先留白。</p>
                 </div>
                 <div class="space-y-1.5">
                   <Label for="med-note" class="text-xs font-medium">預計領藥／櫃檯備註（選填）</Label>
-                  <Textarea id="med-note" v-model="form.note" rows="3" maxlength="3000" :disabled="busy" placeholder="例如：今天 17:00 後領取" />
+                  <RichTextEditor id="med-note" v-model="form.note" aria-label="備註" :min-rows="3" :maxlength="3000" :disabled="busy" placeholder="例如：今天 17:00 後領取" />
                 </div>
               </section>
             </template>
 
             <template v-else>
-              <div class="space-y-1.5"><Label for="med-condition">飼主回報</Label><Textarea id="med-condition" v-model="form.condition" rows="5" maxlength="5000" :disabled="busy || !clinicalEditable" placeholder="食慾、精神、症狀變化…" /></div>
-              <div class="space-y-1.5"><Label for="med-prescription">藥單內容</Label><Textarea id="med-prescription" v-model="form.prescription" rows="10" maxlength="10000" :disabled="busy || !clinicalEditable" placeholder="請輸入藥品名稱、劑量、頻次、天數及用藥指示" /><p v-if="!terminal" class="text-xs text-muted-foreground">{{ doctor ? '請核對藥單內容後送交包藥。後續若修改內容，須重新進行醫師確認。' : '藥單經醫師確認後，包藥人員即可開始處理。' }}</p></div>
-              <div class="space-y-1.5"><Label for="med-note">處理備註</Label><Textarea id="med-note" v-model="form.note" rows="3" maxlength="3000" :disabled="busy || !clinicalEditable" placeholder="預計領藥時間、需向飼主確認的事項…" /></div>
+              <div class="space-y-1.5"><Label for="med-condition">飼主回報</Label><RichTextEditor id="med-condition" v-model="form.condition" aria-label="飼主回報" :min-rows="5" :maxlength="5000" :disabled="busy || !clinicalEditable" placeholder="食慾、精神、症狀變化…" /></div>
+              <div class="space-y-1.5"><Label for="med-prescription">藥單內容</Label><RichTextEditor id="med-prescription" v-model="form.prescription" aria-label="藥單內容" :min-rows="10" :maxlength="10000" :disabled="busy || !clinicalEditable" placeholder="請輸入藥品名稱、劑量、頻次、天數及用藥指示" /><p v-if="!terminal" class="text-xs text-muted-foreground">{{ doctor ? '請核對藥單內容後送交包藥。後續若修改內容，須重新進行醫師確認。' : '藥單經醫師確認後，包藥人員即可開始處理。' }}</p></div>
+              <div class="space-y-1.5"><Label for="med-note">處理備註</Label><RichTextEditor id="med-note" v-model="form.note" aria-label="處理備註" :min-rows="3" :maxlength="3000" :disabled="busy || !clinicalEditable" placeholder="預計領藥時間、需向飼主確認的事項…" /></div>
             </template>
 
             <div v-if="returning" class="space-y-2"><Label for="med-return">給醫師的意見</Label><Input id="med-return" v-model="returnReason" maxlength="500" :disabled="busy" placeholder="請說明需要重新確認的內容" /><p class="text-xs text-muted-foreground">送出後狀態會回到待醫師確認。</p></div>
@@ -431,7 +433,7 @@ onBeforeUnmount(() => {
           <template v-else>
             <Button v-if="!selected" :disabled="busy || !pet" @click="execute('create')">建立並送醫師確認</Button>
             <Button v-if="selected && (clinicalEditable || (!doctor && selected.status === 'ready'))" variant="secondary" :disabled="busy || stale || !dirty" @click="requestAction('edit')">{{ changedClinical && selected.status !== 'review' ? '修改並重新送審' : '儲存修改' }}</Button>
-            <Button v-if="doctor && selected?.status === 'review'" :disabled="busy || stale || !form.prescription.trim()" @click="requestAction('approve')">確認藥單並送交包藥</Button>
+            <Button v-if="doctor && selected?.status === 'review'" :disabled="busy || stale || !richTextToPlain(form.prescription).trim()" @click="requestAction('approve')">確認藥單並送交包藥</Button>
             <Button v-if="!doctor && selected?.status === 'approved'" variant="secondary" :disabled="busy || stale" @click="returning = true">提出意見</Button>
             <Button v-if="!doctor && selected?.status === 'approved'" :disabled="busy || stale" @click="requestAction('ready')">{{ selected.needsRepack ? '完成重新包藥' : '完成包藥' }}</Button>
             <Button v-if="!doctor && selected?.status === 'ready'" :disabled="busy || stale || dirty" @click="requestAction('collect')">確認領藥</Button>

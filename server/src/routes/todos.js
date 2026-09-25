@@ -4,11 +4,21 @@ import Todo from '../models/Todo.js';
 import { MAX_MENTIONS, STAFF_SENDERS } from '../lib/pinnedPets.js';
 import { mentionSnapshots, parseMentionIds } from '../lib/petMentions.js';
 import { isValidDateInput, listTodos, publishTodos } from '../lib/todos.js';
+import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 
 const router = Router();
 
 function invalid(res, message) {
   return res.status(422).json({ message });
+}
+
+// 待辦內文可以上色、加粗（shared/richText.js）：存前標準化；空白與 500 字的判斷看純文字，
+// 只剩格式標記的內容算空白，標記本身也不佔字數。回傳 { content } 或 { error }。
+function cleanContent(value) {
+  const content = normalizeRichText(String(value ?? '')).trim();
+  if (!richTextToPlain(content).trim()) return { error: '待辦內容不可為空' };
+  if (richTextLength(content) > 500) return { error: '待辦內容最多 500 字' };
+  return { content };
 }
 
 // 把 body.mentions（petId 陣列）換成寫進文件的快照。出錯時回 { error: [status, message] }。
@@ -32,9 +42,8 @@ router.post('/', async (req, res, next) => {
   try {
     const createdBy = req.body?.createdBy;
     if (!STAFF_SENDERS.includes(createdBy)) return invalid(res, '身分參數不正確');
-    const content = String(req.body?.content ?? '').trim();
-    if (!content) return invalid(res, '待辦內容不可為空');
-    if (content.length > 500) return invalid(res, '待辦內容最多 500 字');
+    const { content, error: contentError } = cleanContent(req.body?.content);
+    if (contentError) return invalid(res, contentError);
 
     const dueDate = req.body?.dueDate || null;
     if (dueDate !== null && !isValidDateInput(String(dueDate))) return invalid(res, '期限日期格式不正確');
@@ -57,9 +66,8 @@ router.put('/:id', async (req, res, next) => {
 
     const body = req.body ?? {};
     if (body.content !== undefined) {
-      const content = String(body.content).trim();
-      if (!content) return invalid(res, '待辦內容不可為空');
-      if (content.length > 500) return invalid(res, '待辦內容最多 500 字');
+      const { content, error: contentError } = cleanContent(body.content);
+      if (contentError) return invalid(res, contentError);
       todo.content = content;
     }
     if (body.dueDate !== undefined) {

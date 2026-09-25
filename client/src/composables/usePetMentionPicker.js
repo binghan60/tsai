@@ -1,7 +1,7 @@
 import { nextTick, onBeforeUnmount, ref } from 'vue';
 import { http } from '../api/http';
 import { clinicDateInput } from '../lib/datetime';
-import { activeMentionQuery, insertMention, mentionsStillInContent } from '../lib/chatMentions';
+import { activeMentionQuery, insertMention, mentionsStillInContent, MENTION_TRIGGER } from '../lib/chatMentions';
 
 // 文字框裡打 # 標記寵物的候選清單邏輯，聊天室與院內待辦共用。
 // 被標記的寵物由伺服器依 petId 寫入名字快照，這裡只負責「打 # → 選人 → 把 #名字 塞進內文」。
@@ -12,6 +12,8 @@ import { activeMentionQuery, insertMention, mentionsStillInContent } from '../li
 //   text            存文字框內容的 ref（v-model 的那一個）
 //   getElement      回傳實際的 <input>／<textarea>，讀游標位置用
 //   pendingMentions 選過的標記 [{ petId, petName }]；可由外部傳入，讓父元件擁有它（待辦的 v-model:mentions）
+//   richEditor      可上色的編輯器（RichTextEditor 的 expose）；有給就改用它讀游標、插入標記，
+//                   因為 v-model 的字串裡有格式標記，字元位置跟畫面上的游標對不起來（待辦用）
 let todayPets = null;
 let todayPetsDate = '';
 
@@ -32,7 +34,7 @@ async function loadTodayPets() {
   return todayPets;
 }
 
-export function usePetMentionPicker({ text, getElement, pendingMentions = ref([]) }) {
+export function usePetMentionPicker({ text, getElement, pendingMentions = ref([]), richEditor = null }) {
   const mention = ref(null);
   const candidates = ref([]);
   const highlighted = ref(0);
@@ -46,9 +48,16 @@ export function usePetMentionPicker({ text, getElement, pendingMentions = ref([]
     searchRequest += 1;
   }
 
+  // 游標前的文字與游標位置。編輯器給的是「這一行、純文字」，start 也就是行內的位置。
+  function readCursor() {
+    if (richEditor) return richEditor()?.textBeforeCursor() ?? null;
+    const el = getElement?.();
+    return el ? { text: el.value, caret: el.selectionStart } : null;
+  }
+
   function updateMention() {
-    const el = getElement();
-    const next = el ? activeMentionQuery(el.value, el.selectionStart) : null;
+    const cursor = readCursor();
+    const next = cursor ? activeMentionQuery(cursor.text, cursor.caret) : null;
     if (!next) return closeMention();
     if (mention.value?.start === next.start && mention.value?.query === next.query) return;
     mention.value = next;
@@ -76,6 +85,14 @@ export function usePetMentionPicker({ text, getElement, pendingMentions = ref([]
   }
 
   async function selectCandidate(candidate) {
+    if (richEditor) {
+      const instance = richEditor();
+      if (!instance || !mention.value || !candidate) return;
+      instance.replaceBeforeCursor(mention.value.start, `${MENTION_TRIGGER}${candidate.petName} `);
+      pendingMentions.value = [...pendingMentions.value, { petId: candidate.petId, petName: candidate.petName }];
+      closeMention();
+      return;
+    }
     const el = getElement();
     if (!el || !mention.value || !candidate) return;
     const result = insertMention(text.value, mention.value.start, el.selectionStart, candidate.petName);

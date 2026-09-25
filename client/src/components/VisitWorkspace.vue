@@ -22,6 +22,9 @@ import { Button } from './ui/button'
 import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog'
 import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
+import RichText from './RichText.vue'
+import RichTextEditor from './RichTextEditor.vue'
+import { richTextToPlain } from '../../../shared/richText.js'
 import { Alert, AlertDescription } from './ui/alert'
 
 // 就診工作區：在診療台右欄編輯單筆 appointment 的臨床欄位。
@@ -113,8 +116,20 @@ const TEMPLATE_FIELDS = {
 function textareaId(field) {
   return `visit-${field}-${props.appointment._id}`
 }
+// 本次簡易紀錄是可上色的編輯器，游標與選取由編輯器自己記著，插入直接交給它；
+// 文字模板本身是純文字，「存成模板」也只存純文字。
+const visitNoteEditor = ref(null)
 function openTemplates(field) {
   const meta = TEMPLATE_FIELDS[field]
+  if (field === 'visitNote') {
+    openPicker({
+      itemKey: meta.key,
+      label: meta.label,
+      currentText: richTextToPlain(draft.visitNote),
+      onInsert: (template, mode) => visitNoteEditor.value?.insertText(template.content, mode),
+    })
+    return
+  }
   const input = document.getElementById(textareaId(field))
   const selection = input && Number.isInteger(input.selectionStart) ? { start: input.selectionStart, end: input.selectionEnd } : null
   openPicker({
@@ -516,7 +531,8 @@ onBeforeUnmount(() => {
         <p>此筆就診資料與其他更新衝突：{{ conflicts.map((key) => CONFLICT_LABELS[key]).join('、') }}。請選擇要保留的內容。</p>
         <div v-for="key in conflicts" :key="key" class="rounded-lg bg-card p-3 text-foreground">
           <p class="text-xs font-medium text-muted-foreground">{{ CONFLICT_LABELS[key] }} · 目前內容</p>
-          <p class="mt-1 whitespace-pre-wrap text-sm">{{ baseline[key] || '（空白）' }}</p>
+          <RichText v-if="key === 'visitNote' && baseline[key]" class="mt-1 text-sm" :text="baseline[key]" />
+          <p v-else class="mt-1 whitespace-pre-wrap text-sm">{{ baseline[key] || '（空白）' }}</p>
         </div>
         <div class="flex flex-wrap gap-2">
           <Button variant="secondary" size="sm" @click="resolveConflict(false)">使用目前內容</Button>
@@ -542,13 +558,15 @@ onBeforeUnmount(() => {
             <Input v-model="draft.temperatureC" type="number" min="0" step="0.1" :disabled="!editable || committing" />
           </label>
         </div>
-        <label class="block space-y-1.5">
+        <!-- 用 div 不用 label：label 會把點擊轉給裡面第一個可點的元素，也就是編輯器工具列的粗體鈕。 -->
+        <div class="space-y-1.5">
           <span class="flex items-center gap-2 text-xs font-medium">本次簡易紀錄<MechanismTooltip text="此內容與櫃台共用，病歷日誌只保留對本次就診的引用，因此在任一處修改都會立即反映最新內容。" /><span class="ml-auto font-normal text-muted-foreground">自動存入病歷日誌</span></span>
-          <span class="relative block">
-            <Textarea :id="textareaId('visitNote')" v-model="draft.visitNote" rows="8" class="min-h-48 field-sizing-fixed pr-10" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…" />
-            <Button v-if="editable" type="button" variant="secondary" size="icon-xs" class="absolute right-2 top-2" aria-label="插入本次簡易紀錄的文字模板" title="文字模板" :disabled="committing" @click="openTemplates('visitNote')"><FileText class="h-3.5 w-3.5" stroke-width="1.75" /></Button>
-          </span>
-        </label>
+          <RichTextEditor ref="visitNoteEditor" :id="textareaId('visitNote')" v-model="draft.visitNote" aria-label="本次簡易紀錄" :min-rows="8" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…">
+            <template v-if="editable" #toolbar-end>
+              <Button type="button" variant="secondary" size="icon-xs" class="size-8" aria-label="插入本次簡易紀錄的文字模板" title="文字模板" :disabled="committing" @mousedown.prevent @click="openTemplates('visitNote')"><FileText class="h-3.5 w-3.5" stroke-width="1.75" /></Button>
+            </template>
+          </RichTextEditor>
+        </div>
         <label class="block space-y-1.5">
           <span class="flex items-center gap-2 text-xs font-medium">內部備註<MechanismTooltip text="僅供內部人員查看；儲存後會附在本次就診的引用式病歷日誌最後，不會出現在飼主報告。" /><span class="ml-auto font-normal text-muted-foreground">僅院內可見</span></span>
           <Textarea v-model="draft.internalNote" rows="3" maxlength="2000" class="field-sizing-fixed" :disabled="!editable || committing" placeholder="輸入僅供內部人員查看的備註…" />

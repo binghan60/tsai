@@ -10,6 +10,7 @@ import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { withTransaction } from '../lib/transaction.js';
 import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitMedicationUpdate } from '../lib/realtime.js';
+import { normalizeRichText } from '../../../shared/richText.js';
 
 const NOTE_FIELDS = ['content', 'entryDate'];
 
@@ -79,7 +80,7 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
         appointment = await Appointment.findById(existing.appointmentId).session(session);
         if (!appointment) throw Object.assign(new Error('找不到對應的就診資料'), { status: 404 });
         if (req.body.fields !== undefined) applyJournalFields(appointment, req.body.fields);
-        else if (fields.content !== undefined) appointment.visitNote = String(fields.content ?? '').trim();
+        else if (fields.content !== undefined) appointment.visitNote = normalizeRichText(String(fields.content ?? '')).trim();
         appointment.increment();
         await appointment.save({ session });
         const noteFields = {};

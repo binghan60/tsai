@@ -1,4 +1,5 @@
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
+import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 
 export const WORKFLOW_ACTIONS = ['clinical', 'start', 'handoff', 'reclaim', 'complete', 'record', 'followup', 'request-reopen', 'approve-reopen'];
 
@@ -11,10 +12,19 @@ export function workflowError(message, status = 422) {
 const CLINICAL_TEXT_FIELDS = ['visitNote', 'internalNote', 'handoffNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
 const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC'];
 
+// 可以上色、加粗的欄位（格式標記見 shared/richText.js）。存之前一律標準化，
+// 前端編輯器送出的字串跟這裡整理後的一致，才不會一存檔就被判成跟本機不同。
+const RICH_TEXT_FIELDS = new Set(['visitNote']);
+const cleanText = (field, value) => {
+  const text = String(value ?? '');
+  return (RICH_TEXT_FIELDS.has(field) ? normalizeRichText(text) : text).trim();
+};
+
 // 來院原因、「本次簡易紀錄」、給飼主的照護提醒、回診建議與當次量測需在病歷日誌中一同閱讀；
 // 也同步成同一筆自動日誌，避免醫師日後只能看到本次簡易紀錄卻缺少看診當下交辦飼主的內容。
 // internalNote 刻意不放進來——那是僅院內人員可見的備註，不該進入病歷日誌。
 // 回傳分欄的段落（空的不回），前端依 key 分段呈現；純文字版 appointmentJournalContent 由它串成。
+// visitNote 那一段保留格式標記，日誌卡片才畫得出粗體與顏色。
 export function appointmentJournalSections(appointment) {
   const text = value => String(value ?? '').trim();
   const measured = value => value !== null && value !== undefined;
@@ -29,13 +39,14 @@ export function appointmentJournalSections(appointment) {
 }
 
 // 純文字版：量測併成一行，本次簡易紀錄不帶標籤，其餘段落帶「標籤：」前綴。
+// 格式標記在這裡拿掉——content 給差異比對、長度判斷與聊天快照用，不該看到 ** 或 [red]。
 export function appointmentJournalContent(appointment) {
   const byKey = new Map(appointmentJournalSections(appointment).map(section => [section.key, section]));
   const labelled = key => (byKey.has(key) ? `${byKey.get(key).label}：${byKey.get(key).text}` : '');
   return [
     labelled('reason'),
     [labelled('weightKg'), labelled('temperatureC')].filter(Boolean).join('　'),
-    byKey.get('visitNote')?.text || '',
+    richTextToPlain(byKey.get('visitNote')?.text || ''),
     labelled('specialCareNote'),
     labelled('followUpRecommendation'),
   ].filter(Boolean).join('\n\n');
@@ -57,8 +68,8 @@ export function applyJournalFields(appointment, body) {
   for (const [key, max] of Object.entries(JOURNAL_TEXT_LIMITS)) {
     if (body[key] === undefined) continue;
     if (body[key] !== null && typeof body[key] !== 'string') throw workflowError('日誌欄位格式不正確');
-    const text = String(body[key] ?? '').trim();
-    if (text.length > max) throw workflowError(`內容過長（最多 ${max} 字）`);
+    const text = cleanText(key, body[key]);
+    if (richTextLength(text) > max) throw workflowError(`內容過長（最多 ${max} 字）`);
     appointment[key] = text;
   }
   for (const key of ['weightKg', 'temperatureC']) {
@@ -102,7 +113,7 @@ export function applyWorkflowAction(appointment, action, body, now = new Date())
     const onlyJournalFields = requestedFields.length > 0 && requestedFields.every((field) => ['visitNote', 'internalNote'].includes(field));
     if (state.handedOff && !onlyJournalFields) throw workflowError('這筆就診已交給櫃台，請先取回再修改內容', 409);
     for (const field of CLINICAL_TEXT_FIELDS) {
-      if (body[field] !== undefined) appointment[field] = String(body[field] ?? '').trim();
+      if (body[field] !== undefined) appointment[field] = cleanText(field, body[field]);
     }
     for (const field of ['weightKg', 'temperatureC']) {
       if (body[field] === undefined) continue;

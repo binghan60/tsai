@@ -18,7 +18,9 @@ import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { DatePicker } from './ui/date-picker';
 import { TimePicker } from './ui/time-picker';
-import { Textarea } from './ui/textarea';
+import RichText from './RichText.vue';
+import RichTextEditor from './RichTextEditor.vue';
+import { richTextToPlain } from '../../../shared/richText.js';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 
 // 櫃台處理醫師交辦的面板。段落順序是「請轉告飼主 → 醫師交辦 → 病歷內容 → 回診」，
@@ -79,7 +81,8 @@ async function persistNote() {
   const changedParts = describeVisitChanges(before, { visitNote: data.visitNote });
   if (changedParts.length) notifyChat(data, 'visit_data', {
     changedParts,
-    snapshot: { fieldLabel: '本次簡易紀錄', before: before.visitNote, after: data.visitNote || '' },
+    // 聊天室只顯示純文字，格式標記不送過去。
+    snapshot: { fieldLabel: '本次簡易紀錄', before: richTextToPlain(before.visitNote), after: richTextToPlain(data.visitNote) },
   });
   visitNote.value = data.visitNote || '';
   noteBaseline.value = visitNote.value;
@@ -240,11 +243,13 @@ async function approveReopen() {
               <h3 class="flex items-center gap-1.5 text-base font-semibold">本次簡易紀錄<MechanismTooltip text="此內容與醫師診療台共用，病歷日誌只保留對本次就診的引用，因此在任一處修改都會立即反映最新內容。" /></h3>
               <Button v-if="!editingNote && !state.completed" variant="secondary" size="sm" :disabled="busy" @click="startEditNote">編輯</Button>
             </div>
-            <Textarea v-if="editingNote" id="desk-visit-note" v-model="visitNote" aria-label="本次簡易紀錄" rows="8" :disabled="busy || state.completed" placeholder="輸入本次看診紀錄…" />
-            <p v-else class="whitespace-pre-wrap wrap-anywhere rounded-xl bg-field p-4 text-sm leading-relaxed">{{ appointment.visitNote || '尚無本次簡易紀錄。' }}</p>
+            <RichTextEditor v-if="editingNote" id="desk-visit-note" v-model="visitNote" aria-label="本次簡易紀錄" :min-rows="8" :disabled="busy || state.completed" placeholder="輸入本次看診紀錄…" />
+            <RichText v-else-if="appointment.visitNote" class="wrap-anywhere rounded-xl bg-field p-4 text-sm leading-relaxed" :text="appointment.visitNote" />
+            <p v-else class="rounded-xl bg-field p-4 text-sm leading-relaxed">尚無本次簡易紀錄。</p>
             <Alert v-if="editingNote && noteConflict" variant="destructive">
               <AlertDescription>其他人已修改此紀錄，請先核對最新內容：</AlertDescription>
-              <p class="my-2 whitespace-pre-wrap wrap-anywhere text-sm">{{ appointment.visitNote || '（空白）' }}</p>
+              <RichText v-if="appointment.visitNote" class="my-2 wrap-anywhere text-sm" :text="appointment.visitNote" />
+              <p v-else class="my-2 text-sm">（空白）</p>
               <Button variant="secondary" size="sm" :disabled="busy" @click="resetNote">採用最新內容</Button>
             </Alert>
             <div class="flex flex-wrap items-center justify-between gap-2">

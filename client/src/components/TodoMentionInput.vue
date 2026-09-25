@@ -1,12 +1,12 @@
 <script setup>
 import { ref } from 'vue';
 import { usePetMentionPicker } from '../composables/usePetMentionPicker';
-import { Input } from './ui/input';
+import RichTextEditor from './RichTextEditor.vue';
 
-// 待辦內容的單行輸入框，打 # 會跳出寵物候選清單（跟聊天室同一套，
-// 邏輯在 composables/usePetMentionPicker.js）。v-model 是內文；v-model:mentions 是選過的標記
-// [{ petId, petName }]，父元件送出時用 mentionsStillInContent 濾掉已從內文刪掉的。
-// 候選清單開著時 Enter 是選人；沒開時 Enter 照常往上送給外層 <form> 當送出。
+// 待辦內容的單行輸入框：可以上色、加粗（格式標記見 shared/richText.js），打 # 會跳出寵物候選清單
+// （跟聊天室同一套，邏輯在 composables/usePetMentionPicker.js）。v-model 是帶格式標記的內文；
+// v-model:mentions 是選過的標記 [{ petId, petName }]，父元件送出時用 mentionsStillInContent 濾掉已從內文刪掉的。
+// 候選清單開著時 Enter 是選人；沒開時 Enter 發出 submit——編輯器不是 <input>，不會自己觸發外層 <form>。
 const text = defineModel({ type: String, default: '' });
 const mentions = defineModel('mentions', { type: Array, default: () => [] });
 defineProps({
@@ -14,29 +14,29 @@ defineProps({
   ariaLabel: { type: String, default: undefined },
   maxlength: { type: [Number, String], default: undefined },
 });
+const emit = defineEmits(['submit']);
 
-const root = ref(null);
+const editor = ref(null);
 const { mention, candidates, highlighted, updateMention, closeMention, selectCandidate, handleKeydown } = usePetMentionPicker({
   text,
-  getElement: () => root.value?.querySelector('input') ?? null,
+  richEditor: () => editor.value,
   pendingMentions: mentions,
 });
 </script>
 
 <template>
-  <div ref="root" class="relative">
-    <Input
+  <div class="relative">
+    <RichTextEditor
+      ref="editor"
       v-model="text"
+      single-line
       :placeholder="placeholder"
       :aria-label="ariaLabel"
       :maxlength="maxlength"
-      autocomplete="off"
       @keydown="handleKeydown"
-      @input="updateMention"
-      @click="updateMention"
-      @keyup.left="updateMention"
-      @keyup.right="updateMention"
+      @cursor="updateMention"
       @blur="closeMention"
+      @submit="emit('submit')"
     />
     <ul
       v-if="mention && candidates.length"

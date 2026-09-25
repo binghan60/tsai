@@ -22,6 +22,8 @@ import { Button } from './ui/button'
 import { DatePicker } from './ui/date-picker'
 import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
+import RichText from './RichText.vue'
+import RichTextEditor from './RichTextEditor.vue'
 
 // 一則病歷日誌，排成一張小報告：標頭（日期、類型、進度）＋「標籤｜內容」列。
 // 掛號與藥單日誌依後端回傳的分欄 sections 分列，每一欄都能就地修改並寫回來源（掛號／藥單）；
@@ -117,8 +119,18 @@ const kindBadgeClass = computed(() =>
         <label :class="[LABEL, field.tone === 'warning' ? 'text-warning' : 'text-muted-foreground']" :for="`journal-${field.key}-${note._id}`">
           {{ field.label }}<span v-if="field.required" class="text-danger"> *</span>
         </label>
+        <RichTextEditor
+          v-if="field.rich"
+          :id="`journal-${field.key}-${note._id}`"
+          v-model="form[field.key]"
+          :aria-label="field.label"
+          :min-rows="field.rows"
+          :maxlength="field.maxlength"
+          :disabled="saving"
+          class="bg-card"
+        />
         <Textarea
-          v-if="field.multiline"
+          v-else-if="field.multiline"
           :id="`journal-${field.key}-${note._id}`"
           v-model="form[field.key]"
           :rows="field.rows"
@@ -161,6 +173,13 @@ const kindBadgeClass = computed(() =>
             <span class="font-medium tabular-nums">{{ item.text }}</span>
           </span>
         </dd>
+        <RichText
+          v-else-if="row.rich"
+          tag="dd"
+          class="text-sm leading-relaxed wrap-anywhere"
+          :class="[row.emphasis ? 'font-semibold' : '', row.tone === 'warning' ? 'text-warning' : '']"
+          :text="row.text"
+        />
         <dd
           v-else
           class="text-sm leading-relaxed whitespace-pre-wrap wrap-anywhere"

@@ -123,4 +123,14 @@ describe('從病歷日誌更正藥單', () => {
     assert.throws(() => applyMedicationJournalEdit(order(), { prescription: '  ' }, '醫師'), /不能清空/);
     assert.throws(() => applyMedicationJournalEdit({ ...order(), status: 'cancelled' }, { note: 'x' }, '醫師'), /已取消/);
   });
+
+  it('格式標記：存檔前標準化、字數只算純文字、只剩標記算空白、日誌內文去標記', () => {
+    assert.deepEqual(medicationFields({ prescription: ' **[blue]早晚各一顆[/blue]** ' }), { prescription: '[blue]**早晚各一顆**[/blue]' });
+    assert.doesNotThrow(() => medicationFields({ condition: `[red]${'x'.repeat(5000)}[/red]` }));
+    assert.throws(() => applyMedicationJournalEdit(order(), { prescription: '[red]  [/red]' }, '醫師'), /不能清空/);
+    assert.equal(
+      medicationJournalContent({ status: 'review', condition: '', prescription: '[red]**抗生素**[/red] 每日兩次', note: '' }),
+      '領藥（待醫師確認）\n\n藥單：抗生素 每日兩次',
+    );
+  });
 });

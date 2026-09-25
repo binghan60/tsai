@@ -23,6 +23,12 @@
 
 ## 二、資料模型（MongoDB collections）
 
+### 格式標記（粗體／四色）
+本次簡易紀錄 `appointments.visitNote`、藥單 `medicationOrders.condition`／`prescription`／`note`、待辦 `todos.content` 這五個欄位可以加粗與上色（紅／橙／綠／藍，對應 `danger`／`warning`／`success`／`info` token）。**欄位仍是一般字串**，內容是 `shared/richText.js` 定義的極簡標記：粗體 `**字**`、顏色 `[red]字[/red]`，換行就是 `\n`、標記不跨行，`\` 跳脫 `\ * [`（不用 `#`，那是寵物標記）。前後端共用同一份 `parseRichText`／`normalizeRichText`／`richTextToPlain`／`richTextLength`：
+- **存之前一律 `normalizeRichText`**（前端編輯器送出的字串跟伺服器整理後的一致，自動存檔才不會一存就被判成「跟本機不同」）；**字數上限與「不可空白」都看純文字**（schema 用 `lib/richTextSchema.js` 的 `richTextMaxLength`，不是 `maxlength`），只剩標記算空白。
+- **顯示一律走 `RichText.vue` 拆成片段、文字插值輸出，永遠不用 `v-html`**，所以不需要 sanitizer。編輯用 `RichTextEditor.vue`（Tiptap）。
+- 會被拿去當純文字用的地方一律 `richTextToPlain`：病歷日誌的 `content`、聊天快照、`aria-label`、`#寵物` 標記比對、文字模板（「存成模板」只存純文字）。病歷日誌的 `sections[].text` 則保留標記，日誌卡片才畫得出格式。
+
 ### owners 飼主
 `name`、`phone`、`email`、`address`、`notes`（皆選填，僅 `name`／`phone` 必填）。一位飼主可養多隻寵物。
 
@@ -139,6 +145,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 | 資料庫 | MongoDB + Mongoose | |
 | 登入 | `jsonwebtoken` + Node 內建 `crypto.scrypt` | JWT 放在 HttpOnly cookie；密碼雜湊用內建 scrypt，不另外裝 bcrypt |
 | 即時通訊 | Socket.IO | 兩種用途：掛號狀態即時同步（醫生↔櫃台，房間以「天」為單位 `appointments:<date>`）、全站內部聊天（不分房間，`io.emit` 廣播給所有連線）；伺服器掛在 Express 的 httpServer 上（`server/src/lib/realtime.js`），沿用既有的 cookie session 驗證連線 |
+| 富文字 | Tiptap（`@tiptap/vue-3`，只裝 Document／Paragraph／Text／Bold／`@tiptap/extensions`） | 只給本次簡易紀錄、藥單、待辦上色與加粗；**不用 StarterKit**，另有自訂的 `tint` 顏色 mark。存的是 `shared/richText.js` 的標記字串，不是 HTML，見第二節「格式標記」 |
 | PDF | Puppeteer | 見下節 |
 | Email | Nodemailer | SMTP（Gmail 應用程式密碼） |
 | 測試 | Node 內建 `node --test` | 不裝額外框架 |
@@ -380,6 +387,7 @@ GET    /api/health
   | 工作台旁的表單（初診報到建檔、暫存區） | `<SideDrawer>`：頁面版面裡的一欄，非 modal | 使用者填表時還得看著、操作著背後的看板時，不要用 Modal 或 `ui/sheet`（兩者都會遮住並鎖住背景） |
   | 狀態徽章 | `<Badge variant="status">` | 不要覆寫 padding／圓角 |
   | 頁首開面板的按鈕 | `<ConsoleChipBar>` 包 `<ConsoleChip :icon :label :count :tone :active>` | 不要在使用端各寫一套數字樣式，改在 `ConsoleChip` 內部調整。數字只有兩種讀法：`tone="neutral"` 灰數字＝狀態讀數，跟在文字後面、inline，0 也照顯示；`tone="todo"` 紅徽章＝待辦，疊在按鈕右上角（FB 通知樣式：實心紅底、白字、`ring-muted` 蓋掉底下的角，跟 `GlobalChatWidget` 未讀泡泡同一套視覺語彙），0 就整個不畫。軌道刻意沒有 `overflow-x-auto`——橫向捲動會把 chip 連同數字默默裁掉，放不下要讓頁首換行 |
+  | 可上色、加粗的文字欄位（本次簡易紀錄、藥單、待辦） | 編輯 `<RichTextEditor v-model :id :aria-label :min-rows :maxlength>`（待辦加 `single-line`，Enter 發 `submit`）；唯讀 `<RichText :text>` | **不要用 `v-html`**，也不要自己拆 `**`／`[red]`——格式標記見第二節。編輯器外層不要包 `<label>`：label 會把點擊轉給工具列的第一顆按鈕 |
   | 掛號的手術標記 | `<SurgeryBadge :name="item.surgeryName">` | 不要在使用端手寫「手術：…」紫字或膠囊——之前櫃台、診療台、工作區、時段格四處各一種樣式。顏色是 `surgery`（紫），跟遲到徽章的 `danger` 分開色相 |
   | 掛號的遲到標記 | `<LatenessBadge :minutes>`：已報到傳 `latenessMinutes`，還沒報到的逾時掛號傳即時算出的分鐘數 | 不要手寫紅字「遲到 N 分」。顏色是 `danger`（紅），刻意跟手術徽章的 `surgery`（紫）分開色相——兩顆常並排，同色只剩圖示可辨。跟手術徽章同放一列，順序固定「手術 → 遲到」 |
   | 號碼牌圓圈 | `<CheckinNumber :appointment size="md|lg">`（清單 40px／工作區與處理視窗標頭 48px） | 不要手刻圓圈。顏色依階段（`lib/appointmentDisplay.js` 的 `checkinTone`）：候診灰、看診中主色實心、待櫃台 `bg-accent`、已完成淡灰；沒號碼時是虛線票券圖示。初診／回診文字一律用同檔的 `visitTypeLabel` |
