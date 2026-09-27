@@ -130,7 +130,7 @@ watch(
           </SheetContent>
         </Sheet>
 
-        <main class="mx-auto w-full min-w-0 px-4 py-5 sm:px-6" :class="route.meta.wide ? '' : 'max-w-360'">
+        <main class="mx-auto w-full min-w-0 px-4 py-5 sm:px-6">
           <router-view :key="routeViewKey" />
         </main>
       </div>

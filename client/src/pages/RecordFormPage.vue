@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, LockKeyhole, PawPrint, Save, Settings2, Trash2, User } from '@lucide/vue';
+import { Activity, AlertTriangle, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, LockKeyhole, RefreshCw, Save, Settings2, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, clinicTimeInput, combineClinicDateTime, formatDate } from '../lib/datetime';
@@ -14,7 +14,12 @@ import { examinationDefs, labDefs, measurementDefs, referenceRanges, sectionDomI
 import { familyOf } from '../lib/fieldFamily';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useTextTemplates } from '../composables/useTextTemplates';
-import Breadcrumbs from '../components/Breadcrumbs.vue';
+import SpecGrid from '../components/SpecGrid.vue';
+import SpecCell from '../components/SpecCell.vue';
+import PetSex from '../components/PetSex.vue';
+import ReminderTags from '../components/ReminderTags.vue';
+import PageHeader from '../components/PageHeader.vue';
+import { Badge } from '../components/ui/badge';
 import MechanismTooltip from '../components/MechanismTooltip.vue';
 import { Button } from '../components/ui/button';
 import { DatePicker } from '../components/ui/date-picker';
@@ -209,19 +214,6 @@ const confirmingExamType = ref(false);
 const typeChoiceError = ref('');
 
 const pet = ref(null);
-const petReminderFields = computed(() => {
-  if (!pet.value) return [];
-  const vaccine = { none: '未注射', done: `已注射${pet.value.vaccineDate ? `，最後注射時間 ${pet.value.vaccineDate}` : ''}` }[pet.value.vaccineStatus] || '';
-  const history = [pet.value.medicalHistory?.join('、'), pet.value.medicalHistoryOther].filter(Boolean).join('；');
-  const allergy = { none: '無過敏', yes: `有${pet.value.allergyType ? `，${pet.value.allergyType}` : ''}` }[pet.value.allergyStatus] || '';
-  const checkup = { none: '未健檢', done: `有${pet.value.checkupDate ? `，上次健檢時間 ${pet.value.checkupDate}` : ''}` }[pet.value.checkupStatus] || '';
-  return [
-    { label: '疫苗', value: vaccine },
-    { label: '病史', value: history },
-    { label: '藥物過敏', value: allergy },
-    { label: '健檢', value: checkup },
-  ].filter((field) => field.value);
-});
 // 參考範圍就存在範本項目上，不必另外請求。
 const labRanges = computed(() => referenceRanges(template.value));
 const vet = ref('');
@@ -1045,11 +1037,21 @@ function handleBeforeUnload(event) {
 </script>
 
 <template>
-  <section class="space-y-5 pb-48 sm:pb-32">
-    <Button v-if="visitReturnTarget" as-child variant="secondary"><router-link :to="visitReturnTarget">返回診療台</router-link></Button>
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><Breadcrumbs class="mb-2" :items="[{ label: '貓咪', to: '/pets' }, { label: pet?.name || '貓咪資料', to: petId ? `/pets/${petId}` : '/pets' }, { label: isEdit ? '編輯健檢報告' : '新增健檢報告' }]" /><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案健檢報告' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢報告' : '新增健檢報告' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
-      <div v-if="!isLocked" class="flex flex-wrap items-center justify-end gap-3">
+  <section class="flex flex-col gap-5 pb-48 sm:pb-32">
+    <!-- 頁首：返回、標題、草稿／自動儲存狀態；右邊是套用預填模板與重新帶入。 -->
+    <PageHeader
+      :title="isLocked ? '已結案健檢報告' : isEdit && reportVersion > 1 ? `第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢報告' : '新增健檢報告'"
+      :back-to="visitReturnTarget || (petId ? `/pets/${petId}` : '/pets')"
+      :back-label="visitReturnTarget ? '返回診療台' : '返回貓咪資料'"
+      :description="revisionReason ? `修訂原因：${revisionReason}` : ''"
+    >
+      <template #meta>
+        <Badge v-if="!isLocked && !needsTypeChoice" variant="neutral">草稿</Badge>
+        <span v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="inline-flex items-center gap-1.5 text-sm" :class="saveState === 'error' ? 'text-danger' : 'text-subtle-foreground'" :title="'停止輸入約 1.5 秒後自動儲存為草稿'">
+          <Check v-if="saveState === 'saved'" class="size-4 text-success" stroke-width="2.4" /><Clock3 v-else class="size-4" stroke-width="1.75" />{{ saveLabel }}
+        </span>
+      </template>
+      <template v-if="!isLocked" #actions>
         <Popover v-if="!needsTypeChoice && chosenTemplateId" v-model:open="presetMenuOpen">
           <PopoverTrigger as-child>
             <Button type="button" variant="secondary" size="sm"><Layers class="h-4 w-4" />套用預填模板<ChevronDown class="h-4 w-4" /></Button>
@@ -1075,9 +1077,8 @@ function handleBeforeUnload(event) {
           </PopoverContent>
         </Popover>
         <Button v-if="!needsTypeChoice && finalizedSources.length" type="button" variant="secondary" size="sm" @click="openRecopyDialog"><Copy class="h-4 w-4" />重新帶入報告內容</Button>
-        <div v-if="recordId || isDirty || saveState === 'saving' || saveState === 'error'" class="flex items-center gap-2 text-xs" :class="saveState === 'error' ? 'text-danger' : 'text-muted-foreground '"><Clock3 class="h-4 w-4" />{{ saveLabel }}<MechanismTooltip label="查看自動儲存說明" text="填寫中的變更會在停止輸入約 1.5 秒後自動儲存為草稿。若顯示儲存失敗，可用下方「儲存草稿並返回」重試。" /></div>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <Alert v-if="loadError" variant="destructive"><AlertDescription>{{ loadError }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="6" />
@@ -1107,7 +1108,7 @@ function handleBeforeUnload(event) {
             <SelectTrigger id="copy-from-record" class="mt-1 w-full"><SelectValue placeholder="請選擇一份報告" /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="source in finalizedSources" :key="source._id" :value="String(source._id)">
-                {{ formatDate(source.visitDate) }} · {{ source.examType || '健檢報告' }} · 第 {{ source.reportVersion || 1 }} 版
+                <span class="flex gap-x-3"><span class="num">{{ formatDate(source.visitDate) }}</span><span>{{ source.examType || '健檢報告' }}</span><span class="text-muted-foreground">第 {{ source.reportVersion || 1 }} 版</span></span>
               </SelectItem>
             </SelectContent>
           </Select>
@@ -1130,7 +1131,7 @@ function handleBeforeUnload(event) {
             <span v-if="type.species !== 'all'" class="rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-foreground">{{ SPECIES_LABELS[type.species] }}用</span>
             <Check v-if="pendingTemplateId === type._id" class="h-4 w-4 text-primary" stroke-width="1.75" />
           </span>
-          <span class="mt-1 block text-xs text-muted-foreground">{{ type.description || `${type.sectionCount} 個區塊・${type.itemCount} 個項目` }}</span>
+          <span class="mt-1 block text-xs text-muted-foreground">{{ type.description || `${type.sectionCount} 個區塊、${type.itemCount} 個項目` }}</span>
         </button>
       </div>
       <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-border pt-4">
@@ -1159,37 +1160,35 @@ function handleBeforeUnload(event) {
         </div>
       </div>
 
-      <div v-if="!isLocked" id="record-context-bar" class="rounded-2xl border border-border bg-card px-4 py-3 shadow-sm">
-        <div class="flex min-w-0 flex-wrap items-center gap-x-5 gap-y-2">
-          <div class="flex min-w-0 items-center gap-2"><PawPrint class="h-5 w-5 shrink-0 text-primary" /><span class="truncate font-semibold text-foreground">{{ pet?.name ?? '—' }}</span></div>
-          <div class="flex min-w-0 items-center gap-2 text-sm text-foreground"><User class="h-4 w-4 shrink-0 text-muted-foreground" /><span class="truncate">{{ pet?.ownerId?.name ?? '—' }}</span></div>
+      <div v-if="!isLocked" id="record-context-bar" class="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-xl border border-border bg-card px-5 py-3 shadow-card">
+        <div class="flex items-center gap-3">
+          <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
+          <span class="text-lg font-semibold">{{ pet?.name ?? '—' }}</span>
         </div>
-                <dl v-if="petReminderFields.length" class="mt-2 grid grid-cols-2 gap-x-5 gap-y-2 text-xs text-warning sm:grid-cols-4">
-                  <div v-for="field in petReminderFields" :key="field.label" class="min-w-0">
-                    <dt class="font-semibold">{{ field.label }}</dt>
-                    <dd class="mt-0.5 whitespace-pre-wrap font-semibold">{{ field.value }}</dd>
-                  </div>
-                </dl>
-        <div class="mt-3 flex flex-col gap-2 border-t border-border/70 pt-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+        <SpecGrid>
+          <SpecCell label="品種"><span>{{ pet?.breed || pet?.species || '—' }}</span><PetSex :sex="pet?.sex" /></SpecCell>
+          <SpecCell label="飼主">{{ pet?.ownerId?.name ?? '—' }}</SpecCell>
+          <SpecCell v-if="examTypeName" label="類型">{{ examTypeName }}</SpecCell>
+          <SpecCell v-if="visitDate" label="看診日" mono>{{ visitDate.slice(5).replace('-', '/') }}</SpecCell>
+        </SpecGrid>
+        <ReminderTags :pet="pet" />
+        <div class="ml-auto flex flex-wrap items-end gap-2">
+          <div class="space-y-1">
             <Label for="record-follow-up-date">回診日期</Label>
-            <p class="mt-0.5 text-xs text-muted-foreground">會顯示在提供給飼主的報告中；選了日期就要一併填時間<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></p>
-          </div>
-          <div class="flex flex-col items-end gap-1">
-            <div class="flex w-full gap-2 sm:w-auto">
-              <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="尚未安排" aria-label="選擇回診日期" class="w-full sm:w-40" />
+            <div class="flex gap-2">
+              <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="尚未安排" aria-label="選擇回診日期" class="w-52" />
               <TimePicker id="record-follow-up-time" v-model="followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="!followUpDate" class="w-32 shrink-0" />
             </div>
-            <p v-if="followUpTimeError" class="text-xs font-medium text-destructive">{{ followUpTimeError }}</p>
+            <p v-if="followUpTimeError" class="text-sm font-medium text-destructive">{{ followUpTimeError }}</p>
           </div>
         </div>
       </div>
 
       <!-- 從本次看診帶入：哪些欄位現在跟著看診、哪些醫師在報告裡改過（可以還原）。 -->
-      <div v-if="followKeys.length" class="rounded-xl border border-border bg-accent/50 px-5 py-3">
+      <div v-if="followKeys.length" class="rounded-xl bg-info-surface px-5 py-3">
         <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <p class="font-semibold text-accent-foreground">從本次看診帶入<span v-if="visitLink?.date" class="num ml-2 font-normal">{{ visitLink.date }}</span></p>
-          <p class="text-sm text-muted-foreground">醫師在診療台改體重、體溫、回診日期或檢驗數值，這裡會跟著更新；在報告裡改過的欄位就不再跟。</p>
+          <p class="flex items-center gap-2 font-semibold text-info"><RefreshCw class="size-5" stroke-width="2" />從本次看診帶入<span v-if="visitLink?.date" class="num font-normal">{{ visitLink.date }}</span></p>
+          <p class="text-sm text-foreground">體重、體溫、檢驗數值、回診日期會跟著診療台更新；在報告裡改過的欄位就不再跟著變，結案時全部凍結。</p>
           <Button v-if="overriddenKeys.length" variant="secondary" size="sm" class="ml-auto" :disabled="saving" @click="resyncAllFromVisit">全部重新帶入</Button>
         </div>
         <ul v-if="followRows.length" class="mt-2.5 flex flex-wrap gap-2">
@@ -1208,7 +1207,7 @@ function handleBeforeUnload(event) {
       <nav
         v-if="!isLocked && !useCompactNav"
         aria-label="健檢表單區段"
-        class="sticky top-16 z-20 overflow-x-auto lg:top-0 rounded-2xl border border-border bg-card px-2 py-2 shadow-sm"
+        class="sticky top-16 z-20 overflow-x-auto rounded-xl border border-border bg-card px-2 py-2 shadow-card lg:top-0 xl:hidden"
       >
         <ol class="flex min-w-max items-center">
           <li v-for="(section, index) in FORM_SECTIONS" :key="section.id" class="flex items-center">
@@ -1248,7 +1247,7 @@ function handleBeforeUnload(event) {
       <nav
         v-if="!isLocked && useCompactNav"
         aria-label="健檢表單區段"
-        class="sticky top-16 z-20 lg:top-0 flex items-center gap-1 rounded-2xl border border-border bg-card px-2 py-2 shadow-sm"
+        class="sticky top-16 z-20 flex items-center gap-1 rounded-xl border border-border bg-card px-2 py-2 shadow-card lg:top-0 xl:hidden"
       >
         <Button
           type="button"
@@ -1314,6 +1313,28 @@ function handleBeforeUnload(event) {
         </SheetContent>
       </Sheet>
 
+      <div :class="isLocked ? '' : 'xl:grid xl:grid-cols-[16rem_minmax(0,1fr)] xl:items-start xl:gap-4'">
+      <nav v-if="!isLocked" aria-label="健檢表單區段（直排）" class="sticky top-5 hidden flex-col gap-0.5 rounded-xl border border-border bg-card p-2 shadow-card xl:flex">
+        <button
+          v-for="(section, index) in FORM_SECTIONS"
+          :key="section.id"
+          type="button"
+          class="flex items-center gap-3 rounded-[10px] px-2.5 py-2 text-left transition-colors"
+          :class="activeSectionId === section.id ? 'bg-accent' : 'hover:bg-hover'"
+          :aria-current="activeSectionId === section.id ? 'step' : undefined"
+          @click="scrollToSection(section.id)"
+        >
+          <span class="num flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold" :class="stepBadgeClass(index, section.id)">
+            <Check v-if="completionSections[index] && activeSectionId !== section.id" class="size-4" stroke-width="2.5" />
+            <template v-else>{{ index + 1 }}</template>
+          </span>
+          <span class="min-w-0">
+            <span class="block truncate" :class="activeSectionId === section.id ? 'font-semibold text-accent-foreground' : 'font-medium text-foreground'">{{ section.label }}</span>
+            <span class="block text-xs text-subtle-foreground">{{ completionSections[index] ? '已有內容' : '未填' }}</span>
+          </span>
+        </button>
+      </nav>
+      <div class="min-w-0 space-y-5">
       <div id="form-errors" v-if="!isLocked && validationErrors.length" class="rounded-2xl border border-danger/35 bg-danger-surface p-4 text-sm text-danger" role="alert"><p class="font-semibold">正式報告尚缺少以下內容：</p><ul class="mt-2 list-disc space-y-1 pl-5"><li v-for="issue in validationErrors" :key="`${issue.targetId}-${issue.message}`"><button type="button" class="text-left font-medium underline decoration-danger/40 underline-offset-2 hover:decoration-danger" @click="goToValidationIssue(issue)">{{ issue.message }}</button></li></ul><p class="mt-3 text-xs">點擊任一項可前往對應欄位。</p></div>
 
       <form v-if="!isLocked" class="space-y-5" @submit.prevent>
@@ -1322,17 +1343,17 @@ function handleBeforeUnload(event) {
           v-show="activeSectionId === section.id"
           :id="section.id"
           :key="section.key"
-          class="scroll-mt-40 rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6"
+          class="scroll-mt-40 rounded-xl border border-border bg-card p-5 shadow-card sm:p-6"
         >
           <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-3">
-              <span class="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ index + 1 }}</span>
+              <span class="num flex size-8 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ index + 1 }}</span>
               <div>
-                <h2 class="text-base font-semibold text-foreground">{{ section.label }}</h2>
-                <p v-if="section.description" class="text-xs text-muted-foreground">{{ section.description }}</p>
+                <h2 class="text-lg font-semibold text-foreground">{{ section.label }}</h2>
+                <p v-if="section.description" class="text-sm text-muted-foreground">{{ section.description }}</p>
               </div>
             </div>
-            <Button v-if="section.presentation === 'findings'" type="button" variant="secondary" size="sm" @click="markUncheckedFindingsNormal(section)">未標示項目全部正常</Button>
+            <Button v-if="section.presentation === 'findings'" type="button" variant="soft" size="sm" @click="markUncheckedFindingsNormal(section)"><Check stroke-width="2" />未標示項目全部正常</Button>
           </div>
           <FormSection :section="section" />
         </section>
@@ -1342,6 +1363,8 @@ function handleBeforeUnload(event) {
           <Button type="button" variant="secondary" :disabled="activeSectionIndex === FORM_SECTIONS.length - 1" @click="adjacentSection(1)">下一區 →</Button>
         </div>
       </form>
+      </div>
+      </div>
 
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
       <div v-if="!isLocked" id="record-action-bar" class="bottom-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 lg:left-18 lg:right-16">
@@ -1396,7 +1419,7 @@ function handleBeforeUnload(event) {
             <SelectTrigger id="recopy-from-record" class="mt-1 w-full"><SelectValue placeholder="請選擇一份報告" /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="source in finalizedSources" :key="source._id" :value="String(source._id)">
-                {{ formatDate(source.visitDate) }} · {{ source.examType || '健檢報告' }} · 第 {{ source.reportVersion || 1 }} 版
+                <span class="flex gap-x-3"><span class="num">{{ formatDate(source.visitDate) }}</span><span>{{ source.examType || '健檢報告' }}</span><span class="text-muted-foreground">第 {{ source.reportVersion || 1 }} 版</span></span>
               </SelectItem>
             </SelectContent>
           </Select>

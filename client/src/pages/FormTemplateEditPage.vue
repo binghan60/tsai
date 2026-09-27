@@ -3,11 +3,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   AlertTriangle,
   Calendar,
+  Check,
   ChevronDown,
   CircleDot,
   SmilePlus,
   ChevronUp,
-  Eye,
   FlaskConical,
   Gauge,
   Hash,
@@ -17,7 +17,6 @@ import {
   List,
   MousePointerClick,
   Plus,
-  Save,
   SquareCheck,
   Stethoscope,
   TextAlignStart,
@@ -26,13 +25,13 @@ import {
   X,
 } from '@lucide/vue';
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router';
-import Breadcrumbs from '../components/Breadcrumbs.vue';
 import { http } from '../api/http';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useToast } from '../composables/useToast';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
@@ -42,6 +41,7 @@ import { DEFAULT_VALUE_TYPES } from '../../../shared/formDefaults';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
+import PageHeader from '../components/PageHeader.vue';
 
 const route = useRoute();
 const toast = useToast();
@@ -58,6 +58,10 @@ const saving = ref(false);
 const error = ref('');
 const activeKey = ref('');
 const activeView = ref('design');
+const VIEW_OPTIONS = [
+  { value: 'design', label: '設計' },
+  { value: 'preview', label: '預覽' },
+];
 const mobileEditorPane = ref('content');
 // 「項目設定」還是「區塊設定」看目前有沒有選到項目——跟切換鈕本身分開定義，
 // 才不用在 template 裡塞一段行內陣列常數。
@@ -484,45 +488,20 @@ function resolveLeave(confirmed) {
 </script>
 
 <template>
-  <section class="space-y-5 pb-24">
-    <!-- 不透明底色，不用 backdrop-blur：捲動時每一幀重算模糊是長表單最主要的掉幀來源。 -->
-    <header class="-mx-4 border-b border-border bg-background px-4 py-3 sm:-mx-6 sm:px-6">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="min-w-0">
-          <Breadcrumbs class="mb-1" :items="[{ label: '設定', to: '/settings/forms' }, { label: '健檢表單', to: '/settings/forms' }, { label: currentName || '健檢表單' }]" />
-          <div class="flex min-w-0 items-center gap-3">
-            <h1 class="truncate text-xl font-semibold text-foreground">{{ currentName || '健檢表單' }}</h1>
-            <Badge v-if="!loading" :variant="isDirty ? 'secondary' : 'outline'" :class="isDirty ? 'shrink-0 text-warning' : 'shrink-0 text-muted-foreground '">
-              {{ isDirty ? '尚未儲存' : '已儲存' }}
-            </Badge>
-          </div>
-        </div>
-        <div class="flex items-center gap-2">
-          <nav class="inline-flex rounded-xl border border-border bg-card p-1" aria-label="編輯模式">
-            <button
-              type="button"
-              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
-              :class="activeView === 'design' ? 'bg-field text-primary shadow-sm' : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'"
-              @click="activeView = 'design'"
-            >
-              <LayoutList class="h-4 w-4" stroke-width="1.75" />設計
-            </button>
-            <button
-              type="button"
-              class="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors"
-              :class="activeView === 'preview' ? 'bg-field text-primary shadow-sm' : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'"
-              @click="activeView = 'preview'"
-            >
-              <Eye class="h-4 w-4" stroke-width="1.75" />預覽
-            </button>
-          </nav>
-          <Button type="button" :disabled="saving || loading || !isDirty" @click="save()">
-            <Save class="h-4 w-4" stroke-width="1.75" />
-            {{ saving ? '儲存中…' : '儲存變更' }}
-          </Button>
-        </div>
-      </div>
-    </header>
+  <section class="flex flex-col gap-5">
+    <!-- 頁首：返回、表單名稱、未儲存標記；右邊是設計／預覽切換與儲存。 -->
+    <PageHeader :title="currentName || '健檢表單'" back-to="/settings/forms" back-label="返回健檢表單">
+      <template #meta>
+        <Badge v-if="!loading && isDirty" variant="status" class="bg-warning-surface text-warning">有未儲存變更</Badge>
+        <span v-else-if="!loading" class="text-sm text-subtle-foreground">已儲存</span>
+      </template>
+      <template #actions>
+        <SegmentedControl v-model="activeView" aria-label="編輯模式" :options="VIEW_OPTIONS" />
+        <Button type="button" :disabled="saving || loading || !isDirty" @click="save()">
+          <Check stroke-width="2" />{{ saving ? '儲存中…' : '儲存變更' }}
+        </Button>
+      </template>
+    </PageHeader>
 
     <Alert v-if="error" variant="destructive">
       <AlertDescription>{{ error }}</AlertDescription>
@@ -531,8 +510,8 @@ function resolveLeave(confirmed) {
 
     <template v-else>
       <div v-if="activeView === 'design'" class="space-y-5">
-        <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
-          <h2 class="text-base font-semibold text-foreground">基本資料</h2>
+        <div class="rounded-xl border border-border bg-card p-5 shadow-card">
+          <h2 class="text-lg font-semibold text-foreground">基本資料</h2>
           <p class="mt-1 text-sm text-muted-foreground">這些資訊會顯示在建立健檢報告時的類型選單。</p>
           <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(220px,1fr)_180px_2fr]">
             <div class="space-y-1.5">
@@ -560,10 +539,10 @@ function resolveLeave(confirmed) {
           <SegmentedControl v-model="mobileEditorPane" full-width aria-label="手機表單編輯區域" :options="mobileEditorPanes" />
         </div>
 
-        <div class="hidden items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3 shadow-sm xl:flex">
+        <div class="hidden items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3 shadow-card xl:flex">
           <div class="min-w-0">
             <p class="text-sm font-medium text-foreground">
-              {{ desktopCanvasMode === 'focused' ? `正在編輯：${activeSection?.title || '未命名區塊'}` : `表單總覽 · ${sections.length} 個區塊` }}
+              {{ desktopCanvasMode === 'focused' ? `正在編輯：${activeSection?.title || '未命名區塊'}` : `表單總覽：${sections.length} 個區塊` }}
             </p>
             <p class="mt-0.5 text-xs text-muted-foreground">
               {{ desktopCanvasMode === 'focused' ? '一次專注一個區塊，左右面板可各自捲動。' : '點選任一區塊即可回到聚焦編輯。' }}
@@ -572,10 +551,10 @@ function resolveLeave(confirmed) {
           <SegmentedControl v-model="desktopCanvasMode" size="sm" aria-label="桌機畫布顯示方式" :options="[{ value: 'focused', label: '聚焦區塊' }, { value: 'overview', label: '表單總覽' }]" />
         </div>
 
-        <div class="grid items-start gap-5 xl:grid-cols-[236px_minmax(0,1fr)_320px]">
+        <div class="grid items-start gap-5 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
           <!-- 左：區塊清單 + 工具箱 -->
           <aside class="space-y-4 xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-1" :class="mobileEditorPane === 'sections' ? 'block' : 'hidden xl:block'">
-            <div class="rounded-2xl border border-border bg-card p-3 shadow-sm">
+            <div class="space-y-1 rounded-xl border border-border bg-card p-3 shadow-card">
               <div class="mb-2 flex items-center justify-between px-1">
                 <h2 class="text-base font-semibold text-foreground">區塊</h2>
                 <Badge variant="outline">{{ sections.length }}</Badge>
@@ -583,35 +562,39 @@ function resolveLeave(confirmed) {
               <div
                 v-for="(section, index) in sections"
                 :key="section.key"
-                class="flex items-center gap-1 rounded-xl border border-border bg-card p-1"
+                class="flex items-center gap-1 rounded-lg pr-1 transition-colors"
+                :class="activeKey === section.key ? 'bg-accent' : 'hover:bg-hover'"
               >
                 <button
                   type="button"
-                  class="min-h-11 min-w-0 flex-1 rounded-lg px-2 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:translate-y-px"
-                  :class="activeKey === section.key ? 'bg-accent' : 'bg-field/70'"
+                  class="min-h-12 min-w-0 flex-1 rounded-lg px-2.5 py-1.5 text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
                   :aria-pressed="activeKey === section.key"
                   @click="focusSection(section.key)"
                 >
                   <span class="block truncate text-sm font-medium" :class="section.enabled === false ? 'text-muted-foreground' : activeKey === section.key ? 'text-accent-foreground' : 'text-foreground'">
                     {{ section.title || '未命名區塊' }}
                   </span>
-                  <span class="block text-xs text-muted-foreground">
-                    {{ presentationMeta(section.presentation).title }} · {{ (section.items ?? []).length }} 項<span v-if="section.enabled === false"> · 已停用</span>
+                  <span class="flex gap-2 text-xs text-muted-foreground">
+                    <span class="truncate">{{ presentationMeta(section.presentation).title }}</span>
+                    <span class="num shrink-0">{{ (section.items ?? []).length }} 項</span>
+                    <span v-if="section.enabled === false" class="shrink-0 text-warning">已停用</span>
                   </span>
                 </button>
-                <Button type="button" variant="secondary" size="icon" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
-                  <ChevronUp class="h-4 w-4" stroke-width="1.75" />
-                </Button>
-                <Button type="button" variant="secondary" size="icon" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
-                  <ChevronDown class="h-4 w-4" stroke-width="1.75" />
-                </Button>
+                <div class="flex shrink-0 flex-col">
+                  <Button type="button" variant="ghost" size="icon-xs" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
+                    <ChevronUp stroke-width="1.75" />
+                  </Button>
+                  <Button type="button" variant="ghost" size="icon-xs" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
+                    <ChevronDown stroke-width="1.75" />
+                  </Button>
+                </div>
               </div>
               <Button type="button" variant="secondary" size="sm" class="mt-2 w-full" @click="addSection">
                 <Plus class="h-4 w-4" stroke-width="1.75" />新增區塊
               </Button>
             </div>
 
-            <div class="rounded-2xl border border-border bg-card p-3 shadow-sm">
+            <div class="rounded-xl border border-border bg-card p-3 shadow-card">
               <h2 class="px-1 text-base font-semibold text-foreground">工具箱</h2>
               <p class="mb-2 px-1 text-xs text-muted-foreground">
                 <template v-if="activeSection">點一下加進「{{ activeSection.title || '未命名區塊' }}」</template>
@@ -647,11 +630,11 @@ function resolveLeave(confirmed) {
             <article
               v-for="(section, index) in sections"
               :key="section.key"
-              class="rounded-2xl border p-4 transition-all sm:p-5"
+              class="rounded-xl border p-4 transition-all sm:p-5"
               :class="[
                 activeKey === section.key
                   ? 'border-primary bg-field shadow-md ring-2 ring-primary/20 dark:shadow-[0_0_24px_-8px_var(--color-brand-500)]'
-                  : 'cursor-pointer border-border bg-card shadow-sm hover:border-primary/35',
+                  : 'cursor-pointer border-border bg-card shadow-card hover:border-primary/35',
                 activeKey !== section.key
                   ? (desktopCanvasMode === 'overview' ? 'hidden xl:block' : 'hidden')
                   : '',
@@ -661,10 +644,10 @@ function resolveLeave(confirmed) {
               <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
                 <div class="min-w-0">
                   <p v-if="activeKey === section.key" class="inline-flex items-center rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
-                    區塊 {{ index + 1 }} · 編輯中
+                    編輯中：區塊 <span class="num ml-0.5">{{ index + 1 }}</span>
                   </p>
                   <p v-else class="text-xs font-medium text-muted-foreground">區塊 {{ index + 1 }}</p>
-                  <h2 class="mt-0.5 truncate text-base font-semibold text-foreground">{{ section.title || '未命名區塊' }}</h2>
+                  <h2 class="mt-1 truncate text-lg font-semibold text-foreground">{{ section.title || '未命名區塊' }}</h2>
                   <p v-if="section.description" class="mt-0.5 text-xs text-muted-foreground">{{ section.description }}</p>
                 </div>
                 <div class="flex shrink-0 items-center gap-1.5">
@@ -691,7 +674,7 @@ function resolveLeave(confirmed) {
             </div>
           </div>
 
-          <div v-else class="rounded-2xl border border-dashed border-border px-5 py-14 text-center" :class="mobileEditorPane === 'content' ? 'block' : 'hidden xl:block'">
+          <div v-else class="rounded-xl border border-dashed border-border px-5 py-14 text-center" :class="mobileEditorPane === 'content' ? 'block' : 'hidden xl:block'">
             <LayoutList class="mx-auto h-8 w-8 text-muted-foreground" stroke-width="1.5" />
             <p class="mt-3 text-sm font-semibold text-foreground">尚未建立表單區塊</p>
             <p class="mt-1 text-xs text-muted-foreground">先建立一個區塊，再從工具箱加入欄位。</p>
@@ -702,7 +685,7 @@ function resolveLeave(confirmed) {
 
           <!-- 右：設定面板，選什麼就設定什麼 -->
           <aside class="xl:sticky xl:top-20 xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto xl:overscroll-contain xl:pr-1" :class="mobileEditorPane === 'settings' ? 'block' : 'hidden xl:block'">
-            <div class="rounded-2xl border border-border bg-card p-4 shadow-sm">
+            <div class="rounded-xl border border-border bg-card p-4 shadow-card">
               <!-- 項目設定 -->
               <template v-if="selectedItem">
                 <div class="mb-4 flex items-center justify-between gap-2 border-b border-border pb-3">
@@ -923,7 +906,7 @@ function resolveLeave(confirmed) {
       </div>
 
       <div v-else class="space-y-5">
-        <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+        <div class="rounded-xl border border-border bg-card p-5 shadow-card">
           <div class="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 class="text-base font-semibold text-foreground">醫師填寫畫面預覽</h2>
@@ -934,7 +917,7 @@ function resolveLeave(confirmed) {
         </div>
 
         <div v-if="visibleSections.length" class="space-y-5">
-          <div v-for="(section, index) in visibleSections" :key="section.key" class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+          <div v-for="(section, index) in visibleSections" :key="section.key" class="rounded-xl border border-border bg-card p-5 shadow-card">
             <div class="mb-4 flex items-start gap-3">
               <span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">{{ index + 1 }}</span>
               <div>
@@ -945,7 +928,7 @@ function resolveLeave(confirmed) {
             <FormSectionPreview :section="section" />
           </div>
         </div>
-        <p v-else class="rounded-2xl border border-dashed border-border px-5 py-14 text-center text-sm text-muted-foreground">
+        <p v-else class="rounded-xl border border-dashed border-border px-5 py-14 text-center text-sm text-muted-foreground">
           目前沒有可預覽的啟用區塊。
         </p>
       </div>

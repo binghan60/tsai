@@ -121,7 +121,18 @@ petsRouter.get('/', async (req, res, next) => {
         .populate('ownerId', 'name phone attendanceSummary'),
       Pet.countDocuments(filter),
     ]);
-    res.json(paginatedPayload(pets, total, pagination));
+    // 清單上的「最近紀錄」：這一頁每隻貓最新一則病歷日誌的日期（看診、藥單、手動記事都算）。
+    // 只查這一頁的貓，走 {petId, entryDate} 索引。
+    const latest = pets.length
+      ? await ClinicalNote.aggregate([
+        { $match: { petId: { $in: pets.map((pet) => pet._id) } } },
+        { $sort: { petId: 1, entryDate: -1 } },
+        { $group: { _id: '$petId', lastEntryAt: { $first: '$entryDate' } } },
+      ])
+      : [];
+    const lastEntryAt = new Map(latest.map((row) => [String(row._id), row.lastEntryAt]));
+    const items = pets.map((pet) => ({ ...pet.toJSON(), lastEntryAt: lastEntryAt.get(String(pet._id)) ?? null }));
+    res.json(paginatedPayload(items, total, pagination));
   } catch (err) {
     next(err);
   }

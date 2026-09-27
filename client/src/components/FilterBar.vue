@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { CalendarClock, Search, X } from '@lucide/vue';
+import { ArrowRight, CalendarClock, Search, X } from '@lucide/vue';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { DatePicker } from './ui/date-picker';
@@ -61,13 +61,13 @@ function applyDates() {
 
 <template>
   <form
-    class="flex items-center gap-1 rounded-full border border-border bg-card p-1.5 shadow-sm dark:shadow-none"
+    class="flex h-10 items-center gap-1 rounded-full bg-field py-1 pr-1 shadow-[inset_0_0_0_1px_var(--border-strong)] focus-within:shadow-[inset_0_0_0_1px_var(--primary),0_0_0_3px_var(--focus-ring)]"
     role="search"
     @submit.prevent="emit('submit')"
   >
-    <label class="flex min-w-0 flex-1 self-stretch items-center gap-2.5 pl-3.5">
+    <label class="flex min-w-0 flex-1 self-stretch items-center gap-2 pl-3.5">
       <span class="sr-only">{{ label }}</span>
-      <Search class="h-4 w-4 shrink-0 text-muted-foreground" stroke-width="1.9" aria-hidden="true" />
+      <Search class="size-[1.125rem] shrink-0 text-subtle-foreground" stroke-width="1.75" aria-hidden="true" />
       <Input
         :id="id"
         type="text"
@@ -75,21 +75,21 @@ function applyDates() {
         :placeholder="placeholder"
         :value="modelValue"
         :aria-label="label"
-        class="h-full min-w-0 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
+        class="h-full min-w-0 flex-1 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
         @input="emit('update:modelValue', $event.target.value)"
       />
     </label>
 
-    <Button v-if="hasActiveFilter" type="button" variant="secondary" size="icon-xs" :aria-label="`清除${label}`" @click="clearAll">
-      <X class="h-3.5 w-3.5" stroke-width="1.9" />
+    <Button v-if="hasActiveFilter" type="button" variant="ghost" size="icon-xs" class="rounded-full" :aria-label="`清除${label}`" @click="clearAll">
+      <X stroke-width="1.75" />
     </Button>
 
     <template v-if="withDateRange">
       <span class="h-5.5 w-px shrink-0 bg-border"></span>
       <Popover v-model:open="dateOpen">
         <PopoverTrigger as-child>
-          <Button type="button" variant="secondary" size="sm" class="shrink-0 gap-1.5 rounded-full px-3.5 text-xs" :class="hasDateRange ? 'text-foreground' : ''">
-            <CalendarClock class="h-3.5 w-3.5" stroke-width="1.75" />
+          <Button type="button" :variant="hasDateRange ? 'soft' : 'secondary'" size="xs" class="h-8 shrink-0 gap-1.5 rounded-full px-3">
+            <CalendarClock class="size-4" stroke-width="1.75" />
             <span class="whitespace-nowrap">{{ dateRangeLabel }}</span>
           </Button>
         </PopoverTrigger>
@@ -112,8 +112,8 @@ function applyDates() {
       </Popover>
     </template>
 
-    <Button type="submit" size="icon-sm" :aria-label="`搜尋${label}`" class="shrink-0">
-      <Search class="h-4 w-4" stroke-width="2" />
+    <Button type="submit" size="icon-xs" :aria-label="`搜尋${label}`" class="shrink-0 rounded-full">
+      <ArrowRight stroke-width="2" />
     </Button>
   </form>
 </template>

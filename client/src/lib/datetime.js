@@ -189,3 +189,16 @@ export function parseDateInput(text, today = clinicDateInput()) {
   if (candidate.getUTCMonth() !== m - 1 || candidate.getUTCDate() !== d) return '';
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
+
+// 清單上的相對日期：「今天」「昨天」「15 天前」，一年以上寫年數。以診所時區的日期算，不看幾點。
+export function relativeDayLabel(value, now = new Date()) {
+  if (!value) return '';
+  const day = clinicDateInput(value);
+  const today = clinicDateInput(now);
+  if (!day || !today) return '';
+  const diff = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${day}T00:00:00Z`)) / 86400000);
+  if (diff <= 0) return diff === 0 ? '今天' : `${-diff} 天後`;
+  if (diff === 1) return '昨天';
+  if (diff < 365) return `${diff} 天前`;
+  return `${Math.floor(diff / 365)} 年前`;
+}

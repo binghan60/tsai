@@ -6,6 +6,7 @@ import { formatDateTime } from '../lib/datetime'
 import IntakeReview from '../components/IntakeReview.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
+import PageHeader from '../components/PageHeader.vue'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Button } from '../components/ui/button'
 import { Card } from '../components/ui/card'
@@ -41,14 +42,12 @@ onMounted(refresh)
 </script>
 
 <template>
-  <div class="space-y-5 pb-8">
-    <header class="flex flex-wrap items-center gap-4">
-      <div class="min-w-0 flex-1">
-        <h1 class="text-xl font-semibold">初診表審核</h1>
-        <p class="mt-0.5 text-sm text-muted-foreground">飼主送出的初診表，掛號後才建立正式飼主與貓咪資料。</p>
-      </div>
-      <Button variant="secondary" :disabled="loading" @click="refresh"><RefreshCw stroke-width="1.75" />重新載入</Button>
-    </header>
+  <section class="flex flex-col gap-5">
+    <PageHeader title="初診表審核" back-to="/reception" back-label="返回掛號台" description="飼主送出的初診表，掛號後才建立正式飼主與貓咪資料。">
+      <template #actions>
+        <Button variant="secondary" :disabled="loading" @click="refresh"><RefreshCw stroke-width="1.75" />重新載入</Button>
+      </template>
+    </PageHeader>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-if="loading && !items.length" :rows="4" />
@@ -78,5 +77,5 @@ onMounted(refresh)
         <IntakeReview :key="selectedId" :submission-id="selectedId" @decided="onDecided" />
       </Card>
     </div>
-  </div>
+  </section>
 </template>

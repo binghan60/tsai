@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import ListSkeleton from '../components/ListSkeleton.vue'
+import PageHeader from '../components/PageHeader.vue'
 import TechLineChart from '../components/charts/TechLineChart.vue'
 import TechFunnelChart from '../components/charts/TechFunnelChart.vue'
 
@@ -62,11 +63,10 @@ onMounted(fetchDashboard)
 </script>
 
 <template>
-  <section class="space-y-5 xl:flex xl:min-h-[calc(100vh-2.5rem)] xl:flex-col">
-    <header class="flex flex-wrap items-baseline gap-3">
-      <h1 class="text-xl font-semibold">總覽</h1>
-      <span class="num text-lg text-subtle-foreground">{{ todayLabel }}</span>
-    </header>
+  <section class="flex flex-col gap-5 xl:min-h-[calc(100vh-2.5rem)]">
+    <PageHeader title="總覽">
+      <template #meta><span class="num text-lg text-subtle-foreground">{{ todayLabel }}</span></template>
+    </PageHeader>
 
     <Alert v-if="error" variant="destructive">
       <AlertDescription class="flex items-center justify-between gap-3"><span>{{ error }}</span><Button type="button" variant="secondary" size="sm" :disabled="loading" @click="fetchDashboard">重新整理</Button></AlertDescription>

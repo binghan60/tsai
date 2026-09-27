@@ -20,3 +20,11 @@ test('沒有品種時退回掛號記的物種文字', () => {
   assert.equal(breedText({ breed: '' }, '貓'), '貓');
   assert.equal(breedText(null), '');
 });
+
+test('清單提醒：過敏、病史第一項、備註（咬人叫注意）', async () => {
+  const { petReminders } = await import('./petDisplay.js');
+  const tags = petReminders({ allergyStatus: 'yes', allergyType: '盤尼西林', medicalHistory: ['無', '慢性腎病', '甲亢'], notes: '會咬人，保定需兩人' });
+  assert.deepEqual(tags.map((tag) => [tag.key, tag.label]), [['allergy', '過敏'], ['history', '慢性腎病'], ['notes', '注意']]);
+  assert.equal(tags[1].title, '病史：慢性腎病、甲亢');
+  assert.deepEqual(petReminders({ allergyStatus: 'none', medicalHistory: ['無'], notes: '' }), []);
+});

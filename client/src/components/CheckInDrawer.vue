@@ -99,7 +99,7 @@ onMounted(loadSubmissions);
           <Select v-model="selectedId" :disabled="loading" @update:model-value="chooseSubmission">
             <SelectTrigger class="w-full"><SelectValue :placeholder="loading ? '載入中…' : '選擇待審核初診表'" /></SelectTrigger>
             <SelectContent>
-              <SelectItem v-for="item in submissions" :key="item._id" :value="item._id">{{ item.owner.name }} · {{ item.pet.name }} · {{ item.owner.phone }}</SelectItem>
+              <SelectItem v-for="item in submissions" :key="item._id" :value="item._id"><span class="flex gap-x-3"><span class="font-medium">{{ item.pet.name }}</span><span>{{ item.owner.name }}</span><span class="num text-muted-foreground">{{ item.owner.phone }}</span></span></SelectItem>
             </SelectContent>
           </Select>
           <p class="text-xs text-muted-foreground">帶入後仍可在下方修正；確認報到時會一併核准並連結此掛號。</p>

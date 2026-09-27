@@ -30,6 +30,9 @@ const props = defineProps({
   maxlength: { type: [Number, String], default: undefined },
   // 單行（待辦）：Enter 送出、不換行，貼上的換行併成空白。
   singleLine: { type: Boolean, default: false },
+  // 工具列位置：inline＝單行時排在文字右邊（省高度）；top＝排在上面一條（窄欄用，文字才有整行寬度）。
+  // 多行編輯器一律在上面，這個選項只影響單行。
+  toolbarPosition: { type: String, default: 'inline' },
   class: { type: [Boolean, null, String, Object, Array], default: undefined },
 });
 const emit = defineEmits(['update:modelValue', 'submit', 'keydown', 'cursor', 'blur']);
@@ -218,14 +221,15 @@ defineExpose({
     :class="cn(
       'rich-text-editor min-w-0 rounded-lg border border-input bg-field transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
       disabled ? 'cursor-not-allowed opacity-50' : '',
-      singleLine ? 'flex items-center' : '',
+      singleLine ? 'rich-text-editor--single' : '',
+      singleLine && toolbarPosition === 'inline' ? 'flex items-center' : '',
       props.class,
     )"
   >
     <div
       v-if="editor"
       class="flex flex-wrap items-center gap-1"
-      :class="singleLine ? 'order-2 shrink-0 pr-1.5' : 'border-b border-border/70 px-1.5 py-1'"
+      :class="singleLine && toolbarPosition === 'inline' ? 'order-2 shrink-0 pr-1.5' : 'border-b border-border/70 px-1.5 py-1'"
       role="toolbar"
       aria-label="文字格式"
     >
@@ -300,5 +304,19 @@ defineExpose({
   height: 0;
   color: var(--muted-foreground);
   pointer-events: none;
+}
+/* 單行：提示文字放不下就用「…」截斷，不折行壓到邊框。 */
+.rich-text-editor--single :deep(.rich-text-editor__content p.is-editor-empty:first-child) {
+  position: relative;
+}
+.rich-text-editor--single :deep(.rich-text-editor__content p.is-editor-empty:first-child::before) {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  float: none;
+  height: auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 </style>

@@ -32,9 +32,8 @@ const canSubmit = computed(() => Boolean(expected.value) && input.value.trim() =
 
 // 這份報告是哪一份，用看得懂的方式描述——日期與健檢類型比編號好認。
 const recordLabel = computed(() => {
-  const parts = [formatDate(props.record?.visitDate, '—'), props.record?.examType].filter(Boolean);
-  if ((props.record?.reportVersion ?? 1) > 1) parts.push(`第 ${props.record.reportVersion} 版`);
-  return parts.join(' · ');
+  const label = [formatDate(props.record?.visitDate, '—'), props.record?.examType].filter(Boolean).join(' ');
+  return (props.record?.reportVersion ?? 1) > 1 ? `${label}，第 ${props.record.reportVersion} 版` : label;
 });
 
 // 點一下就把確認文字填進輸入框。少一道抄字的功夫，但仍然要刻意點兩個不同的位置，

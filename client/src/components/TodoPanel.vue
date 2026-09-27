@@ -71,8 +71,8 @@ function stamp(value) {
 
 function metaLabel(item) {
   return item.status === 'done'
-    ? `${staffLabel(item.doneBy)}完成 · ${stamp(item.doneAt)}`
-    : `${staffLabel(item.createdBy)}建立 · ${stamp(item.createdAt)}`;
+    ? `${staffLabel(item.doneBy)}完成　${stamp(item.doneAt)}`
+    : `${staffLabel(item.createdBy)}建立　${stamp(item.createdAt)}`;
 }
 
 // 所有動作共用的包裝：同一時間只處理一筆，失敗才跳提示（成功的畫面變化本身就是回饋）。

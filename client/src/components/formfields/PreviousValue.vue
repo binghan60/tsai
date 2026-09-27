@@ -35,8 +35,8 @@ const examTypeText = computed(() => String(entry.value?.examType ?? '').trim());
 const noteText = computed(() => String(entry.value?.note ?? '').trim());
 const tooltip = computed(() => {
   if (!entry.value) return '';
-  const parts = [dateText.value, examTypeText.value, noteText.value].filter(Boolean).join('・');
-  return `上次紀錄・${parts}（開新分頁查看該份報告）`;
+  const when = [dateText.value, examTypeText.value].filter(Boolean).join(' ');
+  return `上次紀錄：${when}${noteText.value ? `，${noteText.value}` : ''}（開新分頁查看該份報告）`;
 });
 </script>
 
@@ -59,7 +59,7 @@ const tooltip = computed(() => {
       <span v-if="showLabel" class="shrink-0 font-medium text-muted-foreground">前次</span>
       <strong class="min-w-0 truncate text-sm font-semibold tabular-nums" :class="isAbnormal ? 'text-danger' : 'text-foreground group-hover:text-primary'">{{ valueText }}</strong>
       <span v-if="unitText" class="shrink-0 text-muted-foreground">{{ unitText }}</span>
-      <span v-if="dateText" class="shrink-0 tabular-nums text-muted-foreground">· {{ dateText }}</span>
+      <span v-if="dateText" class="ml-1 shrink-0 tabular-nums text-muted-foreground">{{ dateText }}</span>
       <span v-if="isAbnormal" class="shrink-0 font-medium text-danger">異常</span>
       <ExternalLink class="size-3 shrink-0 self-center text-muted-foreground/70" stroke-width="1.75" aria-hidden="true" />
     </template>

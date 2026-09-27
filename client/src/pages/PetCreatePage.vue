@@ -19,7 +19,7 @@ import {
   X,
 } from '@lucide/vue';
 import { http } from '../api/http';
-import Breadcrumbs from '../components/Breadcrumbs.vue';
+import PageHeader from '../components/PageHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { Card } from '../components/ui/card';
 import { Label } from '../components/ui/label';
@@ -487,21 +487,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section :class="embedded ? 'space-y-5' : 'relative space-y-5 pb-28'">
-    <!-- 頂部導航 -->
-    <Breadcrumbs v-if="!embedded" :items="[{ label: '貓咪列表', to: '/pets' }, { label: '新增貓咪檔案' }]" />
-
-    <!-- 頁面標題列 -->
-    <div v-if="!embedded" class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-      <div>
-        <h1 class="flex items-center gap-2 text-xl font-semibold text-foreground">
-          <PawPrint class="h-5 w-5 text-primary" />
-          新增貓咪檔案
-        </h1>
-        <p class="mt-1 text-sm text-muted-foreground">確認飼主身分、填寫貓咪基本資料與病史，一次送出建立檔案。</p>
-      </div>
-      <Button type="button" variant="secondary" size="sm" class="self-start sm:self-auto" :disabled="isSubmitting" @click="cancel">取消返回</Button>
-    </div>
+  <section :class="embedded ? 'flex flex-col gap-5' : 'relative flex flex-col gap-5'">
+    <PageHeader v-if="!embedded" title="新增貓咪" back-to="/pets" back-label="返回貓咪清單" description="確認飼主身分、填寫貓咪基本資料與病史，一次送出建立檔案。">
+      <template #actions>
+        <Button type="button" variant="secondary" :disabled="isSubmitting" @click="cancel">取消</Button>
+      </template>
+    </PageHeader>
 
     <Alert v-if="submitError" variant="destructive">
       <AlertCircle class="h-4 w-4" />
@@ -513,7 +504,8 @@ onBeforeUnmount(() => {
          但三張卡同時全部可見時「步驟」這個詞本身就名不符實；折成手風琴
          又會在切換時讓版面高度跳動。改成一張平面表單，卡片邊界、圖示方塊、
          每步驟自己的說明文字這些重複的裝飾都拿掉，靠留白與細分隔線分區。 -->
-    <Card class="space-y-6 p-5 shadow-sm sm:p-6">
+    <!-- 頁首滿版跟其他頁對齊；表單限寬，1920 螢幕上欄位才不會被拉成一整條。 -->
+    <Card class="w-full max-w-5xl space-y-6 p-5 sm:p-6">
       <!-- 飼主 -->
       <div class="space-y-4">
         <div class="flex items-center justify-between">
@@ -844,11 +836,11 @@ onBeforeUnmount(() => {
     </Card>
 
     <!-- 底部固定操作列 -->
-    <div class="sticky bottom-0 z-20 -mx-4 border-t border-border bg-card/95 px-4 py-3.5 shadow-lg backdrop-blur-md sm:mx-0 sm:rounded-2xl sm:border sm:px-6">
+    <div class="sticky bottom-0 z-20 -mx-4 border-t border-border bg-card/95 px-4 py-3.5 shadow-lg backdrop-blur-md sm:mx-0 sm:w-full sm:max-w-5xl sm:rounded-2xl sm:border sm:px-6">
       <div class="flex items-center justify-between">
-        <div class="hidden items-center gap-2 text-xs text-muted-foreground sm:flex">
+        <div class="hidden items-center gap-5 text-xs text-muted-foreground sm:flex">
           <span v-if="activeOwnerName">飼主：<strong class="font-medium text-foreground">{{ activeOwnerName }}</strong></span>
-          <span v-if="petForm.name">・貓咪：<strong class="font-medium text-foreground">{{ petForm.name }}</strong><span v-if="petForm.breed">（{{ petForm.breed }}）</span></span>
+          <span v-if="petForm.name">貓咪：<strong class="font-medium text-foreground">{{ petForm.name }}</strong><span v-if="petForm.breed">（{{ petForm.breed }}）</span></span>
         </div>
         <div class="flex w-full items-center justify-end gap-3 sm:w-auto">
           <Button v-if="!embedded" type="button" variant="secondary" :disabled="isSubmitting" @click="cancel">取消返回</Button>

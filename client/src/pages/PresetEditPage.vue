@@ -1,11 +1,11 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Save, Trash2 } from '@lucide/vue';
+import { Check, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useToast } from '../composables/useToast';
-import Breadcrumbs from '../components/Breadcrumbs.vue';
+import PageHeader from '../components/PageHeader.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import PresetValuesEditor from '../components/formfields/PresetValuesEditor.vue';
@@ -164,34 +164,28 @@ function resolveLeave(confirmed) {
 </script>
 
 <template>
-  <section class="space-y-5 pb-10">
-    <header class="flex flex-wrap items-start justify-between gap-3">
-      <div class="min-w-0">
-        <Breadcrumbs
-          class="mb-2"
-          :items="[
-            { label: '預填模板', to: { path: '/settings/presets', query: template ? { form: template._id } : undefined } },
-            { label: formName },
-            { label: isNew ? '新增模板' : (name.trim() || '未命名模板') },
-          ]"
-        />
-        <div class="flex min-w-0 items-center gap-3">
-          <h1 class="truncate text-xl font-semibold text-foreground">{{ isNew ? '新增預填模板' : (name.trim() || '未命名模板') }}</h1>
-          <Badge v-if="template && !isNew" :variant="isDirty ? 'secondary' : 'outline'" :class="isDirty ? 'shrink-0 text-warning' : 'shrink-0 text-muted-foreground'">{{ isDirty ? '尚未儲存' : '已儲存' }}</Badge>
-        </div>
-        <p class="mt-1 text-sm text-muted-foreground">屬於「{{ formName }}」表單，只有用這份表單填寫報告時才會出現。</p>
-      </div>
-      <div v-if="template" class="flex flex-wrap items-center gap-2">
-        <Button v-if="!isNew" type="button" variant="destructive" :disabled="saving || deleting" @click="showDeleteConfirm = true"><Trash2 class="h-4 w-4" stroke-width="1.75" />刪除模板</Button>
-        <Button type="button" :disabled="saving || deleting || (!isNew && !isDirty)" @click="save"><Save class="h-4 w-4" stroke-width="1.75" />{{ saving ? '儲存中…' : isNew ? '建立模板' : '儲存變更' }}</Button>
-      </div>
-    </header>
+  <section class="flex flex-col gap-5">
+    <PageHeader
+      :title="isNew ? '新增預填模板' : (name.trim() || '未命名模板')"
+      :back-to="{ path: '/settings/presets', query: template ? { form: template._id } : undefined }"
+      back-label="返回預填模板"
+      :description="`屬於「${formName}」表單，只有用這份表單填寫報告時才會出現。`"
+    >
+      <template #meta>
+        <Badge v-if="template && !isNew && isDirty" variant="status" class="bg-warning-surface text-warning">有未儲存變更</Badge>
+      </template>
+      <template v-if="template" #actions>
+        <Button v-if="!isNew" type="button" variant="destructive" :disabled="saving || deleting" @click="showDeleteConfirm = true"><Trash2 stroke-width="1.75" />刪除模板</Button>
+        <Button type="button" :disabled="saving || deleting || (!isNew && !isDirty)" @click="save"><Check stroke-width="2" />{{ saving ? '儲存中…' : isNew ? '建立模板' : '儲存變更' }}</Button>
+      </template>
+    </PageHeader>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-if="loading" :rows="5" />
 
-    <template v-else-if="template">
-      <div class="rounded-2xl border border-border bg-card p-5 shadow-sm">
+    <!-- 頁首滿版跟其他頁對齊；下面的欄位限寬，1920 螢幕上才不會拉成一整條。 -->
+    <div v-else-if="template" class="flex w-full max-w-5xl flex-col gap-5">
+      <div class="rounded-xl border border-border bg-card p-5 shadow-card">
         <div class="max-w-md space-y-1.5">
           <Label for="preset-name" class="text-xs font-medium">模板名稱<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <Input id="preset-name" v-model="name" placeholder="例如：預防針" />
@@ -200,7 +194,7 @@ function resolveLeave(confirmed) {
       </div>
 
       <PresetValuesEditor v-model:values="values" :sections="template.sections ?? []" />
-    </template>
+    </div>
 
     <ConfirmDialog
       :open="showDeleteConfirm"

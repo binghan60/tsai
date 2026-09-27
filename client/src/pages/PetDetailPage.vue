@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowDownToLine, ArrowUpToLine, CalendarDays, Check, ClipboardPlus, Copy, FileText, Link2Off, NotebookPen, Cat, PawPrint, Pencil, Pin, PinOff, Share2, Trash2, User, X } from '@lucide/vue';
+import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, CalendarDays, Check, Copy, FileText, Link2Off, Mail, MapPin, NotebookPen, Cat, Pencil, Pin, PinOff, Plus, Share2, Trash2, X } from '@lucide/vue';
 import ClinicalNoteEntry from '../components/ClinicalNoteEntry.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
@@ -11,7 +11,6 @@ import { ageLabel as calcAgeLabel, clinicDateInput, formatDate as formatClinicDa
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import Breadcrumbs from '../components/Breadcrumbs.vue';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
 import SpecGrid from '../components/SpecGrid.vue';
@@ -22,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { DatePicker } from '../components/ui/date-picker';
 import EmptyState from '../components/EmptyState.vue';
 import RowActions from '../components/RowActions.vue';
+import PageHeader from '../components/PageHeader.vue';
 import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
@@ -409,6 +409,11 @@ async function submitOwnerEdit() {
   }
 }
 
+async function copyPhone(phone) {
+  if (await copyText(phone)) toast.success(phone, '已複製電話');
+  else toast.error('無法複製，請手動選取電話');
+}
+
 async function copyText(value) {
   try {
     await navigator.clipboard.writeText(value);
@@ -595,48 +600,42 @@ watch(pet, async (value) => {
 
 <template>
   <div>
-  <section v-if="pet" class="space-y-5">
-    <Breadcrumbs :items="[
-      { label: '貓咪', to: '/pets' },
-      { label: pet.name },
-    ]" />
+  <section v-if="pet" class="flex flex-col gap-5">
+    <!-- 頁首：返回、名字、病歷號、藥物過敏（最重要的一件事放在最上面），右邊是暫存區與新增健檢。 -->
+    <PageHeader :title="pet.name" back-to="/pets" back-label="返回貓咪清單">
+      <template #meta>
+        <span v-if="pet.medicalRecordNumber" class="num inline-flex h-7 items-center rounded-full bg-sunken px-2.5 text-sm text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)]">{{ pet.medicalRecordNumber }}</span>
+        <span v-if="pet.legacyMedicalRecordNumber" class="text-sm text-subtle-foreground">舊病歷號 <span class="num">{{ pet.legacyMedicalRecordNumber }}</span></span>
+        <span v-if="pet.allergyStatus === 'yes'" class="inline-flex h-7 items-center gap-1.5 rounded-full bg-destructive-solid px-2.5 text-sm font-semibold text-destructive-solid-foreground"><AlertTriangle class="size-4" stroke-width="2" />藥物過敏：{{ pet.allergyType || '未註明藥物' }}</span>
+      </template>
+      <template #actions>
+        <Button type="button" :variant="petPinned ? 'destructive' : 'secondary'" :disabled="pinBusy" @click="togglePin">
+          <component :is="petPinned ? PinOff : Pin" stroke-width="1.75" />{{ petPinned ? '移出暫存區' : '加入暫存區' }}
+        </Button>
+        <Button as-child><router-link :to="`/pets/${pet._id}/records/new`"><Plus stroke-width="1.75" />新增健檢</router-link></Button>
+      </template>
+    </PageHeader>
 
-    <!-- 貓咪與飼主資料合併成同一張卡片、中間用分隔線隔開，不再是兩張並排卡片——
-         報到時兩邊資料要一眼同時看到，兩張卡片在視覺上等於多切一刀。兩邊各自獨立
-         就地編輯（不彈 Modal），互不影響彼此的編輯狀態。 -->
-    <Card class="p-4 shadow-sm dark:shadow-none sm:p-5">
-      <div class="flex flex-wrap items-center justify-between gap-3">
-        <div class="flex min-w-0 items-center gap-3">
-          <div class="flex size-12 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><Cat class="size-6" stroke-width="1.75" /></div>
-          <div class="min-w-0">
-            <div class="flex flex-wrap items-center gap-2">
-              <h1 class="text-xl font-semibold text-foreground">{{ pet.name }}</h1>
-              <span v-if="pet.medicalRecordNumber" class="num rounded-full bg-sunken px-2.5 py-0.5 text-sm font-medium text-muted-foreground">{{ pet.medicalRecordNumber }}</span>
-            </div>
-            <p v-if="pet.legacyMedicalRecordNumber" class="mt-0.5 text-sm text-muted-foreground">舊病歷號 <span class="num">{{ pet.legacyMedicalRecordNumber }}</span></p>
-          </div>
+    <!-- 貓咪與飼主同一張卡片、左右兩欄：報到時兩邊資料要一眼同時看到。兩邊各自就地編輯，互不影響。 -->
+    <Card class="gap-0 p-0">
+      <div class="grid lg:grid-cols-[minmax(0,1fr)_26rem]">
+    <section class="space-y-4 p-5" aria-labelledby="pet-profile-title">
+      <div class="flex items-center gap-2">
+        <h2 id="pet-profile-title" class="text-lg font-semibold">貓咪資料</h2>
+        <div v-if="petEditing" class="ml-auto flex gap-2">
+          <Button type="button" variant="secondary" size="sm" :disabled="petSaving" @click="cancelPetEdit"><X stroke-width="1.75" />取消</Button>
+          <Button type="button" size="sm" :disabled="petSaving" @click="submitPetEdit"><Check stroke-width="1.75" />{{ petSaving ? '儲存中…' : '儲存' }}</Button>
         </div>
-        <template v-if="petEditing">
-          <div class="flex shrink-0 gap-2">
-            <Button type="button" variant="secondary" :disabled="petSaving" @click="cancelPetEdit"><X class="h-4 w-4" />取消</Button>
-            <Button type="button" :disabled="petSaving" @click="submitPetEdit"><Check class="h-4 w-4" />{{ petSaving ? '儲存中…' : '儲存' }}</Button>
-          </div>
-        </template>
-        <div v-else class="flex shrink-0 flex-wrap gap-2">
-          <Button type="button" :variant="petPinned ? 'destructive' : 'secondary'" :disabled="pinBusy" @click="togglePin">
-            <component :is="petPinned ? PinOff : Pin" class="h-4 w-4" stroke-width="1.75" />{{ petPinned ? '移出暫存區' : '加入暫存區' }}
-          </Button>
-          <Button type="button" variant="secondary" @click="startPetEdit"><Pencil class="h-4 w-4" />編輯資料</Button>
-        </div>
+        <Button v-else type="button" variant="secondary" size="sm" class="ml-auto" @click="startPetEdit"><Pencil stroke-width="1.75" />編輯</Button>
       </div>
 
-      <Alert v-if="petEditing && petError" variant="destructive" class="mt-3"><AlertDescription>{{ petError }}</AlertDescription></Alert>
-      <Alert v-if="!petEditing && petAttendanceText" class="mt-3 border-warning/35 bg-warning-surface text-warning">
+      <Alert v-if="petEditing && petError" variant="destructive"><AlertDescription>{{ petError }}</AlertDescription></Alert>
+      <Alert v-if="!petEditing && petAttendanceText" class="border-warning/35 bg-warning-surface text-warning">
         <AlertDescription>{{ petAttendanceText }}</AlertDescription>
       </Alert>
 
       <!-- 編輯模式：直接畫在卡片裡，不彈 Modal。 -->
-      <div v-if="petEditing" class="mt-4 space-y-4 border-t border-border pt-3">
+      <div v-if="petEditing" class="space-y-4">
         <div class="grid gap-x-4 gap-y-4 sm:grid-cols-3">
           <div class="space-y-1.5">
             <Label for="pet-edit-name" class="text-xs font-medium text-foreground">貓咪名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
@@ -759,7 +758,7 @@ watch(pet, async (value) => {
       </div>
 
       <!-- 顯示模式：原本的唯讀摘要，飼主欄位已經合併到下方同一張卡片裡。 -->
-      <div v-else-if="hasAnyPetDetail" class="mt-4 space-y-4 border-t border-border pt-4">
+      <div v-else-if="hasAnyPetDetail" class="space-y-4">
         <!-- 身分資料用規格欄（小標題在上、值在下），不串成一行。 -->
         <SpecGrid v-if="identityFields.length">
           <SpecCell v-for="field in identityFields" :key="field.label" :label="field.label">{{ field.value }}</SpecCell>
@@ -774,38 +773,32 @@ watch(pet, async (value) => {
           </div>
         </dl>
 
-        <dl v-if="pet.notes">
-          <dt class="text-xs font-semibold text-muted-foreground">其他備註</dt>
-          <dd class="mt-1 whitespace-pre-wrap font-medium text-foreground">{{ pet.notes }}</dd>
-        </dl>
+        <div v-if="pet.notes" class="flex gap-3 rounded-lg bg-warning-surface px-3.5 py-2.5 text-warning">
+          <span class="shrink-0 font-semibold">貓咪備註</span>
+          <p class="min-w-0 whitespace-pre-wrap">{{ pet.notes }}</p>
+        </div>
       </div>
 
-      <!-- 飼主資料：跟貓咪資料同一張卡片，用分隔線隔開；關聯的是 pet.ownerId（populate 出 name/phone/email/address/notes/__v）。 -->
-      <div v-if="pet.ownerId" id="owner-card" class="mt-5 border-t border-border pt-4">
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="flex min-w-0 items-center gap-3">
-            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground"><User class="h-5 w-5" stroke-width="1.75" /></div>
-            <div class="min-w-0">
-              <h2 class="block truncate text-xl font-semibold text-foreground">{{ pet.ownerId.name }}</h2>
-              
-            </div>
+    </section>
+
+      <!-- 飼主：右欄。關聯的是 pet.ownerId（populate 出 name/phone/email/address/notes/__v）。 -->
+      <section v-if="pet.ownerId" id="owner-card" class="space-y-3 border-t border-border p-5 lg:border-t-0 lg:border-l" aria-labelledby="owner-profile-title">
+        <div class="flex items-center gap-2">
+          <h2 id="owner-profile-title" class="text-lg font-semibold">飼主</h2>
+          <div v-if="ownerEditing" class="ml-auto flex gap-2">
+            <Button type="button" variant="secondary" size="sm" :disabled="ownerSaving" @click="cancelOwnerEdit"><X stroke-width="1.75" />取消</Button>
+            <Button type="button" size="sm" :disabled="ownerSaving" @click="submitOwnerEdit"><Check stroke-width="1.75" />{{ ownerSaving ? '儲存中…' : '儲存' }}</Button>
           </div>
-          <template v-if="ownerEditing">
-            <div class="flex shrink-0 gap-2">
-              <Button type="button" variant="secondary" :disabled="ownerSaving" @click="cancelOwnerEdit"><X class="h-4 w-4" />取消</Button>
-              <Button type="button" :disabled="ownerSaving" @click="submitOwnerEdit"><Check class="h-4 w-4" />{{ ownerSaving ? '儲存中…' : '儲存' }}</Button>
-            </div>
-          </template>
-          <Button v-else type="button" variant="secondary" @click="startOwnerEdit"><Pencil class="h-4 w-4" />編輯資料</Button>
+          <Button v-else type="button" variant="secondary" size="sm" class="ml-auto" @click="startOwnerEdit"><Pencil stroke-width="1.75" />編輯</Button>
         </div>
 
-        <Alert v-if="ownerEditing && ownerError" variant="destructive" class="mt-3"><AlertDescription>{{ ownerError }}</AlertDescription></Alert>
-        <Alert v-if="!ownerEditing && ownerAttendanceText" class="mt-3 border-warning/35 bg-warning-surface text-warning">
+        <Alert v-if="ownerEditing && ownerError" variant="destructive"><AlertDescription>{{ ownerError }}</AlertDescription></Alert>
+        <Alert v-if="!ownerEditing && ownerAttendanceText" class="border-warning/35 bg-warning-surface text-warning">
           <AlertDescription>{{ ownerAttendanceText }}</AlertDescription>
         </Alert>
 
-        <div v-if="ownerEditing" class="mt-4 space-y-4 border-t border-border pt-3">
-          <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2">
+        <div v-if="ownerEditing" class="space-y-4">
+          <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-1">
             <div class="space-y-1.5">
               <Label for="owner-edit-name" class="text-xs font-medium text-foreground">姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
               <Input id="owner-edit-name" v-model="ownerForm.name" class="border-border focus:border-primary" placeholder="例：王小明" />
@@ -833,28 +826,18 @@ watch(pet, async (value) => {
           </div>
         </div>
 
-        <dl v-else-if="pet.ownerId.phone || pet.ownerId.landline || pet.ownerId.email || pet.ownerId.address || pet.ownerId.notes" class="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-3 text-sm sm:grid-cols-3">
-          <div v-if="pet.ownerId.phone" class="min-w-0">
-            <dt class="text-xs font-semibold text-muted-foreground">手機</dt>
-            <dd class="mt-1 tabular-nums font-medium text-foreground">{{ pet.ownerId.phone }}</dd>
+        <div v-else class="space-y-2">
+          <p class="text-lg font-semibold">{{ pet.ownerId.name }}</p>
+          <p v-if="pet.ownerId.phone" class="flex items-center gap-1.5"><span class="num">{{ pet.ownerId.phone }}</span><Button type="button" variant="ghost" size="icon-xs" :aria-label="`複製 ${pet.ownerId.name} 的電話`" @click="copyPhone(pet.ownerId.phone)"><Copy stroke-width="1.75" /></Button></p>
+          <p v-if="pet.ownerId.landline" class="text-sm text-muted-foreground">市話 <span class="num text-foreground">{{ pet.ownerId.landline }}</span></p>
+          <p v-if="pet.ownerId.email" class="flex items-center gap-1.5 text-sm break-all text-muted-foreground"><Mail class="size-4 shrink-0" stroke-width="1.75" />{{ pet.ownerId.email }}</p>
+          <p v-if="pet.ownerId.address" class="flex items-start gap-1.5 text-sm text-muted-foreground"><MapPin class="mt-0.5 size-4 shrink-0" stroke-width="1.75" />{{ pet.ownerId.address }}</p>
+          <div v-if="pet.ownerId.notes" class="flex gap-3 rounded-lg bg-warning-surface px-3.5 py-2.5 text-warning">
+            <span class="shrink-0 font-semibold">飼主備註</span>
+            <p class="min-w-0 whitespace-pre-wrap">{{ pet.ownerId.notes }}</p>
           </div>
-          <div v-if="pet.ownerId.landline" class="min-w-0">
-            <dt class="text-xs font-semibold text-muted-foreground">市話</dt>
-            <dd class="mt-1 tabular-nums font-medium text-foreground">{{ pet.ownerId.landline }}</dd>
-          </div>
-          <div v-if="pet.ownerId.email" class="min-w-0">
-            <dt class="text-xs font-semibold text-muted-foreground">Email</dt>
-            <dd class="mt-1 break-all font-medium text-foreground">{{ pet.ownerId.email }}</dd>
-          </div>
-          <div v-if="pet.ownerId.address" class="col-span-2 min-w-0 sm:col-span-3">
-            <dt class="text-xs font-semibold text-muted-foreground">地址</dt>
-            <dd class="mt-1 font-medium text-foreground">{{ pet.ownerId.address }}</dd>
-          </div>
-          <div v-if="pet.ownerId.notes" class="col-span-2 min-w-0 sm:col-span-3">
-            <dt class="text-xs font-semibold text-muted-foreground">備註</dt>
-            <dd class="mt-1 whitespace-pre-wrap font-medium text-foreground">{{ pet.ownerId.notes }}</dd>
-          </div>
-        </dl>
+        </div>
+      </section>
       </div>
     </Card>
 
@@ -868,25 +851,19 @@ watch(pet, async (value) => {
           :counts="{ notes: notePagination.total, records: recordPagination.total }"
           aria-label="切換病歷日誌與歷次健檢"
         />
-        <Button v-if="activeSection === 'records'" as-child><router-link :to="`/pets/${pet._id}/records/new`"><ClipboardPlus class="h-4 w-4" />新增健檢</router-link></Button>
+        <span class="text-sm text-subtle-foreground">新到舊</span>
       </div>
 
       <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
       <template v-if="activeSection === 'notes'">
-        <p class="text-sm text-muted-foreground">看診或拿藥時的隨手記事，不必結案就能新增。</p>
-
-        <Card class="space-y-3 p-4 shadow-sm dark:shadow-none">
-          <Textarea v-model="newNoteContent" rows="3" placeholder="輸入看診記事…" />
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-2">
-              <Label for="new-note-date" class="text-xs font-medium text-muted-foreground">日期</Label>
-              <DatePicker id="new-note-date" v-model="newNoteDate" aria-label="日期" class="w-40" :clearable="false" />
-            </div>
-            <Button :disabled="noteSaving || !newNoteContent.trim()" @click="addNote">新增紀錄</Button>
-          </div>
-          <Alert v-if="noteError" variant="destructive"><AlertDescription>{{ noteError }}</AlertDescription></Alert>
-        </Card>
+        <!-- 隨手記一筆：一行就能記，內容長了輸入框自己長高。不必結案、不必填表。 -->
+        <form class="flex flex-wrap items-start gap-2 rounded-xl bg-card p-2 shadow-[inset_0_0_0_1px_var(--border)]" @submit.prevent="addNote">
+          <Textarea v-model="newNoteContent" rows="1" aria-label="新增一則日誌" placeholder="隨手記一筆：打電話追蹤、飼主回報…" class="min-h-10 min-w-60 flex-1 border-0 bg-transparent py-2 shadow-none focus-visible:ring-0" />
+          <DatePicker id="new-note-date" v-model="newNoteDate" aria-label="日誌日期" class="w-44" :clearable="false" />
+          <Button type="submit" :disabled="noteSaving || !newNoteContent.trim()">新增紀錄</Button>
+        </form>
+        <Alert v-if="noteError" variant="destructive"><AlertDescription>{{ noteError }}</AlertDescription></Alert>
 
         <!-- 每則日誌是一張小報告（ClinicalNoteEntry）：標頭是日期與類型，內容是「標籤｜內容」列，修改也在卡片內就地進行。 -->
         <div v-if="clinicalNotes.length" class="space-y-3">
@@ -952,9 +929,9 @@ watch(pet, async (value) => {
               </div>
               <div v-for="record in pet.medicalRecords" :key="record._id" class="desktop-data-row">
                 <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ formatDate(record.visitDate) }}</span>
-                <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> · 第 {{ record.reportVersion }} 版</span></span>
+                <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="ml-2 text-xs text-muted-foreground">第 {{ record.reportVersion }} 版</span></span>
                 <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap"><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge></span>
-                <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的健檢報告`" @select="(action) => handleRowAction(record, action)" /></span>
+                <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的健檢報告`" @select="(action) => handleRowAction(record, action)" /><span v-else class="size-9 shrink-0" aria-hidden="true" /></span>
               </div>
             </Card>
     
@@ -962,7 +939,7 @@ watch(pet, async (value) => {
               <li v-for="record in pet.medicalRecords" :key="record._id">
                 <Card class="p-4 shadow-sm dark:shadow-none">
                 <div class="flex flex-wrap items-start justify-between gap-3">
-                  <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 text-xs text-muted-foreground">第 {{ record.reportVersion || 1 }} 版<template v-if="record.vet"> · {{ record.vet }}</template> · 更新於 {{ formatDateTime(record.updatedAt) }}<template v-if="record.sentTo"> · 寄至 {{ record.sentTo }}</template></p></div></div>
+                  <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground"><span>第 {{ record.reportVersion || 1 }} 版</span><span v-if="record.vet">{{ record.vet }}</span><span>更新於 {{ formatDateTime(record.updatedAt) }}</span><span v-if="record.sentTo">寄至 {{ record.sentTo }}</span></p></div></div>
                   <div class="flex shrink-0 items-center gap-1.5 text-sm">
                     <Button v-if="record.status === 'draft'" as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
                     <Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
@@ -977,7 +954,7 @@ watch(pet, async (value) => {
                 </Card>
               </li>
             </ul>
-            <EmptyState v-else :icon="PawPrint" title="尚無健檢報告" description="點右上角「新增健檢」建立第一份報告。" />
+            <EmptyState v-else :icon="Cat" title="尚無健檢報告" description="點右上角「新增健檢」建立第一份報告。" />
     
             <Pagination v-if="pet.medicalRecords.length" :page="recordPage" :total-pages="totalRecordPages" @update:page="goToRecordPage" />
           </template>

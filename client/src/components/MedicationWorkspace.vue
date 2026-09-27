@@ -348,7 +348,7 @@ onBeforeUnmount(() => {
             <td class="break-words p-3"><RichText v-if="item.condition" :text="item.condition" /><template v-else>—</template></td>
             <td class="break-words p-3 font-medium"><RichText :text="item.prescription" /></td>
             <td class="break-words p-3"><RichText v-if="item.note" :text="item.note" /><template v-else>—</template></td>
-            <td class="space-y-2 p-3"><Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge><p v-if="item.needsRepack" class="text-xs font-semibold text-danger">暫停處理・需重新包藥</p></td>
+            <td class="space-y-2 p-3"><Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge><p v-if="item.needsRepack" class="text-xs font-semibold text-danger">暫停處理，需重新包藥</p></td>
             <td class="p-3">
               <div v-if="!doctor && !['collected', 'cancelled'].includes(item.status)" class="flex flex-nowrap gap-2 whitespace-nowrap">
                 <Button v-if="nextAction(item)" class="shrink-0" size="sm" :disabled="busy" :aria-label="completeLabel(item)" @click="completeFromList(item)">完成</Button>

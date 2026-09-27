@@ -23,6 +23,7 @@ import TextTemplatePickerDialog from '../components/formfields/TextTemplatePicke
 import { useTextTemplates } from '../composables/useTextTemplates'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
+import PageHeader from '../components/PageHeader.vue'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { DatePicker } from '../components/ui/date-picker'
 
@@ -340,16 +341,15 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 xl:h-[calc(100dvh-2.5rem)]">
-    <header class="flex flex-wrap items-center gap-x-4 gap-y-3">
-      <h1 class="text-xl font-semibold">診療台</h1>
-      <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+  <div class="flex flex-col gap-5 xl:h-[calc(100dvh-2.5rem)]">
+    <PageHeader title="診療台">
+      <template #actions>
         <Button v-if="date !== today" variant="soft" size="sm" @click="date = today">回到今天</Button>
         <Button variant="ghost" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft stroke-width="1.75" /></Button>
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
         <Button variant="ghost" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <Alert v-if="error" variant="destructive" class="flex items-center justify-between gap-3">
       <AlertDescription>{{ error }}</AlertDescription>

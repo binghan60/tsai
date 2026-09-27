@@ -27,6 +27,7 @@ import FilterBar from '../components/FilterBar.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
+import PageHeader from '../components/PageHeader.vue'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { DatePicker } from '../components/ui/date-picker'
 
@@ -433,13 +434,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 xl:h-[calc(100dvh-2.5rem)]">
-    <header class="flex flex-wrap items-center gap-x-4 gap-y-3">
-      <div class="flex shrink-0 items-baseline gap-3">
-        <h1 class="text-xl font-semibold">掛號台</h1>
-        <span class="num text-lg text-subtle-foreground">{{ currentTime }}</span>
-      </div>
-      <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+  <div class="flex flex-col gap-5 xl:h-[calc(100dvh-2.5rem)]">
+    <PageHeader title="掛號台">
+      <template #meta><span class="num text-lg text-subtle-foreground">{{ currentTime }}</span></template>
+      <template #actions>
         <Button v-if="!isToday" variant="soft" size="sm" @click="date = today">回到今天</Button>
         <Button variant="ghost" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft stroke-width="1.75" /></Button>
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
@@ -447,8 +445,8 @@ onBeforeUnmount(() => {
         <span class="mx-1.5 h-6 w-px bg-border" aria-hidden="true"></span>
         <Button variant="secondary" @click="newMedication"><Pill stroke-width="1.75" />新增藥單</Button>
         <Button @click="openDrawer('new')"><Plus stroke-width="1.75" />掛號</Button>
-      </div>
-    </header>
+      </template>
+    </PageHeader>
 
     <!-- 流程列：四段橫排，一格一個數字，點一格只看那一段；第三格列出正站在櫃台前的人 -->
     <div v-if="!loading" class="grid overflow-hidden rounded-xl border border-border bg-card shadow-card md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.5fr_1fr]" role="group" aria-label="今日流程">

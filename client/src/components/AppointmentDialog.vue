@@ -17,9 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { buildSlotGrid, duplicateBookings } from '../lib/receptionBoard';
 import { DEFAULT_ESTIMATED_DURATION_MINUTES, MAX_ESTIMATED_DURATION_MINUTES } from '../lib/appointmentTime';
 import { clinicDateInput, clinicTimeInput, formatDate, formatDateTime, weekdayLabel } from '../lib/datetime';
+import { breedText } from '../lib/petDisplay';
 
 // 新增與修改掛號共用的 Modal（取代原本的 AppointmentDrawer 側邊抽屜）。
-// 置中雙欄：左欄「誰・為什麼」（類型、貓咪、來院原因、手術、報告模板、內部備註），
+// 置中雙欄：左欄「誰、為什麼」（類型、貓咪、來院原因、手術、報告模板、內部備註），
 // 右欄「什麼時候」（日期快選＋時段格）。時段格拿到自己的一欄就不用捲動。
 //
 // 抽屜改成 Modal 的原因：櫃台頁改成整寬的時間軸後，再從右邊擠一個 576px 的抽屜進來，
@@ -50,7 +51,7 @@ const MODE_OPTIONS = [
 ];
 const OWNER_MODE_OPTIONS = [
   { value: 'new', label: '新飼主' },
-  { value: 'existing', label: '既有飼主・新增貓咪' },
+  { value: 'existing', label: '既有飼主' },
 ];
 const mode = ref('return');
 const ownerMode = ref('new');
@@ -213,7 +214,7 @@ const description = computed(() => (isEdit.value ? '只更新這筆掛號，不�
 const summary = computed(() => {
   const name = isEdit.value ? petName.value : mode.value === 'return' ? selectedPet.value?.name : petName.value;
   const when = time.value ? `${formatDate(slotDate.value)}（${weekdayLabel(slotDate.value)}）${time.value}` : '';
-  return [name, when, `預估 ${estimatedDurationMinutes.value} 分鐘`, reason.value?.trim()].filter(Boolean).join(' · ');
+  return [name, when, `預估 ${estimatedDurationMinutes.value} 分鐘`, reason.value?.trim()].filter(Boolean);
 });
 function onOpenChange(value) {
   if (value) return;
@@ -289,8 +290,8 @@ const onSubmit = handleSubmit((values) => {
                 <Label for="dialog-pet-search" class="text-xs font-medium">貓咪<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
                 <div v-if="selectedPet" class="flex items-center gap-3 rounded-lg border border-primary bg-accent px-3 py-2.5">
                   <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-semibold text-accent-foreground">{{ selectedPet.name }}<span class="ml-2 text-xs font-normal">{{ [selectedPet.species, selectedPet.breed].filter(Boolean).join(' · ') || '貓咪' }}</span></p>
-                    <p class="truncate text-xs text-accent-foreground/80">{{ selectedPet.ownerId?.name || '飼主未知' }}<template v-if="selectedPet.ownerId?.phone"> · {{ selectedPet.ownerId.phone }}</template></p>
+                    <p class="truncate text-sm font-semibold text-accent-foreground">{{ selectedPet.name }}<span class="ml-2 text-xs font-normal">{{ breedText(selectedPet, '貓咪') }}</span></p>
+                    <p class="flex gap-x-3 truncate text-xs text-accent-foreground/80"><span>{{ selectedPet.ownerId?.name || '飼主未知' }}</span><span v-if="selectedPet.ownerId?.phone" class="num">{{ selectedPet.ownerId.phone }}</span></p>
                   </div>
                   <Button type="button" variant="secondary" size="sm" @click="selectedPet = null">更換</Button>
                 </div>
@@ -311,7 +312,7 @@ const onSubmit = handleSubmit((values) => {
                       class="flex w-full items-center gap-3 border-b border-border bg-card px-3 py-2.5 text-left last:border-b-0 hover:bg-field"
                       @click="selectPet(pet)"
                     >
-                      <span class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold text-primary">{{ pet.name }}</span><span class="ml-2 text-xs text-muted-foreground">{{ pet.species || '貓咪' }} · {{ pet.ownerId?.name || '飼主未知' }}<template v-if="pet.ownerId?.phone"> · {{ pet.ownerId.phone }}</template></span></span>
+                      <span class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold text-primary">{{ pet.name }}</span><span v-if="pet.breed" class="ml-2 text-xs text-muted-foreground">{{ pet.breed }}</span><span class="ml-3 text-xs text-muted-foreground">{{ pet.ownerId?.name || '飼主未知' }}</span><span v-if="pet.ownerId?.phone" class="num ml-3 text-xs text-muted-foreground">{{ pet.ownerId.phone }}</span></span>
                     </button>
                   </div>
                 </template>
@@ -472,7 +473,7 @@ const onSubmit = handleSubmit((values) => {
       </form>
 
       <footer class="flex shrink-0 flex-wrap items-center gap-2 border-t border-border px-5 py-3">
-        <p class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ summary }}</p>
+        <p class="flex min-w-0 flex-1 gap-x-4 overflow-hidden whitespace-nowrap text-xs text-muted-foreground"><span v-for="(part, index) in summary" :key="index" :class="index === summary.length - 1 ? 'min-w-0 truncate' : 'shrink-0'">{{ part }}</span></p>
         <Button type="button" variant="secondary" :disabled="submitting" @click="emit('close')">取消</Button>
         <Button type="submit" form="appointment-dialog-form" :disabled="submitting">{{ submitting ? '處理中…' : isEdit ? '儲存變更' : '掛號' }}</Button>
       </footer>

@@ -1,8 +1,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { AlertTriangle, ClipboardPlus, FileText, PawPrint, Pencil, Trash2, User } from '@lucide/vue';
+import { Cat, FileText, Plus } from '@lucide/vue';
 import { http } from '../api/http';
-import { formatDate as formatClinicDate } from '../lib/datetime';
+import { formatDate as formatClinicDate, relativeDayLabel } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { useRoute, useRouter } from 'vue-router';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
@@ -14,11 +14,13 @@ import FilterTabs from '../components/FilterTabs.vue';
 import FilterBar from '../components/FilterBar.vue';
 import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
-import Pagination from '../components/Pagination.vue';
+import ListFooter from '../components/ListFooter.vue';
+import RowActions from '../components/RowActions.vue';
+import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
+import DataCard from '../components/DataCard.vue';
 
 // 預設先提供完整紀錄；需要處理的工作則依優先級排列在後續篩選中。
 const VIEWS = [
@@ -202,149 +204,102 @@ async function removeRecord(confirmText) {
 </script>
 
 <template>
-  <section class="space-y-5">
-    <PageHeader title="健檢報告" description="依處理狀態篩選與追蹤每筆健檢報告。">
+  <section class="flex flex-col gap-5">
+    <PageHeader title="健檢報告">
       <template #actions>
-        <Button type="button" @click="openPetPicker"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
+        <Button type="button" @click="openPetPicker"><Plus stroke-width="1.75" />新增健檢</Button>
       </template>
     </PageHeader>
 
-    <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,24rem)] xl:items-center">
-      <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="健檢報告佇列" @update:model-value="selectView" />
-      <FilterBar
-        id="records-search"
-        v-model="query"
-        label="搜尋健檢報告"
-        placeholder="貓咪、飼主或報告編號"
-        with-date-range
-        :date-from="dateFrom"
-        :date-to="dateTo"
-        date-from-label="起始看診日"
-        date-to-label="結束看診日"
-        class="w-full min-w-0"
-        @update:date-from="dateFrom = $event"
-        @update:date-to="dateTo = $event"
-        @submit="applyFilters"
-      />
-    </div>
+    <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
-    <ListSkeleton v-if="loading" :rows="6" />
-
-    <Card v-else-if="!error && !records.length">
-      <EmptyState inset :icon="FileText" title="這個佇列目前是空的" description="換一個佇列，或直接建立新的健檢報告。" />
-    </Card>
-
-    <template v-else-if="records.length">
-      <!-- 桌機：清單卡，不是傳統網格表格——每列是身分區塊＋類型日期＋狀態徽章＋一顆主要按鈕，
-           沒有直線分隔，靠橫向髮線區隔列與列。寄送失敗的列左側加一條警示色條，不用額外圖示搶注意力。 -->
-      <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(14rem, 1.3fr) minmax(14rem, 1fr) minmax(11rem, 0.8fr) 13rem">
+    <DataCard title="報告清單" :count="loading && !total ? null : total" style="--data-columns: minmax(12rem, 1.6fr) minmax(8rem, 1fr) minmax(9rem, 1.2fr) 8.5rem minmax(11rem, 1.2fr) 11rem">
+      <template #filters>
+        <FilterBar
+          id="records-search"
+          v-model="query"
+          label="搜尋健檢報告"
+          placeholder="貓咪、飼主、報告編號"
+          with-date-range
+          :date-from="dateFrom"
+          :date-to="dateTo"
+          date-from-label="起始看診日"
+          date-to-label="結束看診日"
+          class="w-full min-w-0 md:w-[28rem]"
+          @update:date-from="dateFrom = $event"
+          @update:date-to="dateTo = $event"
+          @submit="applyFilters"
+        />
+      </template>
+      <template #tabs>
+        <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="健檢報告佇列" @update:model-value="selectView" />
+      </template>
+      <ListSkeleton v-if="loading" :rows="6" inset />
+      <EmptyState v-else-if="!records.length" :icon="FileText" title="這個佇列目前是空的" description="換一個佇列，或直接建立新的健檢報告。" inset />
+      <template v-else>
+      <!-- 桌機：一列一份。寄送失敗的列左側一條警示色條。 -->
+      <div class="hidden xl:block">
         <div class="desktop-data-header">
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">貓咪 / 飼主</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型．看診日</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">狀態</span>
-          <span class="desktop-data-cell"></span>
+          <span>貓咪</span><span>飼主</span><span>健檢類型</span><span>看診日</span><span>狀態</span><span></span>
         </div>
         <div
           v-for="record in records"
           :key="record._id"
-          class="desktop-data-row"
-          :class="getDeliveryStatus(record) === 'failed' ? 'bg-danger-surface/40 shadow-[inset_3px_0_0_var(--danger)]' : ''"
+          class="desktop-data-row hover:bg-hover"
+          :class="getDeliveryStatus(record) === 'failed' ? 'shadow-[inset_3px_0_0_var(--danger)]' : ''"
         >
           <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="desktop-data-cell flex items-center gap-3">
-            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-              <PawPrint class="h-4 w-4" stroke-width="1.75" />
-            </span>
-            <span class="min-w-0 truncate text-sm font-semibold text-primary" :title="`${record.petId?.name || '貓咪未找到'} · ${record.petId?.ownerId?.name || '飼主未知'}`">
-              {{ record.petId?.name || '貓咪未找到' }}<span class="font-normal text-muted-foreground"> · {{ record.petId?.ownerId?.name || '飼主未知' }}</span>
+            <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
+            <span class="min-w-0">
+              <span class="block truncate font-semibold text-primary">{{ record.petId?.name || '找不到貓咪' }}</span>
+              <span class="num block truncate text-xs text-subtle-foreground">{{ record.reportNumber || '尚未編號' }}</span>
             </span>
           </router-link>
-
-          <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground">
-            <span class="min-w-0 flex-1 truncate" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="text-xs text-muted-foreground"> ・第 {{ record.reportVersion }} 版</span></span>
-            <span class="shrink-0 text-xs text-muted-foreground">{{ formatDate(record.visitDate) }}</span>
+          <span class="desktop-data-cell truncate text-sm">{{ record.petId?.ownerId?.name || '—' }}</span>
+          <span class="desktop-data-cell">
+            <span class="block truncate text-sm" :title="record.examType || ''">{{ record.examType || '—' }}</span>
+            <span v-if="record.reportVersion > 1" class="block text-xs text-subtle-foreground">第 <span class="num">{{ record.reportVersion }}</span> 版</span>
           </span>
-
-          <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap">
+          <span class="desktop-data-cell">
+            <span class="num block text-sm">{{ formatDate(record.visitDate) }}</span>
+            <span class="block text-xs text-subtle-foreground">{{ relativeDayLabel(record.visitDate) }}</span>
+          </span>
+          <span class="desktop-data-cell flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
-            <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
-            <AlertTriangle v-if="record.deliveryError" class="h-3.5 w-3.5 shrink-0 text-danger" stroke-width="1.75" :title="record.deliveryError" />
+            <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" :title="record.deliveryError || undefined">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
           </span>
-
-          <span class="desktop-data-cell flex items-center justify-end gap-1.5">
-            <Button as-child variant="secondary" size="sm">
-              <router-link :to="recordLink(record)">
-                <component :is="record.status === 'draft' ? Pencil : FileText" class="h-4 w-4" stroke-width="1.75" />
-                {{ actionLabel(record) }}
-              </router-link>
-            </Button>
-            <Button
-              v-if="canDelete(record)"
-              type="button"
-              variant="destructive"
-              size="sm"
-              :disabled="deletingRecordId === record._id"
-              :aria-label="`刪除${record.petId?.name || '貓咪'} ${formatDate(record.visitDate)} 的健檢報告`"
-              @click="openRemoveRecord(record)"
-            >
-              <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除
-            </Button>
+          <span class="desktop-data-cell flex items-center justify-end gap-1">
+            <Button as-child variant="secondary" size="sm"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
+            <RowActions v-if="canDelete(record)" :actions="[{ key: 'delete', label: record.status === 'draft' ? '捨棄草稿' : '刪除報告', danger: true }]" :label="`${record.petId?.name || '這份報告'}的更多操作`" @select="openRemoveRecord(record)" />
+            <span v-else class="size-9 shrink-0" aria-hidden="true" />
           </span>
         </div>
-      </Card>
-
-      <!-- 手機：卡片 -->
-      <div class="space-y-3 xl:hidden">
-        <Card v-for="record in records" :key="record._id" class="gap-3 p-4 shadow-sm dark:shadow-none">
-          <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="flex items-start gap-3">
-            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-              <PawPrint class="h-5 w-5" stroke-width="1.75" />
-            </span>
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-medium text-primary">{{ record.petId?.name || '貓咪未找到' }}</span>
-              <span class="flex items-center gap-1 truncate text-xs text-muted-foreground">
-                <User class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ record.petId?.ownerId?.name || '飼主未知' }}
-              </span>
-            </span>
-          </router-link>
-
-          <div class="flex flex-wrap gap-1.5">
-            <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
-            <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
-          </div>
-
-          <p class="text-xs text-muted-foreground">
-            {{ record.examType || '健檢' }} · {{ formatDate(record.visitDate) }}<template v-if="record.vet"> · {{ record.vet }}</template>
-          </p>
-          <p v-if="record.deliveryError" class="flex items-start gap-1 text-xs text-danger">
-            <AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" stroke-width="1.75" />
-            <span class="min-w-0">{{ record.deliveryError }}</span>
-          </p>
-
-          <div class="flex items-center gap-2">
-            <Button as-child variant="secondary" size="sm" class="min-w-0 flex-1">
-              <router-link :to="recordLink(record)">
-                <component :is="record.status === 'draft' ? Pencil : FileText" class="h-4 w-4" stroke-width="1.75" />
-                {{ actionLabel(record) }}
-              </router-link>
-            </Button>
-            <Button
-              v-if="canDelete(record)"
-              type="button"
-              variant="destructive"
-              size="sm"
-              class="min-w-0 flex-1"
-              :disabled="deletingRecordId === record._id"
-              :aria-label="`刪除${record.petId?.name || '貓咪'} ${formatDate(record.visitDate)} 的健檢報告`"
-              @click="openRemoveRecord(record)"
-            >
-              <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除
-            </Button>
-          </div>
-        </Card>
       </div>
 
-      <Pagination :page="currentPage" :total-pages="totalPages" @update:page="goToPage" />
-    </template>
+      <!-- 窄螢幕：一份一張小卡。 -->
+      <ul class="divide-y divide-border xl:hidden">
+        <li v-for="record in records" :key="record._id" class="space-y-2 px-4 py-3" :class="getDeliveryStatus(record) === 'failed' ? 'shadow-[inset_3px_0_0_var(--danger)]' : ''">
+          <div class="flex items-start gap-3">
+            <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="min-w-0 flex-1">
+              <span class="block truncate font-semibold text-primary">{{ record.petId?.name || '找不到貓咪' }}</span>
+              <span class="flex gap-3 text-sm text-muted-foreground"><span class="truncate">{{ record.examType || '健檢報告' }}</span><span class="num shrink-0">{{ formatDate(record.visitDate) }}</span></span>
+            </router-link>
+            <RowActions v-if="canDelete(record)" :actions="[{ key: 'delete', label: record.status === 'draft' ? '捨棄草稿' : '刪除報告', danger: true }]" :label="`${record.petId?.name || '這份報告'}的更多操作`" @select="openRemoveRecord(record)" />
+          </div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
+            <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
+            <Button as-child variant="secondary" size="sm" class="ml-auto"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
+          </div>
+          <p v-if="record.deliveryError" class="text-sm text-danger">{{ record.deliveryError }}</p>
+        </li>
+      </ul>
+
+      </template>
+      <template v-if="!loading && records.length" #footer>
+        <ListFooter :page="currentPage" :total-pages="totalPages" :total="total" :page-size="limit" @update:page="goToPage" />
+      </template>
+    </DataCard>
   </section>
   <PetPickerDialog :open="petPickerOpen" @close="closePetPicker" @select="startRecordForPet" />
   <!-- 草稿只要一般確認，已結案報告才要打字（與貓咪詳情頁、後端刪除端點同一個判準）。 -->

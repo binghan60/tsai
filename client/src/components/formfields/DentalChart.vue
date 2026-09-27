@@ -177,7 +177,7 @@ function render() {
       Object.assign(textarea.style, {
         width: '100%', height: '100%', boxSizing: 'border-box', resize: 'none', outline: 'none',
         border: `1.5px solid ${DENTAL.fieldBorder}`, borderLeftWidth: '5px', borderRadius: '6px', padding: '4px 6px',
-        fontSize: '18px', lineHeight: '1.3', fontFamily: 'inherit', color: 'var(--color-foreground)', background: 'var(--color-field)',
+        fontSize: '18px', lineHeight: '1.3', fontFamily: 'inherit', color: 'var(--foreground)', background: 'var(--field)',
       });
       textarea.addEventListener('input', (event) => { if (!props.readonly) setNoteFor(d.code, event.target.value); });
       textarea.addEventListener('focus', () => { textarea.style.borderTopColor = textarea.style.borderRightColor = textarea.style.borderBottomColor = DENTAL.selected; });
@@ -289,7 +289,7 @@ onBeforeUnmount(() => {
     </div>
 
     <!-- 文字清單：報告上也列出，牙位號碼比圖好抄。 -->
-    <div v-if="summary.groups.length || summary.notes.length || summary.restNormal" class="mt-3 space-y-1.5 border-t pt-3" :class="readonly ? 'border-report-border' : 'border-border'">
+    <div v-if="summary.groups.length || summary.notes.length || summary.restNormal" class="mt-3 space-y-1.5 border-t pt-3 text-sm" :class="readonly ? 'border-report-border' : 'border-border'">
       <p v-for="group in summary.groups" :key="group.status" class="flex flex-wrap items-baseline gap-x-2">
         <span class="inline-flex items-center gap-1.5 font-semibold"><span class="dental-swatch" :data-state="group.status" aria-hidden="true"></span>{{ group.label }}</span>
         <span class="num">{{ group.codes.join('、') }}</span>

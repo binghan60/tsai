@@ -30,6 +30,7 @@ const { mention, candidates, highlighted, updateMention, closeMention, selectCan
       ref="editor"
       v-model="text"
       single-line
+      toolbar-position="top"
       :placeholder="placeholder"
       :aria-label="ariaLabel"
       :maxlength="maxlength"
@@ -56,7 +57,7 @@ const { mention, candidates, highlighted, updateMention, closeMention, selectCan
       >
         <span class="min-w-0 flex-1 truncate">
           <span class="font-medium">{{ candidate.petName }}</span>
-          <span class="text-xs text-muted-foreground"><template v-if="candidate.species"> · {{ candidate.species }}</template><template v-if="candidate.ownerName"> · {{ candidate.ownerName }}</template><template v-if="candidate.ownerPhone"> · <span class="tabular-nums">{{ candidate.ownerPhone }}</span></template></span>
+          <span v-if="candidate.ownerName" class="ml-3 text-xs text-muted-foreground">{{ candidate.ownerName }}</span><span v-if="candidate.ownerPhone" class="num ml-3 text-xs text-muted-foreground">{{ candidate.ownerPhone }}</span>
         </span>
         <span v-if="candidate.today" class="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">今日掛號</span>
       </li>

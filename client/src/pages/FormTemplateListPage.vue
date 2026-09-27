@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { Copy, LayoutList, Pencil, Plus, SearchX, Trash2 } from '@lucide/vue';
+import { LayoutList, Plus, SearchX } from '@lucide/vue';
 import { http } from '../api/http';
 import { useFormTemplate } from '../composables/useFormTemplate';
 import { useToast } from '../composables/useToast';
@@ -9,17 +9,17 @@ import { getAvailabilityStatusMeta } from '../lib/recordStatus';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Card } from '../components/ui/card';
-import { Badge } from '../components/ui/badge';
 import { Switch } from '../components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ModalDialog from '../components/ModalDialog.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
+import DataCard from '../components/DataCard.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
 import FilterBar from '../components/FilterBar.vue';
-import Pagination from '../components/Pagination.vue';
+import ListFooter from '../components/ListFooter.vue';
+import RowActions from '../components/RowActions.vue';
 import EmptyState from '../components/EmptyState.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
@@ -44,18 +44,11 @@ const createError = ref('');
 
 const queryInput = ref('');
 const query = ref('');
-const speciesFilter = ref('any');
 const statusFilter = ref('any');
 
 const SPECIES_LABELS = { cat: '貓', dog: '犬', all: '不限物種' };
 
 // 用詞跟表單自己的「適用物種」對齊，整頁只有一套講法。
-// 「不限物種」是不篩選，選「貓」時連不限物種的表單一起列出 ——
-// 跟後端 listTemplates 的 $in: [species, 'all'] 同一套語意，看到的就是這隻能用的表單。
-const SPECIES_FILTERS = [
-  { value: 'any', label: '全部物種' },
-  { value: 'cat', label: '貓' },
-];
 const STATUS_FILTERS = [
   { value: 'any', label: '全部狀態' },
   { value: 'enabled', label: '使用中' },
@@ -69,12 +62,10 @@ const START_MODES = [
 // 「至少保留一份表單」看的是總數，不是篩選後的結果 ——
 // 篩掉剩一筆並不代表刪掉它之後就沒表單了。
 const canDelete = computed(() => templates.value.length > 1);
-const hasFilters = computed(() => Boolean(query.value.trim() || speciesFilter.value !== 'any' || statusFilter.value !== 'any'));
+const hasFilters = computed(() => Boolean(query.value.trim() || statusFilter.value !== 'any'));
 const visibleTemplates = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   return templates.value.filter((template) => {
-    const species = template.species ?? 'all';
-    if (speciesFilter.value !== 'any' && species !== 'all' && species !== speciesFilter.value) return false;
     if (statusFilter.value !== 'any' && (statusFilter.value === 'enabled') !== Boolean(template.enabled)) return false;
     if (!keyword) return true;
     return `${template.name} ${template.description ?? ''}`.toLowerCase().includes(keyword);
@@ -83,6 +74,15 @@ const visibleTemplates = computed(() => {
 
 // 這頁清單是前端過濾（見上面 visibleTemplates），分頁也跟著在前端切，不另外打 API。
 const PAGE_SIZE = 10;
+// 列上只留「編輯」，其餘收進 ⋯：以此建立、刪除（至少要留一份表單）。
+const templateActions = computed(() => [
+  { key: 'duplicate', label: '以此建立新表單', disabled: Boolean(busyId.value) },
+  { key: 'delete', label: '刪除表單', danger: true, disabled: Boolean(busyId.value) || !canDelete.value },
+]);
+function templateAction(key, template) {
+  if (key === 'duplicate') openDuplicate(template);
+  else if (key === 'delete') templateToDelete.value = template;
+}
 const page = ref(1);
 const totalPages = computed(() => Math.max(Math.ceil(visibleTemplates.value.length / PAGE_SIZE), 1));
 const pagedTemplates = computed(() => visibleTemplates.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
@@ -96,13 +96,12 @@ function applyFilters() {
 function clearFilters() {
   queryInput.value = '';
   query.value = '';
-  speciesFilter.value = 'any';
   statusFilter.value = 'any';
   page.value = 1;
 }
 
-// 物種／狀態切換鈕組是即時篩選，不經過 applyFilters，換條件時單獨重置頁碼。
-watch([speciesFilter, statusFilter], () => {
+// 狀態切換鈕組是即時篩選，不經過 applyFilters，換條件時單獨重置頁碼。
+watch(statusFilter, () => {
   page.value = 1;
 });
 const selectedSource = computed(() => templates.value.find((template) => template._id === copyFromId.value) ?? null);
@@ -223,150 +222,62 @@ onMounted(load);
 </script>
 
 <template>
-  <SettingsLayout title="表單管理" description="醫師建立健檢時可選用的表單。每份表單都能設定適用物種與檢查內容。">
+  <SettingsLayout title="表單管理" description="醫師建立健檢報告時選用的表單；停用後不影響已建立的草稿與報告。">
     <template #actions>
-      <Button type="button" @click="openCreate"><Plus class="h-4 w-4" stroke-width="1.75" />新增健檢表單</Button>
+      <Button type="button" @click="openCreate"><Plus stroke-width="1.75" />新增健檢表單</Button>
     </template>
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
-    <ListSkeleton v-if="loading" :rows="4" />
+    <ListSkeleton v-if="loading" :rows="4" :avatar="false" />
 
-    <template v-else-if="templates.length">
-      <div class="grid gap-3 xl:grid-cols-[minmax(22rem,1fr)_auto] xl:items-center">
-        <FilterBar id="template-search" v-model="queryInput" label="搜尋健檢表單" placeholder="輸入表單名稱或說明" class="w-full min-w-0 xl:max-w-xl" @submit="applyFilters" />
-        <div class="flex flex-wrap items-center gap-2 rounded-xl bg-muted/55 p-2 xl:justify-end">
-          <div class="flex items-center gap-2 rounded-lg bg-card px-2.5 py-1.5 shadow-sm">
-            <span class="whitespace-nowrap text-xs font-medium text-muted-foreground">適用物種</span>
-            <SegmentedControl v-model="speciesFilter" size="sm" aria-label="依適用物種篩選" :options="SPECIES_FILTERS" />
-          </div>
-
-          <div class="flex items-center gap-2 rounded-lg bg-card px-2.5 py-1.5 shadow-sm">
-            <span class="whitespace-nowrap text-xs font-medium text-muted-foreground">狀態</span>
-            <SegmentedControl v-model="statusFilter" size="sm" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
-          </div>
-        </div>
-      </div>
-
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="text-sm text-muted-foreground">
-          <template v-if="hasFilters">符合條件 {{ visibleTemplates.length }} 份，共 {{ templates.length }} 份表單</template>
-          <template v-else>目前共有 {{ templates.length }} 份表單</template>
-        </p>
-        <p class="text-xs text-muted-foreground">停用後不影響已建立的草稿與報告</p>
-      </div>
-
-      <EmptyState
-        v-if="!visibleTemplates.length"
-        :icon="SearchX"
-        title="找不到符合條件的表單"
-        description="換個關鍵字，或清除目前的篩選條件。"
-      >
+    <DataCard v-else-if="templates.length" title="健檢表單" :count="visibleTemplates.length" style="--data-columns: minmax(16rem, 2fr) 11rem 9rem 11rem">
+      <template #filters>
+        <SegmentedControl v-model="statusFilter" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
+        <FilterBar id="template-search" v-model="queryInput" label="搜尋健檢表單" placeholder="表單名稱或說明" class="w-full min-w-0 md:w-80" @submit="applyFilters" />
+      </template>
+      <EmptyState v-if="!visibleTemplates.length" :icon="SearchX" title="找不到符合條件的表單" description="換個關鍵字，或清除目前的篩選條件。" inset>
         <Button type="button" variant="secondary" class="mt-4" @click="clearFilters">清除篩選</Button>
       </EmptyState>
-
-      <!-- 桌機：清單卡，與其他列表頁同一套版式 -->
-      <Card v-if="visibleTemplates.length" class="hidden overflow-hidden p-0 shadow-sm xl:block" style="--data-columns: minmax(14rem, 1.4fr) 7rem 10rem 7.5rem 8rem">
-        <div class="desktop-data-header">
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">表單名稱</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">適用物種</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">內容</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">啟用</span>
-          <span class="desktop-data-cell"></span>
-        </div>
-        <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row">
-          <router-link
-            :to="`/settings/forms/${template._id}`"
-            class="desktop-data-cell flex items-center gap-2 text-sm"
-            :title="template.description ? `${template.name} · ${template.description}` : template.name"
-          >
-            <span class="max-w-[65%] shrink-0 truncate font-semibold text-primary">{{ template.name }}</span>
-            <span v-if="template.description" class="min-w-0 truncate text-xs text-muted-foreground">· {{ template.description }}</span>
-          </router-link>
-          <span class="desktop-data-cell text-sm text-foreground">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</span>
-          <span class="desktop-data-cell whitespace-nowrap text-sm text-foreground">{{ template.sectionCount }} 區塊・{{ template.itemCount }} 項目</span>
-          <span class="desktop-data-cell flex items-center gap-2">
-            <Switch
-              :id="`enabled-${template._id}`"
-              :model-value="template.enabled"
-              :disabled="busyId === template._id"
-              @update:model-value="toggleEnabled(template, $event)"
-            />
-            <Label :for="`enabled-${template._id}`" class="text-xs" :class="getAvailabilityStatusMeta(template.enabled).textClass">
-              {{ getAvailabilityStatusMeta(template.enabled).label }}
-            </Label>
-          </span>
-          <span class="desktop-data-cell flex justify-end gap-1">
-            <Button type="button" variant="secondary" size="icon-sm" :aria-label="`編輯表單 ${template.name}`" @click="router.push(`/settings/forms/${template._id}`)">
-              <Pencil class="h-4 w-4" stroke-width="1.75" />
-            </Button>
-            <Button type="button" variant="secondary" size="icon-sm" :disabled="Boolean(busyId)" :aria-label="`以「${template.name}」建立新表單`" @click="openDuplicate(template)">
-              <Copy class="h-4 w-4" stroke-width="1.75" />
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="icon-sm"
-              :disabled="Boolean(busyId) || !canDelete"
-              :title="canDelete ? '刪除這份表單' : '至少要保留一份表單'"
-              :aria-label="`刪除表單 ${template.name}`"
-              @click="templateToDelete = template"
-            >
-              <Trash2 class="h-4 w-4" stroke-width="1.75" />
-            </Button>
-          </span>
-        </div>
-      </Card>
-
-      <!-- 手機：表格擠不下，改回一份一張卡 -->
-      <div v-if="visibleTemplates.length" class="space-y-3 xl:hidden">
-        <Card v-for="template in pagedTemplates" :key="template._id" class="gap-3 p-4 shadow-sm">
-          <div class="flex items-start justify-between gap-3">
-            <router-link :to="`/settings/forms/${template._id}`" class="min-w-0">
-              <span class="block font-semibold text-primary">{{ template.name }}</span>
-              <span v-if="template.description" class="mt-0.5 block text-xs text-muted-foreground">{{ template.description }}</span>
+      <template v-else>
+        <div class="hidden xl:block">
+          <div class="desktop-data-header"><span>表單</span><span>內容</span><span>啟用</span><span></span></div>
+          <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row hover:bg-hover">
+            <router-link :to="`/settings/forms/${template._id}`" class="desktop-data-cell flex items-center gap-3">
+              <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground"><LayoutList class="size-5" stroke-width="1.75" /></span>
+              <span class="min-w-0">
+                <span class="block truncate font-semibold text-primary">{{ template.name }}</span>
+                <span v-if="template.description" class="block truncate text-xs text-subtle-foreground">{{ template.description }}</span>
+              </span>
             </router-link>
-            <div class="flex shrink-0 items-center gap-2">
-              <Switch
-                :id="`enabled-sm-${template._id}`"
-                :model-value="template.enabled"
-                :disabled="busyId === template._id"
-                @update:model-value="toggleEnabled(template, $event)"
-              />
-              <Label :for="`enabled-sm-${template._id}`" class="sr-only">{{ template.enabled ? '停用表單' : '啟用表單' }}</Label>
+            <span class="desktop-data-cell text-sm text-muted-foreground"><span class="num">{{ template.sectionCount }}</span> 區塊　<span class="num">{{ template.itemCount }}</span> 項目</span>
+            <span class="desktop-data-cell flex items-center gap-2">
+              <Switch :id="`enabled-${template._id}`" :model-value="template.enabled" :disabled="busyId === template._id" @update:model-value="toggleEnabled(template, $event)" />
+              <Label :for="`enabled-${template._id}`" :class="getAvailabilityStatusMeta(template.enabled).textClass">{{ getAvailabilityStatusMeta(template.enabled).label }}</Label>
+            </span>
+            <span class="desktop-data-cell flex items-center justify-end gap-1">
+              <Button as-child variant="secondary" size="sm"><router-link :to="`/settings/forms/${template._id}`">編輯</router-link></Button>
+              <RowActions :actions="templateActions" :label="`${template.name}的更多操作`" @select="(key) => templateAction(key, template)" />
+            </span>
+          </div>
+        </div>
+
+        <ul class="divide-y divide-border xl:hidden">
+          <li v-for="template in pagedTemplates" :key="template._id" class="space-y-2 px-4 py-3">
+            <div class="flex items-start gap-3">
+              <router-link :to="`/settings/forms/${template._id}`" class="min-w-0 flex-1">
+                <span class="block truncate font-semibold text-primary">{{ template.name }}</span>
+                <span class="text-sm text-muted-foreground"><span class="num">{{ template.sectionCount }}</span> 區塊　<span class="num">{{ template.itemCount }}</span> 項目</span>
+              </router-link>
+              <Switch :id="`enabled-sm-${template._id}`" :model-value="template.enabled" :disabled="busyId === template._id" :aria-label="template.enabled ? '停用表單' : '啟用表單'" @update:model-value="toggleEnabled(template, $event)" />
+              <RowActions :actions="templateActions" :label="`${template.name}的更多操作`" @select="(key) => templateAction(key, template)" />
             </div>
-          </div>
+          </li>
+        </ul>
 
-          <div class="flex flex-wrap items-center gap-2">
-            <Badge variant="outline" class="rounded-full">{{ SPECIES_LABELS[template.species] ?? '不限物種' }}</Badge>
-            <Badge :class="getAvailabilityStatusMeta(template.enabled).class" class="rounded-full">
-              {{ getAvailabilityStatusMeta(template.enabled).label }}
-            </Badge>
-            <span class="text-xs text-muted-foreground">{{ template.sectionCount }} 個區塊・{{ template.itemCount }} 個項目</span>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <Button type="button" variant="secondary" size="sm" @click="router.push(`/settings/forms/${template._id}`)">
-              <Pencil class="h-4 w-4" stroke-width="1.75" />編輯表單
-            </Button>
-            <Button type="button" variant="secondary" size="sm" :disabled="Boolean(busyId)" @click="openDuplicate(template)">
-              <Copy class="h-4 w-4" stroke-width="1.75" />以此建立
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              class="ml-auto min-h-10"
-              :disabled="Boolean(busyId) || !canDelete"
-              :title="canDelete ? '刪除這份表單' : '至少要保留一份表單'"
-              @click="templateToDelete = template"
-            >
-              <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除
-            </Button>
-          </div>
-        </Card>
-      </div>
-
-      <Pagination v-if="visibleTemplates.length" :page="page" :total-pages="totalPages" @update:page="page = $event" />
-    </template>
+      </template>
+      <template v-if="visibleTemplates.length" #footer>
+        <ListFooter :page="page" :total-pages="totalPages" :total="visibleTemplates.length" :page-size="PAGE_SIZE" @update:page="page = $event" />
+      </template>
+    </DataCard>
 
     <EmptyState
       v-else-if="!loading"

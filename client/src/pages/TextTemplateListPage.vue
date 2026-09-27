@@ -1,21 +1,22 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
-import { CornerDownLeft, Copy, FileText, Pencil, Plus, Search, SearchX, Trash2 } from '@lucide/vue';
+import { CornerDownLeft, FileText, Plus, Search, SearchX } from '@lucide/vue';
 import FilterBar from '../components/FilterBar.vue';
-import Pagination from '../components/Pagination.vue';
+import ListFooter from '../components/ListFooter.vue';
+import RowActions from '../components/RowActions.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
 import { useRoute, useRouter } from 'vue-router';
 import { http } from '../api/http';
 import { useTextTemplates } from '../composables/useTextTemplates';
 import { useToast } from '../composables/useToast';
 import SettingsLayout from '../components/SettingsLayout.vue';
+import DataCard from '../components/DataCard.vue';
 import EmptyState from '../components/EmptyState.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import ModalDialog from '../components/ModalDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
-import { Card } from '../components/ui/card';
 import { Checkbox } from '../components/ui/checkbox';
 import { DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
@@ -255,55 +256,54 @@ onMounted(load);
 </script>
 
 <template>
-  <SettingsLayout title="文字模板" description="集中管理可插入健檢文字欄位的長篇內容；填表時不會自動跳出提示。">
+  <SettingsLayout title="文字模板" description="填寫健檢或看診時，從文字欄位右上角插入的長篇內容。">
     <template #actions>
-      <Button type="button" @click="openCreate"><Plus class="h-4 w-4" />新增文字模板</Button>
+      <Button type="button" @click="openCreate"><Plus stroke-width="1.75" />新增文字模板</Button>
     </template>
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
-    <ListSkeleton v-if="loading" :rows="5" />
+    <ListSkeleton v-if="loading" :rows="5" :avatar="false" />
 
-    <template v-else>
-      <div class="grid gap-3 xl:grid-cols-[minmax(22rem,1fr)_auto] xl:items-center">
-        <FilterBar id="text-template-search" v-model="queryInput" label="搜尋文字模板" placeholder="搜尋模板名稱或內容" class="w-full min-w-0 xl:max-w-xl" @submit="applyFilters" />
-        <div class="flex flex-wrap items-center gap-2 rounded-xl bg-muted/55 p-2 xl:justify-end">
-          <div class="flex items-center gap-2 rounded-lg bg-card px-2.5 py-1.5 shadow-sm">
-            <span class="whitespace-nowrap text-xs font-medium text-muted-foreground">狀態</span>
-            <SegmentedControl v-model="status" size="sm" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
+    <DataCard v-else title="模板" :count="visibleTemplates.length" style="--data-columns: minmax(18rem, 2fr) minmax(12rem, 1fr) 6rem 11rem">
+      <template #filters>
+        <SegmentedControl v-model="status" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
+        <FilterBar id="text-template-search" v-model="queryInput" label="搜尋文字模板" placeholder="模板名稱或內容" class="w-full min-w-0 md:w-80" @submit="applyFilters" />
+      </template>
+      <EmptyState v-if="!visibleTemplates.length" :icon="templates.length ? SearchX : FileText" :title="templates.length ? '找不到符合條件的文字模板' : '還沒有文字模板'" description="建立後，文字欄位右上角的模板鈕就能插入。" inset><Button type="button" class="mt-4" @click="openCreate">新增第一份模板</Button></EmptyState>
+      <template v-else>
+        <div class="hidden xl:block">
+          <div class="desktop-data-header"><span>模板</span><span>適用欄位</span><span>啟用</span><span></span></div>
+          <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row hover:bg-hover">
+            <button type="button" class="desktop-data-cell min-w-0 text-left" :title="template.content" @click="openEdit(template)">
+              <span class="block truncate font-semibold text-primary">{{ template.name }}</span>
+              <span class="block truncate text-xs text-subtle-foreground">{{ template.content }}</span>
+            </button>
+            <span class="desktop-data-cell truncate text-sm text-muted-foreground" :title="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
+            <span class="desktop-data-cell"><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></span>
+            <span class="desktop-data-cell flex items-center justify-end gap-1">
+              <Button type="button" variant="secondary" size="sm" @click="openEdit(template)">編輯</Button>
+              <RowActions :actions="[{ key: 'duplicate', label: '複製一份' }, { key: 'delete', label: '刪除模板', danger: true }]" :label="`${template.name}的更多操作`" @select="(key) => (key === 'duplicate' ? duplicate(template) : (deleteTarget = template))" />
+            </span>
           </div>
         </div>
-      </div>
 
-      <p class="text-sm text-muted-foreground">顯示 {{ visibleTemplates.length }} 份，共 {{ templates.length }} 份模板</p>
-      <EmptyState v-if="!visibleTemplates.length" :icon="templates.length ? SearchX : FileText" :title="templates.length ? '找不到符合條件的文字模板' : '尚未建立文字模板'" description="建立後，填寫健檢的文字欄位便能從模板介面插入。"><Button type="button" class="mt-4" @click="openCreate">新增第一份模板</Button></EmptyState>
+        <ul class="divide-y divide-border xl:hidden">
+          <li v-for="template in pagedTemplates" :key="template._id" class="px-4 py-3">
+            <div class="flex items-start gap-3">
+              <button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)">
+                <span class="block truncate font-semibold text-primary">{{ template.name }}</span>
+                <span class="mt-0.5 line-clamp-2 text-sm whitespace-pre-wrap text-muted-foreground">{{ template.content }}</span>
+              </button>
+              <Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" />
+              <RowActions :actions="[{ key: 'duplicate', label: '複製一份' }, { key: 'delete', label: '刪除模板', danger: true }]" :label="`${template.name}的更多操作`" @select="(key) => (key === 'duplicate' ? duplicate(template) : (deleteTarget = template))" />
+            </div>
+          </li>
+        </ul>
 
-      <Card v-if="visibleTemplates.length" class="hidden overflow-hidden p-0 shadow-sm xl:block" style="--data-columns: minmax(16rem, 1.5fr) minmax(14rem, 1fr) 5rem 8rem">
-        <div class="desktop-data-header">
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">模板名稱</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">適用欄位</span>
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">啟用</span>
-          <span class="desktop-data-cell"></span>
-        </div>
-        <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row">
-          <button type="button" class="group desktop-data-cell flex items-center gap-2 text-left text-sm active:translate-y-px" :title="`${template.name} · ${template.content}`" @click="openEdit(template)">
-            <span class="max-w-[65%] shrink-0 truncate font-semibold text-primary underline-offset-4 group-hover:underline">{{ template.name }}</span>
-            <span class="min-w-0 truncate text-xs text-muted-foreground">· {{ template.content }}</span>
-          </button>
-          <span class="desktop-data-cell truncate text-sm text-foreground" :title="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
-          <span class="desktop-data-cell"><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></span>
-          <span class="desktop-data-cell flex justify-end gap-1">
-            <Button type="button" variant="secondary" size="icon-sm" :aria-label="`編輯${template.name}`" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button>
-            <Button type="button" variant="secondary" size="icon-sm" :aria-label="`複製${template.name}`" @click="duplicate(template)"><Copy class="h-4 w-4" /></Button>
-            <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${template.name}`" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button>
-          </span>
-        </div>
-      </Card>
-
-      <div v-if="visibleTemplates.length" class="space-y-3 xl:hidden">
-        <Card v-for="template in pagedTemplates" :key="template._id" class="p-4"><div class="flex items-start justify-between gap-3"><button type="button" class="group min-w-0 flex-1 text-left active:translate-y-px" @click="openEdit(template)"><span class="font-semibold text-primary underline-offset-4 group-hover:underline">{{ template.name }}</span><span class="mt-1 line-clamp-2 whitespace-pre-wrap text-sm text-muted-foreground">{{ template.content }}</span></button><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></div><div class="mt-3 flex items-center gap-2 border-t border-border pt-3"><span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">{{ applicabilityLabel(template) }}</span><Button type="button" variant="secondary" size="icon" :aria-label="`編輯${template.name}`" @click="openEdit(template)"><Pencil class="h-4 w-4" /></Button><Button type="button" variant="destructive" size="icon" :aria-label="`刪除${template.name}`" @click="deleteTarget = template"><Trash2 class="h-4 w-4" /></Button></div></Card>
-      </div>
-
-      <Pagination v-if="visibleTemplates.length" :page="page" :total-pages="totalPages" @update:page="page = $event" />
-    </template>
+      </template>
+      <template v-if="visibleTemplates.length" #footer>
+        <ListFooter :page="page" :total-pages="totalPages" :total="visibleTemplates.length" :page-size="PAGE_SIZE" @update:page="page = $event" />
+      </template>
+    </DataCard>
 
     <ModalDialog v-if="editorOpen" size="lg" @close="editorOpen = false">
       <div class="space-y-1 p-6 pb-4 pr-16"><DialogTitle>{{ editingId ? '編輯文字模板' : '新增文字模板' }}</DialogTitle><DialogDescription>模板會原樣保留換行；插入時再決定放在游標、接在後面或覆蓋內容。</DialogDescription></div>

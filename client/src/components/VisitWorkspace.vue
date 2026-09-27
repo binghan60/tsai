@@ -464,11 +464,13 @@ onBeforeUnmount(() => {
   <section class="flex min-h-0 flex-col" :aria-label="`${appointment.petName} 看診工作區`">
     <!-- 標頭跟內容一起捲動：標頭（備註、醫療警示）可能很高，固定住會把寫紀錄的空間壓得很小。
          只有底部的動作列固定，送交按鈕隨時按得到。 -->
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <!-- 版面依工作區自己的寬度排（container query），不看視窗寬度：1600px 開著側滑面板時工作區只剩五百多 px，
+         照視窗寬度排的兩欄會被擠爛。 -->
+    <div class="@container/visit min-h-0 flex-1 overflow-y-auto">
       <header class="space-y-4 border-b border-border px-6 pt-5 pb-4">
         <!-- 第一排：左邊是這隻貓（號碼牌、名字、規格欄），右邊是飼主與時間。 -->
         <div class="flex flex-wrap items-start gap-x-6 gap-y-3">
-          <div class="flex min-w-0 flex-1 items-start gap-4">
+          <div class="flex min-w-0 flex-[1_1_20rem] items-start gap-4">
             <CheckinNumber :appointment="appointment" size="lg" />
             <div class="min-w-0 space-y-2.5">
               <div class="flex flex-wrap items-center gap-2">
@@ -523,7 +525,7 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- 貓咪與飼主備註：會咬人、飼主難溝通這類事要在叫進診間前就看到，所以常駐顯示、不收合。 -->
-        <div v-if="pet" class="grid gap-2 lg:grid-cols-2">
+        <div v-if="pet" class="grid gap-2 @2xl/visit:grid-cols-2">
           <div class="min-w-0 rounded-lg px-3.5 py-2.5" :class="pet.notes || editingPetNote ? 'bg-warning-surface text-warning' : 'bg-sunken text-muted-foreground'">
             <div class="flex items-start gap-3">
               <span class="shrink-0 pt-0.5 text-sm font-semibold">貓咪備註</span>
@@ -575,7 +577,7 @@ onBeforeUnmount(() => {
 
       <!-- 左欄由上而下：量測 → 檢驗數值 → 本次簡易紀錄 → 內部備註 → 交給櫃台；右欄是歷次病歷日誌。
            兩欄按 65:35 分配，日誌欄保底 20rem，窄螢幕上報告卡才不會被擠爛。 -->
-      <div class="grid xl:grid-cols-[minmax(0,65fr)_minmax(20rem,35fr)]">
+      <div class="grid @4xl/visit:grid-cols-[minmax(0,65fr)_minmax(20rem,35fr)]">
         <div class="flex flex-col gap-6 px-6 py-5">
           <section class="space-y-3" :aria-labelledby="`measure-heading-${appointment._id}`">
             <div class="flex items-center gap-2"><h3 :id="`measure-heading-${appointment._id}`" class="text-base font-semibold">量測</h3><DestTag :to="['journal', 'report']" /></div>
@@ -596,7 +598,7 @@ onBeforeUnmount(() => {
               <h3 :id="`lab-heading-${appointment._id}`" class="text-base font-semibold">檢驗數值</h3><DestTag :to="['journal', 'report']" />
               <span class="text-sm text-subtle-foreground">項目來自掛號選的「{{ template?.name }}」</span>
             </div>
-            <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+            <div class="grid gap-3 @md/visit:grid-cols-2 @6xl/visit:grid-cols-3">
               <div v-for="item in labItems" :key="item.key" class="space-y-1.5">
                 <div class="flex items-baseline justify-between gap-2">
                   <Label :for="`visit-lab-${item.key}-${appointment._id}`" class="truncate">{{ item.label }}</Label>
@@ -641,7 +643,7 @@ onBeforeUnmount(() => {
               <h3 :id="`handoff-heading-${appointment._id}`" class="text-base font-semibold">交給櫃台</h3>
               <p class="text-sm text-muted-foreground">櫃台處理時會先看到這兩欄；收費與領藥由櫃台直接處理，系統不計價。</p>
             </div>
-            <div class="grid gap-4 lg:grid-cols-2">
+            <div class="grid gap-4 @2xl/visit:grid-cols-2">
               <div class="space-y-1.5">
                 <div class="flex items-center gap-2"><Label :for="textareaId('specialCareNote')" class="text-warning">請轉告飼主</Label><DestTag to="journal" /></div>
                 <div class="relative">
@@ -657,7 +659,7 @@ onBeforeUnmount(() => {
           </section>
         </div>
         <!-- 病歷日誌自己捲動，並在往下捲時黏在頂端，寫到交給櫃台時仍看得到歷次紀錄。 -->
-        <div class="h-128 px-6 py-5 xl:sticky xl:top-0 xl:h-[calc(100dvh-11rem)] xl:self-start xl:pl-0">
+        <div class="h-128 px-6 py-5 @4xl/visit:sticky @4xl/visit:top-0 @4xl/visit:h-[calc(100dvh-11rem)] @4xl/visit:self-start @4xl/visit:pl-0">
           <ClinicalNotesPanel :notes="notes" :loading="notesLoading" :error="notesError" :page="notePage" :total-pages="noteTotalPages" :pet-id="appointment.petId" full-record-label="完整病歷" fill class="h-full" @load="loadNotes" @saved="handleHistoricalNoteSaved" />
         </div>
       </div>

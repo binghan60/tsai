@@ -130,3 +130,13 @@ describe('parseDateInput', () => {
     assert.equal(parseDateInput('123', today), '');
   });
 });
+
+it('relativeDayLabel 以診所日期算相對天數', async () => {
+  const { relativeDayLabel } = await import('./datetime.js');
+  const now = new Date('2026-09-27T04:00:00Z');
+  assert.equal(relativeDayLabel('2026-09-27T01:00:00Z', now), '今天');
+  assert.equal(relativeDayLabel('2026-09-26T01:00:00Z', now), '昨天');
+  assert.equal(relativeDayLabel('2026-09-12T01:00:00Z', now), '15 天前');
+  assert.equal(relativeDayLabel('2024-09-01T01:00:00Z', now), '2 年前');
+  assert.equal(relativeDayLabel(null, now), '');
+});

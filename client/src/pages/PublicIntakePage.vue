@@ -219,7 +219,8 @@ async function submit() {
             <h2>謙華動物醫院</h2>
             <p>CHIEN HUA Animal Hospital</p>
             <p>門診時間：9:00–11:30、14:00–20:30</p>
-            <p>03-561-9595 · 新竹市東區公園路 226 號</p>
+            <p>電話：03-561-9595</p>
+            <p>地址：新竹市東區公園路 226 號</p>
           </div>
         </div>
       </section>
