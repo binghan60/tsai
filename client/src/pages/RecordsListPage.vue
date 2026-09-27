@@ -219,7 +219,7 @@ async function removeRecord(confirmText) {
           id="records-search"
           v-model="query"
           label="搜尋健檢報告"
-          placeholder="貓咪、飼主、報告編號"
+          placeholder="貓咪、飼主"
           with-date-range
           :date-from="dateFrom"
           :date-to="dateTo"
@@ -250,10 +250,7 @@ async function removeRecord(confirmText) {
         >
           <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="desktop-data-cell flex items-center gap-3">
             <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
-            <span class="min-w-0">
-              <span class="block truncate font-semibold text-primary">{{ record.petId?.name || '找不到貓咪' }}</span>
-              <span class="num block truncate text-xs text-subtle-foreground">{{ record.reportNumber || '尚未編號' }}</span>
-            </span>
+            <span class="min-w-0 truncate font-semibold text-primary">{{ record.petId?.name || '找不到貓咪' }}</span>
           </router-link>
           <span class="desktop-data-cell truncate text-sm">{{ record.petId?.ownerId?.name || '—' }}</span>
           <span class="desktop-data-cell">

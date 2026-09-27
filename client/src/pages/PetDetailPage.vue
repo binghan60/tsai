@@ -601,10 +601,9 @@ watch(pet, async (value) => {
 <template>
   <div>
   <section v-if="pet" class="flex flex-col gap-5">
-    <!-- 頁首：返回、名字、病歷號、藥物過敏（最重要的一件事放在最上面），右邊是暫存區與新增健檢。 -->
+    <!-- 頁首：返回、名字、舊病歷號（對得上舊系統的紙本病歷）、藥物過敏（最重要的一件事放在最上面），右邊是暫存區與新增健檢。 -->
     <PageHeader :title="pet.name" back-to="/pets" back-label="返回貓咪清單">
       <template #meta>
-        <span v-if="pet.medicalRecordNumber" class="num inline-flex h-7 items-center rounded-full bg-sunken px-2.5 text-sm text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)]">{{ pet.medicalRecordNumber }}</span>
         <span v-if="pet.legacyMedicalRecordNumber" class="text-sm text-subtle-foreground">舊病歷號 <span class="num">{{ pet.legacyMedicalRecordNumber }}</span></span>
         <span v-if="pet.allergyStatus === 'yes'" class="inline-flex h-7 items-center gap-1.5 rounded-full bg-destructive-solid px-2.5 text-sm font-semibold text-destructive-solid-foreground"><AlertTriangle class="size-4" stroke-width="2" />藥物過敏：{{ pet.allergyType || '未註明藥物' }}</span>
       </template>

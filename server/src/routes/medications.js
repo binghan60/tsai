@@ -31,7 +31,7 @@ router.get('/', async (req, res, next) => {
     }
     if (req.query.q) {
       const q = new RegExp(escapeRegExp(String(req.query.q).slice(0, 200)), 'i');
-      filter.$or = ['petName', 'ownerName', 'ownerPhone', 'medicalRecordNumber'].map(key => ({ [key]: q }));
+      filter.$or = ['petName', 'ownerName', 'ownerPhone'].map(key => ({ [key]: q }));
     }
     const pagination = paginationOptions(req.query, { defaultLimit: 25, maxLimit: 100 });
     const [items, total, grouped] = await Promise.all([
@@ -64,7 +64,7 @@ router.post('/', async (req, res, next) => {
       appointmentId = appointment._id;
     }
     const order = new MedicationOrder({ ...fields, petId: pet._id, ownerId: pet.ownerId._id, appointmentId,
-      petName: pet.name, ownerName: pet.ownerId.name, ownerPhone: pet.ownerId.phone, medicalRecordNumber: pet.medicalRecordNumber || '' });
+      petName: pet.name, ownerName: pet.ownerId.name, ownerPhone: pet.ownerId.phone });
     recordMedicationEvent(order, 'create', req.user.username, '');
     await saveWithJournal(order);
     emitMedicationUpdate(order);

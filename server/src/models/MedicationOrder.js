@@ -9,7 +9,6 @@ const schema = new mongoose.Schema({
   petName: { type: String, required: true },
   ownerName: { type: String, default: '' },
   ownerPhone: { type: String, default: '' },
-  medicalRecordNumber: { type: String, default: '' },
   // 可以上色、加粗（shared/richText.js），字數上限算純文字。
   condition: { type: String, default: '', validate: richTextMaxLength(5000) },
   prescription: { type: String, default: '', validate: richTextMaxLength(10000) },

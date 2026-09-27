@@ -1,15 +1,9 @@
 import mongoose from 'mongoose';
 
-function createMedicalRecordNumber() {
-  const suffix = this?._id?.toString().slice(-8).toUpperCase();
-  return `PET-${suffix || new mongoose.Types.ObjectId().toString().slice(-8).toUpperCase()}`;
-}
-
 const petSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Owner', required: true },
-    medicalRecordNumber: { type: String, default: createMedicalRecordNumber, trim: true },
     legacyMedicalRecordNumber: { type: String, trim: true, default: null },
     species: { type: String, default: '貓', trim: true },
     breed: { type: String, default: '', trim: true },
@@ -46,7 +40,6 @@ const petSchema = new mongoose.Schema(
 );
 
 petSchema.index({ ownerId: 1, createdAt: -1, _id: -1 });
-petSchema.index({ medicalRecordNumber: 1 }, { unique: true, sparse: true });
 petSchema.index(
   { legacyMedicalRecordNumber: 1 },
   {

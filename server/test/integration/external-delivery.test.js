@@ -25,7 +25,7 @@ describe('external SMTP integration', { skip: !smtpEnabled }, () => {
       to: recipient,
       ownerName: '整合測試',
       petName: '測試貓咪',
-      reportNumber: `SMTP-E2E-${Date.now()}`,
+      visitDate: new Date(),
       reportUrl: process.env.PUBLIC_APP_URL || 'https://example.invalid/report/test',
       pdfBuffer: Buffer.from('%PDF-1.4\n%%EOF\n'),
     });

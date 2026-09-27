@@ -14,7 +14,6 @@ const deliveryLogSchema = new mongoose.Schema(
     // 不設 ref／populate：這筆紀錄要能在報告被刪除之後繼續存在，
     // populate 到一個已刪除的文件只會拿到 null。下面幾個欄位就是為此冗餘保存的。
     recordId: { type: mongoose.Schema.Types.ObjectId, required: true },
-    reportNumber: { type: String, default: '' },
     petName: { type: String, default: '' },
     ownerName: { type: String, default: '' },
     // 同一次寄送會先寫 queued，再寫最終結果。用同一個 attemptId 把兩個事件串在一起，

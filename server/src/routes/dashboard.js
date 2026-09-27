@@ -78,10 +78,10 @@ router.get('/', async (req, res, next) => {
         } },
       ]),
       MedicalRecord.countDocuments({ ...CURRENT_VERSION, status: 'draft', updatedAt: { $lt: new Date(Date.now() - DAY_MS) } }),
-      // 橫幅上點名最近一份失敗的：哪隻、哪份、為什麼。
+      // 橫幅上點名最近一份失敗的：哪隻、為什麼。
       MedicalRecord.findOne({ ...CURRENT_VERSION, status: 'finalized', deliveryStatus: { $in: ['failed', 'uncertain'] } })
         .sort({ lastDeliveryAttemptAt: -1, updatedAt: -1 })
-        .select('reportNumber deliveryStatus deliveryError petId')
+        .select('deliveryStatus deliveryError petId')
         .populate({ path: 'petId', select: 'name' })
         .lean(),
     ]);
@@ -110,7 +110,6 @@ router.get('/', async (req, res, next) => {
       },
       latestFailed: latestFailed ? {
         _id: latestFailed._id,
-        reportNumber: latestFailed.reportNumber,
         petName: latestFailed.petId?.name ?? '',
         deliveryStatus: latestFailed.deliveryStatus,
         error: latestFailed.deliveryError ?? '',

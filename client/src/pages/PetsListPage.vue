@@ -111,7 +111,7 @@ function goToPage(next) {
 
     <DataCard title="貓咪清單" :count="loading && !total ? null : total" style="--data-columns: minmax(12rem, 2fr) minmax(8rem, 1.3fr) 5.5rem minmax(10rem, 1.5fr) 8.5rem minmax(9rem, 1.3fr) 12rem">
       <template #filters>
-        <FilterBar id="pet-list-search" v-model="query" label="搜尋貓咪" placeholder="名字、病歷號、飼主、電話" class="w-full min-w-0 md:w-[26rem]" @submit="applyFilters" />
+        <FilterBar id="pet-list-search" v-model="query" label="搜尋貓咪" placeholder="名字、飼主、電話" class="w-full min-w-0 md:w-[26rem]" @submit="applyFilters" />
       </template>
       <ListSkeleton v-if="loading" :rows="6" avatar inset />
       <EmptyState v-else-if="pets.length === 0" :icon="Cat" :title="query ? '找不到符合條件的貓咪' : '還沒有貓咪資料'" :description="query ? '換個關鍵字試試，或按「新增貓咪」建檔。' : '按右上角「新增貓咪」建立第一筆。'" inset />
@@ -124,10 +124,7 @@ function goToPage(next) {
           <div v-for="pet in pets" :key="pet._id" class="desktop-data-row hover:bg-hover">
             <router-link :to="`/pets/${pet._id}`" class="desktop-data-cell flex items-center gap-3">
               <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
-              <span class="min-w-0">
-                <span class="block truncate font-semibold text-primary">{{ pet.name }}</span>
-                <span class="num block truncate text-xs text-subtle-foreground">{{ pet.medicalRecordNumber }}</span>
-              </span>
+              <span class="min-w-0 truncate font-semibold text-primary">{{ pet.name }}</span>
             </router-link>
             <span class="desktop-data-cell truncate text-sm text-muted-foreground" :title="pet.breed || ''">{{ pet.breed || '—' }}</span>
             <span class="desktop-data-cell text-sm text-muted-foreground"><PetSex v-if="pet.sex === 'male' || pet.sex === 'female'" :sex="pet.sex" with-label /><template v-else>—</template></span>

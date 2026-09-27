@@ -33,14 +33,14 @@
 `name`、`phone`、`email`、`address`、`notes`（皆選填，僅 `name`／`phone` 必填）。一位飼主可養多隻寵物。
 
 ### pets 寵物
-`name`、`ownerId`、`medicalRecordNumber`（自動產生 `PET-XXXXXXXX`）、`species`、`breed`、`sex`、`neutered`、`birthDate`、`weightKg`、`allergies`、`chronicConditions`、`currentMedications`、`notes`。`legacyMedicalRecordNumber`（選填，unique+sparse）是舊系統匯入時保留的舊病歷號，供追溯與匯入腳本判斷是否已匯過，非匯入資料一律是 `null`。
+`name`、`ownerId`、`species`、`breed`、`sex`、`neutered`、`birthDate`、`weightKg`、`allergies`、`chronicConditions`、`currentMedications`、`notes`。**寵物與報告都沒有自己的編號**，一律用 MongoDB 的 `_id`——早期的 `medicalRecordNumber`（`PET-…`）與 `reportNumber`（`HC-…`）只是 `_id` 截短，沒有人記得、紙本也沒印，已從 schema 移除（開發資料庫裡的舊值與索引沒清，不影響運作）。報告 PDF 檔名是「貓咪名＿健檢報告＿健檢日期」（`shared/reportFilename.js`，下載與 Email 附件共用）。`legacyMedicalRecordNumber`（選填，unique+sparse）是舊系統匯入時保留的舊病歷號，供追溯與匯入腳本判斷是否已匯過，非匯入資料一律是 `null`。
 
 ### medicalRecords 健檢報告
 欄位分成幾組：
 
 | 組別 | 欄位 |
 |---|---|
-| 基本 | `petId`、`reportNumber`（`HC-YYYY-XXXXXXXX`）、`vet`、`visitDate`、`followUpDate`、`examType` |
+| 基本 | `petId`、`vet`、`visitDate`、`followUpDate`、`examType` |
 | **範本快照** | `templateId`、`templateVersion`、`sections`（結案時凍結的完整表單結構＋作答） |
 | 具名臨床欄位 | `weightKg`、`temperatureC`、`heartRate`、`chiefComplaint`、`diagnosis`、`conclusion`、`other`、`customValues` 等 |
 | 分享 | `shareToken`（uuid，unique）、`shareEnabled`、`sharedAt` |
@@ -58,7 +58,7 @@
 - **結案**：這一刻把看診的值凍結進報告欄位與 `sections` 快照，之後看診再改不影響。看診被刪除（只有已取消／未到的能刪）前，先把值寫進還連著的草稿。
 - 對應是固定規則，不是表單設計器上的設定。早期版本是「複製進草稿＋`overriddenKeys` 記下醫師改過的欄位」，等於兩份資料，已經拿掉。
 
-索引：`petId`、`reportNumber`(unique)、`shareToken`(unique)、`{supersededBy, updatedAt}`、`{status, deliveryStatus}`。後兩個是給跨寵物清單查詢用的——沒有它們那支查詢是全表掃描加記憶體排序，而記憶體排序有 32MB 硬上限，超過會直接失敗。**新增查詢模式時要一併確認索引接得上。**
+索引：`petId`、`shareToken`(unique)、`{supersededBy, updatedAt}`、`{status, deliveryStatus}`。後兩個是給跨寵物清單查詢用的——沒有它們那支查詢是全表掃描加記憶體排序，而記憶體排序有 32MB 硬上限，超過會直接失敗。**新增查詢模式時要一併確認索引接得上。**
 
 ### formTemplates 健檢表單範本
 `name`、`description`、`species`、`enabled`、`order`、`version`，底下是 `sections[]`，每個 section 有 `items[]`。使用者可自由增刪區塊與項目。詳見 [docs/FORM_BUILDER.md](docs/FORM_BUILDER.md)。
@@ -91,9 +91,9 @@
 `GET /api/todos` 回的是**未完成（上限 200，有期限的由早到晚排前面、沒期限的照建立順序接後面）＋最近完成 50 筆**的單一清單，前端依 `status` 分頁籤；任何異動後伺服器整份重讀並廣播 `todos:updated`，前端直接取代。排序在記憶體裡做（`lib/todos.js` 的 `sortOpenTodos`），筆數有上限所以沒有 32MB 排序上限的問題。索引 `{status, createdAt}`（未完成清單）、`{status, doneAt: -1}`（最近完成）、`{mentions.petId}`（刪寵物時找標記）。
 
 ### deliveryLogs 寄送流水帳
-append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
+append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩筆，同一個 `attemptId`；API 回傳時合併成一次寄送一筆）：`recordId`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
 
-**刻意不設 `ref`、改冗餘存報告編號與姓名**——報告可以被刪除，而這筆紀錄的價值正是在報告消失後還查得到寄給了誰。同理它是獨立 collection 而不是內嵌陣列。medicalRecords 上的 `sentTo`/`sentAt` 只留得住最後一次，重寄就覆蓋。
+**刻意不設 `ref`、改冗餘存貓咪與飼主姓名**——報告可以被刪除，而這筆紀錄的價值正是在報告消失後還查得到寄給了誰。同理它是獨立 collection 而不是內嵌陣列。medicalRecords 上的 `sentTo`/`sentAt` 只留得住最後一次，重寄就覆蓋。
 
 ### users 帳號
 `username`（unique）、`passwordHash`（`scrypt$<salt>$<hash>`，`select: false`）、`active`、`tokenVersion`。單人診所共用一組帳號，不是多使用者系統。
@@ -253,7 +253,7 @@ POST   /api/chat/messages               新增一則訊息，body { sender: 'vet
                                        transaction 內把寵物放進暫存區，寵物不存在回 422
 
 寵物暫存區（全站一份，見第二節 pinnedPets）
-GET    /api/pinned-pets                 暫存清單，每筆帶 pet（name/species/breed/medicalRecordNumber/owner{name,phone}），新到舊
+GET    /api/pinned-pets                 暫存清單，每筆帶 pet（name/species/breed/owner{name,phone}），新到舊
 POST   /api/pinned-pets                 手動加入，body { petId, pinnedBy }（upsert）
 DELETE /api/pinned-pets/:petId          手動移除；已不在暫存區也回 200
 
@@ -277,7 +277,7 @@ medication:updated（server→client）    藥單任何異動；前端重讀清�
 intake:updated（server→client）        初診表送出、核准、退回；前端重讀待審筆數（工具欄「初診」）
 
 寄送紀錄
-GET    /api/delivery-logs               流水帳（?recordId= / ?event= / 分頁）
+GET    /api/delivery-logs               流水帳，一筆＝一次寄送（queued 與結果依 attemptId 在資料庫裡先合併再分頁，lib/deliveryAttempts.js）；?recordId= / ?event=（這次寄送的最終結果）/ ?q= / ?from=&to= / 分頁
 
 健檢表單設定
 GET    /api/settings/form-templates
@@ -298,7 +298,7 @@ DELETE /api/text-templates/:id
 GET    /api/search                      全站搜尋（飼主 + 寵物）
 GET    /api/dashboard                   總覽：today（今日掛號／上午下午／在院＝看診中＋候診／待櫃台處理／已完成／待安排回診，
                                        跟掛號台流程列同一套分段）、reports（草稿＋超過一天／待寄送／寄送失敗／本月已寄送與上月）、
-                                       latestFailed（最近一份寄送失敗的貓咪、報告編號、原因）、weeklyTrend（近 8 週，含 weekStart）
+                                       latestFailed（最近一份寄送失敗的貓咪與原因）、weeklyTrend（近 8 週，含 weekStart）
 GET    /api/public/reports/:token        公開，飼主查看報告用
 GET    /api/health
 ```
@@ -328,11 +328,11 @@ GET    /api/health
 
 | 路由 | 頁面 | 說明 |
 |---|---|---|
-| `/` | 總覽 | 照設計稿 R2-Dashboard：頁首「前往掛號台」→ 寄送失敗橫幅（有才出現，點名最近一份的貓咪、報告編號、原因＋「查看並重寄」）→「今天的門診」四格（今日掛號、在院、待櫃台處理、已完成，點進掛號台對應的 `?stage=`）→「健檢報告」四格（草稿、待寄送、寄送失敗、本月已寄送，點進 `/records?view=`；待櫃台處理／寄送失敗有數字時亮琥珀／紅框）→ 近 8 週健檢量長條（CSS 畫的單一序列，只標最新一週，0 也留 2px）＋院內待辦（未完成前 8 筆，圓圈可直接完成，「全部待辦」開工具欄面板）。**每一個數字都點得進對應清單，口徑跟那份清單一致。** 全站已經沒有圖表套件（echarts 隨舊總覽一起拿掉）。 |
+| `/` | 總覽 | 照設計稿 R2-Dashboard：頁首「前往掛號台」→ 寄送失敗橫幅（有才出現，點名最近一份的貓咪與原因＋「查看並重寄」）→「今天的門診」四格（今日掛號、在院、待櫃台處理、已完成，點進掛號台對應的 `?stage=`）→「健檢報告」四格（草稿、待寄送、寄送失敗、本月已寄送，點進 `/records?view=`；待櫃台處理／寄送失敗有數字時亮琥珀／紅框）→ 近 8 週健檢量長條（CSS 畫的單一序列，只標最新一週，0 也留 2px）＋院內待辦（未完成前 8 筆，圓圈可直接完成，「全部待辦」開工具欄面板）。**每一個數字都點得進對應清單，口徑跟那份清單一致。** 全站已經沒有圖表套件（echarts 隨舊總覽一起拿掉）。 |
 | `/appointments` | 診療台 | **左欄「今日病患」400px＋右欄可同時開多筆的看診工作區**（`VetConsolePage`＋`VisitWorkspace`）。左欄頂端三個頁籤：**進行中**（在院依報到順序、今日排程依時段，兩組可收合）／**已交櫃台**（最早交出的在上，可「取回」）／**已完成**（最近完成的在上）。**精簡／詳細**切換（裝置偏好）：精簡一行一筆（號碼／時段、名字、初診徽章、來院原因、手術／遲到／備註圖示、狀態）；詳細另外展開來院原因、徽章、備註。**順序只由掛號資料決定，點擊不會改變**。列上沒有關閉鈕：點哪一列就直接切到哪一個工作區，目前這一筆用淡主色底＋左側主色條輕輕標出；切走的工作區仍掛著，要關掉用工作區標頭的 X，送交櫃台後自動關。工作區各自獨立掛載（`v-show` 切換），切回來未儲存的輸入還在；還在自動存檔的工作區不給關。工作區標頭：左邊號碼牌、名字、貓咪規格欄（品種、性別＋結紮、年齡、體重＋「本次」），右邊飼主規格欄（飼主、電話、報到、看診分鐘）；來院原因獨立一行放大；醫療警示分級；貓咪與飼主備註並排常駐、可就地編輯。內容由上而下：量測 → **檢驗數值**（項目來自掛號的健檢表單，偏高偏低標 ↑↓）→ 本次簡易紀錄 → 內部備註 → 交給櫃台（請轉告飼主、回診建議），右欄歷次病歷日誌；**每個欄位旁有去處小標記**（`DestTag`：日誌／報告／院內）。 |
 | `/reception` | 掛號台 | **頁首＋一條流程列＋整頁的看診時間軸**（`ReceptionPage`）。頁首：「掛號台＋時鐘」｜日期控制、「新增藥單」（開藥單面板並推入新增）、「掛號」。流程列四格「待報到 → 在院 → 待櫃台處理 → 已完成」一格一個數字，點一格只看那一段（`?stage=`），第三格列出正站在櫃台前的人。警示列只在有例外時出現（醫師申請修改、遲到未報到、待審初診表）。時間軸依預約時段排、左側軌道、上午診／下午診可收合（時段結束且沒有待處理時自動收合，`lib/receptionBoard.js` 的 `sessionAutoCollapsed`）、「現在」虛線、午休分隔線；已完成與未到／取消收在最下面。**卡片左邊是貓（名字、初診徽章、手術／遲到徽章、來院原因、請轉告飼主、飼主備註），右邊是對齊的三欄：飼主／電話（附複製鈕）／進度**，最右是主要動作（報到／遲到／處理）＋ `RowActions`。卡片底色只在還沒報到時用遲到（紅）／手術（紫）。整張卡片可點：已交櫃台開 `HandoffSheet`，待審初診表開初診面板，其餘開修改掛號。資料齊全的回診一鍵報到（號碼牌自動配發、超過 `LATE_GRACE_MINUTES` 自動記遲到、可「復原」）。**新增／修改掛號是置中的雙欄 Modal**（`AppointmentDialog`）：左欄誰、為什麼（手術只是標記＋名稱）、右欄時段格（`SlotGrid`，15 分鐘一格、格內列已約的名字、已過的時間不能選）。初診報到（`CheckInDrawer`）開在時間軸右側。**`HandoffSheet`（櫃台處理視窗）**：標頭左邊貓、右邊飼主規格欄，第二排飼主備註與就診進度；左欄「請轉告飼主 → 本次簡易紀錄 → 回診安排」、右欄歷次病歷日誌；底部註明「系統不計價」、一顆「完成處理」收尾。 |
 | `/medications` | 領藥 | 藥單的全頁版（`MedicationPickupPage`＋`MedicationWorkspace`，只有待領藥與已領藥），是「站在櫃台交付藥包」的視圖；表格版面。工具欄的藥單面板是同一個 `MedicationWorkspace` 的 `compact` 版（卡片清單、單欄詳情）。清單與單筆詳情是同一個容器內的兩個檢視，不是第二層 Modal。**「藥單」是物件，「領藥」只指交付那一步。** |
-| `/pets`、`/pets/:id` | 貓咪列表／詳情 | 飼主不是獨立可瀏覽的實體，一律跟著貓咪出現。詳情頁頁首放名字、病歷號與藥物過敏（實心紅），下面一張卡片左貓咪右飼主兩欄，身分資料用規格欄，病史／過敏／備註用警示底，飼主電話可一鍵複製；兩邊各自就地編輯。病歷日誌與健檢報告用頁籤切換，日誌頁籤最上面是就地新增的一行。清單欄位：貓咪＋病歷號、品種、性別、飼主＋電話、最近紀錄（日期＋幾天前）、提醒（`ReminderTags`：過敏／病史／「注意」，`lib/petDisplay.js` 的 `petReminders`）。 |
+| `/pets`、`/pets/:id` | 貓咪列表／詳情 | 飼主不是獨立可瀏覽的實體，一律跟著貓咪出現。詳情頁頁首放名字、舊病歷號（有才出現）與藥物過敏（實心紅），下面一張卡片左貓咪右飼主兩欄，身分資料用規格欄，病史／過敏／備註用警示底，飼主電話可一鍵複製；兩邊各自就地編輯。病歷日誌與健檢報告用頁籤切換，日誌頁籤最上面是就地新增的一行。清單欄位：貓咪、品種、性別、飼主＋電話、最近紀錄（日期＋幾天前）、提醒（`ReminderTags`：過敏／病史／「注意」，`lib/petDisplay.js` 的 `petReminders`）。 |
 | `/pets/new` | 新增貓咪 | 飼主與貓咪欄位同一頁，飼主段切「選擇既有飼主／新增飼主資料」；有離開前的未儲存提示。 |
 | `/records` | 健檢報告清單 | 跨貓咪，佇列切換（預設「全部」）；寄送失敗的列左側一條紅線 |
 | `/records/deliveries` | 寄送紀錄 | 流水帳，含已刪除報告的紀錄 |

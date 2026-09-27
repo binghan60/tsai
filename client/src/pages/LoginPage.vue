@@ -1,7 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { PawPrint } from '@lucide/vue';
 import { useAuthStore } from '../stores/auth';
 import { Button } from '../components/ui/button';
 import Input from '../components/ui/input/Input.vue';
@@ -37,10 +36,9 @@ async function login() {
   <main class="grid min-h-screen place-items-center bg-background px-4 py-8">
     <form class="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-8 shadow-card" @submit.prevent="login">
       <div class="flex items-center gap-3">
-        <span class="flex size-12 items-center justify-center rounded-xl bg-logo text-logo-foreground"><PawPrint class="size-6" stroke-width="2" /></span>
+        <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-12 w-15 object-contain" />
         <div>
           <h1 class="text-xl leading-tight font-semibold">謙華動物醫院</h1>
-          <p class="text-muted-foreground">用診所共用帳號登入</p>
         </div>
       </div>
 

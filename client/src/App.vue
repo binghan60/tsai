@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { Menu, PawPrint, Search } from '@lucide/vue';
+import { Menu, Search } from '@lucide/vue';
 import AppSettingsMenu from './components/AppSettingsMenu.vue';
 import NavRail from './components/shell/NavRail.vue';
 import UtilityRail from './components/shell/UtilityRail.vue';
@@ -109,7 +109,7 @@ watch(
             <SheetTitle class="sr-only">導覽選單</SheetTitle>
             <SheetDescription class="sr-only">謙華動物醫院的主要導覽選單</SheetDescription>
             <div class="flex items-center gap-3 border-b border-nav-border px-4 py-3">
-              <span class="flex size-10 items-center justify-center rounded-[10px] bg-logo text-logo-foreground"><PawPrint class="size-5" stroke-width="2" /></span>
+              <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-9 w-12 object-contain" />
               <span class="font-semibold">謙華動物醫院</span>
             </div>
             <nav class="flex-1 overflow-y-auto px-3 py-3" aria-label="行動版主要導覽">

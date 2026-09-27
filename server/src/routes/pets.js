@@ -38,7 +38,7 @@ const PET_FIELDS = [
   'notes',
 ];
 const MEDICAL_RECORD_SUMMARY_FIELDS =
-  'petId reportNumber vet visitDate examType status deliveryStatus deliveryError reportVersion revisionOf revisionRootId supersededBy shareToken shareEnabled sharedAt shareExpiresAt sentAt sentTo finalizedAt updatedAt createdAt';
+  'petId vet visitDate examType status deliveryStatus deliveryError reportVersion revisionOf revisionRootId supersededBy shareToken shareEnabled sharedAt shareExpiresAt sentAt sentTo finalizedAt updatedAt createdAt';
 
 function pickPetFields(body) {
   return Object.fromEntries(PET_FIELDS.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
@@ -97,18 +97,13 @@ petsRouter.get('/', async (req, res, next) => {
     let filter = {};
     if (query) {
       const pattern = new RegExp(escapeRegExp(query), 'i');
-      const derivedRecordNumber = query.match(/^PET-([0-9A-F]{8})$/i);
       const owners = await Owner.find({
         $or: [{ name: pattern }, { phone: pattern }, { landline: pattern }],
       }).select('_id');
       filter = {
         $or: [
           { name: pattern },
-          { medicalRecordNumber: pattern },
           { ownerId: { $in: owners.map((owner) => owner._id) } },
-          ...(derivedRecordNumber
-            ? [{ $expr: { $regexMatch: { input: { $toString: '$_id' }, regex: `${derivedRecordNumber[1]}$`, options: 'i' } } }]
-            : []),
         ],
       };
     }

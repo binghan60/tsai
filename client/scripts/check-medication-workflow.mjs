@@ -18,7 +18,7 @@ process.env.AUTH_ENABLED = 'false';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const petId = '507f1f77bcf86cd799439011';
 const ownerId = '507f1f77bcf86cd799439012';
-const patient = { _id: petId, name: '安安', medicalRecordNumber: 'P001', ownerId: { _id: ownerId, name: '陳小姐', phone: '0912345678' } };
+const patient = { _id: petId, name: '安安', ownerId: { _id: ownerId, name: '陳小姐', phone: '0912345678' } };
 const orders = new Map();
 const seed = new MedicationOrder({ petId, ownerId, petName: '安安', ownerName: '陳小姐', ownerPhone: '0912345678', prescription: '上次醫師確認的藥單', status: 'collected', __v: 0, createdAt: new Date('2026-09-01T00:00:00Z') });
 orders.set(String(seed._id), seed.toObject());

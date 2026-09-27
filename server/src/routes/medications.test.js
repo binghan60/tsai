@@ -28,7 +28,7 @@ describe('領藥 API', () => {
     mock.method(mongoose, 'startSession', async () => ({ ...fakeSession, withTransaction: async callback => callback() }));
     mock.method(ClinicalNote, 'findOneAndUpdate', async (filter, update, options) => { noteUpserts.push({ filter, update, options }); return {}; });
     mock.method(ClinicalNote, 'deleteOne', async (filter, options) => { noteDeletes.push({ filter, options }); return { deletedCount: 1 }; });
-    mock.method(Pet, 'findById', () => ({ populate: async () => ({ _id: petId, name: '安安', medicalRecordNumber: 'P001', ownerId: { _id: ownerId, name: '陳小姐', phone: '0912345678' } }) }));
+    mock.method(Pet, 'findById', () => ({ populate: async () => ({ _id: petId, name: '安安', ownerId: { _id: ownerId, name: '陳小姐', phone: '0912345678' } }) }));
     mock.method(MedicationOrder.prototype, 'save', async function () { await this.validate(); saved = this; return this; });
   });
   after(async () => { mock.restoreAll(); await new Promise(resolve => server.close(resolve)); });

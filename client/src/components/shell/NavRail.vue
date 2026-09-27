@@ -1,5 +1,5 @@
 <script setup>
-import { PawPrint, Search } from '@lucide/vue';
+import { Search } from '@lucide/vue';
 import { NAV_GROUPS } from '../../lib/navigation';
 import { useStaffIdentity } from '../../composables/useStaffIdentity';
 import AppSettingsMenu from '../AppSettingsMenu.vue';
@@ -13,8 +13,8 @@ const { identity } = useStaffIdentity();
 
 <template>
   <nav aria-label="主選單" class="flex h-full w-18 shrink-0 flex-col items-center border-r border-nav-border bg-nav py-3">
-    <router-link to="/" aria-label="謙華動物醫院首頁" class="mb-2 flex size-[2.625rem] items-center justify-center rounded-[10px] bg-logo text-logo-foreground">
-      <PawPrint class="size-5" stroke-width="2" />
+    <router-link to="/" aria-label="謙華動物醫院首頁" class="mb-2 flex h-11 w-14 items-center justify-center rounded-[10px] transition-colors hover:bg-hover">
+      <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-9 w-12 object-contain" />
     </router-link>
     <button type="button" aria-label="搜尋（Ctrl K）" class="flex h-13 w-15 flex-col items-center justify-center gap-1 rounded-[10px] text-nav-foreground transition-colors hover:bg-hover" @click="emit('search')">
       <Search class="size-5" stroke-width="1.75" />

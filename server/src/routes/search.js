@@ -11,7 +11,6 @@ router.get('/', async (req, res, next) => {
     if (!query) return res.json({ owners: [], pets: [] });
 
     const pattern = new RegExp(escapeRegExp(query), 'i');
-    const derivedRecordNumber = query.match(/^PET-([0-9A-F]{8})$/i);
     const owners = await Owner.find({
       $or: [{ name: pattern }, { phone: pattern }, { landline: pattern }, { email: pattern }],
     })
@@ -22,11 +21,7 @@ router.get('/', async (req, res, next) => {
     const pets = await Pet.find({
       $or: [
         { name: pattern },
-        { medicalRecordNumber: pattern },
         ...(matchingOwnerIds.length ? [{ ownerId: { $in: matchingOwnerIds } }] : []),
-        ...(derivedRecordNumber
-          ? [{ $expr: { $regexMatch: { input: { $toString: '$_id' }, regex: `${derivedRecordNumber[1]}$`, options: 'i' } } }]
-          : []),
       ],
     })
       .sort({ updatedAt: -1 })

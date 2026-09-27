@@ -152,8 +152,6 @@
   --nav-label: #5f6c76;
   --nav-active: #e2f2f2;
   --nav-active-foreground: #00595c;
-  --logo: #007a7e;
-  --logo-foreground: #ffffff;
 
   --chart-1: #00809d;
   --chart-2: #3aa3b8;
@@ -262,8 +260,6 @@
   --nav-label: #7d8999;
   --nav-active: #0a2630;
   --nav-active-foreground: #37d2f2;
-  --logo: #37d2f2;
-  --logo-foreground: #03161c;
 
   --chart-1: #16a2c1;
   --chart-2: #51bccc;
@@ -330,8 +326,6 @@
   --color-nav-label: var(--nav-label);
   --color-nav-active: var(--nav-active);
   --color-nav-active-foreground: var(--nav-active-foreground);
-  --color-logo: var(--logo);
-  --color-logo-foreground: var(--logo-foreground);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

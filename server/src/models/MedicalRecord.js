@@ -1,13 +1,6 @@
 import mongoose from 'mongoose';
 import { v4 as uuidv4 } from 'uuid';
 
-function createReportNumber() {
-  const objectId = this?._id;
-  const year = objectId?.getTimestamp?.().getFullYear() || new Date().getFullYear();
-  const suffix = objectId?.toString().slice(-8).toUpperCase() || uuidv4().slice(0, 8).toUpperCase();
-  return `HC-${year}-${suffix}`;
-}
-
 const examinationFindingSchema = new mongoose.Schema(
   {
     key: { type: String, required: true },
@@ -92,7 +85,6 @@ const reportSectionSchema = new mongoose.Schema(
 const medicalRecordSchema = new mongoose.Schema(
   {
     petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', required: true },
-    reportNumber: { type: String, default: createReportNumber, trim: true },
     vet: { type: String, default: '', trim: true },
     visitDate: { type: Date, default: null },
     followUpDate: { type: Date, default: null },
@@ -180,7 +172,6 @@ const medicalRecordSchema = new mongoose.Schema(
 );
 
 medicalRecordSchema.index({ petId: 1, visitDate: -1, reportVersion: -1, updatedAt: -1 });
-medicalRecordSchema.index({ reportNumber: 1 }, { unique: true, sparse: true });
 
 // 以下兩個是給跨貓咪的健檢紀錄清單（GET /api/records）用的。
 //

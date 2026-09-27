@@ -4,7 +4,6 @@ import { ChevronDown, ChevronUp, Mail, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate, formatDateTime } from '../lib/datetime';
 import { DELIVERY_EVENT_META } from '../lib/recordStatus';
-import { groupDeliveryAttempts } from '../lib/deliveryAttempts';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { useRoute } from 'vue-router';
 import { Badge } from '../components/ui/badge';
@@ -18,7 +17,7 @@ import FilterBar from '../components/FilterBar.vue';
 import PageHeader from '../components/PageHeader.vue';
 import EmptyState from '../components/EmptyState.vue';
 
-// 這頁的重點不是「報告」而是「寄送這件事」：每一次嘗試各自一列，
+// 這頁的重點不是「報告」而是「寄送這件事」：每一次嘗試各自一列（後端已把 queued 與結果併成一筆），
 // 包含後來被刪掉的報告。報告清單那頁回答「還有什麼沒寄」，這頁回答「當初寄了什麼給誰」。
 const EVENTS = [
   { key: '', label: '全部', tone: 'neutral' },
@@ -54,7 +53,6 @@ const error = ref('');
 const expandedDetails = ref(new Set());
 
 let requestSequence = 0;
-const deliveryAttempts = computed(() => groupDeliveryAttempts(logs.value));
 
 async function fetchLogs() {
   const currentRequest = ++requestSequence;
@@ -145,7 +143,7 @@ onBeforeUnmount(() => {
           id="delivery-search"
           v-model="query"
           label="搜尋寄送歷程"
-          placeholder="貓咪、飼主、信箱、報告編號"
+          placeholder="貓咪、飼主、信箱"
           with-date-range
           :date-from="dateFrom"
           :date-to="dateTo"
@@ -169,7 +167,7 @@ onBeforeUnmount(() => {
           <span>時間</span><span>結果</span><span>報告</span><span>收件信箱</span><span>說明</span>
         </div>
         <div
-          v-for="log in deliveryAttempts"
+          v-for="log in logs"
           :key="log.attemptId || log._id"
           class="desktop-data-row hover:bg-hover"
           :class="[log.event === 'failed' ? 'shadow-[inset_3px_0_0_var(--danger)]' : '', detailExpanded(log) ? 'desktop-data-row--expanded' : '']"
@@ -198,7 +196,7 @@ onBeforeUnmount(() => {
 
       <!-- 窄螢幕：一次一張小卡。 -->
       <ul class="divide-y divide-border xl:hidden">
-        <li v-for="log in deliveryAttempts" :key="log.attemptId || log._id" class="space-y-1.5 px-4 py-3" :class="log.event === 'failed' ? 'shadow-[inset_3px_0_0_var(--danger)]' : ''">
+        <li v-for="log in logs" :key="log.attemptId || log._id" class="space-y-1.5 px-4 py-3" :class="log.event === 'failed' ? 'shadow-[inset_3px_0_0_var(--danger)]' : ''">
           <div class="flex items-center justify-between gap-3">
             <Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge>
             <span class="num text-sm text-subtle-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</span>

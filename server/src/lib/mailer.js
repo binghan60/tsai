@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { reportPdfFilename } from '../../../shared/reportFilename.js';
 
 let transporter;
 
@@ -67,7 +68,7 @@ export async function sendHealthReportEmail({
   to,
   ownerName,
   petName,
-  reportNumber,
+  visitDate,
   reportUrl,
   reportExpiresAt,
   pdfBuffer,
@@ -99,7 +100,7 @@ export async function sendHealthReportEmail({
     html,
     attachments: [
       {
-        filename: `${reportNumber || 'health-check-report'}.pdf`,
+        filename: reportPdfFilename({ petName, visitDate }),
         content: pdfBuffer,
         contentType: 'application/pdf',
       },

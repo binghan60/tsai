@@ -19,6 +19,7 @@ import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { enrichSectionsWithPreviousValues, getPetPreviousValues, plainSections } from '../lib/historyValues.js';
 import { clinicDayStart } from '../lib/clinicTime.js';
+import { reportPdfFilename } from '../../../shared/reportFilename.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { applyVisitEdits, hasVisitEdits, stripVisitFields, templateLabItems, visitOverlay } from '../lib/recordVisitLink.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
@@ -130,10 +131,11 @@ function recordSnapshot(record) {
   return Object.fromEntries(RECORD_FIELDS.map((field) => [field, record[field]]));
 }
 
-function safePdfFilename(record) {
-  const reportNumber = String(record.reportNumber || `HC-${record._id.toString().slice(-8).toUpperCase()}`)
-    .replace(/[^a-zA-Z0-9_-]/g, '_');
-  return `${reportNumber}.pdf`;
+// 檔名有中文（貓咪名），Content-Disposition 要用 RFC 5987 的 filename*；
+// 舊式 filename= 只能放 ASCII，留一個英文後備給不認得 filename* 的用戶端。
+function pdfContentDisposition(record) {
+  const filename = reportPdfFilename({ petName: record.petId?.name, visitDate: record.visitDate });
+  return `attachment; filename="health-report.pdf"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
 function reportPayload(record, sections) {
@@ -142,7 +144,6 @@ function reportPayload(record, sections) {
   return {
     // 臨床內容一律走這份區塊快照；報告頁不再讀 MedicalRecord 的具名欄位。
     sections,
-    reportNumber: record.reportNumber || `HC-${record._id.toString().slice(-8).toUpperCase()}`,
     examType: record.examType,
     visitDate: record.visitDate,
     followUpDate: record.followUpDate,
@@ -187,7 +188,7 @@ function reportPayload(record, sections) {
 // 掛載於 /api/pets/:petId/records
 export const petRecordsRouter = Router({ mergeParams: true });
 const PET_RECORD_LIST_FIELDS =
-  'petId reportNumber vet visitDate examType status deliveryStatus deliveryError reportVersion revisionOf revisionRootId supersededBy shareToken shareEnabled sharedAt shareExpiresAt sentAt sentTo finalizedAt updatedAt createdAt';
+  'petId vet visitDate examType status deliveryStatus deliveryError reportVersion revisionOf revisionRootId supersededBy shareToken shareEnabled sharedAt shareExpiresAt sentAt sentTo finalizedAt updatedAt createdAt';
 
 petRecordsRouter.get('/', async (req, res, next) => {
   try {
@@ -336,22 +337,21 @@ const RECORD_VIEW_FILTERS = {
 };
 
 const RECORD_LIST_FIELDS =
-  'petId reportNumber vet visitDate examType status deliveryStatus deliveryError reportVersion sentAt finalizedAt updatedAt createdAt';
+  'petId vet visitDate examType status deliveryStatus deliveryError reportVersion sentAt finalizedAt updatedAt createdAt';
 const RECORD_LIST_POPULATE = {
   path: 'petId',
-  select: 'name species medicalRecordNumber ownerId',
+  select: 'name species ownerId',
   populate: { path: 'ownerId', select: 'name phone email' },
 };
 
 // 關鍵字可能指向貓咪或飼主，那是另外兩個 collection——先解析成 petId 清單，
-// 再併進報告自己的欄位（報告編號、獸醫師）一起比對。
+// 再併進報告自己的欄位（獸醫師）一起比對。
 async function petIdsMatching(pattern) {
   const owners = await Owner.find({ $or: [{ name: pattern }, { phone: pattern }, { landline: pattern }, { email: pattern }] }).select('_id');
   const ownerIds = owners.map((owner) => owner._id);
   const pets = await Pet.find({
     $or: [
       { name: pattern },
-      { medicalRecordNumber: pattern },
       ...(ownerIds.length ? [{ ownerId: { $in: ownerIds } }] : []),
     ],
   }).select('_id');
@@ -391,7 +391,6 @@ async function buildRecordListFilter(query) {
     const petIds = await petIdsMatching(pattern);
     and.push({
       $or: [
-        { reportNumber: pattern },
         { vet: pattern },
         ...(petIds.length ? [{ petId: { $in: petIds } }] : []),
       ],
@@ -719,7 +718,7 @@ recordsRouter.post('/:id/pdf/retry', async (req, res, next) => {
 
 recordsRouter.get('/:id/pdf', async (req, res, next) => {
   try {
-    const record = await MedicalRecord.findById(req.params.id).select('+pdfFileId');
+    const record = await MedicalRecord.findById(req.params.id).select('+pdfFileId').populate('petId', 'name');
     if (!record) return res.status(404).json({ message: '找不到報告' });
     if (!isFinalizedRecord(record)) {
       return res.status(409).json({ message: '請先結案，再下載正式 PDF' });
@@ -729,7 +728,7 @@ recordsRouter.get('/:id/pdf', async (req, res, next) => {
     }
     // The finished PDF is immutable and streamed directly from GridFS.
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${safePdfFilename(record)}"`);
+    res.setHeader('Content-Disposition', pdfContentDisposition(record));
     if (!(await streamStoredPdf(record, res))) {
       return res.status(409).json({ message: 'PDF 正在準備中，請稍後再試。' });
     }
@@ -969,7 +968,6 @@ async function logDelivery(record, event, extra = {}) {
     const owner = pet?.ownerId;
     await DeliveryLog.create({
       recordId: record._id,
-      reportNumber: record.reportNumber || '',
       petName: pet?.name || '',
       ownerName: owner?.name || '',
       event,
@@ -1113,7 +1111,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       to: recipient,
       ownerName: owner.name,
       petName: pet.name,
-      reportNumber: record.reportNumber,
+      visitDate: record.visitDate,
       reportUrl,
       reportExpiresAt: activeShareExpiresAt,
       pdfBuffer,

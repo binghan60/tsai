@@ -47,7 +47,7 @@ api.get('/settings/appointment-settings', (_req, res) => res.json({ defaultAppoi
 api.get('/appointments', (req, res) => res.json({ items: appointments.filter((p) => p.date === req.query.date), patientNotes: { pets: {}, owners: {} } }));
 api.get('/appointments/:id', (req, res) => res.json(appointments.find((p) => p._id === req.params.id)));
 api.get('/pets/:id/clinical-notes', (_req, res) => res.json({ items: [], totalPages: 1 }));
-api.get('/pets/:id', (_req, res) => res.json({ _id: petId, name: '豆豆', breed: '米克斯', sex: 'male', neutered: 'yes', medicalRecordNumber: 'PET-TEST', ownerId: { _id: 'o1', name: '王小姐', phone: '0912345678' } }));
+api.get('/pets/:id', (_req, res) => res.json({ _id: petId, name: '豆豆', breed: '米克斯', sex: 'male', neutered: 'yes', ownerId: { _id: 'o1', name: '王小姐', phone: '0912345678' } }));
 api.post('/appointments/:id/workflow/:action', (req, res) => {
   try {
     const p = appointments.find((item) => item._id === req.params.id);

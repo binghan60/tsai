@@ -11,6 +11,7 @@ import RevisionDialog from '../components/RevisionDialog.vue';
 import ReportSection from '../components/report/ReportSection.vue';
 import RowActions from '../components/RowActions.vue';
 import { Button } from '../components/ui/button';
+import { reportPdfFilename } from '../../../shared/reportFilename.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -118,7 +119,6 @@ function normalizePreview(data) {
   const pet = data.petId && typeof data.petId === 'object' ? data.petId : null;
   return {
     ...data,
-    reportNumber: data.reportNumber || `HC-${data._id?.slice(-8).toUpperCase()}`,
     status: data.status,
     deliveryStatus: getDeliveryStatus(data),
     pet,
@@ -243,7 +243,7 @@ async function downloadPdf() {
     const url = URL.createObjectURL(response.data);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `${record.value.reportNumber || 'health-report'}.pdf`;
+    anchor.download = reportPdfFilename({ petName: record.value.pet?.name, visitDate: record.value.visitDate });
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();

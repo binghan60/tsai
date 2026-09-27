@@ -126,7 +126,7 @@ async function togglePin() {
 </script>
 
 <template>
-  <SidePanel :title="pet?.name ?? '病歷速覽'" :description="pet?.medicalRecordNumber || ''" :can-back="canBack" back-label="返回暫存區" @back="emit('back')" @close="emit('close')">
+  <SidePanel :title="pet?.name ?? '病歷速覽'" :can-back="canBack" back-label="返回暫存區" @back="emit('back')" @close="emit('close')">
     <ListSkeleton v-if="loading" :rows="3" inset />
     <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 

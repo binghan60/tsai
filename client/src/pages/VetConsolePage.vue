@@ -43,6 +43,8 @@ const { loadTemplates: loadTextTemplates } = useTextTemplates()
 const notifyChat = useAppointmentNotifier()
 const today = clinicDateInput()
 const date = useSearchQueryParam('date', today)
+// ?open=<掛號 id>：從別頁（健檢報告的「引用本次看診」）直接打開那一筆的工作區；打開後就從網址拿掉。
+const openParam = useSearchQueryParam('open', '')
 
 const items = ref([])
 const loading = ref(true)
@@ -188,6 +190,7 @@ async function refresh() {
     // 已經不存在的病患（換日期、被刪除）自動關掉，避免停在一筆看不到的病患上。
     openIds.value = openIds.value.filter((id) => items.value.some((item) => String(item._id) === id))
     if (!openIds.value.includes(activeId.value)) activeId.value = openIds.value.at(-1) || ''
+    openFromLink()
   } catch {
     if (token === request) error.value = '資料更新失敗，請重新載入；目前顯示的可能不是最新進度。'
   } finally {
@@ -249,6 +252,18 @@ function openPatient(appointment) {
   const id = String(appointment._id)
   if (!openIds.value.includes(id)) openIds.value.push(id)
   activeId.value = id
+}
+
+function openFromLink() {
+  if (!openParam.value) return
+  const target = byId.value.get(openParam.value)
+  openParam.value = ''
+  if (!target) return
+  openPatient(target)
+  // 切到那一筆所在的頁籤，左欄才看得到目前選中的是哪一列。
+  if (workflowFilter(target, 'handoff')) queueTab.value = 'handoff'
+  else if (workflowFilter(target, 'completed')) queueTab.value = 'completed'
+  else queueTab.value = 'active'
 }
 
 async function startVisit(appointment) {

@@ -308,7 +308,7 @@ onBeforeUnmount(() => {
   <section class="flex min-h-0 flex-1 flex-col gap-3" aria-label="藥單工作區">
     <template v-if="!opened">
     <div class="flex flex-wrap items-center gap-2">
-      <FilterBar id="medication-search" v-model="queryInput" label="搜尋藥單" placeholder="貓咪、飼主、電話或病歷號" class="min-w-0 flex-1" :class="compact ? '' : 'sm:max-w-80'" @submit="applySearch" />
+      <FilterBar id="medication-search" v-model="queryInput" label="搜尋藥單" placeholder="貓咪、飼主或電話" class="min-w-0 flex-1" :class="compact ? '' : 'sm:max-w-80'" @submit="applySearch" />
       <Button v-if="!doctor" class="ml-auto" @click="create"><Plus stroke-width="1.75" />新增藥單</Button>
     </div>
     <FilterTabs :model-value="filter" :items="filterItems" :counts="filterCounts" aria-label="藥單狀態篩選" :fit="compact" :class="compact ? '' : 'self-start'" @update:model-value="setFilter" />
@@ -406,7 +406,7 @@ onBeforeUnmount(() => {
                 <template v-else>
                   <div class="relative">
                     <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
-                    <Input id="med-pet-search" v-model="petQuery" inputmode="search" autocomplete="off" autofocus class="h-11 pl-9" placeholder="搜尋貓咪名字、飼主姓名、電話或病歷號" />
+                    <Input id="med-pet-search" v-model="petQuery" inputmode="search" autocomplete="off" autofocus class="h-11 pl-9" placeholder="搜尋貓咪名字、飼主姓名或電話" />
                   </div>
                   <div v-if="petQuery.trim()" class="overflow-hidden rounded-xl border border-border" aria-live="polite">
                     <p v-if="petLoading" class="px-4 py-3 text-sm text-muted-foreground">搜尋中…</p>

@@ -8,7 +8,7 @@ export const MAX_MENTIONS = 5;
 export async function listPinnedPets() {
   const rows = await PinnedPet.find()
     .sort({ pinnedAt: -1, _id: -1 })
-    .populate({ path: 'petId', select: 'name species breed medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } })
+    .populate({ path: 'petId', select: 'name species breed ownerId', populate: { path: 'ownerId', select: 'name phone' } })
     .lean();
   // 貓咪已經不存在的殘留紀錄不回給前端，點開也只會是 404。
   return rows.filter((row) => row.petId).map((row) => {

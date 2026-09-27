@@ -415,7 +415,6 @@ const onSubmit = handleSubmit((values) => {
               <div class="min-w-0 flex-1 space-y-1 py-1">
                 <Input v-model="surgeryName" :disabled="!isSurgery" placeholder="手術名稱" aria-label="手術名稱" />
                 <p v-if="surgeryNameError" class="text-sm font-medium text-destructive">{{ surgeryNameError }}</p>
-                <p v-else-if="isSurgery" class="text-sm text-surgery">手術只是標記，不另外佔時段；時間照一般門診選。</p>
               </div>
             </div>
 
