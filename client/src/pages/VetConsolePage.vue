@@ -22,6 +22,7 @@ import SegmentedControl from '../components/SegmentedControl.vue'
 import TextTemplatePickerDialog from '../components/formfields/TextTemplatePickerDialog.vue'
 import { useTextTemplates } from '../composables/useTextTemplates'
 import { Badge } from '../components/ui/badge'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import { Button } from '../components/ui/button'
 import PageHeader from '../components/PageHeader.vue'
 import { Alert, AlertDescription } from '../components/ui/alert'
@@ -408,12 +409,31 @@ onBeforeUnmount(() => {
                       <span class="truncate text-base font-semibold text-foreground">{{ item.petName }}</span>
                       <Badge v-if="item.visitType === 'new'" variant="status" class="h-6 bg-info-surface px-2 text-info">初診</Badge>
                       <span v-if="compact" class="min-w-0 flex-1 truncate text-sm text-muted-foreground" :title="item.reason || undefined">{{ item.reason }}</span>
-                      <!-- 精簡版的標記只留圖示（滑過看全文）：一行放不下「手術：結紮」這種整顆徽章。 -->
-                      <span v-if="compact" class="flex shrink-0 items-center gap-1">
-                        <Scissors v-if="item.isSurgery" class="size-4 text-surgery" stroke-width="2" :aria-label="`手術：${item.surgeryName || ''}`" />
-                        <Clock v-if="item.latenessMinutes > 0" class="size-4 text-danger" stroke-width="2" :aria-label="`遲到 ${item.latenessMinutes} 分`" />
-                        <AlertTriangle v-if="notesFor(item).length" class="size-4" :class="severeNotes(item) ? 'text-danger' : 'text-warning'" stroke-width="2" :aria-label="notesFor(item).map((note) => `${note.label}備註：${note.text}`).join('；')" />
-                      </span>
+                      <!-- 精簡版的標記只留圖示：一行放不下「手術：結紮」這種整顆徽章，滑過用 tooltip 看全文。 -->
+                      <TooltipProvider v-if="compact" :delay-duration="150">
+                        <span class="flex shrink-0 items-center gap-1">
+                          <Tooltip v-if="item.isSurgery">
+                            <TooltipTrigger as-child>
+                              <span class="flex size-5 items-center justify-center" :aria-label="`手術：${item.surgeryName || ''}`"><Scissors class="size-4 text-surgery" stroke-width="2" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top"><span class="font-semibold">手術</span> {{ item.surgeryName || '未填名稱' }}</TooltipContent>
+                          </Tooltip>
+                          <Tooltip v-if="item.latenessMinutes > 0">
+                            <TooltipTrigger as-child>
+                              <span class="flex size-5 items-center justify-center" :aria-label="`遲到 ${item.latenessMinutes} 分`"><Clock class="size-4 text-danger" stroke-width="2" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top"><span class="font-semibold">遲到</span> <span class="num">{{ item.latenessMinutes }}</span> 分</TooltipContent>
+                          </Tooltip>
+                          <Tooltip v-if="notesFor(item).length">
+                            <TooltipTrigger as-child>
+                              <span class="flex size-5 items-center justify-center" :aria-label="notesFor(item).map((note) => `${note.label}備註：${note.text}`).join('；')"><AlertTriangle class="size-4" :class="severeNotes(item) ? 'text-danger' : 'text-warning'" stroke-width="2" /></span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" class="max-w-sm flex-col items-start gap-1 whitespace-normal">
+                              <p v-for="note in notesFor(item)" :key="note.label" class="leading-relaxed"><span class="font-semibold">{{ note.label }}備註</span> {{ note.text }}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </span>
+                      </TooltipProvider>
                     </div>
                     <template v-if="!compact">
                       <p class="text-base leading-snug" :class="item.reason ? 'text-foreground' : 'text-subtle-foreground'">{{ item.reason || '未填來院原因' }}</p>
