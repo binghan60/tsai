@@ -397,7 +397,7 @@ onBeforeUnmount(() => {
                 <ChevronDown class="size-4 shrink-0 text-subtle-foreground transition-transform" :class="isCollapsed(group.key) ? '-rotate-90' : ''" stroke-width="2" aria-hidden="true" />
                 <span class="spec-label">{{ group.label }}</span>
                 <span class="num text-xs text-subtle-foreground">{{ group.list.length }}</span>
-                <span v-if="isCollapsed(group.key) && group.list.some((item) => dirtyIds[String(item._id)])" class="size-2 shrink-0 rounded-full bg-info" title="收合的病患有尚未儲存的內容"><span class="sr-only">收合的病患有尚未儲存的內容</span></span>
+                <span v-if="isCollapsed(group.key) && group.list.some((item) => dirtyIds[String(item._id)])" class="size-2 shrink-0 rounded-full bg-info" v-tip="'收合的病患有尚未儲存的內容'"><span class="sr-only">收合的病患有尚未儲存的內容</span></span>
                 <span class="ml-auto text-xs text-subtle-foreground">{{ group.hint }}</span>
               </button>
               <p v-if="!isCollapsed(group.key) && !group.list.length" class="px-4 py-3 text-sm text-subtle-foreground">目前沒有</p>
@@ -423,7 +423,7 @@ onBeforeUnmount(() => {
                     <div class="flex min-w-0 items-center gap-2">
                       <span class="truncate text-base font-semibold text-foreground">{{ item.petName }}</span>
                       <Badge v-if="item.visitType === 'new'" variant="status" class="h-6 bg-info-surface px-2 text-info">初診</Badge>
-                      <span v-if="compact" class="min-w-0 flex-1 truncate text-sm text-muted-foreground" :title="item.reason || undefined">{{ item.reason }}</span>
+                      <span v-if="compact" class="min-w-0 flex-1 truncate text-sm text-muted-foreground" v-tip.overflow="item.reason || undefined">{{ item.reason }}</span>
                       <!-- 精簡版的標記只留圖示：一行放不下「手術：結紮」這種整顆徽章，滑過用 tooltip 看全文。 -->
                       <TooltipProvider v-if="compact" :delay-duration="150">
                         <span class="flex shrink-0 items-center gap-1">
@@ -457,12 +457,12 @@ onBeforeUnmount(() => {
                         <LatenessBadge :minutes="item.latenessMinutes" />
                       </div>
                       <PatientNotes :notes="notesFor(item)" />
-                      <p v-if="item.internalNote" class="line-clamp-1 text-sm text-muted-foreground" :title="item.internalNote"><span class="font-medium text-foreground">掛號備註</span> {{ item.internalNote }}</p>
+                      <p v-if="item.internalNote" class="line-clamp-1 text-sm text-muted-foreground" v-tip.overflow="item.internalNote"><span class="font-medium text-foreground">掛號備註</span> {{ item.internalNote }}</p>
                     </template>
                   </div>
 
                   <span v-if="statusText(item)" class="num shrink-0 text-xs" :class="waitingTooLong(item) ? 'font-semibold text-danger' : 'text-subtle-foreground'">{{ statusText(item) }}</span>
-                  <span v-if="dirtyIds[String(item._id)]" class="size-2 shrink-0 rounded-full bg-info" title="有尚未儲存的內容"><span class="sr-only">有尚未儲存的內容</span></span>
+                  <span v-if="dirtyIds[String(item._id)]" class="size-2 shrink-0 rounded-full bg-info" v-tip="'有尚未儲存的內容'"><span class="sr-only">有尚未儲存的內容</span></span>
                   <Button v-if="group.key === 'onsite' && !workflowState(item).started" size="xs" class="shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope stroke-width="1.75" />看診</Button>
                   <Button v-if="group.key === 'handoff'" variant="secondary" size="xs" class="shrink-0" :disabled="busy" @click.stop="reclaim(item)"><Undo2 stroke-width="1.75" />取回</Button>
                 </li>

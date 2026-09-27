@@ -126,7 +126,7 @@ function goToPage(next) {
               <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
               <span class="min-w-0 truncate font-semibold text-primary">{{ pet.name }}</span>
             </router-link>
-            <span class="desktop-data-cell truncate text-sm text-muted-foreground" :title="pet.breed || ''">{{ pet.breed || '—' }}</span>
+            <span class="desktop-data-cell truncate text-sm text-muted-foreground" v-tip.overflow="pet.breed || ''">{{ pet.breed || '—' }}</span>
             <span class="desktop-data-cell text-sm text-muted-foreground"><PetSex v-if="pet.sex === 'male' || pet.sex === 'female'" :sex="pet.sex" with-label /><template v-else>—</template></span>
             <span class="desktop-data-cell">
               <span class="block truncate text-sm">{{ pet.ownerId?.name || '—' }}</span>

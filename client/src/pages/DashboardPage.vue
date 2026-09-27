@@ -11,6 +11,7 @@ import { useToast } from '../composables/useToast'
 import { richTextToPlain } from '../../../shared/richText.js'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import EmptyState from '../components/EmptyState.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import PageHeader from '../components/PageHeader.vue'
@@ -84,11 +85,18 @@ const toneOf = (card) => (card.tone && card.value > 0 ? TONE[card.tone] : null)
 
 const failedTarget = computed(() => ((reports.value.failed ?? 0) === 1 && latestFailed.value ? `/records/${latestFailed.value._id}/preview` : '/records?view=failed'))
 
-// 近 8 週健檢量：單一序列的長條，只有最新一週標數字，其餘靠 title 與 sr-only 清單。
-const weeks = computed(() => (dashboard.value?.weeklyTrend ?? []).map((week) => {
-  const [, month, day] = clinicDateInput(week.weekStart).split('-')
-  return { label: `${Number(month)}/${day}`, count: week.count ?? 0 }
-}))
+// 近 8 週健檢量：單一序列的長條，只有最新一週標數字，其餘滑過看 tooltip（不用原生 title，
+// 那個要停很久才出現、樣式也跟全站不一致），螢幕報讀器讀 sr-only 清單。
+function monthDay(value) {
+  const [, month, day] = clinicDateInput(value).split('-')
+  return `${Number(month)}/${Number(day)}`
+}
+const weeks = computed(() => (dashboard.value?.weeklyTrend ?? []).map((week) => ({
+  label: monthDay(week.weekStart),
+  // weekEnd 是下一週的開頭（不含），往前 1 毫秒就是這週最後一天。
+  range: `${monthDay(week.weekStart)}–${monthDay(new Date(new Date(week.weekEnd).getTime() - 1))}`,
+  count: week.count ?? 0,
+})))
 const maxWeek = computed(() => Math.max(1, ...weeks.value.map((week) => week.count)))
 const thisWeek = computed(() => weeks.value.at(-1)?.count ?? 0)
 
@@ -165,15 +173,25 @@ async function completeTodo(item) {
             <h3 id="dashboard-trend-title" class="text-base font-semibold">近 8 週健檢量</h3>
             <span class="text-xs text-subtle-foreground">本週 <span class="num">{{ thisWeek }}</span> 份</span>
           </div>
-          <div class="flex min-h-64 flex-1 items-end gap-1.5 border-b border-border-strong" aria-hidden="true">
-            <div v-for="(week, index) in weeks" :key="week.label" class="flex h-full flex-1 flex-col items-center justify-end gap-1.5" :title="`${week.label} 週 ${week.count} 份`">
-              <span v-if="index === weeks.length - 1" class="num text-sm font-semibold">{{ week.count }}</span>
-              <!-- 0 也留 2px 的底：「這週是 0」跟「沒有這週」要看得出差別。 -->
-              <span class="block w-3/5 rounded-t-xs bg-chart-1" :style="{ height: `max(2px, ${(week.count / maxWeek) * 85}%)` }"></span>
-              <span class="num pb-1 text-2xs" :class="index === weeks.length - 1 ? 'font-semibold text-foreground' : 'text-subtle-foreground'">{{ week.label }}</span>
+          <TooltipProvider :delay-duration="0" disable-hoverable-content>
+            <div class="flex min-h-64 flex-1 items-end gap-1.5 border-b border-border-strong" aria-hidden="true">
+              <Tooltip v-for="(week, index) in weeks" :key="week.label">
+                <!-- 整欄都是觸發範圍（不只長條本身）：0 份那週只有 2px 高，只認長條會幾乎滑不到。 -->
+                <TooltipTrigger as-child>
+                  <div class="group flex h-full flex-1 cursor-default flex-col items-center justify-end gap-1.5 rounded-t-md transition-colors hover:bg-hover">
+                    <span v-if="index === weeks.length - 1" class="num text-sm font-semibold">{{ week.count }}</span>
+                    <!-- 0 也留 2px 的底：「這週是 0」跟「沒有這週」要看得出差別。 -->
+                    <span class="block w-3/5 rounded-t-xs bg-chart-1 transition-colors group-hover:bg-primary" :style="{ height: `max(2px, ${(week.count / maxWeek) * 85}%)` }"></span>
+                    <span class="num pb-1 text-2xs" :class="index === weeks.length - 1 ? 'font-semibold text-foreground' : 'text-subtle-foreground'">{{ week.label }}</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" :side-offset="4">
+                  <span class="num">{{ week.range }}</span><span class="font-semibold"><span class="num">{{ week.count }}</span> 份</span>
+                </TooltipContent>
+              </Tooltip>
             </div>
-          </div>
-          <ul class="sr-only"><li v-for="week in weeks" :key="week.label">{{ week.label }} 週：{{ week.count }} 份</li></ul>
+          </TooltipProvider>
+          <ul class="sr-only"><li v-for="week in weeks" :key="week.label">{{ week.range }}：{{ week.count }} 份</li></ul>
         </section>
 
         <section class="flex min-w-0 flex-col gap-1.5 rounded-xl border border-border bg-card px-4.5 py-4 shadow-card" aria-labelledby="dashboard-todo-title">
@@ -194,7 +212,7 @@ async function completeTodo(item) {
               >
                 <span class="size-2 rounded-full bg-success opacity-0 transition-opacity group-hover/check:opacity-100" aria-hidden="true"></span>
               </button>
-              <button type="button" class="min-w-0 flex-1 truncate text-left hover:text-primary" :title="richTextToPlain(item.content)" @click="panel.open('todos')">{{ richTextToPlain(item.content) }}</button>
+              <button type="button" class="min-w-0 flex-1 truncate text-left hover:text-primary" v-tip.overflow="richTextToPlain(item.content)" @click="panel.open('todos')">{{ richTextToPlain(item.content) }}</button>
               <span v-if="dueStatus(item.dueDate, todayInput)" class="inline-flex h-6 shrink-0 items-center rounded-full px-2 text-2xs leading-none font-semibold" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, todayInput).tone]">{{ dueStatus(item.dueDate, todayInput).label }}</span>
             </li>
           </ul>

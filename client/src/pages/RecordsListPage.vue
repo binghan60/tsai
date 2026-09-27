@@ -169,10 +169,6 @@ function actionLabel(record) {
   return record.status === 'draft' ? '繼續填寫' : '查看報告';
 }
 
-// 草稿是還沒做完的工作，按鈕用主色淡面提示；已結案只是查閱，維持下凹底。
-function actionVariant(record) {
-  return record.status === 'draft' ? 'soft' : 'secondary';
-}
 
 // 判準與後端刪除端點一致：已寄出、寄送中、結果待確認的報告不給刪，
 // 按鈕乾脆不出現，免得點了才被 409 擋回來。
@@ -259,7 +255,7 @@ async function removeRecord(confirmText) {
           </router-link>
           <span class="desktop-data-cell truncate text-sm">{{ record.petId?.ownerId?.name || '—' }}</span>
           <span class="desktop-data-cell">
-            <span class="block truncate text-sm" :title="record.examType || ''">{{ record.examType || '—' }}</span>
+            <span class="block truncate text-sm" v-tip.overflow="record.examType || ''">{{ record.examType || '—' }}</span>
             <span v-if="record.reportVersion > 1" class="block text-xs text-subtle-foreground">第 <span class="num">{{ record.reportVersion }}</span> 版</span>
           </span>
           <span class="desktop-data-cell">
@@ -268,10 +264,10 @@ async function removeRecord(confirmText) {
           </span>
           <span class="desktop-data-cell flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
-            <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" :title="record.deliveryError || undefined">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
+            <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" v-tip="record.deliveryError || undefined">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
           </span>
           <span class="desktop-data-cell flex items-center justify-end gap-1">
-            <Button as-child :variant="actionVariant(record)" size="sm"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
+            <Button as-child variant="soft" size="sm"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
             <RowActions v-if="canDelete(record)" :actions="[{ key: 'delete', label: record.status === 'draft' ? '捨棄草稿' : '刪除報告', danger: true }]" :label="`${record.petId?.name || '這份報告'}的更多操作`" @select="openRemoveRecord(record)" />
             <span v-else class="size-9 shrink-0" aria-hidden="true" />
           </span>
@@ -291,7 +287,7 @@ async function removeRecord(confirmText) {
           <div class="flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
             <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
-            <Button as-child :variant="actionVariant(record)" size="sm" class="ml-auto"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
+            <Button as-child variant="soft" size="sm" class="ml-auto"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
           </div>
           <p v-if="record.deliveryError" class="text-sm text-danger">{{ record.deliveryError }}</p>
         </li>

@@ -273,14 +273,14 @@ onMounted(load);
         <div class="hidden xl:block">
           <div class="desktop-data-header"><span>模板</span><span>適用欄位</span><span>啟用</span><span></span></div>
           <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row hover:bg-hover">
-            <button type="button" class="desktop-data-cell min-w-0 text-left" :title="template.content" @click="openEdit(template)">
+            <button type="button" class="desktop-data-cell min-w-0 text-left" v-tip="template.content" @click="openEdit(template)">
               <span class="block truncate font-semibold text-primary">{{ template.name }}</span>
               <span class="block truncate text-xs text-subtle-foreground">{{ template.content }}</span>
             </button>
-            <span class="desktop-data-cell truncate text-sm text-muted-foreground" :title="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
+            <span class="desktop-data-cell truncate text-sm text-muted-foreground" v-tip.overflow="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
             <span class="desktop-data-cell"><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></span>
             <span class="desktop-data-cell flex items-center justify-end gap-1">
-              <Button type="button" variant="secondary" size="sm" @click="openEdit(template)">編輯</Button>
+              <Button type="button" variant="soft" size="sm" @click="openEdit(template)">編輯</Button>
               <RowActions :actions="[{ key: 'duplicate', label: '複製一份' }, { key: 'delete', label: '刪除模板', danger: true }]" :label="`${template.name}的更多操作`" @select="(key) => (key === 'duplicate' ? duplicate(template) : (deleteTarget = template))" />
             </span>
           </div>

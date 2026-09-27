@@ -254,7 +254,7 @@ onMounted(load);
               <Label :for="`enabled-${template._id}`" :class="getAvailabilityStatusMeta(template.enabled).textClass">{{ getAvailabilityStatusMeta(template.enabled).label }}</Label>
             </span>
             <span class="desktop-data-cell flex items-center justify-end gap-1">
-              <Button as-child variant="secondary" size="sm"><router-link :to="`/settings/forms/${template._id}`">編輯</router-link></Button>
+              <Button as-child variant="soft" size="sm"><router-link :to="`/settings/forms/${template._id}`">編輯</router-link></Button>
               <RowActions :actions="templateActions" :label="`${template.name}的更多操作`" @select="(key) => templateAction(key, template)" />
             </span>
           </div>

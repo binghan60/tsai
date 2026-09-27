@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
           <template v-if="!preview">
             <Button type="button" variant="destructive" size="icon" class="absolute right-2 top-2 shadow-sm" :aria-label="`刪除圖片 ${index + 1}`" @click="remove(index)"><Trash2 class="h-4 w-4" /></Button>
             <div class="absolute left-2 top-2 flex items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-sm backdrop-blur" :aria-label="`調整圖片 ${index + 1} 的版型`">
-              <button v-for="option in IMAGE_SIZE_OPTIONS" :key="option.span" type="button" class="min-h-8 rounded-md px-2 text-xs font-medium transition-colors" :class="Number(image.span) === option.span ? 'bg-accent text-accent-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" :title="option.hint" @click="updateSpan(index, option.span)">{{ option.label }}</button>
+              <button v-for="option in IMAGE_SIZE_OPTIONS" :key="option.span" type="button" class="min-h-8 rounded-md px-2 text-xs font-medium transition-colors" :class="Number(image.span) === option.span ? 'bg-accent text-accent-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'" v-tip="option.hint" @click="updateSpan(index, option.span)">{{ option.label }}</button>
             </div>
             <div class="border-t border-border bg-background p-3">
               <label :for="`${inputId}-caption-${index}`" class="mb-1 block text-xs font-medium text-muted-foreground">圖片說明</label>

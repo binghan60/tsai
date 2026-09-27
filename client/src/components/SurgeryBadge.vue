@@ -14,8 +14,8 @@ const label = computed(() => (props.name?.trim() ? `手術：${props.name.trim()
 </script>
 
 <template>
-  <Badge variant="status" class="max-w-full bg-surgery-surface font-semibold text-surgery" :title="label">
+  <Badge variant="status" class="max-w-full bg-surgery-surface font-semibold text-surgery">
     <Scissors stroke-width="1.75" aria-hidden="true" />
-    <span class="truncate">{{ label }}</span>
+    <span v-tip.overflow="label" class="truncate">{{ label }}</span>
   </Badge>
 </template>

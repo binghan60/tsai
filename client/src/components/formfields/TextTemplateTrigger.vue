@@ -41,7 +41,7 @@ function open() {
     class="absolute right-2 z-10 inline-flex h-8 items-center gap-1.5 rounded-md border border-border/80 bg-background/90 px-2 text-xs font-medium text-primary shadow-sm backdrop-blur-sm transition-colors hover:border-primary/30 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
     :class="[centered ? 'top-1/2 -translate-y-1/2' : 'top-2', compact ? 'size-7 justify-center p-0' : '']"
     :aria-label="label ? `開啟${label}文字模板` : '開啟文字模板'"
-    :title="label ? `開啟${label}文字模板` : '開啟文字模板'"
+    v-tip="label ? `開啟${label}文字模板` : '開啟文字模板'"
     @pointerdown="captureSelection"
     @click="open"
   >

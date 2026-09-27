@@ -111,7 +111,7 @@ async function submit() {
                   type="button"
                   class="mx-0.5 inline-flex items-center rounded-full px-1.5 font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
                   :class="message.sender === identity ? 'bg-card' : 'bg-accent'"
-                  :title="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined"
+                  v-tip="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined"
                   @click="pinned.openQuickView(segment.mention.petId)"
                 >#{{ segment.mention.petName }}</button
                 ><template v-else>{{ segment.text }}</template></template

@@ -82,7 +82,7 @@ function tabLabel(item) {
       :aria-selected="modelValue === item.key"
       :aria-current="modelValue === item.key ? 'page' : undefined"
       :aria-label="fit ? tabLabel(item) : undefined"
-      :title="fit && item.short ? item.label : undefined"
+      v-tip="fit && item.short ? item.label : undefined"
       :tabindex="modelValue === item.key ? 0 : -1"
       @click="emit('update:modelValue', item.key)"
       @keydown="onTabKeydown($event, items.indexOf(item), items, emit)"

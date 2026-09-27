@@ -13,7 +13,7 @@ defineProps({
       v-for="note in notes"
       :key="note.key"
       class="line-clamp-2 whitespace-pre-wrap wrap-anywhere rounded-md bg-warning-surface px-2 py-1 text-xs font-medium text-warning"
-      :title="note.text"
+      v-tip.overflow="note.text"
     >
       <span class="font-semibold">{{ note.label }}備註：</span>{{ note.text }}
     </p>

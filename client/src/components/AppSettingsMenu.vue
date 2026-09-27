@@ -5,6 +5,7 @@ import { useTheme } from '../composables/useTheme';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 import NotificationSettingsDialog from './NotificationSettingsDialog.vue';
+import { Button } from './ui/button';
 
 // 設定集中在一處：這台裝置的身分（醫師／櫃台）、明暗主題、自動通知、登出。
 // rail：左側導覽欄底部的版本（圖示＋「設定」二字，選單往右彈）；
@@ -28,9 +29,7 @@ const notificationsOpen = ref(false);
         <Settings class="size-5" stroke-width="1.75" />
         <span class="text-2xs leading-none font-medium">設定</span>
       </button>
-      <button v-else type="button" class="flex size-10 items-center justify-center rounded-lg text-muted-foreground hover:bg-hover" aria-label="開啟設定選單">
-        <Settings class="size-5" stroke-width="1.75" />
-      </button>
+      <Button v-else variant="secondary" size="icon" aria-label="開啟設定選單"><Settings stroke-width="1.75" /></Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent :side="rail ? 'right' : 'bottom'" :align="rail ? 'end' : 'end'" class="w-64">
       <DropdownMenuLabel>這台裝置的身分</DropdownMenuLabel>

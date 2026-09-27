@@ -99,9 +99,10 @@ const medicalTags = computed(() => {
   if (pet.value.allergyStatus === 'yes') tags.push({ key: 'allergy', label: `藥物過敏：${pet.value.allergyType || '有（未註明藥物）'}`, class: 'bg-danger-surface font-semibold text-danger' })
   const history = [pet.value.medicalHistory?.join('、'), pet.value.medicalHistoryOther].filter(Boolean).join('；')
   if (history) tags.push({ key: 'history', label: `病史：${history}`, class: 'bg-card text-danger shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--danger)_55%,transparent)]' })
-  if (pet.value.allergyStatus === 'none') tags.push({ key: 'no-allergy', label: '無藥物過敏', class: 'bg-sunken text-muted-foreground' })
-  if (pet.value.vaccineStatus) tags.push({ key: 'vaccine', label: pet.value.vaccineStatus === 'done' ? `疫苗 ${pet.value.vaccineDate || '已注射'}` : '未注射疫苗', class: 'bg-sunken text-muted-foreground' })
-  if (pet.value.checkupStatus) tags.push({ key: 'checkup', label: pet.value.checkupStatus === 'done' ? `健檢 ${pet.value.checkupDate || '有'}` : '未健檢', class: 'bg-sunken text-muted-foreground' })
+  if (pet.value.allergyStatus === 'none') tags.push({ key: 'no-allergy', label: '無藥物過敏', class: 'bg-success-surface text-success' })
+  // 狀態預設是 'unknown'：不知道就不出標籤，不能當成「未注射／未健檢」。
+  if (['done', 'none'].includes(pet.value.vaccineStatus)) tags.push({ key: 'vaccine', label: pet.value.vaccineStatus === 'done' ? `疫苗 ${pet.value.vaccineDate || '已注射'}` : '未注射疫苗', class: pet.value.vaccineStatus === 'done' ? 'bg-success-surface text-success' : 'bg-warning-surface text-warning' })
+  if (['done', 'none'].includes(pet.value.checkupStatus)) tags.push({ key: 'checkup', label: pet.value.checkupStatus === 'done' ? `健檢 ${pet.value.checkupDate || '有'}` : '未健檢', class: pet.value.checkupStatus === 'done' ? 'bg-success-surface text-success' : 'bg-warning-surface text-warning' })
   return tags
 })
 
@@ -628,7 +629,7 @@ onBeforeUnmount(() => {
             <div class="flex items-center gap-2"><h3 :id="`note-heading-${appointment._id}`" class="text-base font-semibold">本次簡易紀錄</h3><DestTag to="journal" /></div>
             <RichTextEditor ref="visitNoteEditor" :id="textareaId('visitNote')" v-model="draft.visitNote" aria-label="本次簡易紀錄" :min-rows="8" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…">
               <template v-if="editable" #toolbar-end>
-                <Button type="button" variant="secondary" size="icon-xs" aria-label="插入本次簡易紀錄的文字模板" title="文字模板" :disabled="committing" @mousedown.prevent @click="openTemplates('visitNote')"><FileText stroke-width="1.75" /></Button>
+                <Button type="button" variant="secondary" size="icon-xs" aria-label="插入本次簡易紀錄的文字模板" v-tip="'文字模板'" :disabled="committing" @mousedown.prevent @click="openTemplates('visitNote')"><FileText stroke-width="1.75" /></Button>
               </template>
             </RichTextEditor>
           </section>
@@ -648,7 +649,7 @@ onBeforeUnmount(() => {
                 <div class="flex items-center gap-2"><Label :for="textareaId('specialCareNote')" class="text-warning">請轉告飼主</Label><DestTag to="journal" /></div>
                 <div class="relative">
                   <Textarea :id="textareaId('specialCareNote')" v-model="draft.specialCareNote" rows="4" maxlength="500" class="field-sizing-fixed pr-11" :disabled="!editable || committing" placeholder="例：傷口勿舔舐，三天後回來拆線" />
-                  <Button v-if="editable" type="button" variant="secondary" size="icon-xs" class="absolute top-1.5 right-1.5" aria-label="插入請轉告飼主的文字模板" title="文字模板" :disabled="committing" @click="openTemplates('specialCareNote')"><FileText stroke-width="1.75" /></Button>
+                  <Button v-if="editable" type="button" variant="secondary" size="icon-xs" class="absolute top-1.5 right-1.5" aria-label="插入請轉告飼主的文字模板" v-tip="'文字模板'" :disabled="committing" @click="openTemplates('specialCareNote')"><FileText stroke-width="1.75" /></Button>
                 </div>
               </div>
               <div class="space-y-1.5">

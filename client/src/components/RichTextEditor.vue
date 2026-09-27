@@ -240,7 +240,7 @@ defineExpose({
         :disabled="disabled"
         :aria-pressed="editor.isActive('bold')"
         aria-label="粗體（Ctrl+B）"
-        title="粗體（Ctrl+B）"
+        v-tip="'粗體（Ctrl+B）'"
         @mousedown.prevent
         @click="toggleBold"
       >
@@ -255,7 +255,7 @@ defineExpose({
         :disabled="disabled"
         :aria-pressed="editor.isActive('tint', { color: option.color })"
         :aria-label="option.label"
-        :title="option.label"
+        v-tip="option.label"
         @mousedown.prevent
         @click="toggleTint(option.color)"
       >
@@ -266,7 +266,7 @@ defineExpose({
         class="rich-text-editor__tool bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
         :disabled="disabled"
         aria-label="清除格式"
-        title="清除格式"
+        v-tip="'清除格式'"
         @mousedown.prevent
         @click="clearFormatting"
       >

@@ -179,10 +179,10 @@ onBeforeUnmount(() => {
             <span v-else class="flex min-w-0 items-center gap-1.5 text-muted-foreground"><Trash2 class="size-4 shrink-0" stroke-width="1.75" /><span class="truncate">{{ log.petName || '貓咪未記錄' }}</span></span>
             <span class="block truncate text-xs text-subtle-foreground">{{ log.ownerName || '飼主未記錄' }}<template v-if="!log.recordExists">，報告已刪除</template></span>
           </span>
-          <span class="desktop-data-cell truncate text-sm" :title="log.recipient || ''">{{ log.recipient || '—' }}</span>
+          <span class="desktop-data-cell truncate text-sm" v-tip.overflow="log.recipient || ''">{{ log.recipient || '—' }}</span>
           <span class="desktop-data-cell">
             <div v-if="log.error" class="flex min-w-0 gap-1.5 text-sm text-danger" :class="detailExpanded(log) ? 'items-start' : 'items-center'">
-              <span class="min-w-0 flex-1 wrap-break-word" :class="detailExpanded(log) ? 'whitespace-normal' : 'truncate'" :title="log.error">{{ log.error }}</span>
+              <span class="min-w-0 flex-1 wrap-break-word" :class="detailExpanded(log) ? 'whitespace-normal' : 'truncate'" v-tip.overflow="log.error">{{ log.error }}</span>
               <Button v-if="log.error.length > 40" type="button" variant="secondary" size="xs" class="shrink-0" @click="toggleDetail(log)">
                 <component :is="detailExpanded(log) ? ChevronUp : ChevronDown" stroke-width="1.75" />{{ detailExpanded(log) ? '收合' : '詳情' }}
               </Button>

@@ -884,9 +884,9 @@ watch(pet, async (value) => {
               >
                 <button
                   type="button"
-                  class="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  class="flex h-7 w-7 items-center justify-center rounded-full bg-sunken text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="移至日誌最上面"
-                  title="移至日誌頂部"
+                  v-tip="'移至日誌頂部'"
                   @click="scrollNoteTo(note._id, 'start')"
                 >
                   <ArrowUpToLine class="h-3.5 w-3.5" stroke-width="2" />
@@ -894,9 +894,9 @@ watch(pet, async (value) => {
                 <div class="my-0.5 h-px w-3.5 bg-border/70"></div>
                 <button
                   type="button"
-                  class="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  class="flex h-7 w-7 items-center justify-center rounded-full bg-sunken text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   aria-label="移至日誌最下面"
-                  title="移至日誌底部"
+                  v-tip="'移至日誌底部'"
                   @click="scrollNoteTo(note._id, 'end')"
                 >
                   <ArrowDownToLine class="h-3.5 w-3.5" stroke-width="2" />
@@ -928,9 +928,9 @@ watch(pet, async (value) => {
               </div>
               <div v-for="record in pet.medicalRecords" :key="record._id" class="desktop-data-row">
                 <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ formatDate(record.visitDate) }}</span>
-                <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" :title="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="ml-2 text-xs text-muted-foreground">第 {{ record.reportVersion }} 版</span></span>
+                <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" v-tip.overflow="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="ml-2 text-xs text-muted-foreground">第 {{ record.reportVersion }} 版</span></span>
                 <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap"><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge></span>
-                <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的健檢報告`" @select="(action) => handleRowAction(record, action)" /><span v-else class="size-9 shrink-0" aria-hidden="true" /></span>
+                <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的健檢報告`" @select="(action) => handleRowAction(record, action)" /><span v-else class="size-9 shrink-0" aria-hidden="true" /></span>
               </div>
             </Card>
     
@@ -941,7 +941,7 @@ watch(pet, async (value) => {
                   <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground"><span>第 {{ record.reportVersion || 1 }} 版</span><span v-if="record.vet">{{ record.vet }}</span><span>更新於 {{ formatDateTime(record.updatedAt) }}</span><span v-if="record.sentTo">寄至 {{ record.sentTo }}</span></p></div></div>
                   <div class="flex shrink-0 items-center gap-1.5 text-sm">
                     <Button v-if="record.status === 'draft'" as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
-                    <Button v-else as-child variant="secondary" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
+                    <Button v-else as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
                     <RowActions
                       v-if="rowActions(record).length"
                       :actions="rowActions(record)"

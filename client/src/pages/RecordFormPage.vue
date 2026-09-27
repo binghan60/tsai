@@ -996,14 +996,14 @@ function handleBeforeUnload(event) {
     >
       <template #meta>
         <Badge v-if="!isLocked && !needsTypeChoice" variant="neutral">草稿</Badge>
-        <span v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="inline-flex items-center gap-1.5 text-sm" :class="saveState === 'error' ? 'text-danger' : 'text-subtle-foreground'" :title="'停止輸入約 1.5 秒後自動儲存為草稿'">
+        <span v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="inline-flex items-center gap-1.5 text-sm" :class="saveState === 'error' ? 'text-danger' : 'text-subtle-foreground'" v-tip="'停止輸入約 1.5 秒後自動儲存為草稿'">
           <Check v-if="saveState === 'saved'" class="size-4 text-success" stroke-width="2.4" /><Clock3 v-else class="size-4" stroke-width="1.75" />{{ saveLabel }}
         </span>
       </template>
       <template v-if="!isLocked" #actions>
         <Popover v-if="!needsTypeChoice && chosenTemplateId" v-model:open="presetMenuOpen">
           <PopoverTrigger as-child>
-            <Button type="button" variant="secondary" size="sm"><Layers class="h-4 w-4" />套用預填模板<ChevronDown class="h-4 w-4" /></Button>
+            <Button type="button" variant="soft" size="sm"><Layers class="h-4 w-4" />套用預填模板<ChevronDown class="h-4 w-4" /></Button>
           </PopoverTrigger>
           <PopoverContent align="end" class="w-64 p-2">
             <p class="px-3 pb-1 pt-2 text-xs text-muted-foreground">{{ presets.length ? '只覆寫模板有設定的欄位，其餘維持目前內容。' : `「${examTypeName}」還沒有預填模板。` }}</p>
@@ -1151,7 +1151,7 @@ function handleBeforeUnload(event) {
             <button
               type="button"
               :data-form-section="section.id"
-              :title="section.label"
+              v-tip="section.label"
               class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               :class="
                 activeSectionId === section.id

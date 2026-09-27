@@ -37,7 +37,7 @@ const hasNumber = computed(() => props.appointment.checkinNumber != null);
     v-else
     class="flex shrink-0 items-center justify-center rounded-full border border-dashed border-border-strong text-subtle-foreground"
     :class="sizeClass"
-    title="未取號"
+    v-tip="'未取號'"
   >
     <Ticket :class="iconClass" stroke-width="1.75" aria-hidden="true" />
     <span class="sr-only">未取號</span>

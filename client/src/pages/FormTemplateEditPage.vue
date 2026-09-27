@@ -589,7 +589,7 @@ function resolveLeave(confirmed) {
                   </Button>
                 </div>
               </div>
-              <Button type="button" variant="secondary" size="sm" class="mt-2 w-full" @click="addSection">
+              <Button type="button" variant="soft" size="sm" class="mt-2 w-full" @click="addSection">
                 <Plus class="h-4 w-4" stroke-width="1.75" />新增區塊
               </Button>
             </div>
@@ -754,7 +754,7 @@ function resolveLeave(confirmed) {
                         :class="(selectedItem.span ?? 'auto') === option.value
                           ? 'border-primary bg-accent text-accent-foreground'
                           : 'border-border bg-field text-foreground hover:border-primary/35 hover:bg-muted'"
-                        :title="option.hint"
+                        v-tip="option.hint"
                         @click="selectedItem.span = option.value"
                       >{{ option.title }}</button>
                     </div>
@@ -817,7 +817,7 @@ function resolveLeave(confirmed) {
                       </div>
                     </div>
                     <p v-else class="text-xs text-muted-foreground">還沒有選項，這個欄位在表單上會是空的。</p>
-                    <Button type="button" variant="secondary" size="sm" class="w-full" @click="addOption()">
+                    <Button type="button" variant="soft" size="sm" class="w-full" @click="addOption()">
                       <Plus class="h-4 w-4" stroke-width="1.75" />新增選項
                     </Button>
                     <p class="text-xs text-muted-foreground">按 Enter 可以直接接著加下一個；留空的選項會在儲存時移除。</p>

@@ -81,13 +81,36 @@ function collectActionSemantics(file, source, findings) {
   }
 }
 
+// 原生 title 提示要停很久才出現、樣式跟全站不一致，一律改用 v-tip（lib/tooltipDirective.js）。
+// 只檢查 HTML 元素與會把屬性落到 DOM 上的元件；PageHeader、EmptyState 這類元件的 title 是標題 prop，不算。
+const NATIVE_TITLE_COMPONENTS = new Set(['Button', 'Badge', 'Input', 'RouterLink'])
+function collectNativeTitles(file, source, findings) {
+  const templateStart = source.indexOf('<template>')
+  if (templateStart < 0) return
+  const template = source.slice(templateStart)
+  for (const match of template.matchAll(/<([A-Za-z][\w.-]*)\b((?:[^>"']|"[^"]*"|'[^']*')*)>/g)) {
+    const [, tag, attributes] = match
+    const isDomElement = /^[a-z]/.test(tag) || NATIVE_TITLE_COMPONENTS.has(tag)
+    if (!isDomElement || !/(?<![\w-]):?title="/.test(attributes)) continue
+    findings.push({
+      file: path.relative(process.cwd(), file).replaceAll('\\', '/'),
+      line: lineNumber(source, templateStart + match.index),
+      rule: '滑過提示請用 v-tip，不要用原生 title',
+      value: tag,
+    })
+  }
+}
+
 const findings = []
 for (const file of await sourceFiles(sourceRoot)) {
   if (path.basename(file) === 'style.css') continue
   const source = withoutComments(await readFile(file, 'utf8'))
   collectMatches(file, source, stockPalettePattern, '請改用語意色 token', findings)
   collectMatches(file, source, literalColorPattern, '色碼只能定義在 src/style.css', findings)
-  if (path.extname(file) === '.vue') collectActionSemantics(file, source, findings)
+  if (path.extname(file) === '.vue') {
+    collectActionSemantics(file, source, findings)
+    collectNativeTitles(file, source, findings)
+  }
 }
 
 if (findings.length) {

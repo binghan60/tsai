@@ -30,7 +30,7 @@ const emit = defineEmits(['select']);
       <span
         v-if="showAutoBadge && finding.status === option.value && finding.statusSource === 'auto'"
         class="absolute right-1.5 top-1.5 inline-flex opacity-80"
-        title="依參考範圍判讀"
+        v-tip="'依參考範圍判讀'"
       >
         <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="m12 3-1.9 5.1L5 10l5.1 1.9L12 17l1.9-5.1L19 10l-5.1-1.9L12 3Z" />

@@ -10,5 +10,7 @@ import '@fontsource/ibm-plex-mono/latin-600.css'
 import './style.css'
 import App from './App.vue'
 import router from './router'
+import { tooltipDirective } from './lib/tooltipDirective'
 
-createApp(App).use(createPinia()).use(router).mount('#app')
+// v-tip：取代原生 title 的滑過提示，見 lib/tooltipDirective.js。
+createApp(App).use(createPinia()).use(router).directive('tip', tooltipDirective).mount('#app')

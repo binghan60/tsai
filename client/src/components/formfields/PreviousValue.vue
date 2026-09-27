@@ -48,7 +48,7 @@ const tooltip = computed(() => {
     :to="{ name: 'record-preview', params: { id: entry.recordId } }"
     target="_blank"
     rel="noopener"
-    :title="tooltip"
+    v-tip="tooltip"
     class="group min-w-0 text-xs transition-colors focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
     :class="[
       compact ? 'mt-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5' : 'block',

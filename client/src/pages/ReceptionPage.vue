@@ -566,10 +566,10 @@ onBeforeUnmount(() => {
                             <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
                             <LatenessBadge :minutes="item.ui.lateMinutes" />
                           </div>
-                          <p class="truncate" :class="item.reason ? 'text-foreground' : 'text-subtle-foreground'" :title="item.reason">{{ item.reason || '未填來院原因' }}</p>
-                          <p v-if="item.ui.kind === 'handoff' && item.specialCareNote" class="truncate rounded-md bg-warning-surface px-2.5 py-1 text-sm font-medium text-warning" :title="item.specialCareNote"><span class="font-semibold">請轉告飼主</span>　{{ item.specialCareNote }}</p>
+                          <p class="truncate" :class="item.reason ? 'text-foreground' : 'text-subtle-foreground'" v-tip.overflow="item.reason">{{ item.reason || '未填來院原因' }}</p>
+                          <p v-if="item.ui.kind === 'handoff' && item.specialCareNote" class="truncate rounded-md bg-warning-surface px-2.5 py-1 text-sm font-medium text-warning" v-tip.overflow="item.specialCareNote"><span class="font-semibold">請轉告飼主</span>　{{ item.specialCareNote }}</p>
                           <PatientNotes :notes="item.ui.notes" />
-                          <p v-if="item.internalNote && item.status === 'scheduled'" class="truncate text-sm text-muted-foreground" :title="item.internalNote"><span class="font-medium text-foreground">掛號備註</span>　{{ item.internalNote }}</p>
+                          <p v-if="item.internalNote && item.status === 'scheduled'" class="truncate text-sm text-muted-foreground" v-tip.overflow="item.internalNote"><span class="font-medium text-foreground">掛號備註</span>　{{ item.internalNote }}</p>
                           <p v-if="item.visitType === 'new' && !item.petId" class="text-sm text-muted-foreground">
                             初診驗證碼 <span class="num font-semibold tracking-[0.16em] text-foreground">{{ item.intakeVerificationUsedAt ? '已使用' : item.intakeVerificationCode || '未建立' }}</span><template v-if="isInitialDataPending(item)">，等飼主填初診表</template>
                           </p>

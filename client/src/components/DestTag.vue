@@ -23,7 +23,7 @@ const items = computed(() => [].concat(props.to).map((key) => DESTINATIONS[key])
     <span
       v-for="item in items"
       :key="item.label"
-      :title="item.title"
+      v-tip="item.title"
       class="inline-flex h-[1.375rem] items-center gap-1 rounded-sm bg-sunken px-1.5 text-2xs leading-none font-semibold text-subtle-foreground shadow-[inset_0_0_0_1px_var(--border)]"
     >
       <component :is="item.icon" class="size-3" stroke-width="2" aria-hidden="true" />

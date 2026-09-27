@@ -102,7 +102,7 @@ function clearDate() {
         :placeholder="placeholder"
         :aria-label="ariaLabel"
         :aria-invalid="invalid || undefined"
-        title="可直接輸入，例如 2026/9/18、9/18 或民國 115/9/18"
+        v-tip="'可直接輸入，例如 2026/9/18、9/18 或民國 115/9/18'"
         class="num h-full w-full min-w-0 rounded-lg border bg-field pl-3 text-base text-foreground transition-[border-color,box-shadow] placeholder:font-sans placeholder:text-subtle-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/15"
         :class="[clearable && text ? 'pr-16' : 'pr-10', invalid ? 'border-destructive' : 'border-input']"
         @keydown.enter.prevent="commit"
