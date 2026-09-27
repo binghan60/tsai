@@ -345,9 +345,9 @@ onBeforeUnmount(() => {
     <PageHeader title="診療台">
       <template #actions>
         <Button v-if="date !== today" variant="soft" size="sm" @click="date = today">回到今天</Button>
-        <Button variant="ghost" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft stroke-width="1.75" /></Button>
+        <Button variant="secondary" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft stroke-width="1.75" /></Button>
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
-        <Button variant="ghost" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
+        <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
       </template>
     </PageHeader>
 

@@ -62,7 +62,7 @@ async function remove(item) {
       </button>
       <Button
         type="button"
-        variant="ghost"
+        variant="secondary"
         size="icon-xs"
         class="absolute top-3 right-4"
         :disabled="removing === String(item.petId)"

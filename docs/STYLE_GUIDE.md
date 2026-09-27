@@ -1,7 +1,16 @@
-# 視覺規範
+# 設計語言
 
-設計稿：https://claude.ai/artifact/Ev85Kihq8eDuUQLzsYbtBG（「第二輪 定稿規格」頁是規格，第一輪只是比較用的歷史）。
-所有色值與尺度只寫在 `client/src/style.css`；頁面與元件一律用語意 token。`npm run build` 會先跑 `scripts/audit-colors.mjs`，頁面裡出現色碼或 Tailwind 固定色階（`red-500`、`slate-100`…）就直接失敗。
+這份是介面的**設計語言文件**：原則、數值、元件用法、頁面模板，以及為什麼這樣定。改畫面前先讀，改完同一次更新這裡。
+
+## 0. 以誰為準
+
+| 層級 | 放在哪裡 | 地位 |
+|---|---|---|
+| 數值（顏色、字級、圓角、陰影） | `client/src/style.css`（`:root`／`.dark`／`@theme`／`@utility`） | **唯一來源**。`npm run build` 先跑 `scripts/audit-colors.mjs`，頁面裡寫色碼或 Tailwind 固定色階（`red-500`、`slate-100`…）直接失敗 |
+| 元件與頁面實作 | `client/src/components/`、`client/src/pages/` | 畫面真正長什麼樣以程式為準 |
+| 設計語言（本文件） | `docs/STYLE_GUIDE.md` | 規則與理由；跟程式不一致時是本文件過時，要更新 |
+| 摘要 | `CLAUDE.md` 第七節 | 每個 session 自動載入，只放最容易做錯的幾條 |
+| 設計稿 | https://claude.ai/artifact/Ev85Kihq8eDuUQLzsYbtBG（「第二輪 定稿規格」頁） | **2026-09 改版的提案快照**，視覺語言（配色、形狀、字級）的出處。之後的改動沒有回填進去，頁面細節以程式與本文件為準——見第 9 節「跟設計稿不同的地方」 |
 
 ## 1. 兩套主題，同一套形狀
 
@@ -36,7 +45,7 @@
 | `danger` | `#880d0d`／`#ffede9` | `#ffbeb3`／`#41211d` | 失敗、刪除、遲到、藥物過敏、檢驗偏高偏低 |
 | `warning` | `#874c00`／`#fff0e0` | `#f8b05d`／`#3c260d` | 待你動手、請轉告飼主、備註提醒 |
 | `success` | `#2d7f3f`／`#e8f9e9` | `#4eab60`／`#19321d` | 已寄送、已完成、其餘正常 |
-| `info` | `#4260c4`／`#ebf3ff` | `#82a1f6`／`#212a44` | 寄送中、初診、待審初診表 |
+| `info` | `#4260c4`／`#ebf3ff` | `#82a1f6`／`#212a44` | 寄送中、初診、待審初診表、引用本次看診 |
 | `surgery` | `#7238a5`／`#f8efff` | `#d3adff`／`#31253f` | **只給手術標記** |
 | `badge` | `#c62828`／白字 | `#ff8a80`／深字 | 工具欄的紅色數字徽章 |
 
@@ -58,8 +67,9 @@
 | `text-sm` | 16 | 按鈕、表單標籤、次要文字 |
 | `text-xs` | 15 | 註記、徽章、時間戳記 |
 | `text-2xs` | 14 | 規格欄小標題（`spec-label`），最小字級 |
+| `text-display` | 36 | 總覽數字格的大數字（配 `num`），只給「一眼看數字」的讀數，不當標題 |
 
-尺寸與行高都在 `@theme`，改字級改那裡。不要寫 `text-[13px]` 這種任意值。報告紙面 `.report-sheet` 走自己的 A4 尺度，改 `@theme` 後要開預覽頁確認分頁沒變。
+尺寸與行高都在 `@theme`，改字級改那裡。不要寫 `text-[13px]` 這種任意值。報告紙面走自己的尺度，見第 8 節。
 
 ## 4. 形狀與尺寸
 
@@ -68,34 +78,112 @@
 - 清單列：表頭 44、資料列 64（`.desktop-data-header`／`.desktop-data-row`，欄寬由 `--data-columns` 決定）。
 - 目標螢幕 1920×1080；手機寬度仍要能用（導覽換成漢堡選單、面板滿版）。
 
-## 5. 元件
+## 5. 版面
+
+### 骨架
+
+`左側導覽 72px ｜ 工作區 ｜（側滑面板 460px）｜ 右側工具欄 64px`（`App.vue`＋`components/shell/`）。面板一次開一個、不加遮罩、不鎖背景；1600px 以上是版面裡的一欄、把工作區往左推，更窄時浮在工作區上面。細節見 CLAUDE.md 第六節。
+
+### 容器只有一種
+
+寬度與外距只在 `App.vue` 的 `<main>` 決定：**滿版**（填滿兩條欄之間、不設 `max-w`），頁面自己不包外框，沒有例外。每頁根節點 `flex flex-col gap-5`，第一個子元素是 `PageHeader`（標題、選配的筆數＋單位、說明、`back-to` 返回鈕、右邊 `actions`）。
+
+- **表單型頁面**（新增貓咪、預填模板編輯）在頁內把表單限寬 `max-w-5xl`，頁首不限寬——1920 螢幕上單一輸入框拉成一整條沒辦法讀。
+- **會被側滑面板擠窄的區塊**用 container query 依自己的寬度排（例如看診工作區 `@container/visit`），不要照視窗寬度排。
+- 兩個工作台（診療台、掛號台）用 `xl:h-[calc(100dvh-2.5rem)]` 撐滿高度，裡面各自捲動。
+
+### 清單頁模板
+
+照診療台「今日病患」、掛號台「看診時間軸」那張卡片的骨架：
+
+```
+PageHeader（標題＋主要動作，例如「新增貓咪」）
+DataCard title="貓咪清單" :count
+  #filters  → 卡片標頭右邊：SegmentedControl／FilterBar（搜尋膠囊）
+  #tabs     → 標頭下方一條：FilterTabs（佇列，可帶計數）
+  預設 slot → .desktop-data-header（44）＋ .desktop-data-row（64），1280px 以下改一筆一張小卡
+  #footer   → ListFooter（「第 x–y 筆，共 n 筆」＋分頁）
+```
+
+- **篩選放在卡片標頭，不放頁首**——它篩的是這張卡片。頁首只留標題與主要動作。
+- 列上只留一顆主要動作，其餘收進 `RowActions`（⋯ 選單）；某列沒有選單時用同尺寸的空位補齊，按鈕才對得齊。
+- 載入中 `ListSkeleton inset`、空狀態 `EmptyState inset` 放在卡片裡面，不讓整張卡片消失。
+- 用這個模板的：貓咪、健檢報告、寄送歷程、表單管理、文字模板、預填模板。
+
+### 資訊的排法
+
+- **不用「·」「・」把多項資訊串成一行**（「米克斯 · 公 · 6 歲 · 回診」讀起來是一條雜訊）。
+  - 標頭（看診工作區、櫃台處理視窗、病歷速覽、健檢報告資訊列、貓咪詳情）用規格欄 `SpecGrid`＋`SpecCell`：小標題在上、值在下、欄間細線。
+  - 空間小的地方（清單列、候診卡、時間軸卡、暫存區）只寫「品種＋♂♀」（`PetLine`／`PetSex`）。
+  - 其他短資訊靠**間距**分組（`flex gap-x-3`／`gap-x-4`），或寫成「標籤＋值」（「電話：…」）；標題裡的並列用「、」；句子裡用逗號或括號。
+- 初診才出徽章，回診是預設不另標（標頭的「本次」欄例外）。
+- 表格裡不同屬性拆成不同欄（品種、性別分開）。
+
+## 6. 元件
 
 | 需求 | 用什麼 | 注意 |
 |---|---|---|
-| 按鈕 | `<Button variant>`：`default` 實色、`secondary` 下凹底＋細邊、`soft` 主色淡面、`ghost` 只在滑過時出底色、`destructive` 淡紅底、`destructive-solid` 實心紅 | 實心紅只給確認視窗裡的最終動作；編輯鈕用 `secondary`、刪除鈕用 `destructive` 系列（audit 會檢查） |
+| 按鈕 | `<Button variant>`：`default` 實色、`secondary` 下凹底＋細邊、`soft` 主色淡面、`destructive` 淡紅底、`destructive-solid` 實心紅 | **靜止時一定有底色**：圖示鈕、關閉鈕、日期前後鈕、分頁、⋯ 選單都用 `secondary`（透明的 `ghost` 已拿掉）。實心紅只給確認視窗裡的最終動作；編輯鈕用 `secondary`、刪除鈕用 `destructive` 系列（audit 會檢查） |
+| 頁首 | `PageHeader` | 每頁第一個子元素；詳情／編輯頁用 `back-to`，不用麵包屑 |
+| 清單主卡片 | `DataCard`＋`ListFooter` | 見第 5 節「清單頁模板」 |
 | 卡片 | `<Card>` | 自帶邊框、底色、陰影，使用端不要再加 |
 | 對話框 | `<DialogContent size>`＋`DialogHeader`／`DialogFooter` | 只有一種標頭與頁尾；不要覆寫寬度 |
-| 側滑面板 | `panels/SidePanel.vue`（標頭：返回／標題／動作／關閉） | 開在工具欄旁，不遮擋背景；見 CLAUDE.md 第六節 |
+| 側滑面板 | `panels/SidePanel.vue`（標頭：返回／標題／動作／關閉） | 開在工具欄旁，不遮擋背景 |
 | 下拉選單 | `ui/dropdown-menu`；清單列的次要操作用 `RowActions` | 危險項放最後、前面一條線、靜止就是紅字 |
-| 頁籤／分段 | `FilterTabs`（可帶計數）、`SegmentedControl` | 兩者外觀相同（`segment-track`／`segment-active`） |
-| 規格欄 | `SpecGrid`＋`SpecCell label` | 身分資訊一律用它，不用「·」串成一行 |
-| 貓咪一行 | `PetLine`（品種＋♂♀）、`PetSex` | 初診才出徽章，回診不出 |
+| 頁籤／分段 | `FilterTabs`（可帶計數）、`SegmentedControl` | 兩者外觀相同（`segment-track`／`segment-active`）。側滑面板這種窄的地方用 `FilterTabs fit`：平分一列、不橫向捲動，每格上面數字、下面短標籤（item 給 `short`，全名在 title 與讀屏） |
+| 規格欄 | `SpecGrid`＋`SpecCell label` | 身分資訊一律用它 |
+| 貓咪一行 | `PetLine`（品種＋♂♀）、`PetSex` | |
+| 提醒標籤 | `ReminderTags`（過敏／病史／注意，`lib/petDisplay.js` 的 `petReminders`） | 完整內容放 title，列高不變 |
 | 去處標記 | `DestTag to="journal|report|internal"` | 診療台欄位旁：寫完會去哪裡 |
 | 號碼牌 | `CheckinNumber size` | 候診灰、看診中主色實心＋光暈、待櫃台淡面、已完成淡灰 |
 | 手術／遲到 | `SurgeryBadge`、`LatenessBadge` | 紫與紅，並排時順序「手術 → 遲到」 |
-| 格式文字 | 編輯 `RichTextEditor`、顯示 `RichText` | 不用 `v-html` |
+| 格式文字 | 編輯 `RichTextEditor`（待辦 `single-line`＋`toolbar-position="top"`）、顯示 `RichText` | 不用 `v-html` |
 | 空狀態／載入 | `EmptyState`、`ListSkeleton` | 不要只寫「載入中…」 |
 | 錯誤 | `<Alert variant="destructive">` | |
 | 確認／提示 | `ConfirmDialog`、`useToast()` | 禁止 `confirm()`／`alert()` |
-| 分頁 | `Pagination` | |
-| 篩選 | `FilterBar` | 一律提交式（按 Enter 或送出鈕才查） |
+| 篩選 | `FilterBar` | 一律提交式（按 Enter 或送出鈕才查）；選人用的候選清單（`#` 標記）例外 |
+| 牙齒圖 | `formfields/DentalChart.vue` | 貓 Modified Triadan d3 幾何；在報告紙面上也用它（唯讀），見第 8 節 |
 
-圖示統一 `@lucide/vue`、`stroke-width="1.75"`，不用 emoji；頭像一律貓圖示。
+圖示統一 `@lucide/vue`、`stroke-width="1.75"`，不用 emoji；頭像一律貓圖示（診所只看貓）。
 
-## 6. 用語
+## 7. 用語
 
-員工畫面：貓咪、飼主、櫃台、醫師、健檢報告、健檢表單。「藥單」是物件，「領藥」只指交付那一步。報告佇列的預設篩選叫「待處理」。公開初診頁（飼主看的）維持「貓孩兒／家長」。
+員工畫面：貓咪、飼主、櫃台、醫師、健檢報告、健檢表單。「藥單」是物件，「領藥」只指交付那一步。公開初診頁（飼主看的）維持「貓孩兒／家長」。
 
-## 7. 報告紙面
+## 8. 報告紙面
 
-`/report/:token` 與 `/records/:id/preview` 固定淺色（它們是 PDF 的來源），用 `report-*` token，不跟主題切換；在那兩頁加東西不要借用後台的樣式常數。
+`/report/:token` 與 `/records/:id/preview` 是 PDF 的來源，**固定淺色、A4 尺度**，改動要格外小心：
+
+- 用 `report-*` token，不跟主題切換；在那兩頁加東西不要借用後台的樣式常數。
+- 紙面裡共用的元件（牙齒圖）讀的是後台 token，所以 `style.css` 淺色區塊的選擇器是 `:root, .report-sheet`——紙面內一律拿到淺色值。這類元件的行內樣式寫原始 token（`var(--field)`），不要寫 `var(--color-field)`：後者在 `:root` 就算定值，擋不住 `html.dark`。
+- `.report-sheet` 把字級（12／14／16／20／24px）與行高（1.5）鎖在改版前的值。後台的字級、行高怎麼改都不會影響紙面；反過來，動到 `.report-sheet` 或報告元件就要重新比對分頁。
+- 比對方法：用假資料（完整填寫、典型內容兩種）把新舊兩版各印一次 A4 PDF，比頁數與逐像素畫面，明暗主題都要跑。2026-09 改版時照這個方法驗過：頁數與版面跟改版前一致，差異只有牙齒圖下方新增的文字清單。
+
+## 9. 畫面修改的流程
+
+1. **大改**（新頁面、版面重排、新元件類型）：先做設計提案（claude.ai 設計稿，或 artifact 頁面），使用者確認後才實作。
+2. **小改**（間距、文案、既有元件的細節）：直接改程式。
+3. **改完同一次**：
+   - 更新本文件對應段落；規則有變就把理由一起寫下（「為什麼不這樣做」往往比「怎麼做」更有用）。
+   - 新增或改動元件用法時，更新第 6 節的表。
+   - 會影響「最容易做錯」的規則時，同步 CLAUDE.md 第七節。
+   - 驗證：`npm run build`（含色碼檢查）、`npm test`、`npm run test:workflow-browser`、`npm run test:medication-browser`；動到報告就照第 8 節比對紙面。
+4. **設計稿與程式不一致時，以程式為準**，不要照舊設計稿把改好的地方改回去。
+
+### 設計稿定稿之後又決定的事（設計稿沒有回填）
+
+依時間由舊到新，之後有新決定就往下加一列：
+
+| 決定 | 理由 |
+|---|---|
+| 所有頁面滿版，表單頁在頁內限寬 `max-w-5xl`（曾短暫統一成 `max-w-360`，又改回來） | 設計稿以 1920 滿版繪製；限寬讓兩個工作台少了約 300px |
+| 清單頁的搜尋、頁籤移進主卡片標頭（`DataCard`），頁首只留標題與主要動作 | 跟兩個工作台的卡片同一個骨架；篩選緊貼它篩的內容 |
+| 診療台「今日病患」列上不放關閉鈕，目前這筆只用淡主色底＋左側主色條輕輕標出 | 點哪列就切到哪個工作區；關閉放在工作區標頭 |
+| 待辦輸入框的格式工具列放在上方，placeholder 過長時省略 | 單行輸入框塞不下工具列 |
+| 全站拿掉「·」「・」串接，改用規格欄、間距或「標籤＋值」 | 使用者明確不要分隔點 |
+| 健檢報告草稿「引用本次看診」：改了就是改看診，拿掉「已在報告改過＋還原」 | 資料只有一份，見 CLAUDE.md 第二節 medicalRecords |
+| 拿掉透明的 `ghost` 按鈕，全部改 `secondary`；待辦的「完成」是一顆圓形按鈕，滑過才出勾 | 使用者覺得靜止時沒有顏色的按鈕不好看 |
+| 總覽照設計稿 R2-Dashboard 重做；圖表改 CSS 長條，拿掉 echarts | 設計稿定稿時總覽還沒改到 |
+| 聊天面板標頭加回「通知」鈕（自動通知開關） | 只放在設定選單時使用者找不到 |
+| 藥單面板的頁籤平分一列（`FilterTabs fit`），不橫向捲動 | 面板只有約 420px，7 個頁籤塞不下 |
+| 工具欄「暫存」的數字改成紅色徽章（0 不顯示） | 使用者要求；暫存區有貓＝有人要對方看 |

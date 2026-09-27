@@ -1,15 +1,15 @@
 import { Router } from 'express';
 import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
-import ClinicalNote from '../models/ClinicalNote.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import FormTemplate from '../models/FormTemplate.js';
 import { withTransaction } from '../lib/transaction.js';
 import { combineClinicDateTime } from '../lib/clinicTime.js';
 import { defaultRecordFields } from '../lib/formTemplate.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
-import { applyWorkflowAction, appointmentJournalContent, assertWorkflowVersion, workflowError } from '../lib/appointmentWorkflow.js';
-import { initialFollowedFields, syncDraftFromAppointment, templateLabItems } from '../lib/recordVisitSync.js';
+import { applyWorkflowAction, assertWorkflowVersion, workflowError } from '../lib/appointmentWorkflow.js';
+import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
+import { templateLabItems } from '../lib/recordVisitLink.js';
 
 const router = Router({ mergeParams: true });
 
@@ -51,20 +51,8 @@ router.post('/:action', async (req, res, next) => {
       }
       applyWorkflowAction(appointment, action, req.body, new Date(), { labItems });
 
-      // 日誌不存內容、讀取時由看診即時組出；這裡只確保「有內容就有一筆日誌、沒內容就沒有」。
       // 直接完成看診沒填任何東西時，來院原因也算內容。
-      if (action === 'clinical' || action === 'handoff') {
-        const journalContent = appointmentJournalContent(appointment);
-        if (journalContent) {
-          await ClinicalNote.findOneAndUpdate({ appointmentId: appointment._id }, { $set: {
-            petId: appointment.petId,
-            entryDate: combineClinicDateTime(appointment.date, '10:00'),
-            source: 'appointment',
-          }, $unset: { content: '' } }, { upsert: true, runValidators: true, session });
-        } else {
-          await ClinicalNote.deleteOne({ appointmentId: appointment._id }).session(session);
-        }
-      }
+      if (action === 'clinical' || action === 'handoff') await syncAppointmentJournal(appointment, { session });
 
       if (action === 'record') {
         if (appointment.recordId) {
@@ -80,7 +68,6 @@ router.post('/:action', async (req, res, next) => {
             ...defaultRecordFields(template),
             visitDate: combineClinicDateTime(appointment.date, appointment.time || '10:00'),
             chiefComplaint: appointment.reason,
-            ...initialFollowedFields(appointment, template),
             templateId: template._id,
             templateVersion: template.version,
             examType: template.name,
@@ -115,10 +102,6 @@ router.post('/:action', async (req, res, next) => {
         }
         appointment.followUpDate = date;
         appointment.followUpTime = time;
-      }
-      // 報告草稿的體重、體溫、回診日期、檢驗數值跟著看診走（醫師在報告裡改過的除外）。
-      if ((action === 'clinical' || action === 'followup') && appointment.recordId) {
-        await syncDraftFromAppointment({ appointment, MedicalRecord, FormTemplate, session });
       }
       // Even no-op commands advance the revision, so stale confirmations cannot succeed.
       appointment.increment();

@@ -98,9 +98,9 @@ watch(
 
       <div class="min-w-0 flex-1 @container/content">
         <header id="app-header" class="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-card px-4 lg:hidden">
-          <Button variant="ghost" size="icon" aria-label="開啟導覽選單" @click="mobileOpen = true"><Menu stroke-width="1.75" /></Button>
+          <Button variant="secondary" size="icon" aria-label="開啟導覽選單" @click="mobileOpen = true"><Menu stroke-width="1.75" /></Button>
           <p class="min-w-0 flex-1 truncate font-semibold">{{ activeTitle }}</p>
-          <Button variant="ghost" size="icon" aria-label="搜尋飼主、貓咪或電話" @click="openGlobalSearch"><Search stroke-width="1.75" /></Button>
+          <Button variant="secondary" size="icon" aria-label="搜尋飼主、貓咪或電話" @click="openGlobalSearch"><Search stroke-width="1.75" /></Button>
           <AppSettingsMenu @logout="logout" />
         </header>
 

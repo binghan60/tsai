@@ -48,7 +48,7 @@ const typeConfig = {
 
         <button
           type="button"
-          class="absolute top-2.5 right-2.5 flex size-8 items-center justify-center rounded-md text-subtle-foreground transition-colors hover:bg-hover hover:text-foreground"
+          class="absolute top-2.5 right-2.5 flex size-8 items-center justify-center rounded-md bg-secondary text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)] transition-colors hover:bg-secondary-hover hover:text-foreground"
           aria-label="關閉通知"
           @click="removeToast(toast.id)"
         >

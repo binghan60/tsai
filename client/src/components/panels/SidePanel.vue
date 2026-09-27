@@ -18,7 +18,7 @@ const emit = defineEmits(['back', 'close']);
 <template>
   <section class="flex h-full min-h-0 flex-col" :aria-label="title">
     <header class="flex shrink-0 items-start gap-2 border-b border-border px-4 py-3">
-      <Button v-if="canBack" variant="ghost" size="icon-sm" class="-ml-1 mt-0.5" :aria-label="backLabel" @click="emit('back')">
+      <Button v-if="canBack" variant="secondary" size="icon-sm" class="-ml-1 mt-0.5" :aria-label="backLabel" @click="emit('back')">
         <ArrowLeft stroke-width="1.75" />
       </Button>
       <div class="min-w-0 flex-1 py-1">
@@ -26,7 +26,7 @@ const emit = defineEmits(['back', 'close']);
         <p v-if="description" class="mt-0.5 truncate text-sm text-muted-foreground">{{ description }}</p>
       </div>
       <div v-if="$slots.actions" class="flex shrink-0 items-center gap-1.5 pt-0.5"><slot name="actions" /></div>
-      <Button variant="ghost" size="icon-sm" class="-mr-1 mt-0.5" aria-label="關閉面板" @click="emit('close')">
+      <Button variant="secondary" size="icon-sm" class="-mr-1 mt-0.5" aria-label="關閉面板" @click="emit('close')">
         <X stroke-width="1.75" />
       </Button>
     </header>

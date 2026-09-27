@@ -7,6 +7,9 @@ const props = defineProps({
   modelValue: { type: String, default: '' },
   counts: { type: Object, default: () => ({}) },
   ariaLabel: { type: String, required: true },
+  // 窄的地方（側滑面板）用：所有頁籤平分寬度塞進一列、不橫向捲動；每格上面數字、下面短標籤。
+  // 標籤太長的項目在 items 裡給 short（例如「待醫師確認」→「待確認」），全名放在 title 與讀屏。
+  fit: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -34,7 +37,7 @@ function onTabKeydown(event, index, items, emit) {
 
 function updateScrollHint() {
   const element = scroller.value;
-  hasMoreRight.value = Boolean(element && element.scrollLeft + element.clientWidth < element.scrollWidth - 2);
+  hasMoreRight.value = Boolean(!props.fit && element && element.scrollLeft + element.clientWidth < element.scrollWidth - 2);
 }
 
 onMounted(async () => {
@@ -50,12 +53,18 @@ watch(() => props.items, async () => {
   await nextTick();
   updateScrollHint();
 }, { deep: true });
+
+function tabLabel(item) {
+  const count = props.counts[item.key];
+  return count === undefined ? item.label : `${item.label} ${count} 筆`;
+}
 </script>
 
 <template>
   <div
     ref="scroller"
-    class="relative inline-flex max-w-full items-center gap-0.5 overflow-x-auto segment-track [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    class="relative items-center gap-0.5 segment-track"
+    :class="fit ? 'flex w-full' : 'inline-flex max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden'"
     role="tablist"
     :aria-label="ariaLabel"
     @scroll="updateScrollHint"
@@ -65,16 +74,27 @@ watch(() => props.items, async () => {
       :key="item.key || 'all'"
       type="button"
       role="tab"
-      class="inline-flex h-[2.125rem] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 text-sm leading-none whitespace-nowrap transition-colors duration-150 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
-      :class="modelValue === item.key ? selectedClasses : idleClasses"
+      class="inline-flex items-center justify-center rounded-lg text-sm leading-none whitespace-nowrap transition-colors duration-150 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
+      :class="[
+        modelValue === item.key ? selectedClasses : idleClasses,
+        fit ? 'min-w-0 flex-1 flex-col gap-1 px-1 py-1.5' : 'h-[2.125rem] shrink-0 gap-1.5 px-3.5',
+      ]"
       :aria-selected="modelValue === item.key"
       :aria-current="modelValue === item.key ? 'page' : undefined"
+      :aria-label="fit ? tabLabel(item) : undefined"
+      :title="fit && item.short ? item.label : undefined"
       :tabindex="modelValue === item.key ? 0 : -1"
       @click="emit('update:modelValue', item.key)"
       @keydown="onTabKeydown($event, items.indexOf(item), items, emit)"
     >
-      <span>{{ item.label }}</span>
-      <span v-if="counts[item.key] !== undefined" class="num text-xs" :class="modelValue === item.key ? 'text-primary' : 'text-subtle-foreground'">{{ counts[item.key] }}</span>
+      <template v-if="fit">
+        <span v-if="counts[item.key] !== undefined" class="num text-base leading-none font-semibold" :class="modelValue === item.key ? 'text-primary' : 'text-foreground'">{{ counts[item.key] }}</span>
+        <span class="max-w-full truncate text-xs leading-none">{{ item.short || item.label }}</span>
+      </template>
+      <template v-else>
+        <span>{{ item.label }}</span>
+        <span v-if="counts[item.key] !== undefined" class="num text-xs" :class="modelValue === item.key ? 'text-primary' : 'text-subtle-foreground'">{{ counts[item.key] }}</span>
+      </template>
     </button>
     <span v-if="hasMoreRight" class="pointer-events-none absolute inset-y-1.5 right-1.5 flex w-9 items-center justify-end rounded-r-lg bg-gradient-to-l from-sunken via-sunken/90 to-transparent pr-1 text-muted-foreground sm:hidden" aria-hidden="true">
       <ChevronRight class="h-4 w-4" stroke-width="1.75" />

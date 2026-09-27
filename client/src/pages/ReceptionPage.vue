@@ -439,9 +439,9 @@ onBeforeUnmount(() => {
       <template #meta><span class="num text-lg text-subtle-foreground">{{ currentTime }}</span></template>
       <template #actions>
         <Button v-if="!isToday" variant="soft" size="sm" @click="date = today">回到今天</Button>
-        <Button variant="ghost" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft stroke-width="1.75" /></Button>
+        <Button variant="secondary" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft stroke-width="1.75" /></Button>
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
-        <Button variant="ghost" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
+        <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
         <span class="mx-1.5 h-6 w-px bg-border" aria-hidden="true"></span>
         <Button variant="secondary" @click="newMedication"><Pill stroke-width="1.75" />新增藥單</Button>
         <Button @click="openDrawer('new')"><Plus stroke-width="1.75" />掛號</Button>
@@ -585,7 +585,7 @@ onBeforeUnmount(() => {
                         <span class="spec-label block">電話</span>
                         <span v-if="item.ownerPhone" class="flex items-center gap-1">
                           <span class="num truncate">{{ item.ownerPhone }}</span>
-                          <button type="button" class="flex size-7 shrink-0 items-center justify-center rounded-md text-subtle-foreground hover:bg-hover hover:text-foreground" :aria-label="`複製 ${item.ownerName || item.petName} 的電話`" @click.stop="copyPhone(item.ownerPhone)"><Copy class="size-4" stroke-width="1.75" /></button>
+                          <button type="button" class="flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)] hover:bg-secondary-hover hover:text-foreground" :aria-label="`複製 ${item.ownerName || item.petName} 的電話`" @click.stop="copyPhone(item.ownerPhone)"><Copy class="size-4" stroke-width="1.75" /></button>
                         </span>
                         <span v-else class="text-subtle-foreground">—</span>
                       </div>

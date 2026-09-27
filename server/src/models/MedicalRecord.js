@@ -123,10 +123,8 @@ const medicalRecordSchema = new mongoose.Schema(
     // 自訂項目沒有對應欄位，一律收在這裡（key 就是範本項目的 key）。
     customValues: { type: Map, of: mongoose.Schema.Types.Mixed, default: () => new Map() },
 
-    // 報到建立的草稿，體重、體溫、回診日期與檢驗數值預設跟著這次看診走（lib/recordVisitSync.js）。
-    // 醫師在報告裡親手改過的欄位記在這裡，之後就不再被看診的值覆蓋；檢驗項目記成 `lab:<key>`。
-    // 清空＝全部重新帶入。結案後不再同步，快照就是當時的樣子。
-    overriddenKeys: { type: [String], default: [] },
+    // 報到建立的草稿連著一筆看診（appointment.recordId）：體重、體溫、回診日期與檢驗數值不存在這裡，
+    // 讀取時直接引用看診、結案時才凍結進來（lib/recordVisitLink.js）。
 
     // 結案時寫入；草稿為空，報告頁會即時用目前範本組合。
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'FormTemplate', default: null },

@@ -86,7 +86,8 @@ function tone(status) {
 const filterItems = computed(() => [
   { key: 'all', label: '全部' },
   ...(props.stages?.length ? [] : [{ key: 'active', label: '未完成' }]),
-  ...displayedStages.value.map(stage => ({ key: stage.key, label: stage.label })),
+  // 側滑面板裡頁籤平分一列（FilterTabs 的 fit），長標籤給一個短的。
+  ...displayedStages.value.map(stage => ({ key: stage.key, label: stage.label, ...(stage.key === 'review' ? { short: '待確認' } : {}) })),
 ]);
 const filterCounts = computed(() => ({ all: allCount.value, active: activeCount.value, ...Object.fromEntries(displayedStages.value.map(stage => [stage.key, counts.value[stage.key] || 0])) }));
 
@@ -310,7 +311,7 @@ onBeforeUnmount(() => {
       <FilterBar id="medication-search" v-model="queryInput" label="搜尋藥單" placeholder="貓咪、飼主、電話或病歷號" class="min-w-0 flex-1" :class="compact ? '' : 'sm:max-w-80'" @submit="applySearch" />
       <Button v-if="!doctor" class="ml-auto" @click="create"><Plus stroke-width="1.75" />新增藥單</Button>
     </div>
-    <FilterTabs :model-value="filter" :items="filterItems" :counts="filterCounts" aria-label="藥單狀態篩選" class="self-start" @update:model-value="setFilter" />
+    <FilterTabs :model-value="filter" :items="filterItems" :counts="filterCounts" aria-label="藥單狀態篩選" :fit="compact" :class="compact ? '' : 'self-start'" @update:model-value="setFilter" />
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ul v-if="compact" class="-mx-5 divide-y divide-border border-y border-border">
       <li v-if="loading && !items.length" class="px-5 py-10 text-center text-muted-foreground">載入藥單中…</li>
@@ -367,7 +368,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <div v-if="!createOnly" class="flex shrink-0 flex-wrap items-center gap-3 border-b border-border pb-3">
         <Button v-if="!compact" variant="secondary" :disabled="busy" @click="close"><ArrowLeft stroke-width="1.75" />返回清單</Button>
-        <Button v-else variant="ghost" size="icon-sm" :disabled="busy" aria-label="返回清單" @click="close"><ArrowLeft stroke-width="1.75" /></Button>
+        <Button v-else variant="secondary" size="icon-sm" :disabled="busy" aria-label="返回清單" @click="close"><ArrowLeft stroke-width="1.75" /></Button>
         <div class="min-w-0">
           <p class="flex items-center gap-2 text-base font-semibold">
             <ClipboardPlus v-if="!selected" class="h-5 w-5 text-primary" stroke-width="1.75" aria-hidden="true" />

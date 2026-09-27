@@ -130,8 +130,16 @@ try {
   // 「藥單」是右側工具欄的按鈕（文字是「藥單」加上待辦徽章數字，所以用 prefix 比對）。
   async function openMedicationPanel(page) { await clickPrefix(page, '藥單'); await page.waitForSelector('[aria-label="藥單工作區"]'); }
   // 每份清單只顯示一個階段，所以藥單一往前走，還要看它的那一端就得自己切格子。
-  // 階段鈕的文字帶著筆數（「待包藥 1」），用 prefix 比對。
-  async function stage(page, label) { await clickPrefix(page, label); }
+  // 面板裡的階段頁籤平分一列（上面數字、下面短標籤），全名與筆數在 aria-label（「待醫師確認 1 筆」），
+  // 全頁版的頁籤則是文字「待包藥 1」——兩種都用 prefix 比對。
+  async function stage(page, label) {
+    await page.bringToFront();
+    const find = (text) => [...document.querySelectorAll('[role="tab"]')]
+      .find((el) => (el.getAttribute('aria-label') || el.textContent).trim().startsWith(text) && !el.disabled && el.getBoundingClientRect().height);
+    await page.waitForFunction(`(${find})(${JSON.stringify(label)})`);
+    const handle = await page.evaluateHandle(`(${find})(${JSON.stringify(label)})`);
+    await handle.asElement().asLocator().click(); await handle.dispose();
+  }
   await doctor.goto(`${origin}/appointments?tab=medications`);
   await desk.goto(`${origin}/reception?tab=medications`);
   // 掛號台頁首的「新增藥單」直接開藥單面板並推入新增表單（createOnly）。
@@ -194,7 +202,7 @@ try {
   assert.equal(orders.get(String(created._id)).status, 'collected');
   // 已領藥的歷史：/medications 全頁版（stages ready+collected）看得到，頁首的藥單面板最後一個分頁也是「已領藥」。
   await desk.goto(`${origin}/medications`);
-  await clickPrefix(desk, '已領藥');
+  await stage(desk, '已領藥');
   await desk.waitForFunction(() => document.querySelectorAll('[data-medication-row]').length === 2);
   await fill(desk, '[aria-label="搜尋藥單"]', '0912345678');
   await desk.click('[aria-label="搜尋搜尋藥單"]');
@@ -215,7 +223,7 @@ try {
   // 病況是可上色的編輯器（contenteditable），沒有 value，讀畫面上的文字。
   assert.equal(await desk.$eval('#med-condition', el => el.textContent), '飼主來電續藥', 'cancel discard retains draft');
   await click(desk, '建立並送醫師確認'); await closed(desk);
-  await clickPrefix(desk, '待醫師確認'); await open(desk);
+  await stage(desk, '待醫師確認'); await open(desk);
   await click(desk, '取消藥單');
   await click(desk, '確認'); await closed(desk);
   // 已取消沒有自己的分頁（那顆只在不限制 stages 時出現），只有「全部」看得到；歷史紀錄則直接查資料。

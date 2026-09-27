@@ -185,7 +185,7 @@ onBeforeUnmount(() => {
           <span class="desktop-data-cell">
             <div v-if="log.error" class="flex min-w-0 gap-1.5 text-sm text-danger" :class="detailExpanded(log) ? 'items-start' : 'items-center'">
               <span class="min-w-0 flex-1 wrap-break-word" :class="detailExpanded(log) ? 'whitespace-normal' : 'truncate'" :title="log.error">{{ log.error }}</span>
-              <Button v-if="log.error.length > 40" type="button" variant="ghost" size="xs" class="shrink-0" @click="toggleDetail(log)">
+              <Button v-if="log.error.length > 40" type="button" variant="secondary" size="xs" class="shrink-0" @click="toggleDetail(log)">
                 <component :is="detailExpanded(log) ? ChevronUp : ChevronDown" stroke-width="1.75" />{{ detailExpanded(log) ? '收合' : '詳情' }}
               </Button>
             </div>

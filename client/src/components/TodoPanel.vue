@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue';
-import { Check, Circle, ListTodo, Pencil, Plus, Trash2, Undo2, X } from '@lucide/vue';
+import { Check, ListTodo, Pencil, Plus, Trash2, Undo2, X } from '@lucide/vue';
 import { useTodosStore } from '../stores/todos';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
@@ -164,18 +164,20 @@ async function saveEdit(item) {
         <Button
           v-if="item.status === 'open'"
           type="button"
-          variant="ghost"
+          variant="secondary"
           size="icon-xs"
+          class="rounded-full"
           :disabled="busyId === item._id"
           :aria-label="`完成：${plain(item.content)}`"
           @click="run(item._id, () => store.complete(item._id, identity), '操作失敗，請稍後再試')"
         >
-          <Circle class="size-5" stroke-width="1.75" />
+          <!-- 按鈕本身就是那個空心圓；滑過才出勾勾，靜止時不會被誤讀成已完成。 -->
+          <Check class="size-4 opacity-0 transition-opacity group-hover/button:opacity-100" stroke-width="2" />
         </Button>
         <Button
           v-else
           type="button"
-          variant="ghost"
+          variant="secondary"
           size="icon-xs"
           :disabled="busyId === item._id"
           :aria-label="`改回未完成：${plain(item.content)}`"

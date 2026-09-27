@@ -9,7 +9,7 @@ import FormTemplate from '../models/FormTemplate.js';
 import ClinicSettings from '../models/ClinicSettings.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import { defaultRecordFields } from '../lib/formTemplate.js';
-import { initialFollowedFields } from '../lib/recordVisitSync.js';
+import { visitOverlay } from '../lib/recordVisitLink.js';
 import { withTransaction } from '../lib/transaction.js';
 import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsCheckinNumber } from '../lib/appointmentStatus.js';
@@ -140,13 +140,12 @@ async function createCheckinRecord(appointment, session) {
     throw error;
   }
 
-  // 草稿的體重、體溫、回診日期、檢驗數值之後都跟著這次看診走（lib/recordVisitSync.js）。
+  // 草稿不存體重、體溫、回診日期、檢驗數值，讀取時直接引用這次看診（lib/recordVisitLink.js）。
   const [record] = await MedicalRecord.create([{
     petId: appointment.petId,
     ...defaultRecordFields(template),
     visitDate: combineClinicDateTime(appointment.date, appointment.time || '10:00'),
     chiefComplaint: appointment.reason,
-    ...initialFollowedFields(appointment, template),
     templateId: template._id,
     templateVersion: template.version,
     examType: template.name,
@@ -670,7 +669,20 @@ router.delete('/:id', async (req, res, next) => {
     if (!['cancelled', 'no_show'].includes(appointment.status)) {
       return res.status(422).json({ message: '只有已取消或未到的掛號可以刪除' });
     }
-    await appointment.deleteOne();
+    // 連著的報告草稿本來直接引用這筆看診的體重、體溫、檢驗數值；看診要消失了，先把值留在草稿上。
+    const draft = appointment.recordId ? await MedicalRecord.exists({ _id: appointment.recordId, status: 'draft' }) : null;
+    if (draft) {
+      await withTransaction(async (session) => {
+        const record = await MedicalRecord.findOne({ _id: appointment.recordId, status: 'draft' }).session(session);
+        if (record) {
+          const template = record.templateId ? await FormTemplate.findById(record.templateId).session(session) : null;
+          await MedicalRecord.updateOne({ _id: record._id, status: 'draft' }, { $set: visitOverlay(record, appointment, template) }, { session });
+        }
+        await Appointment.deleteOne({ _id: appointment._id }).session(session);
+      });
+    } else {
+      await appointment.deleteOne();
+    }
     res.status(204).end();
   } catch (err) {
     next(err);

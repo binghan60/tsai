@@ -143,9 +143,9 @@ try {
   console.log('Desk completed the handoff');
 
   // ── 右側工具欄：面板不遮擋背景、再按一次收起 ──
-  await click(desk, '暫存區 0');
+  await click(desk, '暫存區');
   await desk.waitForSelector('section[aria-label="暫存區"]');
-  await click(desk, '暫存區 0');
+  await click(desk, '暫存區');
   await desk.waitForSelector('section[aria-label="暫存區"]', { hidden: true });
   await click(desk, '內部聊天（未讀）');
   await desk.waitForSelector('section[aria-label="內部聊天"]');

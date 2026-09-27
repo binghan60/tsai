@@ -20,7 +20,8 @@ import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { enrichSectionsWithPreviousValues, getPetPreviousValues, plainSections } from '../lib/historyValues.js';
 import { clinicDayStart } from '../lib/clinicTime.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
-import { FOLLOWED_FIELDS, followedPatch, sanitizeOverriddenKeys } from '../lib/recordVisitSync.js';
+import { applyVisitEdits, hasVisitEdits, stripVisitFields, templateLabItems, visitOverlay } from '../lib/recordVisitLink.js';
+import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -103,6 +104,19 @@ function effectiveDeliveryStatus(record) {
 // 正是 Puppeteer 產 PDF 的來源，結案與寄信路徑上各會走一次。
 //
 // 草稿還沒凍結結構，仍要即時用目前範本組合並補上對照值。
+// 報到建立的草稿連著一筆看診。體重、體溫、回診日期、檢驗數值只存在看診上，
+// 讀草稿時把看診的值疊到文件上（只改記憶體裡這一份，不存回去），之後的組區塊、預覽都看得到。
+const VISIT_SELECT = '_id date weightKg temperatureC followUpDate followUpTime labValues';
+async function linkedVisitFor(record) {
+  if (!record || record.status !== 'draft') return null;
+  return Appointment.findOne({ recordId: record._id }).select(VISIT_SELECT).lean();
+}
+async function applyLinkedVisit(record, visit = undefined) {
+  const linked = visit === undefined ? await linkedVisitFor(record) : visit;
+  if (linked) record.set(visitOverlay(record, linked, await templateForRecord(record)));
+  return linked;
+}
+
 async function sectionsForView(record) {
   if (isFinalizedRecord(record) && record.sections?.length) return plainSections(record.sections);
   const rawSections = record.sections?.length
@@ -425,19 +439,17 @@ recordsRouter.get('/:id', async (req, res, next) => {
       populate: { path: 'ownerId', select: 'name phone email' },
     });
     if (!record) return res.status(404).json({ message: '找不到報告' });
+    // 連著看診的草稿先疊上看診的值；填寫頁靠 visitLink 知道這幾欄改了會寫回看診。
+    const visit = await applyLinkedVisit(record);
     // 預覽模式與報告頁共用同一套渲染，草稿也要能拿到區塊結構與歷史對照數值。
     const sections = await sectionsForView(record);
-    // 報到建立的草稿連著一筆看診；填寫頁據此標出「看診帶入」的欄位（沒在 overriddenKeys 裡的跟隨欄位）。
-    const visit = record.status === 'draft'
-      ? await Appointment.findOne({ recordId: record._id }).select('_id date petName').lean()
-      : null;
     // 一定要用 toJSON()：toObject() 預設不 flatten Map，展開後 customValues 會變成 {}，
     // 自訂項目的作答一開啟編輯頁就空白，接著自動儲存把 {} 寫回資料庫。
     res.json({
       ...record.toJSON(),
       sections,
       deliveryStatus: effectiveDeliveryStatus(record),
-      visitLink: visit ? { appointmentId: visit._id, date: visit.date, followedFields: FOLLOWED_FIELDS } : null,
+      visitLink: visit ? { appointmentId: visit._id, date: visit.date } : null,
     });
   } catch (err) {
     next(err);
@@ -453,29 +465,43 @@ recordsRouter.put('/:id', async (req, res, next) => {
     const existingForValidation = await MedicalRecord.findById(req.params.id).select('templateId customValues');
     if (!existingForValidation) return res.status(404).json({ message: '找不到指定的健康報告' });
     const template = await templateForRecord(existingForValidation);
-    const recordFields = sanitizeRecordImages(pickRecordFields(req.body), template, existingForValidation);
-    // 報到建立的草稿：體重、體溫、回診日期、檢驗數值跟著看診走。醫師在報告裡改過的欄位由前端
-    // 放進 overriddenKeys，才接受送來的值；其餘一律改回看診的值（前端畫面可能是舊的）。
-    // resyncFromVisit＝清空覆寫紀錄、全部重新帶入。
-    const linkedVisit = await Appointment.findOne({ recordId: req.params.id }).select('weightKg temperatureC followUpDate followUpTime labValues');
-    if (linkedVisit) {
-      const current = await MedicalRecord.findById(req.params.id).select('status overriddenKeys weightKg temperatureC followUpDate labFindings');
-      const overriddenKeys = req.body.resyncFromVisit
-        ? []
-        : req.body.overriddenKeys !== undefined ? sanitizeOverriddenKeys(req.body.overriddenKeys, template) : current?.overriddenKeys ?? [];
-      const merged = { ...(current?.toObject() ?? {}), ...recordFields, overriddenKeys };
-      Object.assign(recordFields, followedPatch(merged, linkedVisit, template), { overriddenKeys });
+    let recordFields = sanitizeRecordImages(pickRecordFields(req.body), template, existingForValidation);
+    // 連著看診的草稿：體重、體溫、回診日期、檢驗數值不存在報告上（送來的一律清掉），
+    // 醫師在報告上改過的那幾欄由前端放在 visitEdits，同一個 transaction 裡寫回看診。
+    const linkedVisit = await Appointment.findOne({ recordId: req.params.id }).select('_id');
+    if (linkedVisit) recordFields = stripVisitFields(recordFields, template);
+    const visitEdits = linkedVisit && hasVisitEdits(req.body.visitEdits) ? req.body.visitEdits : null;
+    let record = null;
+    let editedVisit = null;
+    try {
+      await withTransaction(async (session) => {
+        editedVisit = null;
+        if (visitEdits) {
+          const appointment = await Appointment.findById(linkedVisit._id).session(session);
+          const visitTemplate = appointment.templateId ? await FormTemplate.findById(appointment.templateId).session(session) : null;
+          applyVisitEdits(appointment, visitEdits, templateLabItems(visitTemplate));
+          appointment.increment();
+          await appointment.save({ session });
+          await syncAppointmentJournal(appointment, { session });
+          editedVisit = appointment;
+        }
+        record = await MedicalRecord.findOneAndUpdate(
+          {
+            _id: req.params.id,
+            status: 'draft',
+            __v: expectedVersion,
+            $or: [{ finalizeAttemptId: null }, { finalizeAttemptId: { $exists: false } }],
+          },
+          { $set: recordFields, $inc: { __v: 1 } },
+          { new: true, runValidators: true, session }
+        );
+        // 報告寫不進去（版本衝突、已結案），看診那邊也不能改一半。
+        if (!record) throw Object.assign(new Error('record not saved'), { recordNotSaved: true });
+      });
+    } catch (err) {
+      if (!err.recordNotSaved) throw err;
+      record = null;
     }
-    const record = await MedicalRecord.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        status: 'draft',
-        __v: expectedVersion,
-        $or: [{ finalizeAttemptId: null }, { finalizeAttemptId: { $exists: false } }],
-      },
-      { $set: recordFields, $inc: { __v: 1 } },
-      { new: true, runValidators: true }
-    );
     if (!record) {
       const existing = await MedicalRecord.findById(req.params.id).select('+finalizeAttemptId');
       if (!existing) return res.status(404).json({ message: '找不到報告' });
@@ -491,7 +517,10 @@ recordsRouter.put('/:id', async (req, res, next) => {
       });
     }
     await cleanUpImages(removedImagePublicIds(existingForValidation, record), `record ${record._id} updated`);
-    res.json(record);
+    if (editedVisit) emitAppointmentUpdate(editedVisit);
+    // 回傳時一樣疊上看診的最新值：診療台剛改的數字，填寫頁存一次檔就看得到。
+    const visit = linkedVisit ? await applyLinkedVisit(record) : null;
+    res.json({ ...record.toJSON(), visitLink: visit ? { appointmentId: visit._id, date: visit.date } : null });
   } catch (err) {
     next(err);
   }
@@ -534,6 +563,10 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
     if (!template) {
       return res.status(409).json({ message: '這份報告的健檢類型已不存在，無法結案' });
     }
+    // 連著看診的草稿：結案這一刻把看診的值凍結進報告，之後看診再改也不影響已結案的報告。
+    const linkedVisit = await linkedVisitFor(record);
+    const frozenVisitFields = linkedVisit ? visitOverlay(record, linkedVisit, template) : {};
+    if (linkedVisit) record.set(frozenVisitFields);
     const previousValues = await getPetPreviousValues(record.petId, record._id, record);
     const composedSections = enrichSectionsWithPreviousValues(composeReportSections(record, template), previousValues);
 
@@ -560,6 +593,7 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
         $set: {
           finalizeAttemptId,
           finalizingAt: new Date(),
+          ...frozenVisitFields,
           templateId: template._id,
           templateVersion: template.version,
           sections: composedSections,

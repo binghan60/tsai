@@ -1,11 +1,11 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, AlertTriangle, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, LockKeyhole, RefreshCw, Save, Settings2, Trash2 } from '@lucide/vue';
+import { Activity, AlertTriangle, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, Link2, LockKeyhole, Save, Settings2, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, clinicTimeInput, combineClinicDateTime, formatDate } from '../lib/datetime';
-import { FOLLOWED_FIELD_LABELS, followableKeys, followedValue, labKey, nextOverriddenKeys, staleFollowedKeys } from '../lib/recordVisitFollow';
+import { refreshedVisitKeys, visitEdits, visitSnapshot } from '../lib/recordVisitLink';
 import { collectPreviewIssues } from '../lib/recordFormValidation';
 import { defaultValueForItem } from '../../../shared/formDefaults';
 import { planPresetApplication } from '../lib/formPresets';
@@ -125,66 +125,25 @@ const documentVersion = ref(0);
 const revisionReason = ref('');
 const isLocked = computed(() => recordStatus.value !== 'draft');
 
-// ── 從本次看診帶入 ──
-// 報到建立的草稿（visitLink 有值）：體重、體溫、回診日期、檢驗數值預設跟著看診走。
-// 醫師在這裡改過的欄位記進 overriddenKeys，之後看診再改也不覆蓋；「還原」把它交回給看診。
+// ── 引用本次看診 ──
+// 報到建立的草稿（visitLink 有值）：體重、體溫、檢驗數值、回診日期只存在看診上，這裡顯示的是看診的值。
+// 前三者在這裡改＝寫回看診（存檔時帶 visitEdits）；回診日期只能讀，在掛號台安排。
 const visitLink = ref(null);
-const overriddenKeys = ref([]);
-const serverFollowed = ref(null);
-// 下一次存檔要交回看診的欄位（還原），以及要不要整份重新帶入。
-const restoringKeys = new Set();
-let resyncPending = false;
-const followKeys = computed(() => (visitLink.value && !isLocked.value ? followableKeys(LAB_TESTS.value) : []));
-function followSourceFromRecord(data) {
-  return {
-    weightKg: data?.weightKg,
-    temperatureC: data?.temperatureC,
-    followUp: data?.followUpDate ? `${clinicDateInput(data.followUpDate)} ${clinicTimeInput(data.followUpDate)}` : '',
-    labFindings: data?.labFindings ?? [],
-  };
+const isVisitLinked = computed(() => Boolean(visitLink.value) && !isLocked.value);
+// 上一次從伺服器拿到的看診值；存檔時跟它比，只送醫師真的改過的欄位。
+const visitBaseline = ref(null);
+const labKeys = computed(() => LAB_TESTS.value.map((item) => item.key));
+function currentVisitSnapshot() {
+  return visitSnapshot(record, labKeys.value);
 }
-function currentFollowSource() {
-  return {
-    weightKg: record.weightKg,
-    temperatureC: record.temperatureC,
-    followUp: followUpDate.value ? `${followUpDate.value} ${followUpTime.value}` : '',
-    labFindings: record.labFindings,
-  };
-}
-function followLabel(key) {
-  if (FOLLOWED_FIELD_LABELS[key]) return FOLLOWED_FIELD_LABELS[key];
-  return LAB_TESTS.value.find((item) => labKey(item.key) === key)?.label || key;
-}
-// 說明條上列出的欄位：看診有填的、或醫師改過的；看診沒填也沒人動的就不列，免得一整排空白。
-const followRows = computed(() => followKeys.value
-  .map((key) => ({
-    key,
-    label: followLabel(key),
-    value: followedValue(currentFollowSource(), key),
-    overridden: overriddenKeys.value.includes(key),
-  }))
-  .filter((row) => row.value || row.overridden));
-function applyFollowedFromServer(key, data) {
+function applyVisitValue(key, data) {
   if (key === 'weightKg' || key === 'temperatureC') record[key] = data[key] ?? null;
-  else if (key === 'followUpDate') {
-    followUpDate.value = clinicDateInput(data.followUpDate);
-    followUpTime.value = data.followUpDate ? clinicTimeInput(data.followUpDate) : '';
-  } else if (key.startsWith('lab:')) {
+  else if (key.startsWith('lab:')) {
     const itemKey = key.slice(4);
     const saved = (data.labFindings ?? []).find((finding) => finding.key === itemKey);
     const row = record.labFindings.find((finding) => finding.key === itemKey);
     if (row) Object.assign(row, { value: saved?.value ?? '', status: saved?.status ?? 'not_checked', statusSource: saved?.statusSource ?? row.statusSource });
   }
-}
-function restoreFromVisit(key) {
-  overriddenKeys.value = overriddenKeys.value.filter((item) => item !== key);
-  restoringKeys.add(key);
-  saveRecord({ silent: true });
-}
-function resyncAllFromVisit() {
-  resyncPending = true;
-  overriddenKeys.value = [];
-  saveRecord({ silent: true });
 }
 const showDiscardConfirm = ref(false);
 const discarding = ref(false);
@@ -520,8 +479,7 @@ function applyRecord(data) {
   record.examinationFindings = mergeFindings(EXAMINATION_ITEMS.value, data.examinationFindings, ['note']);
   record.measurementAssessments = mergeFindings(BASIC_MEASUREMENTS.value, data.measurementAssessments, ['statusSource', 'unit', 'referenceMin', 'referenceMax'], { statusSource: 'auto' });
   record.labFindings = mergeFindings(LAB_TESTS.value, data.labFindings, ['statusSource', 'value', 'unit', 'referenceMin', 'referenceMax', 'note']);
-  overriddenKeys.value = [...(data.overriddenKeys ?? [])];
-  serverFollowed.value = followSourceFromRecord(data);
+  visitBaseline.value = data.visitLink ? visitSnapshot(data, labKeys.value) : null;
   lastSavedAt.value = data.updatedAt ? new Date(data.updatedAt) : null;
 }
 
@@ -816,34 +774,24 @@ function buildPayload() {
     heartRate: optionalNumber(record.heartRate),
     respiratoryRate: optionalNumber(record.respiratoryRate),
     bodyConditionScore: optionalNumber(record.bodyConditionScore),
-    ...followPayload(),
+    ...(isVisitLinked.value ? { visitEdits: visitEdits(currentVisitSnapshot(), visitBaseline.value) } : {}),
   };
 }
 
-// 跟隨欄位：跟上次從伺服器拿到的值不一樣，就是醫師親手改過。還原中的欄位不算。
-function followPayload() {
-  if (!followKeys.value.length) return {};
-  if (resyncPending) return { resyncFromVisit: true };
-  return {
-    overriddenKeys: nextOverriddenKeys({
-      keys: followKeys.value.filter((key) => !restoringKeys.has(key)),
-      overridden: overriddenKeys.value,
-      current: currentFollowSource(),
-      server: serverFollowed.value,
-    }),
-  };
-}
-
-// 存檔回來的草稿帶著看診的最新值：沒被覆寫的欄位換成新值。
-function receiveFollowed(saved) {
-  if (!followKeys.value.length) return;
-  resyncPending = false;
-  restoringKeys.clear();
-  overriddenKeys.value = [...(saved.overriddenKeys ?? [])];
-  for (const key of staleFollowedKeys({ keys: followKeys.value, overridden: overriddenKeys.value, current: currentFollowSource(), server: followSourceFromRecord(saved) })) {
-    applyFollowedFromServer(key, saved);
+// 存檔回來的草稿帶著看診的最新值（診療台可能剛改過）：存檔期間畫面沒動的欄位換成新值。
+function receiveVisitValues(saved, sent) {
+  if (!saved.visitLink || !isVisitLinked.value) return;
+  const server = visitSnapshot(saved, labKeys.value);
+  for (const key of refreshedVisitKeys({ current: currentVisitSnapshot(), sent, server })) applyVisitValue(key, saved);
+  if (saved.followUpDate !== undefined) {
+    followUpDate.value = clinicDateInput(saved.followUpDate);
+    followUpTime.value = saved.followUpDate ? clinicTimeInput(saved.followUpDate) : '';
   }
-  serverFollowed.value = followSourceFromRecord(saved);
+  visitBaseline.value = server;
+}
+
+function comparablePayload(payload) {
+  return JSON.stringify({ ...payload, visitEdits: undefined });
 }
 
 async function saveRecord({ silent = false, uploadImages = false } = {}) {
@@ -854,7 +802,8 @@ async function saveRecord({ silent = false, uploadImages = false } = {}) {
   clearTimeout(autosaveTimer);
   try {
     const payload = buildPayload();
-    let savedSnapshot = JSON.stringify(payload);
+    const sentVisit = currentVisitSnapshot();
+    let savedSnapshot = comparablePayload(payload);
     let saved;
     if (recordId.value) {
       ({ data: saved } = await http.put(`/records/${recordId.value}`, {
@@ -876,13 +825,13 @@ async function saveRecord({ silent = false, uploadImages = false } = {}) {
         ...imagePayload,
         expectedVersion: saved.__v ?? documentVersion.value,
       }));
-      savedSnapshot = JSON.stringify(imagePayload);
+      savedSnapshot = comparablePayload(imagePayload);
     }
     documentVersion.value = saved.__v ?? documentVersion.value;
-    receiveFollowed(saved);
+    receiveVisitValues(saved, sentVisit);
     lastSavedAt.value = new Date();
     saveError.value = '';
-    const hasNewChanges = JSON.stringify(buildPayload()) !== savedSnapshot;
+    const hasNewChanges = comparablePayload(buildPayload()) !== savedSnapshot;
     isDirty.value = hasNewChanges;
     saveState.value = hasNewChanges ? 'unsaved' : 'saved';
     if (!silent) toast.success('已成功儲存病歷草稿', '儲存成功');
@@ -1176,30 +1125,18 @@ function handleBeforeUnload(event) {
           <div class="space-y-1">
             <Label for="record-follow-up-date">回診日期</Label>
             <div class="flex gap-2">
-              <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="尚未安排" aria-label="選擇回診日期" class="w-52" />
-              <TimePicker id="record-follow-up-time" v-model="followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="!followUpDate" class="w-32 shrink-0" />
+              <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="尚未安排" aria-label="選擇回診日期" :disabled="isVisitLinked" class="w-52" />
+              <TimePicker id="record-follow-up-time" v-model="followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="isVisitLinked || !followUpDate" class="w-32 shrink-0" />
             </div>
             <p v-if="followUpTimeError" class="text-sm font-medium text-destructive">{{ followUpTimeError }}</p>
           </div>
         </div>
       </div>
 
-      <!-- 從本次看診帶入：哪些欄位現在跟著看診、哪些醫師在報告裡改過（可以還原）。 -->
-      <div v-if="followKeys.length" class="rounded-xl bg-info-surface px-5 py-3">
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <p class="flex items-center gap-2 font-semibold text-info"><RefreshCw class="size-5" stroke-width="2" />從本次看診帶入<span v-if="visitLink?.date" class="num font-normal">{{ visitLink.date }}</span></p>
-          <p class="text-sm text-foreground">體重、體溫、檢驗數值、回診日期會跟著診療台更新；在報告裡改過的欄位就不再跟著變，結案時全部凍結。</p>
-          <Button v-if="overriddenKeys.length" variant="secondary" size="sm" class="ml-auto" :disabled="saving" @click="resyncAllFromVisit">全部重新帶入</Button>
-        </div>
-        <ul v-if="followRows.length" class="mt-2.5 flex flex-wrap gap-2">
-          <li v-for="row in followRows" :key="row.key" class="inline-flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 shadow-[inset_0_0_0_1px_var(--border)]">
-            <span class="text-sm text-muted-foreground">{{ row.label }}</span>
-            <span class="num font-semibold">{{ row.value || '—' }}</span>
-            <span v-if="row.overridden" class="rounded-sm bg-warning-surface px-1.5 py-0.5 text-2xs leading-none font-semibold text-warning">已在報告改過</span>
-            <span v-else class="rounded-sm bg-accent px-1.5 py-0.5 text-2xs leading-none font-semibold text-accent-foreground">看診帶入</span>
-            <button v-if="row.overridden" type="button" class="text-sm font-semibold text-primary hover:underline disabled:opacity-50" :disabled="saving" @click="restoreFromVisit(row.key)">還原</button>
-          </li>
-        </ul>
+      <!-- 引用本次看診：這幾欄只有一份，在看診上。 -->
+      <div v-if="isVisitLinked" class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-info-surface px-5 py-3">
+        <p class="flex items-center gap-2 font-semibold text-info"><Link2 class="size-5" stroke-width="2" />引用本次看診<span v-if="visitLink?.date" class="num font-normal">{{ visitLink.date }}</span></p>
+        <p class="text-sm text-foreground">體重、體溫、檢驗數值與診療台、病歷日誌是同一份，在這裡改會一起更新；回診日期由掛號台安排。結案時凍結成報告的內容。</p>
       </div>
 
       <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序。

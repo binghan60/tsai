@@ -23,7 +23,8 @@ const counts = useWorkCountsStore();
 const { identity } = useStaffIdentity();
 
 const items = computed(() => [
-  { key: 'pinned', icon: Pin, short: '暫存', label: '暫存區', count: pinned.items.length, tone: 'neutral' },
+  // 暫存區有東西＝有人丟了一隻貓過來要對方看，使用者要求跟其他待辦一樣用紅色徽章（0 就不畫）。
+  { key: 'pinned', icon: Pin, short: '暫存', label: '暫存區', count: pinned.items.length, tone: 'todo' },
   {
     key: 'medications',
     icon: Pill,

@@ -80,7 +80,7 @@ function applyDates() {
       />
     </label>
 
-    <Button v-if="hasActiveFilter" type="button" variant="ghost" size="icon-xs" class="rounded-full" :aria-label="`清除${label}`" @click="clearAll">
+    <Button v-if="hasActiveFilter" type="button" variant="secondary" size="icon-xs" class="rounded-full" :aria-label="`清除${label}`" @click="clearAll">
       <X stroke-width="1.75" />
     </Button>
 

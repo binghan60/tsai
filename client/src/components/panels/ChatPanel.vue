@@ -1,6 +1,8 @@
 <script setup>
 import { nextTick, onActivated, ref, watch } from 'vue';
-import { Send } from '@lucide/vue';
+import { Bell, BellOff, Send } from '@lucide/vue';
+import { useAppointmentNotificationPreferences } from '../../lib/appointmentNotificationPreferences';
+import NotificationSettingsDialog from '../NotificationSettingsDialog.vue';
 import { http } from '../../api/http';
 import { useChatStore } from '../../stores/chat';
 import { usePinnedPetsStore } from '../../stores/pinnedPets';
@@ -16,8 +18,11 @@ import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 
 // 全站內部聊天，右側工具欄的最後一個面板。不綁任何掛號或病患（「今天下午提早關診」）。
-// 身分跟著這台裝置（設定選單切換）；自動通知的開關也在設定選單。
+// 身分跟著這台裝置（設定選單切換）。自動通知的開關就放在這個面板的標頭（設定選單也有同一個入口）：
+// 改版時曾經只留在設定選單，使用者在聊天室找不到開關。
 const store = useChatStore();
+const { options: notificationOptions, enabledCount: notificationEnabledCount } = useAppointmentNotificationPreferences();
+const notificationsOpen = ref(false);
 const pinned = usePinnedPetsStore();
 const panel = useUtilityPanelStore();
 const { identity } = useStaffIdentity();
@@ -77,6 +82,17 @@ async function submit() {
   <!-- KeepAlive 底下的根節點要是普通元素：直接放元件（還用 v-if 切換）收起時 Vue 會出錯。 -->
   <div class="h-full min-h-0">
     <SidePanel title="內部聊天" :description="`目前身分：${senderLabel(identity)}`" flush @close="panel.close()">
+      <template #actions>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          :aria-label="`自動通知設定，已開啟 ${notificationEnabledCount} / ${notificationOptions.length} 項`"
+          @click="notificationsOpen = true"
+        >
+          <component :is="notificationEnabledCount ? Bell : BellOff" stroke-width="1.75" />通知<span class="num text-xs text-muted-foreground">{{ notificationEnabledCount }}/{{ notificationOptions.length }}</span>
+        </Button>
+      </template>
       <div class="flex h-full min-h-0 flex-col">
         <div ref="listEl" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
           <p v-if="!store.messages.length" class="py-10 text-center text-muted-foreground">還沒有訊息</p>
@@ -149,5 +165,6 @@ async function submit() {
         </form>
       </div>
     </SidePanel>
+    <NotificationSettingsDialog v-model:open="notificationsOpen" />
   </div>
 </template>

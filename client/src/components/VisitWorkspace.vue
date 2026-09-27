@@ -497,7 +497,7 @@ onBeforeUnmount(() => {
             </SpecGrid>
             <Popover>
               <PopoverTrigger as-child>
-                <Button variant="ghost" size="icon-sm" aria-label="飼主聯絡資料與就診進度"><Info stroke-width="1.75" /></Button>
+                <Button variant="secondary" size="icon-sm" aria-label="飼主聯絡資料與就診進度"><Info stroke-width="1.75" /></Button>
               </PopoverTrigger>
               <PopoverContent align="end" class="w-96 space-y-3 p-4">
                 <dl v-if="ownerFields.length" class="space-y-2">
@@ -509,7 +509,7 @@ onBeforeUnmount(() => {
                 <AppointmentMilestones :appointment="appointment" />
               </PopoverContent>
             </Popover>
-            <Button variant="ghost" size="icon-sm" :aria-label="`關閉 ${appointment.petName} 的工作區`" @click="emit('close')"><X stroke-width="1.75" /></Button>
+            <Button variant="secondary" size="icon-sm" :aria-label="`關閉 ${appointment.petName} 的工作區`" @click="emit('close')"><X stroke-width="1.75" /></Button>
           </div>
         </div>
 
@@ -602,7 +602,7 @@ onBeforeUnmount(() => {
               <div v-for="item in labItems" :key="item.key" class="space-y-1.5">
                 <div class="flex items-baseline justify-between gap-2">
                   <Label :for="`visit-lab-${item.key}-${appointment._id}`" class="truncate">{{ item.label }}</Label>
-                  <span v-if="labRangeText(item)" class="num shrink-0 text-xs text-subtle-foreground">{{ labRangeText(item) }}</span>
+                  <span v-if="labRangeText(item)" class="num shrink-0 text-xs leading-none text-subtle-foreground">{{ labRangeText(item) }}</span>
                 </div>
                 <div class="relative">
                   <Input
@@ -628,7 +628,7 @@ onBeforeUnmount(() => {
             <div class="flex items-center gap-2"><h3 :id="`note-heading-${appointment._id}`" class="text-base font-semibold">本次簡易紀錄</h3><DestTag to="journal" /></div>
             <RichTextEditor ref="visitNoteEditor" :id="textareaId('visitNote')" v-model="draft.visitNote" aria-label="本次簡易紀錄" :min-rows="8" :disabled="!editable || committing" placeholder="輸入本次看診紀錄…">
               <template v-if="editable" #toolbar-end>
-                <Button type="button" variant="ghost" size="icon-xs" aria-label="插入本次簡易紀錄的文字模板" title="文字模板" :disabled="committing" @mousedown.prevent @click="openTemplates('visitNote')"><FileText stroke-width="1.75" /></Button>
+                <Button type="button" variant="secondary" size="icon-xs" aria-label="插入本次簡易紀錄的文字模板" title="文字模板" :disabled="committing" @mousedown.prevent @click="openTemplates('visitNote')"><FileText stroke-width="1.75" /></Button>
               </template>
             </RichTextEditor>
           </section>
@@ -648,7 +648,7 @@ onBeforeUnmount(() => {
                 <div class="flex items-center gap-2"><Label :for="textareaId('specialCareNote')" class="text-warning">請轉告飼主</Label><DestTag to="journal" /></div>
                 <div class="relative">
                   <Textarea :id="textareaId('specialCareNote')" v-model="draft.specialCareNote" rows="4" maxlength="500" class="field-sizing-fixed pr-11" :disabled="!editable || committing" placeholder="例：傷口勿舔舐，三天後回來拆線" />
-                  <Button v-if="editable" type="button" variant="ghost" size="icon-xs" class="absolute top-1.5 right-1.5" aria-label="插入請轉告飼主的文字模板" title="文字模板" :disabled="committing" @click="openTemplates('specialCareNote')"><FileText stroke-width="1.75" /></Button>
+                  <Button v-if="editable" type="button" variant="secondary" size="icon-xs" class="absolute top-1.5 right-1.5" aria-label="插入請轉告飼主的文字模板" title="文字模板" :disabled="committing" @click="openTemplates('specialCareNote')"><FileText stroke-width="1.75" /></Button>
                 </div>
               </div>
               <div class="space-y-1.5">

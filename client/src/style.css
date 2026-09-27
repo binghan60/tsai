@@ -50,6 +50,9 @@
   --text-xl--line-height: 1.35;
   --text-2xl: 1.75rem;
   --text-2xl--line-height: 1.35;
+  /* 總覽數字格的大數字（36，配 num 等寬字）。只給「一眼看數字」的讀數用，不當標題。 */
+  --text-display: 2.25rem;
+  --text-display--line-height: 1.1;
 }
 
 /* ── 語意 token ─────────────────────────────────────────────────────────────

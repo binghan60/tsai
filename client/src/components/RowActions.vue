@@ -24,7 +24,7 @@ function isFirstDanger(action, index) {
 <template>
   <DropdownMenu :modal="false">
     <DropdownMenuTrigger as-child>
-      <Button type="button" :variant="props.triggerText ? 'secondary' : 'ghost'" :size="props.triggerText ? 'sm' : 'icon-sm'" :class="props.triggerText ? 'w-full justify-center' : ''" :aria-label="props.label">
+      <Button type="button" variant="secondary" :size="props.triggerText ? 'sm' : 'icon-sm'" :class="props.triggerText ? 'w-full justify-center' : ''" :aria-label="props.label">
         <component :is="props.icon || MoreHorizontal" stroke-width="1.75" />
         <span v-if="props.triggerText">{{ props.triggerText }}</span>
       </Button>

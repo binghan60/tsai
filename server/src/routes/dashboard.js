@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import Owner from '../models/Owner.js';
-import Pet from '../models/Pet.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import Appointment from '../models/Appointment.js';
 import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
 
+// 總覽：由粗到細三層——寄送失敗（有才出現）→ 今天的門診四格＋健檢報告四格 → 近 8 週健檢量＋院內待辦。
+// 每一個數字都點得進對應的清單，口徑要跟那份清單對得起來（掛號台的 ?stage=、報告清單的 ?view=）。
 const router = Router();
 const WEEKS = 8;
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -19,46 +19,37 @@ export function buildWeekBoundaries(trendStart, weeks = WEEKS) {
 export function fillWeeklyTrend(boundaries, buckets) {
   const counts = new Map(buckets.map((bucket) => [new Date(bucket._id).getTime(), bucket.count]));
   return boundaries.slice(0, -1).map((weekStart, index) => ({
+    weekStart,
     weekEnd: boundaries[index + 1],
     count: counts.get(weekStart.getTime()) ?? 0,
   }));
 }
 
-export function prioritizeActionRecords(attentionRecords = [], pendingRecords = [], draftRecords = [], limit = 8) {
-  const seen = new Set();
-  return [...attentionRecords, ...pendingRecords, ...draftRecords]
-    .filter((record) => {
-      const id = String(record._id);
-      if (seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    })
-    .slice(0, limit);
+// 今天的門診：跟掛號台流程列同一套分段（待報到／在院／待櫃台處理／已完成），取消與未到不算進今日掛號。
+// 上午／下午以 12:00 切；在院再分「看診中」（醫師按了開始看診）與「候診」。
+// 待安排回診＝醫師寫了回診建議、櫃台還沒掛下一次的號。
+export function todayClinic(appointments = []) {
+  const active = appointments.filter((item) => !['cancelled', 'no_show'].includes(item.status));
+  const onsite = active.filter((item) => item.status === 'arrived');
+  const completed = active.filter((item) => item.status === 'completed');
+  return {
+    total: active.length,
+    morning: active.filter((item) => String(item.time ?? '') < '12:00').length,
+    afternoon: active.filter((item) => String(item.time ?? '') >= '12:00').length,
+    onsite: onsite.length,
+    inVisit: onsite.filter((item) => item.visitStartedAt).length,
+    waiting: onsite.filter((item) => !item.visitStartedAt).length,
+    handoff: active.filter((item) => item.status === 'pending_checkout').length,
+    completed: completed.length,
+    followUpPending: completed.filter((item) => String(item.followUpRecommendation ?? '').trim() && !item.followUpAppointmentId).length,
+  };
 }
 
-export function appointmentStatusCounts(buckets = []) {
-  const counts = { scheduled: 0, arrived: 0, completed: 0, cancelled: 0, no_show: 0 };
-  buckets.forEach(({ _id, count }) => {
-    if (_id in counts) counts[_id] = count;
-  });
-  return counts;
-}
-
-export function deliveryRate({ sent = 0, pending = 0, failed = 0 } = {}) {
-  const total = sent + pending + failed;
-  return total ? Math.round((sent / total) * 100) : null;
-}
-
-// pending 跟顯示用的 failed 都刻意把 uncertain 算進去——這樣「寄送異常」卡片的
-// 文案（寄送失敗或結果待確認）與它連去的 /records?view=failed 才會對得起來
-// （那條查詢的 failed 也是 $in: ['failed', 'uncertain']）。但 uncertain 因此
-// 同時出現在 pending 與顯示用 failed 兩邊，拿這兩個數字相加當分母會把 uncertain
-// 算兩次，所以算成功率時分母的第三項改用 statusBreakdown.failed（不含 uncertain）。
+// pending 跟 failed 都刻意把 uncertain 算進去——「寄送失敗」卡片與它連去的 /records?view=failed、
+// 「待寄送」卡片與 /records?view=pending 兩邊的查詢都是這個口徑。
 export function deliveryBreakdown(statusBreakdown = {}) {
-  const { sent = 0, finalized = 0, sending = 0, uncertain = 0, failed: failedOnly = 0 } = statusBreakdown;
-  const pending = finalized + sending + uncertain;
-  const failed = failedOnly + uncertain;
-  return { pending, failed, successRate: deliveryRate({ sent, pending, failed: failedOnly }) };
+  const { finalized = 0, sending = 0, uncertain = 0, failed: failedOnly = 0 } = statusBreakdown;
+  return { pending: finalized + sending + uncertain, failed: failedOnly + uncertain };
 }
 
 router.get('/', async (req, res, next) => {
@@ -74,28 +65,25 @@ router.get('/', async (req, res, next) => {
     const trendStart = clinicDayStart(today, -((WEEKS - 1) * 7 + 6));
     const weekBoundaries = buildWeekBoundaries(trendStart);
     const trendEnd = weekBoundaries.at(-1);
-    const monthRange = { $gte: startOfMonth, $lt: startOfNextMonth };
-    const previousMonthRange = { $gte: startOfPreviousMonth, $lt: startOfMonth };
 
-    const [ownerCount, petCount, monthlyNewOwnerCount, monthlyNewPetCount, [recordSummary], todayAppointmentBuckets, monthAppointmentBuckets, previousMonthAppointmentBuckets, overdueDraftCount] = await Promise.all([
-      Owner.countDocuments(),
-      Pet.countDocuments(),
-      Owner.countDocuments({ createdAt: monthRange }),
-      Pet.countDocuments({ createdAt: monthRange }),
+    const [todayAppointments, [recordSummary], overdueDraftCount, latestFailed] = await Promise.all([
+      Appointment.find({ date: today }).select('time status visitStartedAt followUpRecommendation followUpAppointmentId').lean(),
       MedicalRecord.aggregate([
         { $match: CURRENT_VERSION },
         { $facet: {
-          monthly: [{ $match: { visitDate: monthRange } }, { $count: 'count' }],
-          previousMonthly: [{ $match: { visitDate: previousMonthRange } }, { $count: 'count' }],
-          drafts: [{ $match: { status: 'draft' } }, { $count: 'count' }],
           statuses: [{ $group: { _id: { status: '$status', deliveryStatus: '$deliveryStatus' }, count: { $sum: 1 } } }],
+          sentThisMonth: [{ $match: { deliveryStatus: 'sent', sentAt: { $gte: startOfMonth, $lt: startOfNextMonth } } }, { $count: 'count' }],
+          sentPreviousMonth: [{ $match: { deliveryStatus: 'sent', sentAt: { $gte: startOfPreviousMonth, $lt: startOfMonth } } }, { $count: 'count' }],
           weekly: [{ $match: { visitDate: { $gte: trendStart, $lt: trendEnd } } }, { $bucket: { groupBy: '$visitDate', boundaries: weekBoundaries, output: { count: { $sum: 1 } } } }],
         } },
       ]),
-      Appointment.aggregate([{ $match: { date: today } }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
-      Appointment.aggregate([{ $match: { date: { $gte: monthStartInput, $lt: nextMonthStartInput } } }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
-      Appointment.aggregate([{ $match: { date: { $gte: previousMonthStartInput, $lt: monthStartInput } } }, { $group: { _id: '$status', count: { $sum: 1 } } }]),
       MedicalRecord.countDocuments({ ...CURRENT_VERSION, status: 'draft', updatedAt: { $lt: new Date(Date.now() - DAY_MS) } }),
+      // 橫幅上點名最近一份失敗的：哪隻、哪份、為什麼。
+      MedicalRecord.findOne({ ...CURRENT_VERSION, status: 'finalized', deliveryStatus: { $in: ['failed', 'uncertain'] } })
+        .sort({ lastDeliveryAttemptAt: -1, updatedAt: -1 })
+        .select('reportNumber deliveryStatus deliveryError petId')
+        .populate({ path: 'petId', select: 'name' })
+        .lean(),
     ]);
 
     const statusBreakdown = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0, uncertain: 0 };
@@ -108,22 +96,25 @@ router.get('/', async (req, res, next) => {
       else if (deliveryStatus === 'sending') statusBreakdown.sending += count;
       else statusBreakdown.finalized += count;
     });
-
-    const todayCounts = appointmentStatusCounts(todayAppointmentBuckets);
-    const monthCounts = appointmentStatusCounts(monthAppointmentBuckets);
-    const previousMonthCounts = appointmentStatusCounts(previousMonthAppointmentBuckets);
-    const { pending, failed, successRate } = deliveryBreakdown(statusBreakdown);
+    const { pending, failed } = deliveryBreakdown(statusBreakdown);
 
     res.json({
-      ownerCount, petCount, monthlyNewOwnerCount, monthlyNewPetCount,
-      monthlyReportCount: recordSummary?.monthly?.[0]?.count ?? 0,
-      previousMonthlyReportCount: recordSummary?.previousMonthly?.[0]?.count ?? 0,
-      draftCount: recordSummary?.drafts?.[0]?.count ?? 0,
-      today: { total: Object.values(todayCounts).reduce((sum, count) => sum + count, 0), ...todayCounts },
-      monthlyAppointments: { total: Object.values(monthCounts).reduce((sum, count) => sum + count, 0), checkedIn: monthCounts.arrived + monthCounts.completed, cancelledOrNoShow: monthCounts.cancelled + monthCounts.no_show, ...monthCounts },
-      previousMonthlyAppointments: { total: Object.values(previousMonthCounts).reduce((sum, count) => sum + count, 0), completed: previousMonthCounts.completed },
-      delivery: { sent: statusBreakdown.sent, pending, failed, overdueDraftCount, successRate },
-      statusBreakdown,
+      today: todayClinic(todayAppointments),
+      reports: {
+        drafts: statusBreakdown.draft,
+        overdueDrafts: overdueDraftCount,
+        pending,
+        failed,
+        sentThisMonth: recordSummary?.sentThisMonth?.[0]?.count ?? 0,
+        sentPreviousMonth: recordSummary?.sentPreviousMonth?.[0]?.count ?? 0,
+      },
+      latestFailed: latestFailed ? {
+        _id: latestFailed._id,
+        reportNumber: latestFailed.reportNumber,
+        petName: latestFailed.petId?.name ?? '',
+        deliveryStatus: latestFailed.deliveryStatus,
+        error: latestFailed.deliveryError ?? '',
+      } : null,
       weeklyTrend: fillWeeklyTrend(weekBoundaries, recordSummary?.weekly ?? []),
     });
   } catch (err) {

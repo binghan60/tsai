@@ -581,10 +581,10 @@ function resolveLeave(confirmed) {
                   </span>
                 </button>
                 <div class="flex shrink-0 flex-col">
-                  <Button type="button" variant="ghost" size="icon-xs" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
+                  <Button type="button" variant="secondary" size="icon-xs" :disabled="index === 0" aria-label="上移區塊" @click="move(sections, index, -1)">
                     <ChevronUp stroke-width="1.75" />
                   </Button>
-                  <Button type="button" variant="ghost" size="icon-xs" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
+                  <Button type="button" variant="secondary" size="icon-xs" :disabled="index === sections.length - 1" aria-label="下移區塊" @click="move(sections, index, 1)">
                     <ChevronDown stroke-width="1.75" />
                   </Button>
                 </div>

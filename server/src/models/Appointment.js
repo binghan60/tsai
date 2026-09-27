@@ -58,7 +58,7 @@ const appointmentSchema = new mongoose.Schema(
 
     // 這次看診是看診資料的唯一存放處：體重、體溫、檢驗數值、本次紀錄、請轉告飼主、回診建議、
     // 內部備註與回診日期都只存在這裡。病歷日誌讀它即時組出來；報到時建立的健檢報告草稿
-    // 欄位預設跟著這裡走（醫師在報告裡改過的欄位除外），見 lib/recordVisitSync.js。
+    // 不存這幾欄、直接引用這裡，在報告上改也是寫回這裡（結案時才凍結），見 lib/recordVisitLink.js。
     weightKg: { type: Number, min: 0, default: null },
     temperatureC: { type: Number, min: 0, default: null },
     // 診療台填的檢驗數值。項目來自掛號選的表單範本裡的檢驗區塊；存的時候連同名稱、單位、

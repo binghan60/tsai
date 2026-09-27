@@ -828,7 +828,7 @@ watch(pet, async (value) => {
 
         <div v-else class="space-y-2">
           <p class="text-lg font-semibold">{{ pet.ownerId.name }}</p>
-          <p v-if="pet.ownerId.phone" class="flex items-center gap-1.5"><span class="num">{{ pet.ownerId.phone }}</span><Button type="button" variant="ghost" size="icon-xs" :aria-label="`複製 ${pet.ownerId.name} 的電話`" @click="copyPhone(pet.ownerId.phone)"><Copy stroke-width="1.75" /></Button></p>
+          <p v-if="pet.ownerId.phone" class="flex items-center gap-1.5"><span class="num">{{ pet.ownerId.phone }}</span><Button type="button" variant="secondary" size="icon-xs" :aria-label="`複製 ${pet.ownerId.name} 的電話`" @click="copyPhone(pet.ownerId.phone)"><Copy stroke-width="1.75" /></Button></p>
           <p v-if="pet.ownerId.landline" class="text-sm text-muted-foreground">市話 <span class="num text-foreground">{{ pet.ownerId.landline }}</span></p>
           <p v-if="pet.ownerId.email" class="flex items-center gap-1.5 text-sm break-all text-muted-foreground"><Mail class="size-4 shrink-0" stroke-width="1.75" />{{ pet.ownerId.email }}</p>
           <p v-if="pet.ownerId.address" class="flex items-start gap-1.5 text-sm text-muted-foreground"><MapPin class="mt-0.5 size-4 shrink-0" stroke-width="1.75" />{{ pet.ownerId.address }}</p>
