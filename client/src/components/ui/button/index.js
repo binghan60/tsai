@@ -3,7 +3,7 @@ import { cva } from "class-variance-authority";
 export { default as Button } from "./Button.vue";
 
 export const buttonVariants = cva(
-  // 層級靠底色分：primary 實色（深色主題另有光暈）、secondary 下凹底加一圈細邊、
+  // 層級靠底色分：primary 實色（兩個主題都不加光暈，使用者覺得深色的光暈看了不舒服）、secondary 下凹底加一圈細邊、
   // soft 主色淡面、destructive 淡紅底、destructive-solid 實心紅（只給確認視窗裡的最終動作）。
   // 所有按鈕靜止時都要有底色：曾經有過只在滑過時才出底色的 ghost，使用者覺得「沒有顏色、不好看」，已拿掉；
   // 工具列、清單列上的圖示鈕、關閉鈕、日期前後鈕一律用 secondary。
@@ -13,7 +13,7 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground shadow-glow hover:bg-primary/90 aria-expanded:bg-primary/90",
+          "bg-primary text-primary-foreground hover:bg-primary/90 aria-expanded:bg-primary/90",
         secondary:
           "bg-secondary text-secondary-foreground shadow-[inset_0_0_0_1px_var(--border)] hover:bg-secondary-hover aria-expanded:bg-secondary-hover",
         soft:

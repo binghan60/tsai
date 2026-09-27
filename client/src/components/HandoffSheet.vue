@@ -286,7 +286,7 @@ async function approveReopen() {
                 </div>
                 <div class="flex items-center gap-3">
                   <p class="text-sm text-muted-foreground">飼主還沒決定就先留空，這筆會留在「待安排回診」。</p>
-                  <Button v-if="state.completed" variant="secondary" size="sm" class="ml-auto" :disabled="busy || !canBook" @click="bookFollowUp">確認回診預約</Button>
+                  <Button v-if="state.completed" variant="soft" size="sm" class="ml-auto" :disabled="busy || !canBook" @click="bookFollowUp">確認回診預約</Button>
                 </div>
               </template>
             </section>

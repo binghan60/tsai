@@ -164,7 +164,7 @@ async function saveEdit(item) {
         <Button
           v-if="item.status === 'open'"
           type="button"
-          variant="secondary"
+          variant="soft"
           size="icon-xs"
           class="rounded-full"
           :disabled="busyId === item._id"

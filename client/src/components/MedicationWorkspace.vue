@@ -330,7 +330,7 @@ onBeforeUnmount(() => {
           <span class="num text-xs text-subtle-foreground">{{ formatDateTime(item.createdAt) }}</span>
           <span class="ml-auto flex gap-1.5">
             <Button v-if="!doctor && nextAction(item)" size="xs" :disabled="busy" :aria-label="completeLabel(item)" @click="completeFromList(item)">{{ nextAction(item) === 'ready' ? '完成包藥' : '確認領藥' }}</Button>
-            <Button size="xs" variant="secondary" :disabled="busy" @click="openOrder(item)">{{ doctor && item.status === 'review' ? '審核' : '開啟' }}</Button>
+            <Button size="xs" :variant="doctor && item.status === 'review' ? 'soft' : 'secondary'" :disabled="busy" @click="openOrder(item)">{{ doctor && item.status === 'review' ? '審核' : '開啟' }}</Button>
           </span>
         </div>
       </li>
@@ -356,7 +356,7 @@ onBeforeUnmount(() => {
                 <Button class="shrink-0" size="sm" variant="secondary" :disabled="busy" :aria-label="`修改 ${item.petName} 的藥單`" @click="openOrder(item)">修改</Button>
                 <Button class="shrink-0" size="sm" variant="destructive" :disabled="busy" :aria-label="`取消 ${item.petName} 的藥單`" @click="openCancel(item)">取消</Button>
               </div>
-              <Button v-else size="sm" variant="secondary" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" @click="openOrder(item)">{{ doctor && item.status === 'review' ? '審核藥單' : '查看' }}</Button>
+              <Button v-else size="sm" :variant="doctor && item.status === 'review' ? 'soft' : 'secondary'" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" @click="openOrder(item)">{{ doctor && item.status === 'review' ? '審核藥單' : '查看' }}</Button>
             </td>
           </tr>
         </tbody>

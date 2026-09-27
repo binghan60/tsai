@@ -90,7 +90,7 @@ const emit = defineEmits(['update:modelValue', 'update:placeholder']);
                   // 今天：主色細框；選取：主色實心。兩者分開，才看得出「選的是不是今天」。
                   'data-[today]:font-semibold data-[today]:text-primary data-[today]:shadow-[inset_0_0_0_1.5px_var(--primary)]',
                   'data-[outside-view]:text-subtle-foreground/50',
-                  'data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground data-[selected]:shadow-glow data-[selected]:hover:bg-primary',
+                  'data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground data-[selected]:hover:bg-primary',
                   'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
                   'data-[unavailable]:pointer-events-none data-[unavailable]:text-muted-foreground/40 data-[unavailable]:line-through',
                 )

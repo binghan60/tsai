@@ -21,10 +21,12 @@ const { identity } = useStaffIdentity();
       <span class="text-2xs leading-none font-medium">搜尋</span>
     </button>
 
-    <template v-for="(group, index) in NAV_GROUPS" :key="group.label">
-      <span v-if="index" class="my-1.5 block h-px w-7 bg-border" aria-hidden="true"></span>
+    <!-- 分組標題曾經只是跟項目同字級的淡色字，看起來像少了圖示的項目、分不出段落。
+         現在每組前面一條分隔線（第一組也要，跟「搜尋」隔開），標題用下凹底的小膠囊，形狀跟項目不同。 -->
+    <template v-for="group in NAV_GROUPS" :key="group.label">
+      <span class="mt-2 mb-2.5 block h-px w-12 bg-nav-border" aria-hidden="true"></span>
       <div class="flex flex-col items-center gap-0.5" role="group" :aria-label="group.label">
-        <span class="px-0 pt-1.5 pb-1 text-2xs font-semibold tracking-[0.08em] text-nav-label opacity-80" aria-hidden="true">{{ group.label }}</span>
+        <span class="mb-1 inline-flex h-5 items-center rounded-full bg-sunken px-2 text-2xs leading-none font-semibold text-nav-label shadow-[inset_0_0_0_1px_var(--border)]" aria-hidden="true">{{ group.label }}</span>
         <router-link
           v-for="item in group.items"
           :key="item.to"

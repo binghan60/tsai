@@ -6,14 +6,18 @@
 // 主色（primary / petrol）刻意不參與狀態語意：主色只表示「這是主要操作」，
 // 狀態色只表示「這筆資料現在怎麼了」。唯一的例外是 finalized——「已結案」不是
 // 異常也不是完成，它是流程走到主線上的下一步，用 accent（主色的淡面）最準。
+//
+// 灰色只留給「已經不作用」的狀態（已停用、已取消）。草稿曾經是灰的，但它是還沒做完的工作，
+// 使用者反映灰色看起來像沒有狀態；改用 info（進行中）。跟「寄送中」同色，但寄送中只出現在
+// 已結案報告上、而且只有幾秒，兩者不會同時出現在同一個位置。
 export const RECORD_STATUS_META = {
-  draft: { label: '草稿', class: 'bg-muted text-foreground', dotClass: 'bg-muted-foreground' },
+  draft: { label: '草稿', class: 'bg-info-surface text-info', dotClass: 'bg-info' },
   finalized: { label: '已結案', class: 'bg-accent text-accent-foreground', dotClass: 'bg-primary' },
 };
 
 export const DELIVERY_STATUS_META = {
   // draft 與 not_sent 之前共用同一組 amber，畫面上分不出「還沒寫完」跟「寫完了還沒寄」。
-  // 現在草稿是中性（沒有人在等它），待寄送是 warning（在等你動手）。
+  // 現在草稿是 info（還在寫），待寄送是 warning（寫完了、在等你寄）。
   not_sent: { label: '待寄送', class: 'bg-warning-surface text-warning', dotClass: 'bg-warning' },
   sending: { label: '寄送中', class: 'bg-info-surface text-info', dotClass: 'bg-info' },
   sent: { label: '已寄送', class: 'bg-success-surface text-success', dotClass: 'bg-success' },

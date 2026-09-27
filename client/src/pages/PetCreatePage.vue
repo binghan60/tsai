@@ -599,7 +599,7 @@ onBeforeUnmount(() => {
 
             <div v-else-if="ownerQuery.trim()" class="space-y-2 rounded-xl border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
               <p>查無符合「<strong class="text-foreground">{{ ownerQuery }}</strong>」的既有飼主</p>
-              <Button type="button" variant="secondary" size="sm" class="h-8 text-xs text-primary hover:text-primary" @click="switchModeToNewWithQuery">直接建立此飼主資料 &rarr;</Button>
+              <Button type="button" variant="soft" size="sm" class="h-8 text-xs" @click="switchModeToNewWithQuery">直接建立此飼主資料 &rarr;</Button>
             </div>
 
             <p v-else class="rounded-xl border border-border/50 bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">輸入飼主姓名或手機號碼，系統將即時查詢並列出相符檔案。</p>

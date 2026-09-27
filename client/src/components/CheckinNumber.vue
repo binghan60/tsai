@@ -13,7 +13,7 @@ const props = defineProps({
 
 const TONE_CLASS = {
   waiting: 'bg-sunken text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)]',
-  visiting: 'bg-primary text-primary-foreground shadow-glow',
+  visiting: 'bg-primary text-primary-foreground',
   handoff: 'bg-accent text-accent-foreground',
   done: 'bg-sunken text-subtle-foreground',
 };

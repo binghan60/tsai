@@ -668,7 +668,7 @@ onBeforeUnmount(() => {
     <footer class="flex shrink-0 flex-wrap items-center gap-3 border-t border-border bg-sunken px-6 py-3">
       <p class="text-sm text-muted-foreground" role="status">{{ !state.started && appointment.status === 'arrived' ? '尚未開始看診，可以先看資料' : savedLabel }}</p>
       <div class="ml-auto flex flex-wrap items-center gap-2">
-        <Button variant="secondary" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')"><FileText stroke-width="1.75" />{{ appointment.recordId ? '開啟健檢報告' : '建立健檢報告' }}</Button>
+        <Button variant="soft" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')"><FileText stroke-width="1.75" />{{ appointment.recordId ? '開啟健檢報告' : '建立健檢報告' }}</Button>
         <Button v-if="state.completed" variant="secondary" :disabled="busy || !!appointment.reopenRequest?.requestedAt" @click="openReopenRequest">
           {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
         </Button>

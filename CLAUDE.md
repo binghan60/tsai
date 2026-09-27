@@ -63,7 +63,7 @@
 ### formTemplates 健檢表單範本
 `name`、`description`、`species`、`enabled`、`order`、`version`，底下是 `sections[]`，每個 section 有 `items[]`。使用者可自由增刪區塊與項目。詳見 [docs/FORM_BUILDER.md](docs/FORM_BUILDER.md)。
 
-`presets[]` 是**預填模板**（`{ key, name, order, values }`，`values` 以項目 key 為鍵，複選存陣列）：同一份表單的另外幾組預填值，例如「預防針」「牙齒」，在獨立的設定頁 `/settings/presets` 逐欄設定（`PresetTemplatesPage` 清單 → `PresetEditPage` ＋ `PresetValuesEditor.vue`，**刻意不放在表單設計頁裡**——新增一組模板不該先走進整份表單的結構編輯；表單設計頁的存檔也因此不送 `presets`，兩邊不會互相覆蓋），填報告時從頁首「套用預填模板」手動一鍵帶入，同一個選單底部有捷徑：這份表單還沒有模板就直接開新增頁，有的話回清單並捲到那份表單（`?form=`）。只收文字／選項類欄位（`shared/formDefaults.js` 的 `presetEligible`）：比 `defaultValue` 那批再少掉**日期**（回診日期、健檢日期是每次看診才決定的；除了 `date` 型別，**名稱含「日期」的欄位也排除**——自訂的「回診日期」常被建成文字欄位）與**獸醫師**（`role: 'vet'`），理學檢查、檢驗、量測、牙齒圖、圖片也不收。**它疊在項目 `defaultValue` 之上、兩者不互斥**：新建報告先照舊帶預設值，套模板只覆寫模板有設定的欄位；切換模板時，上一組帶入而醫師沒改過的欄位退回預設值，改過的留著（`client/src/lib/formPresets.js` 的 `planPresetApplication`），套用後的 toast 可「復原」。預填模板不影響表單結構，存檔**不動 `version`**、不進報告快照、報告也不記套過哪一組；掛號自動建草稿只套預設值不套模板。後端每次存檔都用 `sanitizePresets` 對著新的 sections 清洗，刪掉的項目與不合法的選項值一起消失；複製表單時連同預填模板一起複製。
+`presets[]` 是**預填模板**（`{ key, name, order, values }`，`values` 以項目 key 為鍵，複選存陣列）：同一份表單的另外幾組預填值，例如「預防針」「牙齒」，在獨立的設定頁 `/settings/presets` 逐欄設定（`PresetTemplatesPage` 清單 → `PresetEditPage` ＋ `PresetValuesEditor.vue`，**刻意不放在表單設計頁裡**——新增一組模板不該先走進整份表單的結構編輯；表單設計頁的存檔也因此不送 `presets`，兩邊不會互相覆蓋），填報告時從頁首「套用預填模板」手動一鍵帶入，同一個選單底部有捷徑：這份表單還沒有模板就直接開新增頁，有的話回清單並選中那份表單（`?form=`）。只收文字／選項類欄位（`shared/formDefaults.js` 的 `presetEligible`）：比 `defaultValue` 那批再少掉**日期**（回診日期、健檢日期是每次看診才決定的；除了 `date` 型別，**名稱含「日期」的欄位也排除**——自訂的「回診日期」常被建成文字欄位）與**獸醫師**（`role: 'vet'`），理學檢查、檢驗、量測、牙齒圖、圖片也不收。**它疊在項目 `defaultValue` 之上、兩者不互斥**：新建報告先照舊帶預設值，套模板只覆寫模板有設定的欄位；切換模板時，上一組帶入而醫師沒改過的欄位退回預設值，改過的留著（`client/src/lib/formPresets.js` 的 `planPresetApplication`），套用後的 toast 可「復原」。預填模板不影響表單結構，存檔**不動 `version`**、不進報告快照、報告也不記套過哪一組；掛號自動建草稿只套預設值不套模板。後端每次存檔都用 `sanitizePresets` 對著新的 sections 清洗，刪掉的項目與不合法的選項值一起消失；複製表單時連同預填模板一起複製。
 
 ### textTemplates 文字模板
 `name`、`content`、`availableForAllFields`、`applicableItemKeys`、`enabled`、`usageCount`。填表時可插入文字欄位的長篇內容，取代了早期的 quickPhrases 常用語（該 collection 與其路由已移除）。
@@ -341,7 +341,7 @@ GET    /api/health
 | `/report/:token` | 報告檢視頁 | `meta.bare`，**公開**，飼主查看用 + PDF 截圖來源 |
 | `/reception/intakes` | 初診表審核 | 全頁版（左清單、右逐欄審核，`IntakeReview.vue`，跟初診面板共用） |
 | `/settings/forms`、`/settings/forms/:id` | 健檢表單管理／設計 | |
-| `/settings/presets`、`/settings/presets/:formId/:presetKey` | 預填模板清單／單組編輯 | 清單以表單分組；見第二節 formTemplates 的 `presets` |
+| `/settings/presets`、`/settings/presets/:formId/:presetKey` | 預填模板清單／單組編輯 | 清單是左右兩欄：左邊表單清單（搜尋同時比對表單與模板名稱、有模板的排前面、已停用的收在底下，`lib/presetForms.js`），右邊選中那份的模板；選哪份記在 `?form=`，窄螢幕左欄收成下拉選單。見第二節 formTemplates 的 `presets` |
 
 **牙齒圖**（`components/formfields/DentalChart.vue`）：沿用以 tooth.jpg 取樣的貓 Modified Triadan d3 幾何。兩種操作（點選開選單／刷子一顆一顆標）、「其餘全部正常」（`restNormal`，報告會寫出來）、只有標了狀況或正在選的牙才拉出備註欄、每種狀況除了顏色還有形狀記號（缺牙虛線、牙結石點點、牙周病斜線、拔除打叉、其他實色），圖下方有文字清單（報告上也列出，`lib/dentalChart.js`）。
 
@@ -351,12 +351,12 @@ GET    /api/health
 
 **改畫面的流程**：大改（新頁面、版面重排、新元件類型）先做設計提案、使用者確認後才實作；小改直接改程式。**改完同一次**更新 STYLE_GUIDE 對應段落（連同理由）與這一節，並跑 `npm run build`、`npm test`、兩支瀏覽器測試；動到報告就照 STYLE_GUIDE 第 8 節比對紙面。
 
-- **明暗兩套、同一套形狀**：淺色＝清爽臨床（冷灰底 `#f4f6f8`、白卡片、深青主色 `#007a7e`），深色＝深色專業（近黑藍底 `#07090c`、青藍主色 `#37d2f2`，卡片頂端一條內側高光、主要按鈕與看診中的號碼牌有光暈 `shadow-glow`）。所有色值只在 `client/src/style.css` 的 `:root`／`.dark`；`npm run build` 內含 `scripts/audit-colors.mjs`，頁面裡寫色碼或 Tailwind 固定色階會直接失敗。
+- **明暗兩套、同一套形狀**：淺色＝清爽臨床（冷灰底 `#f4f6f8`、白卡片、深青主色 `#007a7e`），深色＝深色專業（近黑藍底 `#07090c`、青藍主色 `#37d2f2`，卡片頂端一條內側高光；**不用光暈**——曾經在主要按鈕與看診中的號碼牌加青色光暈，使用者覺得看了不舒服，已拿掉）。所有色值只在 `client/src/style.css` 的 `:root`／`.dark`；`npm run build` 內含 `scripts/audit-colors.mjs`，頁面裡寫色碼或 Tailwind 固定色階會直接失敗。
 - **一律用語意 token**：表面 `bg-background`／`bg-card`／`bg-sunken`（下凹：軌道、次要按鈕、唯讀區塊）／`bg-hover`／`bg-field`（輸入框）；文字三階 `text-foreground`／`text-muted-foreground`／`text-subtle-foreground`；邊框 `border-border`／`border-border-strong`（`border-input` 同後者）；主色 `bg-primary`、主色淡面 `bg-accent text-accent-foreground`（選取中、已結案）；狀態 `danger`／`warning`／`success`／`info` 各配 `-surface`，另有 `surgery`（紫，只給手術標記）與 `badge`（工具欄紅徽章）。
 - **狀態色的明度是刻意錯開的**（紅綠色盲下只剩明度可辨），淺色 danger 最深、深色 danger 最亮——危險永遠是對比最高的那一個。新增狀態色要跟主色留 40° 以上色相距離。
 - **字級**以 1920×1080 為目標、內文 18px：`text-xl` 28 頁面標題／`text-lg` 22 區塊與對話框標題／`text-base` 18 內文與輸入／`text-sm` 16 控制項、表單標籤、次要文字／`text-xs` 15 註記、徽章／`text-2xs` 14 規格欄小標題（下限）。尺寸定義在 `style.css` 的 `@theme`；不要用任意值字級。數字用 `num`（IBM Plex Mono＋tabular-nums）。報告紙面 `.report-sheet` 走自己的尺度（A4，改了會動到分頁）。
 - **控制項高度** 36／40／44／48，預設 40（`Button` 的 `xs`/`sm` 36、`default` 40、`lg` 48）。**圓角**：格子與小標記 6、控制項 8（`rounded-lg`）、卡片 12（`rounded-xl`）、對話框 16（`rounded-2xl`）、膠囊 999。
-- **按鈕** variant：`default` 實色（深色帶光暈）、`secondary` 下凹底＋細邊、`soft` 主色淡面、`destructive` 淡紅底、`destructive-solid` 實心紅（只給確認視窗的最終動作）。**所有按鈕靜止時都要有底色**——工具列與清單列上的圖示鈕、關閉鈕、日期前後鈕、分頁一律 `secondary`；曾經有只在滑過時出底色的 `ghost`，使用者覺得沒有顏色不好看，已經拿掉，不要加回來。
+- **按鈕** variant：`default` 實色、`secondary` 下凹底＋細邊、`soft` 主色淡面、`destructive` 淡紅底、`destructive-solid` 實心紅（只給確認視窗的最終動作）。**所有按鈕靜止時都要有底色**——工具列與清單列上的圖示鈕、關閉鈕、日期前後鈕、分頁一律 `secondary`；曾經有只在滑過時出底色的 `ghost`，使用者覺得沒有顏色不好看，已經拿掉，不要加回來。**推進流程的動作用 `soft`**（繼續填寫、新增健檢、審核、報到、安排回診…），取消／返回／編輯／分頁這類輔助動作才用 `secondary`。**狀態徽章盡量有顏色**，灰色只留給已取消、已停用這種「不作用」的狀態（草稿是 `info`）。
 - **頁面容器只有一種**：寬度與外距只在 `App.vue` 的 `<main>` 決定：**滿版**（填滿左側導覽與右側工具欄之間，`px-6 py-5`，不設 `max-w`），頁面自己不再包外框，**沒有例外**——診療台、掛號台跟其他頁同寬（早期的 `meta.wide` 已拿掉，因為現在每頁都滿版）；兩個工作台用 `xl:h-[calc(100dvh-2.5rem)]` 撐滿高度。**表單型頁面（新增貓咪、預填模板編輯）在頁內把表單限寬 `max-w-5xl`，頁首不限寬**，才不會在 1920 螢幕上把單一輸入框拉成一整條。會被側滑面板擠窄的區塊用 container query 依自己的寬度排（例如看診工作區 `@container/visit`），不要照視窗寬度排。每頁根節點一律 `flex flex-col gap-5`，第一個子元素一律是 `PageHeader`（連兩個工作台、總覽、貓咪詳情、健檢報告填寫、表單設計都是，工作台的日期控制放 `actions`、時鐘放 `meta`）；底部固定操作列的頁面（健檢報告填寫）才加底部留白。
 - **清單頁一個模板**（照兩個工作台的卡片骨架）：`PageHeader`（只放標題與主要動作；詳情／編輯頁用 `back-to` 出圓形返回鈕，不再有麵包屑）→ 一張 `DataCard`：標頭左邊清單標題＋筆數、右邊 `#filters`（搜尋膠囊 `FilterBar`、`SegmentedControl`），下方 `#tabs` 一條 `FilterTabs`，內容是 `.desktop-data-header`（44px）＋`.desktop-data-row`（64px，欄寬用 `--data-columns`），`#footer` 放 `ListFooter`（「第 x–y 筆，共 n 筆」＋分頁）。**篩選放卡片標頭、不放頁首**；載入中與空狀態放在卡片裡（`inset`）。列上只留一顆主要動作，其餘收進 `RowActions` 的 ⋯ 選單；某列沒有選單時用同尺寸的空位補齊，按鈕才對得齊。1280px 以下改成一筆一張小卡。
 - **身分資訊不用「·」「・」串成一行。** 標頭用規格欄（`SpecGrid`＋`SpecCell`：小標題在上、值在下、細線分隔）；清單只寫「品種＋♂♀」（`PetLine`／`PetSex`）；初診才出徽章，回診不出。

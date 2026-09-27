@@ -8,8 +8,8 @@ describe('todo due status', () => {
   it('逾期、今天、明天、之後各自標示', () => {
     assert.deepEqual(dueStatus('2026-09-20', today), { tone: 'danger', label: '逾期 2 天', overdue: true });
     assert.deepEqual(dueStatus('2026-09-22', today), { tone: 'warning', label: '今天', overdue: false });
-    assert.deepEqual(dueStatus('2026-09-23', today), { tone: 'neutral', label: '明天', overdue: false });
-    assert.deepEqual(dueStatus('2026-10-05', today), { tone: 'neutral', label: '10/5', overdue: false });
+    assert.deepEqual(dueStatus('2026-09-23', today), { tone: 'info', label: '明天', overdue: false });
+    assert.deepEqual(dueStatus('2026-10-05', today), { tone: 'info', label: '10/5', overdue: false });
   });
 
   it('跨月跨年的天數不受月長影響', () => {

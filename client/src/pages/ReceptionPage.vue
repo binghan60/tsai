@@ -443,7 +443,7 @@ onBeforeUnmount(() => {
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
         <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
         <span class="mx-1.5 h-6 w-px bg-border" aria-hidden="true"></span>
-        <Button variant="secondary" @click="newMedication"><Pill stroke-width="1.75" />新增藥單</Button>
+        <Button variant="soft" @click="newMedication"><Pill stroke-width="1.75" />新增藥單</Button>
         <Button @click="openDrawer('new')"><Plus stroke-width="1.75" />掛號</Button>
       </template>
     </PageHeader>
@@ -479,17 +479,17 @@ onBeforeUnmount(() => {
       <div v-if="reopenRequests.length" class="flex min-h-13 items-center gap-3 rounded-xl bg-danger-surface py-2 pr-2 pl-4 text-danger">
         <AlertTriangle class="size-5 shrink-0" stroke-width="1.75" />
         <p class="min-w-0 flex-1 truncate"><span class="font-semibold">醫師申請修改 {{ reopenRequests.length }}</span>　{{ reopenRequests[0].petName }}：{{ reopenRequests[0].reopenRequest.reason || '未填寫原因' }}</p>
-        <Button size="sm" variant="secondary" class="shrink-0" @click="openSheet(reopenRequests[0])">處理</Button>
+        <Button size="sm" variant="soft" class="shrink-0" @click="openSheet(reopenRequests[0])">處理</Button>
       </div>
       <div v-if="overdue.length" class="flex min-h-13 items-center gap-3 rounded-xl bg-danger-surface py-2 pr-2 pl-4 text-danger">
         <AlertTriangle class="size-5 shrink-0" stroke-width="1.75" />
         <p class="min-w-0 flex-1 truncate"><span class="font-semibold">遲到未報到 {{ overdue.length }}</span>　{{ overdue[0].petName }} <span class="num">{{ overdue[0].time }}</span> 預約，已遲 {{ overdueMinutes(overdue[0]) }} 分</p>
-        <Button v-if="scheduledPrimary(overdue[0])" size="sm" variant="secondary" class="shrink-0" :disabled="busy" @click="scheduledPrimary(overdue[0]).run()">{{ scheduledPrimary(overdue[0]).label }}</Button>
+        <Button v-if="scheduledPrimary(overdue[0])" size="sm" variant="soft" class="shrink-0" :disabled="busy" @click="scheduledPrimary(overdue[0]).run()">{{ scheduledPrimary(overdue[0]).label }}</Button>
       </div>
       <div v-if="counts.intake" class="flex min-h-13 items-center gap-3 rounded-xl bg-info-surface py-2 pr-2 pl-4 text-info">
         <ClipboardList class="size-5 shrink-0" stroke-width="1.75" />
         <p class="min-w-0 flex-1 truncate"><span class="font-semibold">待審初診表 {{ counts.intake }}</span>　飼主已填完表單</p>
-        <Button size="sm" variant="secondary" class="shrink-0" @click="panel.open('intake')">審核</Button>
+        <Button size="sm" variant="soft" class="shrink-0" @click="panel.open('intake')">審核</Button>
       </div>
     </div>
 
@@ -630,7 +630,7 @@ onBeforeUnmount(() => {
                     <p class="truncate font-semibold">{{ item.petName }}</p>
                     <p class="truncate text-sm text-muted-foreground">待安排回診　{{ item.followUpRecommendation || item.followUpReason }}</p>
                   </div>
-                  <Button variant="secondary" size="sm" @click="openSheet(item)">安排回診</Button>
+                  <Button variant="soft" size="sm" @click="openSheet(item)">安排回診</Button>
                 </article>
                 <p v-if="!finished.length" class="py-2 text-sm text-subtle-foreground">還沒有完成的就診</p>
                 <button v-for="item in finished" :key="item._id" type="button" class="flex min-h-12 w-full min-w-0 items-center gap-3 rounded-lg bg-card px-3 py-2 text-left hover:bg-hover" @click="openSheet(item)">

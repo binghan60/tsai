@@ -79,7 +79,7 @@ onActivated(refresh);
     </SidePanel>
     <SidePanel v-else title="初診" description="飼主用驗證碼在初診頁填表，送出後在這裡審核" flush @close="panel.close()">
       <div class="space-y-3 border-b border-border px-5 py-4">
-        <Button variant="secondary" class="w-full" :disabled="issuing" @click="issueCode"><KeyRound stroke-width="1.75" />發初診驗證碼</Button>
+        <Button variant="soft" class="w-full" :disabled="issuing" @click="issueCode"><KeyRound stroke-width="1.75" />發初診驗證碼</Button>
         <p v-if="lastCode" class="flex items-baseline justify-between rounded-lg bg-accent px-4 py-2.5 text-accent-foreground">
           <span class="text-sm">剛發出的驗證碼</span>
           <span class="num text-lg font-semibold tracking-[0.2em]">{{ lastCode }}</span>

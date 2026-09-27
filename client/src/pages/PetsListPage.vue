@@ -141,7 +141,7 @@ function goToPage(next) {
             </span>
             <span class="desktop-data-cell"><ReminderTags :pet="pet" /></span>
             <span class="desktop-data-cell flex items-center justify-end gap-1">
-              <Button as-child variant="secondary" size="sm"><router-link :to="`/pets/${pet._id}/records/new`">新增健檢</router-link></Button>
+              <Button as-child variant="soft" size="sm"><router-link :to="`/pets/${pet._id}/records/new`">新增健檢</router-link></Button>
               <RowActions :actions="rowActions(pet)" :label="`${pet.name}的更多操作`" @select="(key) => rowAction(key, pet)" />
             </span>
           </div>
@@ -159,7 +159,7 @@ function goToPage(next) {
             </router-link>
             <div class="flex items-center gap-2">
               <ReminderTags :pet="pet" class="min-w-0 flex-1" />
-              <Button as-child variant="secondary" size="sm" class="ml-auto shrink-0"><router-link :to="`/pets/${pet._id}/records/new`">新增健檢</router-link></Button>
+              <Button as-child variant="soft" size="sm" class="ml-auto shrink-0"><router-link :to="`/pets/${pet._id}/records/new`">新增健檢</router-link></Button>
             </div>
           </li>
         </ul>

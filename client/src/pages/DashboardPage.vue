@@ -113,7 +113,7 @@ async function completeTodo(item) {
     <PageHeader title="總覽">
       <template #meta><span class="flex items-baseline gap-3 text-sm text-subtle-foreground"><span class="num">{{ headerMeta.time }}</span><span>{{ headerMeta.date }}</span></span></template>
       <template #actions>
-        <Button as-child variant="secondary"><router-link to="/reception">前往掛號台<ArrowRight stroke-width="1.75" /></router-link></Button>
+        <Button as-child variant="soft"><router-link to="/reception">前往掛號台<ArrowRight stroke-width="1.75" /></router-link></Button>
       </template>
     </PageHeader>
 

@@ -1,4 +1,4 @@
-// 待辦期限的顯示規則。tone 對應狀態語意 token：逾期＝danger、今天＝warning，其餘中性。
+// 待辦期限的顯示規則。tone 對應狀態語意 token：逾期＝danger、今天＝warning，之後的日期＝info（不用灰色，灰色看起來像沒有狀態）。
 // 日期一律當 YYYY-MM-DD 純日曆值處理（全程只用 Date.UTC 做整數日相減），不經過本地時區。
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -11,7 +11,7 @@ function toDayNumber(value) {
 export const DUE_TONE_CLASS = {
   danger: 'bg-danger-surface text-danger',
   warning: 'bg-warning-surface text-warning',
-  neutral: 'bg-muted text-muted-foreground',
+  info: 'bg-info-surface text-info',
 };
 
 // 沒有期限、或日期讀不懂時回 null，畫面就不出徽章。
@@ -22,9 +22,9 @@ export function dueStatus(dueDate, today) {
   const days = due - now;
   if (days < 0) return { tone: 'danger', label: `逾期 ${-days} 天`, overdue: true };
   if (days === 0) return { tone: 'warning', label: '今天', overdue: false };
-  if (days === 1) return { tone: 'neutral', label: '明天', overdue: false };
+  if (days === 1) return { tone: 'info', label: '明天', overdue: false };
   const [, , month, day] = DATE_ONLY.exec(dueDate);
-  return { tone: 'neutral', label: `${Number(month)}/${Number(day)}`, overdue: false };
+  return { tone: 'info', label: `${Number(month)}/${Number(day)}`, overdue: false };
 }
 
 // 面板標題旁的說明：有幾筆逾期比總數更該被看見。
