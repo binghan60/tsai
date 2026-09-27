@@ -2,15 +2,12 @@
 // 而這些都有「差一格就會算錯」的邊界（寬限分鐘數、時段頭尾、現在是否已過時段）。
 
 import { SESSIONS } from './appointmentTimeline.js';
-import { APPOINTMENT_TIME_MINUTE_STEP, DEFAULT_ESTIMATED_DURATION_MINUTES, SURGERY_TIME_RANGE } from './appointmentTime.js';
+import { APPOINTMENT_TIME_MINUTE_STEP, DEFAULT_ESTIMATED_DURATION_MINUTES } from './appointmentTime.js';
 
-// 一鍵報到時超過預約時間多久才記成遲到。遲到會累計到飼主與寵物的出席紀錄，
+// 一鍵報到時超過預約時間多久才記成遲到。遲到會累計到飼主與貓咪的出席紀錄，
 // 下次掛號會跳「曾遲到 N 次」提醒——晚兩三分鐘就記一筆，那個提醒很快就沒人看了。
 // 遲到分鐘數仍由後端從預約時間起算，寬限只決定「算不算」。
 export const LATE_GRACE_MINUTES = 10;
-
-// 勾了手術才出現的第三組時段格，夾在上午診與下午診中間。
-export const SURGERY_SESSION = { id: 'surgery', label: '手術時間', start: SURGERY_TIME_RANGE[0], end: SURGERY_TIME_RANGE[1], surgery: true };
 
 const INACTIVE_STATUSES = new Set(['cancelled', 'no_show']);
 
@@ -35,15 +32,6 @@ export function isOverdue(appointment, now = new Date(), grace = LATE_GRACE_MINU
   return minutesPastSchedule(appointment, now) > grace;
 }
 
-// 掛號時段格的診別清單：一般掛號只有門診兩段，勾了手術多出中間的手術時段。
-export function slotSessions({ surgery = false, sessions = SESSIONS } = {}) {
-  if (!surgery) return sessions;
-  const list = [...sessions];
-  const index = list.findIndex((session) => toMinutes(session.start) > toMinutes(SURGERY_SESSION.start));
-  list.splice(index < 0 ? list.length : index, 0, SURGERY_SESSION);
-  return list;
-}
-
 // 掛號抽屜的時段格：每個診別切成整點一列、一列 step 分鐘一格，
 // 每格帶出已經約在這個時間的掛號，讓櫃台在電話裡就回答得出「兩點半有沒有空」。
 //
@@ -51,8 +39,8 @@ export function slotSessions({ surgery = false, sessions = SESSIONS } = {}) {
 // - 整點列裡超出診別範圍的格子 inRange=false，畫面上不給選
 // - minTime（今天的現在時間）之前的格子標 past；編輯既有掛號時由元件放行原本選的那格
 // - 已取消／未到不佔時段；excludeId 是正在編輯的那一筆，不能自己算自己一位
-// - surgery=true 時多出手術時段那一組，格子帶 surgery 標記讓畫面用紫色區分
-export function buildSlotGrid(appointments = [], { sessions, step = APPOINTMENT_TIME_MINUTE_STEP, excludeId = '', minTime = '', surgery = false } = {}) {
+// - 手術只是掛號上的標記，時段規則跟一般門診相同，沒有另外的手術時段
+export function buildSlotGrid(appointments = [], { sessions = SESSIONS, step = APPOINTMENT_TIME_MINUTE_STEP, excludeId = '', minTime = '' } = {}) {
   const byTime = new Map();
   for (const appointment of appointments ?? []) {
     if (!appointment?.time || INACTIVE_STATUSES.has(appointment.status)) continue;
@@ -67,7 +55,7 @@ export function buildSlotGrid(appointments = [], { sessions, step = APPOINTMENT_
   }
   const min = toMinutes(minTime);
 
-  return slotSessions({ surgery, sessions }).map((session) => {
+  return sessions.map((session) => {
     const start = toMinutes(session.start);
     const end = toMinutes(session.end);
     const rows = [];
@@ -85,7 +73,7 @@ export function buildSlotGrid(appointments = [], { sessions, step = APPOINTMENT_
       }
       rows.push({ hour: toTime(hour), cells });
     }
-    return { id: session.id, label: session.label, start: session.start, end: session.end, surgery: Boolean(session.surgery), rows };
+    return { id: session.id, label: session.label, start: session.start, end: session.end, rows };
   });
 }
 
@@ -96,7 +84,7 @@ export function slotCellLabel(entries = [], limit = 2) {
   return { names: names.slice(0, limit), more: Math.max(0, names.length - limit) };
 }
 
-// 同一隻寵物在同一天已經有的掛號（排除已取消／未到與正在編輯的那一筆）。
+// 同一隻貓咪在同一天已經有的掛號（排除已取消／未到與正在編輯的那一筆）。
 // 電話裡飼主常忘記自己早上已經掛過，掛號前先提醒比事後多一筆重複要處理便宜。
 export function duplicateBookings(appointments = [], petId, excludeId = '') {
   if (!petId) return [];

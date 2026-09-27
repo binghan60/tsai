@@ -75,7 +75,7 @@ ownerPetsRouter.post('/', async (req, res, next) => {
         { new: true, session }
       ).select('+relationVersion');
       if (!parent) {
-        const error = new Error('找不到飼主，無法建立寵物');
+        const error = new Error('找不到飼主，無法建立貓咪');
         error.status = 404;
         throw error;
       }
@@ -130,7 +130,7 @@ petsRouter.get('/', async (req, res, next) => {
 petsRouter.get('/:id', async (req, res, next) => {
   try {
     const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone landline email address notes attendanceSummary __v');
-    if (!pet) return res.status(404).json({ message: '找不到寵物' });
+    if (!pet) return res.status(404).json({ message: '找不到貓咪' });
     const pagination = paginationOptions(req.query, {
       defaultLimit: 10,
       maxLimit: 50,
@@ -176,7 +176,7 @@ petsRouter.put('/:id', async (req, res, next) => {
   try {
     const expectedVersion = Number(req.body?.expectedVersion);
     if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
-      return res.status(428).json({ message: '缺少寵物資料版本，請重新整理後再試' });
+      return res.status(428).json({ message: '缺少貓咪資料版本，請重新整理後再試' });
     }
     const pet = await Pet.findOneAndUpdate(
       { _id: req.params.id, __v: expectedVersion },
@@ -185,9 +185,9 @@ petsRouter.put('/:id', async (req, res, next) => {
     );
     if (!pet) {
       const current = await Pet.findById(req.params.id).select('__v');
-      if (!current) return res.status(404).json({ message: '找不到寵物' });
+      if (!current) return res.status(404).json({ message: '找不到貓咪' });
       return res.status(409).json({
-        message: '寵物資料已被其他分頁更新，已重新載入最新內容，請確認後再修改',
+        message: '貓咪資料已被其他分頁更新，已重新載入最新內容，請確認後再修改',
         currentVersion: current.__v,
       });
     }
@@ -204,27 +204,27 @@ petsRouter.delete('/:id', async (req, res, next) => {
     await withTransaction(async (session) => {
       const pet = await Pet.findById(req.params.id).session(session);
       if (!pet) {
-        const error = new Error('找不到寵物');
+        const error = new Error('找不到貓咪');
         error.status = 404;
         throw error;
       }
       if (await MedicalRecord.exists({ petId: pet._id }).session(session)) {
-        const error = new Error('此寵物仍有就診紀錄，無法刪除');
+        const error = new Error('此貓咪仍有健檢報告，無法刪除');
         error.status = 409;
         throw error;
       }
       if (await ClinicalNote.exists({ petId: pet._id }).session(session)) {
-        const error = new Error('此寵物仍有病歷日誌，無法刪除');
+        const error = new Error('此貓咪仍有病歷日誌，無法刪除');
         error.status = 409;
         throw error;
       }
       const deleted = await Pet.deleteOne({ _id: pet._id }, { session });
       if (deleted.deletedCount !== 1) {
-        const error = new Error('寵物資料正在被其他操作更新，請重新整理後再試');
+        const error = new Error('貓咪資料正在被其他操作更新，請重新整理後再試');
         error.status = 409;
         throw error;
       }
-      // 暫存紀錄不是病歷，不擋刪除，跟著寵物一起消失。
+      // 暫存紀錄不是病歷，不擋刪除，跟著貓咪一起消失。
       removedPin = (await PinnedPet.deleteOne({ petId: pet._id }, { session })).deletedCount > 0;
       // 待辦同理不擋刪除：只把標記裡的 petId 清成 null，petName／ownerName 快照留著，那筆待辦仍讀得懂。
       unlinkedTodos = (await Todo.updateMany(

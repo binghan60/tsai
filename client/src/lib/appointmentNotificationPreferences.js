@@ -15,7 +15,7 @@ export const NOTIFICATION_OPTIONS = [
   { key: 'desk_complete', label: '櫃台完成處理' },
   { key: 'follow_up', label: '預約回診' },
   { key: 'visit_note', label: '本次簡易紀錄更新' },
-  { key: 'handoff_note', label: '櫃台交辦更新' },
+  { key: 'lab_values', label: '檢驗數值更新' },
   { key: 'special_care_note', label: '飼主提醒更新' },
   { key: 'measurements', label: '量測資料更新' },
   { key: 'follow_up_data', label: '回診資料更新' },
@@ -24,7 +24,7 @@ export const NOTIFICATION_OPTIONS = [
 
 const VISIT_DATA_KEYS = new Map([
   ['本次簡易紀錄', 'visit_note'],
-  ['櫃台交辦', 'handoff_note'],
+  ['檢驗數值', 'lab_values'],
   ['飼主提醒', 'special_care_note'],
   ['量測資料', 'measurements'],
   ['回診資料', 'follow_up_data'],

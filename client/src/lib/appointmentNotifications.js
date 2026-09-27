@@ -32,6 +32,8 @@ export function appointmentNotification(appointment, action, { changedParts = []
 const NUMBER_FIELDS = new Set(['weightKg', 'temperatureC']);
 function normalizedValue(key, value) {
   if (NUMBER_FIELDS.has(key)) return value == null || String(value).trim() === '' ? null : Number(value);
+  // 檢驗數值是 [{ key, value, … }]，只比「哪一項填了什麼」，名稱與參考範圍的快照不算。
+  if (key === 'labValues') return (value ?? []).filter((lab) => String(lab.value ?? '').trim()).map((lab) => `${lab.key}=${String(lab.value).trim()}`).sort().join('|');
   return String(value ?? '').trim();
 }
 
@@ -45,9 +47,9 @@ export function describeVisitChanges(before, after) {
   return [
     ['本次簡易紀錄', ['visitNote']],
     ['內部備註', ['internalNote']],
-    ['櫃台交辦', ['handoffNote']],
     ['飼主提醒', ['specialCareNote']],
     ['量測資料', ['weightKg', 'temperatureC']],
+    ['檢驗數值', ['labValues']],
     ['回診資料', ['followUpRecommendation', 'followUpReason', 'followUpDate', 'followUpTime']],
   ].filter(([, fields]) => changedAppointmentFields(before, after, fields).length).map(([label]) => label);
 }

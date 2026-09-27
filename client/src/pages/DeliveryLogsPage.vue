@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
         id="delivery-search"
         v-model="query"
         label="搜尋寄送歷程"
-        placeholder="寵物、飼主、信箱或報告編號"
+        placeholder="貓咪、飼主、信箱或報告編號"
         with-date-range
         :date-from="dateFrom"
         :date-to="dateTo"
@@ -185,13 +185,13 @@ onBeforeUnmount(() => {
               v-if="log.recordExists"
               :to="`/records/${log.recordId}/preview`"
               class="block truncate text-sm font-medium text-primary"
-              :title="`${log.petName || '寵物未記錄'} · ${log.ownerName || '飼主未記錄'}`"
+              :title="`${log.petName || '貓咪未記錄'} · ${log.ownerName || '飼主未記錄'}`"
             >
-              {{ log.petName || '寵物未記錄' }}<span class="font-normal text-muted-foreground"> · {{ log.ownerName || '飼主未記錄' }}</span>
+              {{ log.petName || '貓咪未記錄' }}<span class="font-normal text-muted-foreground"> · {{ log.ownerName || '飼主未記錄' }}</span>
             </router-link>
-            <span v-else class="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground" :title="`${log.petName || '寵物未記錄'} · 報告已刪除`">
+            <span v-else class="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground" :title="`${log.petName || '貓咪未記錄'} · 報告已刪除`">
               <Trash2 class="h-3.5 w-3.5 shrink-0" stroke-width="1.75" />
-              <span class="truncate">{{ log.petName || '寵物未記錄' }} · 報告已刪除</span>
+              <span class="truncate">{{ log.petName || '貓咪未記錄' }} · 報告已刪除</span>
             </span>
           </span>
           <span class="desktop-data-cell flex items-center gap-1.5 text-sm text-foreground">
@@ -231,7 +231,7 @@ onBeforeUnmount(() => {
             <Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge>
             <span class="text-xs tabular-nums text-muted-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</span>
           </div>
-          <p class="text-sm text-foreground">{{ log.petName || '寵物未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></p>
+          <p class="text-sm text-foreground">{{ log.petName || '貓咪未記錄' }}<span class="ml-2 text-xs text-muted-foreground">{{ log.ownerName }}</span></p>
           <p class="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="inline-flex min-h-11 items-center font-medium text-primary underline decoration-primary/40 underline-offset-2 hover:decoration-primary">查看報告</router-link>
             <template v-else>

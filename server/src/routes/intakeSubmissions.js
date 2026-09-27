@@ -7,7 +7,7 @@ import Pet from '../models/Pet.js';
 import { withTransaction } from '../lib/transaction.js';
 import { combineClinicDateTime } from '../lib/clinicTime.js';
 import { createRateLimiter } from '../lib/rateLimit.js';
-import { emitAppointmentUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitIntakeUpdate } from '../lib/realtime.js';
 
 const PET_FIELDS = ['name', 'species', 'breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'foodsOther', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'];
 const pickPetFields = body => Object.fromEntries(PET_FIELDS.filter(field => body[field] !== undefined).map(field => [field, body[field]]));
@@ -87,6 +87,7 @@ publicIntakeRouter.post('/', publicSubmissionLimiter, async (req, res, next) => 
       await appointment.save({ session });
     });
     emitAppointmentUpdate(appointment);
+    emitIntakeUpdate();
     res.status(201).json({ id: submission._id, status: submission.status });
   } catch (err) { next(err); }
 });
@@ -172,6 +173,7 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
       await submission.save({ session });
     });
     if (appointment) emitAppointmentUpdate(appointment);
+    emitIntakeUpdate();
     res.json({ submission, pet, appointment });
   } catch (err) { next(err); }
 });
@@ -184,6 +186,7 @@ intakeSubmissionsRouter.post('/:id/reject', async (req, res, next) => {
       { new: true, runValidators: true }
     );
     if (!submission) return res.status(409).json({ message: '找不到待審核的初診表，可能已被其他人處理' });
+    emitIntakeUpdate();
     res.json(submission);
   } catch (err) { next(err); }
 });

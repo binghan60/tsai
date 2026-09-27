@@ -191,7 +191,7 @@ describe('clinical notes routes', () => {
     assert.equal(del.status, 409);
   });
 
-  it('列出寵物日誌時，藥單日誌的內文由藥單即時組成，找不到藥單的標成唯讀，手動日誌不受影響', async () => {
+  it('列出貓咪日誌時，藥單日誌的內文由藥單即時組成，找不到藥單的標成唯讀，手動日誌不受影響', async () => {
     const petId = '507f1f77bcf86cd799439012';
     const notes = [
       { _id: 'n1', petId, entryDate: '2026-09-22T02:00:00Z', source: 'medication', medicationOrderId: '507f1f77bcf86cd7994390aa' },

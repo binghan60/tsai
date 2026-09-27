@@ -1,0 +1,47 @@
+import { defineStore } from 'pinia';
+import { http } from '../api/http';
+
+// 工具欄上的兩個待辦數字：藥單各階段筆數、待審初診表筆數。
+// 原本各頁自己抓一次（面板關掉後數字就凍住），現在全站一份，由 useGlobalChat 那條連線
+// 在 medication:updated／intake:updated 時重讀。藥單的「待辦」口徑依這台裝置的身分決定
+// （醫師看待確認、櫃台看待包藥＋待領藥），見 shared/medicationWorkflow.js。
+let medicationRequest = 0;
+let intakeRequest = 0;
+
+export const useWorkCountsStore = defineStore('workCounts', {
+  state: () => ({ medications: {}, intake: 0 }),
+  actions: {
+    async loadMedications() {
+      const id = ++medicationRequest;
+      try {
+        const { data } = await http.get('/medications', { params: { status: 'active', limit: 1 } });
+        if (id === medicationRequest) this.medications = data.counts || {};
+      } catch {
+        // 保留目前數字，下一次即時事件或重新連線會再同步。
+      }
+    },
+    setMedications(counts) {
+      medicationRequest += 1;
+      this.medications = counts || {};
+    },
+    async loadIntake() {
+      const id = ++intakeRequest;
+      try {
+        const { data } = await http.get('/intake-submissions');
+        if (id === intakeRequest) this.intake = (data.items || []).length;
+      } catch {
+        // 同上。
+      }
+    },
+    load() {
+      this.loadMedications();
+      this.loadIntake();
+    },
+    reset() {
+      medicationRequest += 1;
+      intakeRequest += 1;
+      this.medications = {};
+      this.intake = 0;
+    },
+  },
+});

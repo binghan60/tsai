@@ -113,7 +113,7 @@ const medicalRecordSchema = new mongoose.Schema(
     chiefComplaint: { type: String, default: '' },
     history: { type: String, default: '' },
 
-    // 醫生判斷
+    // 醫師判斷
     diagnosis: { type: String, default: '' },
     treatmentPlan: { type: String, default: '' },
     conclusion: { type: String, default: '' },
@@ -122,6 +122,11 @@ const medicalRecordSchema = new mongoose.Schema(
     // 使用者自訂項目的作答。內建項目仍存在上方的具名欄位，
     // 自訂項目沒有對應欄位，一律收在這裡（key 就是範本項目的 key）。
     customValues: { type: Map, of: mongoose.Schema.Types.Mixed, default: () => new Map() },
+
+    // 報到建立的草稿，體重、體溫、回診日期與檢驗數值預設跟著這次看診走（lib/recordVisitSync.js）。
+    // 醫師在報告裡親手改過的欄位記在這裡，之後就不再被看診的值覆蓋；檢驗項目記成 `lab:<key>`。
+    // 清空＝全部重新帶入。結案後不再同步，快照就是當時的樣子。
+    overriddenKeys: { type: [String], default: [] },
 
     // 結案時寫入；草稿為空，報告頁會即時用目前範本組合。
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'FormTemplate', default: null },
@@ -179,7 +184,7 @@ const medicalRecordSchema = new mongoose.Schema(
 medicalRecordSchema.index({ petId: 1, visitDate: -1, reportVersion: -1, updatedAt: -1 });
 medicalRecordSchema.index({ reportNumber: 1 }, { unique: true, sparse: true });
 
-// 以下兩個是給跨寵物的健檢紀錄清單（GET /api/records）用的。
+// 以下兩個是給跨貓咪的健檢紀錄清單（GET /api/records）用的。
 //
 // 沒有它們的話那支查詢是 COLLSCAN + 記憶體排序：不只是慢，MongoDB 的記憶體排序
 // 有 32MB 硬上限，超過會直接丟 Sort exceeded memory limit，整個清單頁打不開。

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-// 飼主公開填寫的初診資料先暫存在這裡；核准前絕不混入正式飼主／寵物資料。
+// 飼主公開填寫的初診資料先暫存在這裡；核准前絕不混入正式飼主／貓咪資料。
 const intakeSubmissionSchema = new mongoose.Schema(
   {
     owner: {

@@ -9,6 +9,7 @@ import { combineClinicDateTime } from '../lib/clinicTime.js';
 import { defaultRecordFields } from '../lib/formTemplate.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { applyWorkflowAction, appointmentJournalContent, assertWorkflowVersion, workflowError } from '../lib/appointmentWorkflow.js';
+import { initialFollowedFields, syncDraftFromAppointment, templateLabItems } from '../lib/recordVisitSync.js';
 
 const router = Router({ mergeParams: true });
 
@@ -42,9 +43,16 @@ router.post('/:action', async (req, res, next) => {
       appointment = await Appointment.findById(req.params.id).session(session);
       if (!appointment) throw workflowError('找不到掛號', 404);
       assertWorkflowVersion(appointment, req.body.version);
-      applyWorkflowAction(appointment, action, req.body);
+      // 檢驗數值要對著這次掛號範本的檢驗項目驗證。
+      let labItems = [];
+      if (action === 'clinical' && req.body.labValues !== undefined) {
+        const template = appointment.templateId ? await FormTemplate.findById(appointment.templateId).session(session) : null;
+        labItems = templateLabItems(template);
+      }
+      applyWorkflowAction(appointment, action, req.body, new Date(), { labItems });
 
-      // 即使只填交辦或直接完成看診，也要將來院原因保存到當次日誌。
+      // 日誌不存內容、讀取時由看診即時組出；這裡只確保「有內容就有一筆日誌、沒內容就沒有」。
+      // 直接完成看診沒填任何東西時，來院原因也算內容。
       if (action === 'clinical' || action === 'handoff') {
         const journalContent = appointmentJournalContent(appointment);
         if (journalContent) {
@@ -61,7 +69,7 @@ router.post('/:action', async (req, res, next) => {
       if (action === 'record') {
         if (appointment.recordId) {
           record = await MedicalRecord.findById(appointment.recordId).session(session);
-          if (!record) throw workflowError('原綁定表單已不存在，請先確認就診紀錄', 409);
+          if (!record) throw workflowError('原綁定表單已不存在，請先確認健檢報告', 409);
         } else {
           const templateId = req.body.templateId || appointment.templateId;
           if (!mongoose.isValidObjectId(templateId)) throw workflowError('請選擇正式表單');
@@ -70,11 +78,9 @@ router.post('/:action', async (req, res, next) => {
           [record] = await MedicalRecord.create([{
             petId: appointment.petId,
             ...defaultRecordFields(template),
-            visitDate: combineClinicDateTime(appointment.date, '10:00'),
+            visitDate: combineClinicDateTime(appointment.date, appointment.time || '10:00'),
             chiefComplaint: appointment.reason,
-            weightKg: appointment.weightKg,
-            temperatureC: appointment.temperatureC,
-            followUpDate: appointment.followUpDate ? combineClinicDateTime(appointment.followUpDate, appointment.followUpTime) : null,
+            ...initialFollowedFields(appointment, template),
             templateId: template._id,
             templateVersion: template.version,
             examType: template.name,
@@ -109,22 +115,10 @@ router.post('/:action', async (req, res, next) => {
         }
         appointment.followUpDate = date;
         appointment.followUpTime = time;
-        if (appointment.recordId) {
-          await MedicalRecord.updateOne(
-            { _id: appointment.recordId, status: 'draft' },
-            { $set: { followUpDate: combineClinicDateTime(date, time) }, $inc: { __v: 1 } },
-            { session }
-          );
-        }
       }
-      if (action === 'clinical' && appointment.recordId) {
-        const measurements = {};
-        for (const key of ['weightKg', 'temperatureC']) {
-          if (req.body[key] !== undefined) measurements[key] = appointment[key];
-        }
-        if (Object.keys(measurements).length) {
-          await MedicalRecord.updateOne({ _id: appointment.recordId, status: 'draft' }, { $set: measurements, $inc: { __v: 1 } }, { session });
-        }
+      // 報告草稿的體重、體溫、回診日期、檢驗數值跟著看診走（醫師在報告裡改過的除外）。
+      if ((action === 'clinical' || action === 'followup') && appointment.recordId) {
+        await syncDraftFromAppointment({ appointment, MedicalRecord, FormTemplate, session });
       }
       // Even no-op commands advance the revision, so stale confirmations cannot succeed.
       appointment.increment();

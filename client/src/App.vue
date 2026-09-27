@@ -1,43 +1,24 @@
 <script setup>
-import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { CalendarClock, Cat, ChevronsLeft, ChevronsRight, ClipboardList, FileText, Layers, LayoutDashboard, Mail, Menu, PackageCheck, Search } from '@lucide/vue';
+import { Menu, PawPrint, Search } from '@lucide/vue';
 import AppSettingsMenu from './components/AppSettingsMenu.vue';
+import NavRail from './components/shell/NavRail.vue';
+import UtilityRail from './components/shell/UtilityRail.vue';
+import UtilityPanelHost from './components/shell/UtilityPanelHost.vue';
+import { NAV_GROUPS, NAV_ITEMS } from './lib/navigation';
 import { useAuthStore } from './stores/auth';
 import { useGlobalChat } from './composables/useGlobalChat';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './components/ui/tooltip';
 import ToastContainer from './components/ToastContainer.vue';
 import GlobalSearchDialog from './components/GlobalSearchDialog.vue';
-import GlobalChatWidget from './components/GlobalChatWidget.vue';
-import PetQuickViewDialog from './components/PetQuickViewDialog.vue';
 
 const route = useRoute();
 const router = useRouter();
 
 const mobileOpen = ref(false);
 const searchOpen = ref(false);
-
-// 桌機側邊欄可以收合成只剩圖示的窄條，狀態記在這台裝置上（跟主題切換一樣是裝置偏好）。
-// localStorage 在無痕或封鎖站台資料時會丟例外，讀寫都包起來，讀不到就當展開。
-const SIDEBAR_KEY = 'sidebar-collapsed';
-function readCollapsed() {
-  try {
-    return localStorage.getItem(SIDEBAR_KEY) === '1';
-  } catch {
-    return false;
-  }
-}
-const sidebarCollapsed = ref(readCollapsed());
-function toggleSidebar() {
-  sidebarCollapsed.value = !sidebarCollapsed.value;
-  try {
-    localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed.value ? '1' : '0');
-  } catch {
-    /* 存不了就只在這次開著的頁面有效 */
-  }
-}
 const auth = useAuthStore();
 useGlobalChat();
 
@@ -56,39 +37,22 @@ const routeViewKey = computed(() => {
   return paramName ? `${pattern}:${String(route.params[paramName] ?? '')}` : pattern;
 });
 
-// match：除了自己的網址前綴，還有哪些路徑也該算在這一項底下。目前用不到，
-// 但 /records 這種「有自己的頂層網址、心理上卻屬於別項」的路由隨時會再出現，
-// 沒有這層的話一進那些頁面側邊欄會全暗，等於在系統裡失去座標。
-const navItems = [
-  { to: '/', label: '儀表板', exact: true, icon: LayoutDashboard },
-  { to: '/appointments', label: '醫師診療台', exact: false, icon: CalendarClock },
-  { to: '/reception', label: '櫃檯工作台', exact: false, icon: ClipboardList },
-  { to: '/medications', label: '領藥', exact: false, icon: PackageCheck },
-  { to: '/pets', label: '寵物', exact: false, icon: Cat },
-  { to: '/records', label: '就診紀錄', exact: false, icon: FileText },
-  { to: '/records/deliveries', label: '寄送歷程', exact: false, icon: Mail },
-  { to: '/settings/forms', label: '表單管理', exact: false, icon: ClipboardList },
-  { to: '/settings/text-templates', label: '文字模板', exact: false, icon: FileText },
-  { to: '/settings/presets', label: '預填模板', exact: false, icon: Layers },
-];
-
-const activeTitle = computed(() => route.meta.title ?? navItems.find(isNavActive)?.label ?? '儀表板');
-
-// router-link 內建的 active-class 是靠比對路由「記錄」（route.matched），不是比對網址字串——
-// /settings、/settings/forms、/settings/forms/:id 各自是獨立註冊的路由，不是巢狀父子關係，
-// 內建判斷永遠抓不到「現在在設定底下的某一頁」。用網址前綴自己判斷才會準。
+// router-link 內建的 active 判斷比對的是路由記錄，/settings/forms 與 /settings/forms/:id
+// 是各自獨立註冊的路由，抓不到「現在在設定底下的某一頁」，所以用網址前綴自己判斷。
 function matchesPrefix(path, prefix) {
   return path === prefix || path.startsWith(`${prefix}/`);
 }
 
 function isNavActive(item) {
-  // 路由自己指定了歸屬就聽它的——網址前綴猜錯的情況（/pets/:petId/records/new
-  // 其實屬於就診紀錄）只有路由自己知道。
+  // 路由自己指定了歸屬就聽它的——/pets/:petId/records/new 其實屬於報告，只有路由自己知道。
   if (route.meta.nav) return route.meta.nav === item.to;
-  if (item.exact) return route.path === item.to || (item.match ?? []).some((prefix) => matchesPrefix(route.path, prefix));
-  return matchesPrefix(route.path, item.to) || (item.match ?? []).some((prefix) => matchesPrefix(route.path, prefix));
+  if (item.exact) return route.path === item.to;
+  // /records/deliveries 同時符合 /records 的前綴；有更長的導覽項吃得下這個網址時讓給它。
+  const longer = NAV_ITEMS.some((other) => other.to.length > item.to.length && matchesPrefix(route.path, other.to));
+  return matchesPrefix(route.path, item.to) && !longer;
 }
-const navActiveClass = 'border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_3px_0_0_var(--color-brand-400)]';
+
+const activeTitle = computed(() => route.meta.title ?? NAV_ITEMS.find(isNavActive)?.label ?? '總覽');
 
 // 搜尋開的是蓋在當前頁面上的面板，不換路由——詳見 GlobalSearchDialog.vue。
 function openGlobalSearch() {
@@ -101,8 +65,6 @@ async function logout() {
 }
 
 // http.js 攔截到 401（cookie 過期、或帳號在別處被撤銷 session）時會發這個事件。
-// 不用 store 的 watch 是因為問題本身就發生在「畫面以為還登入著」的當下，
-// 需要的是主動導轉，不是等某個 state 變化。
 function handleUnauthorized() {
   auth.clearSession();
   if (route.path !== '/login') {
@@ -112,7 +74,6 @@ function handleUnauthorized() {
 onMounted(() => window.addEventListener('auth:unauthorized', handleUnauthorized));
 onUnmounted(() => window.removeEventListener('auth:unauthorized', handleUnauthorized));
 
-provide('openGlobalSearch', openGlobalSearch);
 
 watch(
   () => route.fullPath,
@@ -128,173 +89,61 @@ watch(
   </div>
 
   <template v-else>
-    <div class="app-shell min-h-screen text-foreground lg:flex">
-      <aside
-        class="belle-sidebar hidden min-h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-150 lg:sticky lg:top-0 lg:flex lg:h-screen"
-        :class="sidebarCollapsed ? 'w-16' : 'w-64'"
-      >
-        <TooltipProvider :delay-duration="150">
-          <div class="border-b border-sidebar-border p-2">
-            <router-link to="/" class="flex min-h-14 w-full items-center gap-3 rounded-lg text-left text-sm font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" :class="sidebarCollapsed ? 'justify-center px-0' : 'px-2'" :title="sidebarCollapsed ? '謙華動物醫院' : undefined">
-              <span class="flex h-11 w-11 shrink-0 items-center justify-center">
-                <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-full w-full object-contain" />
-              </span>
-              <span v-if="!sidebarCollapsed" class="min-w-0 flex-1">
-                <span class="block truncate font-semibold">謙華動物醫院</span>
-                <span class="block truncate text-xs text-sidebar-foreground/70">健檢與報告</span>
-              </span>
-            </router-link>
-          </div>
+    <!-- 骨架：左側導覽｜工作區｜（工具欄面板）｜右側工具欄。頁面本身仍由視窗捲動，
+         返回上一頁時捲動位置才還原得回來；兩條欄與並排的面板用 sticky 釘在畫面上。 -->
+    <div class="flex min-h-screen bg-background text-foreground">
+      <div class="sticky top-0 hidden h-screen shrink-0 lg:block">
+        <NavRail :is-active="isNavActive" @search="openGlobalSearch" @logout="logout" />
+      </div>
 
-          <div class="space-y-2 border-b border-sidebar-border p-2">
-            <Tooltip v-if="sidebarCollapsed">
-              <TooltipTrigger as-child>
-                <button type="button" class="flex h-11 w-full items-center justify-center rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" aria-label="搜尋飼主、寵物或電話" @click="openGlobalSearch">
-                  <Search class="h-4 w-4 shrink-0" stroke-width="1.9" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right">搜尋資料 · Ctrl K</TooltipContent>
-            </Tooltip>
-            <button
-              v-else
-              type="button"
-              class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              aria-label="搜尋飼主、寵物或電話"
-              title="搜尋飼主、寵物或電話"
-              @click="openGlobalSearch"
-            >
-              <Search class="h-4 w-4 shrink-0" stroke-width="1.9" />
-              <span class="truncate">搜尋資料</span>
-              <kbd class="ml-auto shrink-0 rounded border border-sidebar-border px-1.5 py-0.5 text-xs text-sidebar-foreground/70">Ctrl K</kbd>
-            </button>
-          </div>
-
-          <nav class="flex-1 px-2 py-4" aria-label="主要導覽">
-            <p v-if="!sidebarCollapsed" class="px-2 pb-2 text-xs font-medium text-sidebar-foreground/70">平台</p>
-            <template v-for="item in navItems" :key="item.to">
-              <Tooltip v-if="sidebarCollapsed">
-                <TooltipTrigger as-child>
-                  <router-link
-                    :to="item.to"
-                    class="mb-1 flex h-11 items-center justify-center rounded-lg border border-transparent bg-sidebar-accent/30 text-sidebar-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    :class="isNavActive(item) ? navActiveClass : ''"
-                    :aria-label="item.label"
-                    :aria-current="isNavActive(item) ? 'page' : undefined"
-                  >
-                    <component :is="item.icon" class="h-5 w-5" stroke-width="1.9" />
-                  </router-link>
-                </TooltipTrigger>
-                <TooltipContent side="right">{{ item.label }}</TooltipContent>
-              </Tooltip>
-              <router-link
-                v-else
-                :to="item.to"
-                class="mb-1 flex min-h-10 items-center gap-3 rounded-lg border border-transparent bg-sidebar-accent/30 px-2.5 text-sm font-medium text-sidebar-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                :class="isNavActive(item) ? navActiveClass : ''"
-                :aria-current="isNavActive(item) ? 'page' : undefined"
-              >
-                <component :is="item.icon" class="h-4 w-4 shrink-0" stroke-width="1.9" />
-                <span class="truncate">{{ item.label }}</span>
-              </router-link>
-            </template>
-          </nav>
-
-          <div class="space-y-2 border-t border-sidebar-border p-2">
-            <AppSettingsMenu :compact="sidebarCollapsed" @logout="logout" />
-            <Tooltip>
-              <TooltipTrigger as-child>
-                <button
-                  type="button"
-                  class="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-sidebar-accent/30 text-xs font-medium text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                  :aria-label="sidebarCollapsed ? '展開側邊欄' : '收合側邊欄'"
-                  :aria-expanded="!sidebarCollapsed"
-                  @click="toggleSidebar"
-                >
-                  <ChevronsRight v-if="sidebarCollapsed" class="h-4 w-4" stroke-width="1.9" />
-                  <template v-else><ChevronsLeft class="h-4 w-4" stroke-width="1.9" />收合側邊欄</template>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent v-if="sidebarCollapsed" side="right">展開側邊欄</TooltipContent>
-            </Tooltip>
-          </div>
-        </TooltipProvider>
-      </aside>
-
-      <div class="min-w-0 flex-1 lg:@container/content">
-        <header id="app-header" class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-4 sm:px-6 lg:hidden">
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon"
-            class="min-w-11 lg:hidden"
-            aria-label="開啟導覽選單"
-            @click="mobileOpen = true"
-          >
-            <Menu class="h-4 w-4" />
-          </Button>
-
-          <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-medium text-foreground">{{ activeTitle }}</p>
-          </div>
-
-          <Button
-            type="button"
-            variant="secondary"
-            size="icon"
-            class="min-w-11 md:hidden"
-            aria-label="搜尋飼主、寵物或電話"
-            @click="openGlobalSearch"
-          >
-            <Search class="h-4 w-4" stroke-width="1.75" />
-          </Button>
-
-          <button type="button" aria-label="搜尋飼主、寵物或電話" class="hidden min-h-11 min-w-72 items-center rounded-lg border border-input bg-field px-3 text-sm text-muted-foreground shadow-sm hover:border-ring hover:text-foreground md:flex" @click="openGlobalSearch">
-            <Search class="mr-2 h-4 w-4" stroke-width="1.75" />
-            <span class="py-2">搜尋飼主、寵物或電話</span>
-          </button>
-
-          <AppSettingsMenu icon-only @logout="logout" />
+      <div class="min-w-0 flex-1 @container/content">
+        <header id="app-header" class="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-card px-4 lg:hidden">
+          <Button variant="ghost" size="icon" aria-label="開啟導覽選單" @click="mobileOpen = true"><Menu stroke-width="1.75" /></Button>
+          <p class="min-w-0 flex-1 truncate font-semibold">{{ activeTitle }}</p>
+          <Button variant="ghost" size="icon" aria-label="搜尋飼主、貓咪或電話" @click="openGlobalSearch"><Search stroke-width="1.75" /></Button>
+          <AppSettingsMenu @logout="logout" />
         </header>
 
         <Sheet v-model:open="mobileOpen">
-          <SheetContent side="left" class="flex w-[min(84vw,320px)] flex-col gap-0 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground">
+          <SheetContent side="left" class="flex w-[min(84vw,320px)] flex-col gap-0 border-nav-border bg-nav p-0">
             <SheetTitle class="sr-only">導覽選單</SheetTitle>
-            <SheetDescription class="sr-only">謙華動物醫院健檢與報告系統的主要導覽選單</SheetDescription>
-            <div class="border-b border-sidebar-border p-3">
-              <router-link to="/" class="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 text-left text-sm font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-                <span class="flex h-12 w-12 shrink-0 items-center justify-center">
-                  <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-full w-full object-contain" />
-                </span>
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate font-semibold">謙華動物醫院</span>
-                  <span class="block truncate text-xs text-sidebar-foreground/70">健檢與報告</span>
-                </span>
-              </router-link>
+            <SheetDescription class="sr-only">謙華動物醫院的主要導覽選單</SheetDescription>
+            <div class="flex items-center gap-3 border-b border-nav-border px-4 py-3">
+              <span class="flex size-10 items-center justify-center rounded-[10px] bg-logo text-logo-foreground"><PawPrint class="size-5" stroke-width="2" /></span>
+              <span class="font-semibold">謙華動物醫院</span>
             </div>
-            <nav class="flex-1 space-y-1 px-3 py-4" aria-label="行動版主要導覽">
-              <router-link
-                v-for="item in navItems"
-                :key="item.to"
-                :to="item.to"
-                class="flex min-h-11 items-center gap-3 rounded-lg border border-transparent bg-sidebar-accent/30 px-2.5 text-sm font-medium text-sidebar-foreground hover:border-sidebar-border hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                :class="isNavActive(item) ? navActiveClass : ''"
-              >
-                <component :is="item.icon" class="h-4 w-4" stroke-width="1.9" />
-                {{ item.label }}
-              </router-link>
+            <nav class="flex-1 overflow-y-auto px-3 py-3" aria-label="行動版主要導覽">
+              <template v-for="group in NAV_GROUPS" :key="group.label">
+                <p class="spec-label px-2 pt-3 pb-1">{{ group.label }}</p>
+                <router-link
+                  v-for="item in group.items"
+                  :key="item.to"
+                  :to="item.to"
+                  class="flex min-h-11 items-center gap-3 rounded-lg px-3 font-medium"
+                  :class="isNavActive(item) ? 'bg-nav-active text-nav-active-foreground' : 'text-nav-foreground hover:bg-hover'"
+                  :aria-current="isNavActive(item) ? 'page' : undefined"
+                >
+                  <component :is="item.icon" class="size-5" stroke-width="1.75" />{{ item.label }}
+                </router-link>
+              </template>
             </nav>
-            <div class="border-t border-sidebar-border p-3"><AppSettingsMenu @logout="logout" /></div>
           </SheetContent>
         </Sheet>
 
-        <main class="mx-auto w-full min-w-0 px-4 py-5 sm:px-6 lg:px-8" :class="route.meta.wide ? '' : 'max-w-360'">
+        <main class="mx-auto w-full min-w-0 px-4 py-5 sm:px-6" :class="route.meta.wide ? '' : 'max-w-360'">
           <router-view :key="routeViewKey" />
         </main>
       </div>
+
+      <div class="min-[1600px]:sticky min-[1600px]:top-0 min-[1600px]:h-screen">
+        <UtilityPanelHost />
+      </div>
+      <div class="sticky top-0 h-screen shrink-0">
+        <UtilityRail />
+      </div>
     </div>
     <GlobalSearchDialog v-model:open="searchOpen" />
-    <GlobalChatWidget />
-    <PetQuickViewDialog />
-    <ToastContainer :placement="route.path.startsWith('/appointments') || route.path === '/reception' ? 'top' : 'bottom'" />
+    <!-- 診療台與掛號台的底部是主要動作（送交櫃台、完成處理），提示改放上面、頁首那一列的下方。 -->
+    <ToastContainer :placement="route.path.startsWith('/appointments') || route.path.startsWith('/reception') ? 'top' : 'bottom'" />
   </template>
 </template>

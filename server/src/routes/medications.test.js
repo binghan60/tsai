@@ -34,7 +34,7 @@ describe('領藥 API', () => {
   after(async () => { mock.restoreAll(); await new Promise(resolve => server.close(resolve)); });
   const post = (path, body) => fetch(`${origin}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 
-  it('櫃檯可不掛號登記，身份採主檔快照且不接受直接指定待包藥狀態', async () => {
+  it('櫃台可不掛號登記，身份採主檔快照且不接受直接指定待包藥狀態', async () => {
     const response = await post('', { petId, prescription: '原藥單', condition: '近況', status: 'approved', approvedBy: '偽造', petName: '偽造' });
     assert.equal(response.status, 201);
     const data = await response.json();

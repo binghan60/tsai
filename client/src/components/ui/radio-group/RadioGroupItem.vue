@@ -19,7 +19,7 @@ const forwarded = useForwardProps(reactiveOmit(props, 'class'));
   <RadioGroupItem
     data-slot="radio-group-item"
     v-bind="forwarded"
-    :class="cn('border-input bg-field data-[state=checked]:border-primary focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 size-4 shrink-0 rounded-full border shadow-xs transition-colors focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50', props.class)"
+    :class="cn('border-input bg-field data-[state=checked]:border-primary focus-visible:border-primary focus-visible:ring-focus-ring aria-invalid:border-destructive aria-invalid:ring-destructive/20 size-5 shrink-0 rounded-full border transition-colors focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50', props.class)"
   >
     <RadioGroupIndicator data-slot="radio-group-indicator" class="flex size-full items-center justify-center text-primary">
       <slot name="indicator"><Circle class="size-2.5 fill-current" /></slot>

@@ -24,7 +24,7 @@ const forwarded = useForwardPropsEmits(reactiveOmit(props, 'class'), emits);
   <CheckboxRoot
     data-slot="checkbox"
     v-bind="forwarded"
-    :class="cn('border-input bg-field data-[state=checked]:border-primary data-[state=checked]:bg-primary focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 size-4 shrink-0 rounded-[4px] border shadow-xs transition-colors focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50', props.class)"
+    :class="cn('border-input bg-field data-[state=checked]:border-primary data-[state=checked]:bg-primary focus-visible:border-primary focus-visible:ring-focus-ring aria-invalid:border-destructive aria-invalid:ring-destructive/20 size-5 shrink-0 rounded-[5px] border transition-colors focus-visible:ring-3 disabled:cursor-not-allowed disabled:opacity-50', props.class)"
   >
     <CheckboxIndicator data-slot="checkbox-indicator" class="flex size-full items-center justify-center text-primary-foreground">
       <slot name="indicator"><Check class="size-3.5" stroke-width="3" /></slot>

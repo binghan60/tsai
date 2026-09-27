@@ -1,12 +1,13 @@
 import { defineStore } from 'pinia';
 import { http } from '../api/http';
+import { useUtilityPanelStore } from './utilityPanel';
 
-// 全站共用的寵物暫存區（櫃台接電話時丟給醫生看病歷用）。資料的真相在後端
+// 全站共用的貓咪暫存區（櫃台接電話時丟給醫師看病歷用）。資料的真相在後端
 // pinnedPets collection，任何異動伺服器都會用 pinned-pets:updated 廣播整份清單，
-// 這裡直接取代，不自己推算差異。quickViewPetId 控制 App.vue 裡唯一一個病歷速覽
-// Modal——聊天室標籤、診療台、櫃台、寵物詳情頁都從這裡叫出同一個。
+// 這裡直接取代，不自己推算差異。病歷速覽開在右側暫存區面板裡推入的一層
+// ——聊天室與待辦的 # 標籤、暫存清單都從 openQuickView 叫出同一個。
 export const usePinnedPetsStore = defineStore('pinnedPets', {
-  state: () => ({ items: [], loaded: false, quickViewPetId: '' }),
+  state: () => ({ items: [], loaded: false }),
   getters: {
     isPinned: (state) => (petId) => state.items.some((item) => String(item.petId) === String(petId)),
   },
@@ -32,15 +33,11 @@ export const usePinnedPetsStore = defineStore('pinnedPets', {
       this.setItems(data.items);
     },
     openQuickView(petId) {
-      this.quickViewPetId = String(petId || '');
-    },
-    closeQuickView() {
-      this.quickViewPetId = '';
+      useUtilityPanelStore().openPet(petId);
     },
     reset() {
       this.items = [];
       this.loaded = false;
-      this.quickViewPetId = '';
     },
   },
 });

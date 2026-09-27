@@ -74,7 +74,7 @@ export async function sendHealthReportEmail({
 }) {
   const fromAddress = process.env.MAIL_FROM?.trim() || process.env.SMTP_EMAIL?.trim() || process.env.SMTP_USER?.trim();
   const fromName = process.env.MAIL_FROM_NAME?.trim() || '謙華動物醫院';
-  const safePetName = petName || '您的寵物';
+  const safePetName = petName || '您的貓咪';
   const greeting = ownerName ? `${ownerName} 您好：` : '您好：';
   const subject = `【謙華動物醫院】${safePetName}的健檢報告`;
   const expiryLabel = reportExpiresAt

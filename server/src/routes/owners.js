@@ -75,7 +75,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// 新飼主與其第一隻寵物必須同時存在；任何一端驗證或寫入失敗都會完整回滾。
+// 新飼主與其第一隻貓咪必須同時存在；任何一端驗證或寫入失敗都會完整回滾。
 router.post('/with-pet', async (req, res, next) => {
   try {
     const ownerInput = req.body?.owner ?? {};
@@ -161,7 +161,7 @@ router.delete('/:id', async (req, res, next) => {
         throw error;
       }
       if (await Pet.exists({ ownerId: owner._id }).session(session)) {
-        const error = new Error('此飼主底下仍有寵物，請先刪除或轉移寵物');
+        const error = new Error('此飼主底下仍有貓咪，請先刪除或轉移貓咪');
         error.status = 409;
         throw error;
       }

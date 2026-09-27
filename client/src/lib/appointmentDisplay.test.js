@@ -4,10 +4,10 @@ import { checkinTone, latenessLabel, patientNotesFor, visitTypeLabel } from './a
 
 describe('patientNotesFor', () => {
   const notes = { pets: { p1: '會咬人' }, owners: { o1: '處置前先說明費用' } };
-  it('寵物在前、飼主在後，只回有內容的', () => {
+  it('貓咪在前、飼主在後，只回有內容的', () => {
     assert.deepEqual(
       patientNotesFor({ petId: 'p1', ownerId: 'o1' }, notes).map((note) => note.label),
-      ['寵物', '飼主'],
+      ['貓咪', '飼主'],
     );
     assert.deepEqual(patientNotesFor({ petId: 'p2', ownerId: 'o1' }, notes).map((note) => note.text), ['處置前先說明費用']);
   });

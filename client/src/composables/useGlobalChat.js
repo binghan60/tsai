@@ -5,6 +5,8 @@ import { useAuthStore } from '../stores/auth';
 import { useChatStore } from '../stores/chat';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 import { useTodosStore } from '../stores/todos';
+import { useWorkCountsStore } from '../stores/workCounts';
+import { useUtilityPanelStore } from '../stores/utilityPanel';
 
 // 全站常駐：由 App.vue 呼叫一次，取代原本 useGlobalAppointmentNotifications
 // 「擁有連線生命週期」的角色——只要登入著就持續連線，不因切換頁面而斷線；
@@ -13,14 +15,16 @@ import { useTodosStore } from '../stores/todos';
 //
 // 全站聊天沒有房間概念（見 server/src/lib/realtime.js 的 emitChatMessage），
 // 不需要 join/leave，登入後直接連線、載入歷史、監聽 chat:new 即可。
-// 寵物暫存區跟聊天綁在一起（# 標記會放進暫存區），同一條連線一併負責；
-// 院內待辦一樣是全站一份、不分房間，也搭這條連線。
+// 貓咪暫存區跟聊天綁在一起（# 標記會放進暫存區），同一條連線一併負責；
+// 院內待辦一樣是全站一份、不分房間，也搭這條連線；工具欄上的藥單、初診數字也是。
 export function useGlobalChat() {
   const socket = getSocket();
   const auth = useAuthStore();
   const store = useChatStore();
   const pinned = usePinnedPetsStore();
   const todos = useTodosStore();
+  const counts = useWorkCountsStore();
+  const panel = useUtilityPanelStore();
 
   async function loadHistory() {
     try {
@@ -43,17 +47,28 @@ export function useGlobalChat() {
     todos.setItems(payload?.items);
   }
 
+  function handleMedications() {
+    counts.loadMedications();
+  }
+
+  function handleIntake() {
+    counts.loadIntake();
+  }
+
   // 斷線期間錯過的暫存區與待辦異動，重新連上時整份重讀補回來。
   function handleReconnect() {
     if (!auth.isAuthenticated) return;
     pinned.load();
     todos.load();
+    counts.load();
   }
 
   onMounted(() => {
     socket.on('chat:new', handleMessage);
     socket.on('pinned-pets:updated', handlePinnedPets);
     socket.on('todos:updated', handleTodos);
+    socket.on('medication:updated', handleMedications);
+    socket.on('intake:updated', handleIntake);
     socket.io.on('reconnect', handleReconnect);
   });
 
@@ -68,10 +83,13 @@ export function useGlobalChat() {
         loadHistory();
         pinned.load();
         todos.load();
+        counts.load();
       } else {
         store.reset();
         pinned.reset();
         todos.reset();
+        counts.reset();
+        panel.reset();
         socket.disconnect();
       }
     },
@@ -82,6 +100,8 @@ export function useGlobalChat() {
     socket.off('chat:new', handleMessage);
     socket.off('pinned-pets:updated', handlePinnedPets);
     socket.off('todos:updated', handleTodos);
+    socket.off('medication:updated', handleMedications);
+    socket.off('intake:updated', handleIntake);
     socket.io.off('reconnect', handleReconnect);
   });
 }

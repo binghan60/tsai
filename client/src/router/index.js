@@ -1,4 +1,3 @@
-import { ref } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 
@@ -36,19 +35,19 @@ const router = createRouter({
   routes: [
     { path: '/login', component: LoginPage, meta: { bare: true, public: true, title: '登入' } },
     { path: '/intake', component: PublicIntakePage, meta: { bare: true, public: true, title: '初診資料填寫' } },
-    { path: '/', component: DashboardPage, meta: { title: '儀表板' } },
+    { path: '/', component: DashboardPage, meta: { title: '總覽' } },
     // wide：兩個工作台整頁不捲動、欄位並排（看板四欄＋抽屜／佇列＋工作區），max-w-360 容不下，改用滿版寬度。
-    { path: '/appointments', component: VetConsolePage, meta: { title: '醫師診療台', wide: true } },
+    { path: '/appointments', component: VetConsolePage, meta: { title: '診療台', wide: true } },
     { path: '/reception', component: ReceptionPage, meta: { title: '掛號台', wide: true } },
     { path: '/medications', component: MedicationPickupPage, meta: { title: '領藥', wide: true } },
     { path: '/reception/intakes', component: IntakeReviewPage, meta: { title: '初診表審核', nav: '/reception' } },
     // 舊書籤：看診不再是獨立頁面，改成診療台右欄可以同時開多筆的工作區。
     { path: '/appointments/:id/visit', redirect: '/appointments' },
-    { path: '/pets', component: PetsListPage, meta: { title: '寵物' } },
+    { path: '/pets', component: PetsListPage, meta: { title: '貓咪' } },
     // 靜態路由要排在 /pets/:id 前面，不然 "new" 會被吃成動態參數 id。
-    { path: '/pets/new', component: PetCreatePage, meta: { title: '新增寵物' } },
-    { path: '/pets/:id', component: PetDetailPage, meta: { title: '寵物資料' } },
-    { path: '/records', component: RecordsListPage, meta: { title: '就診紀錄' } },
+    { path: '/pets/new', component: PetCreatePage, meta: { title: '新增貓咪' } },
+    { path: '/pets/:id', component: PetDetailPage, meta: { title: '貓咪資料' } },
+    { path: '/records', component: RecordsListPage, meta: { title: '健檢報告' } },
     // 寄送流水帳。掛在 /records 底下是因為它講的是報告的事，但它不依附任何一份報告——
     // 報告被刪除後，這裡仍然查得到當初寄給了誰。
     { path: '/records/deliveries', component: DeliveryLogsPage, meta: { title: '寄送歷程', nav: '/records/deliveries' } },
@@ -63,7 +62,7 @@ const router = createRouter({
     { path: '/settings/presets/:formId/:presetKey', component: PresetEditPage, meta: { title: '預填模板' } },
     // transient：不列入「使用者從哪來」的紀錄。存檔後這頁會 replace 成 /records/:id/edit，
     // 之後再回到這個 new 網址只會又開一份新草稿。
-    // nav：這頁的網址掛在 /pets 底下，但它做的是就診紀錄，側邊欄該亮的是那一項。
+    // nav：這頁的網址掛在 /pets 底下，但它做的是健檢報告，側邊欄該亮的是那一項。
     { path: '/pets/:petId/records/new', component: RecordFormPage, meta: { title: '新增健檢', transient: true, nav: '/records' } },
     { path: '/records/:id/edit', component: RecordFormPage, meta: { title: '編輯健檢' } },
     { path: '/records/:id/preview', name: 'record-preview', component: ReportViewPage, meta: { bare: true, title: '報告預覽' } },
@@ -86,39 +85,8 @@ router.beforeEach(async (to) => {
   return { path: '/login', query: { redirect: to.fullPath } };
 });
 
-// 記住使用者是從哪一頁進到目前這頁的，讓各頁的返回鍵能回到真正的出發點，
-// 而不是一律回到寫死的上層網址（從工作台點進健檢編輯，返回卻跑去寵物頁）。
-//
-// 兩份紀錄各有用途：returnPath 這個 ref 供 useBackTarget 直接讀（元件重用時也會跟著更新），
-// history.state 那份則是為了撐過重新整理與上一頁／下一頁——每筆歷史紀錄各自記各自的來源。
-const returnPath = ref('');
-let lastStablePath = '';
-
-export function useReturnPath() {
-  return returnPath;
-}
-
-router.afterEach((to, from) => {
-  // 同一頁只是查詢字串變動（例如列表搜尋同步 ?q=）不算換頁：來源維持不變，
-  // 否則返回鍵會指向使用者「剛剛還站著的同一頁」，等於原地打轉。
-  const samePage = from.matched.length > 0 && from.path === to.path;
-
-  if (!samePage) {
-    // transient 的路由不能當來源。/pets/:petId/records/new 存檔後會 replace 成
-    // /records/:id/edit，之後再回到那個 new 網址只會又開一份新草稿。
-    if (from.matched.length && !from.meta.transient && !from.meta.bare) {
-      lastStablePath = from.fullPath;
-    }
-    // 上一頁／下一頁回到既有紀錄時，那筆紀錄自己記著來源，比當下推算的準。
-    const stored = window.history.state?.chFrom;
-    returnPath.value = typeof stored === 'string' && stored ? stored : lastStablePath;
-  }
-
-  if (returnPath.value && returnPath.value !== to.fullPath && window.history.state?.chFrom !== returnPath.value) {
-    window.history.replaceState({ ...window.history.state, chFrom: returnPath.value }, '');
-  }
-
-  document.title = `${to.meta.title || '儀表板'}｜謙華動物醫院`;
+router.afterEach((to) => {
+  document.title = `${to.meta.title || '總覽'}｜謙華動物醫院`;
 });
 
 export default router;

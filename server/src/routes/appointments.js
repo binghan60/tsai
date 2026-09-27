@@ -9,6 +9,7 @@ import FormTemplate from '../models/FormTemplate.js';
 import ClinicSettings from '../models/ClinicSettings.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import { defaultRecordFields } from '../lib/formTemplate.js';
+import { initialFollowedFields } from '../lib/recordVisitSync.js';
 import { withTransaction } from '../lib/transaction.js';
 import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsCheckinNumber } from '../lib/appointmentStatus.js';
@@ -39,12 +40,10 @@ const APPOINTMENT_TIME_RANGES = [
   ['10:00', '11:30'],
   ['14:00', '19:30'],
 ];
-// 手術掛在門診中間的手術時段。只有勾了手術的掛號能落在這裡，一般門診不開放。
-const SURGERY_TIME_RANGE = ['11:45', '13:45'];
+// 手術只是掛號上的標記（isSurgery／surgeryName），時段跟一般門診一樣，沒有專屬的手術時段。
 const APPOINTMENT_TIME_STEP = 15;
 const MAX_ESTIMATED_DURATION_MINUTES = 240;
 const APPOINTMENT_TIME_ERROR = '預約時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格';
-const SURGERY_TIME_ERROR = '手術時段僅限 10:00–13:45、14:00–19:30，且每 15 分鐘一格';
 
 function newIntakeVerificationCode() {
   return String(randomInt(1000, 10000));
@@ -59,12 +58,11 @@ function minutesOfTime(value) {
   return hour * 60 + minute;
 }
 
-function isValidAppointmentTime(value, { surgery = false } = {}) {
+function isValidAppointmentTime(value) {
   if (!value) return true;
   const minutes = minutesOfTime(value);
   if (minutes == null || minutes % APPOINTMENT_TIME_STEP !== 0) return false;
-  const ranges = surgery ? [...APPOINTMENT_TIME_RANGES, SURGERY_TIME_RANGE] : APPOINTMENT_TIME_RANGES;
-  return ranges.some(([start, end]) => {
+  return APPOINTMENT_TIME_RANGES.some(([start, end]) => {
     const startMinutes = minutesOfTime(start);
     const endMinutes = minutesOfTime(end);
     return minutes >= startMinutes && minutes <= endMinutes;
@@ -79,20 +77,16 @@ function normalizeEstimatedDuration(value) {
   return duration;
 }
 
-function validateAppointmentDuration(time, duration, { surgery = false } = {}) {
+function validateAppointmentDuration(time, duration) {
   if (!time) return;
   const startAt = minutesOfTime(time);
-  const ranges = surgery ? [...APPOINTMENT_TIME_RANGES, SURGERY_TIME_RANGE] : APPOINTMENT_TIME_RANGES;
-  const valid = ranges.some(([start, end]) => (
+  const valid = APPOINTMENT_TIME_RANGES.some(([start, end]) => (
     startAt >= minutesOfTime(start)
     && startAt + duration <= minutesOfTime(end) + APPOINTMENT_TIME_STEP
   ));
   if (!valid) throw Object.assign(new Error('預估診療時間超出可掛號時段，請縮短時間或改選其他時段'), { status: 422 });
 }
 
-function appointmentTimeError(surgery) {
-  return surgery ? SURGERY_TIME_ERROR : APPOINTMENT_TIME_ERROR;
-}
 
 function normalizeSurgeryFields(body) {
   const isSurgery = Boolean(body.isSurgery);
@@ -146,13 +140,13 @@ async function createCheckinRecord(appointment, session) {
     throw error;
   }
 
+  // 草稿的體重、體溫、回診日期、檢驗數值之後都跟著這次看診走（lib/recordVisitSync.js）。
   const [record] = await MedicalRecord.create([{
     petId: appointment.petId,
     ...defaultRecordFields(template),
     visitDate: combineClinicDateTime(appointment.date, appointment.time || '10:00'),
     chiefComplaint: appointment.reason,
-    weightKg: appointment.weightKg,
-    temperatureC: appointment.temperatureC,
+    ...initialFollowedFields(appointment, template),
     templateId: template._id,
     templateVersion: template.version,
     examType: template.name,
@@ -304,8 +298,7 @@ router.post('/', async (req, res, next) => {
   try {
     const { reason, petId } = req.body;
     const time = String(req.body.time || '').trim();
-    const surgery = Boolean(req.body.isSurgery);
-    if (!isValidAppointmentTime(time, { surgery })) return res.status(422).json({ message: appointmentTimeError(surgery) });
+    if (!isValidAppointmentTime(time)) return res.status(422).json({ message: APPOINTMENT_TIME_ERROR });
     let ownerId = null;
     let ownerName;
     let ownerPhone;
@@ -314,9 +307,9 @@ router.post('/', async (req, res, next) => {
 
     if (petId !== undefined && petId !== null && petId !== '') {
       // 回診：不信任前端傳來的快照欄位，一律用資料庫當下的資料覆寫，避免快照與實際病患對不上。
-      if (!mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '寵物編號格式不正確' });
+      if (!mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '貓咪編號格式不正確' });
       const pet = await Pet.findById(petId).populate('ownerId', 'name phone attendanceSummary');
-      if (!pet) return res.status(422).json({ message: '找不到指定的寵物' });
+      if (!pet) return res.status(422).json({ message: '找不到指定的貓咪' });
       ownerId = pet.ownerId?._id ?? null;
       ownerName = pet.ownerId?.name ?? '';
       ownerPhone = pet.ownerId?.phone ?? '';
@@ -338,9 +331,9 @@ router.post('/', async (req, res, next) => {
       }
     }
 
-    // 飼主姓名選填（電話掛號時常常只問得到寵物名），但一筆掛號至少要指得出是誰要來。
+    // 飼主姓名選填（電話掛號時常常只問得到貓咪名），但一筆掛號至少要指得出是誰要來。
     // 回診的 petName 抄自 Pet.name、必定有值，所以這一條實際上只會擋到初診。
-    if (!petName) return res.status(422).json({ message: '請填寫寵物姓名' });
+    if (!petName) return res.status(422).json({ message: '請填寫貓咪姓名' });
 
     // 電話掛號時客人常常是說「我明天帶來」，所以日期可以指定；沒帶就是今天。
     // 這頁仍然一次只看一天（時間軸與候診佇列都以 date 為界），不做跨日排班。
@@ -357,7 +350,7 @@ router.post('/', async (req, res, next) => {
     const template = await resolveAppointmentTemplate(req.body.templateId, { optional: true });
     const { isSurgery, surgeryName } = normalizeSurgeryFields(req.body);
     const estimatedDurationMinutes = normalizeEstimatedDuration(req.body.estimatedDurationMinutes);
-    validateAppointmentDuration(time, estimatedDurationMinutes, { surgery: isSurgery });
+    validateAppointmentDuration(time, estimatedDurationMinutes);
     const appointment = await Appointment.create({
       date,
       time: time || '',
@@ -411,23 +404,21 @@ router.put('/:id', async (req, res, next) => {
       for (const field of EDITABLE_APPOINTMENT_FIELDS) {
         if (req.body[field] !== undefined) updates[field] = req.body[field];
       }
-      // 時段跟手術要一起看：取消手術勾選後，原本掛在手術時段的時間就不再合法。
-      const surgery = updates.isSurgery !== undefined ? Boolean(updates.isSurgery) : Boolean(appointment.isSurgery);
-      if (updates.time !== undefined || updates.isSurgery !== undefined) {
-        const time = updates.time !== undefined ? String(updates.time || '').trim() : appointment.time;
-        if (updates.time !== undefined) updates.time = time;
-        if (!isValidAppointmentTime(time, { surgery })) return res.status(422).json({ message: appointmentTimeError(surgery) });
+      if (updates.time !== undefined) {
+        const time = String(updates.time || '').trim();
+        updates.time = time;
+        if (!isValidAppointmentTime(time)) return res.status(422).json({ message: APPOINTMENT_TIME_ERROR });
       }
       const duration = updates.estimatedDurationMinutes !== undefined
         ? normalizeEstimatedDuration(updates.estimatedDurationMinutes)
         : normalizeEstimatedDuration(appointment.estimatedDurationMinutes);
       updates.estimatedDurationMinutes = duration;
-      validateAppointmentDuration(updates.time !== undefined ? updates.time : appointment.time, duration, { surgery });
+      validateAppointmentDuration(updates.time !== undefined ? updates.time : appointment.time, duration);
       if (updates.date !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(String(updates.date))) {
         return res.status(422).json({ message: '請填寫預約日期' });
       }
       if (updates.petName !== undefined && !String(updates.petName).trim()) {
-        return res.status(422).json({ message: '請填寫寵物姓名' });
+        return res.status(422).json({ message: '請填寫貓咪姓名' });
       }
       if (updates.templateId !== undefined) {
         const template = await resolveAppointmentTemplate(updates.templateId);
@@ -510,7 +501,7 @@ router.post('/:id/check-in', async (req, res, next) => {
     if (needsNewPatient) {
       if (!existingOwnerId && !String(req.body.ownerName || '').trim()) return res.status(422).json({ message: '請填寫飼主姓名' });
       if (!existingOwnerId && !String(req.body.ownerPhone || '').trim()) return res.status(422).json({ message: '請填寫聯絡電話' });
-      if (!String(req.body.petName || '').trim()) return res.status(422).json({ message: '請填寫寵物姓名' });
+      if (!String(req.body.petName || '').trim()) return res.status(422).json({ message: '請填寫貓咪姓名' });
     }
 
     const isLate = Boolean(req.body?.isLate);
@@ -600,7 +591,7 @@ router.post('/:id/check-in', async (req, res, next) => {
       if (isLate) await recordAttendanceIncident(appointment, 'late', appointment.checkedInAt, session);
     }));
 
-    // 報到讓這筆掛號進入候診佇列，醫生頁要立刻看到，不必等 60 秒輪詢。
+    // 報到讓這筆掛號進入候診佇列，醫師頁要立刻看到，不必等 60 秒輪詢。
     emitAppointmentUpdate(appointment);
     res.json(appointment);
   } catch (err) { next(err); }

@@ -42,10 +42,11 @@ test('describeVisitChanges 只講真正變動的部分', () => {
   const changedParts = describeVisitChanges({ visitNote: '原紀錄' }, { visitNote: '新紀錄' });
   assert.deepEqual(changedParts, ['本次簡易紀錄']);
   assert.match(appointmentNotification(appointment, 'visit_data', { changedParts }), /「豆豆」的本次簡易紀錄已更新/);
-  const before = { visitNote: '備註', handoffNote: '', specialCareNote: '', weightKg: 5, temperatureC: null, followUpRecommendation: '' };
+  const before = { visitNote: '備註', specialCareNote: '', weightKg: 5, temperatureC: null, followUpRecommendation: '', labValues: [{ key: 'wbc', label: 'WBC', value: '12' }] };
   // 空白與等值的數字格式不算變更，原樣按儲存不會冒出「已更新」。
   assert.deepEqual(describeVisitChanges(before, { ...before, visitNote: ' 備註 ', weightKg: '5.00' }), []);
-  assert.deepEqual(describeVisitChanges(before, { ...before, handoffNote: '診察費＋X光' }), ['櫃台交辦']);
+  assert.deepEqual(describeVisitChanges(before, { ...before, labValues: [{ key: 'wbc', label: 'WBC 白血球', value: '12' }] }), [], '只換了名稱快照不算變更');
+  assert.deepEqual(describeVisitChanges(before, { ...before, labValues: [{ key: 'wbc', value: '22.4' }] }), ['檢驗數值']);
   assert.deepEqual(describeVisitChanges(before, { ...before, internalNote: '院內追蹤' }), ['內部備註']);
   assert.deepEqual(describeVisitChanges(before, { ...before, specialCareNote: '傷口勿舔舐' }), ['飼主提醒']);
   assert.deepEqual(describeVisitChanges(before, { ...before, weightKg: '', followUpRecommendation: '兩週後' }), ['量測資料', '回診資料']);

@@ -19,8 +19,8 @@ const results = ref({ pets: [] });
 const activeIndex = ref(0);
 const inputEl = ref(null);
 
-// 飼主不是獨立可瀏覽的實體，搜尋結果一律呈現成寵物——後端 /api/search 的 pets
-// 本來就已經用飼主姓名／電話／Email 做過 join，打飼主關鍵字一樣找得到他的寵物。
+// 飼主不是獨立可瀏覽的實體，搜尋結果一律呈現成貓咪——後端 /api/search 的 pets
+// 本來就已經用飼主姓名／電話／Email 做過 join，打飼主關鍵字一樣找得到他的貓咪。
 const flatResults = computed(() => results.value.pets.map((pet) => ({ kind: 'pet', id: pet._id, to: `/pets/${pet._id}`, data: pet })));
 const hasQuery = computed(() => query.value.trim().length > 0);
 
@@ -118,7 +118,7 @@ onBeforeUnmount(() => {
       :show-close-button="false"
       @open-auto-focus.prevent
     >
-      <DialogTitle class="sr-only">搜尋飼主、寵物或電話</DialogTitle>
+      <DialogTitle class="sr-only">搜尋飼主、貓咪或電話</DialogTitle>
       <DialogDescription class="sr-only">輸入關鍵字即時搜尋，用上下鍵選擇、Enter 前往。</DialogDescription>
 
       <div class="relative flex items-center gap-3 border-b border-border px-4">
@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
           v-model="query"
           type="text"
           autocomplete="off"
-          placeholder="搜尋寵物、飼主或電話"
+          placeholder="搜尋貓咪、飼主或電話"
           class="min-h-14 min-w-0 flex-1 border-0 bg-transparent px-0 text-sm shadow-none focus-visible:ring-0"
           @keydown="onKeydown"
         />
@@ -138,8 +138,8 @@ onBeforeUnmount(() => {
       <div class="max-h-[min(60vh,26rem)] overflow-y-auto">
         <p v-if="searching" class="px-4 py-6 text-sm text-muted-foreground" role="status">搜尋中…</p>
         <p v-else-if="searchError" class="px-4 py-6 text-sm text-danger">{{ searchError }}</p>
-        <p v-else-if="!hasQuery" class="px-4 py-6 text-sm text-muted-foreground">輸入寵物名、飼主姓名或電話開始搜尋。</p>
-        <p v-else-if="!flatResults.length" class="px-4 py-6 text-sm text-muted-foreground">找不到符合的寵物或飼主。</p>
+        <p v-else-if="!hasQuery" class="px-4 py-6 text-sm text-muted-foreground">輸入貓咪名、飼主姓名或電話開始搜尋。</p>
+        <p v-else-if="!flatResults.length" class="px-4 py-6 text-sm text-muted-foreground">找不到符合的貓咪或飼主。</p>
 
         <template v-else>
           <template v-for="(item, index) in flatResults" :key="item.id">

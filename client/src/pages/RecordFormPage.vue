@@ -5,6 +5,7 @@ import { Activity, AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight,
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, clinicTimeInput, combineClinicDateTime, formatDate } from '../lib/datetime';
+import { FOLLOWED_FIELD_LABELS, followableKeys, followedValue, labKey, nextOverriddenKeys, staleFollowedKeys } from '../lib/recordVisitFollow';
 import { collectPreviewIssues } from '../lib/recordFormValidation';
 import { defaultValueForItem } from '../../../shared/formDefaults';
 import { planPresetApplication } from '../lib/formPresets';
@@ -118,6 +119,68 @@ const reportVersion = ref(1);
 const documentVersion = ref(0);
 const revisionReason = ref('');
 const isLocked = computed(() => recordStatus.value !== 'draft');
+
+// ── 從本次看診帶入 ──
+// 報到建立的草稿（visitLink 有值）：體重、體溫、回診日期、檢驗數值預設跟著看診走。
+// 醫師在這裡改過的欄位記進 overriddenKeys，之後看診再改也不覆蓋；「還原」把它交回給看診。
+const visitLink = ref(null);
+const overriddenKeys = ref([]);
+const serverFollowed = ref(null);
+// 下一次存檔要交回看診的欄位（還原），以及要不要整份重新帶入。
+const restoringKeys = new Set();
+let resyncPending = false;
+const followKeys = computed(() => (visitLink.value && !isLocked.value ? followableKeys(LAB_TESTS.value) : []));
+function followSourceFromRecord(data) {
+  return {
+    weightKg: data?.weightKg,
+    temperatureC: data?.temperatureC,
+    followUp: data?.followUpDate ? `${clinicDateInput(data.followUpDate)} ${clinicTimeInput(data.followUpDate)}` : '',
+    labFindings: data?.labFindings ?? [],
+  };
+}
+function currentFollowSource() {
+  return {
+    weightKg: record.weightKg,
+    temperatureC: record.temperatureC,
+    followUp: followUpDate.value ? `${followUpDate.value} ${followUpTime.value}` : '',
+    labFindings: record.labFindings,
+  };
+}
+function followLabel(key) {
+  if (FOLLOWED_FIELD_LABELS[key]) return FOLLOWED_FIELD_LABELS[key];
+  return LAB_TESTS.value.find((item) => labKey(item.key) === key)?.label || key;
+}
+// 說明條上列出的欄位：看診有填的、或醫師改過的；看診沒填也沒人動的就不列，免得一整排空白。
+const followRows = computed(() => followKeys.value
+  .map((key) => ({
+    key,
+    label: followLabel(key),
+    value: followedValue(currentFollowSource(), key),
+    overridden: overriddenKeys.value.includes(key),
+  }))
+  .filter((row) => row.value || row.overridden));
+function applyFollowedFromServer(key, data) {
+  if (key === 'weightKg' || key === 'temperatureC') record[key] = data[key] ?? null;
+  else if (key === 'followUpDate') {
+    followUpDate.value = clinicDateInput(data.followUpDate);
+    followUpTime.value = data.followUpDate ? clinicTimeInput(data.followUpDate) : '';
+  } else if (key.startsWith('lab:')) {
+    const itemKey = key.slice(4);
+    const saved = (data.labFindings ?? []).find((finding) => finding.key === itemKey);
+    const row = record.labFindings.find((finding) => finding.key === itemKey);
+    if (row) Object.assign(row, { value: saved?.value ?? '', status: saved?.status ?? 'not_checked', statusSource: saved?.statusSource ?? row.statusSource });
+  }
+}
+function restoreFromVisit(key) {
+  overriddenKeys.value = overriddenKeys.value.filter((item) => item !== key);
+  restoringKeys.add(key);
+  saveRecord({ silent: true });
+}
+function resyncAllFromVisit() {
+  resyncPending = true;
+  overriddenKeys.value = [];
+  saveRecord({ silent: true });
+}
 const showDiscardConfirm = ref(false);
 const discarding = ref(false);
 // 重新帶入：一開始選錯來源報告時，不用捨棄草稿重來，直接在填寫畫面換一份已結案報告覆蓋文字欄位。
@@ -465,6 +528,8 @@ function applyRecord(data) {
   record.examinationFindings = mergeFindings(EXAMINATION_ITEMS.value, data.examinationFindings, ['note']);
   record.measurementAssessments = mergeFindings(BASIC_MEASUREMENTS.value, data.measurementAssessments, ['statusSource', 'unit', 'referenceMin', 'referenceMax'], { statusSource: 'auto' });
   record.labFindings = mergeFindings(LAB_TESTS.value, data.labFindings, ['statusSource', 'value', 'unit', 'referenceMin', 'referenceMax', 'note']);
+  overriddenKeys.value = [...(data.overriddenKeys ?? [])];
+  serverFollowed.value = followSourceFromRecord(data);
   lastSavedAt.value = data.updatedAt ? new Date(data.updatedAt) : null;
 }
 
@@ -578,12 +643,13 @@ async function init() {
       }
       await applyTemplate(data.templateId, { sections: data.sections, name: data.examType });
       examTypeName.value = data.examType || examTypeName.value;
+      visitLink.value = data.visitLink ?? null;
       applyRecord(data);
       await loadPreviousValues();
       // 草稿才可能用到「重新帶入」；已結案報告唯讀，不必多打這支 API。
       if (data.status === 'draft') await loadFinalizedSources();
     } else {
-      // 新報告：先知道是哪隻寵物，才能只列出適用該物種的表單。
+      // 新報告：先知道是哪隻貓咪，才能只列出適用該物種的表單。
       // 這個階段「不」載入任何表單結構，等使用者確認類型後才載入。
       await loadPetContext(petId.value);
       await loadPreviousValues();
@@ -686,7 +752,7 @@ function measurementAssessment(metric) {
   return record.measurementAssessments.find((item) => item.key === metric.key);
 }
 
-// 上次數值：這隻寵物過去每個項目最近一次的紀錄，填表時拿來對照。
+// 上次數值：這隻貓咪過去每個項目最近一次的紀錄，填表時拿來對照。
 // 純輔助資訊 —— 載入失敗就當作沒有歷史紀錄，不擋填表。
 const previousValues = ref({ byKey: {}, byLabel: {} });
 
@@ -758,7 +824,34 @@ function buildPayload() {
     heartRate: optionalNumber(record.heartRate),
     respiratoryRate: optionalNumber(record.respiratoryRate),
     bodyConditionScore: optionalNumber(record.bodyConditionScore),
+    ...followPayload(),
   };
+}
+
+// 跟隨欄位：跟上次從伺服器拿到的值不一樣，就是醫師親手改過。還原中的欄位不算。
+function followPayload() {
+  if (!followKeys.value.length) return {};
+  if (resyncPending) return { resyncFromVisit: true };
+  return {
+    overriddenKeys: nextOverriddenKeys({
+      keys: followKeys.value.filter((key) => !restoringKeys.has(key)),
+      overridden: overriddenKeys.value,
+      current: currentFollowSource(),
+      server: serverFollowed.value,
+    }),
+  };
+}
+
+// 存檔回來的草稿帶著看診的最新值：沒被覆寫的欄位換成新值。
+function receiveFollowed(saved) {
+  if (!followKeys.value.length) return;
+  resyncPending = false;
+  restoringKeys.clear();
+  overriddenKeys.value = [...(saved.overriddenKeys ?? [])];
+  for (const key of staleFollowedKeys({ keys: followKeys.value, overridden: overriddenKeys.value, current: currentFollowSource(), server: followSourceFromRecord(saved) })) {
+    applyFollowedFromServer(key, saved);
+  }
+  serverFollowed.value = followSourceFromRecord(saved);
 }
 
 async function saveRecord({ silent = false, uploadImages = false } = {}) {
@@ -794,6 +887,7 @@ async function saveRecord({ silent = false, uploadImages = false } = {}) {
       savedSnapshot = JSON.stringify(imagePayload);
     }
     documentVersion.value = saved.__v ?? documentVersion.value;
+    receiveFollowed(saved);
     lastSavedAt.value = new Date();
     saveError.value = '';
     const hasNewChanges = JSON.stringify(buildPayload()) !== savedSnapshot;
@@ -921,7 +1015,7 @@ async function confirmDiscard() {
     if (recordId.value) {
       await http.delete(`/records/${recordId.value}`);
     }
-    toast.success('已成功捨棄就診紀錄草稿', '已捨棄草稿');
+    toast.success('已成功捨棄健檢報告草稿', '已捨棄草稿');
     leavingAfterAction.value = true;
     showDiscardConfirm.value = false;
     await router.push(petId.value ? `/pets/${petId.value}` : '/pets');
@@ -954,7 +1048,7 @@ function handleBeforeUnload(event) {
   <section class="space-y-5 pb-48 sm:pb-32">
     <Button v-if="visitReturnTarget" as-child variant="secondary"><router-link :to="visitReturnTarget">返回診療台</router-link></Button>
     <div class="flex flex-wrap items-start justify-between gap-3">
-      <div><Breadcrumbs class="mb-2" :items="[{ label: '寵物', to: '/pets' }, { label: pet?.name || '寵物資料', to: petId ? `/pets/${petId}` : '/pets' }, { label: isEdit ? '編輯就診紀錄' : '新增就診紀錄' }]" /><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案就診紀錄' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯就診紀錄' : '新增就診紀錄' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
+      <div><Breadcrumbs class="mb-2" :items="[{ label: '貓咪', to: '/pets' }, { label: pet?.name || '貓咪資料', to: petId ? `/pets/${petId}` : '/pets' }, { label: isEdit ? '編輯健檢報告' : '新增健檢報告' }]" /><h1 class="text-xl font-semibold text-foreground">{{ isLocked ? '已結案健檢報告' : isEdit && reportVersion > 1 ? `編輯第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢報告' : '新增健檢報告' }}</h1><p class="mt-1 text-sm text-muted-foreground"><span v-if="examTypeName" class="mr-2 inline-flex items-center rounded-full bg-accent px-2.5 py-0.5 text-xs font-medium text-accent-foreground">{{ examTypeName }}</span>{{ isLocked ? '此報告已結案，為保留正式版本而無法直接修改。' : '依健檢流程分段填寫，未執行的檢查維持「未檢查」即可。' }}</p><p v-if="revisionReason" class="mt-1 text-xs text-muted-foreground">修訂原因：{{ revisionReason }}</p></div>
       <div v-if="!isLocked" class="flex flex-wrap items-center justify-end gap-3">
         <Popover v-if="!needsTypeChoice && chosenTemplateId" v-model:open="presetMenuOpen">
           <PopoverTrigger as-child>
@@ -1059,7 +1153,7 @@ function handleBeforeUnload(event) {
             <p class="mt-1 text-sm">為避免已結案的內容與 PDF 不一致，此版本不再開放直接編輯。</p>
             <div class="mt-4 flex flex-wrap gap-2">
               <Button as-child><router-link :to="`/records/${recordId}/preview`"><FileText class="h-4 w-4" />查看正式報告</router-link></Button>
-              <Button as-child variant="secondary"><router-link :to="`/pets/${petId}`">回寵物資料</router-link></Button>
+              <Button as-child variant="secondary"><router-link :to="`/pets/${petId}`">回貓咪資料</router-link></Button>
             </div>
           </div>
         </div>
@@ -1089,6 +1183,24 @@ function handleBeforeUnload(event) {
             <p v-if="followUpTimeError" class="text-xs font-medium text-destructive">{{ followUpTimeError }}</p>
           </div>
         </div>
+      </div>
+
+      <!-- 從本次看診帶入：哪些欄位現在跟著看診、哪些醫師在報告裡改過（可以還原）。 -->
+      <div v-if="followKeys.length" class="rounded-xl border border-border bg-accent/50 px-5 py-3">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <p class="font-semibold text-accent-foreground">從本次看診帶入<span v-if="visitLink?.date" class="num ml-2 font-normal">{{ visitLink.date }}</span></p>
+          <p class="text-sm text-muted-foreground">醫師在診療台改體重、體溫、回診日期或檢驗數值，這裡會跟著更新；在報告裡改過的欄位就不再跟。</p>
+          <Button v-if="overriddenKeys.length" variant="secondary" size="sm" class="ml-auto" :disabled="saving" @click="resyncAllFromVisit">全部重新帶入</Button>
+        </div>
+        <ul v-if="followRows.length" class="mt-2.5 flex flex-wrap gap-2">
+          <li v-for="row in followRows" :key="row.key" class="inline-flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 shadow-[inset_0_0_0_1px_var(--border)]">
+            <span class="text-sm text-muted-foreground">{{ row.label }}</span>
+            <span class="num font-semibold">{{ row.value || '—' }}</span>
+            <span v-if="row.overridden" class="rounded-sm bg-warning-surface px-1.5 py-0.5 text-2xs leading-none font-semibold text-warning">已在報告改過</span>
+            <span v-else class="rounded-sm bg-accent px-1.5 py-0.5 text-2xs leading-none font-semibold text-accent-foreground">看診帶入</span>
+            <button v-if="row.overridden" type="button" class="text-sm font-semibold text-primary hover:underline disabled:opacity-50" :disabled="saving" @click="restoreFromVisit(row.key)">還原</button>
+          </li>
+        </ul>
       </div>
 
       <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序。
@@ -1232,7 +1344,7 @@ function handleBeforeUnload(event) {
       </form>
 
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
-      <div v-if="!isLocked" id="record-action-bar" class="bottom-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 lg:left-64">
+      <div v-if="!isLocked" id="record-action-bar" class="bottom-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 lg:left-18 lg:right-16">
         <div class="mx-auto max-w-[1440px]">
           <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
           <div class="grid grid-cols-3 gap-2 sm:hidden">
@@ -1252,7 +1364,7 @@ function handleBeforeUnload(event) {
     <ConfirmDialog
       :open="showDiscardConfirm"
       title="捨棄健檢草稿"
-      description="確定要捨棄此筆就診紀錄草稿嗎？此操作將刪除此草稿且無法復原。"
+      description="確定要捨棄此筆健檢報告草稿嗎？此操作將刪除此草稿且無法復原。"
       confirm-label="捨棄草稿"
       cancel-label="取消"
       :loading="discarding"

@@ -17,10 +17,8 @@ const delegatedProps = reactiveOmit(props, "class");
 
 const forwardedProps = useForwardProps(delegatedProps);
 
-// 對話框標題對到 CLAUDE.md 字級表的 H2（區塊標題）——
-// 對話框是覆蓋層而不是頁面，最高標題不佔 H1。
-// 原本的 text-lg／sm:text-xl 不在那張表的任何一層。
-const TITLE_CLASS = 'text-base font-semibold tracking-tight text-foreground ';
+// 對話框標題是區塊標題（22px）：對話框是覆蓋層不是頁面，不佔 H1。
+const TITLE_CLASS = 'text-lg font-semibold text-foreground';
 </script>
 
 <template>

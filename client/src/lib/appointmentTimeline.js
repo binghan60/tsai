@@ -10,7 +10,8 @@ export const SESSIONS = [
   { id: 'afternoon', label: '下午診', start: '14:00', end: '19:30' },
 ];
 
-export const SURGERY_BLOCK = { label: '手術時間', start: '11:30', end: '14:00' };
+// 上午診與下午診之間的空檔（午休）。手術只是掛號上的標記、不佔專屬時段，這段不開放掛號。
+export const MIDDAY_BREAK = { label: '午休', start: '11:30', end: '14:00' };
 
 function parseTimeToMinutes(value) {
   const [hour, minute] = String(value).split(':').map(Number);
@@ -71,7 +72,7 @@ export function appointmentsForTimeline(appointments) {
     .sort((a, b) => new Date(a.scheduledAt || 0) - new Date(b.scheduledAt || 0));
 }
 
-// 身分是否已經確定（回診＝已知道是哪隻寵物；初診＝petId 還是空的）。
+// 身分是否已經確定（回診＝已知道是哪隻貓咪；初診＝petId 還是空的）。
 // 決定頭像/名字要不要用「未確認」的灰階樣式，以及按「報到」要不要跳窗核對身分。
 export function isIdentityConfirmed(appointment) {
   return Boolean(appointment?.petId);
@@ -80,8 +81,8 @@ export function isIdentityConfirmed(appointment) {
 // 初診／回診徽章樣式，候診佇列、時間軸與各清單共用同一份判斷，
 // 避免各處各寫一份、之後改樣式要改好幾處。
 export const VISIT_TYPE_META = {
-  new: { label: '初診', classes: 'bg-brand-50 text-brand-700 ring-brand-300/80 dark:bg-brand-950/60 dark:text-brand-200 dark:ring-brand-500/40' },
-  return: { label: '回診', classes: 'bg-petrol-50 text-petrol-700 ring-petrol-300/80 dark:bg-petrol-950/60 dark:text-petrol-300 dark:ring-petrol-500/40' },
+  new: { label: '初診', classes: 'bg-info-surface text-info ring-info/25' },
+  return: { label: '回診', classes: 'bg-sunken text-muted-foreground ring-border' },
   unknown: { label: '類型未記錄', classes: 'bg-muted text-muted-foreground ring-border' },
 };
 

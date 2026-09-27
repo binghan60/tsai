@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { PawPrint } from '@lucide/vue';
 import { useAuthStore } from '../stores/auth';
 import { Button } from '../components/ui/button';
 import Input from '../components/ui/input/Input.vue';
@@ -33,25 +34,28 @@ async function login() {
 </script>
 
 <template>
-  <main class="grid min-h-screen place-items-center bg-muted/30 px-4 py-8">
-    <form class="w-full max-w-sm space-y-5 rounded-xl border bg-card p-6 shadow-sm" @submit.prevent="login">
-      <div class="space-y-1">
-        <h1 class="text-xl font-semibold">診所系統登入</h1>
-        <p class="text-sm text-muted-foreground">請使用診所共用帳號登入。</p>
+  <main class="grid min-h-screen place-items-center bg-background px-4 py-8">
+    <form class="w-full max-w-md space-y-6 rounded-2xl border border-border bg-card p-8 shadow-card" @submit.prevent="login">
+      <div class="flex items-center gap-3">
+        <span class="flex size-12 items-center justify-center rounded-xl bg-logo text-logo-foreground"><PawPrint class="size-6" stroke-width="2" /></span>
+        <div>
+          <h1 class="text-xl leading-tight font-semibold">謙華動物醫院</h1>
+          <p class="text-muted-foreground">用診所共用帳號登入</p>
+        </div>
       </div>
 
-      <p v-if="error" class="rounded-md bg-destructive-surface px-3 py-2 text-sm text-destructive" role="alert">{{ error }}</p>
+      <p v-if="error" class="rounded-lg bg-destructive-surface px-4 py-3 text-destructive" role="alert">{{ error }}</p>
 
-      <div class="space-y-2">
+      <div class="space-y-1.5">
         <Label for="username">帳號</Label>
         <Input id="username" v-model="username" autocomplete="username" required />
       </div>
-      <div class="space-y-2">
+      <div class="space-y-1.5">
         <Label for="password">密碼</Label>
         <Input id="password" v-model="password" type="password" autocomplete="current-password" required />
       </div>
 
-      <Button type="submit" class="w-full" :disabled="submitting">
+      <Button type="submit" size="lg" class="w-full" :disabled="submitting">
         {{ submitting ? '登入中…' : '登入' }}
       </Button>
     </form>

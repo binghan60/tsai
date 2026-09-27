@@ -65,7 +65,7 @@ provideRecordForm({
         remove: (key) => emit('remove', key),
       }
     : null,
-  // 結構預覽沒有特定寵物，也就沒有「上次」可言。
+  // 結構預覽沒有特定貓咪，也就沒有「上次」可言。
   previousFor: () => null,
   valueFor: () => '',
   setValue: noop,

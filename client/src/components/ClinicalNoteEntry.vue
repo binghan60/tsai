@@ -28,10 +28,10 @@ import RichTextEditor from './RichTextEditor.vue'
 // 一則病歷日誌，排成一張小報告：標頭（日期、類型、進度）＋「標籤｜內容」列。
 // 掛號與藥單日誌依後端回傳的分欄 sections 分列，每一欄都能就地修改並寫回來源（掛號／藥單）；
 // 手動與舊系統匯入的日誌是自由文字，整段顯示、整段修改。
-// 標頭右側的 actions slot 給使用端放額外按鈕（例如寵物詳情頁的刪除）。
+// 標頭右側的 actions slot 給使用端放額外按鈕（例如貓咪詳情頁的刪除）。
 const props = defineProps({
   note: { type: Object, required: true },
-  // 內文區額外的 class（例如寵物詳情頁長日誌右側有浮動導航鈕，要讓出空間；只縮內文，標頭底色維持滿版）
+  // 內文區額外的 class（例如貓咪詳情頁長日誌右側有浮動導航鈕，要讓出空間；只縮內文，標頭底色維持滿版）
   bodyClass: { type: [String, Array, Object], default: '' },
 })
 

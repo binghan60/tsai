@@ -28,7 +28,7 @@ describe('pinned pets routes', () => {
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 
-  it('GET 攤平寵物與飼主，並略過寵物已不存在的殘留紀錄', async () => {
+  it('GET 攤平貓咪與飼主，並略過貓咪已不存在的殘留紀錄', async () => {
     mockList([
       { _id: 'p1', pinnedBy: 'vet', source: 'manual', petId: { _id: petId, name: '豆豆', ownerId: { _id: 'o1', name: '王小明', phone: '0912' } } },
       { _id: 'p2', pinnedBy: 'vet', source: 'manual', petId: null },
@@ -56,7 +56,7 @@ describe('pinned pets routes', () => {
     assert.equal(ops[0].updateOne.update.$set.source, 'manual');
   });
 
-  it('POST 身分不正確或寵物不存在要擋', async () => {
+  it('POST 身分不正確或貓咪不存在要擋', async () => {
     Pet.exists = async () => null;
     const badSender = await fetch(`${origin}/api/pinned-pets`, {
       method: 'POST', headers: { 'content-type': 'application/json' },

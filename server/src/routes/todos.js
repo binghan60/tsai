@@ -24,9 +24,9 @@ function cleanContent(value) {
 // 把 body.mentions（petId 陣列）換成寫進文件的快照。出錯時回 { error: [status, message] }。
 async function resolveMentions(value) {
   const ids = parseMentionIds(value);
-  if (!ids) return { error: [422, `標記的寵物格式不正確（一則待辦最多 ${MAX_MENTIONS} 隻）`] };
+  if (!ids) return { error: [422, `標記的貓咪格式不正確（一則待辦最多 ${MAX_MENTIONS} 隻）`] };
   const mentions = await mentionSnapshots(ids);
-  if (!mentions) return { error: [422, '標記的寵物不存在，可能已被刪除'] };
+  if (!mentions) return { error: [422, '標記的貓咪不存在，可能已被刪除'] };
   return { mentions };
 }
 

@@ -6,10 +6,8 @@
 // 淡色調底面。同一個「這是選取中的選項」的概念卻有四種顏色語彙，選取態不再是
 // 一致的視覺記號。
 //
-// 這裡採 FilterTabs 已經確立的語言：軌道用 bg-muted，選取項用 bg-accent
-// text-accent-foreground（主色淡面——CLAUDE.md 定義的「選取／啟用中狀態」正式用法）。
-// 需要計數徽章、色點或橫向捲動時用 FilterTabs，不要在這裡加——那樣兩個元件
-// 遲早又會分裂成不同外觀。
+// 外觀跟 FilterTabs 完全相同：下凹軌道＋選取項浮起一塊卡片底。
+// 需要計數或橫向捲動時用 FilterTabs。
 const props = defineProps({
   modelValue: { type: [String, null], required: true },
   // [{ value, label, icon?, tabId?, panelId? }]。作為真正的頁籤時傳入 id，讓頁籤和內容區建立關聯。
@@ -42,7 +40,7 @@ function onKeydown(event, index) {
   <div
     role="tablist"
     :aria-label="ariaLabel"
-    class="gap-1 rounded-lg bg-muted p-1"
+    class="gap-0.5 segment-track"
     :class="fullWidth ? 'grid' : 'inline-flex'"
     :style="fullWidth ? { gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` } : undefined"
   >
@@ -51,10 +49,12 @@ function onKeydown(event, index) {
       :key="option.value"
       type="button"
       role="tab"
-      class="inline-flex items-center justify-center gap-2 rounded-md px-3 font-medium transition-colors focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:translate-y-px"
+      class="inline-flex items-center justify-center gap-2 rounded-lg px-3.5 text-sm leading-none transition-colors duration-150 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
       :class="[
-        size === 'sm' ? 'min-h-9 text-sm' : 'min-h-11 text-sm',
-        modelValue === option.value ? 'bg-accent text-accent-foreground shadow-sm' : 'bg-field/70 text-muted-foreground hover:bg-card hover:text-foreground',
+        size === 'sm' ? 'h-8' : 'h-[2.125rem]',
+        modelValue === option.value
+          ? 'segment-active font-semibold'
+          : 'font-medium text-muted-foreground hover:text-foreground',
       ]"
       :aria-selected="modelValue === option.value"
       :aria-controls="option.panelId"
@@ -63,7 +63,7 @@ function onKeydown(event, index) {
       @click="emit('update:modelValue', option.value)"
       @keydown="onKeydown($event, index)"
     >
-      <component v-if="option.icon" :is="option.icon" class="h-4 w-4 shrink-0" stroke-width="1.75" aria-hidden="true" />
+      <component v-if="option.icon" :is="option.icon" class="size-[1.125rem] shrink-0" stroke-width="1.75" aria-hidden="true" />
       <span>{{ option.label }}</span>
     </button>
   </div>

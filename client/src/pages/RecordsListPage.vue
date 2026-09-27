@@ -23,7 +23,7 @@ import { Card } from '../components/ui/card';
 // 預設先提供完整紀錄；需要處理的工作則依優先級排列在後續篩選中。
 const VIEWS = [
   { key: 'all', label: '全部', tone: 'neutral' },
-  { key: 'todo', label: '待辦', tone: 'neutral' },
+  { key: 'todo', label: '待處理', tone: 'neutral' },
   { key: 'failed', label: '失敗／待確認', tone: 'danger' },
   { key: 'pending', label: DELIVERY_STATUS_META.not_sent.label, tone: 'warning' },
   { key: 'drafts', label: RECORD_STATUS_META.draft.label, tone: 'warning' },
@@ -89,7 +89,7 @@ async function fetchRecords() {
       page.value = String(returnedTotalPages);
     }
   } catch (err) {
-    if (currentRequest === requestSequence) error.value = '就診紀錄暫時無法載入，請稍後重試';
+    if (currentRequest === requestSequence) error.value = '健檢報告暫時無法載入，請稍後重試';
   } finally {
     if (currentRequest === requestSequence) loading.value = false;
   }
@@ -187,11 +187,11 @@ async function removeRecord(confirmText) {
   try {
     await http.delete(`/records/${record._id}`, { data: { confirmText } });
     recordToRemove.value = null;
-    toast.success(`已刪除「${record.petId?.name || '寵物'}」${formatDate(record.visitDate)} 的就診紀錄`, '刪除紀錄成功');
+    toast.success(`已刪除「${record.petId?.name || '貓咪'}」${formatDate(record.visitDate)} 的健檢報告`, '刪除紀錄成功');
     // 刪掉這頁最後一筆時，fetchRecords 會自己退回有效頁碼。
     await fetchRecords();
   } catch (err) {
-    const msg = err.response?.data?.message ?? '刪除就診紀錄失敗';
+    const msg = err.response?.data?.message ?? '刪除健檢報告失敗';
     removeError.value = msg;
     toast.error(msg, '刪除失敗');
   } finally {
@@ -203,19 +203,19 @@ async function removeRecord(confirmText) {
 
 <template>
   <section class="space-y-5">
-    <PageHeader title="就診紀錄" description="依處理狀態篩選與追蹤每筆就診紀錄。">
+    <PageHeader title="健檢報告" description="依處理狀態篩選與追蹤每筆健檢報告。">
       <template #actions>
         <Button type="button" @click="openPetPicker"><ClipboardPlus class="h-4 w-4" stroke-width="1.75" />新增健檢</Button>
       </template>
     </PageHeader>
 
     <div class="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,24rem)] xl:items-center">
-      <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="就診紀錄佇列" @update:model-value="selectView" />
+      <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="健檢報告佇列" @update:model-value="selectView" />
       <FilterBar
         id="records-search"
         v-model="query"
-        label="搜尋就診紀錄"
-        placeholder="寵物、飼主或報告編號"
+        label="搜尋健檢報告"
+        placeholder="貓咪、飼主或報告編號"
         with-date-range
         :date-from="dateFrom"
         :date-to="dateTo"
@@ -231,7 +231,7 @@ async function removeRecord(confirmText) {
     <ListSkeleton v-if="loading" :rows="6" />
 
     <Card v-else-if="!error && !records.length">
-      <EmptyState inset :icon="FileText" title="這個佇列目前是空的" description="換一個佇列，或直接建立新的就診紀錄。" />
+      <EmptyState inset :icon="FileText" title="這個佇列目前是空的" description="換一個佇列，或直接建立新的健檢報告。" />
     </Card>
 
     <template v-else-if="records.length">
@@ -239,7 +239,7 @@ async function removeRecord(confirmText) {
            沒有直線分隔，靠橫向髮線區隔列與列。寄送失敗的列左側加一條警示色條，不用額外圖示搶注意力。 -->
       <Card class="hidden overflow-hidden p-0 shadow-sm xl:block dark:shadow-none" style="--data-columns: minmax(14rem, 1.3fr) minmax(14rem, 1fr) minmax(11rem, 0.8fr) 13rem">
         <div class="desktop-data-header">
-          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">寵物 / 飼主</span>
+          <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">貓咪 / 飼主</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">健檢類型．看診日</span>
           <span class="desktop-data-cell text-xs font-semibold tracking-wide text-muted-foreground uppercase">狀態</span>
           <span class="desktop-data-cell"></span>
@@ -254,8 +254,8 @@ async function removeRecord(confirmText) {
             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
               <PawPrint class="h-4 w-4" stroke-width="1.75" />
             </span>
-            <span class="min-w-0 truncate text-sm font-semibold text-primary" :title="`${record.petId?.name || '寵物未找到'} · ${record.petId?.ownerId?.name || '飼主未知'}`">
-              {{ record.petId?.name || '寵物未找到' }}<span class="font-normal text-muted-foreground"> · {{ record.petId?.ownerId?.name || '飼主未知' }}</span>
+            <span class="min-w-0 truncate text-sm font-semibold text-primary" :title="`${record.petId?.name || '貓咪未找到'} · ${record.petId?.ownerId?.name || '飼主未知'}`">
+              {{ record.petId?.name || '貓咪未找到' }}<span class="font-normal text-muted-foreground"> · {{ record.petId?.ownerId?.name || '飼主未知' }}</span>
             </span>
           </router-link>
 
@@ -283,7 +283,7 @@ async function removeRecord(confirmText) {
               variant="destructive"
               size="sm"
               :disabled="deletingRecordId === record._id"
-              :aria-label="`刪除${record.petId?.name || '寵物'} ${formatDate(record.visitDate)} 的就診紀錄`"
+              :aria-label="`刪除${record.petId?.name || '貓咪'} ${formatDate(record.visitDate)} 的健檢報告`"
               @click="openRemoveRecord(record)"
             >
               <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除
@@ -300,7 +300,7 @@ async function removeRecord(confirmText) {
               <PawPrint class="h-5 w-5" stroke-width="1.75" />
             </span>
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-medium text-primary">{{ record.petId?.name || '寵物未找到' }}</span>
+              <span class="block truncate text-sm font-medium text-primary">{{ record.petId?.name || '貓咪未找到' }}</span>
               <span class="flex items-center gap-1 truncate text-xs text-muted-foreground">
                 <User class="h-3 w-3 shrink-0" stroke-width="1.75" />{{ record.petId?.ownerId?.name || '飼主未知' }}
               </span>
@@ -334,7 +334,7 @@ async function removeRecord(confirmText) {
               size="sm"
               class="min-w-0 flex-1"
               :disabled="deletingRecordId === record._id"
-              :aria-label="`刪除${record.petId?.name || '寵物'} ${formatDate(record.visitDate)} 的就診紀錄`"
+              :aria-label="`刪除${record.petId?.name || '貓咪'} ${formatDate(record.visitDate)} 的健檢報告`"
               @click="openRemoveRecord(record)"
             >
               <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除
@@ -347,11 +347,11 @@ async function removeRecord(confirmText) {
     </template>
   </section>
   <PetPickerDialog :open="petPickerOpen" @close="closePetPicker" @select="startRecordForPet" />
-  <!-- 草稿只要一般確認，已結案報告才要打字（與寵物詳情頁、後端刪除端點同一個判準）。 -->
+  <!-- 草稿只要一般確認，已結案報告才要打字（與貓咪詳情頁、後端刪除端點同一個判準）。 -->
   <ConfirmDialog
     :open="Boolean(recordToRemove) && !isFinalizedRecord(recordToRemove)"
     title="捨棄健檢草稿"
-    :description="`確定要捨棄「${recordToRemove?.petId?.name || '寵物'}」${formatDate(recordToRemove?.visitDate)} 這筆草稿嗎？此操作無法復原。`"
+    :description="`確定要捨棄「${recordToRemove?.petId?.name || '貓咪'}」${formatDate(recordToRemove?.visitDate)} 這筆草稿嗎？此操作無法復原。`"
     confirm-label="捨棄草稿"
     destructive
     :loading="Boolean(deletingRecordId)"

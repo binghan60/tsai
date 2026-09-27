@@ -48,7 +48,7 @@ router.put('/appointment-settings', async (req, res, next) => {
 router.get('/form-templates', async (req, res, next) => {
   try {
     const includeDisabled = req.query.includeDisabled === '1' || req.query.includeDisabled === 'true';
-    // 建立報告時帶寵物物種，只會拿到適用的表單。
+    // 建立報告時帶貓咪物種，只會拿到適用的表單。
     const templates = await listTemplates({ includeDisabled, species: req.query.species || undefined });
     res.json(templates.map(serializeTemplateSummary));
   } catch (err) {

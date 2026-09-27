@@ -12,11 +12,11 @@ import { formatDate } from '../lib/datetime';
 // 刪除報告要求先打字才能按下確認，仿 GitHub 刪除 repository 的做法——
 // 這是唯一可以刪掉已結案報告的入口，防的是「手滑點到刪除、又手滑點到確認」。
 //
-// 要打的字是寵物名而不是報告編號：編號是一串記不住的亂碼，只能照抄，
-// 抄的過程並不會讓人意識到自己在刪什麼；打出寵物名則會。
+// 要打的字是貓咪名而不是報告編號：編號是一串記不住的亂碼，只能照抄，
+// 抄的過程並不會讓人意識到自己在刪什麼；打出貓咪名則會。
 const props = defineProps({
   record: { type: Object, required: true },
-  // 要輸入的確認文字，由呼叫端提供（目前是寵物名）。
+  // 要輸入的確認文字，由呼叫端提供（目前是貓咪名）。
   confirmWord: { type: String, required: true },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
@@ -69,8 +69,8 @@ function submit() {
           即將刪除 <strong class="text-foreground">{{ expected }}</strong> 的健檢報告<template v-if="recordLabel">（{{ recordLabel }}）</template>。
         </p>
         <div class="space-y-1.5">
-          <Label for="delete-record-confirm" class="text-xs font-medium text-foreground">請輸入寵物名稱以確認刪除</Label>
-          <Input id="delete-record-confirm" ref="inputEl" v-model="input" autofocus autocomplete="off" placeholder="在此輸入寵物名稱" />
+          <Label for="delete-record-confirm" class="text-xs font-medium text-foreground">請輸入貓咪名稱以確認刪除</Label>
+          <Input id="delete-record-confirm" ref="inputEl" v-model="input" autofocus autocomplete="off" placeholder="在此輸入貓咪名稱" />
           <button
             type="button"
             class="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-accent/70 px-2 text-xs font-medium text-primary underline decoration-primary/40 underline-offset-2 transition-colors hover:bg-accent hover:decoration-primary"

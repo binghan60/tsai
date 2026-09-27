@@ -42,7 +42,7 @@ describe('record transaction workflow against a replica set', { skip: !uri }, ()
 
   it('permanently deletes a medical record through a transaction-capable database', async () => {
     owner = await Owner.create({ name: '整合測試飼主', phone: '0900000000' });
-    pet = await Pet.create({ ownerId: owner._id, name: '整合測試寵物', species: '犬' });
+    pet = await Pet.create({ ownerId: owner._id, name: '整合測試貓咪', species: '犬' });
     record = await MedicalRecord.create({ petId: pet._id, visitDate: new Date('2026-08-20T00:00:00.000Z') });
 
     const deletedResponse = await fetch(`${origin}/api/records/${record._id}`, { method: 'DELETE' });
@@ -56,7 +56,7 @@ describe('record transaction workflow against a replica set', { skip: !uri }, ()
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         owner: { name: '原子建檔飼主', phone: '0911000000' },
-        pet: { name: '原子建檔寵物', species: '貓', birthDateEstimated: true },
+        pet: { name: '原子建檔貓咪', species: '貓', birthDateEstimated: true },
       }),
     });
     assert.equal(response.status, 201);

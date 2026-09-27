@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildSlotGrid, duplicateBookings, isOverdue, LATE_GRACE_MINUTES, minutesPastSchedule, sessionAutoCollapsed, slotCellLabel, slotSessions, SURGERY_SESSION } from './receptionBoard.js';
+import { buildSlotGrid, duplicateBookings, isOverdue, LATE_GRACE_MINUTES, minutesPastSchedule, sessionAutoCollapsed, slotCellLabel } from './receptionBoard.js';
 
 const scheduledAt = '2026-09-15T06:00:00.000Z'; // 14:00 台北
 
@@ -72,17 +72,11 @@ describe('buildSlotGrid', () => {
     assert.equal(cells.find((cell) => cell.time === '14:30').past, false);
   });
 
-  // 手術時段只在勾了手術時出現，夾在上午診與下午診中間，格子帶 surgery 標記。
-  it('surgery 會插入手術時段那一組', () => {
-    assert.deepEqual(slotSessions({ sessions }).map((session) => session.id), ['morning', 'afternoon']);
-    assert.deepEqual(slotSessions({ sessions, surgery: true }).map((session) => session.id), ['morning', 'surgery', 'afternoon']);
-    const [, surgery] = buildSlotGrid([], { sessions, surgery: true });
-    assert.equal(surgery.surgery, true);
-    assert.equal(surgery.label, SURGERY_SESSION.label);
-    assert.deepEqual(surgery.rows.map((row) => row.hour), ['11:00', '12:00', '13:00']);
-    assert.equal(surgery.rows[0].cells.find((cell) => cell.time === '11:30').inRange, false);
-    assert.equal(surgery.rows[0].cells.find((cell) => cell.time === '11:45').inRange, true);
-    assert.equal(surgery.rows[2].cells.find((cell) => cell.time === '13:45').inRange, true);
+  // 手術只是標記：時段格永遠只有門診兩段，中午不開放。
+  it('只有上午診與下午診兩組，中午沒有手術時段', () => {
+    assert.deepEqual(buildSlotGrid([], { sessions }).map((session) => session.id), ['morning', 'afternoon']);
+    const [morning] = buildSlotGrid([], { sessions });
+    assert.equal(morning.rows.at(-1).cells.find((cell) => cell.time === '11:45').inRange, false);
   });
 });
 
@@ -100,7 +94,7 @@ describe('duplicateBookings', () => {
     { _id: 'b', petId: 'p1', status: 'cancelled', time: '11:00' },
     { _id: 'c', petId: 'p2', status: 'arrived', time: '10:15' },
   ];
-  it('同一隻寵物當天有效的掛號才算重複，正在編輯的那筆不算', () => {
+  it('同一隻貓咪當天有效的掛號才算重複，正在編輯的那筆不算', () => {
     assert.deepEqual(duplicateBookings(items, 'p1').map((item) => item._id), ['a']);
     assert.deepEqual(duplicateBookings(items, 'p1', 'a'), []);
     assert.deepEqual(duplicateBookings(items, ''), []);

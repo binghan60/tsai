@@ -152,7 +152,7 @@ watch(ownerMode, (mode) => {
 });
 
 // ----------------------------------------------------
-// 寵物表單模組 (Pet Form Module) - 貓咪專科專屬
+// 貓咪表單模組 (Pet Form Module) - 貓咪專科專屬
 // ----------------------------------------------------
 const petForm = ref({
   ...emptyPetDraft(),
@@ -361,7 +361,7 @@ function validateForm() {
   }
 
   if (!petForm.value.name.trim()) {
-    errors.petName = '請填寫寵物名字';
+    errors.petName = '請填寫貓咪名字';
     valid = false;
     firstErrorId = firstErrorId || 'new-pet-name';
   }
@@ -423,11 +423,11 @@ async function submit() {
     const { data: pet } = ownerMode.value === 'existing'
       ? await http.post(`/owners/${selectedOwner.value._id}/pets`, payload)
       : await http.post('/owners/with-pet', { owner: newOwner.value, pet: payload });
-    toast.success(`已成功為 ${activeOwnerName.value} 新增「${pet.name}」`, '新增寵物成功');
+    toast.success(`已成功為 ${activeOwnerName.value} 新增「${pet.name}」`, '新增貓咪成功');
     leavingAfterAction.value = true;
     await router.push(`/pets/${pet._id}`);
   } catch (err) {
-    submitError.value = err.response?.data?.message ?? '新增寵物失敗，請稍後再試。';
+    submitError.value = err.response?.data?.message ?? '新增貓咪失敗，請稍後再試。';
   } finally {
     submitting.value = false;
   }
@@ -489,7 +489,7 @@ onBeforeUnmount(() => {
 <template>
   <section :class="embedded ? 'space-y-5' : 'relative space-y-5 pb-28'">
     <!-- 頂部導航 -->
-    <Breadcrumbs v-if="!embedded" :items="[{ label: '寵物列表', to: '/pets' }, { label: '新增貓咪檔案' }]" />
+    <Breadcrumbs v-if="!embedded" :items="[{ label: '貓咪列表', to: '/pets' }, { label: '新增貓咪檔案' }]" />
 
     <!-- 頁面標題列 -->
     <div v-if="!embedded" class="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
@@ -748,7 +748,7 @@ onBeforeUnmount(() => {
         <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
             <Label class="text-xs font-medium text-foreground">性別</Label>
-            <SegmentedControl v-model="petForm.sex" :options="SEX_OPTIONS" aria-label="寵物性別" size="sm" full-width />
+            <SegmentedControl v-model="petForm.sex" :options="SEX_OPTIONS" aria-label="貓咪性別" size="sm" full-width />
           </div>
           <div class="space-y-1.5">
             <Label for="new-pet-weight" class="text-xs font-medium text-foreground">目前體重</Label>

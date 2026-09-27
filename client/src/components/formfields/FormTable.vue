@@ -103,7 +103,7 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                       :aria-label="`${finding.label}備註`"
                       rows="2"
                       :placeholder="finding.status === 'abnormal' ? '請描述異常（選填）' : '選填'"
-                      class="min-h-16 resize-y scroll-mt-40 border-border bg-field pr-20 text-foreground focus-visible:border-belle-500"
+                      class="min-h-16 resize-y scroll-mt-40 pr-20"
                     />
                     <TextTemplateTrigger v-model="finding.note" :item-key="finding.key" :label="`${finding.label}備註`" :input-id="`record-lab-note-${finding.key}`" />
                   </div>

@@ -19,7 +19,7 @@ import { DEFAULT_ESTIMATED_DURATION_MINUTES, MAX_ESTIMATED_DURATION_MINUTES } fr
 import { clinicDateInput, clinicTimeInput, formatDate, formatDateTime, weekdayLabel } from '../lib/datetime';
 
 // 新增與修改掛號共用的 Modal（取代原本的 AppointmentDrawer 側邊抽屜）。
-// 置中雙欄：左欄「誰・為什麼」（類型、寵物、來院原因、手術、報告模板、內部備註），
+// 置中雙欄：左欄「誰・為什麼」（類型、貓咪、來院原因、手術、報告模板、內部備註），
 // 右欄「什麼時候」（日期快選＋時段格）。時段格拿到自己的一欄就不用捲動。
 //
 // 抽屜改成 Modal 的原因：櫃台頁改成整寬的時間軸後，再從右邊擠一個 576px 的抽屜進來，
@@ -50,7 +50,7 @@ const MODE_OPTIONS = [
 ];
 const OWNER_MODE_OPTIONS = [
   { value: 'new', label: '新飼主' },
-  { value: 'existing', label: '既有飼主・新增寵物' },
+  { value: 'existing', label: '既有飼主・新增貓咪' },
 ];
 const mode = ref('return');
 const ownerMode = ref('new');
@@ -59,7 +59,7 @@ const slotDate = ref(props.appointment?.date || props.date);
 
 const requiredText = (message) => (value) => (value && String(value).trim() !== '') || message;
 const requiredTime = requiredText('請選擇預約時段');
-// 飼主姓名不在這裡驗：接電話掛號時常常只問得到寵物名跟電話，報到那一步才必填。
+// 飼主姓名不在這裡驗：接電話掛號時常常只問得到貓咪名跟電話，報到那一步才必填。
 const requiredPetName = (value) => (!isEdit.value && mode.value !== 'new' ? true : requiredText('必填')(value));
 const requiredForSurgery = (value) => (!isSurgery.value || (value && String(value).trim() !== '')) || '請填寫手術名稱';
 
@@ -88,7 +88,7 @@ const { value: internalNote } = useField('internalNote');
 const { value: isSurgery } = useField('isSurgery');
 const { value: surgeryName, errorMessage: surgeryNameError } = useField('surgeryName', requiredForSurgery);
 
-// ── 寵物／飼主搜尋：直接放在 Modal 裡，不再疊一層選擇對話框 ─────────────────
+// ── 貓咪／飼主搜尋：直接放在 Modal 裡，不再疊一層選擇對話框 ─────────────────
 // 這是「選人用的候選清單」，跟頁面的提交式搜尋不同，邊打邊查。
 function useCandidateSearch(endpoint) {
   const query = ref('');
@@ -151,7 +151,7 @@ function attendanceSummaryText(entity, subject) {
 const attendanceWarnings = computed(() => {
   if (mode.value === 'return' && selectedPet.value) {
     return [
-      attendanceSummaryText(selectedPet.value, selectedPet.value.name || '寵物'),
+      attendanceSummaryText(selectedPet.value, selectedPet.value.name || '貓咪'),
       attendanceSummaryText(selectedPet.value.ownerId, selectedPet.value.ownerId?.name || '飼主'),
     ].filter(Boolean);
   }
@@ -197,7 +197,7 @@ function changeDuration(delta) {
   estimatedDurationMinutes.value = Math.min(MAX_ESTIMATED_DURATION_MINUTES, Math.max(15, Number(estimatedDurationMinutes.value) + delta));
 }
 
-// 同一隻寵物那天已經有掛號時先提醒——電話裡飼主常忘記早上已經掛過。
+// 同一隻貓咪那天已經有掛號時先提醒——電話裡飼主常忘記早上已經掛過。
 const duplicatePetId = computed(() => (isEdit.value ? props.appointment.petId : mode.value === 'return' ? selectedPet.value?._id : null));
 const duplicateWarning = computed(() => {
   const found = duplicateBookings(slotItems.value, duplicatePetId.value, props.appointment?._id);
@@ -209,7 +209,7 @@ const duplicateWarning = computed(() => {
 
 // ── 送出 ─────────────────────────────────────────────────────────────────
 const title = computed(() => (isEdit.value ? `修改掛號：${props.appointment.petName}` : '新增掛號'));
-const description = computed(() => (isEdit.value ? '只更新這筆掛號，不會修改飼主或寵物主檔' : '電話掛號可先指定日期與時段，飼主資料報到時再補齊'));
+const description = computed(() => (isEdit.value ? '只更新這筆掛號，不會修改飼主或貓咪主檔' : '電話掛號可先指定日期與時段，飼主資料報到時再補齊'));
 const summary = computed(() => {
   const name = isEdit.value ? petName.value : mode.value === 'return' ? selectedPet.value?.name : petName.value;
   const when = time.value ? `${formatDate(slotDate.value)}（${weekdayLabel(slotDate.value)}）${time.value}` : '';
@@ -244,7 +244,7 @@ const onSubmit = handleSubmit((values) => {
   const common = { ...shared, internalNote: values.internalNote, templateId: templateId.value };
   if (mode.value === 'return') {
     if (!selectedPet.value) {
-      pickPetError.value = '請先選擇寵物';
+      pickPetError.value = '請先選擇貓咪';
       return;
     }
     emit('submit', { ...common, visitType: 'return', petId: selectedPet.value._id });
@@ -286,10 +286,10 @@ const onSubmit = handleSubmit((values) => {
               <SegmentedControl v-model="mode" :options="MODE_OPTIONS" aria-label="掛號類型" full-width />
 
               <div v-if="mode === 'return'" class="space-y-1.5">
-                <Label for="dialog-pet-search" class="text-xs font-medium">寵物<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+                <Label for="dialog-pet-search" class="text-xs font-medium">貓咪<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
                 <div v-if="selectedPet" class="flex items-center gap-3 rounded-lg border border-primary bg-accent px-3 py-2.5">
                   <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-semibold text-accent-foreground">{{ selectedPet.name }}<span class="ml-2 text-xs font-normal">{{ [selectedPet.species, selectedPet.breed].filter(Boolean).join(' · ') || '寵物' }}</span></p>
+                    <p class="truncate text-sm font-semibold text-accent-foreground">{{ selectedPet.name }}<span class="ml-2 text-xs font-normal">{{ [selectedPet.species, selectedPet.breed].filter(Boolean).join(' · ') || '貓咪' }}</span></p>
                     <p class="truncate text-xs text-accent-foreground/80">{{ selectedPet.ownerId?.name || '飼主未知' }}<template v-if="selectedPet.ownerId?.phone"> · {{ selectedPet.ownerId.phone }}</template></p>
                   </div>
                   <Button type="button" variant="secondary" size="sm" @click="selectedPet = null">更換</Button>
@@ -297,12 +297,12 @@ const onSubmit = handleSubmit((values) => {
                 <template v-else>
                   <div class="relative">
                     <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
-                    <Input id="dialog-pet-search" v-model="petSearch.query.value" autofocus inputmode="search" class="h-11 pl-9" placeholder="寵物名、飼主姓名或電話" autocomplete="off" />
+                    <Input id="dialog-pet-search" v-model="petSearch.query.value" autofocus inputmode="search" class="h-11 pl-9" placeholder="貓咪名、飼主姓名或電話" autocomplete="off" />
                   </div>
                   <div v-if="petSearch.query.value.trim()" class="overflow-hidden rounded-lg border border-border" aria-live="polite">
                     <p v-if="petSearch.loading.value" class="px-3 py-3 text-xs text-muted-foreground">搜尋中…</p>
                     <p v-else-if="petSearch.failed.value" class="px-3 py-3 text-xs text-destructive">搜尋失敗，請稍後再試</p>
-                    <p v-else-if="!petSearch.results.value.length" class="px-3 py-3 text-xs text-muted-foreground">找不到符合的寵物；第一次來請切到「初診」。</p>
+                    <p v-else-if="!petSearch.results.value.length" class="px-3 py-3 text-xs text-muted-foreground">找不到符合的貓咪；第一次來請切到「初診」。</p>
                     <button
                       v-for="pet in petSearch.results.value"
                       v-else
@@ -311,7 +311,7 @@ const onSubmit = handleSubmit((values) => {
                       class="flex w-full items-center gap-3 border-b border-border bg-card px-3 py-2.5 text-left last:border-b-0 hover:bg-field"
                       @click="selectPet(pet)"
                     >
-                      <span class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold text-primary">{{ pet.name }}</span><span class="ml-2 text-xs text-muted-foreground">{{ pet.species || '寵物' }} · {{ pet.ownerId?.name || '飼主未知' }}<template v-if="pet.ownerId?.phone"> · {{ pet.ownerId.phone }}</template></span></span>
+                      <span class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold text-primary">{{ pet.name }}</span><span class="ml-2 text-xs text-muted-foreground">{{ pet.species || '貓咪' }} · {{ pet.ownerId?.name || '飼主未知' }}<template v-if="pet.ownerId?.phone"> · {{ pet.ownerId.phone }}</template></span></span>
                     </button>
                   </div>
                 </template>
@@ -348,11 +348,11 @@ const onSubmit = handleSubmit((values) => {
                     </div>
                   </template>
                   <p v-if="pickOwnerError" class="text-xs font-medium text-destructive">{{ pickOwnerError }}</p>
-                  <p class="text-xs text-muted-foreground">報到時會將新寵物建檔於此飼主名下。</p>
+                  <p class="text-xs text-muted-foreground">報到時會將新貓咪建檔於此飼主名下。</p>
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                   <div class="space-y-1.5">
-                    <Label for="dialog-pet-name" class="text-xs font-medium">寵物姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+                    <Label for="dialog-pet-name" class="text-xs font-medium">貓咪姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
                     <Input id="dialog-pet-name" v-model="petName" placeholder="例：妞妞" />
                     <p v-if="petNameError" class="text-xs font-medium text-destructive">{{ petNameError }}</p>
                   </div>
@@ -381,7 +381,7 @@ const onSubmit = handleSubmit((values) => {
             <template v-else>
               <div class="grid gap-4 sm:grid-cols-2">
                 <div class="space-y-1.5">
-                  <Label for="dialog-edit-pet-name" class="text-xs font-medium">寵物姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+                  <Label for="dialog-edit-pet-name" class="text-xs font-medium">貓咪姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
                   <Input id="dialog-edit-pet-name" v-model="petName" />
                   <p v-if="petNameError" class="text-xs font-medium text-destructive">{{ petNameError }}</p>
                 </div>
@@ -405,26 +405,28 @@ const onSubmit = handleSubmit((values) => {
               <Input id="dialog-reason" v-model="reason" placeholder="例：打疫苗、回診拿藥、不舒服" />
             </div>
 
-            <!-- 勾了手術整列變淡紫底，跟時間軸上的手術卡片同一套；時段格也會多出手術時段。 -->
-            <div class="flex items-start gap-3 rounded-lg border px-3 py-1.5 transition-colors" :class="isSurgery ? 'border-surgery/35 bg-surgery-surface/60' : 'border-transparent'">
+            <!-- 手術只是標記：勾了整列變淡紫底（跟時間軸上的手術卡片同一套），時段規則跟一般門診相同。 -->
+            <div class="flex items-start gap-3 rounded-lg px-3 py-1.5 transition-colors" :class="isSurgery ? 'bg-surgery-surface' : 'bg-sunken'">
               <label for="dialog-is-surgery" class="flex min-h-11 shrink-0 cursor-pointer items-center gap-2 text-sm font-medium" :class="isSurgery ? 'text-surgery' : ''">
                 <Checkbox id="dialog-is-surgery" v-model="isSurgery" />
                 手術
               </label>
               <div class="min-w-0 flex-1 space-y-1 py-1">
                 <Input v-model="surgeryName" :disabled="!isSurgery" placeholder="手術名稱" aria-label="手術名稱" />
-                <p v-if="surgeryNameError" class="text-xs font-medium text-destructive">{{ surgeryNameError }}</p>
+                <p v-if="surgeryNameError" class="text-sm font-medium text-destructive">{{ surgeryNameError }}</p>
+                <p v-else-if="isSurgery" class="text-sm text-surgery">手術只是標記，不另外佔時段；時間照一般門診選。</p>
               </div>
             </div>
 
             <div class="space-y-1.5">
-              <Label for="dialog-template" class="text-xs font-medium">報告模板</Label>
+              <Label for="dialog-template" class="text-xs font-medium">健檢表單</Label>
               <Select v-model="templateId">
                 <SelectTrigger id="dialog-template" class="w-full"><SelectValue placeholder="需要時可由醫師選擇" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="template in templates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
                 </SelectContent>
               </Select>
+              <p class="text-sm text-muted-foreground">報到時用這份建立健檢報告草稿；診療台的檢驗數值項目也從這份帶入。</p>
             </div>
             <div v-if="!isEdit" class="space-y-1.5">
               <Label for="dialog-internal-note" class="text-xs font-medium">內部備註</Label>

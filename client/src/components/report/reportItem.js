@@ -1,4 +1,5 @@
 import { familyOf } from '../../lib/fieldFamily';
+import { hasDentalContent } from '../../lib/dentalChart';
 
 // 報告區塊共用的取值與標籤邏輯。
 // 這個資料夾底下的元件固定用淺色配色（stone / brand），不套 dark: variant ——
@@ -14,7 +15,7 @@ export function hasValue(item) {
 // ReportField 會把它印出來，沒有理由因為狀態是「未檢查」就把它丟掉。
 export function hasContent(item) {
   const family = familyOf(item);
-  if (family === 'dental') return Object.keys(item.value?.teeth ?? {}).length > 0;
+  if (family === 'dental') return hasDentalContent(item.value);
   if (family === 'finding' || family === 'lab') {
     return item.status !== 'not_checked' || hasValue(item) || String(item.note ?? '').trim() !== '';
   }

@@ -1,12 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { AlertTriangle, ArrowRight, CalendarCheck, ClipboardCheck, Clock3, MailWarning, PawPrint, UsersRound } from '@lucide/vue'
+import { AlertTriangle, ArrowRight, CalendarCheck, Cat, ClipboardCheck, Clock3, MailWarning, UsersRound } from '@lucide/vue'
+import { clinicDateInput, weekdayLabel } from '../lib/datetime'
 import { http } from '../api/http'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import ListSkeleton from '../components/ListSkeleton.vue'
-import PageHeader from '../components/PageHeader.vue'
 import TechLineChart from '../components/charts/TechLineChart.vue'
 import TechFunnelChart from '../components/charts/TechFunnelChart.vue'
 
@@ -21,7 +21,7 @@ async function fetchDashboard() {
     const { data } = await http.get('/dashboard')
     dashboard.value = data
   } catch {
-    error.value = '目前無法讀取總儀表板，請稍後再試。'
+    error.value = '目前無法讀取總覽，請稍後再試。'
   } finally {
     loading.value = false
   }
@@ -37,16 +37,21 @@ const today = computed(() => dashboard.value?.today ?? {})
 const month = computed(() => dashboard.value?.monthlyAppointments ?? {})
 const delivery = computed(() => dashboard.value?.delivery ?? {})
 const todayCards = computed(() => [
-  { label: '今日預約', value: today.value.total ?? 0, detail: '所有登記個案', to: '/appointments', icon: CalendarCheck, tone: 'bg-accent text-accent-foreground' },
-  { label: '候診中', value: today.value.arrived ?? 0, detail: '已報到、尚未完成', to: '/appointments', icon: Clock3, tone: 'bg-warning-surface text-warning' },
-  { label: '已完成', value: today.value.completed ?? 0, detail: '今日已看診完成', to: '/appointments', icon: ClipboardCheck, tone: 'bg-success-surface text-success' },
-  { label: '取消／未到', value: (today.value.cancelled ?? 0) + (today.value.no_show ?? 0), detail: '需留意爽約情況', to: '/appointments', icon: AlertTriangle, tone: 'bg-muted text-muted-foreground' },
+  // 每一格都點得進掛號台對應的那一段（?stage= 是掛號台流程列的篩選）。
+  { label: '今日預約', value: today.value.total ?? 0, detail: '所有登記的掛號', to: '/reception', icon: CalendarCheck, tone: 'bg-accent text-accent-foreground' },
+  { label: '在院', value: today.value.arrived ?? 0, detail: '已報到、還沒完成', to: '/reception?stage=onsite', icon: Clock3, tone: 'bg-warning-surface text-warning' },
+  { label: '已完成', value: today.value.completed ?? 0, detail: '今天看完的', to: '/reception?stage=completed', icon: ClipboardCheck, tone: 'bg-success-surface text-success' },
+  { label: '取消／未到', value: (today.value.cancelled ?? 0) + (today.value.no_show ?? 0), detail: '要留意爽約', to: '/reception', icon: AlertTriangle, tone: 'bg-sunken text-muted-foreground' },
 ])
 const alerts = computed(() => [
   { label: '寄送異常', value: delivery.value.failed ?? 0, detail: '寄送失敗或結果待確認', to: '/records?view=failed', tone: 'text-danger' },
   { label: '待寄報告', value: delivery.value.pending ?? 0, detail: '已結案，尚未完成交付', to: '/records?view=pending', tone: 'text-warning' },
   { label: '逾一天草稿', value: delivery.value.overdueDraftCount ?? 0, detail: '超過 24 小時未完成', to: '/records?view=drafts', tone: 'text-foreground' },
 ])
+const todayLabel = computed(() => {
+  const date = clinicDateInput()
+  return `${date.slice(5).replace('-', '/')}（${weekdayLabel(date)}）`
+})
 const funnelData = computed(() => [
   { label: '預約', value: month.value.total ?? 0 },
   { label: '已報到', value: month.value.checkedIn ?? 0 },
@@ -57,55 +62,82 @@ onMounted(fetchDashboard)
 </script>
 
 <template>
-  <section class="space-y-5 xl:flex xl:min-h-[calc(100vh-2.5rem)] xl:flex-col xl:space-y-3">
+  <section class="space-y-5 xl:flex xl:min-h-[calc(100vh-2.5rem)] xl:flex-col">
+    <header class="flex flex-wrap items-baseline gap-3">
+      <h1 class="text-xl font-semibold">總覽</h1>
+      <span class="num text-lg text-subtle-foreground">{{ todayLabel }}</span>
+    </header>
+
     <Alert v-if="error" variant="destructive">
       <AlertDescription class="flex items-center justify-between gap-3"><span>{{ error }}</span><Button type="button" variant="secondary" size="sm" :disabled="loading" @click="fetchDashboard">重新整理</Button></AlertDescription>
     </Alert>
     <ListSkeleton v-if="loading && !dashboard" :rows="7" />
 
     <template v-else-if="dashboard">
-      <div><h2 class="text-base font-semibold text-foreground">今日診所</h2><p class="mt-0.5 text-sm text-muted-foreground xl:hidden">先看現場人流與看診進度。</p></div>
-      <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:gap-2">
-        <router-link v-for="item in todayCards" :key="item.label" :to="item.to" class="group rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:border-primary/45 hover:bg-muted/30 dark:shadow-none xl:flex xl:items-center xl:gap-3 xl:p-3">
-          <div class="flex items-start justify-between gap-3 xl:contents"><span class="flex h-10 w-10 items-center justify-center rounded-lg xl:h-9 xl:w-9 xl:shrink-0" :class="item.tone"><component :is="item.icon" class="h-5 w-5" /></span><ArrowRight class="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 xl:hidden" /></div>
-          <div class="xl:min-w-0 xl:flex-1">
-            <p class="mt-6 text-4xl font-semibold leading-none tabular-nums text-foreground xl:mt-0 xl:text-xl">{{ item.value }}</p><p class="mt-3 text-sm font-medium text-foreground xl:mt-0.5 xl:text-xs">{{ item.label }}</p>
-          </div>
-          <p class="mt-1 text-xs text-muted-foreground xl:hidden">{{ item.detail }}</p>
+      <!-- 現在：今天的人流。每一格都點得進對應的清單。 -->
+      <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <router-link v-for="item in todayCards" :key="item.label" :to="item.to" class="group flex items-center gap-4 rounded-xl border border-border bg-card p-5 shadow-card transition-colors hover:border-primary/45">
+          <span class="flex size-12 shrink-0 items-center justify-center rounded-xl" :class="item.tone"><component :is="item.icon" class="size-6" stroke-width="1.75" /></span>
+          <span class="min-w-0 flex-1">
+            <span class="num block text-xl leading-none font-semibold">{{ item.value }}</span>
+            <span class="mt-1.5 block font-semibold">{{ item.label }}</span>
+            <span class="block truncate text-sm text-muted-foreground">{{ item.detail }}</span>
+          </span>
+          <ArrowRight class="size-5 shrink-0 text-subtle-foreground transition-transform group-hover:translate-x-0.5" stroke-width="1.75" />
         </router-link>
       </div>
 
-      <Card v-if="alerts.some((item) => item.value)" class="border-warning/35 bg-warning-surface/45 shadow-sm dark:shadow-none">
-        <CardContent class="grid gap-3 p-4 md:grid-cols-3 xl:gap-2 xl:p-2.5"><router-link v-for="item in alerts" :key="item.label" :to="item.to" class="flex items-center gap-3 rounded-lg px-2 py-1 transition-colors hover:bg-card/60"><span class="text-2xl font-semibold tabular-nums xl:text-lg" :class="item.tone">{{ item.value }}</span><span class="min-w-0 flex-1"><span class="block text-sm font-medium text-foreground">{{ item.label }}</span><span class="block truncate text-xs text-muted-foreground xl:hidden">{{ item.detail }}</span></span><ArrowRight class="h-4 w-4 shrink-0 text-muted-foreground" /></router-link></CardContent>
-      </Card>
+      <!-- 報告交付的例外：有才出現。 -->
+      <div v-if="alerts.some((item) => item.value)" class="grid gap-3 md:grid-cols-3">
+        <router-link v-for="item in alerts.filter((alert) => alert.value)" :key="item.label" :to="item.to" class="flex items-center gap-3 rounded-xl bg-warning-surface px-4 py-3 transition-colors hover:bg-warning/15">
+          <span class="num text-xl font-semibold" :class="item.tone">{{ item.value }}</span>
+          <span class="min-w-0 flex-1"><span class="block font-semibold text-foreground">{{ item.label }}</span><span class="block truncate text-sm text-muted-foreground">{{ item.detail }}</span></span>
+          <ArrowRight class="size-5 shrink-0 text-subtle-foreground" stroke-width="1.75" />
+        </router-link>
+      </div>
 
-      <div class="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:flex-1 xl:gap-3">
-        <Card class="shadow-sm dark:shadow-none xl:gap-2 xl:py-3"><CardHeader class="xl:px-4"><CardTitle>本月服務量</CardTitle><CardDescription class="xl:hidden">近 8 週健檢／就診紀錄趨勢。</CardDescription></CardHeader><CardContent class="xl:flex xl:flex-1 xl:flex-col xl:px-4"><div class="mb-2 flex items-end justify-between gap-4 xl:mb-1 xl:shrink-0"><div><p class="text-3xl font-semibold tabular-nums text-foreground xl:text-xl">{{ dashboard.monthlyReportCount }}</p><p class="mt-1 text-sm text-muted-foreground">本月健檢／就診紀錄</p></div><span class="rounded-full bg-accent px-3 py-1 text-xs text-accent-foreground">{{ changeLabel(dashboard.monthlyReportCount, dashboard.previousMonthlyReportCount) }}</span></div><div class="h-[260px] w-full xl:h-auto xl:flex-1"><TechLineChart :data="dashboard.weeklyTrend ?? []" label="每週健檢／就診紀錄" /></div></CardContent></Card>
+      <div class="grid gap-4 xl:flex-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <Card class="xl:gap-2">
+          <CardHeader>
+            <CardTitle>本月健檢報告</CardTitle>
+            <CardDescription>近 8 週每週的健檢報告數</CardDescription>
+          </CardHeader>
+          <CardContent class="xl:flex xl:flex-1 xl:flex-col">
+            <div class="mb-3 flex items-end justify-between gap-4">
+              <router-link to="/records?view=all" class="group">
+                <span class="num block text-xl font-semibold group-hover:text-primary">{{ dashboard.monthlyReportCount }}</span>
+                <span class="text-sm text-muted-foreground">本月健檢報告</span>
+              </router-link>
+              <span class="rounded-full bg-accent px-3 py-1 text-sm font-semibold text-accent-foreground">{{ changeLabel(dashboard.monthlyReportCount, dashboard.previousMonthlyReportCount) }}</span>
+            </div>
+            <div class="h-[260px] w-full xl:h-auto xl:flex-1"><TechLineChart :data="dashboard.weeklyTrend ?? []" label="每週健檢報告" /></div>
+          </CardContent>
+        </Card>
 
-        <Card class="shadow-sm dark:shadow-none xl:gap-2 xl:py-3">
-          <CardHeader class="xl:px-4"><CardTitle>本月概況</CardTitle><CardDescription class="xl:hidden">轉換漏斗、客戶成長與服務交付。</CardDescription></CardHeader>
-          <CardContent class="space-y-4 xl:flex xl:flex-1 xl:flex-col xl:space-y-3 xl:px-4">
+        <Card>
+          <CardHeader><CardTitle>本月概況</CardTitle></CardHeader>
+          <CardContent class="space-y-5 xl:flex xl:flex-1 xl:flex-col">
             <div class="xl:flex xl:flex-1 xl:flex-col">
-              <p class="text-xs font-medium text-muted-foreground xl:shrink-0">預約轉換</p>
-              <div v-if="funnelData.length" class="mt-1 h-[120px] w-full xl:mt-1 xl:h-auto xl:flex-1">
+              <p class="spec-label">掛號轉換</p>
+              <div v-if="funnelData.length" class="mt-1 h-[120px] w-full xl:h-auto xl:flex-1">
                 <TechFunnelChart :data="funnelData" />
                 <ul class="sr-only"><li v-for="item in funnelData" :key="item.label">{{ item.label }}：{{ item.value }} 筆</li></ul>
               </div>
-              <p v-else class="mt-1 flex h-[120px] items-center text-sm text-muted-foreground xl:h-auto xl:flex-1">本月尚無預約資料</p>
-              <p class="mt-1 text-xs text-muted-foreground xl:shrink-0">取消／未到：<span class="font-medium tabular-nums text-warning">{{ month.cancelledOrNoShow ?? 0 }}</span> 筆</p>
+              <p v-else class="mt-1 flex h-[120px] items-center text-muted-foreground xl:h-auto xl:flex-1">本月還沒有掛號資料</p>
+              <p class="mt-1 text-sm text-muted-foreground">取消／未到 <span class="num font-semibold text-warning">{{ month.cancelledOrNoShow ?? 0 }}</span> 筆</p>
             </div>
-            <div class="grid grid-cols-2 gap-3 border-t border-border pt-3 text-sm xl:shrink-0">
-              <div><p class="text-lg font-semibold tabular-nums">{{ dashboard.monthlyNewOwnerCount }}</p><p class="text-xs text-muted-foreground">本月新增飼主</p></div>
-              <div><p class="text-lg font-semibold tabular-nums">{{ dashboard.monthlyNewPetCount }}</p><p class="text-xs text-muted-foreground">本月新增寵物</p></div>
-              <router-link to="/pets" class="flex items-center gap-1.5 text-xs text-primary hover:underline"><UsersRound class="h-3.5 w-3.5" />累計 {{ dashboard.ownerCount }} 位飼主</router-link>
-              <router-link to="/pets" class="flex items-center gap-1.5 text-xs text-primary hover:underline"><PawPrint class="h-3.5 w-3.5" />累計 {{ dashboard.petCount }} 隻寵物</router-link>
+            <div class="grid grid-cols-2 gap-3 border-t border-border pt-4">
+              <router-link to="/pets" class="group"><span class="num block text-lg font-semibold group-hover:text-primary">{{ dashboard.monthlyNewOwnerCount }}</span><span class="text-sm text-muted-foreground">本月新增飼主</span></router-link>
+              <router-link to="/pets" class="group"><span class="num block text-lg font-semibold group-hover:text-primary">{{ dashboard.monthlyNewPetCount }}</span><span class="text-sm text-muted-foreground">本月新增貓咪</span></router-link>
+              <router-link to="/pets" class="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"><UsersRound class="size-4" stroke-width="1.75" />累計 <span class="num">{{ dashboard.ownerCount }}</span> 位飼主</router-link>
+              <router-link to="/pets" class="flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"><Cat class="size-4" stroke-width="1.75" />累計 <span class="num">{{ dashboard.petCount }}</span> 隻貓咪</router-link>
             </div>
-            <div class="grid grid-cols-3 gap-2 border-t border-border pt-3 text-sm xl:shrink-0">
-              <div><p class="text-lg font-semibold tabular-nums text-success">{{ delivery.sent ?? 0 }}</p><p class="text-xs text-muted-foreground">已寄送</p></div>
-              <div><p class="text-lg font-semibold tabular-nums text-warning">{{ delivery.pending ?? 0 }}</p><p class="text-xs text-muted-foreground">待完成交付</p></div>
-              <div><p class="text-lg font-semibold tabular-nums" :class="delivery.failed ? 'text-danger' : 'text-foreground'">{{ delivery.successRate === null ? '—' : `${delivery.successRate}%` }}</p><p class="text-xs text-muted-foreground">寄送成功率</p></div>
+            <div class="grid grid-cols-3 gap-3 border-t border-border pt-4">
+              <router-link to="/records?view=sent" class="group"><span class="num block text-lg font-semibold text-success">{{ delivery.sent ?? 0 }}</span><span class="text-sm text-muted-foreground group-hover:text-foreground">已寄送</span></router-link>
+              <router-link to="/records?view=pending" class="group"><span class="num block text-lg font-semibold text-warning">{{ delivery.pending ?? 0 }}</span><span class="text-sm text-muted-foreground group-hover:text-foreground">待交付</span></router-link>
+              <router-link to="/records/deliveries" class="group"><span class="num block text-lg font-semibold" :class="delivery.failed ? 'text-danger' : 'text-foreground'">{{ delivery.successRate === null ? '—' : `${delivery.successRate}%` }}</span><span class="text-sm text-muted-foreground group-hover:text-foreground">寄送成功率</span></router-link>
             </div>
-            <router-link to="/records?view=pending" class="flex shrink-0 items-center justify-between border-t border-border pt-3 text-sm text-primary hover:underline"><span><MailWarning class="mr-1 inline h-4 w-4" />前往處理報告交付</span><ArrowRight class="h-4 w-4" /></router-link>
+            <router-link to="/records?view=pending" class="flex items-center justify-between border-t border-border pt-4 font-medium text-primary hover:underline"><span class="flex items-center gap-2"><MailWarning class="size-5" stroke-width="1.75" />處理報告交付</span><ArrowRight class="size-5" stroke-width="1.75" /></router-link>
           </CardContent>
         </Card>
       </div>

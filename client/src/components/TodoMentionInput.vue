@@ -3,7 +3,7 @@ import { ref } from 'vue';
 import { usePetMentionPicker } from '../composables/usePetMentionPicker';
 import RichTextEditor from './RichTextEditor.vue';
 
-// 待辦內容的單行輸入框：可以上色、加粗（格式標記見 shared/richText.js），打 # 會跳出寵物候選清單
+// 待辦內容的單行輸入框：可以上色、加粗（格式標記見 shared/richText.js），打 # 會跳出貓咪候選清單
 // （跟聊天室同一套，邏輯在 composables/usePetMentionPicker.js）。v-model 是帶格式標記的內文；
 // v-model:mentions 是選過的標記 [{ petId, petName }]，父元件送出時用 mentionsStillInContent 濾掉已從內文刪掉的。
 // 候選清單開著時 Enter 是選人；沒開時 Enter 發出 submit——編輯器不是 <input>，不會自己觸發外層 <form>。
@@ -42,7 +42,7 @@ const { mention, candidates, highlighted, updateMention, closeMention, selectCan
       v-if="mention && candidates.length"
       class="absolute inset-x-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-border bg-popover p-1 shadow-lg"
       role="listbox"
-      aria-label="標記寵物"
+      aria-label="標記貓咪"
     >
       <li
         v-for="(candidate, index) in candidates"

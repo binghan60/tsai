@@ -14,7 +14,7 @@ const ownerSchema = new mongoose.Schema(
       lastLateAt: { type: Date, default: null },
       lastNoShowAt: { type: Date, default: null },
     },
-    // 子資料建立時會遞增，讓「新增寵物」與「刪除飼主」在 transaction 中產生寫入衝突。
+    // 子資料建立時會遞增，讓「新增貓咪」與「刪除飼主」在 transaction 中產生寫入衝突。
     relationVersion: { type: Number, default: 0, select: false },
   },
   { timestamps: true, optimisticConcurrency: true }

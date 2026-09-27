@@ -20,6 +20,7 @@ import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { enrichSectionsWithPreviousValues, getPetPreviousValues, plainSections } from '../lib/historyValues.js';
 import { clinicDayStart } from '../lib/clinicTime.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
+import { FOLLOWED_FIELDS, followedPatch, sanitizeOverriddenKeys } from '../lib/recordVisitSync.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -177,7 +178,7 @@ const PET_RECORD_LIST_FIELDS =
 petRecordsRouter.get('/', async (req, res, next) => {
   try {
     const pagination = paginationOptions(req.query);
-    // 寵物頁只畫摘要，不能把每份報告的大型 sections 快照與全部臨床內容一起載回。
+    // 貓咪頁只畫摘要，不能把每份報告的大型 sections 快照與全部臨床內容一起載回。
     const filter = { petId: req.params.petId };
     const [records, total] = await Promise.all([
       MedicalRecord.find(filter)
@@ -195,7 +196,7 @@ petRecordsRouter.get('/', async (req, res, next) => {
 });
 
 // ── 填表時的「上次數值」──
-// 這隻寵物過去每個項目最近一次的紀錄，不限健檢類型：只要以前量過血小板，
+// 這隻貓咪過去每個項目最近一次的紀錄，不限健檢類型：只要以前量過血小板，
 // 這次的表單有血小板就能顯示上次的值，即使兩次用的是不同的健檢表單。
 // 只收得出數值的型別 —— 理學檢查只有正常／異常，沒有可以拿來對照的數字。
 // 逐份走訪已結案報告找「每個項目最近一次」的值。太久以前的紀錄拿來對照的意義有限，
@@ -261,14 +262,14 @@ petRecordsRouter.post('/', async (req, res, next) => {
     }
     let record;
     await withTransaction(async (session) => {
-      // 遞增父文件 relationVersion，讓「建立報告」與「刪除寵物／表單」無法同時提交。
+      // 遞增父文件 relationVersion，讓「建立報告」與「刪除貓咪／表單」無法同時提交。
       const pet = await Pet.findOneAndUpdate(
         { _id: req.params.petId },
         { $inc: { relationVersion: 1 } },
         { new: true, session }
       ).select('+relationVersion');
       if (!pet) {
-        const error = new Error('找不到寵物');
+        const error = new Error('找不到貓咪');
         error.status = 404;
         throw error;
       }
@@ -305,8 +306,8 @@ petRecordsRouter.post('/', async (req, res, next) => {
 // 掛載於 /api/records
 export const recordsRouter = Router();
 
-// 跨寵物的健檢紀錄清單。存在的理由是「分發」這一端需要一個集散地：
-// 儀錶板只給得出數字與最近幾筆，其餘報告過去只能一隻一隻寵物翻進去找，
+// 跨貓咪的健檢紀錄清單。存在的理由是「分發」這一端需要一個集散地：
+// 儀錶板只給得出數字與最近幾筆，其餘報告過去只能一隻一隻貓咪翻進去找，
 // 寄送失敗的報告尤其容易就這樣消失在系統裡。
 //
 // view 是預設的工作佇列，status／delivery 則是細部篩選，兩者可以疊加。
@@ -328,7 +329,7 @@ const RECORD_LIST_POPULATE = {
   populate: { path: 'ownerId', select: 'name phone email' },
 };
 
-// 關鍵字可能指向寵物或飼主，那是另外兩個 collection——先解析成 petId 清單，
+// 關鍵字可能指向貓咪或飼主，那是另外兩個 collection——先解析成 petId 清單，
 // 再併進報告自己的欄位（報告編號、獸醫師）一起比對。
 async function petIdsMatching(pattern) {
   const owners = await Owner.find({ $or: [{ name: pattern }, { phone: pattern }, { landline: pattern }, { email: pattern }] }).select('_id');
@@ -426,9 +427,18 @@ recordsRouter.get('/:id', async (req, res, next) => {
     if (!record) return res.status(404).json({ message: '找不到報告' });
     // 預覽模式與報告頁共用同一套渲染，草稿也要能拿到區塊結構與歷史對照數值。
     const sections = await sectionsForView(record);
+    // 報到建立的草稿連著一筆看診；填寫頁據此標出「看診帶入」的欄位（沒在 overriddenKeys 裡的跟隨欄位）。
+    const visit = record.status === 'draft'
+      ? await Appointment.findOne({ recordId: record._id }).select('_id date petName').lean()
+      : null;
     // 一定要用 toJSON()：toObject() 預設不 flatten Map，展開後 customValues 會變成 {}，
     // 自訂項目的作答一開啟編輯頁就空白，接著自動儲存把 {} 寫回資料庫。
-    res.json({ ...record.toJSON(), sections, deliveryStatus: effectiveDeliveryStatus(record) });
+    res.json({
+      ...record.toJSON(),
+      sections,
+      deliveryStatus: effectiveDeliveryStatus(record),
+      visitLink: visit ? { appointmentId: visit._id, date: visit.date, followedFields: FOLLOWED_FIELDS } : null,
+    });
   } catch (err) {
     next(err);
   }
@@ -444,6 +454,18 @@ recordsRouter.put('/:id', async (req, res, next) => {
     if (!existingForValidation) return res.status(404).json({ message: '找不到指定的健康報告' });
     const template = await templateForRecord(existingForValidation);
     const recordFields = sanitizeRecordImages(pickRecordFields(req.body), template, existingForValidation);
+    // 報到建立的草稿：體重、體溫、回診日期、檢驗數值跟著看診走。醫師在報告裡改過的欄位由前端
+    // 放進 overriddenKeys，才接受送來的值；其餘一律改回看診的值（前端畫面可能是舊的）。
+    // resyncFromVisit＝清空覆寫紀錄、全部重新帶入。
+    const linkedVisit = await Appointment.findOne({ recordId: req.params.id }).select('weightKg temperatureC followUpDate followUpTime labValues');
+    if (linkedVisit) {
+      const current = await MedicalRecord.findById(req.params.id).select('status overriddenKeys weightKg temperatureC followUpDate labFindings');
+      const overriddenKeys = req.body.resyncFromVisit
+        ? []
+        : req.body.overriddenKeys !== undefined ? sanitizeOverriddenKeys(req.body.overriddenKeys, template) : current?.overriddenKeys ?? [];
+      const merged = { ...(current?.toObject() ?? {}), ...recordFields, overriddenKeys };
+      Object.assign(recordFields, followedPatch(merged, linkedVisit, template), { overriddenKeys });
+    }
     const record = await MedicalRecord.findOneAndUpdate(
       {
         _id: req.params.id,
@@ -554,7 +576,7 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
 
     // 靠 role 找體重，不寫死欄位名稱；使用者若停用或刪除該欄位就不同步。
     const weightItem = composedSections.flatMap((section) => section.items ?? []).find((item) => item.role === 'weight');
-    // Number(null) 與 Number('') 都是 0 —— 沒填體重時不能把寵物的體重蓋成 0。
+    // Number(null) 與 Number('') 都是 0 —— 沒填體重時不能把貓咪的體重蓋成 0。
     const weightText = String(weightItem?.value ?? '').trim();
     const weightValue = Number(weightText);
     const finalizedAt = new Date();
@@ -604,7 +626,7 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
           { session }
         );
         if (petUpdate.matchedCount !== 1) {
-          const error = new Error('找不到報告所屬寵物，無法完成結案');
+          const error = new Error('找不到報告所屬貓咪，無法完成結案');
           error.status = 409;
           throw error;
         }
@@ -789,19 +811,19 @@ recordsRouter.delete('/:id', async (req, res, next) => {
     }
     // 只有已結案的報告要打字確認。它已經產生過正式 PDF、可能也已經給過飼主連結，
     // 是真的刪掉就回不去的東西；草稿則是隨手開、隨手丟的工作中狀態，
-    // 「捨棄剛剛開錯的草稿」要求先抄一次寵物名，只會讓人開始無視這個確認。
+    // 「捨棄剛剛開錯的草稿」要求先抄一次貓咪名，只會讓人開始無視這個確認。
     //
     // 確認方式仿 GitHub 刪除 repository：要求把一段文字原封不動打進來，
     // 防的是「手滑點到刪除又手滑點到確認」這種連續誤觸。
-    // 比對的是寵物名而不是報告編號——編號是一串記不住的亂碼，只能照抄，
-    // 抄的過程不會讓人意識到自己在刪什麼；打出寵物名則會。
+    // 比對的是貓咪名而不是報告編號——編號是一串記不住的亂碼，只能照抄，
+    // 抄的過程不會讓人意識到自己在刪什麼；打出貓咪名則會。
     if (isFinalizedRecord(record)) {
       // 另外查一次而不是 populate：record 後面要整份存進稽核快照，不希望它被塞進 pet 文件。
       const pet = await Pet.findById(record.petId).select('name');
       const expected = String(pet?.name ?? '').trim();
       const confirmText = String(req.body?.confirmText ?? '').trim();
       if (!expected || confirmText !== expected) {
-        return res.status(422).json({ message: '確認文字不符，請輸入完整的寵物名稱' });
+        return res.status(422).json({ message: '確認文字不符，請輸入完整的貓咪名稱' });
       }
     }
     // 修訂鏈回復與刪除必須一起成功；任何一步失敗就全部回滾。
@@ -828,13 +850,13 @@ recordsRouter.delete('/:id', async (req, res, next) => {
       if (isFinalizedRecord(current)) {
         const currentPet = await Pet.findById(current.petId).select('name').session(session);
         if (!currentPet) {
-          const error = new Error('找不到報告所屬寵物，無法確認刪除');
+          const error = new Error('找不到報告所屬貓咪，無法確認刪除');
           error.status = 409;
           throw error;
         }
         const confirmedName = String(req.body?.confirmText ?? '').trim();
         if (confirmedName !== String(currentPet.name ?? '').trim()) {
-          const error = new Error('確認文字不符，請輸入完整的寵物名稱');
+          const error = new Error('確認文字不符，請輸入完整的貓咪名稱');
           error.status = 422;
           throw error;
         }
@@ -904,7 +926,7 @@ recordsRouter.post('/:id/share', async (req, res, next) => {
   }
 });
 
-// 每次寄送嘗試都往流水帳補一筆。寵物與飼主姓名在這裡就抄進去，不留 ref——
+// 每次寄送嘗試都往流水帳補一筆。貓咪與飼主姓名在這裡就抄進去，不留 ref——
 // 這筆紀錄的價值正是在報告被刪除之後還查得到，那時 populate 只會拿到 null。
 async function logDelivery(record, event, extra = {}) {
   if (!record?._id) return;

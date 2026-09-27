@@ -12,16 +12,16 @@ const props = defineProps({
 });
 
 const TONE_CLASS = {
-  waiting: 'bg-muted text-foreground',
-  visiting: 'bg-primary text-primary-foreground',
+  waiting: 'bg-sunken text-foreground shadow-[inset_0_0_0_1px_var(--border-strong)]',
+  visiting: 'bg-primary text-primary-foreground shadow-glow',
   handoff: 'bg-accent text-accent-foreground',
-  done: 'bg-muted text-muted-foreground',
+  done: 'bg-sunken text-subtle-foreground',
 };
 
 const sizeClass = computed(() => {
-  if (props.size === 'lg') return 'h-12 w-12 text-lg';
-  if (props.size === 'sm') return 'h-7 w-7 text-xs';
-  return 'h-10 w-10 text-sm';
+  if (props.size === 'lg') return 'size-12 text-lg';
+  if (props.size === 'sm') return 'size-8 text-sm';
+  return 'size-10 text-base';
 });
 const iconClass = computed(() => (props.size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4'));
 const hasNumber = computed(() => props.appointment.checkinNumber != null);
@@ -30,12 +30,12 @@ const hasNumber = computed(() => props.appointment.checkinNumber != null);
 <template>
   <span
     v-if="hasNumber"
-    class="flex shrink-0 items-center justify-center rounded-full font-semibold tabular-nums"
+    class="num flex shrink-0 items-center justify-center rounded-full font-semibold"
     :class="[sizeClass, TONE_CLASS[checkinTone(appointment)]]"
   >{{ appointment.checkinNumber }}</span>
   <span
     v-else
-    class="flex shrink-0 items-center justify-center rounded-full border border-dashed border-border text-muted-foreground"
+    class="flex shrink-0 items-center justify-center rounded-full border border-dashed border-border-strong text-subtle-foreground"
     :class="sizeClass"
     title="未取號"
   >

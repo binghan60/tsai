@@ -1,227 +1,101 @@
-# 謙華動物醫院健檢與報告系統 UI Style Guide
+# 視覺規範
 
-這份文件是介面視覺與互動的共同規範。實際色票以 `client/src/style.css` 為準，按鈕樣式以 `client/src/components/ui/button/index.js` 為準。
+設計稿：https://claude.ai/artifact/Ev85Kihq8eDuUQLzsYbtBG（「第二輪 定稿規格」頁是規格，第一輪只是比較用的歷史）。
+所有色值與尺度只寫在 `client/src/style.css`；頁面與元件一律用語意 token。`npm run build` 會先跑 `scripts/audit-colors.mjs`，頁面裡出現色碼或 Tailwind 固定色階（`red-500`、`slate-100`…）就直接失敗。
 
-## 設計原則
+## 1. 兩套主題，同一套形狀
 
-1. 操作在靜止狀態就必須能被辨識，不能只靠 hover 顯示背景或邊界。
-2. 每個操作區原則上只放一個主要按鈕；其他操作依重要性降為次要、輔助或危險操作。
-3. 顏色用來表達層級與狀態，不以不同顏色裝飾同類操作。
-4. 結案、刪除、撤銷等不可逆或高風險操作必須有確認步驟。
-5. 手機可點擊區域以 44 × 44 px 為基準；密集資料列最低不得小於 40 px。
+| | 淺色：清爽臨床 | 深色：深色專業 |
+|---|---|---|
+| 頁面底 `background` | `#f4f6f8` | `#07090c` |
+| 卡片 `card` | `#ffffff` | `#0e1217`，頂端一條內側高光（`shadow-card`） |
+| 下凹 `sunken` | `#f1f4f6` | `#0a0d11` |
+| 滑過 `hover` | `#eef2f4` | `#141a21` |
+| 邊框 `border`／`border-strong` | `#e2e8ec`／`#cbd4da` | `#1c232c`／`#2a3440` |
+| 文字 三階 | `#0e1a21`／`#4b5a64`／`#5f6c76` | `#e8edf3`／`#8f9bab`／`#7d8999` |
+| 主色 `primary` | `#007a7e`（白字） | `#37d2f2`（深字），主要按鈕與看診中號碼牌有光暈（`shadow-glow`） |
+| 主色淡面 `accent` | `#e2f2f2`／字 `#00595c` | `#0a2630`／字 `#7fe3f7` |
 
-## 頁面容器
+主題切換存 `localStorage`、預設跟隨系統（`composables/useTheme.js`，開機時由 `index.html` 的內嵌腳本先定好 class，不會閃）。
 
-- 一般後台頁面、清單、工作台、掛號、明細與設定頁統一使用 `mx-auto max-w-7xl`。
-- `App.vue` 的 `<main>` 統一負責響應式水平內距；頁面容器不要重複增加左右 padding。
-- 報告預覽維持 A4 的 `210mm`，就診表單維持 `max-w-6xl`，表單編輯器維持較寬的編輯工作區；這些是內容型態的合理例外。
-- 不可只因頁面目前資料較少就自行縮成 `max-w-4xl`，否則頁首、卡片與其他模組切換時會產生明顯寬度跳動。
+### 表面的用法
 
-## 核心色彩
+- `bg-background` 頁面底；`bg-card` 卡片、面板、對話框；`bg-popover` 選單與浮層。
+- `bg-sunken` 下凹：分段切換的軌道、次要按鈕、唯讀的內容區塊、表頭。
+- `bg-hover` 滑過；`bg-field` 可以輸入的表面（淺色是白、深色往下凹一階）。
+- 不要寫 `bg-white`：深色主題下就是白底配白字。
 
-主色是深青藍（petrol），明暗兩態同色相、只換明度。紅色完整保留給危險與失敗，
-金色只出現在側邊欄與 Logo——三塊色相互不重疊，小尺寸下也分得出「主要操作」和「這會出事」。
+### 文字三階
 
-| 用途 | Light | Dark | 使用方式 |
-| --- | --- | --- | --- |
-| Primary action | `#0E5A6B` | `#3E93A6` | 儲存、預覽、結案、下載等主要操作 |
-| On primary | `#FFFFFF` | `#04222A` | 主要按鈕上的文字。深色是亮階底配深墨字 |
-| Accent surface | `#EEF7F9` | `#0E2830` | 主色的淡面：已結案徽章、選取中的頁籤、圖示底 |
-| Brand accent | `#C99A35` | `#C99A35` | 側邊欄 active、Logo；**不作後台的按鈕底色** |
-| Page background | `#F5F2ED` | `#0B1218` | 頁面背景，單一實色不疊漸層 |
-| Card surface | `#FFFFFF` | `#121B22` | 卡片、彈窗 |
-| Field surface | `#F6F3EE` | `#1C2831` | 輸入框與可點表面 |
-| Border | `#E0DAD1` | `#2C3A44` | 卡片與控制項邊框 |
-| Main text | `#1F1B17` | `#E9EEF1` | 標題與主要內容 |
-| Secondary text | `#6D665D` | `#9AA5AD` | 輔助說明，仍需維持可讀性 |
-| Destructive | `#B3202D` | `#FF8F86` | 刪除、撤銷與錯誤 |
+`text-foreground` 主要內容；`text-muted-foreground` 次要文字、表單標籤；`text-subtle-foreground` 小標題、時間戳記、單位。可點的文字用 `text-primary`，靜止時就要看得出來，不要只寫 hover 才變色。
 
-主要按鈕文字對比：Light 7.80:1、Dark 4.68:1，均符合 WCAG AA。
-卡片對頁面底 1.12（淺）／1.08（深）——刻意做小，卡片靠純白與細邊框浮起來，不靠深邊框硬切。
+## 2. 狀態色
 
-狀態色是四組語意 token（`--success`／`--warning`／`--info`／`--danger`），
-每組各有一個 `-surface` 底色，使用端寫 `bg-success-surface text-success`。
-**不要用 Tailwind 的 `emerald-50`／`amber-50`**：那些是冷調亮白，疊在卡片上對比只有 1.00–1.02。
+| token | 淺色 前景／底 | 深色 前景／底 | 用途 |
+|---|---|---|---|
+| `danger` | `#880d0d`／`#ffede9` | `#ffbeb3`／`#41211d` | 失敗、刪除、遲到、藥物過敏、檢驗偏高偏低 |
+| `warning` | `#874c00`／`#fff0e0` | `#f8b05d`／`#3c260d` | 待你動手、請轉告飼主、備註提醒 |
+| `success` | `#2d7f3f`／`#e8f9e9` | `#4eab60`／`#19321d` | 已寄送、已完成、其餘正常 |
+| `info` | `#4260c4`／`#ebf3ff` | `#82a1f6`／`#212a44` | 寄送中、初診、待審初診表 |
+| `surgery` | `#7238a5`／`#f8efff` | `#d3adff`／`#31253f` | **只給手術標記** |
+| `badge` | `#c62828`／白字 | `#ff8a80`／深字 | 工具欄的紅色數字徽章 |
 
-- 綠色 `success`：正常、成功、已寄送。
-- 琥珀 `warning`：待寄送、未到診、需要留意。
-- 藍色 `info`：處理中、已排程但還沒發生。
-- 紅色 `danger` / `destructive`：異常、失敗、危險操作。
-- 中性 `muted`：草稿、已取消——沒有人在等它的狀態不該搶顏色。
+- 使用端寫 `bg-warning-surface text-warning`，徽章用 `<Badge variant="status" :class="…">`，顏色由 `lib/recordStatus.js` 那類 meta 提供。
+- **明度是刻意錯開的**：紅綠色盲下只剩明度可辨。淺色 danger 最深、深色 danger 最亮——危險永遠是對比最高的那一個。不要「順手對齊」。
+- 新增狀態色要跟主色留 40° 以上的色相距離，並用 dataviz 的 `validate_palette.js` 驗證。
+- 顏色不能是唯一線索：徽章一律帶文字；牙齒圖的狀況另有形狀記號。
 
-### 色票治理規則
+## 3. 字
 
-專案分成三層色票，新增顏色時必須先判斷屬於哪一層：
+- 中文 `Noto Sans TC Variable`、數字 `IBM Plex Mono`，都自架（`main.js` 匯入）。不要改成 CDN：報告頁是 Puppeteer 產 PDF 的來源。
+- 數字（號碼牌、時間、體重、檢驗值、電話）加 `num`：等寬＋tabular-nums，上下才對得齊。
 
-1. **產品 UI 語意色**：`primary`、`secondary`、`muted`、`accent`、`destructive`、
-   `success`、`warning`、`info`、`danger`。一般頁面與共用元件只能使用這一層。
-2. **固定列印報告色**：名稱以 `report-*` 開頭。報告與 PDF 必須固定淺色，不能因後台切換深色模式而改變；
-   因此只能在 `ReportViewPage.vue` 與 `components/report/` 使用。
-3. **資料視覺化色**：`chart-*` 與 `dental-*`。只用於圖表資料系列、牙位方向與牙科狀態，
-   不得拿來當按鈕、提示或一般文字色。
+| class | 尺寸 | 用途 |
+|---|---|---|
+| `text-xl` | 28 | 頁面標題（每頁一個 H1） |
+| `text-lg` | 22 | 區塊標題、對話框與面板標題、卡片標題 |
+| `text-base` | 18 | 內文、輸入框（body 預設） |
+| `text-sm` | 16 | 按鈕、表單標籤、次要文字 |
+| `text-xs` | 15 | 註記、徽章、時間戳記 |
+| `text-2xs` | 14 | 規格欄小標題（`spec-label`），最小字級 |
 
-所有實際 HEX／RGB 色碼只能出現在 `client/src/style.css`。Vue／JavaScript 不可直接寫色碼，
-也不可使用 Tailwind 內建的 `red-*`、`emerald-*`、`amber-*`、`stone-*` 等固定色階。
-新增色票時需同時完成以下事項：
+尺寸與行高都在 `@theme`，改字級改那裡。不要寫 `text-[13px]` 這種任意值。報告紙面 `.report-sheet` 走自己的 A4 尺度，改 `@theme` 後要開預覽頁確認分頁沒變。
 
-- 在 `:root` 定義語意 token；需要支援深色模式的 token，必須在 `.dark` 提供對應值。
-- 需要在 class 使用的 token，要在 `@theme inline` 匯出為 `--color-*`。
-- 在本文件補上用途與禁止用途；同一語意不得另起近似色。
-- 執行 `npm run audit:colors`。此檢查也會隨 `npm run build` 自動執行。
+## 4. 形狀與尺寸
 
-黑／白只允許用於遮罩、列印紙面與已確認對比的前景，例如 `bg-black/50`、`text-white`；
-不能用黑白繞過既有的 `foreground`、`surface` 或 `border` token。
+- 圓角：格子與小標記 6（`rounded-md`）、控制項 8（`rounded-lg`）、卡片與面板內區塊 12（`rounded-xl`）、對話框 16（`rounded-2xl`）、膠囊 `rounded-full`。
+- 控制項高度 36／40／44／48，預設 40。按鈕的 `size`：`xs`／`sm` 36、`default` 40、`lg` 48；圖示按鈕 `icon-xs` 32、`icon-sm` 36、`icon` 40、`icon-lg` 44，跟一般按鈕同圓角。
+- 清單列：表頭 44、資料列 64（`.desktop-data-header`／`.desktop-data-row`，欄寬由 `--data-columns` 決定）。
+- 目標螢幕 1920×1080；手機寬度仍要能用（導覽換成漢堡選單、面板滿版）。
 
-### 狀態與操作不可混用
+## 5. 元件
 
-| 語意 | 正確用途 | 禁止用途 |
-| --- | --- | --- |
-| `primary` | 當下唯一的主要安全操作、互動連結、選取中 | 一般內容、錯誤、刪除 |
-| `secondary` | 編輯、複製、設定等可逆支援操作 | 最終提交、刪除確認 |
-| `muted` | 次要內容、停用或已結束狀態 | 需要立即注意的狀態 |
-| `success` | 已成功、正常、已寄送 | 儲存按鈕或一般正向裝飾 |
-| `warning` | 待處理、未到診、過敏或需留意 | 一般導覽與編輯 |
-| `info` | 處理中、已排程 | 一般連結與主要操作 |
-| `destructive` / `danger` | 刪除、撤銷、捨棄、失敗、異常 | 取消篩選、關閉視窗等安全操作 |
+| 需求 | 用什麼 | 注意 |
+|---|---|---|
+| 按鈕 | `<Button variant>`：`default` 實色、`secondary` 下凹底＋細邊、`soft` 主色淡面、`ghost` 只在滑過時出底色、`destructive` 淡紅底、`destructive-solid` 實心紅 | 實心紅只給確認視窗裡的最終動作；編輯鈕用 `secondary`、刪除鈕用 `destructive` 系列（audit 會檢查） |
+| 卡片 | `<Card>` | 自帶邊框、底色、陰影，使用端不要再加 |
+| 對話框 | `<DialogContent size>`＋`DialogHeader`／`DialogFooter` | 只有一種標頭與頁尾；不要覆寫寬度 |
+| 側滑面板 | `panels/SidePanel.vue`（標頭：返回／標題／動作／關閉） | 開在工具欄旁，不遮擋背景；見 CLAUDE.md 第六節 |
+| 下拉選單 | `ui/dropdown-menu`；清單列的次要操作用 `RowActions` | 危險項放最後、前面一條線、靜止就是紅字 |
+| 頁籤／分段 | `FilterTabs`（可帶計數）、`SegmentedControl` | 兩者外觀相同（`segment-track`／`segment-active`） |
+| 規格欄 | `SpecGrid`＋`SpecCell label` | 身分資訊一律用它，不用「·」串成一行 |
+| 貓咪一行 | `PetLine`（品種＋♂♀）、`PetSex` | 初診才出徽章，回診不出 |
+| 去處標記 | `DestTag to="journal|report|internal"` | 診療台欄位旁：寫完會去哪裡 |
+| 號碼牌 | `CheckinNumber size` | 候診灰、看診中主色實心＋光暈、待櫃台淡面、已完成淡灰 |
+| 手術／遲到 | `SurgeryBadge`、`LatenessBadge` | 紫與紅，並排時順序「手術 → 遲到」 |
+| 格式文字 | 編輯 `RichTextEditor`、顯示 `RichText` | 不用 `v-html` |
+| 空狀態／載入 | `EmptyState`、`ListSkeleton` | 不要只寫「載入中…」 |
+| 錯誤 | `<Alert variant="destructive">` | |
+| 確認／提示 | `ConfirmDialog`、`useToast()` | 禁止 `confirm()`／`alert()` |
+| 分頁 | `Pagination` | |
+| 篩選 | `FilterBar` | 一律提交式（按 Enter 或送出鈕才查） |
 
-## 文字顏色
+圖示統一 `@lucide/vue`、`stroke-width="1.75"`，不用 emoji；頭像一律貓圖示。
 
-預設是 `text-foreground`（近黑）。**內容本身不上色**——寵物名、飼主名、日期、診斷、表格內容都是黑的，
-它們是資訊，不是操作。顏色是留給「這個東西跟你有互動關係」用的訊號，內容一旦跟著上色，
-訊號就被稀釋掉了。
+## 6. 用語
 
-| Class | 什麼時候用 | 例子 |
-| --- | --- | --- |
-| `text-foreground` | 預設。所有內容文字 | 寵物名、診斷、表格儲存格、標題 |
-| `text-muted-foreground` | 次要資訊：說明、時間戳記、表單標籤 | 「上次更新：3/12 14:20」、欄位標籤 |
-| `text-primary` | 只有三種情況，見下 | 清單裡的寵物名、「← 返回」、選取中的頁籤 |
-| `text-accent-foreground` | 站在 `bg-accent`（主色淡面）上的前景 | accent 圓底裡的圖示、已結案徽章 |
-| `text-danger` / `text-destructive` | 危險與異常：必填星號、錯誤訊息、刪除操作 | 「\*」、「寄送失敗」 |
-| `text-success` / `text-warning` / `text-info` | 狀態，且只用於狀態 | 徽章、狀態圓點 |
+員工畫面：貓咪、飼主、櫃台、醫師、健檢報告、健檢表單。「藥單」是物件，「領藥」只指交付那一步。報告佇列的預設篩選叫「待處理」。公開初診頁（飼主看的）維持「貓孩兒／家長」。
 
-`text-primary` 僅限這三種情況：
+## 7. 報告紙面
 
-1. **可點擊、但沒有按鈕外框的東西** —— 清單裡點了會進詳情頁的項目名稱、純文字連結
-   （「← 返回飼主」「查看報告」）。**靜止狀態就要上色**，不可以只寫 `group-hover:text-primary`
-   讓它滑過去才變色——那等於在靜止畫面上藏起一個操作，違反第一條設計原則。
-2. **選取／啟用中的狀態** —— 選取中的頁籤、當前編輯的區塊、已完成的步驟。
-3. **主色淡面上的前景** —— 這種情況實際上該寫 `text-accent-foreground`，深色主題的
-   `accent` 很暗而 `primary` 是亮階，兩者對比只有 4.4，掛在 `accent-foreground` 上才穩過 AA。
-
-反過來說，**不該是主色的**：
-
-- **必填星號** → `text-danger`。它是警示不是連結；用主色會讓「必填」讀起來像「可以點」。
-- **不可點的名字** → `text-foreground`。工作台待辦列的寵物名、寄送歷程的寵物名都只是文字，
-  那兩處的操作在右側按鈕上。上了色等於承諾一個不存在的連結。
-- **對話框裡的選單項目**（寵物挑選、全站搜尋結果）→ `text-foreground`。整列本來就是可選的，
-  而且有 hover 底色，再上色只會讓整個清單變彩色。
-- **純裝飾圖示** → `text-muted-foreground`，除非那個圖示本身代表可點擊或選取中。
-- **狀態徽章** → 走狀態 token，主色不參與狀態語意。
-
-判準是**詞性**：名詞（內容、識別欄）在可點時整個上色；動詞短語（「查看報告」「插入模板」）
-一律上色加底線；不可點的名詞維持黑字。
-
-## 按鈕層級
-
-統一使用共用 `Button`，導頁按鈕使用 `as-child` 包住 `router-link`。
-
-```vue
-<Button>主要操作</Button>
-<Button variant="outline">返回／取消</Button>
-<Button variant="secondary">編輯／輔助操作</Button>
-<Button variant="destructive">低強度危險操作</Button>
-<Button variant="destructive-solid">確認刪除</Button>
-
-<Button as-child variant="outline">
-  <router-link to="/pets">回寵物列表</router-link>
-</Button>
-```
-
-| Variant | 用途 | 常見範例 |
-| --- | --- | --- |
-| `default` | 當下最重要且安全的下一步 | 新增健檢、預覽、下載 PDF |
-| `outline` | 離開目前流程或不提交變更 | 返回、取消、關閉、儲存草稿並返回 |
-| `secondary` | 可逆、可重複執行的支援操作 | 編輯、設定、分享、複製連結、批次標示 |
-| `destructive` | 尚未進入最終確認的危險操作 | 刪除、捨棄、撤銷入口 |
-| `destructive-solid` | 確認視窗內的最終危險操作 | 確認刪除、確認撤銷 |
-| `link` | 段落文字內的超連結，不作工具列按鈕 | 前往補填資料 |
-
-禁止事項：
-
-- 不可讓按鈕在常態時完全透明，僅在 hover 才出現底色；低層級的中性操作統一使用有底色的 `secondary`。
-- 不可自行加上邊框做成描邊（空心）按鈕，包含在頁面手動疊加 `border-*` class 到既有 variant 上；所有 variant 一律用實色／淡色填底分層級，沒有例外。需要更輕的危險操作層級時用 `destructive`，不要另外做一個描邊變體。
-- 整列可點卡片可使用卡片或資料列本身的底色，純文字連結可維持文字樣式；除此之外，所有 `button` 都要有自己的靜止底色。
-- 不可在頁面手寫新的主要操作色；應使用語意 variant。
-- 不可用紅、綠、黃表示一般操作，避免與醫療狀態混淆。
-- 同一操作區不可出現兩個以上同等視覺重量的主要按鈕。
-
-## 特殊控制
-
-分段選擇器、頁籤與側邊導覽可以使用原生 `button` 或 `router-link`，但必須同時符合：
-
-- 未選取狀態已有可見背景或邊界。
-- 選取狀態同時透過底色、文字或邊界區分，不能只靠顏色細微差異。
-- 鍵盤焦點清楚可見，並提供 `aria-current` 或對應的 ARIA 狀態。
-- 純圖示按鈕必須提供中文 `aria-label`。
-
-## 圓角、尺寸與間距
-
-- 一般按鈕 `default`：高度 44 px（等於觸控目標下限），圓角 12 px。
-- 小型按鈕 `sm`：高度 40 px；密集資料列的下限。
-- 極小按鈕 `xs`：高度 36 px；**只給桌機的密集表格**，不用在觸控介面。
-- 大型主要操作 `lg`：高度 48 px。
-- 這四階由 `size` 決定，**不要用 `min-h-*` 覆寫**——那會讓高度跟 padding 對不上。
-- 圖示與文字間距：8 px。
-- 同組按鈕間距：8 px。
-- 卡片圓角：16 px；欄位與按鈕圓角不得大於卡片。
-
-### 卡片內距
-
-一般卡片的水平內距一律 20 px，`CardHeader`／`CardContent` 的預設已經是 `px-5`，使用端不必再寫。
-密集資料表格因固定 56 px 列高，表頭與資料列統一使用 16 px 水平內距；同一張表的兩者必須共用
-`.desktop-data-*` 樣式，避免欄位左邊界漂移。
-
-垂直內距分四檔，每一檔對應一種用途，不要混用：
-
-| 用途 | 內距 |
-| --- | --- |
-| 表格容器、帶標題列的卡 | `p-0`（`gap-0 overflow-hidden py-0`；內容自己有 `px-5 py-3`） |
-| 主要資訊卡、儀表板區塊 | `p-5` |
-| 清單項目卡（手機版一列一張） | `p-4` |
-| 篩選面板 | `p-3` |
-
-### 桌機資料表格
-
-- 外層使用 `<Card class="overflow-hidden p-0">`，並以 `--data-columns` 定義各欄寬。
-- 表頭使用 `.desktop-data-header`，固定 44 px；資料列使用 `.desktop-data-row`，固定 56 px。
-- 每個欄位使用 `.desktop-data-cell`，長文字維持單行並以 `truncate` 省略；完整內容可放在 `title`。
-- 只有使用者主動展開錯誤或詳情時，才使用 `.desktop-data-row--expanded` 解除固定高度。
-- 不補空白列湊滿卡片高度；資料少就讓卡片自然變短。
-- 1280 px 以下改用手機卡片，不強迫窄螢幕維持多欄表格。
-
-### 清單項目的圖示
-
-清單每一列的識別圖示一律是 **`bg-accent` 圓底 + 圖示**（桌機 `h-9 w-9`、手機 `h-10 w-10`），
-不要放裸的彩色圖示。圓底把圖示跟文字在視覺上分開，密集清單掃起來才有節奏。
-
-## 互動狀態
-
-每個操作元件都必須具備：
-
-- Default：常態已有底色或邊界。
-- Hover：提高背景或邊界對比，不改變按鈕用途色。
-- Focus visible：顯示 2 px 主色焦點環（`--ring`）。焦點環只由元件自己畫一次，
-  全域的 outline 只負責沒有 ring 的原生元素，否則按鈕聚焦時會出現雙圈。
-- Active：輕微向下位移，提供按壓回饋。
-- Disabled：降低透明度、移除陰影並禁止點擊。
-- Loading：保留原尺寸並以文字說明，例如「儲存中…」。
-
-## 新頁面檢查表
-
-- 是否使用共用 `Button`，而非複製一串 Tailwind 按鈕 class？
-- 不使用滑鼠 hover 時，是否仍看得出所有可操作項目？
-- 主要操作是否只有一個，且位置符合使用流程？
-- 危險操作是否為紅色並有確認視窗？
-- 狀態色是否只用於狀態？
-- 鍵盤、手機與深色模式是否都能辨識？
-- 文字與背景對比是否至少達 WCAG AA？
+`/report/:token` 與 `/records/:id/preview` 固定淺色（它們是 PDF 的來源），用 `report-*` token，不跟主題切換；在那兩頁加東西不要借用後台的樣式常數。

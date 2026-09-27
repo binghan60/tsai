@@ -21,12 +21,11 @@ const tone = computed(() =>
   props.destructive
     ? {
         icon: AlertTriangle,
-        shell: 'border-destructive/30 bg-destructive-surface text-destructive dark:border-destructive/40',
+        shell: 'bg-destructive-surface text-destructive',
       }
     : {
         icon: CheckCircle2,
-        // 淺色走 belle 酒紅、深色走 brand 琥珀橘，與全站主色分工一致。
-        shell: 'border-primary/35 bg-accent text-accent-foreground',
+        shell: 'bg-accent text-accent-foreground',
       }
 );
 
@@ -40,9 +39,9 @@ function close() {
 <template>
   <Dialog :open="open" @update:open="(value) => !value && close()">
     <DialogContent :show-close-button="!loading" size="sm">
-      <div class="relative p-6 sm:p-7 pb-5">
+      <div class="relative px-6 pt-6 pb-5">
         <div class="flex gap-4">
-          <div class="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border" :class="tone.shell">
+          <div class="flex size-10 shrink-0 items-center justify-center rounded-lg" :class="tone.shell">
             <component :is="tone.icon" class="h-5 w-5" stroke-width="1.75" />
           </div>
           <div class="min-w-0 flex-1 space-y-1.5 pr-4">

@@ -1,90 +1,79 @@
 <script setup>
-import MedicationWorkspace from '../components/MedicationWorkspace.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowRight, CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, LayoutList, List, ListTodo, Pill, Pin, RefreshCw, Scissors, Stethoscope, Undo2, X } from '@lucide/vue'
+import { AlertTriangle, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Clock, RefreshCw, Scissors, Stethoscope, Undo2 } from '@lucide/vue'
 import { http } from '../api/http'
-import { getSocket } from '../api/socket'
 import { useToast } from '../composables/useToast'
 import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
-import { clinicDateInput, clinicTimeInput, shiftDateInput, weekdayLabel } from '../lib/datetime'
+import { clinicDateInput, clinicTimeInput, shiftDateInput } from '../lib/datetime'
 import { workflowFilter, workflowState } from '../../../shared/appointmentWorkflow.js'
-import { patientNotesFor, visitTypeLabel } from '../lib/appointmentDisplay'
+import { patientNotesFor } from '../lib/appointmentDisplay'
 import PatientNotes from '../components/PatientNotes.vue'
-import PatientNotesTip from '../components/PatientNotesTip.vue'
-import { Card } from '../components/ui/card'
-import { usePinnedPetsStore } from '../stores/pinnedPets'
-import { useTodosStore } from '../stores/todos'
 import VisitWorkspace from '../components/VisitWorkspace.vue'
-import PinnedPetsList from '../components/PinnedPetsList.vue'
-import TodoPanel from '../components/TodoPanel.vue'
-import ModalDialog from '../components/ModalDialog.vue'
-import ConsoleChip from '../components/ConsoleChip.vue'
-import ConsoleChipBar from '../components/ConsoleChipBar.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
 import CheckinNumber from '../components/CheckinNumber.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
+import FilterTabs from '../components/FilterTabs.vue'
+import SegmentedControl from '../components/SegmentedControl.vue'
 import TextTemplatePickerDialog from '../components/formfields/TextTemplatePickerDialog.vue'
 import { useTextTemplates } from '../composables/useTextTemplates'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { DatePicker } from '../components/ui/date-picker'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
-import { medicationTodoCount } from '../../../shared/medicationWorkflow.js'
 
-// 醫師診療台：左欄是今日病患（在院、今日排程；順序固定，點擊不會改變），右欄是可以同時開好幾筆的就診工作區。
-// 刻意不做成「點一筆就換頁」——醫師手上常常同時有好幾隻動物在跑（等一隻的檢驗結果
-// 時先看下一隻），換頁或 Modal 都會擋住這種來回切換。
+// 醫師診療台：左欄是今日病患，右欄是可以同時開好幾筆的看診工作區。
+// 刻意不做成「點一筆就換頁」——醫師手上常常同時有好幾隻貓在跑（等一隻的檢驗結果時先看下一隻），
+// 換頁或 Modal 都會擋住這種來回切換。
 //
-// 左欄每一筆都直接列出來院原因與寵物／飼主備註：醫師看今天的排程是為了先準備器材，
-// 「會咬人」「飼主很難溝通」要在叫進診間之前就知道，不能藏在點開之後。
+// 左欄頂端三個頁籤：進行中（在院＋今日排程）／已交櫃台／已完成。後兩個原本是頁首開的大 Modal，
+// 現在就地切換，點一筆照樣在右欄開工作區。暫存區、藥單、待辦在右側工具欄。
+// 順序只由掛號資料決定（在院依報到時間、待報到依預約時段），點開、切換、看診都不會讓卡片換位置。
+// 列上沒有關閉鈕：點哪一列就切到哪一個工作區，目前這一筆只用淡主色底＋左側色條輕輕標出來。切走的工作區仍掛著，
+// 回來時沒存完的輸入還在；要關掉用工作區標頭的 X，送交櫃台後也會自動關。
 const router = useRouter()
 const toast = useToast()
 const { loadTemplates: loadTextTemplates } = useTextTemplates()
 const notifyChat = useAppointmentNotifier()
-const pinnedPets = usePinnedPetsStore()
-const todos = useTodosStore()
 const today = clinicDateInput()
 const date = useSearchQueryParam('date', today)
-const medicationCounts = ref({})
-// 醫師在等的只有「待醫師確認」那一段，不是未完成總數——口徑統一在 shared/medicationWorkflow.js。
-const medicationTodo = computed(() => medicationTodoCount(medicationCounts.value, 'doctor'))
-const medicationSocket = getSocket()
-let medicationCountRequest = 0
 
 const items = ref([])
 const loading = ref(true)
 const error = ref('')
 const busy = ref(false)
 const templates = ref([])
-// 寵物／飼主備註存在主檔上，列表 API 另外回一份以 id 為鍵的對照表（見 routes/appointments.js）。
+// 貓咪／飼主備註存在主檔上，列表 API 另外回一份以 id 為鍵的對照表（見 routes/appointments.js）。
 const patientNotes = ref({ pets: {}, owners: {} })
 // 各工作區回報的「有未儲存內容」，佇列上顯示藍點。
 const dirtyIds = reactive({})
 
-const COMPACT_STORAGE_KEY = 'clinic.vetConsoleCompact'
-function getInitialCompact() {
+// 精簡（一行一筆）／詳細（原因、備註全展開）是這台電腦的顯示偏好，存 localStorage。
+const DENSITY_STORAGE_KEY = 'clinic.vetConsoleDensity'
+function readDensity() {
   try {
-    const saved = localStorage.getItem(COMPACT_STORAGE_KEY)
-    if (saved !== null) return saved === 'true'
-  } catch {}
-  return true
+    return localStorage.getItem(DENSITY_STORAGE_KEY) === 'detailed' ? 'detailed' : 'compact'
+  } catch {
+    return 'compact'
+  }
 }
-const isCompact = ref(getInitialCompact())
-function setCompact(val) {
-  isCompact.value = val
+const density = ref(readDensity())
+watch(density, (value) => {
   try {
-    localStorage.setItem(COMPACT_STORAGE_KEY, String(val))
+    localStorage.setItem(DENSITY_STORAGE_KEY, value)
   } catch {}
-}
+})
+const compact = computed(() => density.value === 'compact')
+const DENSITY_OPTIONS = [
+  { value: 'compact', label: '精簡' },
+  { value: 'detailed', label: '詳細' },
+]
 
-// 左欄的「在院」「今日排程」可以各自收合；收合只是藏起卡片（v-show，不重新排序也不卸載），
-// 是這台電腦的顯示偏好，跟 isCompact 一樣存 localStorage。
+// 「在院」「今日排程」可以各自收合（v-show，不重新排序也不卸載），同樣是裝置偏好。
 const GROUPS_STORAGE_KEY = 'clinic.vetConsoleCollapsedGroups'
 function restoreCollapsed() {
   try {
@@ -103,10 +92,8 @@ function toggleGroup(key) {
   } catch {}
 }
 
-// 同時開著的病患（左欄卡片就地標示，不另成群組），各自的未儲存輸入留在各自的工作區元件裡。
-//
-// 存進 localStorage 是必要的：診間電腦被重新整理、當掉重開、或不小心關掉分頁時，
-// 醫師手上那幾隻動物不能跟著消失——留在畫面上的工作區就是他的待辦清單。
+// 同時開著的病患，各自的未儲存輸入留在各自的工作區元件裡。
+// 存進 localStorage：診間電腦被重新整理或當掉重開時，醫師手上那幾隻貓不能跟著消失。
 // 綁 date 是因為換日期本來就會清空，隔天開機也不該還原昨天的病患。
 const TABS_STORAGE_KEY = 'clinic.vetConsoleTabs'
 function restoreTabs(forDate) {
@@ -124,11 +111,7 @@ function restoreTabs(forDate) {
 const restored = restoreTabs(date.value)
 const openIds = ref(restored.openIds)
 const activeId = ref(restored.activeId)
-// 頁首 chip 群開的面板：暫存區／已交櫃台／已完成是「查閱用」的三份清單，藥單是待辦，
-// 四者都不是手上的工作，所以不佔左欄「今日病患」的高度——那一欄要留給還要動手的病患。
-// 用大 Modal 而不是側欄抽屜：這幾份是「一次看一批、看完就關」，不需要一邊看一邊寫，
-// 攤在大面板上一列可以放兩筆，比擠在 384px 的窄欄好讀。一次只開一個，不持久化（重整就關）。
-const drawer = ref('')
+const queueTab = ref('active')
 const now = ref(Date.now())
 let clock
 let request = 0
@@ -137,56 +120,31 @@ const isToday = computed(() => date.value === today)
 const byId = computed(() => new Map(items.value.map((item) => [String(item._id), item])))
 const openTabs = computed(() => openIds.value.map((id) => byId.value.get(id)).filter(Boolean))
 const active = computed(() => byId.value.get(activeId.value) || null)
-const isOpen = (item) => openIds.value.includes(String(item._id))
-// 左欄的順序只由掛號資料決定（在院依報到時間、待報到依預約時段），跟「有沒有點開」「有沒有按看診」無關：
-// 點開、切換、關閉、開始看診都只改卡片的底色與標籤，不會讓卡片換位置或換群組。
-const onsite = computed(() => queue('onsite'))
-const scheduled = computed(() => items.value.filter((item) => workflowFilter(item, 'scheduled')).sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt)))
-const handedOff = computed(() => queue('handoff'))
-const finished = computed(() => queue('completed'))
-const onsiteCount = computed(() => items.value.filter((item) => workflowFilter(item, 'onsite') || workflowFilter(item, 'handoff')).length)
-const scheduledCount = computed(() => items.value.filter((item) => workflowFilter(item, 'scheduled')).length)
-
-const mainGroups = computed(() => [
-  { key: 'onsite', label: '在院', list: onsite.value, hint: '依報到順序' },
-  { key: 'scheduled', label: '今日排程 · 待報到', list: scheduled.value, hint: '依時段' },
-])
-
-const referenceDrawers = computed(() => [
-  { key: 'pinned', label: '暫存區', icon: Pin, count: pinnedPets.items.length, description: '在聊天室打 # 標記就會放進來' },
-  { key: 'handoff', label: '已交櫃台', icon: ArrowRight, count: handedOff.value.length, description: '櫃台還沒完成處理，可以取回補資料' },
-  { key: 'completed', label: '已完成', icon: Check, count: finished.value.length, description: '櫃台已完成處理，點名字可查看內容' },
-  // 藥單跟前三顆不同類：那三份是查閱，這一顆是待辦，所以走 todo（紅徽章、0 就不畫），
-  // chip 群裡也用一條分隔線隔開。它現在跟其他三顆共用同一個面板，不再是頁面上的第二個 ModalDialog 特例。
-  { key: 'medications', label: '藥單', icon: Pill, count: medicationTodo.value, tone: 'todo', description: '查看未完成藥單，並依目前進度完成可執行的處理' },
-  // 待辦也是待辦讀法（紅徽章、0 就不畫），跟藥單同屬分隔線右側那一群。
-  { key: 'todos', label: '待辦', icon: ListTodo, count: todos.openCount, tone: 'todo', description: '院內共用的待辦事項，醫生與櫃台即時同步' },
-])
-const activeDrawer = computed(() => referenceDrawers.value.find((entry) => entry.key === drawer.value) || null)
-// 查閱清單的排序依面板標題那件事：已交櫃台＝最早交出的在上面（在櫃台前等最久），已完成＝最近完成的在上面。
-const drawerList = computed(() => {
-  const byTime = (key, direction) => (a, b) => direction * (new Date(a[key] || 0) - new Date(b[key] || 0))
-  if (drawer.value === 'handoff') return [...handedOff.value].sort(byTime('handoffAt', 1))
-  if (drawer.value === 'completed') return [...finished.value].sort(byTime('deskCompletedAt', -1))
-  return []
-})
-const DRAWER_COLUMNS = '3rem minmax(11rem, 1fr) minmax(0, 2.4fr) 5.5rem'
-const DRAWER_COLUMNS_WITH_ACTION = `${DRAWER_COLUMNS} 5.5rem`
-function drawerTime(item) {
-  return clinicTimeInput(drawer.value === 'handoff' ? item.handoffAt : item.deskCompletedAt) || '—'
-}
-function toggleDrawer(key) {
-  drawer.value = drawer.value === key ? '' : key
-}
-// 從查閱清單點病患：Modal 蓋住工作區，開了分頁就要把它關掉，否則看不到剛切過去的那一筆。
-function openFromDrawer(appointment) {
-  openPatient(appointment)
-  drawer.value = ''
-}
 
 function queue(filter) {
   return items.value.filter((item) => workflowFilter(item, filter)).sort((a, b) => new Date(a.checkedInAt || a.scheduledAt) - new Date(b.checkedInAt || b.scheduledAt))
 }
+const byTime = (key, direction) => (a, b) => direction * (new Date(a[key] || 0) - new Date(b[key] || 0))
+const onsite = computed(() => queue('onsite'))
+const scheduled = computed(() => items.value.filter((item) => workflowFilter(item, 'scheduled')).sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt)))
+// 已交櫃台：最早交出的在上面（在櫃台前等最久）；已完成：最近完成的在上面。
+const handedOff = computed(() => [...queue('handoff')].sort(byTime('handoffAt', 1)))
+const finished = computed(() => [...queue('completed')].sort(byTime('deskCompletedAt', -1)))
+
+const QUEUE_TABS = [
+  { key: 'active', label: '進行中' },
+  { key: 'handoff', label: '已交櫃台' },
+  { key: 'completed', label: '已完成' },
+]
+const queueCounts = computed(() => ({ active: onsite.value.length + scheduled.value.length, handoff: handedOff.value.length, completed: finished.value.length }))
+const groups = computed(() => {
+  if (queueTab.value === 'handoff') return [{ key: 'handoff', list: handedOff.value }]
+  if (queueTab.value === 'completed') return [{ key: 'completed', list: finished.value }]
+  return [
+    { key: 'onsite', label: '在院', list: onsite.value, hint: '依報到順序', collapsible: true },
+    { key: 'scheduled', label: '今日排程', list: scheduled.value, hint: '依時段', collapsible: true },
+  ]
+})
 
 function minutesSince(value) {
   if (!value) return null
@@ -198,25 +156,19 @@ function waitingTooLong(item) {
   const state = workflowState(item)
   return item.status === 'arrived' && !state.started && Boolean(item.checkedInAt) && minutesSince(item.checkedInAt) >= LONG_WAIT_MINUTES
 }
-// 待報到的手術卡片淡紫底（跟櫃台頁同一套）：醫師看排程是為了先備器材。
-function cardClass(item, groupKey) {
-  if (String(item._id) === activeId.value) return 'border-primary bg-accent'
-  // 開著但不是目前這一筆：留在原位、只加一圈主色淡框，切換分頁靠點卡片。
-  if (isOpen(item)) return 'border-primary/40 bg-card hover:bg-field'
-  if (groupKey === 'scheduled' && item.isSurgery) return 'border-surgery/35 bg-surgery-surface/60 hover:bg-surgery-surface'
-  return 'border-border bg-card hover:bg-field'
-}
-function statusMeta(item) {
+function statusText(item) {
   const state = workflowState(item)
-  if (state.completed) return '已完成'
-  if (state.handedOff) return '已交櫃台'
+  if (state.completed) return clinicTimeInput(item.deskCompletedAt) ? `${clinicTimeInput(item.deskCompletedAt)} 完成` : '已完成'
+  if (state.handedOff) return clinicTimeInput(item.handoffAt) ? `${clinicTimeInput(item.handoffAt)} 交出` : '已交櫃台'
   if (state.started) return `看診 ${minutesSince(item.visitStartedAt)} 分`
   if (item.status === 'arrived') return item.checkedInAt ? `已等 ${minutesSince(item.checkedInAt)} 分` : '候診中'
-  if (item.status === 'scheduled') return item.time ? `${item.time} 掛號` : '未報到'
   return ''
 }
 function notesFor(item) {
   return patientNotesFor(item, patientNotes.value)
+}
+function severeNotes(item) {
+  return notesFor(item).some((note) => note.text.includes('咬') || note.text.includes('凶'))
 }
 
 async function refresh() {
@@ -241,12 +193,12 @@ async function refresh() {
   }
 }
 
-// 醫師在診間裡看不到櫃台，有人報到要在這頁直接講：從「待報到」變成「已報到」（或新增時就是已報到的現場掛號）
-// 就跳一則提示。這頁的 toast 固定在上方，不用點開聊天室。只看今天，翻舊日期不吵。
+// 醫師在診間裡看不到櫃台，有人報到要在這頁直接講：從「待報到」變成「已報到」
+// （或新增時就是已報到的現場掛號）就跳一則提示。只看今天，翻舊日期不吵。
 function announceCheckIn(previous, next) {
   if (!isToday.value || next.status !== 'arrived' || workflowState(next).started) return
   if (previous && previous.status !== 'scheduled') return
-  const detail = [next.checkinNumber ? `號碼牌 ${next.checkinNumber}` : '', next.reason].filter(Boolean).join(' · ')
+  const detail = [next.checkinNumber ? `號碼牌 ${next.checkinNumber}` : '', next.reason].filter(Boolean).join('，')
   toast.success(detail, `${next.petName} 已報到`)
 }
 
@@ -267,7 +219,7 @@ function applyUpdate(item) {
   items.value[index] = item
 }
 
-const { connected } = useClinicSync(date, refresh, applyUpdate)
+useClinicSync(date, refresh, applyUpdate)
 
 // 重新整理要回到原本開著的那幾筆，所以每次開關／切換都寫回去。
 watch(
@@ -290,7 +242,7 @@ watch(date, () => {
   refresh()
 })
 
-// 點卡片只開啟工作區（可以先看資料）；真正開始看診要按「看診」／「開始看診」。
+// 點一筆只開啟工作區（可以先看資料）；真正開始看診要按「看診」／「開始看診」。
 function openPatient(appointment) {
   const id = String(appointment._id)
   if (!openIds.value.includes(id)) openIds.value.push(id)
@@ -354,9 +306,9 @@ async function reclaim(appointment) {
     const { data } = await http.post(`/appointments/${appointment._id}/workflow/reclaim`, { version: appointment.__v ?? 0 })
     applyUpdate(data)
     notifyChat(data, 'reclaim')
-    // 取回就是要接著補資料，所以直接切到工作區；查閱面板蓋在上面，一併關掉。
+    // 取回就是要接著補資料：切回「進行中」並開工作區。
     openPatient(data)
-    drawer.value = ''
+    queueTab.value = 'active'
   } catch (err) {
     toast.error(err.response?.data?.message || '取回失敗，請稍後重試')
   } finally {
@@ -373,16 +325,6 @@ async function loadTemplates() {
   }
 }
 
-async function refreshMedicationCounts() {
-  const requestId = ++medicationCountRequest
-  try {
-    const { data } = await http.get('/medications', { params: { status: 'review', limit: 1 } })
-    if (requestId === medicationCountRequest) medicationCounts.value = data.counts || {}
-  } catch {
-    /* 計數更新失敗時保留目前數字，下一次即時事件或重新連線會再同步。 */
-  }
-}
-
 onMounted(() => {
   clock = setInterval(() => {
     now.value = Date.now()
@@ -390,232 +332,118 @@ onMounted(() => {
   loadTemplates()
   loadTextTemplates().catch(() => {})
   refresh()
-  refreshMedicationCounts()
-  medicationSocket.on('medication:updated', refreshMedicationCounts)
-  medicationSocket.on('connect', refreshMedicationCounts)
 })
 onBeforeUnmount(() => {
   request += 1
-  medicationCountRequest += 1
   clearInterval(clock)
-  medicationSocket.off('medication:updated', refreshMedicationCounts)
-  medicationSocket.off('connect', refreshMedicationCounts)
 })
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 xl:h-[calc(100dvh-2.5rem)]">
+  <div class="flex flex-col gap-4 xl:h-[calc(100dvh-2.5rem)]">
     <header class="flex flex-wrap items-center gap-x-4 gap-y-3">
-      <div class="flex shrink-0 items-baseline gap-2">
-        <h1 class="text-xl font-semibold">醫師診療台</h1>
-      </div>
-      <!-- 面板群放在標題與日期之間：它們跟「今天是哪一天」無關，也不是主要操作，
-           夾在中間才不會跟右邊那組日期控制搶同一塊視線。前三顆是查閱、藥單是待辦，中間一條分隔線。 -->
-      <div class="flex flex-1 items-center justify-center">
-        <ConsoleChipBar aria-label="工作面板">
-          <template v-for="(entry, index) in referenceDrawers" :key="entry.key">
-            <span v-if="entry.tone === 'todo' && index && referenceDrawers[index - 1].tone !== 'todo'" class="mx-0.5 h-5 w-px shrink-0 bg-border" aria-hidden="true"></span>
-            <ConsoleChip :icon="entry.icon" :label="entry.label" :count="entry.count" :tone="entry.tone" :active="drawer === entry.key" @click="toggleDrawer(entry.key)" />
-          </template>
-        </ConsoleChipBar>
-      </div>
-      <div class="flex shrink-0 items-center gap-1">
-        <Button variant="secondary" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft class="h-4 w-4" /></Button>
-        <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-36" />
-        <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight class="h-4 w-4" /></Button>
-        <!-- 只在不是今天時出現：當天它一直是 disabled，留著等於白佔 80px，而這一行沒有 80px 可以浪費。 -->
-        <Button v-if="date !== today" variant="secondary" size="sm" @click="date = today">今天</Button>
+      <h1 class="text-xl font-semibold">診療台</h1>
+      <div class="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+        <Button v-if="date !== today" variant="soft" size="sm" @click="date = today">回到今天</Button>
+        <Button variant="ghost" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft stroke-width="1.75" /></Button>
+        <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
+        <Button variant="ghost" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
       </div>
     </header>
 
-    <div class="flex min-h-0 flex-1 flex-col gap-3">
-      <Alert v-if="error" variant="destructive" class="flex items-center justify-between gap-3">
-        <AlertDescription>{{ error }}</AlertDescription>
-        <Button variant="secondary" size="sm" @click="refresh"><RefreshCw class="h-4 w-4" />重試</Button>
-      </Alert>
+    <Alert v-if="error" variant="destructive" class="flex items-center justify-between gap-3">
+      <AlertDescription>{{ error }}</AlertDescription>
+      <Button variant="secondary" size="sm" @click="refresh"><RefreshCw stroke-width="1.75" />重試</Button>
+    </Alert>
 
-      <div class="flex min-h-0 flex-1 flex-col gap-3 xl:flex-row">
-        <section class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card xl:w-100 xl:shrink-0" aria-label="今日病患">
-          <header class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border px-3.5 py-2.5">
-            <div class="flex items-center gap-2">
-              <h2 class="text-base font-semibold">今日病患</h2>
-              <Badge variant="status" class="bg-accent text-accent-foreground tabular-nums">在院 {{ onsiteCount }} · 待到 {{ scheduledCount }}</Badge>
-            </div>
-            <div class="inline-flex rounded-lg border border-border bg-muted/40 p-0.5 text-xs">
-              <button type="button" class="flex items-center gap-1 rounded-md px-2 py-1 font-medium transition-colors" :class="isCompact ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" :aria-pressed="isCompact" @click="setCompact(true)" title="精簡版：節省高度，瀏覽更多病患">
-                <List class="h-3.5 w-3.5" stroke-width="2" />
-                <span>精簡</span>
-              </button>
-              <button type="button" class="flex items-center gap-1 rounded-md px-2 py-1 font-medium transition-colors" :class="!isCompact ? 'bg-card text-foreground shadow-xs' : 'text-muted-foreground hover:text-foreground'" :aria-pressed="!isCompact" @click="setCompact(false)" title="詳細版：完整顯示所有備註與資訊">
-                <LayoutList class="h-3.5 w-3.5" stroke-width="2" />
-                <span>詳細</span>
-              </button>
-            </div>
-          </header>
-
-          <div class="min-h-0 flex-1 overflow-y-auto px-2.5 pb-3">
-            <ListSkeleton v-if="loading" :rows="4" />
-            <template v-else>
-              <template v-for="group in mainGroups" :key="group.key">
-                <div v-if="group.list.length || !group.hideWhenEmpty" class="pt-2">
-                  <button type="button" class="mb-1.5 flex w-full items-center gap-2 rounded-md bg-transparent px-1.5 py-1 text-left text-xs font-semibold text-muted-foreground transition-colors hover:bg-field focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :aria-expanded="!isCollapsed(group.key)" :aria-label="`${isCollapsed(group.key) ? '展開' : '收合'}${group.label}`" @click="toggleGroup(group.key)">
-                    <ChevronDown class="h-3.5 w-3.5 shrink-0 transition-transform" :class="isCollapsed(group.key) ? '-rotate-90' : ''" stroke-width="2" aria-hidden="true" />
-                    {{ group.label }}<span class="font-normal">{{ group.list.length }}</span>
-                    <span v-if="isCollapsed(group.key) && group.list.some((item) => dirtyIds[String(item._id)])" class="h-2 w-2 shrink-0 rounded-full bg-primary" title="收合的病患有尚未儲存的內容"><span class="sr-only">收合的病患有尚未儲存的內容</span></span>
-                    <span v-if="group.hint" class="ml-auto font-normal">{{ group.hint }}</span>
-                  </button>
-                  <p v-if="!isCollapsed(group.key) && !group.list.length" class="px-1.5 py-2 text-xs text-muted-foreground">目前沒有</p>
-                  <article v-for="item in group.list" v-show="!isCollapsed(group.key)" :key="item._id" class="cursor-pointer rounded-xl border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :class="[cardClass(item, group.key), isCompact ? 'mb-1.5 p-2' : 'mb-2 p-3']" role="button" tabindex="0" :aria-label="`開啟 ${item.petName}`" @click="openPatient(item)" @keydown.enter.self.prevent="openPatient(item)" @keydown.space.self.prevent="openPatient(item)">
-                    <!-- 精簡版內容：緊湊兩行式佈局，高度縮減 60%，單行截斷原因，安全警示微標籤（不含 emoji） -->
-                    <div v-if="isCompact" class="flex items-start gap-2">
-                      <span v-if="group.key === 'scheduled'" class="w-9 shrink-0 pt-0.5 text-xs font-semibold tabular-nums text-muted-foreground">{{ item.time || '未定' }}</span>
-                      <CheckinNumber v-else :appointment="item" size="sm" />
-
-                      <div class="min-w-0 flex-1 space-y-0.5">
-                        <div class="flex items-center gap-1.5">
-                          <span class="truncate text-sm font-semibold" :class="String(item._id) === activeId ? 'text-accent-foreground' : ''">{{ item.petName }}</span>
-                          <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
-
-                          <PatientNotesTip :notes="notesFor(item)" />
-
-                          <TooltipProvider v-if="item.isSurgery" :delay-duration="100">
-                            <Tooltip>
-                              <TooltipTrigger as-child>
-                                <button type="button" class="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded bg-surgery-surface px-1.5 py-0.5 text-[11px] font-semibold text-surgery transition-colors hover:bg-surgery/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-surgery" :aria-label="item.surgeryName ? `手術：${item.surgeryName}` : '手術'" @click.stop>
-                                  <Scissors class="h-3 w-3" stroke-width="2" aria-hidden="true" />
-                                  <span>手術</span>
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" align="start" :arrow="false" class="max-w-xs whitespace-normal rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
-                                <div class="rounded-md bg-surgery-surface px-2.5 py-1.5 text-xs font-medium text-surgery leading-relaxed"><span class="font-semibold">手術：</span>{{ item.surgeryName?.trim() || '未填手術名稱' }}</div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-
-                          <TooltipProvider v-if="item.latenessMinutes > 0" :delay-duration="100">
-                            <Tooltip>
-                              <TooltipTrigger as-child>
-                                <button type="button" class="inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded bg-danger-surface px-1.5 py-0.5 text-[11px] font-semibold text-danger tabular-nums transition-colors hover:bg-danger/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-danger" :aria-label="`遲到 ${item.latenessMinutes} 分`" @click.stop>
-                                  <Clock class="h-3 w-3" stroke-width="2" aria-hidden="true" />
-                                  <span>+{{ item.latenessMinutes }}分</span>
-                                </button>
-                              </TooltipTrigger>
-                              <TooltipContent side="top" align="start" :arrow="false" class="max-w-xs whitespace-normal rounded-xl border border-border bg-popover p-2 text-popover-foreground shadow-lg">
-                                <div class="rounded-md bg-danger-surface px-2.5 py-1.5 text-xs font-medium text-danger leading-relaxed tabular-nums"><span class="font-semibold">遲到：</span>超過預約時間 {{ item.latenessMinutes }} 分鐘</div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-
-                          <span v-if="group.key !== 'scheduled'" class="ml-auto shrink-0 text-xs" :class="waitingTooLong(item) ? 'font-semibold text-danger' : 'text-muted-foreground'">{{ statusMeta(item) }}</span>
-                          <span v-if="dirtyIds[String(item._id)]" class="h-2 w-2 shrink-0 rounded-full bg-primary" title="有尚未儲存的內容"><span class="sr-only">有尚未儲存的內容</span></span>
-                        </div>
-
-                        <p class="truncate text-xs leading-tight" :class="item.reason ? 'text-muted-foreground' : 'text-muted-foreground/60 italic'" :title="item.reason || '未填來院原因'">
-                          {{ item.reason || '未填來院原因' }}
-                        </p>
-                      </div>
-
-                      <Button v-if="group.key === 'onsite' && !workflowState(item).started" size="xs" class="h-7 shrink-0 px-2 text-xs" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope class="h-3.5 w-3.5" />看診</Button>
-                      <Button v-if="isOpen(item)" variant="secondary" size="icon-xs" class="h-7 w-7 shrink-0" :aria-label="`關閉 ${item.petName}`" @click.stop="closeTab(String(item._id))"><X class="h-3.5 w-3.5" /></Button>
-                    </div>
-
-                    <!-- 詳細版內容：完整展開所有備註、徽章與掛號紀錄 -->
-                    <div v-else class="flex items-start gap-2.5">
-                      <span v-if="group.key === 'scheduled'" class="w-11 shrink-0 pt-0.5 text-sm font-semibold tabular-nums">{{ item.time || '未定' }}</span>
-                      <CheckinNumber v-else :appointment="item" />
-
-                      <div class="min-w-0 flex-1 space-y-1">
-                        <div class="flex items-center gap-1.5">
-                          <span class="truncate text-sm font-semibold" :class="String(item._id) === activeId ? 'text-accent-foreground' : ''">{{ item.petName }}</span>
-                          <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
-                          <span v-if="group.key !== 'scheduled'" class="ml-auto shrink-0 text-xs" :class="waitingTooLong(item) ? 'font-semibold text-danger' : 'text-muted-foreground'">{{ statusMeta(item) }}</span>
-                          <span v-if="dirtyIds[String(item._id)]" class="h-2 w-2 shrink-0 rounded-full bg-primary" title="有尚未儲存的內容"><span class="sr-only">有尚未儲存的內容</span></span>
-                        </div>
-                        <p class="text-sm font-medium leading-snug" :class="item.reason ? 'text-foreground' : 'text-muted-foreground'">{{ item.reason || '未填來院原因' }}</p>
-                        <div v-if="item.isSurgery || item.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
-                          <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
-                          <LatenessBadge :minutes="item.latenessMinutes" />
-                        </div>
-                        <PatientNotes :notes="notesFor(item)" />
-                        <p v-if="item.internalNote" class="line-clamp-1 text-xs text-muted-foreground" :title="item.internalNote"><span class="font-medium text-foreground">掛號備註：</span>{{ item.internalNote }}</p>
-                      </div>
-
-                      <Button v-if="group.key === 'onsite' && !workflowState(item).started" size="xs" class="shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope class="h-4 w-4" />看診</Button>
-                      <Button v-if="isOpen(item)" variant="secondary" size="icon-xs" class="shrink-0" :aria-label="`關閉 ${item.petName}`" @click.stop="closeTab(String(item._id))"><X class="h-3.5 w-3.5" /></Button>
-                    </div>
-                  </article>
-                </div>
-              </template>
-            </template>
+    <div class="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
+      <section class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-card xl:w-100 xl:shrink-0" aria-label="今日病患">
+        <header class="flex shrink-0 flex-col gap-2.5 border-b border-border px-4 py-3">
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="text-lg font-semibold">今日病患</h2>
+            <SegmentedControl v-model="density" :options="DENSITY_OPTIONS" size="sm" aria-label="清單顯示方式" />
           </div>
-        </section>
+          <FilterTabs v-model="queueTab" :items="QUEUE_TABS" :counts="queueCounts" aria-label="病患進度" class="w-full [&>button]:flex-1" />
+        </header>
 
-        <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card" aria-label="看診工作區">
-          <!-- 每個開著的病患各自掛一個工作區並用 v-show 切換，不是共用一個再換 props——
-             元件被銷毀重建就等於把還沒存檔的輸入丟掉，那正是要避免的事。 -->
-          <VisitWorkspace v-for="tab in openTabs" v-show="String(tab._id) === activeId" :key="tab._id" class="min-h-0 flex-1" :appointment="tab" :templates="templates" @updated="onWorkspaceUpdate" @start="startVisit" @close="closeTab(String(tab._id))" @dirty="onDirty" @notes-updated="onNotesUpdated" @open-record="(appointment) => router.push({ path: `/records/${appointment.recordId}/edit`, query: { visit: appointment._id, visitDate: appointment.date } })" />
-          <EmptyState v-if="!active && !loading" :icon="CalendarClock" title="從左邊選一位病患" description="點卡片可以先看資料，按「看診」才會記錄開始時間。可以同時開好幾位，切換不會清空已輸入的內容。" inset />
-        </section>
-      </div>
-
-      <!-- 查閱用的大 Modal：一次看一批、看完就關，所以用蓋住畫面的大面板而不是側欄。
-         點病患會開／切到工作區分頁並自動關掉這個面板。 -->
-      <ModalDialog v-if="activeDrawer" size="xl" :title="activeDrawer.label" :description="activeDrawer.description" :icon="activeDrawer.icon" :count="drawer === 'medications' ? null : activeDrawer.count" @close="drawer = ''">
-        <!-- 藥單面板自己要撐滿高度（裡面有清單與詳情兩個檢視要切換），查閱清單則是內容多高就多高、
-           min-h 只是不讓「目前沒有」塌成一條窄橫幅——xl 面板有 1280px 寬，內容 100px 高時比例會像壞掉。 -->
-        <div v-if="drawer === 'medications'" class="flex h-[min(72vh,52rem)] min-h-96 flex-col p-5 sm:p-6">
-          <MedicationWorkspace mode="doctor" initial-filter="review" :stages="['review', 'approved', 'ready', 'collected']" @counts="medicationCounts = $event" />
-        </div>
-        <TodoPanel v-else-if="drawer === 'todos'" />
-        <div v-else class="max-h-[min(68vh,48rem)] min-h-72 overflow-y-auto p-5 sm:p-6">
-          <template v-if="drawer === 'pinned'">
-            <PinnedPetsList />
-            <p v-if="!pinnedPets.items.length" class="py-10 text-center text-sm text-muted-foreground">暫存區是空的</p>
-          </template>
+        <div class="min-h-0 flex-1 overflow-y-auto pb-2">
+          <ListSkeleton v-if="loading" :rows="4" inset />
           <template v-else>
-            <p v-if="!drawerList.length" class="py-10 text-center text-sm text-muted-foreground">目前沒有</p>
-            <!-- 一筆一列、欄位對齊：這份清單是拿來「掃一遍、找某一隻」的，兩欄卡片的 Z 字讀序與忽高忽低的卡片都會拖慢掃視。
-                 備註收成「注意／提醒」小標籤（滑過看全文），不讓整段備註把列撐高。 -->
-            <Card v-else class="overflow-hidden p-0" :style="{ '--data-columns': drawer === 'handoff' ? DRAWER_COLUMNS_WITH_ACTION : DRAWER_COLUMNS }">
-              <div class="desktop-data-header text-xs font-semibold text-muted-foreground">
-                <span class="desktop-data-cell">號碼</span>
-                <span class="desktop-data-cell">寵物</span>
-                <span class="desktop-data-cell">來院原因</span>
-                <span class="desktop-data-cell text-right">{{ drawer === 'handoff' ? '交出時間' : '完成時間' }}</span>
-                <span v-if="drawer === 'handoff'" class="desktop-data-cell"></span>
-              </div>
-              <div
-                v-for="item in drawerList"
-                :key="item._id"
-                class="desktop-data-row cursor-pointer transition-colors hover:bg-field focus-visible:bg-field focus-visible:outline-none"
-                role="button"
-                tabindex="0"
-                :aria-label="`開啟 ${item.petName}`"
-                @click="openFromDrawer(item)"
-                @keydown.enter.self.prevent="openFromDrawer(item)"
-                @keydown.space.self.prevent="openFromDrawer(item)"
+            <div v-for="group in groups" :key="group.key">
+              <button
+                v-if="group.collapsible"
+                type="button"
+                class="flex w-full items-center gap-2 px-4 pt-3 pb-1.5 text-left hover:text-foreground"
+                :aria-expanded="!isCollapsed(group.key)"
+                :aria-label="`${isCollapsed(group.key) ? '展開' : '收合'}${group.label}`"
+                @click="toggleGroup(group.key)"
               >
-                <span class="desktop-data-cell"><CheckinNumber :appointment="item" /></span>
-                <span class="desktop-data-cell flex items-baseline gap-1.5">
-                  <span class="min-w-0 truncate text-sm font-semibold text-primary">{{ item.petName }}</span>
-                  <span class="shrink-0 text-xs text-muted-foreground">{{ [item.species, visitTypeLabel(item)].filter(Boolean).join(' · ') }}</span>
-                </span>
-                <span class="desktop-data-cell flex items-center gap-1.5">
-                  <span class="min-w-0 truncate text-sm" :class="item.reason ? '' : 'text-muted-foreground'" :title="item.reason || undefined">{{ item.reason || '未填來院原因' }}</span>
-                  <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" class="shrink-0" />
-                  <LatenessBadge :minutes="item.latenessMinutes" class="shrink-0" />
-                  <PatientNotesTip :notes="notesFor(item)" />
-                </span>
-                <span class="desktop-data-cell text-right text-sm tabular-nums text-muted-foreground">{{ drawerTime(item) }}</span>
-                <span v-if="drawer === 'handoff'" class="desktop-data-cell text-right">
-                  <Button variant="secondary" size="xs" :disabled="busy" @click.stop="reclaim(item)" @keydown.stop><Undo2 class="h-4 w-4" stroke-width="1.75" />取回</Button>
-                </span>
-              </div>
-            </Card>
+                <ChevronDown class="size-4 shrink-0 text-subtle-foreground transition-transform" :class="isCollapsed(group.key) ? '-rotate-90' : ''" stroke-width="2" aria-hidden="true" />
+                <span class="spec-label">{{ group.label }}</span>
+                <span class="num text-xs text-subtle-foreground">{{ group.list.length }}</span>
+                <span v-if="isCollapsed(group.key) && group.list.some((item) => dirtyIds[String(item._id)])" class="size-2 shrink-0 rounded-full bg-info" title="收合的病患有尚未儲存的內容"><span class="sr-only">收合的病患有尚未儲存的內容</span></span>
+                <span class="ml-auto text-xs text-subtle-foreground">{{ group.hint }}</span>
+              </button>
+              <p v-if="!isCollapsed(group.key) && !group.list.length" class="px-4 py-3 text-sm text-subtle-foreground">目前沒有</p>
+
+              <ul v-show="!isCollapsed(group.key)">
+                <li
+                  v-for="item in group.list"
+                  :key="item._id"
+                  class="group/row flex cursor-pointer items-center gap-3 border-b border-border px-4 transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-inset"
+                  :class="[compact ? 'min-h-14 py-2' : 'py-3', String(item._id) === activeId ? 'bg-accent/60 shadow-[inset_3px_0_0_var(--primary)]' : 'hover:bg-hover']"
+                  :aria-current="String(item._id) === activeId ? 'true' : undefined"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`開啟 ${item.petName}`"
+                  @click="openPatient(item)"
+                  @keydown.enter.self.prevent="openPatient(item)"
+                  @keydown.space.self.prevent="openPatient(item)"
+                >
+                  <span v-if="group.key === 'scheduled'" class="num w-12 shrink-0 text-base font-semibold" :class="item.isSurgery ? 'text-surgery' : 'text-foreground'">{{ item.time || '未定' }}</span>
+                  <CheckinNumber v-else :appointment="item" :size="compact ? 'sm' : 'md'" />
+
+                  <div class="min-w-0 flex-1" :class="compact ? '' : 'space-y-1'">
+                    <div class="flex min-w-0 items-center gap-2">
+                      <span class="truncate text-base font-semibold text-foreground">{{ item.petName }}</span>
+                      <Badge v-if="item.visitType === 'new'" variant="status" class="h-6 bg-info-surface px-2 text-info">初診</Badge>
+                      <span v-if="compact" class="min-w-0 flex-1 truncate text-sm text-muted-foreground" :title="item.reason || undefined">{{ item.reason }}</span>
+                      <!-- 精簡版的標記只留圖示（滑過看全文）：一行放不下「手術：結紮」這種整顆徽章。 -->
+                      <span v-if="compact" class="flex shrink-0 items-center gap-1">
+                        <Scissors v-if="item.isSurgery" class="size-4 text-surgery" stroke-width="2" :aria-label="`手術：${item.surgeryName || ''}`" />
+                        <Clock v-if="item.latenessMinutes > 0" class="size-4 text-danger" stroke-width="2" :aria-label="`遲到 ${item.latenessMinutes} 分`" />
+                        <AlertTriangle v-if="notesFor(item).length" class="size-4" :class="severeNotes(item) ? 'text-danger' : 'text-warning'" stroke-width="2" :aria-label="notesFor(item).map((note) => `${note.label}備註：${note.text}`).join('；')" />
+                      </span>
+                    </div>
+                    <template v-if="!compact">
+                      <p class="text-base leading-snug" :class="item.reason ? 'text-foreground' : 'text-subtle-foreground'">{{ item.reason || '未填來院原因' }}</p>
+                      <div v-if="item.isSurgery || item.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
+                        <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
+                        <LatenessBadge :minutes="item.latenessMinutes" />
+                      </div>
+                      <PatientNotes :notes="notesFor(item)" />
+                      <p v-if="item.internalNote" class="line-clamp-1 text-sm text-muted-foreground" :title="item.internalNote"><span class="font-medium text-foreground">掛號備註</span> {{ item.internalNote }}</p>
+                    </template>
+                  </div>
+
+                  <span v-if="statusText(item)" class="num shrink-0 text-xs" :class="waitingTooLong(item) ? 'font-semibold text-danger' : 'text-subtle-foreground'">{{ statusText(item) }}</span>
+                  <span v-if="dirtyIds[String(item._id)]" class="size-2 shrink-0 rounded-full bg-info" title="有尚未儲存的內容"><span class="sr-only">有尚未儲存的內容</span></span>
+                  <Button v-if="group.key === 'onsite' && !workflowState(item).started" size="xs" class="shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope stroke-width="1.75" />看診</Button>
+                  <Button v-if="group.key === 'handoff'" variant="secondary" size="xs" class="shrink-0" :disabled="busy" @click.stop="reclaim(item)"><Undo2 stroke-width="1.75" />取回</Button>
+                </li>
+              </ul>
+            </div>
           </template>
         </div>
-      </ModalDialog>
-      <TextTemplatePickerDialog />
+      </section>
+
+      <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-card" aria-label="看診工作區">
+        <!-- 每個開著的病患各自掛一個工作區並用 v-show 切換，不是共用一個再換 props——
+             元件被銷毀重建就等於把還沒存檔的輸入丟掉，那正是要避免的事。 -->
+        <VisitWorkspace v-for="tab in openTabs" v-show="String(tab._id) === activeId" :key="tab._id" class="min-h-0 flex-1" :appointment="tab" :templates="templates" @updated="onWorkspaceUpdate" @start="startVisit" @close="closeTab(String(tab._id))" @dirty="onDirty" @notes-updated="onNotesUpdated" @open-record="(appointment) => router.push({ path: `/records/${appointment.recordId}/edit`, query: { visit: appointment._id, visitDate: appointment.date } })" />
+        <EmptyState v-if="!active && !loading" :icon="CalendarClock" title="從左邊選一位病患" description="點一筆可以先看資料，按「看診」才會記錄開始時間。可以同時開好幾位，切換不會清空已輸入的內容。" inset class="my-auto" />
+      </section>
     </div>
+    <TextTemplatePickerDialog />
   </div>
 </template>

@@ -69,14 +69,14 @@ const onSubmit = handleSubmit((values) => emit('submit', {
       </div>
       <div>
         <DialogTitle>報到</DialogTitle>
-        <DialogDescription class="mt-0.5 text-xs">初診：確認寵物與飼主身分後即可建立正式病歷、進入候診時間軸</DialogDescription>
+        <DialogDescription class="mt-0.5 text-xs">初診：確認貓咪與飼主身分後即可建立正式病歷、進入候診時間軸</DialogDescription>
       </div>
     </div>
 
     <form class="flex flex-col" @submit.prevent="onSubmit">
       <div class="space-y-4 p-6 pt-3 sm:p-7 sm:pt-3">
         <Alert v-if="!appointment.petId && appointment.ownerId">
-          <AlertDescription>新寵物將登記於既有飼主 {{ appointment.ownerName }}（{{ appointment.ownerPhone || '未填寫電話' }}）名下。</AlertDescription>
+          <AlertDescription>新貓咪將登記於既有飼主 {{ appointment.ownerName }}（{{ appointment.ownerPhone || '未填寫電話' }}）名下。</AlertDescription>
         </Alert>
         <div v-if="!appointment.petId && !appointment.ownerId" class="space-y-1.5">
           <Label for="checkin-owner-name" class="text-xs font-medium text-foreground">飼主姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
@@ -89,7 +89,7 @@ const onSubmit = handleSubmit((values) => emit('submit', {
           <p v-if="ownerPhoneError" class="text-xs font-medium text-destructive">{{ ownerPhoneError }}</p>
         </div>
         <div v-if="!appointment.petId" class="space-y-1.5">
-          <Label for="checkin-pet-name" class="text-xs font-medium text-foreground">寵物姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+          <Label for="checkin-pet-name" class="text-xs font-medium text-foreground">貓咪姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
           <Input id="checkin-pet-name" v-model="petName" class="border-border" />
           <p v-if="petNameError" class="text-xs font-medium text-destructive">{{ petNameError }}</p>
         </div>

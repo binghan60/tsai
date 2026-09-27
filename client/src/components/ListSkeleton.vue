@@ -9,7 +9,7 @@ import { Skeleton } from './ui/skeleton';
 // 對齊桌機密集資料列；資料進來時位置幾乎不動。
 defineProps({
   rows: { type: Number, default: 5 },
-  // 有頭像／圖示欄的清單（飼主、寵物、報告）留一個圓形佔位
+  // 有頭像／圖示欄的清單（飼主、貓咪、報告）留一個圓形佔位
   avatar: { type: Boolean, default: true },
   // 對話框或卡片內部用：外層已經有一圈邊框，再包一層 Card 會變成框中框。
   // 跟 EmptyState 的 inset 是同一個理由。
@@ -20,7 +20,7 @@ defineProps({
 <template>
   <component :is="inset ? 'div' : Card" :class="inset ? '' : 'overflow-hidden p-0'" role="status" aria-label="載入中">
     <div class="divide-y divide-border">
-      <div v-for="row in rows" :key="row" class="flex h-14 items-center gap-4 px-4 py-2.5">
+      <div v-for="row in rows" :key="row" class="flex h-16 items-center gap-4 px-5 py-2.5">
         <Skeleton v-if="avatar" class="size-9 shrink-0 rounded-full" />
         <div class="min-w-0 flex-1 space-y-2">
           <Skeleton class="h-4 w-40 max-w-full" />

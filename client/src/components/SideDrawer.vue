@@ -38,8 +38,8 @@ onMounted(async () => {
   <section ref="root" role="region" :aria-labelledby="titleId" class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card" @keydown="onKeydown">
     <header class="flex shrink-0 items-start gap-3 border-b border-border px-5 py-4">
       <div class="min-w-0 flex-1">
-        <h2 :id="titleId" class="text-base font-semibold">{{ title }}</h2>
-        <p v-if="description" class="mt-0.5 text-xs text-muted-foreground">{{ description }}</p>
+        <h2 :id="titleId" class="text-lg font-semibold">{{ title }}</h2>
+        <p v-if="description" class="mt-0.5 text-sm text-muted-foreground">{{ description }}</p>
       </div>
       <slot name="actions" />
       <Button type="button" variant="secondary" size="icon-sm" data-drawer-close :aria-label="closeLabel" :disabled="closeDisabled" @click="emit('close')">

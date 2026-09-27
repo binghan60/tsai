@@ -26,7 +26,7 @@ router.get('/', async (req, res, next) => {
     if (status === 'active') filter.status = { $in: MEDICATION_ACTIVE };
     else if (status !== 'all') filter.status = status;
     if (req.query.petId) {
-      if (!mongoose.isValidObjectId(req.query.petId)) return res.status(422).json({ message: '寵物編號不正確' });
+      if (!mongoose.isValidObjectId(req.query.petId)) return res.status(422).json({ message: '貓咪編號不正確' });
       filter.petId = req.query.petId;
     }
     if (req.query.q) {
@@ -54,13 +54,13 @@ router.get('/:id', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const fields = medicationFields(req.body);
-    if (!mongoose.isValidObjectId(req.body.petId)) return res.status(422).json({ message: '請選擇寵物' });
+    if (!mongoose.isValidObjectId(req.body.petId)) return res.status(422).json({ message: '請選擇貓咪' });
     const pet = await Pet.findById(req.body.petId).populate('ownerId');
-    if (!pet?.ownerId) return res.status(404).json({ message: '找不到寵物或飼主資料' });
+    if (!pet?.ownerId) return res.status(404).json({ message: '找不到貓咪或飼主資料' });
     let appointmentId = null;
     if (req.body.appointmentId) {
       const appointment = await Appointment.findById(req.body.appointmentId);
-      if (!appointment || String(appointment.petId) !== String(pet._id)) return res.status(422).json({ message: '就診資料與寵物不符' });
+      if (!appointment || String(appointment.petId) !== String(pet._id)) return res.status(422).json({ message: '就診資料與貓咪不符' });
       appointmentId = appointment._id;
     }
     const order = new MedicationOrder({ ...fields, petId: pet._id, ownerId: pet.ownerId._id, appointmentId,

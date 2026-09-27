@@ -4,7 +4,7 @@ import { ExternalLink } from '@lucide/vue';
 import { useRecordForm } from './context';
 import { formatDate } from '../../lib/datetime';
 
-// 填表時的對照資訊：這隻寵物「上次」量到這個項目時的值。
+// 填表時的對照資訊：這隻貓咪「上次」量到這個項目時的值。
 // 不限上次做的是哪一種健檢 —— 只要以前量過，這次表單上有同一個項目就顯示，
 // 並附上那次的日期與健檢種類，讓醫師知道這個數字是什麼時候、什麼情境下量的。
 // 沒有歷史紀錄（或這是結構預覽）時整個元件不渲染。

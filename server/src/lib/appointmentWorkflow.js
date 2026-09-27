@@ -1,5 +1,6 @@
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
+import { labFlag } from '../../../shared/labValues.js';
 
 export const WORKFLOW_ACTIONS = ['clinical', 'start', 'handoff', 'reclaim', 'complete', 'record', 'followup', 'request-reopen', 'approve-reopen'];
 
@@ -7,10 +8,42 @@ export function workflowError(message, status = 422) {
   return Object.assign(new Error(message), { status });
 }
 
-// 醫師寫給櫃台的自由文字。收費、領藥、要開的證明都寫在 handoffNote，
-// 系統不再逐項計價，也不保存任何金額——櫃台讀這段文字自己收費。
-const CLINICAL_TEXT_FIELDS = ['visitNote', 'internalNote', 'handoffNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
-const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC'];
+// 診療台的文字欄位。系統不計價、不保存金額；早期的「給櫃台的交辦」已經移除。
+const CLINICAL_TEXT_FIELDS = ['visitNote', 'internalNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
+const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC', 'labValues'];
+const LAB_VALUE_MAX = 40;
+
+// 檢驗數值偏高／偏低的箭頭，判斷方式跟健檢報告的自動判讀一致（參考範圍外＝異常）。
+export { labFlag };
+
+// 病歷日誌裡的一行檢驗摘要：「WBC 22.4 ×10³/µL ↑　ALT 168 U/L ↑」。
+export function labSummary(labValues) {
+  return (labValues ?? [])
+    .filter((lab) => String(lab.value ?? '').trim())
+    .map((lab) => [lab.label, lab.value, lab.unit, labFlag(lab)].filter(Boolean).join(' '))
+    .join('　');
+}
+
+// 診療台送來的檢驗數值是 { key: value }；只收掛號範本裡真的有的檢驗項目，
+// 存成含名稱、單位、參考範圍的快照（見 models/Appointment.js 的 labValues）。空值＝拿掉。
+export function mergeLabValues(current, incoming, labItems) {
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) throw workflowError('檢驗數值格式不正確');
+  const items = new Map((labItems ?? []).map((item) => [item.key, item]));
+  const values = new Map((current ?? []).map((lab) => [lab.key, String(lab.value ?? '')]));
+  for (const [key, raw] of Object.entries(incoming)) {
+    if (!items.has(key)) throw workflowError('檢驗項目不在這次掛號的表單裡');
+    if (raw !== null && typeof raw !== 'string' && typeof raw !== 'number') throw workflowError('檢驗數值格式不正確');
+    const value = String(raw ?? '').trim();
+    if (value.length > LAB_VALUE_MAX) throw workflowError(`檢驗數值過長（最多 ${LAB_VALUE_MAX} 字）`);
+    values.set(key, value);
+  }
+  return [...items.values()]
+    .filter((item) => values.get(item.key))
+    .map((item) => ({
+      key: item.key, label: item.label, value: values.get(item.key), unit: item.unit || '',
+      referenceMin: item.referenceMin ?? null, referenceMax: item.referenceMax ?? null,
+    }));
+}
 
 // 可以上色、加粗的欄位（格式標記見 shared/richText.js）。存之前一律標準化，
 // 前端編輯器送出的字串跟這裡整理後的一致，才不會一存檔就被判成跟本機不同。
@@ -32,6 +65,7 @@ export function appointmentJournalSections(appointment) {
     { key: 'reason', label: '來院原因', text: text(appointment.reason) },
     { key: 'weightKg', label: '體重', text: measured(appointment.weightKg) ? `${appointment.weightKg} kg` : '' },
     { key: 'temperatureC', label: '體溫', text: measured(appointment.temperatureC) ? `${appointment.temperatureC} °C` : '' },
+    { key: 'labValues', label: '檢驗', text: labSummary(appointment.labValues) },
     { key: 'visitNote', label: '本次簡易紀錄', text: text(appointment.visitNote) },
     { key: 'specialCareNote', label: '請轉告飼主', text: text(appointment.specialCareNote) },
     { key: 'followUpRecommendation', label: '回診建議', text: text(appointment.followUpRecommendation) },
@@ -46,6 +80,7 @@ export function appointmentJournalContent(appointment) {
   return [
     labelled('reason'),
     [labelled('weightKg'), labelled('temperatureC')].filter(Boolean).join('　'),
+    labelled('labValues'),
     richTextToPlain(byKey.get('visitNote')?.text || ''),
     labelled('specialCareNote'),
     labelled('followUpRecommendation'),
@@ -62,7 +97,7 @@ export function appointmentJournalFields(appointment) {
 
 // 從病歷日誌直接改這次就診的內容。跟 workflow 的 clinical 不同，這裡**不看流程階段**：
 // 病歷日誌是事後回頭更正紀錄的地方，櫃台完成處理之後照樣要改得動（看診工作區那邊仍然鎖著）。
-// 只收日誌看得到的欄位，internalNote／handoffNote 不在這裡改。
+// 只收日誌看得到的欄位，internalNote 不在這裡改；檢驗數值要對著範本的項目，只在診療台改。
 export function applyJournalFields(appointment, body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw workflowError('日誌欄位格式不正確');
   for (const [key, max] of Object.entries(JOURNAL_TEXT_LIMITS)) {
@@ -100,7 +135,8 @@ export function adoptWorkflow(appointment) {
   appointment.workflowVersion = 2;
 }
 
-export function applyWorkflowAction(appointment, action, body, now = new Date()) {
+// labItems：這次掛號範本裡的檢驗項目（route 讀範本後傳進來），用來驗證 labValues。
+export function applyWorkflowAction(appointment, action, body, now = new Date(), { labItems = [] } = {}) {
   if (!['arrived', 'pending_checkout', 'completed'].includes(appointment.status) || !appointment.petId) {
     throw workflowError('請先完成報到，才能處理看診與交辦');
   }
@@ -121,6 +157,7 @@ export function applyWorkflowAction(appointment, action, body, now = new Date())
       if (value !== null && (!Number.isFinite(value) || value < 0)) throw workflowError('量測值必須是有效的非負數');
       appointment[field] = value;
     }
+    if (body.labValues !== undefined) appointment.labValues = mergeLabValues(appointment.labValues, body.labValues, labItems);
   } else if (action === 'start') {
     if (!state.handedOff) appointment.visitStartedAt ||= now;
   } else if (action === 'handoff') {

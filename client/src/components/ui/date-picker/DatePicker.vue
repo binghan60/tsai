@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 // 元件內部才轉成 @internationalized/date 的 CalendarDate，那是純日曆值、不帶時區，
 // 挑選畫面上的哪一天不會因為時區換算跑掉。
 //
-// 欄位本身是可以直接打字的輸入框，右邊才是開日曆的按鈕：寵物生日、舊病歷這類年份差很多的日期，
+// 欄位本身是可以直接打字的輸入框，右邊才是開日曆的按鈕：貓咪生日、舊病歷這類年份差很多的日期，
 // 在日曆上一個月一個月翻要按很久，打 2019/3/5 或 108/3/5（民國）都行，Enter 或離開欄位就套用。
 // 打了看不懂的內容會退回原本的值，不會存進去。解析規則在 lib/datetime.js 的 parseDateInput。
 const props = defineProps({
@@ -103,7 +103,7 @@ function clearDate() {
         :aria-label="ariaLabel"
         :aria-invalid="invalid || undefined"
         title="可直接輸入，例如 2026/9/18、9/18 或民國 115/9/18"
-        class="h-full w-full min-w-0 rounded-lg border bg-field pl-3 text-sm text-foreground tabular-nums transition-colors placeholder:text-muted-foreground hover:bg-muted focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/30"
+        class="num h-full w-full min-w-0 rounded-lg border bg-field pl-3 text-base text-foreground transition-[border-color,box-shadow] placeholder:font-sans placeholder:text-subtle-foreground focus-visible:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/15"
         :class="[clearable && text ? 'pr-16' : 'pr-10', invalid ? 'border-destructive' : 'border-input']"
         @keydown.enter.prevent="commit"
         @blur="onBlur"

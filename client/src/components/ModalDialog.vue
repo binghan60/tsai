@@ -21,13 +21,13 @@ const emit = defineEmits(['close']);
          absolute 裝飾才會固定在原位；捲動一律交給內層這個容器。 -->
     <DialogContent :size="size" class="max-h-[90vh] flex flex-col p-0">
       <div class="relative flex max-h-[90vh] flex-col overflow-y-auto">
-        <div v-if="title" class="shrink-0 border-b border-border p-5 pr-16 sm:px-6">
+        <div v-if="title" class="shrink-0 border-b border-border px-6 pt-5 pb-4 pr-16">
           <DialogTitle class="flex items-center gap-2">
             <component :is="icon" v-if="icon" class="h-4.5 w-4.5 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
             {{ title }}
-            <span v-if="count !== null" class="inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-muted px-2 text-xs font-semibold tabular-nums">{{ count }}</span>
+            <span v-if="count !== null" class="num inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-sunken px-2 text-xs font-semibold text-muted-foreground">{{ count }}</span>
           </DialogTitle>
-          <DialogDescription v-if="description" class="mt-1 text-xs">{{ description }}</DialogDescription>
+          <DialogDescription v-if="description" class="mt-1">{{ description }}</DialogDescription>
         </div>
         <slot />
       </div>

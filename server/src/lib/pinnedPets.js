@@ -10,7 +10,7 @@ export async function listPinnedPets() {
     .sort({ pinnedAt: -1, _id: -1 })
     .populate({ path: 'petId', select: 'name species breed medicalRecordNumber ownerId', populate: { path: 'ownerId', select: 'name phone' } })
     .lean();
-  // 寵物已經不存在的殘留紀錄不回給前端，點開也只會是 404。
+  // 貓咪已經不存在的殘留紀錄不回給前端，點開也只會是 404。
   return rows.filter((row) => row.petId).map((row) => {
     const { petId: pet, ...rest } = row;
     const { ownerId: owner, ...petFields } = pet;

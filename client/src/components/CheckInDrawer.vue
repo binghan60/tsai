@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import SegmentedControl from './SegmentedControl.vue';
 import { clinicTimeInput } from '../lib/datetime';
 
-// 初診報到＝建立正式飼主與寵物資料再報到。欄位跟「新增寵物」頁完全相同，
+// 初診報到＝建立正式飼主與貓咪資料再報到。欄位跟「新增貓咪」頁完全相同，
 // 內容太多放不進小面板，所以跟掛號一樣用看板旁的抽屜，不擋住櫃台其他工作。
 // 回診報到不走這裡：資料齊全的回診在卡片上一鍵完成。
 const props = defineProps({
@@ -78,7 +78,7 @@ onMounted(loadSubmissions);
 </script>
 
 <template>
-  <SideDrawer :title="`初診報到：${appointment.petName}`" description="確認後會建立飼主與寵物資料，並完成報到" :close-disabled="submitting" close-label="取消報到" @close="emit('close')">
+  <SideDrawer :title="`初診報到：${appointment.petName}`" description="確認後會建立飼主與貓咪資料，並完成報到" :close-disabled="submitting" close-label="取消報到" @close="emit('close')">
     <div class="space-y-5">
       <div class="grid gap-4 sm:grid-cols-[minmax(0,1fr)_7rem]">
         <div class="space-y-1.5">

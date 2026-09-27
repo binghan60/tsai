@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import MedicationOrder from '../models/MedicationOrder.js';
+import MedicalRecord from '../models/MedicalRecord.js';
+import FormTemplate from '../models/FormTemplate.js';
+import { syncDraftFromAppointment } from '../lib/recordVisitSync.js';
 import { applyJournalFields } from '../lib/appointmentWorkflow.js';
 import { applyMedicationJournalEdit } from '../lib/medicationWorkflow.js';
 import { syncMedicationJournal } from '../lib/medicationJournal.js';
@@ -83,6 +86,8 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
         else if (fields.content !== undefined) appointment.visitNote = normalizeRichText(String(fields.content ?? '')).trim();
         appointment.increment();
         await appointment.save({ session });
+        // 從日誌改體重、體溫，報告草稿一樣跟著走（醫師在報告裡改過的除外）。
+        await syncDraftFromAppointment({ appointment, MedicalRecord, FormTemplate, session });
         const noteFields = {};
         if (fields.entryDate !== undefined) noteFields.entryDate = fields.entryDate;
         note = Object.keys(noteFields).length

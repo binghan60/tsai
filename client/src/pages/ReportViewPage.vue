@@ -168,7 +168,7 @@ function valueByRole(role) {
   return value === null || value === undefined || String(value).trim() === '' ? '' : value;
 }
 
-// 寵物資料中的「未記錄」是尚未填寫，不應在正式報告中佔一個欄位。
+// 貓咪資料中的「未記錄」是尚未填寫，不應在正式報告中佔一個欄位。
 const sexAndAgeLabel = computed(() => [
   sexLabel(record.value?.pet?.sex),
   ageLabel(record.value?.pet?.birthDate, valueByRole('visitDate') || record.value?.visitDate, ''),
@@ -402,8 +402,8 @@ watch(
     <section v-if="record" class="mx-auto max-w-[210mm] space-y-4 print:max-w-none print:space-y-0">
       <div class="sticky top-2 z-20 -mx-2 flex flex-col gap-2 rounded-xl border border-report-border bg-report-canvas/95 px-2 py-2 shadow-sm print:hidden sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <div v-if="isPreview" class="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-          <Button type="button" variant="secondary" class="w-full border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted hover:text-report-foreground sm:w-auto" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回寵物資料' }}</Button>
-          <Button type="button" variant="secondary" class="w-full border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted hover:text-report-foreground sm:w-auto" @click="router.push('/records')"><List class="h-4 w-4" />回就診紀錄</Button>
+          <Button type="button" variant="secondary" class="w-full border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted hover:text-report-foreground sm:w-auto" @click="router.push(isDraft ? `/records/${route.params.id}/edit` : `/pets/${record.pet?._id}`)"><ArrowLeft class="h-4 w-4" />{{ isDraft ? '返回編輯' : '回貓咪資料' }}</Button>
+          <Button type="button" variant="secondary" class="w-full border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted hover:text-report-foreground sm:w-auto" @click="router.push('/records')"><List class="h-4 w-4" />回健檢報告</Button>
         </div>
         <div v-else></div>
         <div class="flex w-full flex-wrap justify-start gap-2 sm:w-auto sm:justify-end">
@@ -487,7 +487,7 @@ watch(
               <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-12 w-14 object-contain" />
               <div>
                 <div class="text-xl font-semibold text-brand-700">謙華動物醫院</div>
-                <div class="mt-0.5 text-sm font-medium text-report-text">寵物健康檢查報告</div>
+                <div class="mt-0.5 text-sm font-medium text-report-text">貓咪健康檢查報告</div>
               </div>
             </div>
           </div>
@@ -507,7 +507,7 @@ watch(
         </header>
 
         <section class="mt-6 rounded-xl bg-report-surface-muted p-5">
-          <h1 class="text-2xl font-semibold text-report-foreground">{{ record.pet?.name || '寵物姓名未記錄' }}</h1>
+          <h1 class="text-2xl font-semibold text-report-foreground">{{ record.pet?.name || '貓咪姓名未記錄' }}</h1>
           <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
             <div v-if="record.owner?.name"><dt class="text-xs font-medium text-report-muted">飼主</dt><dd class="mt-1 text-report-foreground">{{ record.owner.name }}</dd></div>
             <div v-if="record.pet?.species || record.pet?.breed"><dt class="text-xs font-medium text-report-muted">物種／品種</dt><dd class="mt-1 text-report-foreground">{{ record.pet?.species || '' }}<template v-if="record.pet?.species && record.pet?.breed">／</template>{{ record.pet?.breed || '' }}</dd></div>

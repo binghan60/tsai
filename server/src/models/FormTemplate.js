@@ -78,7 +78,7 @@ const formTemplateSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     description: { type: String, default: '', trim: true },
     // 這份表單給哪種動物用。'all' = 不限，建立報告時一律可選；
-    // 指定物種後，只有該物種的寵物會看到這份表單。
+    // 指定物種後，只有該物種的貓咪會看到這份表單。
     species: { type: String, enum: ['cat', 'dog', 'all'], default: 'all' },
     // 停用的類型不再出現在建立報告的選單，但既有報告仍能正常顯示。
     enabled: { type: Boolean, default: true },

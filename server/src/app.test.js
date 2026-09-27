@@ -82,6 +82,6 @@ describe('health endpoints', () => {
       body: JSON.stringify({ name: '小白' }),
     });
     assert.equal(response.status, 428);
-    assert.deepEqual(await response.json(), { message: '缺少寵物資料版本，請重新整理後再試' });
+    assert.deepEqual(await response.json(), { message: '缺少貓咪資料版本，請重新整理後再試' });
   });
 });

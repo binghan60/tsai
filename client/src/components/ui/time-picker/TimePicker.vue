@@ -95,12 +95,12 @@ function clearTime(event) {
         :aria-label="ariaLabel"
         :class="
           cn(
-            'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-field px-3 text-sm text-foreground transition-colors hover:bg-muted focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50',
+            'flex h-10 w-full items-center justify-between gap-2 rounded-lg border border-input bg-field px-3 text-base text-foreground transition-[border-color,box-shadow] focus-visible:border-primary focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring disabled:pointer-events-none disabled:opacity-50',
             props.class,
           )
         "
       >
-        <span :class="label ? 'text-foreground' : 'text-muted-foreground'">{{ label || placeholder }}</span>
+        <span :class="label ? 'num text-foreground' : 'text-subtle-foreground'">{{ label || placeholder }}</span>
         <span class="flex shrink-0 items-center gap-1">
           <X v-if="label && !disabled" class="h-3.5 w-3.5 text-muted-foreground transition-colors hover:text-foreground" stroke-width="1.75" @click="clearTime" />
           <Clock class="h-4 w-4 text-muted-foreground" stroke-width="1.75" />

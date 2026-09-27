@@ -14,11 +14,10 @@ const scroller = ref(null);
 const hasMoreRight = ref(false);
 let resizeObserver;
 
-// 單一扁平膠囊：track 用 bg-muted 墊底，選取態浮一顆白色 chip（跟 Pagination
-// 上一頁鈕同一個「raised chip on a muted pill」語彙），不再用主色調底面或色點
-// ——頁籤是導覽，不是狀態顯示，色彩份量交給徽章跟 badge 就好。
-const selectedClasses = 'bg-card text-primary font-semibold shadow-sm';
-const idleClasses = 'bg-field/70 text-muted-foreground font-medium hover:bg-card hover:text-foreground';
+// 分段切換：下凹軌道＋選取項浮起一塊卡片底（跟 SegmentedControl 同一個外觀）。
+// 頁籤是導覽不是狀態，選取態不上主色，只有計數數字轉成主色。
+const selectedClasses = 'segment-active font-semibold';
+const idleClasses = 'text-muted-foreground font-medium hover:text-foreground';
 
 function onTabKeydown(event, index, items, emit) {
   let next = null;
@@ -56,7 +55,7 @@ watch(() => props.items, async () => {
 <template>
   <div
     ref="scroller"
-    class="relative inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-full bg-muted p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    class="relative inline-flex max-w-full items-center gap-0.5 overflow-x-auto segment-track [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     role="tablist"
     :aria-label="ariaLabel"
     @scroll="updateScrollHint"
@@ -66,7 +65,7 @@ watch(() => props.items, async () => {
       :key="item.key || 'all'"
       type="button"
       role="tab"
-      class="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-full px-4 text-sm whitespace-nowrap transition-colors duration-200 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+      class="inline-flex h-[2.125rem] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3.5 text-sm leading-none whitespace-nowrap transition-colors duration-150 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
       :class="modelValue === item.key ? selectedClasses : idleClasses"
       :aria-selected="modelValue === item.key"
       :aria-current="modelValue === item.key ? 'page' : undefined"
@@ -75,9 +74,9 @@ watch(() => props.items, async () => {
       @keydown="onTabKeydown($event, items.indexOf(item), items, emit)"
     >
       <span>{{ item.label }}</span>
-      <span v-if="counts[item.key] !== undefined" class="text-xs tabular-nums opacity-70">{{ counts[item.key] }}</span>
+      <span v-if="counts[item.key] !== undefined" class="num text-xs" :class="modelValue === item.key ? 'text-primary' : 'text-subtle-foreground'">{{ counts[item.key] }}</span>
     </button>
-    <span v-if="hasMoreRight" class="pointer-events-none absolute inset-y-1.5 right-1.5 flex w-9 items-center justify-end rounded-r-full bg-gradient-to-l from-muted via-muted/90 to-transparent pr-1 text-muted-foreground sm:hidden" aria-hidden="true">
+    <span v-if="hasMoreRight" class="pointer-events-none absolute inset-y-1.5 right-1.5 flex w-9 items-center justify-end rounded-r-lg bg-gradient-to-l from-sunken via-sunken/90 to-transparent pr-1 text-muted-foreground sm:hidden" aria-hidden="true">
       <ChevronRight class="h-4 w-4" stroke-width="1.75" />
     </span>
   </div>

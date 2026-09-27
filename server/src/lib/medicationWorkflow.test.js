@@ -18,11 +18,11 @@ describe('領藥狀態與藥單版本', () => {
     assert.equal(item.approvedBy, '醫師');
     assert.throws(() => action(item, 'collect'), { status: 409 });
     action(item, 'ready', {}, '包藥人員');
-    action(item, 'collect', {}, '櫃檯');
+    action(item, 'collect', {}, '櫃台');
     assert.equal(item.status, 'collected');
     assert.equal(item.packedBy, '包藥人員');
     assert.ok(item.collectedAt);
-    assert.deepEqual(item.history.map(entry => entry.actor), ['醫師', '包藥人員', '櫃檯']);
+    assert.deepEqual(item.history.map(entry => entry.actor), ['醫師', '包藥人員', '櫃台']);
     assert.equal(item.history[0].prescription, '醫師修改後的藥單');
     assert.throws(() => action(item, 'edit', { prescription: '不得修改' }), { status: 409 });
   });
@@ -61,10 +61,10 @@ describe('領藥狀態與藥單版本', () => {
     assert.equal(item.history.at(-1).reason, '');
     assert.throws(() => action(item, 'ready'), { status: 409 });
   });
-  it('櫃檯可附上意見退回醫師重新審核', () => {
+  it('櫃台可附上意見退回醫師重新審核', () => {
     const item = order();
     action(item, 'approve', {}, '醫師');
-    action(item, 'return', { reason: '劑量請再確認' }, '櫃檯');
+    action(item, 'return', { reason: '劑量請再確認' }, '櫃台');
     assert.equal(item.status, 'review');
     assert.equal(item.approvedAt, null);
     assert.equal(item.approvedBy, '');

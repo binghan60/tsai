@@ -15,11 +15,11 @@ defineProps({
 <template>
   <div
     class="px-5 text-center"
-    :class="inset ? 'py-10' : 'rounded-2xl border border-dashed border-border py-14'"
+    :class="inset ? 'py-10' : 'rounded-xl border border-dashed border-border-strong py-14'"
   >
-    <component :is="icon" v-if="icon" class="mx-auto mb-2 h-8 w-8 text-muted-foreground" stroke-width="1.75" />
-    <p class="text-sm font-medium text-foreground">{{ title }}</p>
-    <p v-if="description" class="mt-1 text-xs text-muted-foreground">{{ description }}</p>
+    <component :is="icon" v-if="icon" class="mx-auto mb-3 size-9 text-subtle-foreground" stroke-width="1.75" />
+    <p class="text-base font-semibold text-foreground">{{ title }}</p>
+    <p v-if="description" class="mt-1 text-sm text-muted-foreground">{{ description }}</p>
     <slot />
   </div>
 </template>

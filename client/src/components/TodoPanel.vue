@@ -18,13 +18,12 @@ import TodoMentionInput from './TodoMentionInput.vue';
 import RichText from './RichText.vue';
 import { richTextToPlain } from '../../../shared/richText.js';
 
-// 院內待辦面板，診療台與櫃台共用，內容整個放在頁首「待辦」chip 開的 ModalDialog 裡。
-// 面板只在開著的時候才掛載，所以 today 每次打開都是新的。
+// 院內待辦，放在右側工具欄的「待辦」面板裡（460px 寬，所以新增列與清單都是直排）。
 const store = useTodosStore();
 const pinned = usePinnedPetsStore();
 const { identity } = useStaffIdentity();
 const toast = useToast();
-const today = clinicDateInput();
+// KeepAlive 會讓面板跨日掛著，「今天」每次用到才算，不在掛載時存一份。
 const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
 const dateTimeOptions = { month: 'numeric', day: 'numeric', ...timeOptions };
 
@@ -56,18 +55,18 @@ const shown = computed(() => {
   return [...store.openItems, ...store.doneItems];
 });
 const EMPTY_TEXT = {
-  all: { title: '還沒有任何待辦', description: '在上面輸入就能新增，打 # 可以標記寵物，兩邊的電腦會即時同步' },
-  open: { title: '沒有未完成的待辦', description: '在上面輸入就能新增，打 # 可以標記寵物，兩邊的電腦會即時同步' },
+  all: { title: '還沒有任何待辦', description: '在上面輸入就能新增，打 # 可以標記貓咪，兩邊的電腦會即時同步' },
+  open: { title: '沒有未完成的待辦', description: '在上面輸入就能新增，打 # 可以標記貓咪，兩邊的電腦會即時同步' },
   done: { title: '還沒有完成的待辦', description: '只保留最近 50 筆' },
 };
 
 function staffLabel(value) {
-  return value === 'front_desk' ? '櫃台' : '醫生';
+  return value === 'front_desk' ? '櫃台' : '醫師';
 }
 
 // 待辦會跨日留著，不是今天的要帶日期，否則「09:30」看不出是哪一天。
 function stamp(value) {
-  return formatDateTime(value, clinicDateInput(value) === today ? timeOptions : dateTimeOptions);
+  return formatDateTime(value, clinicDateInput(value) === clinicDateInput() ? timeOptions : dateTimeOptions);
 }
 
 function metaLabel(item) {
@@ -118,7 +117,7 @@ function mentionIds(text, list) {
 function startEdit(item) {
   editingId.value = item._id;
   editText.value = item.content;
-  // 編輯時已被刪除的寵物（petId 為 null）不能再送回伺服器。
+  // 編輯時已被刪除的貓咪（petId 為 null）不能再送回伺服器。
   editMentions.value = (item.mentions ?? []).filter((m) => m.petId).map((m) => ({ petId: String(m.petId), petName: m.petName }));
 }
 
@@ -139,11 +138,13 @@ async function saveEdit(item) {
 </script>
 
 <template>
-  <div class="max-h-[min(68vh,48rem)] min-h-72 space-y-4 overflow-y-auto p-5 sm:p-6">
-    <form class="flex flex-wrap items-start gap-2" @submit.prevent="submit">
-      <TodoMentionInput v-model="content" v-model:mentions="mentions" class="min-w-56 flex-1" placeholder="要做的事，打 # 可以標記寵物" aria-label="待辦內容" maxlength="500" @submit="submit" />
-      <DatePicker v-model="dueDate" class="w-40" placeholder="期限（選填）" aria-label="期限" />
-      <Button type="submit" :disabled="!plain(content) || adding"><Plus class="h-4 w-4" stroke-width="1.75" />新增</Button>
+  <div class="space-y-4">
+    <form class="space-y-2" @submit.prevent="submit">
+      <TodoMentionInput v-model="content" v-model:mentions="mentions" placeholder="要做的事，打 # 可以標記貓咪" aria-label="待辦內容" maxlength="500" @submit="submit" />
+      <div class="flex items-center gap-2">
+        <DatePicker v-model="dueDate" class="min-w-0 flex-1" placeholder="期限" aria-label="期限" />
+        <Button type="submit" :disabled="!plain(content) || adding"><Plus stroke-width="1.75" />新增</Button>
+      </div>
     </form>
 
     <FilterTabs v-model="view" :items="tabs" :counts="counts" aria-label="待辦狀態" />
@@ -158,23 +159,23 @@ async function saveEdit(item) {
     />
     <!-- 單欄清單：待辦有先後（期限早的在上面），兩欄卡片的 Z 字讀序看不出來。
          列高隨內容，不套 desktop-data-row 的固定 56px——待辦內文最長 500 字，要能完整換行。 -->
-    <ul v-else class="divide-y divide-border overflow-hidden rounded-xl border border-border bg-card">
-      <li v-for="item in shown" :key="item._id" class="grid min-h-14 grid-cols-[2.25rem_minmax(0,1fr)_7rem_auto] items-center gap-3 px-4 py-2.5">
+    <ul v-else class="-mx-5 divide-y divide-border border-y border-border">
+      <li v-for="item in shown" :key="item._id" class="group grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-3 px-5 py-3">
         <Button
           v-if="item.status === 'open'"
           type="button"
-          variant="secondary"
+          variant="ghost"
           size="icon-xs"
           :disabled="busyId === item._id"
           :aria-label="`完成：${plain(item.content)}`"
           @click="run(item._id, () => store.complete(item._id, identity), '操作失敗，請稍後再試')"
         >
-          <Circle class="h-4 w-4" stroke-width="1.75" />
+          <Circle class="size-5" stroke-width="1.75" />
         </Button>
         <Button
           v-else
           type="button"
-          variant="secondary"
+          variant="ghost"
           size="icon-xs"
           :disabled="busyId === item._id"
           :aria-label="`改回未完成：${plain(item.content)}`"
@@ -190,18 +191,17 @@ async function saveEdit(item) {
             <Button type="button" variant="secondary" size="icon-xs" aria-label="取消編輯" @click="cancelEdit"><X class="h-4 w-4" stroke-width="1.75" /></Button>
           </form>
           <!-- 標籤緊貼標籤寫在同一行：RichText 是 whitespace-pre-wrap，標籤之間多一個換行就會多一個空格。
-               RichText 先把粗體／顏色拆成片段，每個片段裡再把 #名字 換成可點的寵物標籤（點了開病歷速覽）；
-               petId 是 null 代表寵物資料已被刪除，只留下當時的名字、不可點。 -->
-          <RichText v-else v-slot="{ text }" tag="p" :text="item.content" class="text-sm leading-snug" :class="item.status === 'done' ? 'text-muted-foreground line-through' : ''"><template v-for="(segment, index) in splitMentionSegments(text, item.mentions)" :key="index"><button v-if="segment.type === 'mention' && segment.mention.petId" type="button" class="mx-0.5 inline-flex items-center rounded-full bg-accent px-1.5 font-medium text-accent-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :title="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined" @click="pinned.openQuickView(segment.mention.petId)">#{{ segment.mention.petName }}</button><span v-else-if="segment.type === 'mention'" class="text-muted-foreground" title="寵物資料已刪除">#{{ segment.mention.petName }}</span><template v-else>{{ segment.text }}</template></template></RichText>
+               RichText 先把粗體／顏色拆成片段，每個片段裡再把 #名字 換成可點的貓咪標籤（點了開病歷速覽）；
+               petId 是 null 代表貓咪資料已被刪除，只留下當時的名字、不可點。 -->
+          <RichText v-else v-slot="{ text }" tag="p" :text="item.content" class="pt-1 text-base leading-snug" :class="item.status === 'done' ? 'text-muted-foreground line-through' : ''"><template v-for="(segment, index) in splitMentionSegments(text, item.mentions)" :key="index"><button v-if="segment.type === 'mention' && segment.mention.petId" type="button" class="mx-0.5 inline-flex items-center rounded-full bg-accent px-1.5 font-medium text-accent-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :title="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined" @click="pinned.openQuickView(segment.mention.petId)">#{{ segment.mention.petName }}</button><span v-else-if="segment.type === 'mention'" class="text-muted-foreground" title="貓咪資料已刪除">#{{ segment.mention.petName }}</span><template v-else>{{ segment.text }}</template></template></RichText>
 
-          <p class="text-xs text-muted-foreground">{{ metaLabel(item) }}</p>
+          <p class="flex flex-wrap items-center gap-2 text-xs text-subtle-foreground">
+            <Badge v-if="item.status === 'open' && dueStatus(item.dueDate, clinicDateInput())" variant="status" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, clinicDateInput()).tone]">{{ dueStatus(item.dueDate, clinicDateInput()).label }}</Badge>
+            {{ metaLabel(item) }}
+          </p>
         </div>
 
-        <span class="flex justify-end">
-          <Badge v-if="item.status === 'open' && dueStatus(item.dueDate, today)" variant="status" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, today).tone]">{{ dueStatus(item.dueDate, today).label }}</Badge>
-        </span>
-
-        <div class="flex shrink-0 items-center gap-1.5">
+        <div class="flex shrink-0 items-center gap-1">
           <Button v-if="item.status === 'open' && editingId !== item._id" type="button" variant="secondary" size="icon-xs" :aria-label="`編輯：${plain(item.content)}`" @click="startEdit(item)">
             <Pencil class="h-4 w-4" stroke-width="1.75" />
           </Button>

@@ -132,7 +132,7 @@ async function runImport(rows) {
       if (legacyId) {
         const existingPet = await Pet.findOne({ legacyMedicalRecordNumber: legacyId }).select('_id');
         if (existingPet) {
-          // 寵物已經匯過，但可能是上次執行中途中斷、只建立了 Pet 沒建立到日誌記事——
+          // 貓咪已經匯過，但可能是上次執行中途中斷、只建立了 Pet 沒建立到日誌記事——
           // 補上缺的那一步，而不是整筆跳過，這樣重跑才能真正把中斷的匯入補完整。
           if (chartNotes && !(await ClinicalNote.exists({ petId: existingPet._id, source: 'legacy_import' }))) {
             await ClinicalNote.create({

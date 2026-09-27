@@ -1,4 +1,4 @@
-// 內文裡標記寵物的純字串邏輯，聊天室與院內待辦共用，跟元件分開才能用 node --test 測。
+// 內文裡標記貓咪的純字串邏輯，聊天室與院內待辦共用，跟元件分開才能用 node --test 測。
 
 // 觸發字元。用 # 而不是 @：@ 在中文輸入法與 email 之間太容易撞在一起，# 打起來也順手。
 // 要換字元只改這一個常數，畫面上顯示標籤的地方也都讀它。
@@ -14,7 +14,7 @@ export function activeMentionQuery(text, caret) {
   return { start: before.length - match[2].length - 1, query: match[2] };
 }
 
-// 把 start..caret 這段關鍵字換成 `#寵物名 `，回傳新文字與新游標位置。
+// 把 start..caret 這段關鍵字換成 `#貓咪名 `，回傳新文字與新游標位置。
 export function insertMention(text, start, caret, name) {
   const value = String(text ?? '');
   const token = `${MENTION_TRIGGER}${name} `;

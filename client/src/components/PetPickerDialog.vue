@@ -41,7 +41,7 @@ async function fetchPets() {
     total.value = data.total ?? 0;
     limit.value = data.limit ?? 25;
   } catch (err) {
-    if (currentRequest === requestSequence) error.value = '寵物清單載入失敗，請稍後再試。';
+    if (currentRequest === requestSequence) error.value = '貓咪清單載入失敗，請稍後再試。';
   } finally {
     if (currentRequest === requestSequence) loading.value = false;
   }
@@ -103,19 +103,19 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
 <template>
   <ModalDialog v-if="open" size="md" @close="close">
     <div class="p-6 pb-3 sm:p-7 sm:pb-3">
-      <DialogTitle>選擇要做健檢的寵物</DialogTitle>
-      <DialogDescription class="mt-1">選定寵物後會直接開始新增就診紀錄。</DialogDescription>
+      <DialogTitle>選擇要做健檢的貓咪</DialogTitle>
+      <DialogDescription class="mt-1">選定貓咪後會直接開始新增健檢報告。</DialogDescription>
     </div>
 
     <div class="space-y-3 px-6 pb-6 sm:px-7 sm:pb-7">
       <div class="relative">
         <Search class="pointer-events-none absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
-        <Input v-model="query" type="text" inputmode="search" class="h-11 pl-10 pr-10" placeholder="搜尋寵物、飼主或電話" aria-label="搜尋寵物、飼主或電話" />
+        <Input v-model="query" type="text" inputmode="search" class="h-11 pl-10 pr-10" placeholder="搜尋貓咪、飼主或電話" aria-label="搜尋貓咪、飼主或電話" />
         <button v-if="query" type="button" class="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground" aria-label="清除搜尋" @click="clearQuery">
           <X class="h-4 w-4" />
         </button>
       </div>
-      <p v-if="!loading" class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 隻寵物</p>
+      <p v-if="!loading" class="text-xs tabular-nums text-muted-foreground">共 {{ total }} 隻貓咪</p>
       <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
       <ListSkeleton v-if="loading" inset :rows="4" />
       <div v-else-if="pets.length" class="space-y-2">
@@ -123,7 +123,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
           v-for="pet in pets"
           :key="pet._id"
           :title="pet.name"
-          :aria-label="`選擇寵物 ${pet.name}`"
+          :aria-label="`選擇貓咪 ${pet.name}`"
           @select="selectPet(pet)"
         >
           <template #icon>
@@ -136,7 +136,7 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
           </template>
         </PickerOptionRow>
       </div>
-      <p v-else class="rounded-xl border border-border px-4 py-8 text-center text-sm text-muted-foreground">{{ query.trim() ? '找不到符合的寵物。' : '目前沒有可選擇的寵物。' }}</p>
+      <p v-else class="rounded-xl border border-border px-4 py-8 text-center text-sm text-muted-foreground">{{ query.trim() ? '找不到符合的貓咪。' : '目前沒有可選擇的貓咪。' }}</p>
 
       <div v-if="totalPages > 1" class="flex items-center justify-between gap-3">
         <span class="text-xs tabular-nums text-muted-foreground">第 {{ page }} / {{ totalPages }} 頁</span>

@@ -9,122 +9,58 @@
 @custom-variant data-disabled (&:where([data-state="disabled"], [data-disabled]:not([data-disabled="false"])));
 
 @theme {
-  /* Variable 版本是刻意的：微軟正黑體等系統中文字體只有 Regular/Bold 兩級，
-     font-medium(500) 會退回 400、font-semibold(600) 會跳成 700 或被合成，
-     介面靠字重建立的階層在中文上等於不存在。變數字體才有真正的 100–900。 */
+  /* 中文用 Noto Sans TC 變數字體（自架）：系統中文字體只有 Regular/Bold 兩級，
+     500／600 會失效，介面靠字重建立的階層就不存在。
+     數字用 IBM Plex Mono（同樣自架）：號碼牌、時間、量測、檢驗值要上下對得齊。
+     等寬字只有拉丁字元，中文會退回後面的 Noto Sans TC。 */
   --font-sans: 'Noto Sans TC Variable', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Noto Sans TC Variable', ui-monospace, monospace;
 
-  /* ── 主色：深青藍 Petrol ────────────────────────────────────────────────
-     主色刻意不放在紅色區。原本的 primary 是酒紅 #81333A，跟 destructive #B42332
-     同色相，在徽章與小圖示的尺寸下分不出「這是主要操作」還是「這會出事」。
-     移到深青之後紅色完整讓給危險與失敗，金色 brand 留給側邊欄 active 與品牌，
-     三者各佔一塊色相互不重疊。深青與側邊欄的深藍黑同色相家族，整體更像一套。 */
-  --color-petrol-50: #eef7f9;
-  --color-petrol-100: #d3eaef;
-  --color-petrol-200: #a7d3dc;
-  --color-petrol-300: #72b4c3;
-  --color-petrol-400: #3e93a6;
-  --color-petrol-500: #25798d;
-  --color-petrol-600: #0e5a6b;
-  --color-petrol-700: #0c4857;
-  --color-petrol-800: #0a3743;
-  --color-petrol-900: #072932;
-
-  /* ── 表面：冷中性 Paper ─────────────────────────────────────────────────
-     舊的象牙白卡片 #FFF8EA 疊在米黃底 #EFE2C1 上，明度差只有 1.22——卡片是不是
-     一個獨立物件，全靠 #C8AF78 那條深卡其邊框在扛，整片畫面因此又黃又髒。
-     這組把飽和度幾乎拉光：卡片純白、頁面底冷灰白，明度差加一條細邊框就夠讓卡片
-     浮起來，顏色預算全部讓給主行動與狀態。
-
-     整條色階是在 OKLCH 上算的：色相固定 220（跟 petrol 深端同家族，不再像舊版
-     那樣從 197 漂到 215，淺階偏青、深階偏藍像兩種灰），彩度隨明度降低而緩升
-     0→0.026，明度階距是排過的，不是舊版那種 1.6 / 3.5 / 11.5 / 16.7 的跳法。
-     邊框(300)特地訂在 L87.4：舊值對純白卡片只有 1.38，而這份設計是「卡片靠
-     明度差加一條細邊框浮起來」，邊框太弱等於少了一半。現在是 1.46。 */
-  --color-paper-0: #ffffff;
-  --color-paper-50: #f7fafc;
-  --color-paper-100: #f0f5f7;
-  --color-paper-200: #e2eaed;
-  --color-paper-300: #ccd8dc;
-  --color-paper-400: #a4b4ba;
-  --color-paper-500: #778a90;
-  --color-paper-600: #53676e;
-  --color-paper-700: #374a50;
-  --color-paper-800: #22353b;
-  --color-paper-900: #112329;
-
-  /* 品牌金。側邊欄 active、Logo、報告紙面用；不作後台的主要操作色。 */
+  /* 報告紙面專用的品牌金。後台不用——只有 /report/:token 與預覽頁的區塊標題還在用。 */
   --color-brand-50: #fff7df;
   --color-brand-100: #f7e8b8;
-  --color-brand-200: #efd283;
-  --color-brand-300: #dfb856;
-  --color-brand-400: #c99a35;
-  --color-brand-500: #ad7727;
-  --color-brand-600: #8d541d;
   --color-brand-700: #6f3919;
-  --color-brand-800: #512716;
-  --color-brand-900: #35170d;
 
-  /* 酒紅。已不是後台主色，只留給 /report/:token 與 /records/:id/preview 的紙面。 */
-  --color-belle-50: #fff1ea;
-  --color-belle-100: #f8d9c8;
-  --color-belle-200: #ebb49f;
-  --color-belle-300: #d88475;
-  --color-belle-400: #bf665d;
-  --color-belle-500: #a74845;
-  --color-belle-600: #81333a;
-  --color-belle-700: #5f2530;
-  --color-belle-800: #3d1824;
+  /* 圓角只有五種：6 格子與小標記、8 控制項、12 卡片、16 對話框、999 膠囊。
+     Tailwind 的 rounded-lg 就是控制項、rounded-xl 是卡片、rounded-2xl 是對話框。 */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1rem;
 
-  /* 象牙／羊皮紙。同上，只服務報告紙面。 */
-  --color-cream-50: #fffaf0;
-  --color-cream-100: #f3e6c9;
-  --color-cream-200: #e3cf9d;
-  --color-cream-300: #ccb27a;
-
-  /* 深墨。側邊欄與深色主題的底層用色。 */
-  --color-ink-400: #62655e;
-  --color-ink-500: #50554f;
-  --color-ink-600: #414d55;
-  --color-ink-700: #263640;
-  --color-ink-800: #1b2731;
-  --color-ink-900: #101923;
-
-  --radius-sm: 0.5rem;
-  --radius-md: 0.625rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-
-  /* 後台介面字級：Body 16px、Caption 下限 14px。
-     原本的 12px 之所以難讀，主因是那時 Noto Sans TC 根本沒載進來，實際渲染的是
-     微軟正黑體——12px 加上沒有 hinting，中文筆畫會黏在一起。字體修好之後，
-     真正需要往上抬的是 Body（14→16），Caption 停在 14 就夠。
-
-     一度把 xs 也拉到 16px，但那會讓 Caption 與 Body 同尺寸，「這是次要資訊」
-     就只剩顏色一個訊號能表達，時間戳記和主要內容看起來一樣重。留 14px 這一階，
-     階層才有尺寸＋顏色兩個訊號。這也是中文後台的慣例尺度（Ant Design 同樣是
-     12/14/16，body 14）——這裡把 body 抬到 16，比慣例再寬鬆一階。
-
-     行高一律自己指定，不吃 Tailwind 預設——那組值是為拉丁字母調的
-     （text-sm 是 1.43 倍），中文方塊字需要 1.6 以上才不會擠成一片。 */
-     /* 最小字14px，如果要改成16px用1rem */
-  --text-xs: 0.875rem;
-  --text-xs--line-height: 1.6;
+  /* 字級以 1920×1080 為目標、內文 18px。五級：
+       xl 28 頁面標題 ／ lg 22 區塊標題 ／ base 18 內文與輸入 ／
+       sm 16 控制項、表單標籤、次要文字 ／ xs 15 註記、徽章 ／ 2xs 14 規格欄小標題（下限）。
+     行高自己指定：Tailwind 預設是為拉丁字母調的，中文要 1.5 以上才不會擠成一片。
+     單行控制項（按鈕、徽章）自己加 leading-none。 */
+  --text-2xs: 0.875rem;
+  --text-2xs--line-height: 1.5;
+  --text-xs: 0.9375rem;
+  --text-xs--line-height: 1.55;
   --text-sm: 1rem;
-  --text-sm--line-height: 1.75;
+  --text-sm--line-height: 1.6;
   --text-base: 1.125rem;
-  --text-base--line-height: 1.6;
-  --text-lg: 1.25rem;
-  --text-lg--line-height: 1.5;
-  --text-xl: 1.5rem;
-  --text-xl--line-height: 1.4;
+  --text-base--line-height: 1.65;
+  --text-lg: 1.375rem;
+  --text-lg--line-height: 1.45;
+  --text-xl: 1.75rem;
+  --text-xl--line-height: 1.35;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 1.35;
 }
 
-/* Semantic component tokens: the source of truth for shared UI components.
-   使用端一律寫語意 token，不要碰上面的色階——text-ink-900 dark:text-white 那種
-   雙寫等於在系統裡養第二套配色，兩套並行正是「配色沒問題但細節很髒」的來源。 */
+/* ── 語意 token ─────────────────────────────────────────────────────────────
+   使用端一律寫語意 token（bg-card、text-muted-foreground…），不要寫色碼或色階；
+   明暗兩態由這裡切換，使用端不寫 dark: 雙份顏色。
+
+   淺色＝「清爽臨床」：冷灰頁面底、白卡片、深青主色。
+   深色＝「深色專業」：近黑藍底、青藍主色，卡片有一條內側高光、主要按鈕有光暈。
+   兩態共用同一套形狀與字級，只換顏色。 */
 :root {
-  /* 舊紙本初診表的固定白底配色；公開填寫頁不跟隨後台深色主題。 */
+  /* 公開初診頁的紙本配色；那一頁不跟隨後台主題。 */
   --intake-white: #fff;
   --intake-text: #333;
   --intake-border: #e0e0e0;
@@ -140,100 +76,106 @@
   --intake-focus-hover: #1976d2;
   --intake-orange: #d97706;
   --intake-shadow: rgba(0, 0, 0, 0.1);
-  --background: var(--color-paper-100);
-  --foreground: var(--color-paper-900);
-  --card: var(--color-paper-0);
-  --card-foreground: var(--color-paper-900);
-  --popover: var(--color-paper-0);
-  --popover-foreground: var(--color-paper-900);
-  --primary: var(--color-petrol-600);
+
+  /* 表面：頁面底 → 卡片 → 下凹（sunken：輸入列、分段切換的軌道、次要按鈕）→ 滑過。 */
+  --background: #f4f6f8;
+  --card: #ffffff;
+  --popover: #ffffff;
+  --sunken: #f1f4f6;
+  --hover: #eef2f4;
+  /* 可以輸入的表面。淺色是白底配深邊框，深色往下凹一階。 */
+  --field: #ffffff;
+
+  /* 文字三階：主要、次要、第三（小標題、時間戳記）。第三階對白底仍有 5.4:1。 */
+  --foreground: #0e1a21;
+  --muted-foreground: #4b5a64;
+  --subtle-foreground: #5f6c76;
+  --card-foreground: var(--foreground);
+  --popover-foreground: var(--foreground);
+
+  --border: #e2e8ec;
+  --border-strong: #cbd4da;
+  --input: var(--border-strong);
+
+  --primary: #007a7e;
   --primary-foreground: #ffffff;
-  /* H≈215° 的霧青次要操作，與 Petrol 主色同色相、以明度而非另一種顏色分層。 */
-  --secondary: #c1e3ec;
-  --secondary-hover: #acd6e1;
-  --secondary-foreground: #154a57;
-  --muted: var(--color-paper-200);
-  --muted-foreground: var(--color-paper-600);
-  /* accent 的彩度(0.040)刻意比 muted(0.006) 高一個量級。「已結案」用 accent、
-     「草稿」用 muted，兩者明度幾乎相同，能分開全靠有沒有顏色——舊值 petrol-50
-     的彩度只有 0.010，兩張徽章在清單上是同一塊淡灰。 */
-  --accent: #d6f6ff;
-  --accent-foreground: var(--color-petrol-700);
-  /* H≈22° 的深磚紅（OKLCH 實測色相；舊註解寫的 351° 是別的色彩系統的值）。
-     明度刻意壓到 L38，是四個狀態色裡最深的一個——見下方狀態語意的說明。 */
-  --destructive: #7c111d;
-  --destructive-surface: #ffe8e7;
-  --destructive-solid: #a8353a;
+  /* accent＝主色淡面：選取中、啟用中、已結案徽章。 */
+  --accent: #e2f2f2;
+  --accent-foreground: #00595c;
+  /* 次要按鈕：下凹底＋一圈細邊。 */
+  --secondary: var(--sunken);
+  --secondary-hover: #e8edf0;
+  --secondary-foreground: var(--foreground);
+  --muted: var(--sunken);
+  --ring: #007a7e;
+  --focus-ring: rgb(0 122 126 / 0.28);
+
+  /* 狀態色。明度刻意錯開（紅綠色盲下只剩明度可辨），
+     淺色 danger 最深、深色 danger 最亮——危險永遠是對比最高的那一個。
+     每組都有 -surface 底色，徽章與橫幅寫 bg-warning-surface text-warning。 */
+  --destructive: #880d0d;
+  --destructive-surface: #ffede9;
+  --destructive-solid: #b3261e;
   --destructive-solid-foreground: #ffffff;
-  --border: var(--color-paper-300);
-  --input: var(--color-paper-300);
-  /* field：輸入框與浮在卡片上的可點表面。卡片改成純白之後，這層不可能再「比卡片
-     更亮」，所以淺色改成往下凹一階；深色沒有更暗可用（會跟頁面底糊在一起），
-     仍然往上浮。兩態方向相反、傳達的是同一件事：這塊是可以動的東西。 */
-  --field: #f2f7f9;
-  --ring: var(--color-petrol-600);
-
-  /* 狀態語意。四個色相各自獨佔一種語意，且都不是 primary——主色只表示「主要操作」，
-     狀態只表示「這筆資料現在怎麼了」，兩者在畫面上不會被誤讀成對方。
-     surface 是徽章／橫幅的底色：舊版直接用 Tailwind 的 amber-50／emerald-50，
-     那是冷調亮白，疊在象牙卡片上對比只有 1.00–1.02，等於底色根本沒畫出來。
-
-     ── 明度是刻意錯開的，不是同一階 ──────────────────────────────────
-     這組色的四個明度看起來不整齊，那是必要的。紅綠色盲（占男性約 8%）下紅與綠
-     會塌到同一個色相上，唯一還留著的線索就是明度差——舊版四個狀態色明度全擠在
-     L47–52，模擬紅綠色盲後「已寄送」與「寄送失敗」的 ΔE 只有 1.6，等於同一個
-     顏色。現在三個暖／綠色相在可用區間內拉開（danger L38 / warning L44 /
-     success L50），最小 ΔE 拉到 6.2。
-
-     可用區間的上限是「徽章文字站在自己的徽章底色上要有 5:1」——淺色主題大約
-     L50 就到頂了。特別注意 WCAG 亮度對綠色加權特別高，同樣的 OKLCH 明度下
-     綠色的實際對比會比琥珀色低一截，success 因此不能再往上抬。
-
-     info 從舊值 H237 移到 H266。舊值跟 petrol 主色(H218)只差 19°，「寄送中」
-     的徽章和主色連結在畫面上是同一種藍，違反上面「狀態不會被誤讀成主色」那條。
-
-     藍黃色盲（約 0.01%）下 info 與主色仍然偏近(ΔE 4.2)，這是四個色相塞進這麼窄
-     的明度區間換來的，取捨後接受——徽章一律帶文字標籤，顏色不是唯一線索。 */
-  --success: #00755a;
-  --success-surface: #dbf6eb;
-  --warning: #724800;
-  --warning-surface: #fcecd8;
-  --info: #4461a9;
-  --info-surface: #e7efff;
-  /* danger 是既有狀態 API 的相容名稱；錯誤、異常與刪除共用同一套紅色來源。 */
+  --success: #2d7f3f;
+  --success-surface: #e8f9e9;
+  --warning: #874c00;
+  --warning-surface: #fff0e0;
+  --info: #4260c4;
+  --info-surface: #ebf3ff;
   --danger: var(--destructive);
   --danger-surface: var(--destructive-surface);
-  /* 手術是第五個狀態色，色相 H300 附近，跟主色 petrol(H218) 與四個狀態色都留足距離。
-     只給掛號的手術標記用（徽章、時間軸卡片底色、時段格的手術時段），不是「危險」——
-     遲到才是 danger，兩顆徽章常並排，色相分開才不會只剩圖示可辨。 */
-  --surgery: #5b2d9e;
-  --surgery-surface: #efe6fb;
+  /* 手術只是另一種掛號，不是警示：紫色，跟遲到的紅色分開色相。 */
+  --surgery: #7238a5;
+  --surgery-surface: #f8efff;
+  /* 待辦數字的紅徽章（工具欄、分頁上的數字）。 */
+  --badge: #c62828;
+  --badge-foreground: #ffffff;
 
-  --chart-1: #007f98;
-  --chart-2: #00a5b6;
-  --chart-3: #5dc4c7;
-  --chart-area: rgb(0 127 152 / 0.15);
+  /* 陰影：淺色卡片只靠邊框；浮層往左投影（面板從右側滑入）。 */
+  --card-shadow: none;
+  --glow: none;
+  --pop-shadow: -16px 0 40px -20px rgb(15 30 40 / 0.35), 0 2px 6px rgb(15 30 40 / 0.06);
+  --menu-shadow: 0 12px 32px -12px rgb(15 30 40 / 0.28), 0 2px 6px rgb(15 30 40 / 0.06);
+  --segment-shadow: 0 1px 2px rgb(0 0 0 / 0.08), inset 0 0 0 1px var(--border);
 
-  /* Data-visualization colors are centralized here because canvas/SVG cannot use
-     Tailwind utility classes. These tokens describe domain categories, not actions. */
-  /* 正常牙齒固定為白色，避免主題切換改變牙齒狀態的辨識色。 */
+  /* 左側導覽欄。 */
+  --nav: #ffffff;
+  --nav-border: #e2e8ec;
+  --nav-foreground: #4b5a64;
+  --nav-label: #5f6c76;
+  --nav-active: #e2f2f2;
+  --nav-active-foreground: #00595c;
+  --logo: #007a7e;
+  --logo-foreground: #ffffff;
+
+  --chart-1: #00809d;
+  --chart-2: #3aa3b8;
+  --chart-3: #86c8d5;
+  --chart-area: rgb(0 128 157 / 0.15);
+
+  /* 牙齒圖：狀態色＋形狀記號（虛線、點點、斜線、打叉），顏色不是唯一線索。 */
   --dental-normal: #ffffff;
-  --dental-missing: #8b5e3c;
-  --dental-calculus: #d49a18;
-  --dental-periodontal: #71717a;
-  --dental-extracted: #d34b4b;
-  --dental-other: #7c5ce0;
-  --dental-right: #d81e1e;
-  --dental-left: #2f3d9d;
-  --dental-outline: #3f3f46;
-  --dental-guide: #c4c4cc;
-  --dental-field-border: #d4d4d8;
-  --dental-selected: #155e75;
-  --dental-selected-ring: rgb(21 94 117 / 0.5);
-  --dental-selected-glow: rgb(21 94 117 / 0.45);
+  --dental-missing: #5f6c76;
+  --dental-missing-surface: #f1f4f6;
+  --dental-calculus: var(--warning);
+  --dental-calculus-surface: var(--warning-surface);
+  --dental-periodontal: var(--info);
+  --dental-periodontal-surface: var(--info-surface);
+  --dental-extracted: var(--danger);
+  --dental-extracted-surface: var(--danger-surface);
+  --dental-other: var(--surgery);
+  --dental-other-surface: var(--surgery-surface);
+  --dental-right: #b3261e;
+  --dental-left: #4260c4;
+  --dental-outline: #4b5a64;
+  --dental-guide: #cbd4da;
+  --dental-field-border: #cbd4da;
+  --dental-selected: #007a7e;
+  --dental-selected-ring: rgb(0 122 126 / 0.5);
+  --dental-selected-glow: rgb(0 122 126 / 0.4);
 
-  /* The exported/PDF report is intentionally a fixed light canvas in both app
-     themes. Use report-* tokens inside ReportView and report components. */
+  /* 報告紙面固定淺色，兩個主題都一樣（它同時是 PDF 的來源）。 */
   --report-canvas: #f5f5f4;
   --report-surface: #ffffff;
   --report-surface-muted: #fafaf9;
@@ -261,98 +203,78 @@
   --report-danger-strong: #991b1b;
   --report-danger-surface: #fef2f2;
   --report-danger-border: #fecaca;
-
-  /* 側邊欄兩個主題都是深底，自成一套。不要在側邊欄裡用 text-muted-foreground——
-     淺色主題下那是暖灰字，會整片糊在深色側邊欄上。 */
-  --sidebar: #182733;
-  --sidebar-foreground: #e8d8b3;
-  --sidebar-primary: var(--color-brand-400);
-  --sidebar-primary-foreground: var(--color-cream-50);
-  --sidebar-accent: #263946;
-  --sidebar-accent-foreground: var(--color-brand-100);
-  --sidebar-border: #3a4a50;
-  --sidebar-ring: var(--color-brand-400);
 }
 
 .dark {
-  /* 深色的表面分層是一條排過的梯子：側邊欄 L15.5 → 頁面底 16.5 → 卡片 20.5 →
-     輸入框 22.8 → 浮層 24.6 → accent 26.7 → 狀態底 29 → muted 31 → secondary 35
-     → 邊框 38。舊版是 accent 27.1 / field 28.2 / destructive-surface 28.7 /
-     muted 29.6 四層全擠在 3 個明度點之內，加上彩度都很低，畫面上它們就是同一塊
-     「比卡片亮一點的東西」——那正是「配色沒問題但細節很髒」的來源。
+  --background: #07090c;
+  --card: #0e1217;
+  --popover: #11161c;
+  --sunken: #0a0d11;
+  --hover: #141a21;
+  --field: #0a0d11;
 
-     梯子的頂端(24.6)不是隨便訂的：主色 petrol-400 是固定的，而主色文字站在
-     任何表面上都要有 4.5，反推出「會承載 text-primary 的表面不能亮過 L24.6」。
-     舊版 --field 是 L28.2，primary 站上去只有 4.24，本來就沒過。 */
-  --background: #061014;
-  /* 原本是 #f4ead0（暖米白），那是配酒紅／金的舊主色留下的。疊在 petrol 上會發黃、
-     顯髒，改成中性偏冷的白，跟深青主色同一個溫度。 */
-  --foreground: #e3eef0;
-  --card: #0b1a1e;
-  --card-foreground: #e3eef0;
-  /* 浮層比卡片再亮一階：對話框／選單／Sheet 疊在卡片上時要看得出是浮起來的。 */
-  --popover: #122429;
-  --popover-foreground: #e3eef0;
-  /* 深色主題最亮的東西應該是主行動。舊值 brand-600 #8D541D 對卡片只有 2.84，
-     主要按鈕反而是畫面上最沉的一塊。改成亮階當底、深墨當字（Material 3 的
-     on-primary 做法），對比 4.92 / 4.68。 */
-  --primary: var(--color-petrol-400);
-  --primary-foreground: #00161d;
-  --secondary: #1f4049;
-  --secondary-hover: #284f5a;
-  --secondary-foreground: #cfebf0;
-  --muted: #213439;
-  --muted-foreground: #a3adaf;
-  --accent: #002b35;
-  /* 深色的 accent-foreground 用 petrol-200 而不是 300：它要跟 muted-foreground
-     （草稿徽章的字）分得開，300 太接近那個灰。 */
-  --accent-foreground: var(--color-petrol-200);
-  --destructive: #ffb4b1;
-  --destructive-surface: #3f2221;
-  --destructive-solid: #b94548;
-  --destructive-solid-foreground: #ffffff;
-  --border: #32464d;
-  --input: #3d545b;
-  /* field 與卡片的明度差只有 1.05，靠 --input 那條邊框把它撐起來——它同樣受
-     上面那條「承載 text-primary 的表面不能太亮」的天花板限制（HandoffSheet 的
-     號碼牌、表單設計頁的檢視切換鈕都是 text-primary + bg-field）。 */
-  --field: #0f1f24;
-  --ring: var(--color-petrol-400);
+  --foreground: #e8edf3;
+  --muted-foreground: #8f9bab;
+  --subtle-foreground: #7d8999;
 
-  /* 明度錯開的理由同淺色主題，方向相反：深色主題裡「亮」等於「重」，
-     所以 danger 是最亮的一個(L84)，success 最沉(L70)。兩個主題共通的原則是
-     ——四個狀態色裡，危險永遠是對比最高的那一個。 */
-  --success: #4ab494;
-  --success-surface: #103328;
-  --warning: #dfa963;
-  --warning-surface: #392710;
-  --info: #a4c0ff;
-  --info-surface: #212b42;
-  --danger: var(--destructive);
-  --danger-surface: var(--destructive-surface);
-  --surgery: #c9b3f5;
-  --surgery-surface: #2a1c48;
+  --border: #1c232c;
+  --border-strong: #2a3440;
+
+  --primary: #37d2f2;
+  --primary-foreground: #03161c;
+  --accent: #0a2630;
+  --accent-foreground: #7fe3f7;
+  --secondary-hover: #141a21;
+  --ring: #37d2f2;
+  --focus-ring: rgb(55 210 242 / 0.35);
+
+  --destructive: #ffbeb3;
+  --destructive-surface: #41211d;
+  --destructive-solid: #ff8a80;
+  --destructive-solid-foreground: #2a0806;
+  --success: #4eab60;
+  --success-surface: #19321d;
+  --warning: #f8b05d;
+  --warning-surface: #3c260d;
+  --info: #82a1f6;
+  --info-surface: #212a44;
+  --surgery: #d3adff;
+  --surgery-surface: #31253f;
+  --badge: #ff8a80;
+  --badge-foreground: #2a0806;
+
+  /* 深色卡片頂端一條內側高光；主要按鈕與看診中的號碼牌有青色光暈。 */
+  --card-shadow: inset 0 1px 0 rgb(255 255 255 / 0.045);
+  --glow: 0 0 0 1px rgb(55 210 242 / 0.55), 0 8px 24px -8px rgb(55 210 242 / 0.6);
+  --pop-shadow: 0 0 0 1px #2a3440, -24px 0 48px -12px rgb(0 0 0 / 0.85);
+  --menu-shadow: 0 0 0 1px #2a3440, 0 16px 40px -12px rgb(0 0 0 / 0.85);
+  --segment-shadow: 0 1px 2px rgb(0 0 0 / 0.5), inset 0 0 0 1px var(--border);
+
+  --nav: #050709;
+  --nav-border: #161c23;
+  --nav-foreground: #8f9bab;
+  --nav-label: #7d8999;
+  --nav-active: #0a2630;
+  --nav-active-foreground: #37d2f2;
+  --logo: #37d2f2;
+  --logo-foreground: #03161c;
 
   --chart-1: #16a2c1;
   --chart-2: #51bccc;
   --chart-3: #7dd5d8;
   --chart-area: rgb(22 162 193 / 0.22);
 
-  --dental-outline: #c4c4cc;
-  --dental-guide: #59656e;
-  --dental-field-border: #59656e;
-  --dental-selected: #72b4c3;
-  --dental-selected-ring: rgb(114 180 195 / 0.5);
-  --dental-selected-glow: rgb(114 180 195 / 0.45);
-
-  --sidebar: #070d12;
-  --sidebar-foreground: #d7c8a5;
-  --sidebar-primary: var(--color-brand-500);
-  --sidebar-primary-foreground: #fffaf0;
-  --sidebar-accent: #192936;
-  --sidebar-accent-foreground: #e6bf77;
-  --sidebar-border: #243640;
-  --sidebar-ring: var(--color-brand-500);
+  --dental-normal: #e8edf3;
+  --dental-missing: #7d8999;
+  --dental-missing-surface: #0a0d11;
+  --dental-right: #ff8a80;
+  --dental-left: #82a1f6;
+  --dental-outline: #8f9bab;
+  --dental-guide: #2a3440;
+  --dental-field-border: #2a3440;
+  --dental-selected: #37d2f2;
+  --dental-selected-ring: rgb(55 210 242 / 0.5);
+  --dental-selected-glow: rgb(55 210 242 / 0.45);
 }
 
 @theme inline {
@@ -362,6 +284,9 @@
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
+  --color-sunken: var(--sunken);
+  --color-hover: var(--hover);
+  --color-field: var(--field);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -369,6 +294,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -376,9 +302,10 @@
   --color-destructive-solid: var(--destructive-solid);
   --color-destructive-solid-foreground: var(--destructive-solid-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
-  --color-field: var(--field);
   --color-ring: var(--ring);
+  --color-focus-ring: var(--focus-ring);
   --color-success: var(--success);
   --color-success-surface: var(--success-surface);
   --color-warning: var(--warning);
@@ -389,6 +316,16 @@
   --color-danger-surface: var(--danger-surface);
   --color-surgery: var(--surgery);
   --color-surgery-surface: var(--surgery-surface);
+  --color-badge: var(--badge);
+  --color-badge-foreground: var(--badge-foreground);
+  --color-nav: var(--nav);
+  --color-nav-border: var(--nav-border);
+  --color-nav-foreground: var(--nav-foreground);
+  --color-nav-label: var(--nav-label);
+  --color-nav-active: var(--nav-active);
+  --color-nav-active-foreground: var(--nav-active-foreground);
+  --color-logo: var(--logo);
+  --color-logo-foreground: var(--logo-foreground);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -419,14 +356,11 @@
   --color-report-danger-strong: var(--report-danger-strong);
   --color-report-danger-surface: var(--report-danger-surface);
   --color-report-danger-border: var(--report-danger-border);
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+
+  --shadow-card: var(--card-shadow);
+  --shadow-glow: var(--glow);
+  --shadow-pop: var(--pop-shadow);
+  --shadow-menu: var(--menu-shadow);
 }
 
 @layer base {
@@ -435,32 +369,53 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-base text-foreground;
     font-family: var(--font-sans);
+  }
+
+  /* 可捲動的容器一律當定位基準。沒有這條的話，裡面 absolute 的東西（最常見是 sr-only 的讀屏文字）
+     定位基準會跑到 body，不會被容器裁掉，而是撐在它「本來該在的位置」——捲動區底下的內容越長，
+     整頁就多出越長一截空白（診療台工作區就是這樣多出 126px）。
+     放在 base layer：本身是 absolute／fixed／sticky 的元素，utility 會蓋過這條。 */
+  :where([class*='overflow-y-auto'], [class*='overflow-auto'], [class*='overflow-x-auto']) {
+    position: relative;
   }
 }
 
-/* 內容區的底。漸層全部收掉了——舊版 body 兩層 radial 加這裡兩層再加一個 ::before，
-   主介面底色是四層合成的暖黃，層數越多卡片越浮不起來（當時卡片對底色只有 1.22）。
-   現在頁面底是單一實色、卡片是純白，明度差自己就能把卡片托起來。 */
-.app-shell {
-  position: relative;
-  isolation: isolate;
-  background: var(--background);
+/* 數字：等寬、表格數字。號碼牌、時間、體重、檢驗值用。 */
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
-.belle-sidebar {
-  background-image:
-    linear-gradient(162deg, rgb(201 154 53 / 0.13), transparent 34%),
-    radial-gradient(circle at 22% 0%, rgb(247 232 184 / 0.15), transparent 17rem),
-    linear-gradient(180deg, rgb(24 39 51 / 0.98), rgb(10 18 25 / 0.98));
+/* 規格欄的小標題（小字、字距拉開、第三階文字色）。 */
+@utility spec-label {
+  font-size: var(--text-2xs);
+  line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--subtle-foreground);
 }
 
-.dark .belle-sidebar {
-  background-image:
-    linear-gradient(162deg, rgb(201 154 53 / 0.12), transparent 34%),
-    radial-gradient(circle at 22% 0%, rgb(247 232 184 / 0.1), transparent 17rem),
-    linear-gradient(180deg, rgb(7 13 18 / 0.99), rgb(4 8 12 / 0.99));
+/* 分段切換（FilterTabs、SegmentedControl 共用）：下凹軌道＋選取項浮起一塊卡片底。 */
+@utility segment-track {
+  border-radius: 10px;
+  background: var(--sunken);
+  padding: 3px;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+@utility segment-active {
+  background: var(--card);
+  color: var(--foreground);
+  box-shadow: var(--segment-shadow);
+}
+
+/* 聚焦框：主色邊框＋3px 半透明光圈。輸入框、選單觸發鈕、開關共用。 */
+@utility focus-ring {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  outline: none;
 }
 
 button,
@@ -471,7 +426,6 @@ select {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* 隱藏 input[type=number] 的原生上下調整按鈕，維持跟其他輸入框一致的外觀。 */
 input[type='number'] {
   appearance: textfield;
 }
@@ -482,10 +436,7 @@ input[type='number']::-webkit-outer-spin-button {
   margin: 0;
 }
 
-/* 捲軸做細、但不隱藏。之前是 scrollbar-width: none 加 width: 0 全域隱藏，
-   換來的是長清單、對話框內容、橫向頁籤全都沒有「還有多少沒看到」的線索——
-   FilterTabs 為此還自己做了一個右側漸層箭頭在補這個洞。scrollbar-gutter: stable
-   讓捲軸出現與否都佔同一份寬度，版面不會因為內容變長而橫向跳動。 */
+/* 捲軸做細、但不隱藏：長清單要有「還有多少沒看到」的線索。 */
 html {
   scrollbar-gutter: stable;
 }
@@ -516,7 +467,6 @@ html {
   background-clip: content-box;
 }
 
-/* 可操作元件使用一致的游標提示；文字輸入仍保留原生 text cursor。 */
 :where(
   button:not(:disabled),
   a[href],
@@ -544,24 +494,23 @@ html {
   cursor: not-allowed;
 }
 
-:where(button, a, input, textarea, select):not(:where([data-slot], [class*='ring-'])):focus-visible {
+:where(button, a, input, textarea, select, [tabindex]):not(:where([data-slot], [class*='ring-'])):focus-visible {
   @apply outline-2 outline-offset-2 outline-ring;
 }
 
-/* 基本量測：使用元件本身的 focus 邊框，避免 input 內層外框錯位。 */
 .measurement-field input:focus-visible {
   outline: none;
 }
 
-/* 桌機資料清單：表頭與資料列共用同一份 --data-columns，避免各欄靠 w-* 個別拼接後
-   因長文字換行而錯位。每頁只需要定義欄位比例；列內文字預設由使用端 truncate／clamp。 */
+/* 桌機資料清單：表頭與資料列共用同一份 --data-columns。表頭 44px、資料列 64px，
+   列內文字由使用端 truncate。 */
 .desktop-data-header,
 .desktop-data-row {
   display: grid;
   grid-template-columns: var(--data-columns, minmax(0, 1fr));
   align-items: center;
-  column-gap: 0.75rem;
-  padding-inline: 1rem;
+  column-gap: 1rem;
+  padding-inline: 1.25rem;
   min-width: 0;
 }
 
@@ -569,14 +518,17 @@ html {
   height: 2.75rem;
   overflow: hidden;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in oklab, var(--muted) 40%, transparent);
+  background: var(--sunken);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--subtle-foreground);
 }
 
 .desktop-data-row {
-  height: 3.5rem;
-  padding-block: 0.375rem;
+  height: 4rem;
+  padding-block: 0.5rem;
   overflow: hidden;
-  border-bottom: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  border-bottom: 1px solid var(--border);
 }
 
 .desktop-data-row--expanded {
@@ -597,19 +549,23 @@ html {
   box-shadow: 0 -10px 30px -20px rgb(0 0 0 / 0.35);
 }
 
-/* 報告紙面走自己的字級尺度，不跟著後台的 16px 下限走。
-   兩個理由：一、它是 A4 列印文件不是螢幕介面，放大會直接改變分頁位置，
-   而 PDF 是要寄給飼主的正式文件；二、report/* 那組元件與後台共用
-   text-xs/text-sm，沒有這層作用域，改 @theme 就會連紙面一起放大。
-   紙面外的操作列與 print:hidden 橫幅不在這個作用域內，會跟著後台放大——
-   那些是給操作者看的，本來就該大。 */
+/* 報告紙面走自己的字級尺度：它是 A4 列印文件，放大會直接改變分頁位置。
+   紙面外的操作列不在這個作用域內。 */
 .report-sheet {
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1.5;
   --text-xs: 0.75rem;
   --text-xs--line-height: 1.5;
   --text-sm: 0.875rem;
   --text-sm--line-height: 1.6;
   --text-base: 1rem;
   --text-base--line-height: 1.5;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.5;
+  --text-xl: 1.5rem;
+  --text-xl--line-height: 1.4;
+  /* 後台 body 是 18px；紙面維持原本的 16px 基準，沒指定字級的文字才不會跟著放大。 */
+  font-size: 1rem;
 }
 
 @page {
@@ -633,16 +589,7 @@ html {
   }
 }
 
-/* 裝飾用的角落光暈。原本是 blur-3xl／blur-2xl 的實心圓，但 filter: blur() 在
-   對話框進場（zoom + fade）期間每一幀都要重算一次，是開場卡頓的來源之一。
-   radial-gradient 由合成器直接畫出來，成本接近零，視覺結果幾乎相同。
-   顏色由使用端用 [--glow-color:…] 指定。 */
-.ambient-glow {
-  background-image: radial-gradient(circle closest-side, var(--glow-color, transparent), transparent);
-}
-
-/* 系統層級開了「減少動態效果」就不要再放大／滑入，只保留淡入淡出。
-   完全拿掉動畫會讓對話框瞬間出現、失去「它從哪裡來」的線索，反而更難理解。 */
+/* 系統開了「減少動態效果」就不放大／滑入，只留淡入淡出。 */
 @media (prefers-reduced-motion: reduce) {
   [data-slot='dialog-content'],
   [data-slot='dialog-overlay'] {

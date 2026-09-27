@@ -16,7 +16,7 @@ function mockList(open = [], done = []) {
   });
 }
 
-// 寵物名字快照走 Pet.find(...).select().populate().lean()，跟聊天室的 # 標記同一條路徑。
+// 貓咪名字快照走 Pet.find(...).select().populate().lean()，跟聊天室的 # 標記同一條路徑。
 function mockPets(pets) {
   Pet.find = () => ({ select: () => ({ populate: () => ({ lean: async () => pets }) }) });
 }

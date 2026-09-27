@@ -26,7 +26,7 @@ export async function syncMedicationJournal(order, { session } = {}) {
   );
 }
 
-// 交易提交之後才通知：讓開著這隻寵物病歷日誌的畫面重新讀取。
+// 交易提交之後才通知：讓開著這隻貓咪病歷日誌的畫面重新讀取。
 export function announceMedicationJournal(order) {
   emitClinicalNoteUpdate({ petId: order.petId, medicationOrderId: order._id });
 }

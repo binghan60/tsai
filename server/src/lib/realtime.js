@@ -47,14 +47,14 @@ export function emitChatMessage(message) {
 
 // 掛號本身的狀態／欄位有變動時廣播完整文件（完成看診、候診中或已完成修正看診資料
 // 都會呼叫）；前端收到後直接用 _id 找到本地那一筆更新欄位，不用整頁重新 fetch——
-// 這是醫生頁按下「更新」送出量測／回診資料後，櫃台頁能立刻看到最新內容的機制。
+// 這是醫師頁按下「更新」送出量測／回診資料後，櫃台頁能立刻看到最新內容的機制。
 export function emitAppointmentUpdate(appointment, previousDate) {
   const payload = typeof appointment.toObject === 'function' ? appointment.toObject() : appointment;
   io?.to(dayRoom(appointment.date)).emit('appointment:updated', payload);
   if (previousDate && previousDate !== appointment.date) io?.to(dayRoom(previousDate)).emit('appointment:updated', payload);
 }
 
-// 寵物暫存區跟聊天一樣是全站一份，不分房間；payload 是完整清單。
+// 貓咪暫存區跟聊天一樣是全站一份，不分房間；payload 是完整清單。
 export function emitPinnedPetsUpdate(items) {
   io?.emit('pinned-pets:updated', { items });
 }
@@ -72,4 +72,9 @@ export function emitClinicalNoteUpdate(note) {
 // 藥單跨天保留，向所有已登入的工作台推送失效通知，再依各自篩選重新讀取。
 export function emitMedicationUpdate(order) {
   io?.emit('medication:updated', { _id: String(order._id), version: order.__v });
+}
+
+// 待審初診表有增減（飼主送出、櫃台核准或退回）。只是失效通知，前端自己重讀待審筆數。
+export function emitIntakeUpdate() {
+  io?.emit('intake:updated');
 }

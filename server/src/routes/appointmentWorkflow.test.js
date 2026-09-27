@@ -13,6 +13,13 @@ const id = '507f1f77bcf86cd799439011';
 const petId = '507f1f77bcf86cd799439012';
 const templateId = '507f1f77bcf86cd799439013';
 const chain = value => ({ session: async () => value });
+const labTemplate = {
+  _id: templateId, version: 1, name: '一般健檢',
+  sections: [{ key: 'labs', title: '檢驗', items: [
+    { key: 'wbc', label: 'WBC 白血球', type: 'lab', unit: '×10³/µL', referenceMin: 5.5, referenceMax: 19.5 },
+    { key: 'alt', label: 'ALT', type: 'lab', unit: 'U/L', referenceMin: 12, referenceMax: 130 },
+  ] }],
+};
 
 describe('independent appointment workflow HTTP routes', () => {
   let server, origin, store, diary, records, failDiary;
@@ -64,7 +71,8 @@ describe('independent appointment workflow HTTP routes', () => {
       diary.set(String(query.appointmentId), { ...update.$set, appointmentId: query.appointmentId });
     });
     mock.method(ClinicalNote, 'deleteOne', query => ({ session: async session => { assert.ok(session); diary.delete(String(query.appointmentId)); } }));
-    mock.method(FormTemplate, 'findOne', () => chain({ _id: templateId, version: 1, name: '一般健檢', sections: [] }));
+    mock.method(FormTemplate, 'findOne', () => chain(labTemplate));
+    mock.method(FormTemplate, 'findById', () => chain(labTemplate));
     mock.method(MedicalRecord, 'create', async ([values], options) => {
       assert.ok(options.session);
       const record = { ...values, _id: new mongoose.Types.ObjectId(), status: 'draft' };
@@ -120,7 +128,7 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal(store.get(id).visitNote, undefined);
   });
   it('hands the visit to the desk, keeps the queue number, and rejects stale confirmations', async () => {
-    await post('clinical', { handoffNote: '診察費＋胸腔 X 光兩張' });
+    await post('clinical', { specialCareNote: '傷口勿舔' });
     const handed = await post('handoff');
     assert.equal(handed.status, 200);
     assert.equal(handed.body.status, 'pending_checkout');
@@ -139,13 +147,13 @@ describe('independent appointment workflow HTTP routes', () => {
   });
   it('lets the vet reclaim a handed-off visit until the desk completes it', async () => {
     await post('handoff');
-    assert.equal((await post('clinical', { handoffNote: '取回前不應修改' })).status, 409);
+    assert.equal((await post('clinical', { specialCareNote: '取回前不應修改' })).status, 409);
     const reclaimed = await post('reclaim');
     assert.equal(reclaimed.status, 200);
     assert.equal(reclaimed.body.status, 'arrived');
     assert.equal(reclaimed.body.handoffAt, null);
     // 取回後補內容、再送一次，櫃台完成之後就不能再取回。
-    assert.equal((await post('clinical', { handoffNote: '補開止咳藥' })).status, 200);
+    assert.equal((await post('clinical', { followUpRecommendation: '一週後複診' })).status, 200);
     await post('handoff');
     await post('complete');
     assert.equal((await post('reclaim')).status, 409);
@@ -184,6 +192,36 @@ describe('independent appointment workflow HTTP routes', () => {
     const changed = await post('followup', { followUpDate: '2026-09-15', followUpTime: '14:00' });
     assert.equal(changed.status, 200);
     assert.equal(record.followUpDate.toISOString(), '2026-09-15T06:00:00.000Z');
+  });
+  it('stores lab values from the booking template, summarises them in the diary and keeps the draft following the visit', async () => {
+    const created = await post('record');
+    assert.equal((await post('clinical', { labValues: { lipase: '300' } })).status, 422, '不在範本裡的檢驗項目要擋');
+    // 上面那次失敗會把模擬的交易回滾成快照副本，所以之後才取草稿的參照。
+    const record = records.get(String(created.body.recordId));
+    const versionBefore = record.__v || 0;
+    const saved = await post('clinical', { weightKg: '4.2', labValues: { wbc: '22.4', alt: '90' } });
+    assert.equal(saved.status, 200);
+    assert.deepEqual(store.get(id).labValues.map(lab => [lab.key, lab.value]), [['wbc', '22.4'], ['alt', '90']]);
+    assert.match(await diaryContent(), /檢驗：WBC 白血球 22\.4 ×10³\/µL ↑　ALT 90 U\/L/);
+
+    assert.equal(record.weightKg, 4.2);
+    const wbc = record.labFindings.find(finding => finding.key === 'wbc');
+    assert.equal(wbc.value, '22.4');
+    assert.equal(wbc.status, 'abnormal');
+    assert.equal(record.labFindings.find(finding => finding.key === 'alt').status, 'normal');
+    assert.equal(record.__v || 0, versionBefore, '同步不動報告版本號，開著的填寫頁存檔才不會撞衝突');
+
+    // 醫師在報告裡改過體重與 WBC 之後，看診再改也不覆蓋那兩欄。
+    record.overriddenKeys = ['weightKg', 'lab:wbc'];
+    record.weightKg = 4.0;
+    await post('clinical', { weightKg: '4.5', labValues: { wbc: '25', alt: '140' } });
+    assert.equal(record.weightKg, 4.0);
+    assert.equal(record.labFindings.find(finding => finding.key === 'wbc').value, '22.4');
+    assert.equal(record.labFindings.find(finding => finding.key === 'alt').value, '140');
+
+    // 清空檢驗值＝從看診拿掉。
+    await post('clinical', { labValues: { alt: '' } });
+    assert.deepEqual(store.get(id).labValues.map(lab => lab.key), ['wbc']);
   });
   it('copies existing follow-up date when creating a draft later', async () => {
     const booked = await post('followup', { followUpDate: '2026-09-14', followUpTime: '10:00' });

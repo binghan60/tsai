@@ -3,42 +3,39 @@ import { cva } from "class-variance-authority";
 export { default as Button } from "./Button.vue";
 
 export const buttonVariants = cva(
-  // 版面重新設計後的按鈕語言：拿掉外框，靠實色／淡色填底分層級——border 留在
-  // base 裡只是為了 aria-invalid 狀態需要一圈可見邊框，平常一律 border-transparent，
-  // 不吃 box-sizing 也不會跳動。圓角改放進 size（見下）：一般按鈕維持 rounded-lg，
-  // 純圖示按鈕改圓形，跟其他按鈕的方形（含 outline）做出區隔。
-  // leading-none：全域行高為了中文可讀性設到 1.6–1.75，但按鈕是單行控制項，
-  // 繼承那個行高會讓文字盒撐到 28px，在 h-9/h-10 裡上下就只剩幾 px。
-  "focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 border border-transparent bg-clip-padding text-sm leading-none font-semibold shadow-sm focus-visible:ring-3 aria-invalid:ring-3 [&_svg:not([class*=size-])]:size-4 group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-colors outline-none select-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0",
+  // 層級靠底色分：primary 實色（深色主題另有光暈）、secondary 下凹底加一圈細邊、
+  // soft 主色淡面、ghost 只在滑過時出現底色（給工具列與清單列上的次要圖示）、
+  // destructive 淡紅底、destructive-solid 實心紅（只給確認視窗裡的最終動作）。
+  // leading-none：按鈕是單行控制項，不吃全域的中文行高。
+  "focus-visible:ring-focus-ring aria-invalid:ring-destructive/20 aria-invalid:border-destructive border border-transparent bg-clip-padding text-sm leading-none font-semibold focus-visible:ring-3 aria-invalid:ring-3 [&_svg:not([class*=size-])]:size-[1.125rem] group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-[background-color,color,box-shadow] outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground hover:bg-primary/90 aria-expanded:bg-primary/90",
-        // 淡色填底取代「描邊＋極淡填色」——跟現況比對比更清楚，也不用再畫一圈邊框。
-        // 中性淡底，跟 outline 的主色調分開：這個是「可重複執行的支援操作」，不代表主色。
+          "bg-primary text-primary-foreground shadow-glow hover:bg-primary/90 aria-expanded:bg-primary/90",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary-hover aria-expanded:bg-secondary-hover",
+          "bg-secondary text-secondary-foreground shadow-[inset_0_0_0_1px_var(--border)] hover:bg-secondary-hover aria-expanded:bg-secondary-hover",
+        soft:
+          "bg-accent text-accent-foreground hover:bg-accent/80 aria-expanded:bg-accent/80",
+        ghost:
+          "bg-transparent text-muted-foreground hover:bg-hover hover:text-foreground aria-expanded:bg-hover aria-expanded:text-foreground",
         destructive:
-          "bg-destructive-surface text-destructive hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+          "bg-destructive-surface text-destructive hover:bg-destructive/15 focus-visible:ring-destructive/25 dark:hover:bg-destructive/20",
         "destructive-solid":
           "bg-destructive-solid text-destructive-solid-foreground hover:bg-destructive-solid/90 focus-visible:ring-destructive-solid/30",
-        link: "bg-accent/70 text-primary shadow-none underline-offset-4 hover:bg-accent hover:underline",
+        link: "bg-transparent px-0 text-primary underline-offset-4 hover:underline",
       },
-      // 高度階層是真的分階，不是四個名字指向同一個 h-11。xs 只給桌機的密集表格用；
-      // 觸控介面最低到 sm(40px)，一般操作用 default(44px)。
-      // icon 系列改成 rounded-full：純圖示的圓形跟一般按鈕的方形是兩種語彙，
-      // 圓形留給「只有一個動作、佔最小空間」的場合（分頁按鈕、篩選送出鈕…）。
+      // 高度 36／40／44／48，預設 40。圖示按鈕跟一般按鈕同圓角（8px），不另外做成圓形。
       size: {
         default:
-          "h-11 gap-2 rounded-lg px-4 has-data-[icon=inline-end]:pr-3.5 has-data-[icon=inline-start]:pl-3.5",
-        xs: "h-9 gap-1.5 rounded-lg px-3 text-xs",
-        sm: "h-10 gap-2 rounded-lg px-3.5",
-        lg: "h-12 gap-2 rounded-lg px-5",
-        icon: "size-11 rounded-full",
-        "icon-xs": "size-9 rounded-full",
-        "icon-sm": "size-10 rounded-full",
-        "icon-lg": "size-12 rounded-full",
+          "h-10 gap-2 rounded-lg px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        xs: "h-9 gap-1.5 rounded-lg px-3",
+        sm: "h-9 gap-1.5 rounded-lg px-3.5",
+        lg: "h-12 gap-2 rounded-lg px-5 text-base",
+        icon: "size-10 rounded-lg",
+        "icon-xs": "size-8 rounded-md",
+        "icon-sm": "size-9 rounded-lg",
+        "icon-lg": "size-11 rounded-lg",
       },
     },
     defaultVariants: {

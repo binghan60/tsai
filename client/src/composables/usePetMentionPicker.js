@@ -3,10 +3,10 @@ import { http } from '../api/http';
 import { clinicDateInput } from '../lib/datetime';
 import { activeMentionQuery, insertMention, mentionsStillInContent, MENTION_TRIGGER } from '../lib/chatMentions';
 
-// 文字框裡打 # 標記寵物的候選清單邏輯，聊天室與院內待辦共用。
-// 被標記的寵物由伺服器依 petId 寫入名字快照，這裡只負責「打 # → 選人 → 把 #名字 塞進內文」。
+// 文字框裡打 # 標記貓咪的候選清單邏輯，聊天室與院內待辦共用。
+// 被標記的貓咪由伺服器依 petId 寫入名字快照，這裡只負責「打 # → 選人 → 把 #名字 塞進內文」。
 //
-// 候選清單今天有掛號的排前面，再補上全部寵物的搜尋結果——電話裡問的常常是今天沒來的動物。
+// 候選清單今天有掛號的排前面，再補上全部貓咪的搜尋結果——電話裡問的常常是今天沒來的動物。
 // 這是選人用的候選清單，不是全站搜尋，所以邊打邊查。
 //
 //   text            存文字框內容的 ref（v-model 的那一個）

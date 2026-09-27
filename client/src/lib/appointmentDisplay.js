@@ -14,11 +14,11 @@ export function latenessLabel(minutes) {
   return value >= 1 ? `遲到 ${value} 分` : '';
 }
 
-// 寵物／飼主備註（「會咬人」「飼主難溝通」）。資料來自 GET /api/appointments 的 patientNotes，
+// 貓咪／飼主備註（「會咬人」「飼主難溝通」）。資料來自 GET /api/appointments 的 patientNotes，
 // 以 id 為鍵，不在掛號快照上；初診還沒建檔時沒有 id，自然沒有備註。
 export function patientNotesFor(appointment = {}, patientNotes = {}) {
   return [
-    { key: 'pet', label: '寵物', text: appointment.petId ? patientNotes.pets?.[String(appointment.petId)] : '' },
+    { key: 'pet', label: '貓咪', text: appointment.petId ? patientNotes.pets?.[String(appointment.petId)] : '' },
     { key: 'owner', label: '飼主', text: appointment.ownerId ? patientNotes.owners?.[String(appointment.ownerId)] : '' },
   ].filter((note) => note.text);
 }

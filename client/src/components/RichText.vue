@@ -5,7 +5,7 @@ import { BOLD_CLASS, tintClass } from '../lib/richTextStyle';
 
 // 唯讀顯示帶格式標記的文字（粗體、四色）。標記由 shared/richText.js 拆成片段後以文字插值輸出，
 // 不走 v-html——內容是使用者打的字，永遠不當成 HTML。
-// 需要在片段裡再加工（例如待辦把 #寵物 換成可點標籤）時用預設 slot，slot 拿到 { text }。
+// 需要在片段裡再加工（例如待辦把 #貓咪 換成可點標籤）時用預設 slot，slot 拿到 { text }。
 const props = defineProps({
   text: { type: String, default: '' },
   tag: { type: String, default: 'div' },

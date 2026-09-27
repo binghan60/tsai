@@ -84,7 +84,7 @@ test('the vet can reclaim a visit until the desk completes it', () => {
   assert.equal(p.status, 'arrived');
   assert.equal(visitLabel(p), '看診中');
 
-  applyWorkflowAction(p, 'clinical', { handoffNote: '補開止咳藥' });
+  applyWorkflowAction(p, 'clinical', { followUpRecommendation: '一週後複診' });
   applyWorkflowAction(p, 'handoff', {});
   applyWorkflowAction(p, 'complete', {});
   assert.throws(() => applyWorkflowAction(p, 'reclaim', {}), { status: 409 });
@@ -106,10 +106,11 @@ test('the desk cannot complete before the vet hands off, and cannot complete twi
 
 test('clinical text and measurements are trimmed, validated and journal notes stay editable after handoff', () => {
   const p = appointment();
-  applyWorkflowAction(p, 'clinical', { visitNote: '  夜咳為主  ', internalNote: '  院內留存  ', handoffNote: ' 診察費＋X光 ', weightKg: '5.2', temperatureC: '' });
+  applyWorkflowAction(p, 'clinical', { visitNote: '  夜咳為主  ', internalNote: '  院內留存  ', specialCareNote: ' 傷口勿舔 ', handoffNote: '已移除的欄位', weightKg: '5.2', temperatureC: '' });
   assert.equal(p.visitNote, '夜咳為主');
   assert.equal(p.internalNote, '院內留存');
-  assert.equal(p.handoffNote, '診察費＋X光');
+  assert.equal(p.specialCareNote, '傷口勿舔');
+  assert.equal(p.handoffNote, undefined, '給櫃台的交辦已移除，不再寫入');
   assert.equal(p.weightKg, 5.2);
   assert.equal(p.temperatureC, null);
   assert.throws(() => applyWorkflowAction(p, 'clinical', { weightKg: -1 }), { status: 422 });
@@ -120,7 +121,7 @@ test('clinical text and measurements are trimmed, validated and journal notes st
   applyWorkflowAction(p, 'clinical', { internalNote: '  院內補充  ' });
   assert.equal(p.internalNote, '院內補充');
   assert.equal(p.status, 'pending_checkout');
-  assert.throws(() => applyWorkflowAction(p, 'clinical', { handoffNote: '更改收費項目' }), { status: 409 });
+  assert.throws(() => applyWorkflowAction(p, 'clinical', { followUpRecommendation: '更改回診建議' }), { status: 409 });
   assert.throws(() => applyWorkflowAction(p, 'clinical', { weightKg: 5.4 }), { status: 409 });
   assert.throws(() => applyWorkflowAction(p, 'clinical', { specialCareNote: '傷口勿舔舐' }), { status: 409 });
   applyWorkflowAction(p, 'reclaim', {});

@@ -1,16 +1,10 @@
 <script setup>
-import { ref } from 'vue';
 import { MoreHorizontal } from '@lucide/vue';
 import { Button } from './ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu';
 
-// 清單每一列的次要操作。
-//
-// 存在的理由：一列上並排四五個同等重量的按鈕時，「這一列最該做的事是哪個」就消失了，
-// 而且窄螢幕會折成兩三行，整份清單的節奏跟著散掉。主要操作留在列上，其餘收進這裡。
-//
-// 危險項用常駐的紅字而不是 hover 才變紅——選單裡「刪除」跟「複製連結」如果靜止時
-// 長得一樣，掃過去時看不出哪一個會出事。
+// 清單每一列的次要操作。主要操作留在列上，其餘收進這個選單，
+// 一列上才不會並排四五顆同等重量的按鈕。危險項放在最後、前面隔一條線、靜止時就是紅字。
 const props = defineProps({
   // [{ key, label, icon?, danger?, disabled? }]
   actions: { type: Array, required: true },
@@ -21,36 +15,32 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['select']);
-const open = ref(false);
 
-function choose(action) {
-  if (action.disabled) return;
-  open.value = false;
-  emit('select', action.key);
+function isFirstDanger(action, index) {
+  return action.danger && index > 0 && !props.actions[index - 1].danger;
 }
 </script>
 
 <template>
-  <Popover v-model:open="open">
-    <PopoverTrigger as-child>
-      <Button type="button" variant="secondary" :size="props.triggerText ? 'sm' : 'icon-sm'" :class="props.triggerText ? 'w-full justify-center' : ''" :aria-label="props.label">
-        <component :is="props.icon || MoreHorizontal" class="h-4 w-4" stroke-width="1.75" />
+  <DropdownMenu :modal="false">
+    <DropdownMenuTrigger as-child>
+      <Button type="button" :variant="props.triggerText ? 'secondary' : 'ghost'" :size="props.triggerText ? 'sm' : 'icon-sm'" :class="props.triggerText ? 'w-full justify-center' : ''" :aria-label="props.label">
+        <component :is="props.icon || MoreHorizontal" stroke-width="1.75" />
         <span v-if="props.triggerText">{{ props.triggerText }}</span>
       </Button>
-    </PopoverTrigger>
-    <PopoverContent align="end" class="w-48 p-1">
-      <button
-        v-for="action in props.actions"
-        :key="action.key"
-        type="button"
-        class="flex min-h-10 w-full items-center gap-2 rounded-md px-2.5 text-left text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
-        :class="action.danger ? 'bg-destructive-surface text-destructive hover:bg-destructive/20' : 'bg-muted/60 text-foreground hover:bg-secondary'"
-        :disabled="action.disabled"
-        @click="choose(action)"
-      >
-        <component :is="action.icon" v-if="action.icon" class="h-4 w-4 shrink-0" stroke-width="1.75" />
-        {{ action.label }}
-      </button>
-    </PopoverContent>
-  </Popover>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      <template v-for="(action, index) in props.actions" :key="action.key">
+        <DropdownMenuSeparator v-if="isFirstDanger(action, index)" />
+        <DropdownMenuItem
+          :variant="action.danger ? 'destructive' : 'default'"
+          :disabled="action.disabled"
+          @select="emit('select', action.key)"
+        >
+          <component :is="action.icon" v-if="action.icon" stroke-width="1.75" />
+          {{ action.label }}
+        </DropdownMenuItem>
+      </template>
+    </DropdownMenuContent>
+  </DropdownMenu>
 </template>

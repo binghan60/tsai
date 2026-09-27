@@ -38,34 +38,34 @@ const emit = defineEmits(['update:modelValue', 'update:placeholder']);
     @update:model-value="emit('update:modelValue', $event)"
     @update:placeholder="emit('update:placeholder', $event)"
   >
-    <!-- 外側兩顆是整年跳：寵物生日這類年份差很多的日期，一個月一個月翻要按很久。
+    <!-- 外側兩顆是整年跳：貓咪生日這類年份差很多的日期，一個月一個月翻要按很久。
          真正差很遠的還是直接在 DatePicker 的輸入框打字比較快，這裡只是補一個中間檔。 -->
     <CalendarHeader class="flex items-center justify-between gap-1 pb-3">
       <div class="flex items-center gap-1">
         <CalendarPrev
           :prev-page="(date) => date.subtract({ years: 1 })"
           aria-label="前一年"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+          class="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
         >
           <ChevronsLeft class="h-4 w-4" stroke-width="1.75" />
         </CalendarPrev>
         <CalendarPrev
-          class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+          class="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
         >
           <ChevronLeft class="h-4 w-4" stroke-width="1.75" />
         </CalendarPrev>
       </div>
-      <CalendarHeading class="text-sm font-semibold text-foreground" />
+      <CalendarHeading class="text-base font-semibold text-foreground" />
       <div class="flex items-center gap-1">
         <CalendarNext
-          class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+          class="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
         >
           <ChevronRight class="h-4 w-4" stroke-width="1.75" />
         </CalendarNext>
         <CalendarNext
           :next-page="(date) => date.add({ years: 1 })"
           aria-label="後一年"
-          class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-muted/60 text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+          class="inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
         >
           <ChevronsRight class="h-4 w-4" stroke-width="1.75" />
         </CalendarNext>
@@ -75,7 +75,7 @@ const emit = defineEmits(['update:modelValue', 'update:placeholder']);
     <CalendarGrid v-for="month in grid" :key="month.value.toString()" class="w-full border-collapse select-none">
       <CalendarGridHead>
         <CalendarGridRow class="grid grid-cols-7">
-          <CalendarHeadCell v-for="day in weekDays" :key="day" class="text-center text-xs font-medium text-muted-foreground">{{ day }}</CalendarHeadCell>
+          <CalendarHeadCell v-for="day in weekDays" :key="day" class="text-center text-xs font-medium text-subtle-foreground">{{ day }}</CalendarHeadCell>
         </CalendarGridRow>
       </CalendarGridHead>
       <CalendarGridBody>
@@ -86,11 +86,11 @@ const emit = defineEmits(['update:modelValue', 'update:placeholder']);
               :month="month.value"
               :class="
                 cn(
-                  'mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-muted/40 text-sm text-foreground transition-colors hover:bg-muted',
-                  'data-[today]:bg-primary data-[today]:font-semibold data-[today]:text-primary-foreground data-[today]:hover:bg-primary',
-                  'data-[outside-view]:text-muted-foreground/50',
-                  'data-[selected]:border data-[selected]:border-primary/60 data-[selected]:bg-primary/10 data-[selected]:text-primary data-[selected]:hover:bg-primary/15',
-                  'data-[today]:data-[selected]:border-0 data-[today]:data-[selected]:bg-primary data-[today]:data-[selected]:text-primary-foreground',
+                  'num mx-auto flex size-10 items-center justify-center rounded-lg text-sm text-foreground transition-colors hover:bg-hover',
+                  // 今天：主色細框；選取：主色實心。兩者分開，才看得出「選的是不是今天」。
+                  'data-[today]:font-semibold data-[today]:text-primary data-[today]:shadow-[inset_0_0_0_1.5px_var(--primary)]',
+                  'data-[outside-view]:text-subtle-foreground/50',
+                  'data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground data-[selected]:shadow-glow data-[selected]:hover:bg-primary',
                   'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
                   'data-[unavailable]:pointer-events-none data-[unavailable]:text-muted-foreground/40 data-[unavailable]:line-through',
                 )

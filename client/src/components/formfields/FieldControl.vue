@@ -55,7 +55,7 @@ const imageValue = computed(() => {
             :aria-label="`${item.label}備註`"
             rows="2"
             :placeholder="entry.status === 'abnormal' ? '請描述異常（選填）' : '備註（選填）'"
-            class="min-h-16 resize-y scroll-mt-40 border-border bg-field pr-20 text-foreground focus-visible:border-belle-500"
+            class="min-h-16 resize-y scroll-mt-40 pr-20"
           />
           <TextTemplateTrigger v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" :input-id="`record-exam-note-${item.key}`" />
         </div>
@@ -95,7 +95,7 @@ const imageValue = computed(() => {
             :aria-label="`${item.label}備註`"
             rows="2"
             :placeholder="entry.status === 'abnormal' ? '請描述異常（選填）' : '備註（選填）'"
-            class="min-h-16 resize-y scroll-mt-40 border-border bg-field pr-20 text-foreground focus-visible:border-belle-500"
+            class="min-h-16 resize-y scroll-mt-40 pr-20"
           />
           <TextTemplateTrigger v-model="entry.note" :item-key="item.key" :label="`${item.label}備註`" :input-id="`record-lab-note-${item.key}`" />
         </div>

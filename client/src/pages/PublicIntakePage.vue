@@ -309,7 +309,7 @@ async function submit() {
   background: var(--intake-white);
   padding: 20px;
   color: var(--intake-text);
-  font-family: 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  font-family: var(--font-sans);
 }
 .intake-page.is-verification {
   display: flex;

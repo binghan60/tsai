@@ -19,8 +19,8 @@ const appointmentSchema = new mongoose.Schema(
     visitType: { type: String, enum: ['new', 'return'], default: null },
 
     // 一律存快照——不管是不是既有病患。查詢列表不用 populate 就能顯示，
-    // 且飼主/寵物之後改名不會讓「當初電話裡登記的名字」跟著變。
-    // 選填：電話掛號時常常只問得到寵物名跟電話。報到時才必填——
+    // 且飼主/貓咪之後改名不會讓「當初電話裡登記的名字」跟著變。
+    // 選填：電話掛號時常常只問得到貓咪名跟電話。報到時才必填——
     // 那一步要真的建立 Owner 文件，而 Owner.name 是必要欄位。
     ownerName: { type: String, default: '', trim: true },
     ownerPhone: { type: String, default: '', trim: true },
@@ -56,12 +56,24 @@ const appointmentSchema = new mongoose.Schema(
     checkedInAt: { type: Date, default: null },
     latenessMinutes: { type: Number, default: 0, min: 0, max: 1440 },
 
-    // 報到後量測的生命徵象，供候診時就地填寫的簡易門診表單使用；不回填任何 MedicalRecord，
-    // 避免跟健檢報告的欄位混為一談（健檢表單類型只能在建立報告當下選一次，不存在
-    // 「先建立報告、之後才補選類型」這條路，因此這裡先自己保管，等真正建立報告時
-    // 才透過 /pets/:petId/records/new?fromAppointment= 轉過去）。
+    // 這次看診是看診資料的唯一存放處：體重、體溫、檢驗數值、本次紀錄、請轉告飼主、回診建議、
+    // 內部備註與回診日期都只存在這裡。病歷日誌讀它即時組出來；報到時建立的健檢報告草稿
+    // 欄位預設跟著這裡走（醫師在報告裡改過的欄位除外），見 lib/recordVisitSync.js。
     weightKg: { type: Number, min: 0, default: null },
     temperatureC: { type: Number, min: 0, default: null },
+    // 診療台填的檢驗數值。項目來自掛號選的表單範本裡的檢驗區塊；存的時候連同名稱、單位、
+    // 參考範圍一起存成快照，病歷日誌不必再讀範本就能組出「WBC 22.4 ↑」這種摘要。
+    labValues: {
+      type: [new mongoose.Schema({
+        key: { type: String, required: true, trim: true },
+        label: { type: String, required: true, trim: true },
+        value: { type: String, default: '', trim: true, maxlength: 40 },
+        unit: { type: String, default: '', trim: true },
+        referenceMin: { type: Number, default: null },
+        referenceMax: { type: Number, default: null },
+      }, { _id: false })],
+      default: [],
+    },
     // 看診結束時約定的下次回診日。保留 date-only 字串，避免日期因伺服器時區偏移。
     followUpDate: { type: String, default: '', match: /^$|^\d{4}-\d{2}-\d{2}$/ },
     // 回診時間（選填，HH:MM）。沒填時併入 MedicalRecord.followUpDate 會落在當天 00:00。
@@ -69,20 +81,16 @@ const appointmentSchema = new mongoose.Schema(
     // 回診原因——就是下一筆自動掛號的「來院原因」（Appointment.reason），
     // 不是這次看診本身的來院原因。沒填就用「回診」墊底。
     followUpReason: { type: String, default: '', trim: true },
-    // 完成看診時依 followUpDate/followUpTime 自動掛出的下一筆掛號。之後改回診日期會回頭
-    // 同步這筆（見 routes/appointments.js 的 syncFollowUpAppointment），只有它還是 scheduled
-    // 狀態才動；已經報到/完成/取消就是現場已經另外處理過了，不回頭改。
+    // 櫃台敲定回診時段時掛出的下一筆掛號（routes/appointmentWorkflow.js 的 followup）。
+    // 之後改回診時段會就地改期這筆，只有它還是 scheduled 狀態才動；已經報到/完成/取消
+    // 就是現場另外處理過了，不回頭改。
     followUpAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
     // 本次簡易紀錄的唯一來源；病歷日誌透過 appointmentId 讀取。飼主看不到，也不進健檢報告。
     visitNote: { type: String, default: '', trim: true },
     internalNote: { type: String, default: '', trim: true, maxlength: 2000 },
     // 面向飼主的照護提醒（例如「傷口勿舔舐」），由醫師填、櫃台當面轉告飼主。
-    // 跟 handoffNote（櫃台的作業指示）語意分開，才能在櫃台端用警示樣式獨立呈現——
-    // 這是最容易漏講的一件事。刻意不跟 clinicalNotes 同步，單一資料來源留在這裡。
+    // 在櫃台處理視窗用警示樣式獨立呈現——這是最容易漏講的一件事。
     specialCareNote: { type: String, default: '', trim: true, maxlength: 500 },
-    // 給櫃台的交辦：收費項目、領藥、要開的證明都寫這裡，取代了早期逐項計價的批價清單。
-    // 系統不解析內容、不計價也不記金額——櫃台讀這段文字自行收費。
-    handoffNote: { type: String, default: '', trim: true, maxlength: 1000 },
     followUpRecommendation: { type: String, default: '', trim: true, maxlength: 500 },
 
     // 流水線的三個里程碑，見 shared/appointmentWorkflow.js。status 由它們推導出來，

@@ -44,7 +44,7 @@ router.post('/messages', async (req, res, next) => {
     }
     const uniqueMentionIds = parseMentionIds(req.body?.mentions);
     if (!uniqueMentionIds) {
-      return res.status(422).json({ message: `標記的寵物格式不正確（一則訊息最多 ${MAX_MENTIONS} 隻）` });
+      return res.status(422).json({ message: `標記的貓咪格式不正確（一則訊息最多 ${MAX_MENTIONS} 隻）` });
     }
     const baseDoc = { sender, content, auto, ...(snapshot ? { snapshot } : {}) };
 
@@ -55,7 +55,7 @@ router.post('/messages', async (req, res, next) => {
     }
 
     const mentions = await mentionSnapshots(uniqueMentionIds);
-    if (!mentions) return res.status(422).json({ message: '標記的寵物不存在，可能已被刪除' });
+    if (!mentions) return res.status(422).json({ message: '標記的貓咪不存在，可能已被刪除' });
 
     // 訊息與暫存區要嘛一起成功：訊息送出了暫存區卻沒放進去，對方就找不到那隻動物。
     let message;

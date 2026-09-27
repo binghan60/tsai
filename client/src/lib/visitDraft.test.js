@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clinicalDraft, draftPatch, mergeClinicalUpdate } from './visitDraft.js';
+import { clinicalDraft, draftPatch, mergeClinicalUpdate, takeBaseline } from './visitDraft.js';
 
 test('remote workflow updates preserve an unsaved clinical note without a false conflict', () => {
   const original = { visitNote: 'old' };
@@ -21,9 +21,31 @@ test('concurrent edits to the same clinical field require a user decision', () =
   assert.equal(result.draft.specialCareNote, 'new reminder');
 });
 
-test('the draft carries the four text fields the vet fills in one screen', () => {
-  const draft = clinicalDraft({ handoffNote: '診察費', specialCareNote: '勿舔舐', followUpRecommendation: '兩週後', visitNote: '心雜音' });
-  assert.deepEqual(draftPatch({ ...draft, handoffNote: '診察費＋X光' }, draft), { handoffNote: '診察費＋X光' });
+test('the draft carries the text fields the vet fills in one screen; the handoff note is gone', () => {
+  const draft = clinicalDraft({ specialCareNote: '勿舔舐', followUpRecommendation: '兩週後', visitNote: '心雜音', handoffNote: '舊資料' });
+  assert.deepEqual(draftPatch({ ...draft, followUpRecommendation: '一週後' }, draft), { followUpRecommendation: '一週後' });
+  assert.equal('handoffNote' in draft, false);
   // 空欄位一律正規化成空字串，載入舊資料時不會被當成「有變更」。
-  assert.equal(clinicalDraft({}).handoffNote, '');
+  assert.equal(clinicalDraft({}).specialCareNote, '');
+});
+
+test('lab values are compared and sent per item; clearing one sends an empty string', () => {
+  const base = clinicalDraft({ labValues: [{ key: 'wbc', value: '12' }, { key: 'alt', value: '80' }] });
+  const draft = { ...base, labs: { ...base.labs, wbc: '22.4' } };
+  delete draft.labs.alt;
+  assert.deepEqual(draftPatch(draft, base), { labValues: { wbc: '22.4', alt: '' } });
+  assert.deepEqual(draftPatch(base, base), {});
+});
+
+test('a remote lab edit on another item merges in; the same item edited on both sides conflicts', () => {
+  const base = clinicalDraft({ labValues: [{ key: 'wbc', value: '12' }] });
+  const local = { ...base, labs: { wbc: '15' } };
+  const merged = mergeClinicalUpdate(local, base, { labValues: [{ key: 'wbc', value: '12' }, { key: 'alt', value: '168' }] });
+  assert.deepEqual(merged.draft.labs, { wbc: '15', alt: '168' });
+  assert.deepEqual(merged.conflicts, []);
+
+  const clash = mergeClinicalUpdate(local, base, { labValues: [{ key: 'wbc', value: '18' }] });
+  assert.deepEqual(clash.conflicts, ['lab:wbc']);
+  takeBaseline(clash.draft, clash.baseline, 'lab:wbc');
+  assert.equal(clash.draft.labs.wbc, '18');
 });

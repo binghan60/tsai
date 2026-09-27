@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-// 醫生↔櫃台的全站內部聊天，跟任何掛號／病患都無關（例如「今天下午提早關診」），
+// 醫師↔櫃台的全站內部聊天，跟任何掛號／病患都無關（例如「今天下午提早關診」），
 // 所以不像 clinicalNotes/visitNote 那樣掛在 petId/appointmentId 底下。
 const chatMessageSchema = new mongoose.Schema(
   {
@@ -15,7 +15,7 @@ const chatMessageSchema = new mongoose.Schema(
       type: new mongoose.Schema({ fieldLabel: { type: String, trim: true, maxlength: 100 }, before: { type: String, default: '' }, after: { type: String, default: '' } }, { _id: false }),
       default: undefined,
     },
-    // 訊息裡用 # 標記的寵物；名字存成送出當下的快照，寵物之後改名或刪除舊訊息仍顯示得出來。
+    // 訊息裡用 # 標記的貓咪；名字存成送出當下的快照，貓咪之後改名或刪除舊訊息仍顯示得出來。
     mentions: {
       type: [new mongoose.Schema({
         petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', required: true },

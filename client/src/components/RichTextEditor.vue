@@ -105,7 +105,7 @@ const editor = useEditor({
       class: 'rich-text-editor__content w-full px-3 py-2 text-sm text-foreground outline-none whitespace-pre-wrap wrap-break-word',
       style: props.singleLine ? 'min-height: 2.75rem' : `min-height: calc(${props.minRows} * 1.65em + 1rem)`,
     },
-    // 呼叫端（待辦的寵物候選清單）先處理；它吃掉的按鍵會 preventDefault。
+    // 呼叫端（待辦的貓咪候選清單）先處理；它吃掉的按鍵會 preventDefault。
     handleKeyDown: (view, event) => {
       emit('keydown', event);
       if (event.defaultPrevented) return true;
@@ -191,7 +191,7 @@ function insertText(text, mode = 'cursor') {
   if (content.length) editor.value.chain().focus().insertContent(content).run();
 }
 
-// 待辦的 # 寵物標記：讀游標前這一行的純文字，選好寵物後把 #關鍵字 換成 #名字。
+// 待辦的 # 貓咪標記：讀游標前這一行的純文字，選好貓咪後把 #關鍵字 換成 #名字。
 function textBeforeCursor() {
   const selection = editor.value?.state.selection;
   if (!selection) return { text: '', caret: 0 };

@@ -115,7 +115,7 @@ describe('appointments routes', () => {
     }
   });
 
-  it('既有飼主的新寵物掛號與報到沿用飼主，不重複建檔', async () => {
+  it('既有飼主的新貓咪掛號與報到沿用飼主，不重複建檔', async () => {
     const original = { create: Appointment.create, find: Appointment.findById, owner: Owner.findById, update: Owner.findOneAndUpdate, createOwner: Owner.create, pet: Pet.create };
     const owner = { _id: '507f1f77bcf86cd799439022', name: '王小姐', phone: '0912345678' };
     let appointment;
@@ -226,17 +226,17 @@ describe('appointments routes', () => {
   });
 
   // 飼主姓名選填，但一筆掛號至少要指得出是誰要來。
-  it('建立掛號時，初診沒填寵物姓名要回 422', async () => {
+  it('建立掛號時，初診沒填貓咪姓名要回 422', async () => {
     const response = await fetch(`${origin}/api/appointments`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ ownerName: '王小姐' }),
     });
     assert.equal(response.status, 422);
-    assert.deepEqual(await response.json(), { message: '請填寫寵物姓名' });
+    assert.deepEqual(await response.json(), { message: '請填寫貓咪姓名' });
   });
 
-  it('初診只填寵物姓名就能掛號，飼主姓名可以留空', async () => {
+  it('初診只填貓咪姓名就能掛號，飼主姓名可以留空', async () => {
     const originalCreate = Appointment.create;
     Appointment.create = async (doc) => doc;
     try {
@@ -264,10 +264,10 @@ describe('appointments routes', () => {
       body: JSON.stringify({ petId: 'not-an-object-id' }),
     });
     assert.equal(response.status, 422);
-    assert.deepEqual(await response.json(), { message: '寵物編號格式不正確' });
+    assert.deepEqual(await response.json(), { message: '貓咪編號格式不正確' });
   });
 
-  it('回診掛號一律用資料庫當下的飼主/寵物資料覆寫快照，不採信 body 帶的欄位', async () => {
+  it('回診掛號一律用資料庫當下的飼主/貓咪資料覆寫快照，不採信 body 帶的欄位', async () => {
     const originalFindById = Pet.findById;
     const originalCreate = Appointment.create;
     Pet.findById = () => ({
@@ -284,7 +284,7 @@ describe('appointments routes', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         // 故意帶跟資料庫不一致的假快照，驗證後端不會採信它們。
-        body: JSON.stringify({ petId: '507f1f77bcf86cd799439011', visitType: 'new', ownerName: '假名字', petName: '假寵物名' }),
+        body: JSON.stringify({ petId: '507f1f77bcf86cd799439011', visitType: 'new', ownerName: '假名字', petName: '假貓咪名' }),
       });
       assert.equal(response.status, 201);
       const body = await response.json();
@@ -316,7 +316,7 @@ describe('appointments routes', () => {
     }
   });
 
-  it('初診報到沒填寵物姓名要回 422', async () => {
+  it('初診報到沒填貓咪姓名要回 422', async () => {
     const originalFindById = Appointment.findById;
     Appointment.findById = async () => ({ _id: 'apt-2', status: 'scheduled', petId: null });
     try {
@@ -326,7 +326,7 @@ describe('appointments routes', () => {
         body: JSON.stringify({ ownerName: '林小姐', ownerPhone: '0955-888-777' }),
       });
       assert.equal(response.status, 422);
-      assert.deepEqual(await response.json(), { message: '請填寫寵物姓名' });
+      assert.deepEqual(await response.json(), { message: '請填寫貓咪姓名' });
     } finally {
       Appointment.findById = originalFindById;
     }
@@ -346,9 +346,9 @@ describe('appointments routes', () => {
     }
   });
 
-  // 勾了手術才開放中午的手術時段；刻度與門診邊界一樣要守。
-  it('手術掛號可以落在 11:45–13:45 的手術時段，一般掛號不行', async () => {
-    for (const time of ['11:40', '13:50', '12:05']) {
+  // 手術只是標記：沒有專屬的中午手術時段，時段規則跟一般門診完全一樣。
+  it('手術掛號的時段規則跟一般門診相同，中午不開放', async () => {
+    for (const time of ['11:45', '12:00', '13:45', '12:05']) {
       const response = await fetch(`${origin}/api/appointments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -356,7 +356,7 @@ describe('appointments routes', () => {
       });
       assert.equal(response.status, 422, time);
       assert.deepEqual(await response.json(), {
-        message: '手術時段僅限 10:00–13:45、14:00–19:30，且每 15 分鐘一格',
+        message: '預約時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格',
       });
     }
   });
@@ -446,7 +446,7 @@ describe('appointments routes', () => {
     }
   });
 
-  it('遲到報到會累加寵物與飼主的出席摘要', async () => {
+  it('遲到報到會累加貓咪與飼主的出席摘要', async () => {
     const original = { findById: Appointment.findById, updatePet: Pet.updateOne, updateOwner: Owner.updateOne };
     const petId = '507f1f77bcf86cd799439012';
     const ownerId = '507f1f77bcf86cd799439013';
@@ -633,7 +633,7 @@ describe('appointments routes', () => {
     }
   });
 
-  it('標記未到會累加寵物與飼主的出席摘要', async () => {
+  it('標記未到會累加貓咪與飼主的出席摘要', async () => {
     const original = { findById: Appointment.findById, updatePet: Pet.updateOne, updateOwner: Owner.updateOne };
     const petId = '507f1f77bcf86cd799439012';
     const ownerId = '507f1f77bcf86cd799439013';
@@ -802,7 +802,7 @@ describe('appointments summary', () => {
       if (server) await new Promise((resolve) => server.close(resolve));
     });
 
-  it('附帶寵物與飼主備註對照表', async () => {
+  it('附帶貓咪與飼主備註對照表', async () => {
     const original = { find: Appointment.find, pet: Pet.find, owner: Owner.find };
     const petA = '507f1f77bcf86cd799439031';
     const petB = '507f1f77bcf86cd799439032';
