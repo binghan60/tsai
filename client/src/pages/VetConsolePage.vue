@@ -452,6 +452,13 @@ onBeforeUnmount(() => {
                           </Tooltip>
                         </span>
                       </TooltipProvider>
+                      <!-- 詳細版的狀態與按鈕放在名字這一行：放在整列最右邊會跟下面的來院原因、備註搶寬度，
+                           候診的列（有「看診」鈕）內容只剩三分之一寬。 -->
+                      <span v-if="!compact" class="ml-auto flex shrink-0 items-center gap-3">
+                        <span v-if="statusText(item)" class="num shrink-0 text-xs" :class="waitingTooLong(item) ? 'font-semibold text-danger' : 'text-subtle-foreground'">{{ statusText(item) }}</span>
+                        <Button v-if="['onsite', 'surgery'].includes(group.key) && !workflowState(item).started" size="xs" class="shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope stroke-width="1.75" />看診</Button>
+                        <Button v-if="group.key === 'handoff'" variant="secondary" size="xs" class="shrink-0" :disabled="busy" @click.stop="reclaim(item)"><Undo2 stroke-width="1.75" />取回</Button>
+                      </span>
                     </div>
                     <template v-if="!compact">
                       <p class="text-base leading-snug" :class="item.reason ? 'text-foreground' : 'text-subtle-foreground'">{{ item.reason || '未填來院原因' }}</p>
@@ -464,9 +471,11 @@ onBeforeUnmount(() => {
                     </template>
                   </div>
 
-                  <span v-if="statusText(item)" class="num shrink-0 text-xs" :class="waitingTooLong(item) ? 'font-semibold text-danger' : 'text-subtle-foreground'">{{ statusText(item) }}</span>
-                  <Button v-if="['onsite', 'surgery'].includes(group.key) && !workflowState(item).started" size="xs" class="shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope stroke-width="1.75" />看診</Button>
-                  <Button v-if="group.key === 'handoff'" variant="secondary" size="xs" class="shrink-0" :disabled="busy" @click.stop="reclaim(item)"><Undo2 stroke-width="1.75" />取回</Button>
+                  <template v-if="compact">
+                    <span v-if="statusText(item)" class="num shrink-0 text-xs" :class="waitingTooLong(item) ? 'font-semibold text-danger' : 'text-subtle-foreground'">{{ statusText(item) }}</span>
+                    <Button v-if="['onsite', 'surgery'].includes(group.key) && !workflowState(item).started" size="xs" class="shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope stroke-width="1.75" />看診</Button>
+                    <Button v-if="group.key === 'handoff'" variant="secondary" size="xs" class="shrink-0" :disabled="busy" @click.stop="reclaim(item)"><Undo2 stroke-width="1.75" />取回</Button>
+                  </template>
                 </li>
               </ul>
             </div>
