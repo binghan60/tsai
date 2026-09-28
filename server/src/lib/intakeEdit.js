@@ -3,6 +3,8 @@
 // 只擋「掛號一定要有」的幾欄（飼主姓名、手機、貓咪名字），公開初診頁另外要求的地址、Email、品種等
 // 不在這裡強制——櫃台改的是飼主填錯的地方，不該因為飼主漏填別欄就存不進去。
 
+import { checkMobilePhone } from '../../../shared/phone.js';
+
 export const INTAKE_OWNER_FIELDS = ['name', 'phone', 'landline', 'email', 'address'];
 export const INTAKE_PET_FIELDS = ['name', 'species', 'breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'foodsOther', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'];
 
@@ -83,6 +85,9 @@ export function mergeIntakeEdit(current, body = {}) {
 
   if (!owner.name) throw invalid('請填寫飼主姓名');
   if (!owner.phone) throw invalid('請填寫聯絡電話');
+  const checkedPhone = checkMobilePhone(owner.phone, current.owner?.phone);
+  if (checkedPhone.error) throw invalid(checkedPhone.error);
+  owner.phone = checkedPhone.phone;
   if (owner.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner.email)) throw invalid('Email 格式不正確');
   if (!pet.name) throw invalid('請填寫貓咪名字');
   return { owner, pet };

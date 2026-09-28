@@ -30,7 +30,7 @@
 - 會被拿去當純文字用的地方一律 `richTextToPlain`：病歷日誌的 `content`、聊天快照、`aria-label`、`#寵物` 標記比對、文字模板（「存成模板」只存純文字）。病歷日誌的 `sections[].text` 則保留標記，日誌卡片才畫得出格式。
 
 ### owners 飼主
-`name`、`phone`、`email`、`address`、`notes`（皆選填，僅 `name`／`phone` 必填）。一位飼主可養多隻寵物。
+`name`、`phone`、`landline`、`email`、`address`、`notes`（皆選填，僅 `name`／`phone` 必填）。一位飼主可養多隻寵物。**`phone` 是手機**：09 開頭 10 碼，存之前整理成純數字（`shared/phone.js` 的 `checkMobilePhone`，前後端、公開初診頁、掛號的 `ownerPhone` 共用），市話放 `landline`；修改時沒動到的舊值照收——舊系統匯入的「電話」常是市話，不能因為改了姓名就存不進去。
 
 ### pets 寵物
 `name`、`ownerId`、`species`、`breed`、`sex`、`neutered`、`birthDate`、`weightKg`、`allergies`、`chronicConditions`、`currentMedications`、`notes`。**寵物與報告都沒有自己的編號**，一律用 MongoDB 的 `_id`——早期的 `medicalRecordNumber`（`PET-…`）與 `reportNumber`（`HC-…`）只是 `_id` 截短，沒有人記得、紙本也沒印，已從 schema 移除（開發資料庫裡的舊值與索引沒清，不影響運作）。報告 PDF 檔名是「貓咪名＿健檢報告＿健檢日期」（`shared/reportFilename.js`，下載與 Email 附件共用）。`legacyMedicalRecordNumber`（選填，unique+sparse）是舊系統匯入時保留的舊病歷號，供追溯與匯入腳本判斷是否已匯過，非匯入資料一律是 `null`。
@@ -103,7 +103,7 @@ append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩�
 **登入用的 JWT 是無狀態的，`tokenVersion` 是唯一的撤銷手段**：token 簽章與過期時間本身沒辦法中途作廢，所以每次請求都會多查一次這筆帳號文件，比對 `tokenVersion` 是否跟簽發當下相同、`active` 是否仍為真。改密碼／執行 revoke-sessions／停用帳號都會讓 `tokenVersion` +1，現有 cookie 立刻失效，不用等 30 天自然過期。
 
 ### appointments 掛號與候診
-只服務當日門診時間軸。`date`／`time` 是登記來源（`date` 由掛號時指定，預設今天），`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。
+只服務當日門診時間軸。`date`／`time` 是登記來源（`date` 由掛號時指定，預設今天），`scheduledAt` 供排序；既有病患帶 `ownerId`／`petId`，初診可先留空，但兩種情況都保存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。**`ownerName` 在掛號階段是選填**——接電話時常常只問得到寵物名跟電話；`petName` 才是必填，一筆掛號至少要指得出是誰要來。到 `POST /:id/check-in` 才必填飼主姓名與電話，因為那一步要真的建立 `Owner` 文件，而 `Owner.name` 是必要欄位。`ownerPhone` 選填，但填了就要是手機（規則同 owners 的 `phone`）。
 
 `isSurgery`（布林）／`surgeryName`（文字）是掛號時可勾選的手術標記，跟 `reason`（來院原因）是兩個獨立欄位、互不覆蓋——勾選手術不會動到來院原因文字，兩者可以同時填。勾選時 `surgeryName` 必填（後端 422 擋，前端 vee-validate 同步擋），未勾選則清空。**手術只是標記，沒有專屬時段**：時段規則跟一般門診相同（早期的中午手術時段 11:45–13:45 已經拿掉）。`estimatedDurationMinutes` 是預估診療時間，預設 15、限 15–240 且為 15 的倍數；整段必須落在同一診別內，Modal 會把開始格與後續占用格醒目標出，但與其他掛號重疊時只提醒、不阻擋。診療台、工作區與掛號台都會在勾選手術的那筆掛號旁標註紫色「手術」徽章（`SurgeryBadge`，`surgery` token；遲到徽章是紅色 `danger`，兩者刻意分開色相），帶出 `surgeryName`。**時段刻度是 15 分鐘**（`APPOINTMENT_TIME_STEP`，前端 `lib/appointmentTime.js` 同一組數字），門診時段 10:00–11:30、14:00–19:30，中間是午休；時段格上今天已經過去的時間不能選。
 
@@ -349,6 +349,7 @@ GET    /api/health
 | `/pets/:petId/records/new`、`/records/:id/edit` | 健檢報告填寫 | 自動存草稿、離開前攔截；連著看診的草稿在資訊列下方有「引用本次看診」說明條：體重、體溫、檢驗數值在這裡改會寫回看診（`lib/recordVisitLink.js`），回診日期唯讀。1280px 以上區段導覽是左側直排的步驟清單，更窄時改回上方橫排。底部操作列貼齊左右兩條欄。 |
 | `/records/:id/preview` | 報告預覽 | `meta.bare`，後台用，有結案／寄送／分享操作 |
 | `/report/:token` | 報告檢視頁 | `meta.bare`，**公開**，飼主查看用 + PDF 截圖來源 |
+| `/intake` | 初診填寫（公開） | `meta.bare`，飼主在診所現場用手機、以櫃台給的 4 位驗證碼填。手機優先的獨立版面（`--intake-*` token，不跟主題），電腦版同外觀；草稿存 `sessionStorage`、不出提示。規則見 STYLE_GUIDE 第 10 節 |
 | `/reception/intakes` | 初診表審核 | 全頁版（左清單、右逐欄審核，`IntakeReview.vue`，跟初診面板共用）。貓咪／醫療紀錄／飼主三段各有「修改」，就地改完存回初診表（`IntakeSectionEditor.vue`）；掛號日期與時段必填，規則跟掛號視窗的時段格相同（`lib/appointmentTime.js` 的 `appointmentSlotErrors`） |
 | `/settings/forms`、`/settings/forms/:id` | 健檢表單管理／設計 | |
 | `/settings/presets`、`/settings/presets/:formId/:presetKey` | 預填模板清單／單組編輯 | 清單是左右兩欄：左邊表單清單（搜尋同時比對表單與模板名稱、有模板的排前面、已停用的收在底下，`lib/presetForms.js`），右邊選中那份的模板；選哪份記在 `?form=`，窄螢幕左欄收成下拉選單。見第二節 formTemplates 的 `presets` |
@@ -376,6 +377,7 @@ GET    /api/health
 - 圖示統一 `@lucide/vue`，`stroke-width="1.75"`；頭像一律貓圖示（診所只看貓）。
 - **用語**：員工畫面一律「貓咪」「櫃台」「醫師」「健檢報告」；「藥單」是物件、「領藥」只指交付；公開初診頁維持「貓孩兒／家長」。
 - 報告頁（`/report/:token`、`/records/:id/preview`）固定淺色，用 `report-*` token，不跟主題切換。紙面裡共用的元件（牙齒圖）讀的是後台 token，所以 `style.css` 的淺色區塊選擇器是 `:root, .report-sheet`，紙面內一律拿到淺色值；這類元件的行內樣式要寫 `var(--field)` 這種原始 token，不要寫 `var(--color-field)`（那個在 `:root` 就算定值，擋不住 `html.dark`）。`.report-sheet` 另外把字級與行高鎖回改版前的 16px／1.5，動到 `@theme` 字級後要重新比對紙面分頁。
+- 公開初診頁（`/intake`）也是獨立的一套：`--intake-*` token、只有一個強調色、16px 為底（iOS 輸入框小於 16px 會放大整頁）、點擊範圍 44px，不要借後台元件的樣式；見 STYLE_GUIDE 第 10 節。
 
 ## 八、開發與驗證
 

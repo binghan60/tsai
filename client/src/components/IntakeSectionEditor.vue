@@ -4,6 +4,8 @@ import { Check, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay';
 import SegmentedControl from './SegmentedControl.vue';
+import YearMonthSelect from './YearMonthSelect.vue';
+import { checkMobilePhone } from '../../../shared/phone.js';
 import { Alert, AlertDescription } from './ui/alert';
 import { Button } from './ui/button';
 import { Checkbox } from './ui/checkbox';
@@ -43,7 +45,9 @@ const attempted = ref(false);
 const required = computed(() => ({
   petName: props.section === 'pet' && !String(pet.value.name || '').trim() ? '請填寫貓咪名字' : '',
   ownerName: props.section === 'owner' && !String(owner.value.name || '').trim() ? '請填寫飼主姓名' : '',
-  ownerPhone: props.section === 'owner' && !String(owner.value.phone || '').trim() ? '請填寫手機' : '',
+  ownerPhone: props.section !== 'owner' ? ''
+    : !String(owner.value.phone || '').trim() ? '請填寫手機'
+      : checkMobilePhone(owner.value.phone, props.submission?.owner?.phone).error,
 }));
 
 function toggle(list, option, checked) {
@@ -114,7 +118,7 @@ async function save() {
           <Label>疫苗</Label>
           <div class="flex flex-wrap items-center gap-3">
             <SegmentedControl v-model="pet.vaccineStatus" :options="VACCINE" aria-label="疫苗" size="sm" />
-            <Input v-if="pet.vaccineStatus === 'done'" v-model="pet.vaccineDate" class="w-44" aria-label="疫苗注射時間" placeholder="注射時間" />
+            <YearMonthSelect v-if="pet.vaccineStatus === 'done'" v-model="pet.vaccineDate" label="最後注射時間" />
           </div>
         </div>
         <div class="space-y-1.5 @lg:col-span-2">
@@ -135,7 +139,7 @@ async function save() {
           <Label>健檢</Label>
           <div class="flex flex-wrap items-center gap-3">
             <SegmentedControl v-model="pet.checkupStatus" :options="CHECKUP" aria-label="健檢" size="sm" />
-            <Input v-if="pet.checkupStatus === 'done'" v-model="pet.checkupDate" class="w-44" aria-label="健檢時間" placeholder="健檢時間" />
+            <YearMonthSelect v-if="pet.checkupStatus === 'done'" v-model="pet.checkupDate" label="上次健檢時間" />
           </div>
         </div>
       </template>

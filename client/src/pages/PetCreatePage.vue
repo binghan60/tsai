@@ -32,6 +32,8 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import SegmentedControl from '../components/SegmentedControl.vue';
 import PickerOptionRow from '../components/PickerOptionRow.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
+import YearMonthSelect from '../components/YearMonthSelect.vue';
+import { checkMobilePhone } from '../../../shared/phone.js';
 import { emptyOwnerDraft, emptyPetDraft } from '../lib/formDrafts';
 import { useToast } from '../composables/useToast';
 
@@ -348,8 +350,9 @@ function validateForm() {
       valid = false;
       firstErrorId = firstErrorId || 'new-owner-name';
     }
-    if (!newOwner.value.phone.trim()) {
-      errors.newOwnerPhone = '請填寫聯絡電話';
+    const phoneError = newOwner.value.phone.trim() ? checkMobilePhone(newOwner.value.phone).error : '請填寫手機';
+    if (phoneError) {
+      errors.newOwnerPhone = phoneError;
       valid = false;
       firstErrorId = firstErrorId || 'new-owner-phone';
     }
@@ -804,7 +807,7 @@ onBeforeUnmount(() => {
           <div class="space-y-1.5">
             <Label class="text-xs font-medium text-foreground">疫苗</Label>
             <SegmentedControl v-model="petForm.vaccineStatus" :options="VACCINE_OPTIONS" aria-label="疫苗" size="sm" full-width />
-            <Input v-if="petForm.vaccineStatus === 'done'" v-model="petForm.vaccineDate" class="h-9 text-sm" placeholder="最後注射時間，例：8/10" />
+            <YearMonthSelect v-if="petForm.vaccineStatus === 'done'" v-model="petForm.vaccineDate" label="最後注射時間" />
           </div>
         </div>
         <div class="space-y-1.5">
@@ -825,7 +828,7 @@ onBeforeUnmount(() => {
           <div class="space-y-1.5">
             <Label class="text-xs font-medium text-foreground">健檢</Label>
             <SegmentedControl v-model="petForm.checkupStatus" :options="CHECKUP_OPTIONS" aria-label="健檢" size="sm" full-width />
-            <Input v-if="petForm.checkupStatus === 'done'" v-model="petForm.checkupDate" class="h-9 text-sm" placeholder="上次健檢時間" />
+            <YearMonthSelect v-if="petForm.checkupStatus === 'done'" v-model="petForm.checkupDate" label="上次健檢時間" />
           </div>
           <div class="space-y-1.5">
             <Label for="new-pet-notes" class="text-xs font-medium text-foreground">其他備註與個性提醒</Label>

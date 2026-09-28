@@ -1,12 +1,13 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useField, useForm } from 'vee-validate'
+import { Check } from '@lucide/vue'
 import { http } from '../api/http'
 import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group'
-import { normalizeMobilePhone } from '../../../shared/phone.js'
-import IntakeYearMonthSelect from '../components/IntakeYearMonthSelect.vue'
+import { MOBILE_PHONE_ERROR, normalizeMobilePhone } from '../../../shared/phone.js'
+import YearMonthSelect from '../components/YearMonthSelect.vue'
 import { INTAKE_BREED_SUGGESTIONS, INTAKE_COLOR_SUGGESTIONS, INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay'
 
 const submitting = ref(false)
@@ -32,7 +33,7 @@ const { validate, errors } = useForm({
     mealsPerDay: value => pet.feedingType !== 'scheduled' || integer(value, 1, 20) || '請填寫每日 1–20 餐的整數',
     petNeutered: value => ['yes', 'no'].includes(value) || '請選擇結紮狀態',
     ownerName: required,
-    ownerPhone: value => required(value) !== true ? '此欄位必填' : !!normalizeMobilePhone(value) || '請填寫 09 開頭的 10 碼手機號碼',
+    ownerPhone: value => required(value) !== true ? '此欄位必填' : !!normalizeMobilePhone(value) || MOBILE_PHONE_ERROR,
     ownerAddress: required,
     ownerEmail: value => required(value) !== true ? '此欄位必填' : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim()) || 'Email 格式不正確',
   },
@@ -89,7 +90,11 @@ linkDetail(() => pet.checkupStatus === 'done', () => { pet.checkupStatus = 'done
 linkDetail(() => historyOther.value, () => { historyOther.value = true }, () => pet.medicalHistoryOther, () => { pet.medicalHistoryOther = '' })
 
 const errorId = name => `intake-${name}-error`
-const errorFor = (...keys) => attemptedSubmit.value ? keys.map(key => errors.value[key]).find(Boolean) || '' : ''
+// 「沒填」等送出時才提醒；數字欄一打錯（例如月齡打 15）就立刻提示，不必等到送出才發現。
+// Email、手機不即時提示——打到一半就跳「格式不正確」只會干擾。
+const liveNumberKeys = { ageYears: () => pet.ageYears, ageMonths: () => pet.ageMonths, householdCatCount: () => pet.householdCatCount, mealsPerDay: () => pet.mealsPerDay }
+const showsError = key => attemptedSubmit.value || (key in liveNumberKeys && String(liveNumberKeys[key]() ?? '') !== '')
+const errorFor = (...keys) => keys.filter(showsError).map(key => errors.value[key]).find(Boolean) || ''
 // 欄位出錯時讓報讀器知道、並唸出錯誤訊息。
 function invalidAttrs(name, ...keys) {
   if (!errorFor(...keys)) return {}
@@ -125,6 +130,19 @@ function estimatedBirthDate() {
   date.setHours(0, 0, 0, 0)
   date.setMonth(date.getMonth() - years * 12 - months)
   return date.toISOString()
+}
+
+// 數字欄（年齡、貓口、餐數）打字當下就擋：非數字、或打完會超過上限（月齡 11、餐數 20…）的那一鍵直接不收。
+// 用 text＋inputmode=numeric 而不是 type=number：number 欄位讀不到游標位置，也會收 e、小數點與負號。
+// 自動填入等擋不到的情況，還有欄位下方即時出現的錯誤訊息墊底。
+function blockOutOfRange(event, max) {
+  if (!event.inputType?.startsWith('insert') || event.isComposing) return
+  const input = event.target
+  const data = event.data ?? event.dataTransfer?.getData('text/plain') ?? ''
+  const start = input.selectionStart ?? input.value.length
+  const end = input.selectionEnd ?? start
+  const next = input.value.slice(0, start) + data + input.value.slice(end)
+  if (!/^\d*$/.test(next) || (next !== '' && Number(next) > max)) event.preventDefault()
 }
 
 function toggleList(list, option, checked) {
@@ -202,6 +220,38 @@ async function verifyCode() {
   else verified.value = true
 }
 
+// ── 草稿：飼主在現場用手機填，常被打斷（切去相簿找疫苗紀錄、螢幕鎖定、不小心下拉重新整理）。
+// 存在這個分頁的 sessionStorage：重新整理還在、關掉分頁就沒了，不會留下舊資料；送出後清掉。
+// 已驗證過的驗證碼一起存，重新整理後自動再驗一次，飼主不必重打。
+// 接回來時不另外提示——飼主只會覺得資料本來就還在。
+const DRAFT_KEY = 'intake-draft'
+
+function formData() {
+  return JSON.parse(JSON.stringify({ owner: { ...owner }, pet: { ...pet }, historyOther: historyOther.value }))
+}
+function applyFormData(data) {
+  for (const key of Object.keys(owner)) if (data?.owner?.[key] !== undefined) owner[key] = data.owner[key]
+  for (const key of Object.keys(pet)) if (data?.pet?.[key] !== undefined) pet[key] = data.pet[key]
+  historyOther.value = !!data?.historyOther
+}
+function readDraft() {
+  try { return JSON.parse(window.sessionStorage.getItem(DRAFT_KEY) || 'null') } catch { return null }
+}
+function writeDraft(value) {
+  try {
+    if (value) window.sessionStorage.setItem(DRAFT_KEY, JSON.stringify(value))
+    else window.sessionStorage.removeItem(DRAFT_KEY)
+  } catch { /* 無痕模式等情況存不進去就算了，表單照常能填 */ }
+}
+
+const storedDraft = readDraft()
+if (storedDraft?.data) applyFormData(storedDraft.data)
+watch(() => [JSON.stringify(formData()), verified.value], () => {
+  if (submitted.value) return
+  writeDraft({ savedAt: Date.now(), code: verified.value ? verificationCode.value : '', data: formData() })
+})
+if (storedDraft?.code) verificationCode.value = storedDraft.code
+
 async function submit() {
   if (submitting.value || !verified.value) return
   attemptedSubmit.value = true
@@ -241,6 +291,7 @@ async function submit() {
       },
     })
     submitted.value = true
+    writeDraft(null)
   } catch (err) {
     error.value = err.response?.data?.message || '送出失敗，請確認網路後再試。'
     if (err.response?.status === 409) verified.value = false
@@ -254,8 +305,10 @@ async function submit() {
   <main class="intake-page" :class="{ 'is-verification': !submitted && !verified }">
     <div class="container">
       <div v-if="submitted" class="submitted">
+        <div class="submitted-icon" aria-hidden="true"><Check :size="34" :stroke-width="2.25" /></div>
         <h1>已送出初診資料</h1>
-        <p>櫃台人員會先核對資料，審核完成後才會建立正式病歷。謝謝您的填寫。</p>
+        <p class="submitted-lead">櫃台已收到您的資料，<br>請在候診區稍候叫號。</p>
+        <p class="submitted-note"><strong>資料填錯了？</strong>直接告訴櫃台人員就可以更正。</p>
       </div>
       <section v-else-if="!verified" class="verification-card" aria-labelledby="intake-verification-title">
         <h1 id="intake-verification-title">初診掛號單</h1>
@@ -297,7 +350,7 @@ async function submit() {
               <div id="intake-pet-sex-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-sex-field' }">
                 <span id="intake-pet-sex-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>性別：</span><RadioGroup v-model="pet.sex" aria-labelledby="intake-pet-sex-label" aria-required="true" v-bind="invalidAttrs('pet-sex', 'petSex')" class="contents"><label class="option-label"><RadioGroupItem value="male" />男生</label><label class="option-label"><RadioGroupItem value="female" />女生</label></RadioGroup><span v-if="errorFor('petSex')" :id="errorId('pet-sex')" class="field-error">{{ errorFor('petSex') }}</span>
               </div>
-              <div id="intake-pet-age-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-age-field' }"><label for="intake-pet-age-years" class="field-label"><span class="required-mark" aria-hidden="true">*</span>年齡：</label><Input id="intake-pet-age-years" v-model="pet.ageYears" aria-label="年齡（年）" aria-required="true" v-bind="invalidAttrs('pet-age', 'petAge', 'ageYears', 'ageMonths')" class="input-short" type="number" min="0" step="1" inputmode="numeric" /> 年 <Input v-model="pet.ageMonths" aria-label="年齡（個月）" v-bind="invalidAttrs('pet-age', 'petAge', 'ageYears', 'ageMonths')" class="input-short" type="number" min="0" max="11" step="1" inputmode="numeric" /> 個月<span class="hint">（月齡 0–11）</span><span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="errorFor('petAge', 'ageYears', 'ageMonths')" :id="errorId('pet-age')" class="field-error">{{ errorFor('petAge', 'ageYears', 'ageMonths') }}</span></div>
+              <div id="intake-pet-age-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-age-field' }"><label for="intake-pet-age-years" class="field-label"><span class="required-mark" aria-hidden="true">*</span>年齡：</label><Input id="intake-pet-age-years" v-model="pet.ageYears" aria-label="年齡（年）" aria-required="true" v-bind="invalidAttrs('pet-age', 'petAge', 'ageYears', 'ageMonths')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 99)" /> 年 <Input v-model="pet.ageMonths" aria-label="年齡（個月）" v-bind="invalidAttrs('pet-age', 'petAge', 'ageYears', 'ageMonths')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 11)" /> 個月<span class="hint">（月齡 0–11）</span><span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="errorFor('petAge', 'ageYears', 'ageMonths')" :id="errorId('pet-age')" class="field-error">{{ errorFor('petAge', 'ageYears', 'ageMonths') }}</span></div>
               <div id="intake-pet-breed-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-breed-field' }"><label for="intake-pet-breed" class="field-label"><span class="required-mark" aria-hidden="true">*</span>品種：</label><Input id="intake-pet-breed" v-model="pet.breed" list="intake-breed-suggestions" autocomplete="off" aria-required="true" v-bind="invalidAttrs('pet-breed', 'petBreed')" class="input-medium" /><span v-if="errorFor('petBreed')" :id="errorId('pet-breed')" class="field-error">{{ errorFor('petBreed') }}</span></div>
               <div class="field"><label for="intake-pet-color" class="field-label">花色：</label><Input id="intake-pet-color" v-model="pet.color" list="intake-color-suggestions" autocomplete="off" class="input-medium" /></div>
               <datalist id="intake-breed-suggestions"><option v-for="option in breedSuggestions" :key="option" :value="option" /></datalist>
@@ -305,13 +358,13 @@ async function submit() {
             </div>
             <div>
               <div class="field-group-title section-emphasis">生活狀況</div>
-              <div id="intake-household-count-field" class="field"><label for="intake-household-count" class="field-label">家中貓口：</label><Input id="intake-household-count" v-model="pet.householdCatCount" v-bind="invalidAttrs('household-count', 'householdCatCount')" class="input-short" type="number" min="0" step="1" inputmode="numeric" /> 隻<span v-if="errorFor('householdCatCount')" :id="errorId('household-count')" class="field-error">{{ errorFor('householdCatCount') }}</span></div>
+              <div id="intake-household-count-field" class="field"><label for="intake-household-count" class="field-label">家中貓口：</label><Input id="intake-household-count" v-model="pet.householdCatCount" v-bind="invalidAttrs('household-count', 'householdCatCount')" class="input-medium" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 99)" /> 隻<span v-if="errorFor('householdCatCount')" :id="errorId('household-count')" class="field-error">{{ errorFor('householdCatCount') }}</span></div>
               <div class="field" role="group" aria-labelledby="intake-foods-label">
                 <span id="intake-foods-label" class="field-label">主餐配菜：</span><label v-for="option in foodOptions" :key="option" class="option-label"><Checkbox :model-value="pet.foods.includes(option)" @update:model-value="pet.foods = toggleList(pet.foods, option, $event === true)" />{{ option }}<template v-if="option === '其他'">：</template></label
                 ><Input v-if="pet.foods.includes('其他')" v-model="pet.foodsOther" aria-label="其他主餐配菜" class="input-medium" placeholder="請填寫" /><span class="hint">(以上可複選)</span>
               </div>
               <div id="intake-meals-field" class="field">
-                <span id="intake-feeding-label" class="field-label">放飯頻率：</span><RadioGroup v-model="pet.feedingType" aria-labelledby="intake-feeding-label" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" aria-label="一日幾餐" v-bind="invalidAttrs('meals', 'mealsPerDay')" class="input-short" type="number" min="1" max="20" step="1" inputmode="numeric" /> 餐</label></RadioGroup><span v-if="errorFor('mealsPerDay')" :id="errorId('meals')" class="field-error">{{ errorFor('mealsPerDay') }}</span>
+                <span id="intake-feeding-label" class="field-label">放飯頻率：</span><RadioGroup v-model="pet.feedingType" aria-labelledby="intake-feeding-label" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" aria-label="一日幾餐" v-bind="invalidAttrs('meals', 'mealsPerDay')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 20)" /> 餐</label></RadioGroup><span v-if="errorFor('mealsPerDay')" :id="errorId('meals')" class="field-error">{{ errorFor('mealsPerDay') }}</span>
               </div>
             </div>
           </div>
@@ -321,7 +374,7 @@ async function submit() {
               <span id="intake-neutered-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>結紮：</span><RadioGroup v-model="pet.neutered" aria-labelledby="intake-neutered-label" aria-required="true" v-bind="invalidAttrs('pet-neutered', 'petNeutered')" class="contents"><label class="option-label"><RadioGroupItem value="no" />未結紮</label><label class="option-label"><RadioGroupItem value="yes" />已結紮</label></RadioGroup><span v-if="errorFor('petNeutered')" :id="errorId('pet-neutered')" class="field-error">{{ errorFor('petNeutered') }}</span>
             </div>
             <div class="field">
-              <span id="intake-vaccine-label" class="field-label">疫苗：</span><RadioGroup v-model="pet.vaccineStatus" aria-labelledby="intake-vaccine-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />未注射</label><label class="option-label"><RadioGroupItem value="done" />已注射：最後注射時間</label></RadioGroup><IntakeYearMonthSelect v-model="pet.vaccineDate" label="最後注射時間" />
+              <span id="intake-vaccine-label" class="field-label">疫苗：</span><RadioGroup v-model="pet.vaccineStatus" aria-labelledby="intake-vaccine-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />未注射</label><label class="option-label"><RadioGroupItem value="done" />已注射：最後注射時間</label></RadioGroup><YearMonthSelect v-model="pet.vaccineDate" label="最後注射時間" appearance="intake" />
             </div>
             <div class="field" role="group" aria-labelledby="intake-history-label">
               <span id="intake-history-label" class="field-label">病史：</span><label v-for="option in historyOptions" :key="option" class="option-label"><Checkbox :model-value="pet.medicalHistory.includes(option)" @update:model-value="pet.medicalHistory = toggleList(pet.medicalHistory, option, $event === true)" />{{ option }}</label
@@ -331,7 +384,7 @@ async function submit() {
               <span id="intake-allergy-label" class="field-label">藥物過敏：</span><RadioGroup v-model="pet.allergyStatus" aria-labelledby="intake-allergy-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />無過敏</label><label class="option-label"><RadioGroupItem value="yes" />有：過敏類別</label></RadioGroup><Input v-model="pet.allergyType" aria-label="過敏類別" class="input-medium" />
             </div>
             <div class="field">
-              <span id="intake-checkup-label" class="field-label">健檢：</span><RadioGroup v-model="pet.checkupStatus" aria-labelledby="intake-checkup-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />未健檢</label><label class="option-label"><RadioGroupItem value="done" />有：上次健檢時間</label></RadioGroup><IntakeYearMonthSelect v-model="pet.checkupDate" label="上次健檢時間" />
+              <span id="intake-checkup-label" class="field-label">健檢：</span><RadioGroup v-model="pet.checkupStatus" aria-labelledby="intake-checkup-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />未健檢</label><label class="option-label"><RadioGroupItem value="done" />有：上次健檢時間</label></RadioGroup><YearMonthSelect v-model="pet.checkupDate" label="上次健檢時間" appearance="intake" />
             </div>
           </div>
         </div>
@@ -518,51 +571,65 @@ async function submit() {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 12px;
-  line-height: 1.8;
+  gap: 8px;
+  margin-bottom: 18px;
+  line-height: 1.5;
 }
+/* 電腦版與手機版同一套外觀：標籤獨佔一行、輸入框有外框、選項是整塊可點的膠囊（至少 44px 高）。 */
 .field-label {
   color: var(--intake-label);
   font-weight: bold;
 }
+.field > .field-label,
+.contact-item > .field-label {
+  flex-basis: 100%;
+}
 .field input[data-slot='input'] {
-  border: none;
-  border-bottom: 1px solid var(--intake-secondary);
-  border-radius: 0;
-  padding: 2px 5px;
-  background: transparent;
+  min-height: 44px;
+  border: 1px solid var(--intake-dash);
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: var(--intake-white);
   color: var(--intake-text);
   font-family: inherit;
   /* 小於 16px 時 iOS Safari 一聚焦就放大整頁，飼主填完每一格都要自己縮回來。 */
   font-size: 16px;
   height: auto;
-  min-height: 0;
   box-shadow: none;
   outline: none;
 }
 .field input[data-slot='input']:focus {
-  border-bottom: 2px solid var(--intake-accent);
-  background-color: var(--intake-accent-surface);
+  border: 1px solid var(--intake-accent);
+  box-shadow: 0 0 0 3px var(--intake-accent-surface);
 }
 .input-short {
-  width: 56px;
+  width: 64px;
   text-align: center;
 }
-.input-medium {
-  width: 150px;
-}
+.input-medium,
 .input-long {
-  min-width: 200px;
-  flex: 1;
+  min-width: 0;
+  flex: 1 1 180px;
 }
 .option-label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-right: 8px;
+  gap: 8px;
+  min-height: 44px;
+  border: 1px solid var(--intake-dash);
+  border-radius: 999px;
+  padding: 6px 14px;
   cursor: pointer;
   user-select: none;
+}
+.option-label:has([data-state='checked']) {
+  border-color: var(--intake-accent);
+  background: var(--intake-accent-surface);
+}
+/* 「定食定量：一日 □ 餐」的輸入框在膠囊裡面，縮小一點才不會把膠囊撐高。 */
+.field .option-label input[data-slot='input'] {
+  min-height: 32px;
+  padding: 2px 6px;
 }
 .option-label [data-slot='checkbox'],
 .option-label [data-slot='radio-group-item'] {
@@ -587,7 +654,7 @@ async function submit() {
   color: var(--intake-secondary);
   font-size: 14px;
 }
-.field-error { color: var(--intake-red); font-size: 14px; }
+.field-error { flex-basis: 100%; color: var(--intake-red); font-size: 14px; }
 .required-mark { color: var(--intake-red); }
 .field-highlight {
   animation: required-field-flash 0.55s ease-in-out 3;
@@ -699,21 +766,49 @@ async function submit() {
   text-align: center;
 }
 .submitted {
-  padding: 80px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 72px 20px;
   text-align: center;
 }
-.submitted h1 {
-  font-size: 24px;
+.submitted-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  background: var(--intake-accent-surface);
+  color: var(--intake-accent);
 }
-.submitted p {
+.submitted h1 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: 1px;
+}
+.submitted-lead {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.7;
+}
+.submitted-note {
+  margin: 12px 0 0;
+  border: 1px solid var(--intake-border);
+  border-radius: 12px;
+  padding: 12px 16px;
   color: var(--intake-secondary);
-  line-height: 1.8;
+  line-height: 1.6;
+}
+.submitted-note strong {
+  display: block;
+  color: var(--intake-text);
 }
 @media (prefers-reduced-motion: reduce) {
   .field-highlight { animation: none; background: var(--intake-accent-surface); }
 }
-/* 手機：飼主多半在櫃台前用手機填。選項改成整塊可點的膠囊、輸入框有外框，
-   點擊範圍至少 44px；電腦版維持紙本表單的底線樣式。 */
+/* 手機：頁面貼齊螢幕、欄位改成單欄，送出鈕滿寬。外觀跟電腦版相同。 */
 @media (max-width: 640px) {
   .intake-page {
     padding: 0;
@@ -733,56 +828,6 @@ async function submit() {
   }
   .header h1 {
     font-size: 22px;
-  }
-  .field {
-    gap: 8px;
-    margin-bottom: 18px;
-    line-height: 1.5;
-  }
-  .field > .field-label,
-  .contact-item > .field-label {
-    flex-basis: 100%;
-  }
-  .field input[data-slot='input'] {
-    min-height: 44px;
-    border: 1px solid var(--intake-dash);
-    border-radius: 8px;
-    padding: 8px 12px;
-    background: var(--intake-white);
-  }
-  .field input[data-slot='input']:focus {
-    border: 1px solid var(--intake-accent);
-    box-shadow: 0 0 0 3px var(--intake-accent-surface);
-    background: var(--intake-white);
-  }
-  .input-medium,
-  .input-long {
-    width: auto;
-    min-width: 0;
-    flex: 1 1 180px;
-  }
-  .input-short {
-    width: 64px;
-  }
-  .option-label {
-    min-height: 44px;
-    margin-right: 0;
-    border: 1px solid var(--intake-dash);
-    border-radius: 999px;
-    padding: 6px 14px;
-    gap: 8px;
-  }
-  .option-label:has([data-state='checked']) {
-    border-color: var(--intake-accent);
-    background: var(--intake-accent-surface);
-  }
-  /* 「定食定量：一日 □ 餐」的輸入框在膠囊裡面，縮小一點才不會把膠囊撐高。 */
-  .option-label input[data-slot='input'] {
-    min-height: 32px;
-    padding: 2px 6px;
-  }
-  .field-error {
-    flex-basis: 100%;
   }
   .medical {
     margin-top: 10px;

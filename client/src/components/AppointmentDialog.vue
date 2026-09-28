@@ -18,6 +18,7 @@ import { buildSlotGrid, duplicateBookings } from '../lib/receptionBoard';
 import { DEFAULT_ESTIMATED_DURATION_MINUTES, MAX_ESTIMATED_DURATION_MINUTES } from '../lib/appointmentTime';
 import { clinicDateInput, clinicTimeInput, formatDate, formatDateTime, weekdayLabel } from '../lib/datetime';
 import { breedText } from '../lib/petDisplay';
+import { checkMobilePhone } from '../../../shared/phone.js';
 
 // 新增與修改掛號共用的 Modal（取代原本的 AppointmentDrawer 側邊抽屜）。
 // 置中雙欄：左欄「誰、為什麼」（類型、貓咪、來院原因、手術、報告模板、內部備註），
@@ -62,6 +63,8 @@ const requiredText = (message) => (value) => (value && String(value).trim() !== 
 const requiredTime = requiredText('請選擇預約時段');
 // 飼主姓名不在這裡驗：接電話掛號時常常只問得到貓咪名跟電話，報到那一步才必填。
 const requiredPetName = (value) => (!isEdit.value && mode.value !== 'new' ? true : requiredText('必填')(value));
+// 電話選填，填了就要是手機（報到時拿它建立飼主）；修改時沒動到的舊電話照收，見 shared/phone.js。
+const ownerPhoneRule = (value) => checkMobilePhone(value, isEdit.value ? props.appointment?.ownerPhone : undefined).error || true;
 const requiredForSurgery = (value) => (!isSurgery.value || (value && String(value).trim() !== '')) || '請填寫手術名稱';
 
 const { handleSubmit, submitCount } = useForm({
@@ -81,7 +84,7 @@ const { handleSubmit, submitCount } = useForm({
 const { value: petName, errorMessage: petNameError } = useField('petName', requiredPetName);
 const { value: species } = useField('species');
 const { value: ownerName } = useField('ownerName');
-const { value: ownerPhone } = useField('ownerPhone');
+const { value: ownerPhone, errorMessage: ownerPhoneError } = useField('ownerPhone', ownerPhoneRule);
 const { value: time, errorMessage: timeError } = useField('time', requiredTime);
 const { value: estimatedDurationMinutes } = useField('estimatedDurationMinutes');
 const { value: reason } = useField('reason');
@@ -368,8 +371,9 @@ const onSubmit = handleSubmit((values) => {
                     <Input id="dialog-owner-name" v-model="ownerName" placeholder="接電話時問得到再填" />
                   </div>
                   <div class="space-y-1.5">
-                    <Label for="dialog-owner-phone" class="text-xs font-medium">聯絡電話</Label>
-                    <Input id="dialog-owner-phone" v-model="ownerPhone" placeholder="例：0912-345-678" />
+                    <Label for="dialog-owner-phone" class="text-xs font-medium">手機</Label>
+                    <Input id="dialog-owner-phone" v-model="ownerPhone" class="num" inputmode="tel" placeholder="例：0912-345-678" :aria-invalid="Boolean(ownerPhoneError)" />
+                    <p v-if="ownerPhoneError" class="text-xs font-medium text-destructive">{{ ownerPhoneError }}</p>
                   </div>
                 </div>
               </template>
@@ -395,8 +399,9 @@ const onSubmit = handleSubmit((values) => {
                   <Input id="dialog-edit-owner-name" v-model="ownerName" />
                 </div>
                 <div class="space-y-1.5">
-                  <Label for="dialog-edit-owner-phone" class="text-xs font-medium">聯絡電話</Label>
-                  <Input id="dialog-edit-owner-phone" v-model="ownerPhone" />
+                  <Label for="dialog-edit-owner-phone" class="text-xs font-medium">手機</Label>
+                  <Input id="dialog-edit-owner-phone" v-model="ownerPhone" class="num" inputmode="tel" :aria-invalid="Boolean(ownerPhoneError)" />
+                  <p v-if="ownerPhoneError" class="text-xs font-medium text-destructive">{{ ownerPhoneError }}</p>
                 </div>
               </div>
             </template>

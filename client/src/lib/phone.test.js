@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { normalizeMobilePhone } from '../../../shared/phone.js';
+import { checkMobilePhone, MOBILE_PHONE_ERROR, normalizeMobilePhone } from '../../../shared/phone.js';
+
+describe('checkMobilePhone', () => {
+  it('手機格式整理後照收，空值不算錯', () => {
+    assert.deepEqual(checkMobilePhone('0912-345-678'), { phone: '0912345678', error: '' });
+    assert.deepEqual(checkMobilePhone('  '), { phone: '', error: '' });
+  });
+
+  it('不是手機就報錯，除非跟原本存的值一樣（舊資料的市話）', () => {
+    assert.deepEqual(checkMobilePhone('03-561-9595'), { phone: '03-561-9595', error: MOBILE_PHONE_ERROR });
+    assert.deepEqual(checkMobilePhone('03-561-9595', '03-561-9595'), { phone: '03-561-9595', error: '' });
+    assert.deepEqual(checkMobilePhone('03-561-9596', '03-561-9595'), { phone: '03-561-9596', error: MOBILE_PHONE_ERROR });
+  });
+});
 
 describe('normalizeMobilePhone', () => {
   it('整理常見的手機寫法成 10 碼數字', () => {

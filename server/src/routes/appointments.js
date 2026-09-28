@@ -17,6 +17,7 @@ import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import appointmentWorkflowRouter from './appointmentWorkflow.js';
 import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, validateAppointmentDuration } from '../lib/appointmentTime.js';
+import { checkMobilePhone } from '../../../shared/phone.js';
 
 const router = Router();
 router.use('/:id/workflow', appointmentWorkflowRouter);
@@ -293,7 +294,10 @@ router.post('/', async (req, res, next) => {
     } else {
       // 初診：身分尚未確定，先存文字快照，報到時才正式建檔。
       ownerName = String(req.body.ownerName || '').trim();
-      ownerPhone = String(req.body.ownerPhone || '').trim();
+      // 電話選填，但填了就要是手機（報到時會拿它建立飼主）。
+      const checkedPhone = checkMobilePhone(req.body.ownerPhone);
+      if (checkedPhone.error) return res.status(422).json({ message: checkedPhone.error });
+      ownerPhone = checkedPhone.phone;
       petName = String(req.body.petName || '').trim();
       species = String(req.body.species || '').trim();
       if (req.body.ownerId !== undefined && req.body.ownerId !== null && req.body.ownerId !== '') {
@@ -395,6 +399,12 @@ router.put('/:id', async (req, res, next) => {
       if (updates.petName !== undefined && !String(updates.petName).trim()) {
         return res.status(422).json({ message: '請填寫貓咪姓名' });
       }
+      if (updates.ownerPhone !== undefined) {
+        // 回診掛號的電話抄自飼主資料，可能是舊系統的市話；沒改動就照收。
+        const checkedPhone = checkMobilePhone(updates.ownerPhone, appointment.ownerPhone);
+        if (checkedPhone.error) return res.status(422).json({ message: checkedPhone.error });
+        updates.ownerPhone = checkedPhone.phone;
+      }
       if (updates.templateId !== undefined) {
         const template = await resolveAppointmentTemplate(updates.templateId);
         updates.templateId = template._id;
@@ -476,6 +486,8 @@ router.post('/:id/check-in', async (req, res, next) => {
     if (needsNewPatient) {
       if (!existingOwnerId && !String(req.body.ownerName || '').trim()) return res.status(422).json({ message: '請填寫飼主姓名' });
       if (!existingOwnerId && !String(req.body.ownerPhone || '').trim()) return res.status(422).json({ message: '請填寫聯絡電話' });
+      const phoneError = existingOwnerId ? '' : checkMobilePhone(req.body.ownerPhone).error;
+      if (phoneError) return res.status(422).json({ message: phoneError });
       if (!String(req.body.petName || '').trim()) return res.status(422).json({ message: '請填寫貓咪姓名' });
     }
 
@@ -521,7 +533,7 @@ router.post('/:id/check-in', async (req, res, next) => {
         } else {
           [owner] = await Owner.create(
             [{
-              name: String(req.body.ownerName).trim(), phone: String(req.body.ownerPhone).trim(),
+              name: String(req.body.ownerName).trim(), phone: checkMobilePhone(req.body.ownerPhone).phone,
               landline: String(ownerDetails.landline || '').trim(), email: String(ownerDetails.email || '').trim(), address: String(ownerDetails.address || '').trim(),
             }],
             { session }

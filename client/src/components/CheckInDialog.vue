@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { TimePicker } from './ui/time-picker';
 import SegmentedControl from './SegmentedControl.vue';
 import { clinicTimeInput } from '../lib/datetime';
+import { checkMobilePhone } from '../../../shared/phone.js';
 
 const props = defineProps({
   appointment: { type: Object, required: true },
@@ -35,7 +36,13 @@ const { handleSubmit } = useForm({
   },
 });
 const { value: ownerName, errorMessage: ownerNameError } = useField('ownerName', ownerFieldRule);
-const { value: ownerPhone, errorMessage: ownerPhoneError } = useField('ownerPhone', ownerFieldRule);
+// 報到會用這支電話建立飼主，所以要是手機（shared/phone.js）。
+const ownerPhoneRule = (value) => {
+  const required = ownerFieldRule(value);
+  if (required !== true || props.appointment.ownerId) return required;
+  return checkMobilePhone(value).error || true;
+};
+const { value: ownerPhone, errorMessage: ownerPhoneError } = useField('ownerPhone', ownerPhoneRule);
 const { value: petName, errorMessage: petNameError } = useField('petName', patientFieldRule);
 const arrivalMode = ref(props.late ? 'late' : 'on-time');
 const lateAt = ref(clinicTimeInput(new Date()));
@@ -84,8 +91,8 @@ const onSubmit = handleSubmit((values) => emit('submit', {
           <p v-if="ownerNameError" class="text-xs font-medium text-destructive">{{ ownerNameError }}</p>
         </div>
         <div v-if="!appointment.petId && !appointment.ownerId" class="space-y-1.5">
-          <Label for="checkin-owner-phone" class="text-xs font-medium text-foreground">聯絡電話<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-          <Input id="checkin-owner-phone" v-model="ownerPhone" class="border-border" />
+          <Label for="checkin-owner-phone" class="text-xs font-medium text-foreground">手機<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+          <Input id="checkin-owner-phone" v-model="ownerPhone" class="num border-border" inputmode="tel" placeholder="例：0912-345-678" :aria-invalid="Boolean(ownerPhoneError)" />
           <p v-if="ownerPhoneError" class="text-xs font-medium text-destructive">{{ ownerPhoneError }}</p>
         </div>
         <div v-if="!appointment.petId" class="space-y-1.5">

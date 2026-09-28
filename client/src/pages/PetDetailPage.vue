@@ -25,6 +25,8 @@ import PageHeader from '../components/PageHeader.vue';
 import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
+import YearMonthSelect from '../components/YearMonthSelect.vue';
+import { checkMobilePhone } from '../../../shared/phone.js';
 
 import { useToast } from '../composables/useToast';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
@@ -383,7 +385,13 @@ function cancelOwnerEdit() {
 }
 async function submitOwnerEdit() {
   if (!String(ownerForm.name).trim() || !String(ownerForm.phone).trim()) {
-    ownerError.value = '請填寫飼主姓名與電話';
+    ownerError.value = '請填寫飼主姓名與手機';
+    return;
+  }
+  // 沒改動的舊電話照收（舊系統匯入的常是市話），改了才要求手機格式，見 shared/phone.js。
+  const phoneError = checkMobilePhone(ownerForm.phone, pet.value.ownerId?.phone).error;
+  if (phoneError) {
+    ownerError.value = phoneError;
     return;
   }
   if (String(ownerForm.email).trim() && !EMAIL_PATTERN.test(String(ownerForm.email).trim())) {
@@ -718,7 +726,7 @@ watch(pet, async (value) => {
                 <SelectItem v-for="option in VACCINE_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
               </SelectContent>
             </Select>
-            <Input v-if="petForm.vaccineStatus === 'done'" v-model="petForm.vaccineDate" class="border-border focus:border-primary" placeholder="最後注射時間，例：8/10" />
+            <YearMonthSelect v-if="petForm.vaccineStatus === 'done'" v-model="petForm.vaccineDate" label="最後注射時間" />
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-allergy" class="text-xs font-medium text-foreground">藥物過敏</Label>
@@ -738,7 +746,7 @@ watch(pet, async (value) => {
                 <SelectItem v-for="option in CHECKUP_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
               </SelectContent>
             </Select>
-            <Input v-if="petForm.checkupStatus === 'done'" v-model="petForm.checkupDate" class="border-border focus:border-primary" placeholder="上次健檢時間" />
+            <YearMonthSelect v-if="petForm.checkupStatus === 'done'" v-model="petForm.checkupDate" label="上次健檢時間" />
           </div>
           <div class="space-y-1.5">
             <Label class="text-xs font-medium text-foreground">病史</Label>
@@ -804,7 +812,7 @@ watch(pet, async (value) => {
             </div>
             <div class="space-y-1.5">
               <Label for="owner-edit-phone" class="text-xs font-medium text-foreground">手機 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <Input id="owner-edit-phone" v-model="ownerForm.phone" class="border-border focus:border-primary" placeholder="例：0912-345-678" />
+              <Input id="owner-edit-phone" v-model="ownerForm.phone" class="num border-border focus:border-primary" inputmode="tel" placeholder="例：0912-345-678" />
             </div>
             <div class="space-y-1.5">
               <Label for="owner-edit-landline" class="text-xs font-medium text-foreground">市話（選填）</Label>

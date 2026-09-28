@@ -250,7 +250,8 @@ describe('appointments routes', () => {
       const body = await response.json();
       assert.equal(body.petName, '妞妞');
       assert.equal(body.ownerName, '');
-      assert.equal(body.ownerPhone, '0912-345-678');
+      // 手機一律整理成 10 碼數字再存（shared/phone.js）。
+      assert.equal(body.ownerPhone, '0912345678');
       assert.equal(body.visitType, 'new');
     } finally {
       Appointment.create = originalCreate;
@@ -392,7 +393,7 @@ describe('appointments routes', () => {
       });
       assert.equal(response.status, 200);
       assert.equal(appointment.ownerName, '林小姐');
-      assert.equal(appointment.ownerPhone, '0955-888-777');
+      assert.equal(appointment.ownerPhone, '0955888777');
       assert.equal(appointment.petName, '奶茶');
       assert.equal(appointment.species, '犬');
       assert.equal(appointment.time, '15:30');

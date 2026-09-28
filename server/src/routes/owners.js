@@ -4,6 +4,7 @@ import Pet from '../models/Pet.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
 import { escapeRegExp } from '../lib/regex.js';
+import { checkMobilePhone } from '../../../shared/phone.js';
 
 const router = Router();
 const PET_FIELDS = [
@@ -37,9 +38,12 @@ function pickPetFields(body) {
   return Object.fromEntries(PET_FIELDS.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
 }
 
-function validateOwnerInput({ name, phone, email }) {
+// previousPhone：修改既有飼主時傳原本的電話，沒改動的舊資料（常是市話）照收，見 shared/phone.js。
+function validateOwnerInput({ name, phone, email }, previousPhone) {
   if (!String(name || '').trim()) return '請填寫飼主姓名';
   if (!String(phone || '').trim()) return '請填寫聯絡電話';
+  const { error: phoneError } = checkMobilePhone(phone, previousPhone);
+  if (phoneError) return phoneError;
   if (String(email || '').trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email).trim())) return 'Email 格式不正確';
   return '';
 }
@@ -68,7 +72,7 @@ router.post('/', async (req, res, next) => {
     const { name, phone, landline, email, address, notes } = req.body;
     const validationError = validateOwnerInput({ name, phone, email });
     if (validationError) return res.status(422).json({ message: validationError });
-    const owner = await Owner.create({ name, phone, landline, email, address, notes });
+    const owner = await Owner.create({ name, phone: checkMobilePhone(phone).phone, landline, email, address, notes });
     res.status(201).json(owner);
   } catch (err) {
     next(err);
@@ -87,7 +91,7 @@ router.post('/with-pet', async (req, res, next) => {
     await withTransaction(async (session) => {
       const [owner] = await Owner.create([{
         name: ownerInput.name,
-        phone: ownerInput.phone,
+        phone: checkMobilePhone(ownerInput.phone).phone,
         landline: ownerInput.landline,
         email: ownerInput.email,
         address: ownerInput.address,
@@ -125,13 +129,16 @@ router.get('/:id', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const { name, phone, landline, email, address, notes } = req.body;
-    const validationError = validateOwnerInput({ name, phone, email });
-    if (validationError) return res.status(422).json({ message: validationError });
+    const { name, landline, email, address, notes } = req.body;
     const expectedVersion = Number(req.body?.expectedVersion);
     if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
       return res.status(428).json({ message: '缺少飼主資料版本，請重新整理後再試' });
     }
+    const existing = await Owner.findById(req.params.id).select('phone');
+    if (!existing) return res.status(404).json({ message: '找不到飼主' });
+    const validationError = validateOwnerInput({ name, phone: req.body.phone, email }, existing.phone);
+    if (validationError) return res.status(422).json({ message: validationError });
+    const phone = checkMobilePhone(req.body.phone, existing.phone).phone;
     const owner = await Owner.findOneAndUpdate(
       { _id: req.params.id, __v: expectedVersion },
       { $set: { name, phone, landline, email, address, notes }, $inc: { __v: 1 } },
