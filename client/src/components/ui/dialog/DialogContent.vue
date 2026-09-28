@@ -32,7 +32,7 @@ const props = defineProps({
     type: String,
     required: false,
     default: 'md',
-    validator: (v) => ['sm', 'md', 'lg', 'wide', 'xl'].includes(v),
+    validator: (v) => ['sm', 'md', 'lg', 'wide', 'xl', '2xl'].includes(v),
   },
 });
 
@@ -44,6 +44,9 @@ const SIZE_CLASS = {
   wide: 'sm:max-w-[min(60rem,calc(100vw-4rem))]',
   // 長表單與工作台型對話框使用；仍保留視窗邊距，避免小螢幕滿版貼邊。
   xl: 'sm:max-w-[min(80rem,calc(100vw-4rem))]',
+  // 櫃台處理視窗：左邊跟飼主說、右邊約回診（日期欄＋時段格）並排，80rem 排不開。
+  // 90rem 是右欄還能並排的下限（AppointmentSlotPicker split 在 48rem 以上才並排）；曾放到 105rem，使用者覺得太大。
+  '2xl': 'sm:max-w-[min(90rem,calc(100vw-4rem))]',
 };
 const emits = defineEmits([
   "escapeKeyDown",

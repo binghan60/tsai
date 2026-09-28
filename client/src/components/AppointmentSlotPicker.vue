@@ -32,6 +32,9 @@ const props = defineProps({
   clearable: { type: Boolean, default: false },
   label: { type: String, default: '日期與時段' },
   required: { type: Boolean, default: true },
+  // 並排：日期、診療時間（與 #aside 放進來的欄位）一窄欄在左，時段格在右。櫃台處理視窗用——
+  // 那裡寬度夠，直排會讓時段格掉到要捲的地方。依自己的寬度排（container query），放不下就退回直排。
+  split: { type: Boolean, default: false },
 });
 
 const today = clinicDateInput();
@@ -67,6 +70,8 @@ function changeDuration(delta) {
 </script>
 
 <template>
+  <div :class="split ? '@container' : ''">
+  <div :class="split ? 'grid gap-3 @3xl:grid-cols-[18.75rem_minmax(0,1fr)] @3xl:gap-6' : 'space-y-3'">
   <div class="space-y-3">
     <div class="space-y-2">
       <Label class="text-xs font-medium">{{ label }}<template v-if="required"><span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></template></Label>
@@ -85,16 +90,23 @@ function changeDuration(delta) {
           <Button type="button" variant="secondary" size="sm" class="h-9 min-w-12 px-2 text-xs font-bold shadow-sm" :disabled="duration >= MAX_ESTIMATED_DURATION_MINUTES" aria-label="增加 15 分鐘" @click="changeDuration(15)">＋</Button>
         </div>
       </div>
-      <div class="flex flex-wrap gap-1.5">
+      <div :class="split ? 'grid grid-cols-3 gap-1.5' : 'flex flex-wrap gap-1.5'">
         <Button v-for="minutes in [15, 30, 45, 60, 90, 120]" :key="minutes" type="button" size="sm" class="h-9 min-w-12 px-2 text-xs font-semibold shadow-sm" :variant="duration === minutes ? 'default' : 'secondary'" @click="duration = minutes">{{ minutes }}</Button>
       </div>
     </div>
+    <slot name="aside" />
+  </div>
+  <div :class="split ? 'flex flex-col gap-3' : 'space-y-3'">
     <SlotGrid v-if="date" v-model="time" :sessions="sessions" :duration-minutes="Number(duration)" :invalid="showErrors && Boolean(!time || overflowError)" />
+    <!-- 並排時撐滿時段格的位置、字置中：只有一行高的灰條貼在右欄頂端，跟左邊的欄位對不齊，看起來是歪的。 -->
+    <p v-else-if="split" class="flex min-h-40 flex-1 items-center justify-center rounded-lg border border-dashed border-border-strong px-3 text-sm text-subtle-foreground">先選日期，才看得到那天的時段。</p>
     <p v-else class="rounded-lg bg-sunken px-3 py-3 text-sm text-subtle-foreground">先選日期，才看得到那天的時段。</p>
     <p v-if="showErrors && date && !time" class="text-xs font-medium text-destructive">請選擇預約時段</p>
     <p v-if="overflowError" class="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{{ overflowError }}</p>
     <Alert v-if="duplicateWarning" class="border-warning/35 bg-warning-surface text-warning">
       <AlertDescription>{{ duplicateWarning }}</AlertDescription>
     </Alert>
+  </div>
+  </div>
   </div>
 </template>

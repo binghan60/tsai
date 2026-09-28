@@ -131,7 +131,7 @@ try {
   await click(desk, '處理 豆豆');
   await bodyHas(desk, '請轉告飼主');
   await bodyHas(desk, '傷口勿舔舐');
-  assert.equal(await desk.evaluate(() => document.body.textContent.includes('醫師交辦')), false, 'handoff sheet has no handoff-note section');
+  await desk.screenshot({ path: join(tmpdir(), 'clinic-handoff-sheet.png') });  assert.equal(await desk.evaluate(() => document.body.textContent.includes('醫師交辦')), false, 'handoff sheet has no handoff-note section');
   await click(desk, '完成處理');
   await find(desk, () => !document.querySelector('[aria-label="關閉處理視窗"]'));
   assert.equal(fixture.status, 'completed');
