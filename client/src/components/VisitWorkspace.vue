@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from './PatientLink.vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { ArrowRight, FileText, Info, Pencil, Stethoscope, Undo2 } from '@lucide/vue'
+import { ArrowRight, FileText, Pencil, Stethoscope, Undo2 } from '@lucide/vue'
 import SurgeryBadge from './SurgeryBadge.vue'
 import LatenessBadge from './LatenessBadge.vue'
 import CheckinNumber from './CheckinNumber.vue'
@@ -19,8 +19,6 @@ import { workflowState } from '../../../shared/appointmentWorkflow.js'
 import { labFlag, labRangeText, templateLabItems } from '../../../shared/labValues.js'
 import { clinicalDraft, draftPatch, labConflictKey, mergeClinicalUpdate, takeBaseline } from '../lib/visitDraft'
 import { ageLabel, clinicTimeInput } from '../lib/datetime'
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover'
-import AppointmentMilestones from './AppointmentMilestones.vue'
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -84,6 +82,7 @@ const state = computed(() => workflowState(props.appointment))
 const editable = computed(() => state.value.started && !state.value.handedOff && !state.value.completed)
 const dirty = computed(() => Object.keys(draftPatch(draft, baseline.value)).length > 0)
 const owner = computed(() => (typeof pet.value?.ownerId === 'object' ? pet.value.ownerId : null))
+// 飼主聯絡資料與就診時間直接攤在標頭的規格欄（曾經收在 Info 彈出框裡，使用者要一眼看到）。
 const ownerFields = computed(() => {
   const data = owner.value
   return [
@@ -474,15 +473,16 @@ onBeforeUnmount(() => {
          照視窗寬度排的兩欄會被擠爛。 -->
     <div class="@container/visit min-h-0 flex-1 overflow-y-auto">
       <header class="space-y-4 border-b border-border px-6 pt-5 pb-4">
-        <!-- 第一排：左邊是這隻貓（號碼牌、名字、規格欄），右邊是飼主與時間。 -->
-        <div class="flex flex-wrap items-start gap-x-6 gap-y-3">
-          <div class="flex min-w-0 flex-[1_1_20rem] items-start gap-4">
-            <CheckinNumber :appointment="appointment" size="lg" />
-            <div class="min-w-0 space-y-2.5">
-              <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-xl leading-tight font-semibold"><PatientLink :pet-id="appointment.petId">{{ appointment.petName }}</PatientLink></h2>
-                <Badge v-if="appointment.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
-              </div>
+        <!-- 第一排：號碼牌在左，右邊是名字，名字下面一排規格：貓咪靠左、飼主與就診時間靠右，小標題在同一條線上。
+             放不下時飼主整組換到下一行、跟貓咪規格同一條左緣（justify-between 在只剩一項的行會靠左）。 -->
+        <div class="flex items-start gap-4">
+          <CheckinNumber :appointment="appointment" size="lg" />
+          <div class="min-w-0 flex-1 space-y-2.5">
+            <div class="flex flex-wrap items-center gap-2">
+              <h2 class="text-xl leading-tight font-semibold"><PatientLink :pet-id="appointment.petId">{{ appointment.petName }}</PatientLink></h2>
+              <Badge v-if="appointment.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
+            </div>
+            <div class="flex flex-wrap items-start justify-between gap-x-8 gap-y-2.5">
               <SpecGrid>
                 <SpecCell label="品種">{{ pet?.breed || appointment.species || '—' }}</SpecCell>
                 <SpecCell v-if="pet?.sex === 'male' || pet?.sex === 'female'" label="性別"><PetSex :sex="pet.sex" :neutered="pet.neutered" with-label /></SpecCell>
@@ -492,29 +492,24 @@ onBeforeUnmount(() => {
                   <span v-if="draft.weightKg !== ''" class="rounded-sm bg-accent px-1.5 py-0.5 font-sans text-2xs leading-none font-semibold text-accent-foreground">本次</span>
                 </SpecCell>
               </SpecGrid>
+              <!-- 飼主與就診時間分成兩組：欄位多時各自整組換行，不會把時間切在飼主資料中間。 -->
+              <div class="flex min-w-0 flex-wrap items-start gap-x-8 gap-y-2.5">
+                <SpecGrid class="min-w-0">
+                  <SpecCell label="飼主"><PatientLink v-if="owner?.name || appointment.ownerName" :pet-id="appointment.petId" quiet>{{ owner?.name || appointment.ownerName }}</PatientLink><template v-else>待確認</template></SpecCell>
+                  <SpecCell v-if="owner?.phone || appointment.ownerPhone" label="電話" mono>{{ owner?.phone || appointment.ownerPhone }}</SpecCell>
+                  <SpecCell v-for="field in ownerFields" :key="field.label" :label="field.label" :mono="field.mono">
+                    <span class="max-w-60 truncate" v-tip.overflow="field.value">{{ field.value }}</span>
+                  </SpecCell>
+                </SpecGrid>
+                <SpecGrid>
+                  <SpecCell label="預約" mono>{{ appointment.time || '未定' }}</SpecCell>
+                  <SpecCell v-if="appointment.checkedInAt" label="報到" mono>{{ clinicTimeInput(appointment.checkedInAt) }}</SpecCell>
+                  <SpecCell v-if="visitMinutes !== null" label="看診" mono>{{ visitMinutes }} 分</SpecCell>
+                  <SpecCell v-if="appointment.handoffAt" label="交櫃台" mono>{{ clinicTimeInput(appointment.handoffAt) }}</SpecCell>
+                  <SpecCell v-if="appointment.deskCompletedAt" label="完成" mono>{{ clinicTimeInput(appointment.deskCompletedAt) }}</SpecCell>
+                </SpecGrid>
+              </div>
             </div>
-          </div>
-          <div class="flex items-start gap-2">
-            <SpecGrid>
-              <SpecCell label="飼主"><PatientLink v-if="owner?.name || appointment.ownerName" :pet-id="appointment.petId" quiet>{{ owner?.name || appointment.ownerName }}</PatientLink><template v-else>待確認</template></SpecCell>
-              <SpecCell v-if="owner?.phone || appointment.ownerPhone" label="電話" mono>{{ owner?.phone || appointment.ownerPhone }}</SpecCell>
-              <SpecCell v-if="appointment.checkedInAt" label="報到" mono>{{ clinicTimeInput(appointment.checkedInAt) }}</SpecCell>
-              <SpecCell v-if="visitMinutes !== null" label="看診" mono>{{ visitMinutes }} 分</SpecCell>
-            </SpecGrid>
-            <Popover>
-              <PopoverTrigger as-child>
-                <Button variant="secondary" size="icon-sm" aria-label="飼主聯絡資料與就診進度"><Info stroke-width="1.75" /></Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" class="w-96 space-y-3 p-4">
-                <dl v-if="ownerFields.length" class="space-y-2">
-                  <div v-for="field in ownerFields" :key="field.label" class="flex gap-3">
-                    <dt class="w-12 shrink-0 text-sm text-subtle-foreground">{{ field.label }}</dt>
-                    <dd class="min-w-0 break-all" :class="field.mono ? 'num' : ''">{{ field.value }}</dd>
-                  </div>
-                </dl>
-                <AppointmentMilestones :appointment="appointment" />
-              </PopoverContent>
-            </Popover>
           </div>
         </div>
 
