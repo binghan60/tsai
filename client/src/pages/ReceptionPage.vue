@@ -557,7 +557,9 @@ onBeforeUnmount(() => {
 
                   <!-- 整張卡片可點（開處理視窗／初診審核／修改掛號）；裡面的按鈕各自 stop，不會連帶觸發。 -->
                   <article class="cursor-pointer rounded-xl border px-4 py-3 transition-colors" :class="item.ui.tone.card" @click="cardClick(item)">
-                    <div class="grid items-center gap-x-5 gap-y-2 xl:grid-cols-[minmax(0,1fr)_8rem_10rem_9rem_auto]">
+                    <!-- 每張卡片各自是一個 grid，欄寬必須全部固定：按鈕欄若是 auto，「處理」「報到＋⋯」「只有 ⋯」寬度不同，
+                         前面的飼主、電話、進度就會一張卡片一個位置。按鈕欄的寬度以最寬的「報到…＋⋯」為準。 -->
+                    <div class="grid items-center gap-x-5 gap-y-2 xl:grid-cols-[minmax(0,1fr)_8rem_10rem_9rem_8.5rem]">
                       <div class="flex min-w-0 items-start gap-3">
                         <span class="flex size-10 shrink-0 items-center justify-center rounded-full" :class="item.ui.confirmed ? 'bg-accent text-accent-foreground' : 'bg-sunken text-subtle-foreground'"><Cat class="size-5" stroke-width="1.75" /></span>
                         <div class="min-w-0 flex-1 space-y-1">
@@ -597,7 +599,11 @@ onBeforeUnmount(() => {
                       </div>
 
                       <div class="flex shrink-0 items-center justify-end gap-1.5" @click.stop>
-                        <Button v-if="item.ui.kind === 'handoff'" @click="openSheet(item)">處理</Button>
+                        <template v-if="item.ui.kind === 'handoff'">
+                          <Button @click="openSheet(item)">處理</Button>
+                          <!-- 沒有 ⋯ 選單時補一個同尺寸的空位，主要按鈕才跟其他卡片對齊。 -->
+                          <span class="size-9 shrink-0" aria-hidden="true"></span>
+                        </template>
                         <template v-else-if="item.status === 'scheduled'">
                           <Button v-if="item.ui.primary" :variant="item.ui.primary.late ? 'destructive-solid' : 'default'" :disabled="busy" @click="item.ui.primary.run()">{{ item.ui.primary.label }}</Button>
                           <RowActions :actions="item.ui.actions" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
