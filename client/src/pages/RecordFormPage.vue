@@ -1126,7 +1126,7 @@ function handleBeforeUnload(event) {
           <div class="space-y-1">
             <Label for="record-follow-up-date">回診日期</Label>
             <div class="flex gap-2">
-              <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="尚未安排" aria-label="選擇回診日期" :disabled="isVisitLinked" class="w-52" />
+              <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="" aria-label="選擇回診日期" :disabled="isVisitLinked" class="w-52" />
               <TimePicker id="record-follow-up-time" v-model="followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="isVisitLinked || !followUpDate" class="w-32 shrink-0" />
             </div>
             <p v-if="followUpTimeError" class="text-sm font-medium text-destructive">{{ followUpTimeError }}</p>

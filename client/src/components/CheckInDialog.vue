@@ -83,7 +83,7 @@ const onSubmit = handleSubmit((values) => emit('submit', {
     <form class="flex flex-col" @submit.prevent="onSubmit">
       <div class="space-y-4 p-6 pt-3 sm:p-7 sm:pt-3">
         <Alert v-if="!appointment.petId && appointment.ownerId">
-          <AlertDescription>新貓咪將登記於既有飼主 {{ appointment.ownerName }}（{{ appointment.ownerPhone || '未填寫電話' }}）名下。</AlertDescription>
+          <AlertDescription>新貓咪將登記於既有飼主 {{ appointment.ownerName }}<template v-if="appointment.ownerPhone">（{{ appointment.ownerPhone }}）</template>名下。</AlertDescription>
         </Alert>
         <div v-if="!appointment.petId && !appointment.ownerId" class="space-y-1.5">
           <Label for="checkin-owner-name" class="text-xs font-medium text-foreground">飼主姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>

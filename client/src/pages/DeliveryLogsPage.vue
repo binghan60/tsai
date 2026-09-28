@@ -175,9 +175,9 @@ onBeforeUnmount(() => {
           <span class="desktop-data-cell"><span class="num block text-sm">{{ formatDate(log.completedAt || log.startedAt) }}</span><span class="num block text-xs text-subtle-foreground">{{ formatDateTime(log.completedAt || log.startedAt, { hour: '2-digit', minute: '2-digit', hour12: false }) }}</span></span>
           <span class="desktop-data-cell"><Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge></span>
           <span class="desktop-data-cell">
-            <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="block truncate font-semibold text-primary">{{ log.petName || '貓咪未記錄' }}</router-link>
-            <span v-else class="flex min-w-0 items-center gap-1.5 text-muted-foreground"><Trash2 class="size-4 shrink-0" stroke-width="1.75" /><span class="truncate">{{ log.petName || '貓咪未記錄' }}</span></span>
-            <span class="block truncate text-xs text-subtle-foreground">{{ log.ownerName || '飼主未記錄' }}<template v-if="!log.recordExists">，報告已刪除</template></span>
+            <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="block truncate font-semibold text-primary">{{ log.petName }}</router-link>
+            <span v-else class="flex min-w-0 items-center gap-1.5 text-muted-foreground"><Trash2 class="size-4 shrink-0" stroke-width="1.75" /><span class="truncate">{{ log.petName }}</span></span>
+            <span class="block min-h-lh truncate text-xs text-subtle-foreground">{{ log.ownerName }}<template v-if="!log.recordExists">{{ log.ownerName ? '，' : '' }}報告已刪除</template></span>
           </span>
           <span class="desktop-data-cell truncate text-sm" v-tip.overflow="log.recipient || ''">{{ log.recipient || '—' }}</span>
           <span class="desktop-data-cell">
@@ -201,7 +201,7 @@ onBeforeUnmount(() => {
             <Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge>
             <span class="num text-sm text-subtle-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</span>
           </div>
-          <p class="flex gap-3"><router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="font-semibold text-primary">{{ log.petName || '貓咪未記錄' }}</router-link><span v-else class="text-muted-foreground">{{ log.petName || '貓咪未記錄' }}（報告已刪除）</span><span class="text-muted-foreground">{{ log.ownerName }}</span></p>
+          <p class="flex gap-3"><router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="font-semibold text-primary">{{ log.petName }}</router-link><span v-else class="text-muted-foreground">{{ log.petName }}（報告已刪除）</span><span class="text-muted-foreground">{{ log.ownerName }}</span></p>
           <p class="truncate text-sm">{{ log.recipient || '—' }}</p>
           <p v-if="log.error" class="text-sm text-danger">{{ log.error }}</p>
         </li>

@@ -130,8 +130,8 @@ onBeforeUnmount(() => clearTimeout(searchTimer));
             <Cat class="h-5 w-5" stroke-width="1.75" />
           </template>
           <template #description>
-            <span class="flex items-center gap-1 truncate">
-              <User class="h-3.5 w-3.5 shrink-0" />{{ pet.ownerId?.name || '未指定飼主' }}
+            <span v-if="pet.ownerId?.name" class="flex items-center gap-1 truncate">
+              <User class="h-3.5 w-3.5 shrink-0" />{{ pet.ownerId.name }}
             </span>
           </template>
         </PickerOptionRow>

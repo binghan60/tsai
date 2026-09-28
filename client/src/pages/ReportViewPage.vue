@@ -507,7 +507,7 @@ watch(
         </header>
 
         <section class="mt-6 rounded-xl bg-report-surface-muted p-5">
-          <h1 class="text-2xl font-semibold text-report-foreground">{{ record.pet?.name || '貓咪姓名未記錄' }}</h1>
+          <h1 class="text-2xl font-semibold text-report-foreground">{{ record.pet?.name }}</h1>
           <dl class="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
             <div v-if="record.owner?.name"><dt class="text-xs font-medium text-report-muted">飼主</dt><dd class="mt-1 text-report-foreground">{{ record.owner.name }}</dd></div>
             <div v-if="record.pet?.species || record.pet?.breed"><dt class="text-xs font-medium text-report-muted">物種／品種</dt><dd class="mt-1 text-report-foreground">{{ record.pet?.species || '' }}<template v-if="record.pet?.species && record.pet?.breed">／</template>{{ record.pet?.breed || '' }}</dd></div>

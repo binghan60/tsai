@@ -33,7 +33,7 @@ const steps = computed(() => {
   const { started, handedOff, completed } = state.value;
   const appointment = props.appointment;
   return [
-    { key: 'booked', label: '預約', detail: appointment.time || '未指定', tone: 'done' },
+    { key: 'booked', label: '預約', detail: appointment.time || '', tone: 'done' },
     {
       key: 'arrived',
       label: arrived.value ? '報到' : '待報到',

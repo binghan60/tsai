@@ -203,7 +203,7 @@ onBeforeUnmount(() => {
               <PetLine :pet="item.data" class="text-sm text-muted-foreground" />
             </span>
             <span class="hidden min-w-0 shrink-0 text-right sm:block">
-              <span class="block truncate text-sm font-medium text-foreground">{{ item.data.ownerId?.name || '未留飼主' }}</span>
+              <span class="block truncate text-sm font-medium text-foreground">{{ item.data.ownerId?.name }}</span>
               <span v-if="item.data.ownerId?.phone" class="num block text-sm text-muted-foreground">{{ item.data.ownerId.phone }}</span>
             </span>
             <CornerDownLeft class="size-4 shrink-0 text-subtle-foreground" :class="index === activeIndex ? 'visible' : 'invisible'" stroke-width="2" aria-hidden="true" />

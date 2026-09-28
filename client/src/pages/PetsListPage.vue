@@ -138,7 +138,6 @@ function goToPage(next) {
                 <span class="num block text-sm">{{ formatDate(pet.lastEntryAt) }}</span>
                 <span class="block text-xs text-subtle-foreground">{{ relativeDayLabel(pet.lastEntryAt) }}</span>
               </template>
-              <span v-else class="text-sm text-subtle-foreground">尚無紀錄</span>
             </span>
             <span class="desktop-data-cell"><ReminderTags :pet="pet" /></span>
             <span class="desktop-data-cell flex items-center justify-end gap-1">

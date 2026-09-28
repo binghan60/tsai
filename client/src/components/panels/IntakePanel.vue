@@ -93,8 +93,8 @@ async function issueCode() {
 
 // 掛今天的只寫時段；掛別天的要寫出日期，不然櫃台會以為是今天的號。
 function scheduleLabel(item) {
-  const time = item.time || '未指定時段';
-  if (item.date === clinicDateInput()) return `今天 ${time}`;
+  const time = item.time || '';
+  if (item.date === clinicDateInput()) return `今天 ${time}`.trim();
   const [, month, day] = item.date.split('-');
   return `${Number(month)}/${Number(day)}（${weekdayLabel(item.date)}）${time}`;
 }

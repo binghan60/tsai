@@ -538,7 +538,7 @@ onBeforeUnmount(() => {
                     <Badge variant="outline" class="px-1.5 py-0 text-xs font-normal">已登記飼主</Badge>
                   </div>
                   <div class="flex flex-wrap items-center gap-x-4 gap-y-1 pt-0.5 text-xs text-muted-foreground">
-                    <span>{{ selectedOwner.phone || '無電話紀錄' }}</span>
+                    <span v-if="selectedOwner.phone" class="num">{{ selectedOwner.phone }}</span>
                     <span v-if="selectedOwner.email" class="flex items-center gap-1"><Mail class="h-3 w-3" />{{ selectedOwner.email }}</span>
                     <span v-if="selectedOwner.address" class="flex items-center gap-1"><MapPin class="h-3 w-3" />{{ selectedOwner.address }}</span>
                   </div>
