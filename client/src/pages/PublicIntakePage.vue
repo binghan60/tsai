@@ -6,6 +6,7 @@ import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group'
 import { Button } from '../components/ui/button'
+import { INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay'
 
 const submitting = ref(false)
 const submitted = ref(false)
@@ -59,8 +60,8 @@ const pet = reactive({
   checkupStatus: 'unknown',
   checkupDate: '',
 })
-const historyOptions = ['心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題']
-const foodOptions = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧', '其他']
+const historyOptions = INTAKE_HISTORY_OPTIONS
+const foodOptions = INTAKE_FOOD_OPTIONS
 const hasAge = computed(() => pet.ageYears !== '' || pet.ageMonths !== '')
 const agePresent = field('petAge', false)
 watch(hasAge, value => { agePresent.value = value }, { flush: 'sync' })

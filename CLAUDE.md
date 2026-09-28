@@ -222,6 +222,8 @@ POST   /api/records/:id/send-email      寄送 PDF + 連結給飼主
 GET    /api/appointments                當日掛號時間軸（?date=YYYY-MM-DD，預設今天）；另回 patientNotes { pets, owners }，
                                        以 id 為鍵的寵物／飼主備註（空白不回），給診療台佇列顯示「會咬人」之類的提醒（櫃台看板／處理視窗只用其中的飼主備註）
 GET    /api/appointments/summary        週檢視用的日期範圍內每日掛號數（?start=&end=，最多 31 天）
+GET    /api/appointments/intake-codes   已發出、飼主還能用的初診驗證碼（不分日期，條件跟公開初診頁驗證一致），給初診面板管理；
+                                       作廢＝取消那筆掛號（走 /:id/cancel）
 POST   /api/appointments                新增掛號（body 可帶 date，省略＝今天；time 每 15 分鐘一格，手術只是標記、時段規則相同）
 GET    /api/appointments/:id
 PUT    /api/appointments/:id            更新掛號資料（時段／來院原因／身分快照）
@@ -252,6 +254,14 @@ POST   /api/chat/messages               新增一則訊息，body { sender: 'vet
                                        成功後透過 Socket.IO 廣播給所有連線；帶 mentions（最多 5 隻）時同一個
                                        transaction 內把寵物放進暫存區，寵物不存在回 422
 
+初診表（飼主在公開初診頁用驗證碼填寫；公開端是 /api/public/intake-submissions 的 /verify 與送出）
+GET    /api/intake-submissions          待審清單（?status=pending|approved|rejected）
+GET    /api/intake-submissions/:id
+PUT    /api/intake-submissions/:id      審核前修改飼主填的內容，body { version, owner?, pet? }；只限待審核（否則 409），
+                                       規則在 lib/intakeEdit.js，同一個 transaction 更新掛號上的姓名／電話／貓咪名快照
+POST   /api/intake-submissions/:id/approve  建立飼主與貓咪並排定掛號；date、time 必填，時段規則跟新增掛號相同（lib/appointmentTime.js）
+POST   /api/intake-submissions/:id/reject
+
 寵物暫存區（全站一份，見第二節 pinnedPets）
 GET    /api/pinned-pets                 暫存清單，每筆帶 pet（name/species/breed/owner{name,phone}），新到舊
 POST   /api/pinned-pets                 手動加入，body { petId, pinnedBy }（upsert）
@@ -274,7 +284,7 @@ chat:new（server→client）              全站內部聊天新增一則訊息�
 pinned-pets:updated（server→client）   暫存區任何異動（# 標記、手動加入／移除、刪除寵物）後廣播 { items } 完整清單，前端直接取代
 todos:updated（server→client）         待辦任何異動（新增、修改、完成、重開、刪除，以及刪寵物解除連結）後廣播 { items } 完整清單，前端直接取代
 medication:updated（server→client）    藥單任何異動；前端重讀清單與工具欄上的待辦數字
-intake:updated（server→client）        初診表送出、核准、退回；前端重讀待審筆數（工具欄「初診」）
+intake:updated（server→client）        初診表送出、修改、核准、退回；前端重讀待審筆數（工具欄「初診」）
 
 寄送紀錄
 GET    /api/delivery-logs               流水帳，一筆＝一次寄送（queued 與結果依 attemptId 在資料庫裡先合併再分頁，lib/deliveryAttempts.js）；?recordId= / ?event=（這次寄送的最終結果）/ ?q= / ?from=&to= / 分頁
@@ -320,9 +330,9 @@ GET    /api/health
 - **左側導覽**（`components/shell/NavRail.vue`，項目定義在 `lib/navigation.js`）：圖示＋兩三個字，分三組——看診（總覽、診療台、掛號台、藥單）、資料（貓咪、報告、寄送）、設定（表單、模板、預填）。最上面是 Logo 與搜尋（`Ctrl/Cmd+K` 命令面板，不換路由），最下面是設定選單（`AppSettingsMenu`：這台裝置的身分醫師／櫃台、明暗主題、自動通知設定、登出）與目前身分。不做收合——字已經在圖示下面。手機寬度改成頁首的漢堡選單。
 - active 判斷用網址前綴（`router-link` 內建的比對路由記錄，抓不到獨立註冊的深層路由）；路由可以用 `meta.nav` 指定歸屬，更長的導覽項吃得下目前網址時讓給它（`/records/deliveries` 不算 `/records`）。
 - **右側工具欄**（`components/shell/UtilityRail.vue`）開側滑面板：暫存、藥單、待辦、初診（只在掛號台）、聊天（最下面）。數字目前全部是**紅色徽章＝要人動手**（暫存區幾隻、藥單、待辦、初診、聊天未讀，0 就不畫）；暫存區原本是灰色「狀態讀數」，使用者要求改紅——有貓被丟進暫存區就是有人要對方看。元件仍保留灰色讀數（`tone: 'neutral'`，0 也照顯示）給之後真正的狀態數字用。藥單的口徑依這台裝置的身分（醫師看待確認、櫃台看待包藥＋待領藥，`shared/medicationWorkflow.js` 的 `medicationTodoCount`）。藥單與初診的數字在 `stores/workCounts.js`，由 `useGlobalChat` 那條連線在 `medication:updated`／`intake:updated` 時重讀。
-- **側滑面板**（`components/shell/UtilityPanelHost.vue`＋`stores/utilityPanel.js`）：一次開一個，**不加遮罩、不鎖背景**（一邊做事一邊查）；1600px 以上是版面裡的一欄、把工作區往左推，更窄時浮在工作區上面。面板內可以再「推入」一層、左上角返回：暫存區點一隻貓推入**病歷速覽**（`panels/PetQuickView.vue`，聊天與待辦的 `#` 標記也開這裡，`pinnedPets.openQuickView`）、藥單推入「新增藥單」、初診推入逐欄審核。面板用 `KeepAlive`，關掉再開表單草稿、聊天輸入都還在。面板外框統一用 `panels/SidePanel.vue`。
+- **側滑面板**（`components/shell/UtilityPanelHost.vue`＋`stores/utilityPanel.js`）：一次開一個，**不加遮罩、不鎖背景**（一邊做事一邊查）；1600px 以上是版面裡的一欄、把工作區往左推，更窄時浮在工作區上面。面板內可以再「推入」一層、左上角返回：暫存區點一隻貓推入**病歷速覽**（`panels/PetQuickView.vue`，聊天與待辦的 `#` 標記也開這裡，`pinnedPets.openQuickView`）、藥單推入「新增藥單」、初診推入逐欄審核（初診面板分「待審核／已發出」兩個頁籤，預設待審核、發碼後切到已發出；已發出的驗證碼可複製、作廢，不必到時間軸逐天找）。面板用 `KeepAlive`，關掉再開表單草稿、聊天輸入都還在。面板外框統一用 `panels/SidePanel.vue`。
 - 聊天是面板之一（`panels/ChatPanel.vue`），不再有右下角泡泡；標頭有「通知」鈕（顯示已開幾項），開「自動通知」的逐項開關（`NotificationSettingsDialog`，設定選單也有同一個入口）——開關決定的是**這台裝置做那些動作時要不要自動發訊息**（`useAppointmentNotifier`），不是這台看不看得到；改版時曾經只留在設定選單，使用者在聊天室找不到，不要再拿掉；面板開著時 `chat.open()`，未讀數由 chat store 依 `isOpen` 判斷。身分是裝置固定的（`useStaffIdentity`）。
-- Toast 在工具欄左邊（`right-21`）；診療台與掛號台放在頁首下方（底部是送交櫃台、完成處理這些主要動作），其他頁放右下。
+- Toast 一律在畫面底部置中（`ToastContainer`，所有頁面同一個位置；早期診療台與掛號台放頁首下方、其他頁放右下，使用者要求統一改成中間下面）。
 
 ### 頁面
 
@@ -339,7 +349,7 @@ GET    /api/health
 | `/pets/:petId/records/new`、`/records/:id/edit` | 健檢報告填寫 | 自動存草稿、離開前攔截；連著看診的草稿在資訊列下方有「引用本次看診」說明條：體重、體溫、檢驗數值在這裡改會寫回看診（`lib/recordVisitLink.js`），回診日期唯讀。1280px 以上區段導覽是左側直排的步驟清單，更窄時改回上方橫排。底部操作列貼齊左右兩條欄。 |
 | `/records/:id/preview` | 報告預覽 | `meta.bare`，後台用，有結案／寄送／分享操作 |
 | `/report/:token` | 報告檢視頁 | `meta.bare`，**公開**，飼主查看用 + PDF 截圖來源 |
-| `/reception/intakes` | 初診表審核 | 全頁版（左清單、右逐欄審核，`IntakeReview.vue`，跟初診面板共用） |
+| `/reception/intakes` | 初診表審核 | 全頁版（左清單、右逐欄審核，`IntakeReview.vue`，跟初診面板共用）。貓咪／醫療紀錄／飼主三段各有「修改」，就地改完存回初診表（`IntakeSectionEditor.vue`）；掛號日期與時段必填，規則跟掛號視窗的時段格相同（`lib/appointmentTime.js` 的 `appointmentSlotErrors`） |
 | `/settings/forms`、`/settings/forms/:id` | 健檢表單管理／設計 | |
 | `/settings/presets`、`/settings/presets/:formId/:presetKey` | 預填模板清單／單組編輯 | 清單是左右兩欄：左邊表單清單（搜尋同時比對表單與模板名稱、有模板的排前面、已停用的收在底下，`lib/presetForms.js`），右邊選中那份的模板；選哪份記在 `?form=`，窄螢幕左欄收成下拉選單。見第二節 formTemplates 的 `presets` |
 

@@ -484,7 +484,7 @@ onBeforeUnmount(() => {
       </div>
       <div v-if="overdue.length" class="flex min-h-13 items-center gap-3 rounded-xl bg-danger-surface py-2 pr-2 pl-4 text-danger">
         <AlertTriangle class="size-5 shrink-0" stroke-width="1.75" />
-        <p class="min-w-0 flex-1 truncate"><span class="font-semibold">遲到未報到 {{ overdue.length }}</span>　<PatientLink :pet-id="overdue[0].petId" quiet>{{ overdue[0].petName }}</PatientLink> <span class="num">{{ overdue[0].time }}</span> 預約，已遲 {{ overdueMinutes(overdue[0]) }} 分</p>
+        <p class="min-w-0 flex-1 truncate"><span class="font-semibold">遲到 {{ overdue.length }}</span>　<PatientLink :pet-id="overdue[0].petId" quiet>{{ overdue[0].petName }}</PatientLink> <span class="num">{{ overdue[0].time }}</span> 預約，已遲 {{ overdueMinutes(overdue[0]) }} 分</p>
         <Button v-if="scheduledPrimary(overdue[0])" size="sm" variant="soft" class="shrink-0" :disabled="busy" @click="scheduledPrimary(overdue[0]).run()">{{ scheduledPrimary(overdue[0]).label }}</Button>
       </div>
       <div v-if="counts.intake" class="flex min-h-13 items-center gap-3 rounded-xl bg-info-surface py-2 pr-2 pl-4 text-info">

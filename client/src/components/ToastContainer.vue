@@ -4,7 +4,6 @@ import { useToast } from '../composables/useToast';
 import { Button } from './ui/button';
 
 const { toasts, removeToast } = useToast();
-defineProps({ placement: { type: String, default: 'bottom' } });
 
 // 每種提示只用一個語意色，畫在左邊的圖示方塊上；讀者要辨認的只有「成功還是失敗」。
 const typeConfig = {
@@ -15,7 +14,8 @@ const typeConfig = {
 </script>
 
 <template>
-  <div class="pointer-events-none fixed inset-x-4 z-60 flex max-w-sm flex-col gap-3 sm:left-auto sm:right-21 sm:w-full" :class="placement === 'top' ? 'top-20' : 'bottom-5'" aria-live="polite">
+  <!-- 置中貼底：左右兩條欄寬度相近，以視窗置中就等於以工作區置中。 -->
+  <div class="pointer-events-none fixed inset-x-4 bottom-5 z-60 mx-auto flex max-w-sm flex-col gap-3" aria-live="polite">
     <TransitionGroup
       enter-active-class="transition duration-300 ease-out"
       enter-from-class="translate-y-4 opacity-0 scale-95"

@@ -9,7 +9,7 @@ export function useToast() {
   function addToast({ title = '', message = '', type = 'success', duration, action = null }) {
     const id = ++count;
     const toast = { id, title, message, type, action };
-    duration ??= action ? 8000 : 3500;
+    duration ??= action ? 8000 : 1500;
     toasts.value.push(toast);
 
     if (duration > 0) {
@@ -32,7 +32,7 @@ export function useToast() {
   }
 
   function error(message, title = '操作失敗') {
-    return addToast({ title, message, type: 'error', duration: 4500 });
+    return addToast({ title, message, type: 'error', duration: 2500 });
   }
 
   function info(message, title = '提示訊息') {

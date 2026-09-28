@@ -8,9 +8,10 @@ import { withTransaction } from '../lib/transaction.js';
 import { combineClinicDateTime } from '../lib/clinicTime.js';
 import { createRateLimiter } from '../lib/rateLimit.js';
 import { emitAppointmentUpdate, emitIntakeUpdate } from '../lib/realtime.js';
+import { INTAKE_PET_FIELDS, mergeIntakeEdit } from '../lib/intakeEdit.js';
+import { APPOINTMENT_TIME_ERROR, APPOINTMENT_TIME_STEP, isValidAppointmentTime, validateAppointmentDuration } from '../lib/appointmentTime.js';
 
-const PET_FIELDS = ['name', 'species', 'breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'foodsOther', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'];
-const pickPetFields = body => Object.fromEntries(PET_FIELDS.filter(field => body[field] !== undefined).map(field => [field, body[field]]));
+const pickPetFields = body => Object.fromEntries(INTAKE_PET_FIELDS.filter(field => body[field] !== undefined).map(field => [field, body[field]]));
 const publicSubmissionLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
 const publicVerificationLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 10 });
 
@@ -112,6 +113,41 @@ intakeSubmissionsRouter.get('/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// 審核前修改飼主填的內容（填錯字、電話少一碼……）。只有待審核的能改；body.version 必須是目前的 __v。
+// 飼主送出時掛號上寫過姓名、電話、貓咪名字的快照（時間軸靠它顯示），同一個 transaction 裡一起更新。
+intakeSubmissionsRouter.put('/:id', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(422).json({ message: '初診表編號格式不正確' });
+    let submission;
+    let appointment;
+    await withTransaction(async (session) => {
+      submission = await IntakeSubmission.findById(req.params.id).session(session);
+      if (!submission) throw Object.assign(new Error('找不到初診表'), { status: 404 });
+      if (submission.status !== 'pending') throw Object.assign(new Error('這份初診表已完成審核，不能再修改'), { status: 409 });
+      if (req.body?.version !== undefined && req.body.version !== submission.__v) {
+        throw Object.assign(new Error('這份初診表剛被修改過，請重新載入後再改'), { status: 409 });
+      }
+      const { owner, pet } = mergeIntakeEdit({ owner: submission.owner.toObject(), pet: submission.pet.toObject() }, req.body);
+      submission.set({ owner, pet });
+      await submission.save({ session });
+      if (submission.linkedAppointmentId) {
+        appointment = await Appointment.findById(submission.linkedAppointmentId).session(session);
+        if (appointment && !appointment.petId) {
+          appointment.ownerName = owner.name;
+          appointment.ownerPhone = owner.phone;
+          appointment.petName = pet.name;
+          await appointment.save({ session });
+        } else {
+          appointment = null;
+        }
+      }
+    });
+    if (appointment) emitAppointmentUpdate(appointment);
+    emitIntakeUpdate();
+    res.json(submission);
+  } catch (err) { next(err); }
+});
+
 intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
   try {
     if (!mongoose.isValidObjectId(req.params.id)) return res.status(422).json({ message: '初診表編號格式不正確' });
@@ -142,17 +178,18 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
       if (submission.linkedAppointmentId) {
         appointment = await Appointment.findById(submission.linkedAppointmentId).session(session);
         if (appointment && !appointment.petId) {
+          // 跟新增掛號同一套時段規則（lib/appointmentTime.js），而且日期、時段都必填——
+          // 審核通過就是一筆正式掛號，要落得在時間軸的某一格上。
           const date = String(req.body?.date || '').trim();
           const time = String(req.body?.time || '').trim();
-          if (date) {
-            const parsedDate = new Date(`${date}T00:00:00Z`);
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) {
-              throw Object.assign(new Error('掛號日期格式不正確'), { status: 422 });
-            }
+          if (!date) throw Object.assign(new Error('請選擇掛號日期'), { status: 422 });
+          if (!time) throw Object.assign(new Error('請選擇預約時段'), { status: 422 });
+          const parsedDate = new Date(`${date}T00:00:00Z`);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== date) {
+            throw Object.assign(new Error('掛號日期格式不正確'), { status: 422 });
           }
-          if (time && !/^\d{2}:\d{2}$/.test(time)) {
-            throw Object.assign(new Error('掛號時間格式不正確'), { status: 422 });
-          }
+          if (!isValidAppointmentTime(time)) throw Object.assign(new Error(APPOINTMENT_TIME_ERROR), { status: 422 });
+          validateAppointmentDuration(time, appointment.estimatedDurationMinutes ?? APPOINTMENT_TIME_STEP);
           appointment.ownerId = owner._id;
           appointment.petId = pet._id;
           appointment.ownerName = owner.name;
@@ -160,13 +197,11 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
           appointment.petName = pet.name;
           appointment.species = pet.species;
           appointment.intakeSubmissionId = submission._id;
-          if (date) appointment.date = date;
-          if (time) {
-            appointment.time = time;
-          }
+          appointment.date = date;
+          appointment.time = time;
+          appointment.scheduledAt = combineClinicDateTime(date, time);
           if (req.body?.reason !== undefined) appointment.reason = String(req.body.reason || '').trim();
           if (req.body?.internalNote !== undefined) appointment.internalNote = String(req.body.internalNote || '').trim();
-          if (date || time) appointment.scheduledAt = combineClinicDateTime(appointment.date, appointment.time || '00:00');
           await appointment.save({ session });
         }
       }

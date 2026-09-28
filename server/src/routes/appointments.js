@@ -16,6 +16,7 @@ import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsChe
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import appointmentWorkflowRouter from './appointmentWorkflow.js';
+import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, validateAppointmentDuration } from '../lib/appointmentTime.js';
 
 const router = Router();
 router.use('/:id/workflow', appointmentWorkflowRouter);
@@ -36,56 +37,11 @@ function checkWorkflowCompatibility(appointment, path, version) {
 
 const EDITABLE_APPOINTMENT_FIELDS = ['date', 'time', 'estimatedDurationMinutes', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species', 'templateId', 'isSurgery', 'surgeryName'];
 const EDITABLE_APPOINTMENT_STATUSES = new Set(['scheduled', 'arrived']);
-const APPOINTMENT_TIME_RANGES = [
-  ['10:00', '11:30'],
-  ['14:00', '19:30'],
-];
-// 手術只是掛號上的標記（isSurgery／surgeryName），時段跟一般門診一樣，沒有專屬的手術時段。
-const APPOINTMENT_TIME_STEP = 15;
-const MAX_ESTIMATED_DURATION_MINUTES = 240;
-const APPOINTMENT_TIME_ERROR = '預約時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格';
 
 function newIntakeVerificationCode() {
   return String(randomInt(1000, 10000));
 }
 
-function minutesOfTime(value) {
-  const match = /^(\d{2}):(\d{2})$/.exec(value);
-  if (!match) return null;
-  const hour = Number(match[1]);
-  const minute = Number(match[2]);
-  if (hour > 23 || minute > 59) return null;
-  return hour * 60 + minute;
-}
-
-function isValidAppointmentTime(value) {
-  if (!value) return true;
-  const minutes = minutesOfTime(value);
-  if (minutes == null || minutes % APPOINTMENT_TIME_STEP !== 0) return false;
-  return APPOINTMENT_TIME_RANGES.some(([start, end]) => {
-    const startMinutes = minutesOfTime(start);
-    const endMinutes = minutesOfTime(end);
-    return minutes >= startMinutes && minutes <= endMinutes;
-  });
-}
-
-function normalizeEstimatedDuration(value) {
-  const duration = value === undefined || value === null || value === '' ? APPOINTMENT_TIME_STEP : Number(value);
-  if (!Number.isSafeInteger(duration) || duration < APPOINTMENT_TIME_STEP || duration > MAX_ESTIMATED_DURATION_MINUTES || duration % APPOINTMENT_TIME_STEP !== 0) {
-    throw Object.assign(new Error('預估診療時間須為 15–240 分鐘，且以 15 分鐘為單位'), { status: 422 });
-  }
-  return duration;
-}
-
-function validateAppointmentDuration(time, duration) {
-  if (!time) return;
-  const startAt = minutesOfTime(time);
-  const valid = APPOINTMENT_TIME_RANGES.some(([start, end]) => (
-    startAt >= minutesOfTime(start)
-    && startAt + duration <= minutesOfTime(end) + APPOINTMENT_TIME_STEP
-  ));
-  if (!valid) throw Object.assign(new Error('預估診療時間超出可掛號時段，請縮短時間或改選其他時段'), { status: 422 });
-}
 
 
 function normalizeSurgeryFields(body) {
@@ -287,6 +243,26 @@ router.get('/summary', async (req, res, next) => {
 
     const dates = enumerateDates(start, end);
     const items = fillDailyCounts(dates, buckets);
+    res.json({ items });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/appointments/intake-codes
+// 已發出、飼主還能用的初診驗證碼（條件跟公開初診頁驗證時一致，見 routes/intakeSubmissions.js），
+// 不分日期——電話裡掛明天的初診也會先拿到碼。給初診面板管理用，不必去時間軸逐天找。
+router.get('/intake-codes', async (req, res, next) => {
+  try {
+    const items = await Appointment.find({
+      intakeVerificationExpiresAt: { $gt: new Date() },
+      intakeVerificationCode: { $ne: '' },
+      intakeVerificationUsedAt: null,
+      intakeSubmissionId: null,
+      visitType: 'new',
+      petId: null,
+      status: { $in: ['scheduled', 'arrived'] },
+    }).sort({ createdAt: -1 }).limit(100);
     res.json({ items });
   } catch (err) {
     next(err);

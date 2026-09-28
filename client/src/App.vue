@@ -143,7 +143,6 @@ watch(
       </div>
     </div>
     <GlobalSearchDialog v-model:open="searchOpen" />
-    <!-- 診療台與掛號台的底部是主要動作（送交櫃台、完成處理），提示改放上面、頁首那一列的下方。 -->
-    <ToastContainer :placement="route.path.startsWith('/appointments') || route.path.startsWith('/reception') ? 'top' : 'bottom'" />
+    <ToastContainer />
   </template>
 </template>

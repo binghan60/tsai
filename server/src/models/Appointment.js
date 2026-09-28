@@ -119,6 +119,8 @@ appointmentSchema.index({ scheduledAt: 1 });
 // 依狀態篩選（例如把已取消/未到跟其餘分開），以及讀取當日候診佇列。
 appointmentSchema.index({ status: 1, scheduledAt: 1 });
 appointmentSchema.index({ intakeVerificationCode: 1, intakeVerificationExpiresAt: 1 });
+// 初診面板的「已發出的驗證碼」：只看還沒過期的，用到期時間當範圍條件。
+appointmentSchema.index({ intakeVerificationExpiresAt: 1 });
 // 號碼牌可由櫃台自行決定，允許同日重複與再次使用；history 僅保留異動紀錄。
 
 export default mongoose.model('Appointment', appointmentSchema);

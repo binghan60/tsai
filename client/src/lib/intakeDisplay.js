@@ -1,6 +1,10 @@
 // 公開初診表（飼主填的）送進來的內容，在櫃台審核時怎麼讀。
 // 審核畫面、初診面板、初診審核頁共用這份，不要各自再寫一次對照表。
 
+// 公開初診頁的勾選項目；櫃台審核時修改也用同一份，兩邊的選項才不會各說各話。
+export const INTAKE_FOOD_OPTIONS = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧', '其他'];
+export const INTAKE_HISTORY_OPTIONS = ['心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題'];
+
 const blank = (value) => value === null || value === undefined || value === '';
 
 function birthMonth(value) {
