@@ -565,7 +565,7 @@ onBeforeUnmount(() => {
         <div class="flex flex-col gap-6 px-6 py-5">
           <section class="space-y-3" :aria-labelledby="`measure-heading-${appointment._id}`">
             <div class="flex items-center gap-2"><h3 :id="`measure-heading-${appointment._id}`" class="text-base font-semibold">量測</h3><DestTag :to="['journal', 'report']" /></div>
-            <div class="grid grid-cols-2 gap-3 sm:max-w-md">
+            <div class="grid grid-cols-2 gap-3">
               <div class="space-y-1.5">
                 <Label :for="`visit-weight-${appointment._id}`">體重</Label>
                 <div class="relative"><Input :id="`visit-weight-${appointment._id}`" v-model="draft.weightKg" type="number" min="0" step="0.01" class="num pr-11" :disabled="!editable || committing" /><span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-subtle-foreground">kg</span></div>
