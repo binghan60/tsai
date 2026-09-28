@@ -10,6 +10,7 @@ import { createRateLimiter } from '../lib/rateLimit.js';
 import { emitAppointmentUpdate, emitIntakeUpdate } from '../lib/realtime.js';
 import { INTAKE_PET_FIELDS, mergeIntakeEdit } from '../lib/intakeEdit.js';
 import { APPOINTMENT_TIME_ERROR, APPOINTMENT_TIME_STEP, isValidAppointmentTime, validateAppointmentDuration } from '../lib/appointmentTime.js';
+import { normalizeMobilePhone } from '../../../shared/phone.js';
 
 const pickPetFields = body => Object.fromEntries(INTAKE_PET_FIELDS.filter(field => body[field] !== undefined).map(field => [field, body[field]]));
 const publicSubmissionLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
@@ -61,6 +62,10 @@ publicIntakeRouter.post('/', publicSubmissionLimiter, async (req, res, next) => 
     const pet = req.body?.pet ?? {};
     if (!String(owner.address || '').trim()) return res.status(422).json({ message: '請填寫飼主地址' });
     if (!String(owner.email || '').trim()) return res.status(422).json({ message: '請填寫 Email' });
+    // 公開頁收的是手機（櫃台要能聯絡到人）；市話另有欄位。
+    const phone = normalizeMobilePhone(owner.phone);
+    if (String(owner.phone || '').trim() && !phone) return res.status(422).json({ message: '請填寫 09 開頭的 10 碼手機號碼' });
+    if (phone) owner.phone = phone;
     if (!String(pet.breed || '').trim()) return res.status(422).json({ message: '請填寫品種' });
     if (!['male', 'female'].includes(pet.sex)) return res.status(422).json({ message: '請選擇性別' });
     if (!['yes', 'no'].includes(pet.neutered)) return res.status(422).json({ message: '請選擇結紮狀態' });

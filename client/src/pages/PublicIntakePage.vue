@@ -5,8 +5,9 @@ import { http } from '../api/http'
 import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group'
-import { Button } from '../components/ui/button'
-import { INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay'
+import { normalizeMobilePhone } from '../../../shared/phone.js'
+import IntakeYearMonthSelect from '../components/IntakeYearMonthSelect.vue'
+import { INTAKE_BREED_SUGGESTIONS, INTAKE_COLOR_SUGGESTIONS, INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay'
 
 const submitting = ref(false)
 const submitted = ref(false)
@@ -31,7 +32,7 @@ const { validate, errors } = useForm({
     mealsPerDay: value => pet.feedingType !== 'scheduled' || integer(value, 1, 20) || '請填寫每日 1–20 餐的整數',
     petNeutered: value => ['yes', 'no'].includes(value) || '請選擇結紮狀態',
     ownerName: required,
-    ownerPhone: required,
+    ownerPhone: value => required(value) !== true ? '此欄位必填' : !!normalizeMobilePhone(value) || '請填寫 09 開頭的 10 碼手機號碼',
     ownerAddress: required,
     ownerEmail: value => required(value) !== true ? '此欄位必填' : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value).trim()) || 'Email 格式不正確',
   },
@@ -62,6 +63,38 @@ const pet = reactive({
 })
 const historyOptions = INTAKE_HISTORY_OPTIONS
 const foodOptions = INTAKE_FOOD_OPTIONS
+const breedSuggestions = INTAKE_BREED_SUGGESTIONS
+const colorSuggestions = INTAKE_COLOR_SUGGESTIONS
+const historyOther = ref(false)
+const hospital = {
+  name: '謙華動物醫院',
+  nameEn: 'CHIEN HUA Animal Hospital',
+  hours: '10:00–12:00、14:00–20:00',
+  phone: '03-561-9595',
+  phoneHref: 'tel:+88635619595',
+  address: '新竹市東區公園路 226 號',
+  mapHref: 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent('新竹市東區公園路226號 謙華動物醫院'),
+}
+
+// 選項後面的補充欄（注射時間、過敏類別…）跟選項綁在一起：在補充欄打字就自動選「有」，
+// 改選「無」就清空補充欄。否則飼主直接在空格裡寫過敏藥物卻沒勾「有」，送出的資料會自相矛盾。
+function linkDetail(isOn, turnOn, getText, clearText) {
+  watch(getText, text => { if (String(text ?? '').trim() && !isOn()) turnOn() })
+  watch(isOn, on => { if (!on) clearText() })
+}
+linkDetail(() => pet.feedingType === 'scheduled', () => { pet.feedingType = 'scheduled' }, () => pet.mealsPerDay, () => { pet.mealsPerDay = '' })
+linkDetail(() => pet.vaccineStatus === 'done', () => { pet.vaccineStatus = 'done' }, () => pet.vaccineDate, () => { pet.vaccineDate = '' })
+linkDetail(() => pet.allergyStatus === 'yes', () => { pet.allergyStatus = 'yes' }, () => pet.allergyType, () => { pet.allergyType = '' })
+linkDetail(() => pet.checkupStatus === 'done', () => { pet.checkupStatus = 'done' }, () => pet.checkupDate, () => { pet.checkupDate = '' })
+linkDetail(() => historyOther.value, () => { historyOther.value = true }, () => pet.medicalHistoryOther, () => { pet.medicalHistoryOther = '' })
+
+const errorId = name => `intake-${name}-error`
+const errorFor = (...keys) => attemptedSubmit.value ? keys.map(key => errors.value[key]).find(Boolean) || '' : ''
+// 欄位出錯時讓報讀器知道、並唸出錯誤訊息。
+function invalidAttrs(name, ...keys) {
+  if (!errorFor(...keys)) return {}
+  return { 'aria-invalid': 'true', 'aria-describedby': errorId(name) }
+}
 const hasAge = computed(() => pet.ageYears !== '' || pet.ageMonths !== '')
 const agePresent = field('petAge', false)
 watch(hasAge, value => { agePresent.value = value }, { flush: 'sync' })
@@ -72,6 +105,10 @@ const fieldTargets = {
   petNeutered: 'pet-neutered', ownerName: 'owner-name', ownerPhone: 'owner-phone',
   ownerAddress: 'owner-address', ownerEmail: 'owner-email',
 }
+// 年齡有三條規則但只算一格；送出後才顯示，跟欄位旁的錯誤訊息同步。
+const issueCount = computed(() => attemptedSubmit.value
+  ? new Set(Object.keys(fieldTargets).filter(key => errors.value[key]).map(key => fieldTargets[key])).size
+  : 0)
 const estimatedBirthLabel = computed(() => {
   const date = estimatedBirthDate()
   if (!date) return ''
@@ -127,26 +164,42 @@ async function jumpToIssue() {
   }, 1600)
 }
 
-watch(verificationCode, () => { verified.value = false })
+// 只收數字；打滿 4 碼就直接驗證，不必再按按鈕。
+watch(verificationCode, code => {
+  const digits = String(code ?? '').replace(/\D/g, '').slice(0, 4)
+  if (digits !== code) {
+    verificationCode.value = digits
+    return
+  }
+  verified.value = false
+  error.value = ''
+  if (digits.length === 4) verifyCode()
+})
 
 async function verifyCode() {
   if (verifying.value) return
   error.value = ''
-  const code = verificationCode.value.replace(/\D/g, '')
+  const code = verificationCode.value
   if (code.length !== 4) {
     error.value = '請輸入櫃台提供的 4 位驗證碼'
     return
   }
   verifying.value = true
+  let message = ''
   try {
     await http.post('/public/intake-submissions/verify', { verificationCode: code })
-    verificationCode.value = code
-    verified.value = true
   } catch (err) {
-    error.value = err.response?.data?.message || '驗證失敗，請確認驗證碼後再試。'
+    message = err.response?.data?.message || '驗證失敗，請確認驗證碼後再試。'
   } finally {
     verifying.value = false
   }
+  // 驗證途中又改了驗證碼：這次的結果不算數，改驗新的那組。
+  if (verificationCode.value !== code) {
+    if (verificationCode.value.length === 4) verifyCode()
+    return
+  }
+  if (message) error.value = message
+  else verified.value = true
 }
 
 async function submit() {
@@ -162,7 +215,7 @@ async function submit() {
   try {
     await http.post('/public/intake-submissions', {
       verificationCode: verificationCode.value,
-      owner,
+      owner: { ...owner, phone: normalizeMobilePhone(owner.phone) },
       pet: {
         name: pet.name,
         species: '貓',
@@ -178,13 +231,13 @@ async function submit() {
         feedingType: pet.feedingType,
         mealsPerDay: pet.feedingType === 'scheduled' ? Number(pet.mealsPerDay) : null,
         vaccineStatus: pet.vaccineStatus,
-        vaccineDate: pet.vaccineDate,
+        vaccineDate: pet.vaccineStatus === 'done' ? pet.vaccineDate : '',
         medicalHistory: pet.medicalHistory,
-        medicalHistoryOther: pet.medicalHistoryOther,
+        medicalHistoryOther: historyOther.value ? pet.medicalHistoryOther : '',
         allergyStatus: pet.allergyStatus,
-        allergyType: pet.allergyType,
+        allergyType: pet.allergyStatus === 'yes' ? pet.allergyType : '',
         checkupStatus: pet.checkupStatus,
-        checkupDate: pet.checkupDate,
+        checkupDate: pet.checkupStatus === 'done' ? pet.checkupDate : '',
       },
     })
     submitted.value = true
@@ -209,24 +262,29 @@ async function submit() {
         <div class="verification-content">
           <form class="verification-form" @submit.prevent="verifyCode">
             <label for="intake-verification-code">請輸入驗證碼</label>
-            <Input id="intake-verification-code" v-model="verificationCode" inputmode="numeric" autocomplete="one-time-code" maxlength="4" placeholder="4 位數字" class="verification-input" />
-            <p v-if="error" class="error">{{ error }}</p>
-            <Button type="submit" :disabled="verifying">{{ verifying ? '驗證中…' : '開始填寫' }}</Button>
+            <p id="intake-verification-hint" class="verification-hint">驗證碼是 4 位數字，請向櫃台人員索取。</p>
+            <Input id="intake-verification-code" v-model="verificationCode" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="4" placeholder="0000" aria-describedby="intake-verification-hint" :aria-invalid="error ? 'true' : undefined" class="verification-input num" />
+            <p v-if="error" class="error" role="alert">{{ error }}</p>
+            <button class="primary-btn" type="submit" :disabled="verifying">{{ verifying ? '驗證中…' : '開始填寫' }}</button>
           </form>
         </div>
         <div class="verification-hospital-info">
-          <img src="/chien-hua-logo-mark-v2.png" alt="謙華動物醫院 Logo" />
+          <img src="/chien-hua-logo-mark-v2.png" :alt="`${hospital.name} Logo`" />
           <div>
-            <h2>謙華動物醫院</h2>
-            <p>CHIEN HUA Animal Hospital</p>
-            <p>門診時間：9:00–11:30、14:00–20:30</p>
-            <p>電話：03-561-9595</p>
-            <p>地址：新竹市東區公園路 226 號</p>
+            <h2>{{ hospital.name }}</h2>
+            <p>{{ hospital.nameEn }}</p>
+            <p>門診時間：{{ hospital.hours }}</p>
+            <p>電話：<a :href="hospital.phoneHref">{{ hospital.phone }}</a></p>
+            <p>地址：<a :href="hospital.mapHref" target="_blank" rel="noopener">{{ hospital.address }}</a></p>
           </div>
         </div>
       </section>
       <form v-else novalidate @submit.prevent="submit">
         <div class="header">
+          <div class="header-brand">
+            <img src="/chien-hua-logo-mark-v2.png" alt="" class="header-logo" />
+            <span>{{ hospital.name }}</span>
+          </div>
           <h1>初診掛號單</h1>
         </div>
         <p class="hint">標示 * 的欄位必填；年齡可填歲數或月數，未滿一歲可填 0 歲。</p>
@@ -235,68 +293,75 @@ async function submit() {
           <div class="grid">
             <div>
               <div class="field-group-title section-emphasis">基本資料</div>
-              <div id="intake-pet-name-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-name-field' }"><label><span class="required-mark" aria-hidden="true">*</span>名字：</label><Input v-model="pet.name" class="input-medium" aria-required="true" :aria-invalid="attemptedSubmit && !!errors.petName" /><span v-if="attemptedSubmit && errors.petName" class="field-error">{{ errors.petName }}</span></div>
+              <div id="intake-pet-name-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-name-field' }"><label for="intake-pet-name" class="field-label"><span class="required-mark" aria-hidden="true">*</span>名字：</label><Input id="intake-pet-name" v-model="pet.name" class="input-medium" aria-required="true" v-bind="invalidAttrs('pet-name', 'petName')" /><span v-if="errorFor('petName')" :id="errorId('pet-name')" class="field-error">{{ errorFor('petName') }}</span></div>
               <div id="intake-pet-sex-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-sex-field' }">
-                <label><span class="required-mark" aria-hidden="true">*</span>性別：</label><RadioGroup v-model="pet.sex" aria-required="true" class="contents"><label class="option-label"><RadioGroupItem value="male" />男生</label><label class="option-label"><RadioGroupItem value="female" />女生</label></RadioGroup><span v-if="attemptedSubmit && errors.petSex" class="field-error">{{ errors.petSex }}</span>
+                <span id="intake-pet-sex-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>性別：</span><RadioGroup v-model="pet.sex" aria-labelledby="intake-pet-sex-label" aria-required="true" v-bind="invalidAttrs('pet-sex', 'petSex')" class="contents"><label class="option-label"><RadioGroupItem value="male" />男生</label><label class="option-label"><RadioGroupItem value="female" />女生</label></RadioGroup><span v-if="errorFor('petSex')" :id="errorId('pet-sex')" class="field-error">{{ errorFor('petSex') }}</span>
               </div>
-              <div id="intake-pet-age-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-age-field' }"><label><span class="required-mark" aria-hidden="true">*</span>年齡：</label><Input v-model="pet.ageYears" aria-required="true" class="input-short" type="number" min="0" step="1" inputmode="numeric" /> 年 <Input v-model="pet.ageMonths" class="input-short" type="number" min="0" max="11" step="1" inputmode="numeric" /> 個月<span class="hint">（月齡 0–11）</span><span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="attemptedSubmit && (errors.petAge || errors.ageYears || errors.ageMonths)" class="field-error">{{ errors.petAge || errors.ageYears || errors.ageMonths }}</span></div>
-              <div id="intake-pet-breed-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-breed-field' }"><label><span class="required-mark" aria-hidden="true">*</span>品種：</label><Input v-model="pet.breed" aria-required="true" class="input-medium" /><span v-if="attemptedSubmit && errors.petBreed" class="field-error">{{ errors.petBreed }}</span></div>
-              <div class="field"><label>花色：</label><Input v-model="pet.color" class="input-medium" /></div>
+              <div id="intake-pet-age-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-age-field' }"><label for="intake-pet-age-years" class="field-label"><span class="required-mark" aria-hidden="true">*</span>年齡：</label><Input id="intake-pet-age-years" v-model="pet.ageYears" aria-label="年齡（年）" aria-required="true" v-bind="invalidAttrs('pet-age', 'petAge', 'ageYears', 'ageMonths')" class="input-short" type="number" min="0" step="1" inputmode="numeric" /> 年 <Input v-model="pet.ageMonths" aria-label="年齡（個月）" v-bind="invalidAttrs('pet-age', 'petAge', 'ageYears', 'ageMonths')" class="input-short" type="number" min="0" max="11" step="1" inputmode="numeric" /> 個月<span class="hint">（月齡 0–11）</span><span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="errorFor('petAge', 'ageYears', 'ageMonths')" :id="errorId('pet-age')" class="field-error">{{ errorFor('petAge', 'ageYears', 'ageMonths') }}</span></div>
+              <div id="intake-pet-breed-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-breed-field' }"><label for="intake-pet-breed" class="field-label"><span class="required-mark" aria-hidden="true">*</span>品種：</label><Input id="intake-pet-breed" v-model="pet.breed" list="intake-breed-suggestions" autocomplete="off" aria-required="true" v-bind="invalidAttrs('pet-breed', 'petBreed')" class="input-medium" /><span v-if="errorFor('petBreed')" :id="errorId('pet-breed')" class="field-error">{{ errorFor('petBreed') }}</span></div>
+              <div class="field"><label for="intake-pet-color" class="field-label">花色：</label><Input id="intake-pet-color" v-model="pet.color" list="intake-color-suggestions" autocomplete="off" class="input-medium" /></div>
+              <datalist id="intake-breed-suggestions"><option v-for="option in breedSuggestions" :key="option" :value="option" /></datalist>
+              <datalist id="intake-color-suggestions"><option v-for="option in colorSuggestions" :key="option" :value="option" /></datalist>
             </div>
             <div>
               <div class="field-group-title section-emphasis">生活狀況</div>
-              <div id="intake-household-count-field" class="field"><label>家中貓口：</label><Input v-model="pet.householdCatCount" class="input-short" type="number" min="0" step="1" inputmode="numeric" /> 隻<span v-if="attemptedSubmit && errors.householdCatCount" class="field-error">{{ errors.householdCatCount }}</span></div>
-              <div class="field">
-                <label>主餐配菜：</label><label v-for="option in foodOptions" :key="option" class="option-label"><Checkbox :model-value="pet.foods.includes(option)" @update:model-value="pet.foods = toggleList(pet.foods, option, $event === true)" />{{ option }}<template v-if="option === '其他'">：</template></label
-                ><Input v-if="pet.foods.includes('其他')" v-model="pet.foodsOther" class="input-medium" placeholder="請填寫" /><span class="hint">(以上可複選)</span>
+              <div id="intake-household-count-field" class="field"><label for="intake-household-count" class="field-label">家中貓口：</label><Input id="intake-household-count" v-model="pet.householdCatCount" v-bind="invalidAttrs('household-count', 'householdCatCount')" class="input-short" type="number" min="0" step="1" inputmode="numeric" /> 隻<span v-if="errorFor('householdCatCount')" :id="errorId('household-count')" class="field-error">{{ errorFor('householdCatCount') }}</span></div>
+              <div class="field" role="group" aria-labelledby="intake-foods-label">
+                <span id="intake-foods-label" class="field-label">主餐配菜：</span><label v-for="option in foodOptions" :key="option" class="option-label"><Checkbox :model-value="pet.foods.includes(option)" @update:model-value="pet.foods = toggleList(pet.foods, option, $event === true)" />{{ option }}<template v-if="option === '其他'">：</template></label
+                ><Input v-if="pet.foods.includes('其他')" v-model="pet.foodsOther" aria-label="其他主餐配菜" class="input-medium" placeholder="請填寫" /><span class="hint">(以上可複選)</span>
               </div>
               <div id="intake-meals-field" class="field">
-                <label>放飯頻率：</label><RadioGroup v-model="pet.feedingType" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" :disabled="pet.feedingType !== 'scheduled'" class="input-short" type="number" min="1" max="20" step="1" inputmode="numeric" /> 餐</label></RadioGroup><span v-if="attemptedSubmit && errors.mealsPerDay" class="field-error">{{ errors.mealsPerDay }}</span>
+                <span id="intake-feeding-label" class="field-label">放飯頻率：</span><RadioGroup v-model="pet.feedingType" aria-labelledby="intake-feeding-label" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" aria-label="一日幾餐" v-bind="invalidAttrs('meals', 'mealsPerDay')" class="input-short" type="number" min="1" max="20" step="1" inputmode="numeric" /> 餐</label></RadioGroup><span v-if="errorFor('mealsPerDay')" :id="errorId('meals')" class="field-error">{{ errorFor('mealsPerDay') }}</span>
               </div>
             </div>
           </div>
           <div class="medical">
             <div class="field-group-title section-emphasis">醫療紀錄</div>
             <div id="intake-pet-neutered-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-neutered-field' }">
-              <label><span class="required-mark" aria-hidden="true">*</span>結紮：</label><RadioGroup v-model="pet.neutered" aria-required="true" class="contents"><label class="option-label"><RadioGroupItem value="no" />未結紮</label><label class="option-label"><RadioGroupItem value="yes" />已結紮</label></RadioGroup><span v-if="attemptedSubmit && errors.petNeutered" class="field-error">{{ errors.petNeutered }}</span>
+              <span id="intake-neutered-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>結紮：</span><RadioGroup v-model="pet.neutered" aria-labelledby="intake-neutered-label" aria-required="true" v-bind="invalidAttrs('pet-neutered', 'petNeutered')" class="contents"><label class="option-label"><RadioGroupItem value="no" />未結紮</label><label class="option-label"><RadioGroupItem value="yes" />已結紮</label></RadioGroup><span v-if="errorFor('petNeutered')" :id="errorId('pet-neutered')" class="field-error">{{ errorFor('petNeutered') }}</span>
             </div>
             <div class="field">
-              <label>疫苗：</label><RadioGroup v-model="pet.vaccineStatus" class="contents"><label class="option-label"><RadioGroupItem value="none" />未注射</label><label class="option-label"><RadioGroupItem value="done" />已注射：最後注射時間</label></RadioGroup><Input v-model="pet.vaccineDate" class="input-medium" placeholder="例：8/10" />
+              <span id="intake-vaccine-label" class="field-label">疫苗：</span><RadioGroup v-model="pet.vaccineStatus" aria-labelledby="intake-vaccine-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />未注射</label><label class="option-label"><RadioGroupItem value="done" />已注射：最後注射時間</label></RadioGroup><IntakeYearMonthSelect v-model="pet.vaccineDate" label="最後注射時間" />
+            </div>
+            <div class="field" role="group" aria-labelledby="intake-history-label">
+              <span id="intake-history-label" class="field-label">病史：</span><label v-for="option in historyOptions" :key="option" class="option-label"><Checkbox :model-value="pet.medicalHistory.includes(option)" @update:model-value="pet.medicalHistory = toggleList(pet.medicalHistory, option, $event === true)" />{{ option }}</label
+              ><label class="option-label"><Checkbox v-model="historyOther" />其他：</label><Input v-model="pet.medicalHistoryOther" aria-label="其他病史" class="input-medium" />
             </div>
             <div class="field">
-              <label>病史：</label><label v-for="option in historyOptions" :key="option" class="option-label"><Checkbox :model-value="pet.medicalHistory.includes(option)" @update:model-value="pet.medicalHistory = toggleList(pet.medicalHistory, option, $event === true)" />{{ option }}</label
-              ><label class="option-label">其他</label><Input v-model="pet.medicalHistoryOther" class="input-medium" />
+              <span id="intake-allergy-label" class="field-label">藥物過敏：</span><RadioGroup v-model="pet.allergyStatus" aria-labelledby="intake-allergy-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />無過敏</label><label class="option-label"><RadioGroupItem value="yes" />有：過敏類別</label></RadioGroup><Input v-model="pet.allergyType" aria-label="過敏類別" class="input-medium" />
             </div>
             <div class="field">
-              <label>藥物過敏：</label><RadioGroup v-model="pet.allergyStatus" class="contents"><label class="option-label"><RadioGroupItem value="none" />無過敏</label><label class="option-label"><RadioGroupItem value="yes" />有：過敏類別</label></RadioGroup><Input v-model="pet.allergyType" class="input-medium" />
-            </div>
-            <div class="field">
-              <label>健檢：</label><RadioGroup v-model="pet.checkupStatus" class="contents"><label class="option-label"><RadioGroupItem value="none" />未健檢</label><label class="option-label"><RadioGroupItem value="done" />有：上次健檢時間</label></RadioGroup><Input v-model="pet.checkupDate" class="input-medium" />
+              <span id="intake-checkup-label" class="field-label">健檢：</span><RadioGroup v-model="pet.checkupStatus" aria-labelledby="intake-checkup-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />未健檢</label><label class="option-label"><RadioGroupItem value="done" />有：上次健檢時間</label></RadioGroup><IntakeYearMonthSelect v-model="pet.checkupDate" label="上次健檢時間" />
             </div>
           </div>
         </div>
         <div class="section owner-section">
           <div class="section-title">家長</div>
           <div class="field-group-title section-emphasis">基本資料</div>
-          <div id="intake-owner-name-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-owner-name-field' }"><label><span class="required-mark" aria-hidden="true">*</span>姓名：</label><Input v-model="owner.name" class="input-medium" autocomplete="name" aria-required="true" :aria-invalid="attemptedSubmit && !!errors.ownerName" /><span v-if="attemptedSubmit && errors.ownerName" class="field-error">{{ errors.ownerName }}</span></div>
+          <div id="intake-owner-name-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-owner-name-field' }"><label for="intake-owner-name" class="field-label"><span class="required-mark" aria-hidden="true">*</span>姓名：</label><Input id="intake-owner-name" v-model="owner.name" class="input-medium" autocomplete="name" aria-required="true" v-bind="invalidAttrs('owner-name', 'ownerName')" /><span v-if="errorFor('ownerName')" :id="errorId('owner-name')" class="field-error">{{ errorFor('ownerName') }}</span></div>
           <div class="field contact-field">
-            <div class="contact-item"><label>市話：</label><Input v-model="owner.landline" class="input-medium" type="tel" /></div>
-            <div id="intake-owner-phone-field" class="contact-item" :class="{ 'field-highlight': highlightedField === 'intake-owner-phone-field' }"><label><span class="required-mark" aria-hidden="true">*</span>手機：</label><Input v-model="owner.phone" class="input-medium" type="tel" autocomplete="tel" aria-required="true" :aria-invalid="attemptedSubmit && !!errors.ownerPhone" /><span v-if="attemptedSubmit && errors.ownerPhone" class="field-error">{{ errors.ownerPhone }}</span></div>
+            <div class="contact-item"><label for="intake-owner-landline" class="field-label">市話：</label><Input id="intake-owner-landline" v-model="owner.landline" class="input-medium" type="tel" /></div>
+            <div id="intake-owner-phone-field" class="contact-item" :class="{ 'field-highlight': highlightedField === 'intake-owner-phone-field' }"><label for="intake-owner-phone" class="field-label"><span class="required-mark" aria-hidden="true">*</span>手機：</label><Input id="intake-owner-phone" v-model="owner.phone" class="input-medium" type="tel" inputmode="tel" autocomplete="tel" maxlength="16" placeholder="例：0912-345-678" aria-required="true" v-bind="invalidAttrs('owner-phone', 'ownerPhone')" /><span v-if="errorFor('ownerPhone')" :id="errorId('owner-phone')" class="field-error">{{ errorFor('ownerPhone') }}</span></div>
           </div>
-          <div id="intake-owner-address-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-owner-address-field' }"><label><span class="required-mark" aria-hidden="true">*</span>地址：</label><Input v-model="owner.address" aria-required="true" class="input-long" autocomplete="street-address" /><span v-if="attemptedSubmit && errors.ownerAddress" class="field-error">{{ errors.ownerAddress }}</span></div>
-          <div id="intake-owner-email-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-owner-email-field' }"><label><span class="required-mark" aria-hidden="true">*</span>Email：</label><Input v-model="owner.email" aria-required="true" class="input-long" inputmode="email" autocomplete="email" :aria-invalid="attemptedSubmit && !!errors.ownerEmail" /><span v-if="attemptedSubmit && errors.ownerEmail" class="field-error">{{ errors.ownerEmail }}</span></div>
+          <div id="intake-owner-address-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-owner-address-field' }"><label for="intake-owner-address" class="field-label"><span class="required-mark" aria-hidden="true">*</span>地址：</label><Input id="intake-owner-address" v-model="owner.address" aria-required="true" v-bind="invalidAttrs('owner-address', 'ownerAddress')" class="input-long" autocomplete="street-address" /><span v-if="errorFor('ownerAddress')" :id="errorId('owner-address')" class="field-error">{{ errorFor('ownerAddress') }}</span></div>
+          <div id="intake-owner-email-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-owner-email-field' }"><label for="intake-owner-email" class="field-label"><span class="required-mark" aria-hidden="true">*</span>Email：</label><Input id="intake-owner-email" v-model="owner.email" aria-required="true" v-bind="invalidAttrs('owner-email', 'ownerEmail')" class="input-long" inputmode="email" autocomplete="email" /><span v-if="errorFor('ownerEmail')" :id="errorId('owner-email')" class="field-error">{{ errorFor('ownerEmail') }}</span></div>
         </div>
-        <p v-if="error" class="error">{{ error }}</p>
+        <div v-if="issueCount" class="required-summary" aria-live="polite">
+          <span>還有 {{ issueCount }} 個欄位需要填寫或修正</span>
+          <button type="button" class="summary-jump" @click="jumpToIssue">前往填寫</button>
+        </div>
+        <p v-if="error" class="error" role="alert">{{ error }}</p>
         <div class="submit-btn-container">
-          <button class="submit-btn" type="submit" :disabled="submitting">{{ submitting ? '送出中…' : '送出' }}</button>
+          <button class="primary-btn submit-btn" type="submit" :disabled="submitting">{{ submitting ? '送出中…' : '送出' }}</button>
         </div>
         <div class="footer">
           <div class="hospital-info">
-            <img src="/chien-hua-logo-mark-v2.png" alt="謙華動物醫院 Logo" class="hospital-logo" />
+            <img src="/chien-hua-logo-mark-v2.png" :alt="`${hospital.name} Logo`" class="hospital-logo" />
             <div>
-              <h2>謙華動物醫院 CHIEN HUA Animal Hospital</h2>
-              <p>門診時間：9:00-11:30, 14:00-20:30 / 電話：035619595</p>
-              <p>地址：新竹市東區公園路226號</p>
+              <h2>{{ hospital.name }} {{ hospital.nameEn }}</h2>
+              <p>門診時間：{{ hospital.hours }}</p>
+              <p>電話：<a :href="hospital.phoneHref">{{ hospital.phone }}</a></p>
+              <p>地址：<a :href="hospital.mapHref" target="_blank" rel="noopener">{{ hospital.address }}</a></p>
             </div>
           </div>
         </div>
@@ -312,6 +377,7 @@ async function submit() {
   padding: 20px;
   color: var(--intake-text);
   font-family: var(--font-sans);
+  font-size: 16px;
 }
 .intake-page.is-verification {
   display: flex;
@@ -348,11 +414,6 @@ async function submit() {
   font-size: 24px;
   letter-spacing: 2px;
 }
-.verification-card > p {
-  margin: 14px 0 24px;
-  color: var(--intake-secondary);
-  line-height: 1.7;
-}
 .verification-form {
   display: grid;
   gap: 10px;
@@ -362,10 +423,20 @@ async function submit() {
   color: var(--intake-label);
   font-weight: bold;
 }
+.verification-hint {
+  margin: -4px 0 4px;
+  color: var(--intake-secondary);
+  font-size: 14px;
+}
 .verification-input {
+  height: 52px;
   text-align: center;
-  font-size: 20px;
-  letter-spacing: 0.3em;
+  font-size: 24px;
+  letter-spacing: 0.4em;
+}
+.verification-input:focus-visible {
+  border-color: var(--intake-accent);
+  box-shadow: 0 0 0 3px var(--intake-accent-surface);
 }
 .verification-hospital-info {
   display: flex;
@@ -376,7 +447,7 @@ async function submit() {
   padding-top: 20px;
   text-align: left;
   color: var(--intake-secondary);
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.65;
 }
 .verification-hospital-info img {
@@ -391,7 +462,7 @@ async function submit() {
 }
 .verification-hospital-info h2 {
   color: var(--intake-text);
-  font-size: 14px;
+  font-size: 16px;
 }
 .header {
   position: relative;
@@ -400,14 +471,22 @@ async function submit() {
   padding-bottom: 15px;
   text-align: center;
 }
-.logo {
-  color: var(--intake-red);
-  font-size: 16px;
+.header-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--intake-secondary);
+  font-size: 15px;
   font-weight: bold;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
+}
+.header-logo {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
 }
 .header h1 {
-  margin: 10px 0 0;
+  margin: 6px 0 0;
   font-size: 24px;
   letter-spacing: 2px;
 }
@@ -417,14 +496,8 @@ async function submit() {
 .section-title {
   margin-bottom: 12px;
   color: var(--intake-heading);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: bold;
-}
-.section-title span {
-  margin-left: 10px;
-  color: var(--intake-muted);
-  font-size: 14px;
-  font-weight: normal;
 }
 .grid {
   display: grid;
@@ -438,10 +511,9 @@ async function submit() {
   margin-bottom: 10px;
   border-bottom: 1px dashed var(--intake-dash);
   padding-bottom: 4px;
-  color: var(--intake-secondary);
   font-weight: bold;
 }
-.section-emphasis, .section-title.section-emphasis span, .section-title .section-emphasis { color: var(--intake-orange); }
+.section-emphasis { color: var(--intake-accent); }
 .field {
   display: flex;
   align-items: center;
@@ -450,7 +522,7 @@ async function submit() {
   margin-bottom: 12px;
   line-height: 1.8;
 }
-.field > label:first-child {
+.field-label {
   color: var(--intake-label);
   font-weight: bold;
 }
@@ -462,22 +534,23 @@ async function submit() {
   background: transparent;
   color: var(--intake-text);
   font-family: inherit;
-  font-size: 14px;
+  /* 小於 16px 時 iOS Safari 一聚焦就放大整頁，飼主填完每一格都要自己縮回來。 */
+  font-size: 16px;
   height: auto;
   min-height: 0;
   box-shadow: none;
   outline: none;
 }
 .field input[data-slot='input']:focus {
-  border-bottom: 2px solid var(--intake-focus);
-  background-color: var(--intake-focus-surface);
+  border-bottom: 2px solid var(--intake-accent);
+  background-color: var(--intake-accent-surface);
 }
 .input-short {
-  width: 50px;
+  width: 56px;
   text-align: center;
 }
 .input-medium {
-  width: 130px;
+  width: 150px;
 }
 .input-long {
   min-width: 200px;
@@ -486,50 +559,67 @@ async function submit() {
 .option-label {
   display: inline-flex;
   align-items: center;
-  margin-right: 6px;
+  gap: 6px;
+  margin-right: 8px;
   cursor: pointer;
-  font-size: 14px;
   user-select: none;
 }
 .option-label [data-slot='checkbox'],
 .option-label [data-slot='radio-group-item'] {
-  width: 16px;
-  height: 16px;
-  margin-right: 4px;
+  width: 18px;
+  height: 18px;
   cursor: pointer;
 }
-.option-label :deep([data-slot='checkbox'][data-state='checked']) {
-  border-color: var(--intake-orange) !important;
-  background-color: var(--intake-orange) !important;
-}
+.option-label :deep([data-slot='checkbox'][data-state='checked']),
 .option-label :deep([data-slot='radio-group-item'][data-state='checked']) {
-  border-color: var(--intake-orange) !important;
-  background-color: var(--intake-orange) !important;
+  border-color: var(--intake-accent) !important;
+  background-color: var(--intake-accent) !important;
+}
+.option-label :deep([data-slot='checkbox']:focus-visible),
+.option-label :deep([data-slot='radio-group-item']:focus-visible) {
+  border-color: var(--intake-accent) !important;
+  box-shadow: 0 0 0 3px var(--intake-accent-surface);
 }
 .option-label :deep([data-slot='radio-group-indicator']) {
   display: none !important;
 }
 .hint {
-  color: var(--intake-hint);
-  font-size: 11px;
+  color: var(--intake-secondary);
+  font-size: 14px;
 }
-.field-error { color: var(--intake-red); font-size: 12px; }
+.field-error { color: var(--intake-red); font-size: 14px; }
 .required-mark { color: var(--intake-red); }
 .field-highlight {
   animation: required-field-flash 0.55s ease-in-out 3;
   border-radius: 4px;
 }
 @keyframes required-field-flash {
-  50% { background: var(--intake-focus-surface); box-shadow: 0 0 0 3px var(--intake-focus-surface); }
+  50% { background: var(--intake-accent-surface); box-shadow: 0 0 0 3px var(--intake-accent-surface); }
 }
 .required-summary {
-  margin: 0 0 18px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 20px 0 0;
   border: 1px solid var(--intake-red);
-  border-radius: 4px;
-  padding: 9px 12px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: var(--intake-red-surface);
   color: var(--intake-red);
-  font-size: 14px;
+  font-weight: bold;
   line-height: 1.5;
+}
+.summary-jump {
+  border: none;
+  background: none;
+  padding: 4px 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
 }
 .owner-section {
   border-top: 1px dashed var(--intake-dash);
@@ -547,10 +637,6 @@ async function submit() {
   align-items: center;
   gap: 6px;
 }
-.contact-item > label {
-  color: var(--intake-label);
-  font-weight: bold;
-}
 .contact-item .field-error {
   flex-basis: 100%;
 }
@@ -558,20 +644,29 @@ async function submit() {
   margin-top: 25px;
   text-align: center;
 }
-.submit-btn {
+.primary-btn {
+  min-height: 48px;
   border: none;
-  border-radius: 4px;
-  padding: 10px 24px;
-  background-color: var(--intake-focus);
+  border-radius: 8px;
+  padding: 10px 32px;
+  background-color: var(--intake-accent);
   color: var(--intake-white);
   cursor: pointer;
-  font-size: 16px;
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: bold;
+  letter-spacing: 1px;
   transition: background 0.2s;
 }
-.submit-btn:hover:not(:disabled) {
-  background-color: var(--intake-focus-hover);
+.primary-btn:hover:not(:disabled) {
+  background-color: var(--intake-accent-hover);
 }
-.submit-btn:disabled {
+.primary-btn:focus-visible {
+  outline: 3px solid var(--intake-accent-surface);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--intake-accent);
+}
+.primary-btn:disabled {
   cursor: wait;
   opacity: 0.7;
 }
@@ -580,7 +675,7 @@ async function submit() {
   border-top: 2px solid var(--intake-border);
   padding-top: 15px;
   color: var(--intake-secondary);
-  font-size: 12px;
+  font-size: 14px;
 }
 .hospital-info h2 {
   margin: 0;
@@ -591,6 +686,12 @@ async function submit() {
 .hospital-logo { width: 44px; height: 44px; flex: 0 0 auto; object-fit: contain; }
 .hospital-info p {
   margin: 3px 0;
+}
+.hospital-info a,
+.verification-hospital-info a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .error {
   margin: 12px 0;
@@ -609,8 +710,10 @@ async function submit() {
   line-height: 1.8;
 }
 @media (prefers-reduced-motion: reduce) {
-  .field-highlight { animation: none; background: var(--intake-focus-surface); }
+  .field-highlight { animation: none; background: var(--intake-accent-surface); }
 }
+/* 手機：飼主多半在櫃台前用手機填。選項改成整塊可點的膠囊、輸入框有外框，
+   點擊範圍至少 44px；電腦版維持紙本表單的底線樣式。 */
 @media (max-width: 640px) {
   .intake-page {
     padding: 0;
@@ -632,20 +735,60 @@ async function submit() {
     font-size: 22px;
   }
   .field {
-    align-items: flex-start;
-    gap: 5px;
+    gap: 8px;
+    margin-bottom: 18px;
+    line-height: 1.5;
   }
-  .field > label:first-child {
-    min-width: 70px;
+  .field > .field-label,
+  .contact-item > .field-label {
+    flex-basis: 100%;
+  }
+  .field input[data-slot='input'] {
+    min-height: 44px;
+    border: 1px solid var(--intake-dash);
+    border-radius: 8px;
+    padding: 8px 12px;
+    background: var(--intake-white);
+  }
+  .field input[data-slot='input']:focus {
+    border: 1px solid var(--intake-accent);
+    box-shadow: 0 0 0 3px var(--intake-accent-surface);
+    background: var(--intake-white);
+  }
+  .input-medium,
+  .input-long {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 180px;
+  }
+  .input-short {
+    width: 64px;
   }
   .option-label {
-    margin-right: 8px;
+    min-height: 44px;
+    margin-right: 0;
+    border: 1px solid var(--intake-dash);
+    border-radius: 999px;
+    padding: 6px 14px;
+    gap: 8px;
   }
-  .input-long {
-    min-width: 150px;
+  .option-label:has([data-state='checked']) {
+    border-color: var(--intake-accent);
+    background: var(--intake-accent-surface);
+  }
+  /* 「定食定量：一日 □ 餐」的輸入框在膠囊裡面，縮小一點才不會把膠囊撐高。 */
+  .option-label input[data-slot='input'] {
+    min-height: 32px;
+    padding: 2px 6px;
+  }
+  .field-error {
+    flex-basis: 100%;
   }
   .medical {
     margin-top: 10px;
+  }
+  .submit-btn {
+    width: 100%;
   }
 }
 </style>
