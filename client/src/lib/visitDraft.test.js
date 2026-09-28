@@ -2,6 +2,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { clinicalDraft, draftPatch, mergeClinicalUpdate, takeBaseline } from './visitDraft.js';
 
+test('量測在草稿裡是字串，伺服器的數字跟畫面上的同一個值不算變更', () => {
+  const base = clinicalDraft({ weightKg: 4.2, temperatureC: null });
+  assert.deepEqual([base.weightKg, base.temperatureC], ['4.2', '']);
+  assert.deepEqual(draftPatch({ ...base, weightKg: '4.2' }, base), {});
+  assert.deepEqual(draftPatch({ ...base, temperatureC: '38.5' }, base), { temperatureC: '38.5' });
+});
+
 test('remote workflow updates preserve an unsaved clinical note without a false conflict', () => {
   const original = { visitNote: 'old' };
   const base = clinicalDraft(original);

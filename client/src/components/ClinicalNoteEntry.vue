@@ -142,9 +142,8 @@ const kindBadgeClass = computed(() =>
           <Input
             :id="`journal-${field.key}-${note._id}`"
             v-model="form[field.key]"
-            type="number"
-            min="0"
-            :step="field.step"
+            type="text"
+            inputmode="decimal"
             :disabled="saving"
             class="w-32 bg-card tabular-nums"
           />

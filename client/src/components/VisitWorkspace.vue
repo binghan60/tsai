@@ -565,14 +565,16 @@ onBeforeUnmount(() => {
         <div class="flex flex-col gap-6 px-6 py-5">
           <section class="space-y-3" :aria-labelledby="`measure-heading-${appointment._id}`">
             <div class="flex items-center gap-2"><h3 :id="`measure-heading-${appointment._id}`" class="text-base font-semibold">量測</h3><DestTag :to="['journal', 'report']" /></div>
+            <!-- 量測用文字框＋數字鍵盤，不用 type="number"：數字框在空白時按上下鍵或滾輪會直接帶入最小值 0，
+                 醫師捲動工作區時游標停在體溫欄，就莫名其妙存了 0 °C。填寫頁的量測欄位也是這樣做。 -->
             <div class="grid grid-cols-2 gap-3">
               <div class="space-y-1.5">
                 <Label :for="`visit-weight-${appointment._id}`">體重</Label>
-                <div class="relative"><Input :id="`visit-weight-${appointment._id}`" v-model="draft.weightKg" type="number" min="0" step="0.01" class="num pr-11" :disabled="!editable || committing" /><span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-subtle-foreground">kg</span></div>
+                <div class="relative"><Input :id="`visit-weight-${appointment._id}`" v-model="draft.weightKg" type="text" inputmode="decimal" class="num pr-11" :disabled="!editable || committing" /><span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-subtle-foreground">kg</span></div>
               </div>
               <div class="space-y-1.5">
                 <Label :for="`visit-temp-${appointment._id}`">體溫</Label>
-                <div class="relative"><Input :id="`visit-temp-${appointment._id}`" v-model="draft.temperatureC" type="number" min="0" step="0.1" class="num pr-11" :disabled="!editable || committing" /><span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-subtle-foreground">°C</span></div>
+                <div class="relative"><Input :id="`visit-temp-${appointment._id}`" v-model="draft.temperatureC" type="text" inputmode="decimal" class="num pr-11" :disabled="!editable || committing" /><span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-subtle-foreground">°C</span></div>
               </div>
             </div>
           </section>

@@ -8,9 +8,12 @@ function labMap(appointment) {
   return Object.fromEntries((appointment?.labValues ?? []).map((lab) => [lab.key, String(lab.value ?? '')]));
 }
 
+// 量測在草稿裡一律是字串：輸入框是文字框，伺服器回的是數字，兩邊型別不同就會把同一個值當成改過。
+const MEASUREMENT_FIELDS = new Set(['weightKg', 'temperatureC']);
+
 export function clinicalDraft(appointment) {
   return {
-    ...Object.fromEntries(CLINICAL_FIELDS.map((key) => [key, appointment[key] ?? ''])),
+    ...Object.fromEntries(CLINICAL_FIELDS.map((key) => [key, MEASUREMENT_FIELDS.has(key) ? String(appointment[key] ?? '') : appointment[key] ?? ''])),
     labs: labMap(appointment),
   };
 }
