@@ -1,5 +1,5 @@
 <script setup>
-import { nextTick, onActivated, ref, watch } from 'vue';
+import { computed, nextTick, onActivated, onBeforeUnmount, ref, watch } from 'vue';
 import { Bell, BellOff, Send } from '@lucide/vue';
 import { useAppointmentNotificationPreferences } from '../../lib/appointmentNotificationPreferences';
 import NotificationSettingsDialog from '../NotificationSettingsDialog.vue';
@@ -12,6 +12,7 @@ import { useToast } from '../../composables/useToast';
 import { usePetMentionPicker } from '../../composables/usePetMentionPicker';
 import { formatDateTime } from '../../lib/datetime';
 import { splitMentionSegments } from '../../lib/chatMentions';
+import { chatTimeLabel, chatTimeline } from '../../lib/chatTimeline';
 import SidePanel from './SidePanel.vue';
 import ChatChangeSnapshot from '../ChatChangeSnapshot.vue';
 import { Button } from '../ui/button';
@@ -31,7 +32,12 @@ const toast = useToast();
 const draft = ref('');
 const sending = ref(false);
 const listEl = ref(null);
-const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
+// 「今天」「昨天」要跟著時間走：面板一直開著過了午夜，分隔條也要改口。
+const now = ref(new Date());
+const clock = setInterval(() => { now.value = new Date(); }, 60_000);
+onBeforeUnmount(() => clearInterval(clock));
+// 換天的地方插日期分隔（跟 LINE 一樣），見 lib/chatTimeline.js。
+const rows = computed(() => chatTimeline(store.messages, now.value));
 
 function senderLabel(sender) {
   return sender === 'front_desk' ? '櫃台' : '醫師';
@@ -96,31 +102,37 @@ async function submit() {
       <div class="flex h-full min-h-0 flex-col">
         <div ref="listEl" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
           <p v-if="!store.messages.length" class="py-10 text-center text-muted-foreground">還沒有訊息</p>
-          <div
-            v-for="message in store.messages"
-            :key="message._id"
-            class="flex flex-col"
-            :class="message.sender === identity ? 'items-end' : 'items-start'"
-          >
+          <template v-for="row in rows" :key="row.key">
+            <div v-if="row.type === 'day'" class="flex items-center gap-3 py-1" role="separator" :aria-label="row.label">
+              <span class="h-px flex-1 bg-border" aria-hidden="true"></span>
+              <span class="rounded-full bg-sunken px-3 py-0.5 text-xs font-semibold text-muted-foreground">{{ row.label }}</span>
+              <span class="h-px flex-1 bg-border" aria-hidden="true"></span>
+            </div>
             <div
-              class="max-w-[88%] rounded-xl px-3.5 py-2 text-base whitespace-pre-wrap wrap-anywhere"
-              :class="message.sender === identity ? 'rounded-br-sm bg-accent text-accent-foreground' : 'rounded-bl-sm bg-sunken text-foreground'"
-            ><template v-for="(segment, index) in splitMentionSegments(message.content, message.mentions)" :key="index"
-                ><button
-                  v-if="segment.type === 'mention'"
-                  type="button"
-                  class="mx-0.5 inline-flex items-center rounded-full px-1.5 font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-                  :class="message.sender === identity ? 'bg-card' : 'bg-accent'"
-                  v-tip="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined"
-                  @click="pinned.openQuickView(segment.mention.petId)"
-                >#{{ segment.mention.petName }}</button
-                ><template v-else>{{ segment.text }}</template></template
-            ><div v-if="message.snapshot"><ChatChangeSnapshot :snapshot="message.snapshot" /></div></div>
-            <span class="mt-1 flex items-center gap-1.5 px-1 text-xs text-subtle-foreground">
-              <span v-if="message.auto" class="rounded-sm bg-sunken px-1.5 py-0.5 font-semibold">自動通知</span>
-              {{ senderLabel(message.sender) }}<span class="num">{{ formatDateTime(message.createdAt, timeOptions) }}</span>
-            </span>
-          </div>
+              v-else
+              class="flex flex-col"
+              :class="row.message.sender === identity ? 'items-end' : 'items-start'"
+            >
+              <div
+                class="max-w-[88%] rounded-xl px-3.5 py-2 text-base whitespace-pre-wrap wrap-anywhere"
+                :class="row.message.sender === identity ? 'rounded-br-sm bg-accent text-accent-foreground' : 'rounded-bl-sm bg-sunken text-foreground'"
+              ><template v-for="(segment, index) in splitMentionSegments(row.message.content, row.message.mentions)" :key="index"
+                  ><button
+                    v-if="segment.type === 'mention'"
+                    type="button"
+                    class="mx-0.5 inline-flex items-center rounded-full px-1.5 font-semibold text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+                    :class="row.message.sender === identity ? 'bg-card' : 'bg-accent'"
+                    v-tip="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined"
+                    @click="pinned.openQuickView(segment.mention.petId)"
+                  >#{{ segment.mention.petName }}</button
+                  ><template v-else>{{ segment.text }}</template></template
+              ><div v-if="row.message.snapshot"><ChatChangeSnapshot :snapshot="row.message.snapshot" /></div></div>
+              <span class="mt-1 flex items-center gap-1.5 px-1 text-xs text-subtle-foreground">
+                <span v-if="row.message.auto" class="rounded-sm bg-sunken px-1.5 py-0.5 font-semibold">自動通知</span>
+                {{ senderLabel(row.message.sender) }}<span class="num" v-tip="formatDateTime(row.message.createdAt)">{{ chatTimeLabel(row.message.createdAt, now) }}</span>
+              </span>
+            </div>
+          </template>
         </div>
 
         <form ref="composerEl" class="relative flex shrink-0 items-end gap-2 border-t border-border px-4 py-3" @submit.prevent="submit">
