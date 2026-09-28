@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import PatientLink from './PatientLink.vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { ArrowRight, FileText, Info, Pencil, Stethoscope, Undo2, X } from '@lucide/vue'
 import SurgeryBadge from './SurgeryBadge.vue'
@@ -475,7 +476,7 @@ onBeforeUnmount(() => {
             <CheckinNumber :appointment="appointment" size="lg" />
             <div class="min-w-0 space-y-2.5">
               <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-xl leading-tight font-semibold">{{ appointment.petName }}</h2>
+                <h2 class="text-xl leading-tight font-semibold"><PatientLink :pet-id="appointment.petId">{{ appointment.petName }}</PatientLink></h2>
                 <Badge v-if="appointment.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
               </div>
               <SpecGrid>
@@ -491,7 +492,7 @@ onBeforeUnmount(() => {
           </div>
           <div class="flex items-start gap-2">
             <SpecGrid>
-              <SpecCell label="飼主">{{ owner?.name || appointment.ownerName || '待確認' }}</SpecCell>
+              <SpecCell label="飼主"><PatientLink v-if="owner?.name || appointment.ownerName" :pet-id="appointment.petId" quiet>{{ owner?.name || appointment.ownerName }}</PatientLink><template v-else>待確認</template></SpecCell>
               <SpecCell v-if="owner?.phone || appointment.ownerPhone" label="電話" mono>{{ owner?.phone || appointment.ownerPhone }}</SpecCell>
               <SpecCell v-if="appointment.checkedInAt" label="報到" mono>{{ clinicTimeInput(appointment.checkedInAt) }}</SpecCell>
               <SpecCell v-if="visitMinutes !== null" label="看診" mono>{{ visitMinutes }} 分</SpecCell>

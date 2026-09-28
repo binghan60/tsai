@@ -1,12 +1,20 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import PatientLink from './PatientLink.vue';
 import { onBeforeRouteLeave } from 'vue-router';
 import { http } from '../api/http';
 import { getSocket } from '../api/socket';
-import { formatDateTime } from '../lib/datetime';
+import { formatDateTime, relativeTimeLabel } from '../lib/datetime';
 import { MEDICATION_ACTIVE, MEDICATION_STAGES, medicationLabel } from '../../../shared/medicationWorkflow.js';
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue';
 import ConfirmDialog from './ConfirmDialog.vue';
+import DataCard from './DataCard.vue';
+import EmptyState from './EmptyState.vue';
+import ListFooter from './ListFooter.vue';
+import ListSkeleton from './ListSkeleton.vue';
+import RowActions from './RowActions.vue';
+import SpecGrid from './SpecGrid.vue';
+import SpecCell from './SpecCell.vue';
 import FilterTabs from './FilterTabs.vue';
 import FilterBar from './FilterBar.vue';
 import Pagination from './Pagination.vue';
@@ -18,7 +26,8 @@ import { richTextToPlain } from '../../../shared/richText.js';
 import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
-import { ArrowLeft, ClipboardPlus, Plus, Search } from '@lucide/vue';
+import { ArrowLeft, Cat, ChevronDown, ChevronRight, ClipboardPlus, Copy, Pill, Plus, Search } from '@lucide/vue';
+import { useToast } from '../composables/useToast';
 
 // 藥單工作區。清單與單筆詳情是同一個容器內的兩個檢視（opened 切換），不是兩層 Modal——
 // 舊版在 xl 的面板裡再開一個 xl 的 Modal，同尺寸疊同尺寸畫面幾乎不變、看起來像沒反應，
@@ -36,11 +45,19 @@ const props = defineProps({
 });
 const emit = defineEmits(['counts', 'close', 'create']);
 const doctor = computed(() => props.mode === 'doctor');
+// 全頁版（/medications）：跟健檢報告清單同一種寫法——滿版清單（DataCard 分欄），點一筆整頁切換成詳情卡片，
+// 左上返回鈕回清單。曾經試過左清單、右詳情並排，使用者要的是跟健檢報告一樣的清單。
+// 已確認的藥單在詳情是唯讀檢視（藥單內容放大，方便拿藥包逐項對照），要改才切成編輯框。
+const fullPage = computed(() => !props.compact && !props.createOnly);
+const editing = ref(false);
+const showNotes = ref(false);
+const toast = useToast();
 const filter = ref(props.initialFilter || (doctor.value ? 'review' : 'active'));
 const queryInput = ref('');
 const query = ref('');
 const page = ref(1);
 const totalPages = ref(1);
+const pageSize = ref(25);
 const total = ref(0);
 const items = ref([]);
 const counts = ref({});
@@ -79,6 +96,8 @@ const displayedStages = computed(() => props.stages?.length ? MEDICATION_STAGES.
 const terminal = computed(() => ['collected', 'cancelled'].includes(selected.value?.status));
 const dirty = computed(() => opened.value && JSON.stringify(form) !== initial.value);
 const clinicalEditable = computed(() => !terminal.value && (!selected.value || doctor.value || selected.value.status === 'review'));
+// 右欄顯示編輯框的時機：新增藥單、按了「修改藥單」，或醫師正在審核（全頁版目前只有櫃台在用，保留給醫師的路徑）。
+const showEditor = computed(() => !fullPage.value || !selected.value || editing.value || (doctor.value && clinicalEditable.value));
 const changedClinical = computed(() => selected.value && ['condition', 'prescription', 'note'].some(key => form[key].trim() !== selected.value[key]));
 function tone(status) {
   return { review: 'bg-warning-surface text-warning', approved: 'bg-info-surface text-info', ready: 'bg-accent text-accent-foreground', collected: 'bg-success-surface text-success' }[status] || 'bg-sunken text-muted-foreground';
@@ -100,6 +119,7 @@ async function refresh() {
     counts.value = data.counts;
     total.value = data.total;
     totalPages.value = data.totalPages;
+    pageSize.value = data.limit || pageSize.value;
     emit('counts', data.counts);
     const current = items.value.find(item => item._id === selected.value?._id);
     if (current && current.__v !== selected.value.__v) stale.value = true;
@@ -127,6 +147,36 @@ function applySearch() {
   else refresh();
 }
 function setFilter(value) { page.value = 1; filter.value = value; }
+// 全頁版清單列上的 ⋯：列上的主要動作是確認領藥／完成包藥時，「查看藥單」收在這裡；取消藥單放最後。
+function rowActions(item) {
+  return [
+    ...(nextAction(item) ? [{ key: 'open', label: '查看藥單' }] : []),
+    ...(!['collected', 'cancelled'].includes(item.status) ? [{ key: 'cancel', label: '取消藥單', danger: true }] : []),
+  ];
+}
+function runRowAction(key, item) {
+  if (key === 'open') openOrder(item);
+  else cancelFromList(item);
+}
+// 清單列上的 ⋯「取消藥單」：不必先點進去。
+function cancelFromList(item) {
+  selected.value = item;
+  resetForm(item);
+  confirmation.value = {
+    title: `取消 ${item.petName} 的藥單？`,
+    description: '取消後不再包藥或交付。',
+    run: () => execute('cancel'),
+    cancel: () => { selected.value = null; },
+  };
+}
+async function copyPhone(phone) {
+  try {
+    await navigator.clipboard.writeText(phone);
+    toast.success(phone, '已複製電話');
+  } catch {
+    toast.error('無法複製，請手動選取電話');
+  }
+}
 watch(petQuery, value => {
   clearTimeout(searchTimer);
   const sequence = ++searchSequence;
@@ -150,6 +200,7 @@ function resetForm(order) {
   modalError.value = '';
   returning.value = false;
   returnReason.value = '';
+  editing.value = false;
 }
 function create() {
   // 面板版的新增是推入另一層（有自己的返回鈕），交給外層處理。
@@ -203,16 +254,6 @@ async function openOrder(item) {
   } catch (err) { error.value = err.response?.data?.message || '無法開啟藥單'; }
   finally { busy.value = false; }
 }
-function openCancel(item) {
-  selected.value = item;
-  resetForm(item);
-  confirmation.value = {
-    title: `取消 ${item.petName} 的藥單？`,
-    description: '取消後不再包藥或交付。',
-    run: () => execute('cancel'),
-    cancel: () => { selected.value = null; },
-  };
-}
 function pickPet(value) {
   pet.value = value;
   petQuery.value = '';
@@ -228,12 +269,21 @@ function leave() {
   opened.value = false;
   if (props.createOnly) emit('close');
 }
+// 全頁版：新增表單按「取消」、或修改到一半按「取消修改」。
+function cancelEditing() {
+  const run = () => {
+    if (selected.value) resetForm(selected.value);
+    else leave();
+  };
+  if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', description: '本次尚未儲存的輸入會清除。', run };
+  else run();
+}
 function close() {
   if (busy.value) return;
   if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', description: props.createOnly ? '關閉後，本次尚未儲存的輸入會清除。' : '返回清單後，本次尚未儲存的輸入會清除。', run: leave };
   else leave();
 }
-defineExpose({ close });
+defineExpose({ close, create });
 function reload() {
   confirmation.value = { title: '載入最新藥單？', description: '會以最新藥單取代目前輸入，請先保留需要的文字。', run: () => openOrder(selected.value) };
 }
@@ -284,6 +334,29 @@ function completeFromList(item) {
     if (confirmation.value) confirmation.value.cancel = cancel;
   }
 }
+// 全頁版右欄底部：一顆主要動作（依階段），其餘收進 ⋯ 選單，取消藥單放最後、紅字。
+const primaryAction = computed(() => {
+  const order = selected.value;
+  if (!order || terminal.value || returning.value || editing.value) return null;
+  if (doctor.value) return order.status === 'review' ? { key: 'approve', label: '確認藥單並送交包藥', disabled: !richTextToPlain(form.prescription).trim() } : null;
+  if (order.status === 'approved') return { key: 'ready', label: order.needsRepack ? '完成重新包藥' : '完成包藥' };
+  if (order.status === 'ready') return { key: 'collect', label: '確認領藥', disabled: dirty.value };
+  return null;
+});
+const moreActions = computed(() => {
+  const order = selected.value;
+  if (!order || terminal.value || returning.value || editing.value || doctor.value) return [];
+  return [
+    ...(clinicalEditable.value ? [{ key: 'edit', label: '修改藥單' }] : []),
+    ...(order.status === 'approved' ? [{ key: 'return', label: '提出意見' }] : []),
+    { key: 'cancel', label: '取消藥單', danger: true },
+  ];
+});
+function runMoreAction(key) {
+  if (key === 'edit') editing.value = true;
+  else if (key === 'return') returning.value = true;
+  else requestAction(key);
+}
 function runConfirmation() { const run = confirmation.value?.run; confirmation.value = null; run?.(); }
 function cancelConfirmation() { confirmation.value?.cancel?.(); confirmation.value = null; }
 if (props.createOnly) create();
@@ -305,23 +378,96 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="flex min-h-0 flex-1 flex-col gap-3" aria-label="藥單工作區">
-    <template v-if="!opened">
+  <section
+    aria-label="藥單工作區"
+    class="flex min-h-0 flex-1 flex-col gap-3"
+  >
+    <!-- 全頁版清單：跟健檢報告清單同一個模板（DataCard 分欄、列上一顆主要動作＋⋯）。點貓咪整頁切到詳情。 -->
+    <DataCard v-if="fullPage && !opened" title="藥單" :count="loading && !total ? null : total" style="--data-columns: minmax(13rem, 1.3fr) minmax(16rem, 2.4fr) 9rem 10rem 13rem">
+      <template #filters>
+        <FilterBar id="medication-search" v-model="queryInput" label="搜尋藥單" placeholder="貓咪、飼主或電話" class="w-full min-w-0 md:w-[26rem]" @submit="applySearch" />
+      </template>
+      <template #tabs>
+        <FilterTabs :model-value="filter" :items="filterItems" :counts="filterCounts" aria-label="藥單狀態篩選" @update:model-value="setFilter" />
+      </template>
+      <Alert v-if="error" variant="destructive" class="m-4"><AlertDescription>{{ error }}</AlertDescription></Alert>
+      <ListSkeleton v-if="loading && !items.length" :rows="5" inset />
+      <EmptyState v-else-if="!items.length" :icon="Pill" :title="error ? '暫時無法載入藥單' : '目前沒有符合條件的藥單'" description="飼主來電續藥時，按右上角「新增藥單」登記。" inset />
+      <template v-else>
+      <!-- 桌機：一列一張藥單。需重新包藥的列左側一條紅線。 -->
+      <div class="hidden xl:block">
+        <div class="desktop-data-header">
+          <span>貓咪</span><span>藥單內容</span><span>登記</span><span>狀態</span><span></span>
+        </div>
+        <div v-for="item in items" :key="item._id" data-medication-row class="desktop-data-row hover:bg-hover" :class="item.needsRepack ? 'shadow-[inset_3px_0_0_var(--danger)]' : ''">
+          <span class="desktop-data-cell flex min-w-0 items-center gap-3">
+            <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
+            <span class="min-w-0">
+              <span class="block truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
+              <span class="flex gap-2 text-sm text-muted-foreground"><span class="truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink><template v-else>飼主未記錄</template></span><span class="num shrink-0">{{ item.ownerPhone }}</span></span>
+            </span>
+          </span>
+          <!-- 貓咪名、飼主名連到貓咪詳情；點藥單內容才是開這張藥單。 -->
+          <button type="button" class="desktop-data-cell truncate text-left text-sm hover:text-primary" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" v-tip.overflow="richTextToPlain(item.prescription)" @click="openOrder(item)">{{ richTextToPlain(item.prescription).replace(/\n+/g, '；') || '—' }}</button>
+          <span class="desktop-data-cell">
+            <span class="num block text-sm">{{ formatDateTime(item.createdAt, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) }}</span>
+            <span class="block text-xs text-subtle-foreground">{{ relativeTimeLabel(item.createdAt) }}</span>
+          </span>
+          <span class="desktop-data-cell flex flex-wrap items-center gap-1.5">
+            <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
+            <Badge v-if="item.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>
+          </span>
+          <span class="desktop-data-cell flex items-center justify-end gap-1">
+            <Button v-if="nextAction(item)" variant="soft" size="sm" :disabled="busy" :aria-label="completeLabel(item)" @click="completeFromList(item)">{{ nextAction(item) === 'ready' ? '完成包藥' : '確認領藥' }}</Button>
+            <Button v-else variant="soft" size="sm" :disabled="busy" @click="openOrder(item)">查看</Button>
+            <RowActions v-if="nextAction(item) || !['collected', 'cancelled'].includes(item.status)" :actions="rowActions(item)" :label="`${item.petName} 藥單的更多操作`" @select="(key) => runRowAction(key, item)" />
+            <span v-else class="size-9 shrink-0" aria-hidden="true" />
+          </span>
+        </div>
+      </div>
+
+      <!-- 窄螢幕：一張藥單一張小卡。 -->
+      <ul class="divide-y divide-border xl:hidden">
+        <li v-for="item in items" :key="item._id" class="space-y-2 px-4 py-3" :class="item.needsRepack ? 'shadow-[inset_3px_0_0_var(--danger)]' : ''">
+          <div class="flex items-start gap-3">
+            <div class="min-w-0 flex-1">
+              <span class="block truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
+              <span class="flex gap-3 text-sm text-muted-foreground"><span class="truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink></span><span class="num shrink-0">{{ relativeTimeLabel(item.createdAt) }}</span></span>
+            </div>
+            <RowActions v-if="nextAction(item) || !['collected', 'cancelled'].includes(item.status)" :actions="rowActions(item)" :label="`${item.petName} 藥單的更多操作`" @select="(key) => runRowAction(key, item)" />
+          </div>
+          <p class="line-clamp-2 text-sm">{{ richTextToPlain(item.prescription) || '—' }}</p>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
+            <Badge v-if="item.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>
+            <Button v-if="nextAction(item)" variant="soft" size="sm" class="ml-auto" :disabled="busy" @click="completeFromList(item)">{{ nextAction(item) === 'ready' ? '完成包藥' : '確認領藥' }}</Button>
+            <Button v-else variant="soft" size="sm" class="ml-auto" :disabled="busy" @click="openOrder(item)">查看</Button>
+          </div>
+        </li>
+      </ul>
+      </template>
+      <template v-if="!loading && items.length" #footer>
+        <ListFooter :page="page" :total-pages="totalPages" :total="total" :page-size="pageSize" @update:page="page = $event" />
+      </template>
+    </DataCard>
+
+    <!-- 面板版：清單與詳情在同一個容器內切換。 -->
+    <template v-else-if="!opened">
     <div class="flex flex-wrap items-center gap-2">
-      <FilterBar id="medication-search" v-model="queryInput" label="搜尋藥單" placeholder="貓咪、飼主或電話" class="min-w-0 flex-1" :class="compact ? '' : 'sm:max-w-80'" @submit="applySearch" />
+      <FilterBar id="medication-search" v-model="queryInput" label="搜尋藥單" placeholder="貓咪、飼主或電話" class="min-w-0 flex-1" @submit="applySearch" />
       <Button v-if="!doctor" class="ml-auto" @click="create"><Plus stroke-width="1.75" />新增藥單</Button>
     </div>
-    <FilterTabs :model-value="filter" :items="filterItems" :counts="filterCounts" aria-label="藥單狀態篩選" :fit="compact" :class="compact ? '' : 'self-start'" @update:model-value="setFilter" />
+    <FilterTabs :model-value="filter" :items="filterItems" :counts="filterCounts" aria-label="藥單狀態篩選" fit @update:model-value="setFilter" />
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ul v-if="compact" class="-mx-5 divide-y divide-border border-y border-border">
       <li v-if="loading && !items.length" class="px-5 py-10 text-center text-muted-foreground">載入藥單中…</li>
       <li v-else-if="!items.length" class="px-5 py-10 text-center text-muted-foreground">{{ error ? '暫時無法載入藥單' : '目前沒有符合條件的藥單' }}</li>
       <li v-for="item in items" :key="item._id" data-medication-row class="space-y-2 px-5 py-3.5">
         <div class="flex items-start gap-3">
-          <button type="button" class="min-w-0 flex-1 text-left" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" @click="openOrder(item)">
-            <span class="block truncate text-base font-semibold text-primary">{{ item.petName }}</span>
-            <span class="flex items-baseline gap-3 text-sm"><span class="truncate">{{ item.ownerName }}</span><span class="num shrink-0 text-muted-foreground">{{ item.ownerPhone }}</span></span>
-          </button>
+          <div class="min-w-0 flex-1">
+            <span class="block truncate text-base font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
+            <span class="flex items-baseline gap-3 text-sm"><span class="truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink></span><span class="num shrink-0 text-muted-foreground">{{ item.ownerPhone }}</span></span>
+          </div>
           <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
         </div>
         <RichText v-if="item.prescription" tag="p" :text="item.prescription" class="line-clamp-3 rounded-lg bg-sunken px-3 py-2 text-sm" />
@@ -330,64 +476,96 @@ onBeforeUnmount(() => {
           <span class="num text-xs text-subtle-foreground">{{ formatDateTime(item.createdAt) }}</span>
           <span class="ml-auto flex gap-1.5">
             <Button v-if="!doctor && nextAction(item)" size="xs" :disabled="busy" :aria-label="completeLabel(item)" @click="completeFromList(item)">{{ nextAction(item) === 'ready' ? '完成包藥' : '確認領藥' }}</Button>
-            <Button size="xs" variant="soft" :disabled="busy" @click="openOrder(item)">{{ doctor && item.status === 'review' ? '審核' : '開啟' }}</Button>
+            <Button size="xs" variant="soft" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" @click="openOrder(item)">{{ doctor && item.status === 'review' ? '審核' : '開啟' }}</Button>
           </span>
         </div>
       </li>
     </ul>
-    <div v-else class="min-h-0 flex-1 overflow-auto rounded-xl border border-border bg-card">
-      <table class="w-full min-w-264 text-left text-sm">
-        <thead class="sticky top-0 z-10 bg-sunken text-xs text-subtle-foreground"><tr>
-          <th class="p-3">登記時間</th><th class="p-3">貓咪／飼主</th><th class="w-1/5 p-3">近況回報</th><th class="w-1/3 p-3">藥單內容</th><th class="p-3">備註</th><th class="p-3">狀態</th><th class="p-3">操作</th>
-        </tr></thead>
-        <tbody>
-          <tr v-if="loading && !items.length"><td colspan="7" class="p-10 text-center text-muted-foreground">載入藥單中…</td></tr>
-          <tr v-else-if="!items.length"><td colspan="7" class="p-10 text-center text-muted-foreground">{{ error ? '暫時無法載入藥單' : '目前沒有符合條件的藥單' }}</td></tr>
-          <tr v-for="item in items" :key="item._id" data-medication-row class="border-t border-border align-top hover:bg-hover">
-            <td class="whitespace-nowrap p-3 text-xs text-muted-foreground">{{ formatDateTime(item.createdAt) }}</td>
-            <td class="p-3"><p class="font-semibold">{{ item.petName }}</p><p>{{ item.ownerName }}</p><p class="text-xs text-muted-foreground">{{ item.ownerPhone }}</p></td>
-            <td class="break-words p-3"><RichText v-if="item.condition" :text="item.condition" /><template v-else>—</template></td>
-            <td class="break-words p-3 font-medium"><RichText :text="item.prescription" /></td>
-            <td class="break-words p-3"><RichText v-if="item.note" :text="item.note" /><template v-else>—</template></td>
-            <td class="space-y-2 p-3"><Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge><p v-if="item.needsRepack" class="text-xs font-semibold text-danger">暫停處理，需重新包藥</p></td>
-            <td class="p-3">
-              <div v-if="!doctor && !['collected', 'cancelled'].includes(item.status)" class="flex flex-nowrap gap-2 whitespace-nowrap">
-                <Button v-if="nextAction(item)" class="shrink-0" size="sm" :disabled="busy" :aria-label="completeLabel(item)" @click="completeFromList(item)">完成</Button>
-                <Button class="shrink-0" size="sm" variant="secondary" :disabled="busy" :aria-label="`修改 ${item.petName} 的藥單`" @click="openOrder(item)">修改</Button>
-                <Button class="shrink-0" size="sm" variant="destructive" :disabled="busy" :aria-label="`取消 ${item.petName} 的藥單`" @click="openCancel(item)">取消</Button>
-              </div>
-              <Button v-else size="sm" variant="soft" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" @click="openOrder(item)">{{ doctor && item.status === 'review' ? '審核藥單' : '查看' }}</Button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
     <Pagination :page="page" :total-pages="totalPages" @update:page="page = $event" />
     </template>
 
-    <template v-else>
-      <div v-if="!createOnly" class="flex shrink-0 flex-wrap items-center gap-3 border-b border-border pb-3">
+    <!-- 詳情。全頁版是一張卡片（取代清單）；面板版直接排在容器裡（contents，不多一層）。 -->
+    <div v-if="opened" :class="fullPage ? 'flex min-w-0 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-card' : 'contents'">
+      <template v-if="opened">
+      <!-- 全頁版標頭：貓咪與狀態，下面規格欄（飼主、電話、登記時間），跟看診工作區、櫃台處理視窗同一種寫法。 -->
+      <header v-if="fullPage && selected" class="flex flex-col gap-3 border-b border-border px-6 py-4">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <Button variant="secondary" size="icon-sm" :disabled="busy" aria-label="返回清單" @click="close"><ArrowLeft stroke-width="1.75" /></Button>
+          <h2 class="text-xl font-semibold"><PatientLink :pet-id="selected.petId">{{ selected.petName }}</PatientLink></h2>
+          <Badge variant="status" :class="tone(selected.status)">{{ medicationLabel(selected.status) }}</Badge>
+          <Badge v-if="dirty" variant="status" class="ml-auto bg-warning-surface text-warning">有未儲存內容</Badge>
+        </div>
+        <SpecGrid>
+          <SpecCell label="飼主"><PatientLink v-if="selected.ownerName" :pet-id="selected.petId" quiet>{{ selected.ownerName }}</PatientLink><template v-else>未記錄</template></SpecCell>
+          <SpecCell label="電話" mono>
+            <span class="flex items-center gap-1.5">{{ selected.ownerPhone || '—' }}<Button v-if="selected.ownerPhone" type="button" variant="secondary" size="icon-xs" :aria-label="`複製 ${selected.ownerName || selected.petName} 的電話`" @click="copyPhone(selected.ownerPhone)"><Copy stroke-width="1.75" /></Button></span>
+          </SpecCell>
+          <SpecCell label="登記" mono>{{ formatDateTime(selected.createdAt, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) }}</SpecCell>
+        </SpecGrid>
+      </header>
+      <header v-else-if="fullPage" class="flex items-center gap-2.5 border-b border-border px-6 py-4">
+        <Button variant="secondary" size="icon-sm" :disabled="busy" aria-label="返回清單" @click="close"><ArrowLeft stroke-width="1.75" /></Button>
+        <ClipboardPlus class="size-5 text-primary" stroke-width="1.75" aria-hidden="true" />
+        <div class="min-w-0">
+          <h2 class="text-xl font-semibold">新增藥單</h2>
+          <p class="text-sm text-muted-foreground">記錄飼主需求並建立藥單，送交醫師確認後再包藥。</p>
+        </div>
+        <Badge v-if="dirty" variant="status" class="ml-auto bg-warning-surface text-warning">有未儲存內容</Badge>
+      </header>
+      <div v-if="!createOnly && !fullPage" class="flex shrink-0 flex-wrap items-center gap-3 border-b border-border pb-3">
         <Button v-if="!compact" variant="secondary" :disabled="busy" @click="close"><ArrowLeft stroke-width="1.75" />返回清單</Button>
         <Button v-else variant="secondary" size="icon-sm" :disabled="busy" aria-label="返回清單" @click="close"><ArrowLeft stroke-width="1.75" /></Button>
         <div class="min-w-0">
           <p class="flex items-center gap-2 text-base font-semibold">
             <ClipboardPlus v-if="!selected" class="h-5 w-5 text-primary" stroke-width="1.75" aria-hidden="true" />
-            {{ selected ? `${selected.petName} 的藥單` : '新增藥單' }}
+            <template v-if="selected"><PatientLink :pet-id="selected.petId">{{ selected.petName }}</PatientLink> 的藥單</template><template v-else>新增藥單</template>
             <Badge v-if="selected" variant="status" :class="tone(selected.status)">{{ medicationLabel(selected.status) }}</Badge>
           </p>
-          <p v-if="selected" class="flex gap-3 text-sm"><span>{{ selected.ownerName }}</span><span class="num text-muted-foreground">{{ selected.ownerPhone }}</span></p>
+          <p v-if="selected" class="flex gap-3 text-sm"><PatientLink v-if="selected.ownerName" :pet-id="selected.petId" quiet>{{ selected.ownerName }}</PatientLink><span class="num text-muted-foreground">{{ selected.ownerPhone }}</span></p>
           <p v-else class="text-sm text-muted-foreground">記錄飼主需求並建立藥單，送交醫師確認後再包藥。</p>
         </div>
         <Badge v-if="dirty" variant="status" class="ml-auto bg-warning-surface text-warning">有未儲存內容</Badge>
       </div>
       <!-- 排版跟診療台的看診工作區一致：左欄是要填的欄位，右欄是歷次病歷日誌（可分頁、可捲動）。
            xl 以上兩欄各自捲動、整個面板不捲；較窄時上下堆疊、整個容器一起捲。 -->
-      <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1" :class="compact ? '' : 'xl:overflow-hidden'">
+      <div class="flex min-h-0 flex-1 flex-col gap-4" :class="fullPage ? 'px-6 py-5' : compact ? 'overflow-y-auto pr-1' : 'overflow-y-auto pr-1 xl:overflow-hidden'">
         <Alert v-if="stale" class="shrink-0" variant="destructive"><AlertDescription>藥單已被其他工作台更新，目前輸入已保留。請載入最新內容後再操作。<Button size="sm" variant="secondary" class="ml-2" @click="reload">載入最新藥單</Button></AlertDescription></Alert>
         <Alert v-if="selected?.needsRepack" class="shrink-0" variant="destructive"><AlertDescription>藥單在包藥完成後曾修改，請停止使用原藥包。待醫師重新確認後，請依最新藥單重新包藥。</AlertDescription></Alert>
         <Alert v-if="modalError" class="shrink-0" variant="destructive"><AlertDescription>{{ modalError }}</AlertDescription></Alert>
 
-        <div class="grid gap-5" :class="compact ? '' : 'xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[minmax(0,1fr)]'">
+
+        <!-- 全頁版的唯讀檢視：藥單內容是主角（櫃台拿藥包逐項對照），其餘是「標籤｜內容」列，跟病歷日誌卡片同一種寫法。 -->
+        <template v-if="!showEditor">
+          <section class="space-y-2" aria-labelledby="med-prescription-title">
+            <h3 id="med-prescription-title" class="text-sm font-semibold text-muted-foreground">藥單內容</h3>
+            <div class="rounded-xl border border-border-strong bg-sunken px-5 py-4 text-lg leading-relaxed">
+              <RichText v-if="richTextToPlain(selected.prescription).trim()" tag="div" :text="selected.prescription" class="whitespace-pre-line" />
+              <p v-else class="text-base text-subtle-foreground">尚未填寫藥單內容</p>
+            </div>
+          </section>
+          <dl class="divide-y divide-border rounded-xl border border-border">
+            <div class="grid gap-1 px-4 py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4">
+              <dt class="text-sm font-medium text-muted-foreground">飼主回報</dt>
+              <dd><RichText v-if="richTextToPlain(selected.condition).trim()" tag="div" :text="selected.condition" class="whitespace-pre-line" /><span v-else class="text-subtle-foreground">—</span></dd>
+            </div>
+            <div class="grid gap-1 px-4 py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4">
+              <dt class="text-sm font-medium text-muted-foreground">處理備註</dt>
+              <dd><RichText v-if="richTextToPlain(selected.note).trim()" tag="div" :text="selected.note" class="whitespace-pre-line" /><span v-else class="text-subtle-foreground">—</span></dd>
+            </div>
+          </dl>
+          <div v-if="returning" class="space-y-2"><Label for="med-return">給醫師的意見</Label><Input id="med-return" v-model="returnReason" maxlength="500" :disabled="busy" placeholder="請說明需要重新確認的內容" /><p class="text-xs text-muted-foreground">送出後狀態會回到待醫師確認。</p></div>
+          <!-- 交藥時用不太到，預設收合。 -->
+          <section class="rounded-xl border border-border">
+            <button type="button" class="flex w-full items-center gap-2 px-4 py-3 text-left text-sm font-semibold hover:bg-hover" :aria-expanded="showNotes" @click="showNotes = !showNotes">
+              <component :is="showNotes ? ChevronDown : ChevronRight" class="size-4" stroke-width="1.75" />歷次病歷日誌
+            </button>
+            <div v-if="showNotes" class="h-[28rem] border-t border-border p-3">
+              <ClinicalNotesPanel :notes="notes" :loading="notesLoading" :error="notesError" :page="notePage" :total-pages="noteTotalPages" :pet-id="pet?._id || ''" unlinked-text="選擇貓咪後顯示歷次病歷日誌。" fill class="h-full" @load="loadNotes" @saved="loadNotes(notePage)" />
+            </div>
+          </section>
+        </template>
+
+        <div v-else class="grid gap-5" :class="compact ? '' : 'xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_26rem] xl:grid-rows-[minmax(0,1fr)]'">
           <div class="space-y-5" :class="compact ? '' : 'xl:min-h-0 xl:overflow-y-auto xl:pr-1'">
             <template v-if="!selected">
               <section class="space-y-3" aria-labelledby="med-pet-section-title">
@@ -458,7 +636,28 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </div>
-      <div class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+
+      <!-- 全頁版底部：一顆主要動作，其餘收進 ⋯。 -->
+      <footer v-if="fullPage" class="flex flex-wrap items-center justify-end gap-2 border-t border-border px-6 py-3.5">
+        <p v-if="terminal" class="mr-auto text-sm text-muted-foreground">這筆藥單已結束，內容唯讀。</p>
+        <template v-else-if="returning">
+          <Button variant="secondary" :disabled="busy" @click="returning = false">返回</Button>
+          <Button :disabled="busy || stale || !returnReason.trim()" @click="execute('return', { reason: returnReason })">送回醫師重審</Button>
+        </template>
+        <template v-else-if="!selected">
+          <Button variant="secondary" :disabled="busy" @click="cancelEditing">取消</Button>
+          <Button :disabled="busy || !pet" @click="execute('create')">建立並送醫師確認</Button>
+        </template>
+        <template v-else-if="editing">
+          <Button variant="secondary" :disabled="busy" @click="cancelEditing">取消修改</Button>
+          <Button :disabled="busy || stale || !dirty" @click="requestAction('edit')">{{ changedClinical && selected.status !== 'review' ? '修改並重新送審' : '儲存修改' }}</Button>
+        </template>
+        <template v-else>
+          <RowActions v-if="moreActions.length" :actions="moreActions" :label="`${selected.petName} 藥單的更多操作`" @select="runMoreAction" />
+          <Button v-if="primaryAction" :disabled="busy || stale || primaryAction.disabled" @click="requestAction(primaryAction.key)">{{ primaryAction.label }}</Button>
+        </template>
+      </footer>
+      <div v-else class="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
         <template v-if="!terminal">
           <Button v-if="selected && !doctor && !returning" variant="secondary" :disabled="busy || stale" @click="requestAction('cancel')">取消藥單</Button>
           <template v-if="returning"><Button variant="secondary" :disabled="busy" @click="returning = false">返回</Button><Button :disabled="busy || stale || !returnReason.trim()" @click="execute('return', { reason: returnReason })">送回醫師重審</Button></template>
@@ -473,7 +672,8 @@ onBeforeUnmount(() => {
         </template>
         <p v-else class="text-xs text-muted-foreground">這筆藥單已結束，內容唯讀。</p>
       </div>
-    </template>
+      </template>
+    </div>
   </section>
 
   <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :description="confirmation.description" @confirm="runConfirmation" @cancel="cancelConfirmation" />

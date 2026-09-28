@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import PatientLink from '../components/PatientLink.vue'
 import { AlertTriangle, CalendarPlus, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, Pill, Plus, RefreshCw, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
@@ -478,12 +479,12 @@ onBeforeUnmount(() => {
     <div v-if="!loading && hasAlerts" class="grid gap-2 md:grid-cols-3" aria-label="需要注意">
       <div v-if="reopenRequests.length" class="flex min-h-13 items-center gap-3 rounded-xl bg-danger-surface py-2 pr-2 pl-4 text-danger">
         <AlertTriangle class="size-5 shrink-0" stroke-width="1.75" />
-        <p class="min-w-0 flex-1 truncate"><span class="font-semibold">醫師申請修改 {{ reopenRequests.length }}</span>　{{ reopenRequests[0].petName }}：{{ reopenRequests[0].reopenRequest.reason || '未填寫原因' }}</p>
+        <p class="min-w-0 flex-1 truncate"><span class="font-semibold">醫師申請修改 {{ reopenRequests.length }}</span>　<PatientLink :pet-id="reopenRequests[0].petId" quiet>{{ reopenRequests[0].petName }}</PatientLink>：{{ reopenRequests[0].reopenRequest.reason || '未填寫原因' }}</p>
         <Button size="sm" variant="soft" class="shrink-0" @click="openSheet(reopenRequests[0])">處理</Button>
       </div>
       <div v-if="overdue.length" class="flex min-h-13 items-center gap-3 rounded-xl bg-danger-surface py-2 pr-2 pl-4 text-danger">
         <AlertTriangle class="size-5 shrink-0" stroke-width="1.75" />
-        <p class="min-w-0 flex-1 truncate"><span class="font-semibold">遲到未報到 {{ overdue.length }}</span>　{{ overdue[0].petName }} <span class="num">{{ overdue[0].time }}</span> 預約，已遲 {{ overdueMinutes(overdue[0]) }} 分</p>
+        <p class="min-w-0 flex-1 truncate"><span class="font-semibold">遲到未報到 {{ overdue.length }}</span>　<PatientLink :pet-id="overdue[0].petId" quiet>{{ overdue[0].petName }}</PatientLink> <span class="num">{{ overdue[0].time }}</span> 預約，已遲 {{ overdueMinutes(overdue[0]) }} 分</p>
         <Button v-if="scheduledPrimary(overdue[0])" size="sm" variant="soft" class="shrink-0" :disabled="busy" @click="scheduledPrimary(overdue[0]).run()">{{ scheduledPrimary(overdue[0]).label }}</Button>
       </div>
       <div v-if="counts.intake" class="flex min-h-13 items-center gap-3 rounded-xl bg-info-surface py-2 pr-2 pl-4 text-info">
@@ -561,7 +562,7 @@ onBeforeUnmount(() => {
                         <span class="flex size-10 shrink-0 items-center justify-center rounded-full" :class="item.ui.confirmed ? 'bg-accent text-accent-foreground' : 'bg-sunken text-subtle-foreground'"><Cat class="size-5" stroke-width="1.75" /></span>
                         <div class="min-w-0 flex-1 space-y-1">
                           <div class="flex min-w-0 flex-wrap items-center gap-2">
-                            <span class="truncate text-base font-semibold">{{ item.petName || '—' }}</span>
+                            <span class="truncate text-base font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName || '—' }}</PatientLink></span>
                             <Badge v-if="item.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
                             <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
                             <LatenessBadge :minutes="item.ui.lateMinutes" />
@@ -579,7 +580,7 @@ onBeforeUnmount(() => {
                       <!-- 右側三欄：飼主、電話、進度，每張卡片上下對齊，掃一眼就能對上是誰、打給誰、到哪一步。 -->
                       <div class="min-w-0 xl:pl-2">
                         <span class="spec-label block">飼主</span>
-                        <span class="block truncate" :class="item.ownerName ? '' : 'text-subtle-foreground'">{{ item.ownerName || '未留姓名' }}</span>
+                        <span class="block truncate" :class="item.ownerName ? '' : 'text-subtle-foreground'"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink><template v-else>未留姓名</template></span>
                       </div>
                       <div class="min-w-0">
                         <span class="spec-label block">電話</span>
@@ -627,7 +628,7 @@ onBeforeUnmount(() => {
                 <article v-for="item in followUps" :key="`fu-${item._id}`" class="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
                   <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><CalendarPlus class="size-4" stroke-width="1.75" /></span>
                   <div class="min-w-0 flex-1">
-                    <p class="truncate font-semibold">{{ item.petName }}</p>
+                    <p class="truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></p>
                     <p class="truncate text-sm text-muted-foreground">待安排回診　{{ item.followUpRecommendation || item.followUpReason }}</p>
                   </div>
                   <Button variant="soft" size="sm" @click="openSheet(item)">安排回診</Button>
@@ -652,7 +653,7 @@ onBeforeUnmount(() => {
                 <article v-for="item in closedAppointments" :key="item._id" class="flex min-w-0 items-center gap-3 rounded-lg bg-card px-3 py-2">
                   <Badge variant="status" :class="closedStatusMeta(item).class">{{ closedStatusMeta(item).label }}</Badge>
                   <div class="min-w-0 flex-1">
-                    <p class="truncate font-semibold">{{ item.petName }}</p>
+                    <p class="truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></p>
                     <p class="truncate text-sm text-muted-foreground"><span class="num">{{ item.time || '未定' }}</span>　{{ item.cancelReason || item.ownerName }}</p>
                   </div>
                   <RowActions :actions="[{ key: 'restore', label: '恢復待報到' }, { key: 'edit', label: '修改預約' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />

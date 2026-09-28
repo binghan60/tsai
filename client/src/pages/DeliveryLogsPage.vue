@@ -133,7 +133,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="flex flex-col gap-5">
-    <PageHeader title="寄送歷程" description="每一次寄送嘗試都留一筆；報告刪除後這裡仍查得到寄給了誰。" />
+    <PageHeader title="寄送歷程" />
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 

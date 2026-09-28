@@ -1,5 +1,6 @@
 ﻿<script setup>
 import { computed, nextTick, ref, watch } from 'vue';
+import PatientLink from './PatientLink.vue';
 import { CalendarClock, Check, Pencil, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
@@ -207,7 +208,7 @@ async function approveReopen() {
               <CheckinNumber :appointment="appointment" size="lg" />
               <div class="min-w-0 space-y-1.5">
                 <div class="flex flex-wrap items-center gap-2">
-                  <DialogTitle class="text-xl leading-tight">{{ appointment.petName }}</DialogTitle>
+                  <DialogTitle class="text-xl leading-tight"><PatientLink :pet-id="appointment.petId">{{ appointment.petName }}</PatientLink></DialogTitle>
                   <Badge v-if="appointment.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
                   <SurgeryBadge v-if="appointment.isSurgery" :name="appointment.surgeryName" />
                   <LatenessBadge :minutes="appointment.latenessMinutes" />
@@ -217,7 +218,7 @@ async function approveReopen() {
             </div>
             <div class="flex items-start gap-2">
               <SpecGrid>
-                <SpecCell label="飼主">{{ appointment.ownerName || '待確認' }}</SpecCell>
+                <SpecCell label="飼主"><PatientLink v-if="appointment.ownerName" :pet-id="appointment.petId" quiet>{{ appointment.ownerName }}</PatientLink><template v-else>待確認</template></SpecCell>
                 <SpecCell v-if="appointment.ownerPhone" label="電話" mono><a :href="`tel:${appointment.ownerPhone}`" class="text-primary">{{ appointment.ownerPhone }}</a></SpecCell>
                 <SpecCell label="預約" mono>{{ appointment.date?.slice(5) }} {{ appointment.time || '' }}</SpecCell>
               </SpecGrid>

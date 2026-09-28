@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import PatientLink from '../components/PatientLink.vue';
 import { Cat, FileText, Plus } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate, relativeDayLabel } from '../lib/datetime';
@@ -253,7 +254,7 @@ async function removeRecord(confirmText) {
             <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
             <span class="min-w-0 truncate font-semibold text-primary">{{ record.petId?.name || '找不到貓咪' }}</span>
           </router-link>
-          <span class="desktop-data-cell truncate text-sm">{{ record.petId?.ownerId?.name || '—' }}</span>
+          <span class="desktop-data-cell truncate text-sm"><PatientLink v-if="record.petId?.ownerId?.name" :pet-id="record.petId" quiet>{{ record.petId.ownerId.name }}</PatientLink><template v-else>—</template></span>
           <span class="desktop-data-cell">
             <span class="block truncate text-sm" v-tip.overflow="record.examType || ''">{{ record.examType || '—' }}</span>
             <span v-if="record.reportVersion > 1" class="block text-xs text-subtle-foreground">第 <span class="num">{{ record.reportVersion }}</span> 版</span>

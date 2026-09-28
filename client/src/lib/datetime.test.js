@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ageLabel, clinicDateInput, clinicTimeInput, combineClinicDateTime, parseDateInput, shiftDateInput, weekdayLabel, startOfWeek } from './datetime.js';
+import { ageLabel, clinicDateInput, clinicTimeInput, combineClinicDateTime, parseDateInput, shiftDateInput, weekdayLabel, startOfWeek, relativeTimeLabel } from './datetime.js';
 
 describe('clinic date helpers', () => {
   it('uses the Taipei calendar day around UTC midnight', () => {
@@ -139,4 +139,18 @@ it('relativeDayLabel 以診所日期算相對天數', async () => {
   assert.equal(relativeDayLabel('2026-09-12T01:00:00Z', now), '15 天前');
   assert.equal(relativeDayLabel('2024-09-01T01:00:00Z', now), '2 年前');
   assert.equal(relativeDayLabel(null, now), '');
+});
+
+describe('relativeTimeLabel', () => {
+  const now = new Date('2026-09-27T06:00:00Z'); // 台北 9/27 14:00
+  it('一小時內寫分鐘、今天內寫小時', () => {
+    assert.equal(relativeTimeLabel('2026-09-27T05:59:40Z', now), '剛剛');
+    assert.equal(relativeTimeLabel('2026-09-27T05:35:00Z', now), '25 分鐘前');
+    assert.equal(relativeTimeLabel('2026-09-27T02:00:00Z', now), '4 小時前');
+  });
+  it('更早的寫昨天或月日加時間（診所時區）', () => {
+    assert.equal(relativeTimeLabel('2026-09-26T09:30:00Z', now), '昨天 17:30');
+    assert.equal(relativeTimeLabel('2026-09-18T06:30:00Z', now), '9/18 14:30');
+    assert.equal(relativeTimeLabel(null, now), '');
+  });
 });

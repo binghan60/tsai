@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import PatientLink from '../components/PatientLink.vue'
 import { AlertTriangle, ArrowRight, ListTodo } from '@lucide/vue'
 import { clinicDateInput, clinicTimeInput, weekdayLabel } from '../lib/datetime'
 import { DUE_TONE_CLASS, dueStatus } from '../lib/todoDisplay'
@@ -136,7 +137,7 @@ async function completeTodo(item) {
         <AlertTriangle class="size-5 shrink-0" stroke-width="1.75" />
         <span class="font-semibold"><span class="num">{{ reports.failed }}</span> 份健檢報告寄送失敗</span>
         <span v-if="latestFailed" class="flex min-w-0 flex-wrap items-baseline gap-x-4 text-foreground">
-          <span>{{ latestFailed.petName }}</span>
+          <PatientLink :pet-id="latestFailed.petId" quiet>{{ latestFailed.petName }}</PatientLink>
           <span v-if="latestFailed.error" class="min-w-0 truncate">{{ latestFailed.error }}</span>
         </span>
         <Button as-child variant="destructive" size="sm" class="ml-auto shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--danger)_35%,transparent)]">

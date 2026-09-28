@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import PatientLink from '../components/PatientLink.vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { Activity, AlertTriangle, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, Link2, LockKeyhole, Save, Settings2, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
@@ -1112,11 +1113,11 @@ function handleBeforeUnload(event) {
       <div v-if="!isLocked" id="record-context-bar" class="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-xl border border-border bg-card px-5 py-3 shadow-card">
         <div class="flex items-center gap-3">
           <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
-          <span class="text-lg font-semibold">{{ pet?.name ?? '—' }}</span>
+          <span class="text-lg font-semibold"><PatientLink :pet-id="pet?._id">{{ pet?.name ?? '—' }}</PatientLink></span>
         </div>
         <SpecGrid>
           <SpecCell label="品種"><span>{{ pet?.breed || pet?.species || '—' }}</span><PetSex :sex="pet?.sex" /></SpecCell>
-          <SpecCell label="飼主">{{ pet?.ownerId?.name ?? '—' }}</SpecCell>
+          <SpecCell label="飼主"><PatientLink v-if="pet?.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink><template v-else>—</template></SpecCell>
           <SpecCell v-if="examTypeName" label="類型">{{ examTypeName }}</SpecCell>
           <SpecCell v-if="visitDate" label="看診日" mono>{{ visitDate.slice(5).replace('-', '/') }}</SpecCell>
         </SpecGrid>

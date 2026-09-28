@@ -110,6 +110,7 @@ router.get('/', async (req, res, next) => {
       },
       latestFailed: latestFailed ? {
         _id: latestFailed._id,
+        petId: latestFailed.petId?._id ?? null,
         petName: latestFailed.petId?.name ?? '',
         deliveryStatus: latestFailed.deliveryStatus,
         error: latestFailed.deliveryError ?? '',

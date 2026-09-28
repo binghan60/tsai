@@ -202,3 +202,18 @@ export function relativeDayLabel(value, now = new Date()) {
   if (diff < 365) return `${diff} 天前`;
   return `${Math.floor(diff / 365)} 年前`;
 }
+
+// 藥單這類「今天內處理完」的清單：一小時內寫分鐘、今天內寫小時，再早就是「昨天 14:30」「9/18 14:30」。
+export function relativeTimeLabel(value, now = new Date()) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return '';
+  const minutes = Math.floor((now.getTime() - date.getTime()) / 60000);
+  if (minutes < 1) return '剛剛';
+  if (minutes < 60) return `${minutes} 分鐘前`;
+  const day = relativeDayLabel(date, now);
+  if (day === '今天') return `${Math.floor(minutes / 60)} 小時前`;
+  const time = clinicTimeInput(date);
+  if (day === '昨天') return `昨天 ${time}`;
+  const [, month, dayOfMonth] = clinicDateInput(date).split('-');
+  return `${Number(month)}/${Number(dayOfMonth)} ${time}`;
+}

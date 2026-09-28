@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import PatientLink from '../PatientLink.vue';
 import { useRoute } from 'vue-router';
 import { Cat, Pin, PinOff } from '@lucide/vue';
 import { http } from '../../api/http';
@@ -138,7 +139,7 @@ async function togglePin() {
         <SpecCell v-if="pet.weightKg != null" label="體重" mono>{{ pet.weightKg }} kg</SpecCell>
       </SpecGrid>
       <SpecGrid v-if="owner">
-        <SpecCell label="飼主">{{ owner.name }}</SpecCell>
+        <SpecCell label="飼主"><PatientLink :pet-id="pet._id" quiet>{{ owner.name }}</PatientLink></SpecCell>
         <SpecCell v-if="owner.phone" label="電話" mono><a :href="`tel:${owner.phone}`" class="text-primary">{{ owner.phone }}</a></SpecCell>
         <SpecCell v-if="owner.landline" label="市話" mono>{{ owner.landline }}</SpecCell>
       </SpecGrid>

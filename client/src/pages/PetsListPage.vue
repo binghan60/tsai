@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import PatientLink from '../components/PatientLink.vue';
 import { Cat, Plus } from '@lucide/vue';
 import { http } from '../api/http';
 import DataCard from '../components/DataCard.vue';
@@ -129,7 +130,7 @@ function goToPage(next) {
             <span class="desktop-data-cell truncate text-sm text-muted-foreground" v-tip.overflow="pet.breed || ''">{{ pet.breed || '—' }}</span>
             <span class="desktop-data-cell text-sm text-muted-foreground"><PetSex v-if="pet.sex === 'male' || pet.sex === 'female'" :sex="pet.sex" with-label /><template v-else>—</template></span>
             <span class="desktop-data-cell">
-              <span class="block truncate text-sm">{{ pet.ownerId?.name || '—' }}</span>
+              <span class="block truncate text-sm"><PatientLink v-if="pet.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink><template v-else>—</template></span>
               <span v-if="pet.ownerId?.phone" class="num block truncate text-xs text-subtle-foreground">{{ pet.ownerId.phone }}</span>
             </span>
             <span class="desktop-data-cell">
