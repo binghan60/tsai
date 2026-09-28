@@ -58,6 +58,9 @@ const query = ref('');
 const page = ref(1);
 const totalPages = ref(1);
 const pageSize = ref(25);
+// 面板版是一張張高卡片，一頁 25 張要捲很久、頁碼形同虛設；每頁少一點，翻頁才有意義。全頁版照後端預設 25 筆。
+const COMPACT_PAGE_SIZE = 8;
+const compactList = ref(null);
 const total = ref(0);
 const items = ref([]);
 const counts = ref({});
@@ -113,7 +116,7 @@ const filterCounts = computed(() => ({ all: allCount.value, active: activeCount.
 async function refresh() {
   const sequence = ++listSequence;
   try {
-    const { data } = await http.get('/medications', { params: { status: filter.value, q: query.value, page: page.value } });
+    const { data } = await http.get('/medications', { params: { status: filter.value, q: query.value, page: page.value, ...(props.compact ? { limit: COMPACT_PAGE_SIZE } : {}) } });
     if (sequence !== listSequence) return;
     items.value = data.items;
     counts.value = data.counts;
@@ -145,6 +148,11 @@ function applySearch() {
   query.value = queryInput.value.trim();
   if (page.value !== 1) page.value = 1;
   else refresh();
+}
+// 面板版翻頁後捲回清單頂端，不然會停在上一頁的底部。
+function goToPage(value) {
+  page.value = value;
+  compactList.value?.scrollIntoView({ block: 'start' });
 }
 function setFilter(value) { page.value = 1; filter.value = value; }
 // 全頁版清單列上的 ⋯：列上的主要動作是確認領藥／完成包藥時，「查看藥單」收在這裡；取消藥單放最後。
@@ -459,7 +467,7 @@ onBeforeUnmount(() => {
     </div>
     <FilterTabs :model-value="filter" :items="filterItems" :counts="filterCounts" aria-label="藥單狀態篩選" fit @update:model-value="setFilter" />
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
-    <ul v-if="compact" class="-mx-5 divide-y divide-border border-y border-border">
+    <ul v-if="compact" ref="compactList" class="-mx-5 divide-y divide-border border-y border-border">
       <li v-if="loading && !items.length" class="px-5 py-10 text-center text-muted-foreground">載入藥單中…</li>
       <li v-else-if="!items.length" class="px-5 py-10 text-center text-muted-foreground">{{ error ? '暫時無法載入藥單' : '目前沒有符合條件的藥單' }}</li>
       <li v-for="item in items" :key="item._id" data-medication-row class="space-y-2 px-5 py-3.5">
@@ -481,7 +489,7 @@ onBeforeUnmount(() => {
         </div>
       </li>
     </ul>
-    <Pagination :page="page" :total-pages="totalPages" @update:page="page = $event" />
+    <Pagination :page="page" :total-pages="totalPages" @update:page="goToPage" />
     </template>
 
     <!-- 詳情。全頁版是一張卡片（取代清單）；面板版直接排在容器裡（contents，不多一層）。 -->
