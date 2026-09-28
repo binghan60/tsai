@@ -40,7 +40,7 @@ const router = createRouter({
     { path: '/reception', component: ReceptionPage, meta: { title: '掛號台' } },
     { path: '/medications', component: MedicationPickupPage, meta: { title: '領藥' } },
     { path: '/reception/intakes', component: IntakeReviewPage, meta: { title: '初診表審核', nav: '/reception' } },
-    // 舊書籤：看診不再是獨立頁面，改成診療台右欄可以同時開多筆的工作區。
+    // 舊書籤：看診不再是獨立頁面，改成診療台右欄的工作區。
     { path: '/appointments/:id/visit', redirect: '/appointments' },
     { path: '/pets', component: PetsListPage, meta: { title: '貓咪' } },
     // 靜態路由要排在 /pets/:id 前面，不然 "new" 會被吃成動態參數 id。

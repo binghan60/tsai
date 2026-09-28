@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from './PatientLink.vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { ArrowRight, FileText, Info, Pencil, Stethoscope, Undo2, X } from '@lucide/vue'
+import { ArrowRight, FileText, Info, Pencil, Stethoscope, Undo2 } from '@lucide/vue'
 import SurgeryBadge from './SurgeryBadge.vue'
 import LatenessBadge from './LatenessBadge.vue'
 import CheckinNumber from './CheckinNumber.vue'
@@ -43,9 +43,9 @@ const props = defineProps({
 const toast = useToast()
 const notifyChat = useAppointmentNotifier()
 const { openPicker } = useTextTemplates()
-// start：還沒開始看診時按「開始看診」；close：從佇列關掉這筆；dirty：有沒有未存內容（佇列顯示藍點）；
+// start：還沒開始看診時按「開始看診」；
 // notes-updated：貓咪／飼主備註改了，讓佇列上的備註標籤跟著更新。
-const emit = defineEmits(['updated', 'open-record', 'start', 'close', 'dirty', 'notes-updated'])
+const emit = defineEmits(['updated', 'open-record', 'start', 'notes-updated'])
 
 const draft = reactive(clinicalDraft(props.appointment))
 const baseline = ref(clinicalDraft(props.appointment))
@@ -371,7 +371,12 @@ watch(
   { deep: true },
 )
 
-watch(dirty, (value) => emit('dirty', String(props.appointment._id), value), { immediate: true })
+// 診療台一次只掛一個工作區，換貓或送交櫃台後就卸載；卸載前由診療台呼叫這裡，把還在等的自動存檔立刻送出。
+// 回傳 false（存檔失敗、有衝突待處理）時診療台會留在這筆，輸入才不會跟著元件一起消失。
+function flush() {
+  return editable.value ? save() : true
+}
+defineExpose({ flush })
 
 function resolveConflict(keepLocal) {
   if (!keepLocal) for (const key of conflicts.value) takeBaseline(draft, baseline.value, key)
@@ -457,7 +462,6 @@ onBeforeUnmount(() => {
   disposed = true
   clearTimeout(timer)
   clearInterval(clock)
-  emit('dirty', String(props.appointment._id), false)
   window.removeEventListener('beforeunload', beforeUnload)
 })
 </script>
@@ -511,7 +515,6 @@ onBeforeUnmount(() => {
                 <AppointmentMilestones :appointment="appointment" />
               </PopoverContent>
             </Popover>
-            <Button variant="secondary" size="icon-sm" :aria-label="`關閉 ${appointment.petName} 的工作區`" @click="emit('close')"><X stroke-width="1.75" /></Button>
           </div>
         </div>
 
