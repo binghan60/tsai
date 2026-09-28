@@ -24,7 +24,7 @@ export function labSummary(labValues) {
     .join('　');
 }
 
-// 診療台送來的檢驗數值是 { key: value }；只收掛號範本裡真的有的檢驗項目，
+// 送來的檢驗數值（健檢報告填寫頁經 visitEdits 寫回）是 { key: value }；只收掛號範本裡真的有的檢驗項目，
 // 存成含名稱、單位、參考範圍的快照（見 models/Appointment.js 的 labValues）。空值＝拿掉。
 export function mergeLabValues(current, incoming, labItems) {
   if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) throw workflowError('檢驗數值格式不正確');
@@ -97,7 +97,7 @@ export function appointmentJournalFields(appointment) {
 
 // 從病歷日誌直接改這次就診的內容。跟 workflow 的 clinical 不同，這裡**不看流程階段**：
 // 病歷日誌是事後回頭更正紀錄的地方，櫃台完成處理之後照樣要改得動（看診工作區那邊仍然鎖著）。
-// 只收日誌看得到的欄位，internalNote 不在這裡改；檢驗數值要對著範本的項目，只在診療台改。
+// 只收日誌看得到的欄位，internalNote 不在這裡改；檢驗數值要對著範本的項目，只在健檢報告填寫頁改。
 export function applyJournalFields(appointment, body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw workflowError('日誌欄位格式不正確');
   for (const [key, max] of Object.entries(JOURNAL_TEXT_LIMITS)) {

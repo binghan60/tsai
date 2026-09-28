@@ -1,5 +1,5 @@
 // Opt-in browser smoke test with isolated, in-memory API fixtures. Never connects to MongoDB.
-// 走一遍現在的看診流程：診療台開工作區 → 開始看診 → 自動存檔（紀錄、檢驗數值）→ 遠端更新與衝突 →
+// 走一遍現在的看診流程：診療台開工作區 → 開始看診 → 自動存檔 → 遠端更新與衝突 →
 // 送交櫃台 → 掛號台處理視窗完成處理；另外檢查右側工具欄面板、明暗主題、窄螢幕與登出。
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
@@ -102,13 +102,9 @@ try {
   assert.match(fixture.visitNote, /皮膚搔癢改善/);
   console.log('Visit started and the note autosaved');
 
-  // 檢驗數值：項目來自掛號選的健檢表單，超出參考範圍標 ↑。
-  await doctor.type(`#visit-lab-wbc-${id}`, '22.4');
-  await find(doctor, () => document.querySelector('[aria-label="偏高"]'));
-  await find(doctor, () => document.querySelector('[aria-label="豆豆 看診工作區"] footer').textContent.includes('已儲存'));
-  assert.deepEqual(fixture.labValues.map((lab) => [lab.key, lab.value]), [['wbc', '22.4']]);
+  // 檢驗數值改在健檢報告填寫頁輸入，診療台不再有檢驗區塊。
+  assert.equal(await doctor.$(`#visit-lab-wbc-${id}`), null, 'lab value block is gone from the workspace');
   await doctor.screenshot({ path: join(tmpdir(), 'clinic-workspace.png') });
-  console.log('Lab value saved from the booking template');
 
   // 遠端改了別的欄位：本機正在打的字留著、不算衝突。
   await doctor.type('[contenteditable][aria-label="本次簡易紀錄"]', '本機補充');
@@ -136,9 +132,8 @@ try {
   await bodyHas(desk, '請轉告飼主');
   await bodyHas(desk, '傷口勿舔舐');
   assert.equal(await desk.evaluate(() => document.body.textContent.includes('醫師交辦')), false, 'handoff sheet has no handoff-note section');
-  await bodyHas(desk, '系統不計價');
   await click(desk, '完成處理');
-  await find(desk, () => !document.body.textContent.includes('系統不計價'));
+  await find(desk, () => !document.querySelector('[aria-label="關閉處理視窗"]'));
   assert.equal(fixture.status, 'completed');
   console.log('Desk completed the handoff');
 
@@ -179,7 +174,7 @@ try {
   await find(doctor, () => location.pathname === '/login');
   assert.equal(logoutCount, 1);
   assert.deepEqual(errors, []);
-  console.log('PASS: 看診工作區、自動存檔、檢驗數值、遠端更新與衝突、送交櫃台、完成處理、工具欄面板、明暗主題、窄螢幕與登出。');
+  console.log('PASS: 看診工作區、自動存檔、遠端更新與衝突、送交櫃台、完成處理、工具欄面板、明暗主題、窄螢幕與登出。');
   console.log(`Screenshots in ${tmpdir()} (clinic-*.png)`);
 } catch (error) {
   console.error(error);

@@ -61,7 +61,7 @@ const appointmentSchema = new mongoose.Schema(
     // 不存這幾欄、直接引用這裡，在報告上改也是寫回這裡（結案時才凍結），見 lib/recordVisitLink.js。
     weightKg: { type: Number, min: 0, default: null },
     temperatureC: { type: Number, min: 0, default: null },
-    // 診療台填的檢驗數值。項目來自掛號選的表單範本裡的檢驗區塊；存的時候連同名稱、單位、
+    // 檢驗數值（在健檢報告填寫頁輸入、寫回這裡）。項目來自掛號選的表單範本裡的檢驗區塊；存的時候連同名稱、單位、
     // 參考範圍一起存成快照，病歷日誌不必再讀範本就能組出「WBC 22.4 ↑」這種摘要。
     labValues: {
       type: [new mongoose.Schema({

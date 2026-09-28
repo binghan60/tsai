@@ -1,4 +1,4 @@
-// 檢驗數值的共用規則：診療台的檢驗網格、病歷日誌的檢驗摘要、健檢報告草稿的帶入都用這份。
+// 檢驗數值的共用規則：病歷日誌的檢驗摘要、健檢報告填寫頁寫回看診的驗證都用這份。
 // 檢驗項目不是另一份清單，而是掛號時選的健檢表單裡「檢驗」類型的項目。
 
 // 表單裡啟用中的檢驗項目（停用的區塊、停用的項目都不算）。
@@ -20,17 +20,5 @@ export function labFlag(lab) {
   if (!text || !Number.isFinite(numeric)) return '';
   if (lab.referenceMax !== null && lab.referenceMax !== undefined && numeric > lab.referenceMax) return '↑';
   if (lab.referenceMin !== null && lab.referenceMin !== undefined && numeric < lab.referenceMin) return '↓';
-  return '';
-}
-
-// 「5.5–19.5」這種參考範圍文字；只有一邊時寫成「≤ 19.5」「≥ 5.5」。
-export function labRangeText(item) {
-  const min = item?.referenceMin;
-  const max = item?.referenceMax;
-  const hasMin = min !== null && min !== undefined;
-  const hasMax = max !== null && max !== undefined;
-  if (hasMin && hasMax) return `${min}–${max}`;
-  if (hasMax) return `≤ ${max}`;
-  if (hasMin) return `≥ ${min}`;
   return '';
 }

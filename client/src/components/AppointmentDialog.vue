@@ -379,7 +379,7 @@ const onSubmit = handleSubmit((values) => {
                   <SelectItem v-for="template in templates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
                 </SelectContent>
               </Select>
-              <p class="text-sm text-muted-foreground">報到時用這份建立健檢報告草稿；診療台的檢驗數值項目也從這份帶入。</p>
+              <p class="text-sm text-muted-foreground">報到時用這份建立健檢報告草稿。</p>
             </div>
             <div v-if="!isEdit" class="space-y-1.5">
               <Label for="dialog-internal-note" class="text-xs font-medium">內部備註</Label>

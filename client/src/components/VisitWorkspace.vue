@@ -14,10 +14,8 @@ import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { useTextTemplates } from '../composables/useTextTemplates'
-import { loadFormTemplate } from '../composables/useFormTemplateCache'
 import { workflowState } from '../../../shared/appointmentWorkflow.js'
-import { labFlag, labRangeText, templateLabItems } from '../../../shared/labValues.js'
-import { clinicalDraft, draftPatch, labConflictKey, mergeClinicalUpdate, takeBaseline } from '../lib/visitDraft'
+import { clinicalDraft, draftPatch, mergeClinicalUpdate, takeBaseline } from '../lib/visitDraft'
 import { ageLabel, clinicTimeInput } from '../lib/datetime'
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue'
 import { Badge } from './ui/badge'
@@ -34,6 +32,7 @@ import { Alert, AlertDescription } from './ui/alert'
 // 看診工作區：診療台右欄編輯單筆掛號的看診內容。
 // 看診（這筆掛號）是唯一存放處：病歷日誌即時讀它，報到時建立的健檢報告草稿也預設跟著它走
 // （體重、體溫、回診日期、檢驗數值），醫師在報告裡改過的欄位才不再跟。
+// 檢驗數值不在這裡填（診療台的檢驗區塊已拿掉），改在健檢報告填寫頁輸入、寫回看診。
 // 每個欄位旁的小標記（日誌／報告／院內）說的就是這件事：寫在這裡的東西會去哪裡。
 const props = defineProps({
   appointment: { type: Object, required: true },
@@ -56,7 +55,6 @@ const reopenReason = ref('')
 const reopenError = ref('')
 const savedAt = ref(null)
 const pet = ref(null)
-const template = ref(null)
 const notes = ref([])
 const notePage = ref(1)
 const noteTotalPages = ref(1)
@@ -105,16 +103,6 @@ const medicalTags = computed(() => {
   if (['done', 'none'].includes(pet.value.checkupStatus)) tags.push({ key: 'checkup', label: pet.value.checkupStatus === 'done' ? `健檢 ${pet.value.checkupDate || '有'}` : '未健檢', class: pet.value.checkupStatus === 'done' ? 'bg-success-surface text-success' : 'bg-warning-surface text-warning' })
   return tags
 })
-
-// 檢驗項目沿用掛號時選的健檢表單裡的「檢驗」項目，不是另一份清單。
-const labItems = computed(() => templateLabItems(template.value))
-function labFlagFor(item) {
-  return labFlag({ ...item, value: draft.labs[item.key] })
-}
-function setLab(key, value) {
-  if (String(value ?? '').trim()) draft.labs[key] = String(value)
-  else delete draft.labs[key]
-}
 
 // 文字模板：三個文字欄各一顆按鈕，key 用 visit: 前綴（後端 /text-templates/fields 也認得）。
 const TEMPLATE_FIELDS = {
@@ -169,7 +157,8 @@ const CONFLICT_LABELS = {
   temperatureC: '體溫',
 }
 function conflictLabel(key) {
-  if (key.startsWith('lab:')) return labItems.value.find((item) => labConflictKey(item.key) === key)?.label || '檢驗數值'
+  // 檢驗數值不在診療台編輯，本機不會改到它，照理不會衝突；留著後備標籤免得畫面出現空白。
+  if (key.startsWith('lab:')) return '檢驗數值'
   return CONFLICT_LABELS[key]
 }
 function conflictValue(key) {
@@ -204,11 +193,6 @@ watch(
 
 async function loadContext() {
   pet.value = null
-  loadFormTemplate(props.appointment.templateId).then((data) => {
-    if (!disposed) template.value = data
-  }).catch(() => {
-    if (!disposed) contextError.value = '掛號選的健檢表單未能載入，檢驗數值暫時無法填寫。'
-  })
   if (!props.appointment.petId) return
   const petId = props.appointment.petId
   try {
@@ -575,7 +559,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- 左欄由上而下：量測 → 檢驗數值 → 本次簡易紀錄 → 內部備註 → 交給櫃台；右欄是歷次病歷日誌。
+      <!-- 左欄由上而下：量測 → 本次簡易紀錄 → 內部備註 → 交給櫃台；右欄是歷次病歷日誌。
            兩欄按 65:35 分配，日誌欄保底 20rem，窄螢幕上報告卡才不會被擠爛。 -->
       <div class="grid @4xl/visit:grid-cols-[minmax(0,65fr)_minmax(20rem,35fr)]">
         <div class="flex flex-col gap-6 px-6 py-5">
@@ -589,36 +573,6 @@ onBeforeUnmount(() => {
               <div class="space-y-1.5">
                 <Label :for="`visit-temp-${appointment._id}`">體溫</Label>
                 <div class="relative"><Input :id="`visit-temp-${appointment._id}`" v-model="draft.temperatureC" type="number" min="0" step="0.1" class="num pr-11" :disabled="!editable || committing" /><span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-subtle-foreground">°C</span></div>
-              </div>
-            </div>
-          </section>
-
-          <section v-if="labItems.length" class="space-y-3" :aria-labelledby="`lab-heading-${appointment._id}`">
-            <div class="flex flex-wrap items-center gap-2">
-              <h3 :id="`lab-heading-${appointment._id}`" class="text-base font-semibold">檢驗數值</h3><DestTag :to="['journal', 'report']" />
-              <span class="text-sm text-subtle-foreground">項目來自掛號選的「{{ template?.name }}」</span>
-            </div>
-            <div class="grid gap-3 @md/visit:grid-cols-2 @6xl/visit:grid-cols-3">
-              <div v-for="item in labItems" :key="item.key" class="space-y-1.5">
-                <div class="flex items-baseline justify-between gap-2">
-                  <Label :for="`visit-lab-${item.key}-${appointment._id}`" class="truncate">{{ item.label }}</Label>
-                  <span v-if="labRangeText(item)" class="num shrink-0 text-xs leading-none text-subtle-foreground">{{ labRangeText(item) }}</span>
-                </div>
-                <div class="relative">
-                  <Input
-                    :id="`visit-lab-${item.key}-${appointment._id}`"
-                    :model-value="draft.labs[item.key] ?? ''"
-                    maxlength="40"
-                    class="num"
-                    :class="[item.unit || labFlagFor(item) ? 'pr-24' : '', labFlagFor(item) ? 'border-danger/60' : '']"
-                    :disabled="!editable || committing"
-                    @update:model-value="(value) => setLab(item.key, value)"
-                  />
-                  <span class="pointer-events-none absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1.5 text-sm">
-                    <span v-if="item.unit" class="text-subtle-foreground">{{ item.unit }}</span>
-                    <span v-if="labFlagFor(item)" class="num font-bold text-danger" :aria-label="labFlagFor(item) === '↑' ? '偏高' : '偏低'">{{ labFlagFor(item) }}</span>
-                  </span>
-                </div>
               </div>
             </div>
           </section>
