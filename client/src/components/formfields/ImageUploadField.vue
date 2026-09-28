@@ -204,7 +204,6 @@ onBeforeUnmount(() => {
         </div>
       </div>
       <p v-if="error" class="text-sm text-danger">{{ error }}</p>
-      <p v-else-if="!images.length && preview" class="text-sm text-muted-foreground">尚未上傳圖片。</p>
     </div>
   </FieldShell>
 </template>
