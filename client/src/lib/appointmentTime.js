@@ -27,15 +27,14 @@ export function durationOverflowError(time, durationMinutes = DEFAULT_ESTIMATED_
 }
 
 // 所有排掛號的地方（掛號視窗、櫃台約回診、初診表審核）送出前都拿這個驗，跟後端同一套：
-// 日期、時段都必填；時段落在診別內、15 分鐘一格；今天已經過去的時間不能選（只給新約的時段，
-// 修改既有掛號不傳 nowTime）；預估診療時間要塞得進同一個診別。
-export function appointmentSlotErrors({ date, time, durationMinutes = DEFAULT_ESTIMATED_DURATION_MINUTES, today = '', nowTime = '' }) {
+// 日期、時段都必填；時段落在診別內、15 分鐘一格；預估診療時間要塞得進同一個診別。
+// 今天已經過去的時間照樣能選——現場常要補登早上已經來過的貓，鎖住反而掛不進去。
+export function appointmentSlotErrors({ date, time, durationMinutes = DEFAULT_ESTIMATED_DURATION_MINUTES }) {
   const errors = {};
   if (!date) errors.date = '請選擇掛號日期';
   const start = toMinutes(time);
   if (!time) errors.time = '請選擇預約時段';
   else if (start === null || start % APPOINTMENT_TIME_MINUTE_STEP !== 0 || !APPOINTMENT_TIME_RANGES.some(([from, to]) => start >= toMinutes(from) && start <= toMinutes(to))) errors.time = APPOINTMENT_TIME_ERROR;
-  else if (date && date === today && nowTime && start < toMinutes(nowTime)) errors.time = '這個時段已經過了，請改選其他時段';
   else if (durationOverflowError(time, durationMinutes)) errors.time = DURATION_OVERFLOW_ERROR;
   return errors;
 }

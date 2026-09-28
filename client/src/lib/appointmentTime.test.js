@@ -31,9 +31,8 @@ describe('appointmentSlotErrors', () => {
     assert.deepEqual(appointmentSlotErrors({ date: '2026-10-01', time: '19:30' }), {});
   });
 
-  it('今天已經過去的時間不能選，別天不管', () => {
-    assert.match(appointmentSlotErrors({ date: '2026-10-01', time: '14:00', today: '2026-10-01', nowTime: '15:02' }).time, /已經過了/);
-    assert.deepEqual(appointmentSlotErrors({ date: '2026-10-02', time: '14:00', today: '2026-10-01', nowTime: '15:02' }), {});
+  it('今天已經過去的時間照樣能選（現場補登）', () => {
+    assert.deepEqual(appointmentSlotErrors({ date: '2026-10-01', time: '10:00', today: '2026-10-01', nowTime: '15:02' }), {});
   });
 
   it('預估診療時間要塞得進同一個診別', () => {

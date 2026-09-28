@@ -65,13 +65,6 @@ describe('buildSlotGrid', () => {
     assert.deepEqual(cells.find((cell) => cell.time === '14:45').entries.map((item) => item.petName), ['小白']);
   });
 
-  it('minTime 之前的格子標為已過', () => {
-    const [, afternoon] = buildSlotGrid([], { sessions, minTime: '14:20' });
-    const cells = afternoon.rows[0].cells;
-    assert.equal(cells.find((cell) => cell.time === '14:15').past, true);
-    assert.equal(cells.find((cell) => cell.time === '14:30').past, false);
-  });
-
   // 手術只是標記：時段格永遠只有門診兩段，中午不開放。
   it('只有上午診與下午診兩組，中午沒有手術時段', () => {
     assert.deepEqual(buildSlotGrid([], { sessions }).map((session) => session.id), ['morning', 'afternoon']);

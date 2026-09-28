@@ -37,10 +37,10 @@ export function isOverdue(appointment, now = new Date(), grace = LATE_GRACE_MINU
 //
 // - 時段頭尾都可選（11:30、19:30 是合法時段，跟後端驗證的 ranges 一致）
 // - 整點列裡超出診別範圍的格子 inRange=false，畫面上不給選
-// - minTime（今天的現在時間）之前的格子標 past；編輯既有掛號時由元件放行原本選的那格
+// - 今天已經過去的時間照樣可選（現場補登早上來過的貓），不另外鎖
 // - 已取消／未到不佔時段；excludeId 是正在編輯的那一筆，不能自己算自己一位
 // - 手術只是掛號上的標記，時段規則跟一般門診相同，沒有另外的手術時段
-export function buildSlotGrid(appointments = [], { sessions = SESSIONS, step = APPOINTMENT_TIME_MINUTE_STEP, excludeId = '', minTime = '' } = {}) {
+export function buildSlotGrid(appointments = [], { sessions = SESSIONS, step = APPOINTMENT_TIME_MINUTE_STEP, excludeId = '' } = {}) {
   const byTime = new Map();
   for (const appointment of appointments ?? []) {
     if (!appointment?.time || INACTIVE_STATUSES.has(appointment.status)) continue;
@@ -53,7 +53,6 @@ export function buildSlotGrid(appointments = [], { sessions = SESSIONS, step = A
       byTime.get(occupiedTime).push({ ...appointment, occupiesFrom: appointment.time, isContinuation: minute !== start });
     }
   }
-  const min = toMinutes(minTime);
 
   return sessions.map((session) => {
     const start = toMinutes(session.start);
@@ -67,7 +66,6 @@ export function buildSlotGrid(appointments = [], { sessions = SESSIONS, step = A
         cells.push({
           time,
           inRange,
-          past: min !== null && minute < min,
           entries: inRange ? byTime.get(time) ?? [] : [],
         });
       }

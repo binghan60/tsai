@@ -34,8 +34,6 @@ function cellClass(cell) {
   if (cell.time === props.modelValue) return 'border-primary bg-primary text-primary-foreground font-semibold ring-2 ring-primary/25';
   if (selectedRange.value.has(cell.time) && cell.inRange) return 'border-primary/70 bg-primary/20 text-primary font-semibold ring-1 ring-primary/20';
   if (!cell.inRange) return 'invisible';
-  // 已經過去的時間不能再掛（今天的現在之前）；格子保留位置、淡掉，看得出那一格有誰。
-  if (cell.past) return 'border-transparent bg-sunken text-subtle-foreground/60';
   if (cell.entries.length) return 'border-border bg-sunken text-foreground font-medium hover:border-primary';
   return 'border-border bg-field text-muted-foreground hover:border-primary';
 }
@@ -47,7 +45,7 @@ const grid = computed(() => props.sessions.map((session) => ({
     ...row,
     cells: row.cells.map((cell) => {
       const label = slotCellLabel(cell.entries);
-      return { ...cell, label: label.names.join('、'), more: label.more, selectable: cell.inRange && !cell.past, cellClass: cellClass(cell) };
+      return { ...cell, label: label.names.join('、'), more: label.more, selectable: cell.inRange, cellClass: cellClass(cell) };
     }),
   })),
 })));
@@ -73,7 +71,7 @@ const selectedExists = computed(() => props.sessions.some((session) => (
             :class="cell.cellClass"
             :disabled="!cell.selectable && cell.time !== modelValue"
             :aria-pressed="cell.time === modelValue"
-            :aria-label="`${cell.time}${cell.past ? '，已過' : ''}${cell.entries.length ? `，已約 ${cell.entries.length} 位` : '，尚無預約'}${selectedRange.has(cell.time) ? '，本次預估診療範圍' : ''}`"
+            :aria-label="`${cell.time}${cell.entries.length ? `，已約 ${cell.entries.length} 位` : '，尚無預約'}${selectedRange.has(cell.time) ? '，本次預估診療範圍' : ''}`"
             @click="emit('update:modelValue', cell.time)"
           >
             <span v-if="cell.time === modelValue" class="num">{{ cell.time }}</span>

@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue';
 import { Check, Pencil, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { useToast } from '../composables/useToast';
-import { clinicDateInput, clinicTimeInput, formatDateTime } from '../lib/datetime';
+import { clinicDateInput, formatDateTime } from '../lib/datetime';
 import { intakeSections } from '../lib/intakeDisplay';
 import { DEFAULT_ESTIMATED_DURATION_MINUTES, DURATION_OVERFLOW_ERROR, appointmentSlotErrors } from '../lib/appointmentTime';
 import AppointmentSlotPicker from './AppointmentSlotPicker.vue';
@@ -42,10 +42,10 @@ let request = 0;
 const sections = computed(() => intakeSections(submission.value));
 // 掛號安排跟掛號視窗是同一塊（AppointmentSlotPicker＋SurgeryField），日期、時段必填，
 // 規則在 lib/appointmentTime.js，後端審核時也照同一套再驗一次。
-// 「已經過去的時段」看的是按下掛號那一刻，所以不用 computed（快取住的現在時間會過期），按下時與之後改欄位時重算。
+// 按下掛號時檢查，之後改欄位時重算。
 const slotErrors = ref({});
 function checkSlot() {
-  const errors = appointmentSlotErrors({ ...form.value, durationMinutes: durationMinutes.value, today: clinicDateInput(), nowTime: clinicTimeInput(new Date()) });
+  const errors = appointmentSlotErrors({ ...form.value, durationMinutes: durationMinutes.value });
   if (form.value.isSurgery && !form.value.surgeryName.trim()) errors.surgeryName = '請填寫手術名稱';
   slotErrors.value = errors;
   return !Object.keys(errors).length;
@@ -157,7 +157,7 @@ async function decide() {
             :exclude-id="linkedAppointmentId"
             :show-errors="attemptedApprove"
           />
-          <!-- 沒選時段、超出診別這兩種時段格自己會標；這裡只補「時段已經過了」這類按下掛號才知道的錯誤。 -->
+          <!-- 沒選時段、超出診別這兩種時段格自己會標；這裡只補其餘按下掛號才知道的錯誤。 -->
           <p v-if="attemptedApprove && slotErrors.time && form.time && slotErrors.time !== DURATION_OVERFLOW_ERROR" class="text-xs font-medium text-destructive">{{ slotErrors.time }}</p>
           <div class="space-y-1.5"><Label for="intake-note">內部備註</Label><Textarea id="intake-note" v-model="form.internalNote" rows="2" maxlength="2000" placeholder="僅院內人員可見" /></div>
         </div>

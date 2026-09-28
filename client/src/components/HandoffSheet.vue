@@ -7,7 +7,6 @@ import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
 import { describeVisitChanges } from '../lib/appointmentNotifications';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { DEFAULT_ESTIMATED_DURATION_MINUTES, appointmentSlotErrors } from '../lib/appointmentTime';
-import { clinicDateInput, clinicTimeInput } from '../lib/datetime';
 import AppointmentSlotPicker from './AppointmentSlotPicker.vue';
 import SurgeryField from './SurgeryField.vue';
 import { Input } from './ui/input';
@@ -176,12 +175,12 @@ function handleHistoricalNoteSaved({ note, content }) {
   loadNotes(notePage.value);
 }
 
-// 送出前跟掛號視窗同一套檢查（lib/appointmentTime.js）；「已經過去的時段」看按下那一刻。
+// 送出前跟掛號視窗同一套檢查（lib/appointmentTime.js）。
 // 回傳第一個錯誤訊息，沒有錯誤回空字串。
 function followUpError() {
   followUpAttempted.value = true;
   const { date, time, duration, isSurgery, surgeryName } = followUp.value;
-  const errors = appointmentSlotErrors({ date, time, durationMinutes: duration, today: clinicDateInput(), nowTime: clinicTimeInput(new Date()) });
+  const errors = appointmentSlotErrors({ date, time, durationMinutes: duration });
   if (errors.date) return '請選擇回診日期';
   if (errors.time) return errors.time === '請選擇預約時段' ? '請選擇回診時段' : errors.time;
   if (isSurgery && !surgeryName.trim()) return '請填寫手術名稱';

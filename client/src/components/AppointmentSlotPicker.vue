@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { DatePicker } from './ui/date-picker';
 import { buildSlotGrid, duplicateBookings } from '../lib/receptionBoard';
 import { MAX_ESTIMATED_DURATION_MINUTES, durationOverflowError } from '../lib/appointmentTime';
-import { clinicDateInput, clinicTimeInput, formatDate } from '../lib/datetime';
+import { clinicDateInput, formatDate } from '../lib/datetime';
 
 // 「什麼時候」的共用區塊：日期（＋今天）→ 預估診療時間 → 時段格。
 // 所有排掛號的地方都用這一塊——掛號視窗、櫃台處理視窗的回診安排、初診表審核——
@@ -51,10 +51,7 @@ watch(date, async (value) => {
 }, { immediate: true });
 const items = computed(() => (usesProvided.value ? props.dayItems : fetchedItems.value ?? []));
 
-const sessions = computed(() => buildSlotGrid(items.value, {
-  excludeId: props.excludeId,
-  minTime: date.value === today ? clinicTimeInput(new Date()) : '',
-}));
+const sessions = computed(() => buildSlotGrid(items.value, { excludeId: props.excludeId }));
 const overflowError = computed(() => (time.value ? durationOverflowError(time.value, duration.value) : ''));
 
 const duplicateWarning = computed(() => {
