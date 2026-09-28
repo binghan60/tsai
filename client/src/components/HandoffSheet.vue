@@ -1,12 +1,16 @@
 ﻿<script setup>
 import { computed, nextTick, ref, watch } from 'vue';
 import PatientLink from './PatientLink.vue';
-import { CalendarClock, Check, Pencil, X } from '@lucide/vue';
+import { Check, Pencil, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
 import { describeVisitChanges } from '../lib/appointmentNotifications';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
-import { APPOINTMENT_TIME_RANGES, APPOINTMENT_TIME_MINUTE_STEP } from '../lib/appointmentTime';
+import { DEFAULT_ESTIMATED_DURATION_MINUTES, appointmentSlotErrors } from '../lib/appointmentTime';
+import { clinicDateInput, clinicTimeInput } from '../lib/datetime';
+import AppointmentSlotPicker from './AppointmentSlotPicker.vue';
+import SurgeryField from './SurgeryField.vue';
+import { Input } from './ui/input';
 import AppointmentMilestones from './AppointmentMilestones.vue';
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue';
 import SpecGrid from './SpecGrid.vue';
@@ -19,8 +23,6 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { Alert, AlertDescription } from './ui/alert';
-import { DatePicker } from './ui/date-picker';
-import { TimePicker } from './ui/time-picker';
 import RichText from './RichText.vue';
 import RichTextEditor from './RichTextEditor.vue';
 import { richTextToPlain } from '../../../shared/richText.js';
@@ -45,8 +47,6 @@ const noteDirty = computed(() => visitNote.value !== noteBaseline.value);
 const noteConflict = computed(() => noteDirty.value && (props.appointment.visitNote || '') !== noteBaseline.value);
 const noteSaved = ref(false);
 const editingNote = ref(false);
-const date = ref(props.appointment.followUpDate || '');
-const time = ref(props.appointment.followUpTime || '');
 const notes = ref([]);
 const notePage = ref(1);
 const noteTotalPages = ref(1);
@@ -54,14 +54,34 @@ const notesLoading = ref(false);
 const notesError = ref('');
 let notesRequest = 0;
 
+// 回診安排跟掛號視窗是同一套：來院原因、手術標記、日期、預估診療時間、時段格（AppointmentSlotPicker）。
+// 來院原因預設帶醫師寫的回診原因；醫師沒寫就留空，不替使用者補字。
+function followUpDefaults() {
+  return {
+    date: props.appointment.followUpDate || '',
+    time: props.appointment.followUpTime || '',
+    duration: DEFAULT_ESTIMATED_DURATION_MINUTES,
+    reason: props.appointment.followUpReason || props.appointment.followUpRecommendation || '',
+    isSurgery: false,
+    surgeryName: '',
+  };
+}
+const followUp = ref(followUpDefaults());
+const followUpAttempted = ref(false);
+// 已經約好的回診也能在這裡改期（後端就地改那一筆），展開的是同一塊時段選擇。
+const rescheduling = ref(false);
+
 const state = computed(() => workflowState(props.appointment));
 const booked = computed(() => Boolean(props.appointment.followUpAppointmentId));
-const needsFollowUp = computed(() => Boolean(props.appointment.followUpRecommendation || props.appointment.followUpReason));
-const canBook = computed(() => Boolean(date.value && time.value) && !booked.value);
+const editingFollowUp = computed(() => !booked.value || rescheduling.value);
+// 選了日期或時段就算「要約回診」；兩者都空＝飼主還沒決定，這筆留在「待安排回診」。
+const followUpStarted = computed(() => editingFollowUp.value && Boolean(followUp.value.date || followUp.value.time));
+const surgeryNameError = computed(() => (followUpAttempted.value && followUp.value.isSurgery && !followUp.value.surgeryName.trim() ? '請填寫手術名稱' : ''));
 
 watch(() => props.appointment._id, () => {
-  date.value = props.appointment.followUpDate || '';
-  time.value = props.appointment.followUpTime || '';
+  followUp.value = followUpDefaults();
+  followUpAttempted.value = false;
+  rescheduling.value = false;
   resetNote();
   editingNote.value = false;
   error.value = '';
@@ -156,22 +176,83 @@ function handleHistoricalNoteSaved({ note, content }) {
   loadNotes(notePage.value);
 }
 
+// 送出前跟掛號視窗同一套檢查（lib/appointmentTime.js）；「已經過去的時段」看按下那一刻。
+// 回傳第一個錯誤訊息，沒有錯誤回空字串。
+function followUpError() {
+  followUpAttempted.value = true;
+  const { date, time, duration, isSurgery, surgeryName } = followUp.value;
+  const errors = appointmentSlotErrors({ date, time, durationMinutes: duration, today: clinicDateInput(), nowTime: clinicTimeInput(new Date()) });
+  if (errors.date) return '請選擇回診日期';
+  if (errors.time) return errors.time === '請選擇預約時段' ? '請選擇回診時段' : errors.time;
+  if (isSurgery && !surgeryName.trim()) return '請填寫手術名稱';
+  return '';
+}
+
+function followUpPayload() {
+  const { date, time, duration, reason, isSurgery, surgeryName } = followUp.value;
+  return {
+    followUpDate: date,
+    followUpTime: time,
+    estimatedDurationMinutes: Number(duration),
+    reason: reason.trim(),
+    isSurgery,
+    surgeryName: isSurgery ? surgeryName.trim() : '',
+  };
+}
+
 async function bookFollowUp() {
-  if (busy.value || !canBook.value) return;
+  if (busy.value || !followUpStarted.value) return;
+  error.value = followUpError();
+  if (error.value) return;
   busy.value = true;
-  error.value = '';
-  try { await run('followup', { followUpDate: date.value, followUpTime: time.value }); }
+  try {
+    await run('followup', followUpPayload());
+    rescheduling.value = false;
+  }
   catch (err) { error.value = err.response?.data?.message || '回診預約失敗，請稍後重試'; }
   finally { busy.value = false; }
 }
 
-// 一顆按鈕收尾：還沒掛號的回診先掛上，再結束這次就診。分成兩顆只會讓櫃台漏按其中一顆。
-async function complete() {
-  if (busy.value || editingNote.value) return;
+// 改期：先讀那筆回診掛號，帶入它現在的時段、診療時間、原因與手術標記。
+async function startReschedule() {
+  if (busy.value) return;
   busy.value = true;
   error.value = '';
   try {
-    if (canBook.value) await run('followup', { followUpDate: date.value, followUpTime: time.value }, { silentToast: true });
+    const { data } = await http.get(`/appointments/${props.appointment.followUpAppointmentId}`);
+    if (data.status !== 'scheduled') {
+      error.value = '這筆回診已經報到或被處理過，請從時間軸上的那筆掛號修改。';
+      return;
+    }
+    followUp.value = {
+      date: data.date || '',
+      time: data.time || '',
+      duration: data.estimatedDurationMinutes || DEFAULT_ESTIMATED_DURATION_MINUTES,
+      reason: data.reason || '',
+      isSurgery: Boolean(data.isSurgery),
+      surgeryName: data.surgeryName || '',
+    };
+    followUpAttempted.value = false;
+    rescheduling.value = true;
+  } catch (err) {
+    error.value = err.response?.data?.message || '回診掛號載入失敗，請稍後重試';
+  } finally { busy.value = false; }
+}
+function cancelReschedule() {
+  rescheduling.value = false;
+  followUpAttempted.value = false;
+  error.value = '';
+}
+
+// 一顆按鈕收尾：還沒掛號的回診先掛上，再結束這次就診。分成兩顆只會讓櫃台漏按其中一顆。
+// 回診只填了一半（有日期沒時段）時擋下來，不默默丟掉。
+async function complete() {
+  if (busy.value || editingNote.value) return;
+  error.value = followUpStarted.value ? followUpError() : '';
+  if (error.value) return;
+  busy.value = true;
+  try {
+    if (followUpStarted.value) await run('followup', followUpPayload(), { silentToast: true });
     await run('complete');
     emit('close');
   } catch (err) {
@@ -213,12 +294,12 @@ async function approveReopen() {
                   <SurgeryBadge v-if="appointment.isSurgery" :name="appointment.surgeryName" />
                   <LatenessBadge :minutes="appointment.latenessMinutes" />
                 </div>
-                <DialogDescription>{{ appointment.reason || '未填來院原因' }}</DialogDescription>
+                <DialogDescription>{{ appointment.reason }}</DialogDescription>
               </div>
             </div>
             <div class="flex items-start gap-2">
               <SpecGrid>
-                <SpecCell label="飼主"><PatientLink v-if="appointment.ownerName" :pet-id="appointment.petId" quiet>{{ appointment.ownerName }}</PatientLink><template v-else>待確認</template></SpecCell>
+                <SpecCell label="飼主"><PatientLink v-if="appointment.ownerName" :pet-id="appointment.petId" quiet>{{ appointment.ownerName }}</PatientLink></SpecCell>
                 <SpecCell v-if="appointment.ownerPhone" label="電話" mono><a :href="`tel:${appointment.ownerPhone}`" class="text-primary">{{ appointment.ownerPhone }}</a></SpecCell>
                 <SpecCell label="預約" mono>{{ appointment.date?.slice(5) }} {{ appointment.time || '' }}</SpecCell>
               </SpecGrid>
@@ -237,8 +318,8 @@ async function approveReopen() {
 
             <section class="space-y-2">
               <h3 class="text-base font-semibold text-warning">請轉告飼主</h3>
-              <p v-if="appointment.specialCareNote" class="whitespace-pre-wrap rounded-xl bg-warning-surface p-4 leading-relaxed font-medium text-warning">{{ appointment.specialCareNote }}</p>
-              <p v-else class="rounded-xl bg-sunken p-4 text-subtle-foreground">醫師沒有要轉告的事。</p>
+              <!-- 沒有內容也保留同一格、留白，不補說明文字。 -->
+              <p class="min-h-[calc(1lh+2rem)] whitespace-pre-wrap rounded-xl bg-warning-surface p-4 leading-relaxed font-medium text-warning">{{ appointment.specialCareNote }}</p>
             </section>
 
             <section class="space-y-2">
@@ -247,8 +328,7 @@ async function approveReopen() {
                 <Button v-if="!editingNote && !state.completed" variant="secondary" size="sm" :disabled="busy" @click="startEditNote"><Pencil stroke-width="1.75" />編輯</Button>
               </div>
               <RichTextEditor v-if="editingNote" id="desk-visit-note" v-model="visitNote" aria-label="本次簡易紀錄" :min-rows="8" :disabled="busy || state.completed" placeholder="輸入本次看診紀錄…" />
-              <RichText v-else-if="appointment.visitNote" class="wrap-anywhere rounded-xl bg-sunken p-4 leading-relaxed" :text="appointment.visitNote" />
-              <p v-else class="rounded-xl bg-sunken p-4 text-subtle-foreground">尚無本次簡易紀錄。</p>
+              <RichText v-else class="min-h-[calc(1lh+2rem)] wrap-anywhere rounded-xl bg-sunken p-4 leading-relaxed" :text="appointment.visitNote || ''" />
               <Alert v-if="editingNote && noteConflict" variant="destructive">
                 <AlertDescription>其他人已修改此紀錄，請先核對最新內容：</AlertDescription>
                 <RichText v-if="appointment.visitNote" class="my-2 wrap-anywhere" :text="appointment.visitNote" />
@@ -267,27 +347,45 @@ async function approveReopen() {
             <section class="space-y-3">
               <div>
                 <h3 class="text-base font-semibold">回診安排</h3>
-                <p class="text-sm text-muted-foreground">確認後會建立下一筆回診掛號；已經有回診掛號時，改日期時間會一起改那一筆。</p>
+                <p class="text-sm text-muted-foreground">跟掛號視窗一樣選時段與預估診療時間，確認後會建立下一筆回診掛號；已經約好的按「修改」改期，會一起改那一筆。</p>
               </div>
-              <div v-if="needsFollowUp" class="rounded-xl bg-accent px-4 py-3">
+              <!-- 醫師沒寫也照樣留這一格、內容空白，不補說明文字。 -->
+              <div class="rounded-xl bg-accent px-4 py-3">
                 <p class="spec-label text-accent-foreground">醫師建議</p>
-                <p class="mt-0.5 text-accent-foreground">{{ appointment.followUpRecommendation || appointment.followUpReason }}</p>
+                <p class="mt-0.5 min-h-lh text-accent-foreground">{{ appointment.followUpRecommendation || appointment.followUpReason }}</p>
               </div>
-              <p v-else class="flex items-center gap-2 text-muted-foreground"><CalendarClock class="size-5" stroke-width="1.75" />醫師沒有指定回診，仍可視需要直接約下一次。</p>
 
               <div v-if="booked" class="flex items-center gap-3 rounded-xl bg-success-surface px-4 py-3 text-success">
                 <Check class="size-5" stroke-width="2" />
                 <span class="font-semibold">已安排回診</span>
                 <span class="num text-lg font-semibold">{{ appointment.followUpDate }} {{ appointment.followUpTime }}</span>
+                <Button v-if="!rescheduling" variant="secondary" size="sm" class="ml-auto" :disabled="busy" @click="startReschedule"><Pencil stroke-width="1.75" />修改</Button>
               </div>
-              <template v-else>
-                <div class="grid gap-3 sm:grid-cols-2">
-                  <div class="space-y-1.5"><Label for="desk-followup-date">回診日期</Label><DatePicker id="desk-followup-date" v-model="date" aria-label="回診日期" /></div>
-                  <div class="space-y-1.5"><Label for="desk-followup-time">回診時間</Label><TimePicker id="desk-followup-time" v-model="time" :ranges="APPOINTMENT_TIME_RANGES" :minute-step="APPOINTMENT_TIME_MINUTE_STEP" aria-label="回診時間" /></div>
+              <template v-if="editingFollowUp">
+                <div class="space-y-1.5">
+                  <Label for="desk-followup-reason">來院原因</Label>
+                  <Input id="desk-followup-reason" v-model="followUp.reason" placeholder="例：拆線、複診" />
                 </div>
-                <div class="flex items-center gap-3">
+                <SurgeryField v-model:is-surgery="followUp.isSurgery" v-model:surgery-name="followUp.surgeryName" :error="surgeryNameError" />
+                <AppointmentSlotPicker
+                  v-model:date="followUp.date"
+                  v-model:time="followUp.time"
+                  v-model:duration="followUp.duration"
+                  :exclude-id="String(rescheduling ? appointment.followUpAppointmentId : appointment._id)"
+                  :pet-id="appointment.petId ? String(appointment.petId) : ''"
+                  :pet-name="appointment.petName"
+                  :show-errors="followUpAttempted && followUpStarted"
+                  :required="false"
+                  clearable
+                  label="回診日期與時段"
+                />
+                <div v-if="rescheduling" class="flex items-center justify-end gap-2">
+                  <Button variant="secondary" size="sm" :disabled="busy" @click="cancelReschedule">取消</Button>
+                  <Button variant="soft" size="sm" :disabled="busy || !followUpStarted" @click="bookFollowUp">儲存回診變更</Button>
+                </div>
+                <div v-else class="flex items-center gap-3">
                   <p class="text-sm text-muted-foreground">飼主還沒決定就先留空，這筆會留在「待安排回診」。</p>
-                  <Button v-if="state.completed" variant="soft" size="sm" class="ml-auto" :disabled="busy || !canBook" @click="bookFollowUp">確認回診預約</Button>
+                  <Button v-if="state.completed" variant="soft" size="sm" class="ml-auto" :disabled="busy || !followUpStarted" @click="bookFollowUp">確認回診預約</Button>
                 </div>
               </template>
             </section>

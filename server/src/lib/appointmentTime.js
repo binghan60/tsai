@@ -1,4 +1,5 @@
-// 掛號時段規則：新增／修改掛號與初診表審核（routes/intakeSubmissions.js）共用同一套，
+// 掛號時段規則：新增／修改掛號、初診表審核（routes/intakeSubmissions.js）與櫃台約回診
+// （routes/appointmentWorkflow.js 的 followup）共用同一套，
 // 前端 client/src/lib/appointmentTime.js 是同一組數字。
 // 手術只是掛號上的標記（isSurgery／surgeryName），時段跟一般門診一樣，沒有專屬的手術時段。
 export const APPOINTMENT_TIME_RANGES = [
@@ -36,6 +37,14 @@ export function normalizeEstimatedDuration(value) {
     throw Object.assign(new Error('預估診療時間須為 15–240 分鐘，且以 15 分鐘為單位'), { status: 422 });
   }
   return duration;
+}
+
+// 手術標記：勾了就要有手術名稱，沒勾就清空名稱。
+export function normalizeSurgeryFields(body) {
+  const isSurgery = Boolean(body.isSurgery);
+  const surgeryName = String(body.surgeryName || '').trim();
+  if (isSurgery && !surgeryName) throw Object.assign(new Error('請填寫手術名稱'), { status: 422 });
+  return { isSurgery, surgeryName: isSurgery ? surgeryName : '' };
 }
 
 export function validateAppointmentDuration(time, duration) {

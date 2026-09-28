@@ -96,7 +96,7 @@ const age = computed(() => ageLabel(pet.value?.birthDate, new Date(), ''))
 const medicalTags = computed(() => {
   if (!pet.value) return []
   const tags = []
-  if (pet.value.allergyStatus === 'yes') tags.push({ key: 'allergy', label: `藥物過敏：${pet.value.allergyType || '有（未註明藥物）'}`, class: 'bg-danger-surface font-semibold text-danger' })
+  if (pet.value.allergyStatus === 'yes') tags.push({ key: 'allergy', label: pet.value.allergyType ? `藥物過敏：${pet.value.allergyType}` : '藥物過敏', class: 'bg-danger-surface font-semibold text-danger' })
   const history = [pet.value.medicalHistory?.join('、'), pet.value.medicalHistoryOther].filter(Boolean).join('；')
   if (history) tags.push({ key: 'history', label: `病史：${history}`, class: 'bg-card text-danger shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--danger)_55%,transparent)]' })
   if (pet.value.allergyStatus === 'none') tags.push({ key: 'no-allergy', label: '無藥物過敏', class: 'bg-success-surface text-success' })
@@ -495,14 +495,14 @@ onBeforeUnmount(() => {
               <!-- 飼主與就診時間分成兩組：欄位多時各自整組換行，不會把時間切在飼主資料中間。 -->
               <div class="flex min-w-0 flex-wrap items-start gap-x-8 gap-y-2.5">
                 <SpecGrid class="min-w-0">
-                  <SpecCell label="飼主"><PatientLink v-if="owner?.name || appointment.ownerName" :pet-id="appointment.petId" quiet>{{ owner?.name || appointment.ownerName }}</PatientLink><template v-else>待確認</template></SpecCell>
+                  <SpecCell label="飼主"><PatientLink v-if="owner?.name || appointment.ownerName" :pet-id="appointment.petId" quiet>{{ owner?.name || appointment.ownerName }}</PatientLink></SpecCell>
                   <SpecCell v-if="owner?.phone || appointment.ownerPhone" label="電話" mono>{{ owner?.phone || appointment.ownerPhone }}</SpecCell>
                   <SpecCell v-for="field in ownerFields" :key="field.label" :label="field.label" :mono="field.mono">
                     <span class="max-w-60 truncate" v-tip.overflow="field.value">{{ field.value }}</span>
                   </SpecCell>
                 </SpecGrid>
                 <SpecGrid>
-                  <SpecCell label="預約" mono>{{ appointment.time || '未定' }}</SpecCell>
+                  <SpecCell label="預約" mono>{{ appointment.time }}</SpecCell>
                   <SpecCell v-if="appointment.checkedInAt" label="報到" mono>{{ clinicTimeInput(appointment.checkedInAt) }}</SpecCell>
                   <SpecCell v-if="visitMinutes !== null" label="看診" mono>{{ visitMinutes }} 分</SpecCell>
                   <SpecCell v-if="appointment.handoffAt" label="交櫃台" mono>{{ clinicTimeInput(appointment.handoffAt) }}</SpecCell>
@@ -515,7 +515,7 @@ onBeforeUnmount(() => {
 
         <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
           <span class="spec-label">來院原因</span>
-          <span class="text-lg font-semibold" :class="appointment.reason ? '' : 'text-subtle-foreground'">{{ appointment.reason || '掛號時沒有填寫' }}</span>
+          <span class="text-lg font-semibold">{{ appointment.reason }}</span>
           <SurgeryBadge v-if="appointment.isSurgery" :name="appointment.surgeryName" class="self-center" />
           <LatenessBadge :minutes="appointment.latenessMinutes" class="self-center" />
         </div>
@@ -530,7 +530,7 @@ onBeforeUnmount(() => {
             <div class="flex items-start gap-3">
               <span class="shrink-0 pt-0.5 text-sm font-semibold">貓咪備註</span>
               <Textarea v-if="editingPetNote" v-model="petNoteDraft" class="min-w-0 flex-1 text-foreground" rows="2" maxlength="2000" :disabled="petNoteSaving" aria-label="貓咪備註" placeholder="例：會咬人，保定需兩人" />
-              <p v-else class="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere" :class="pet.notes ? 'font-medium' : ''">{{ pet.notes || '尚無備註' }}</p>
+              <p v-else class="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere font-medium">{{ pet.notes }}</p>
               <Button v-if="!editingPetNote" variant="secondary" size="icon-xs" class="shrink-0" aria-label="編輯貓咪備註" @click="startPetNoteEdit"><Pencil stroke-width="1.75" /></Button>
             </div>
             <Alert v-if="petNoteError" variant="destructive" class="mt-2"><AlertDescription>{{ petNoteError }}</AlertDescription></Alert>
@@ -543,7 +543,7 @@ onBeforeUnmount(() => {
             <div class="flex items-start gap-3">
               <span class="shrink-0 pt-0.5 text-sm font-semibold">飼主備註</span>
               <Textarea v-if="editingOwnerNote" v-model="ownerNoteDraft" class="min-w-0 flex-1 text-foreground" rows="2" maxlength="2000" :disabled="ownerNoteSaving" aria-label="飼主備註" placeholder="例：處置前先說明費用" />
-              <p v-else class="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere" :class="owner?.notes ? 'font-medium' : ''">{{ owner ? owner.notes || '尚無備註' : '未提供飼主資料' }}</p>
+              <p v-else class="min-w-0 flex-1 whitespace-pre-wrap wrap-anywhere font-medium">{{ owner?.notes }}</p>
               <Button v-if="owner && !editingOwnerNote" variant="secondary" size="icon-xs" class="shrink-0" aria-label="編輯飼主備註" @click="startOwnerNoteEdit"><Pencil stroke-width="1.75" /></Button>
             </div>
             <Alert v-if="ownerNoteError" variant="destructive" class="mt-2"><AlertDescription>{{ ownerNoteError }}</AlertDescription></Alert>

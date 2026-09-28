@@ -9,7 +9,7 @@ import { combineClinicDateTime } from '../lib/clinicTime.js';
 import { createRateLimiter } from '../lib/rateLimit.js';
 import { emitAppointmentUpdate, emitIntakeUpdate } from '../lib/realtime.js';
 import { INTAKE_PET_FIELDS, mergeIntakeEdit } from '../lib/intakeEdit.js';
-import { APPOINTMENT_TIME_ERROR, APPOINTMENT_TIME_STEP, isValidAppointmentTime, validateAppointmentDuration } from '../lib/appointmentTime.js';
+import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 import { MOBILE_PHONE_ERROR, normalizeMobilePhone } from '../../../shared/phone.js';
 
 const pickPetFields = body => Object.fromEntries(INTAKE_PET_FIELDS.filter(field => body[field] !== undefined).map(field => [field, body[field]]));
@@ -194,7 +194,13 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
             throw Object.assign(new Error('掛號日期格式不正確'), { status: 422 });
           }
           if (!isValidAppointmentTime(time)) throw Object.assign(new Error(APPOINTMENT_TIME_ERROR), { status: 422 });
-          validateAppointmentDuration(time, appointment.estimatedDurationMinutes ?? APPOINTMENT_TIME_STEP);
+          // 預估診療時間與手術標記也跟掛號視窗一樣；沒帶就沿用掛號上原本的值。
+          const estimatedDurationMinutes = normalizeEstimatedDuration(req.body?.estimatedDurationMinutes ?? appointment.estimatedDurationMinutes);
+          validateAppointmentDuration(time, estimatedDurationMinutes);
+          const surgery = normalizeSurgeryFields(req.body?.isSurgery !== undefined ? req.body : appointment);
+          appointment.estimatedDurationMinutes = estimatedDurationMinutes;
+          appointment.isSurgery = surgery.isSurgery;
+          appointment.surgeryName = surgery.surgeryName;
           appointment.ownerId = owner._id;
           appointment.petId = pet._id;
           appointment.ownerName = owner.name;

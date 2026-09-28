@@ -479,7 +479,7 @@ onBeforeUnmount(() => {
     <div v-if="!loading && hasAlerts" class="grid gap-2 md:grid-cols-3" aria-label="需要注意">
       <div v-if="reopenRequests.length" class="flex min-h-13 items-center gap-3 rounded-xl bg-danger-surface py-2 pr-2 pl-4 text-danger">
         <AlertTriangle class="size-5 shrink-0" stroke-width="1.75" />
-        <p class="min-w-0 flex-1 truncate"><span class="font-semibold">醫師申請修改 {{ reopenRequests.length }}</span>　<PatientLink :pet-id="reopenRequests[0].petId" quiet>{{ reopenRequests[0].petName }}</PatientLink>：{{ reopenRequests[0].reopenRequest.reason || '未填寫原因' }}</p>
+        <p class="min-w-0 flex-1 truncate"><span class="font-semibold">醫師申請修改 {{ reopenRequests.length }}</span>　<PatientLink :pet-id="reopenRequests[0].petId" quiet>{{ reopenRequests[0].petName }}</PatientLink><template v-if="reopenRequests[0].reopenRequest.reason">：{{ reopenRequests[0].reopenRequest.reason }}</template></p>
         <Button size="sm" variant="soft" class="shrink-0" @click="openSheet(reopenRequests[0])">處理</Button>
       </div>
       <div v-if="overdue.length" class="flex min-h-13 items-center gap-3 rounded-xl bg-danger-surface py-2 pr-2 pl-4 text-danger">
@@ -552,7 +552,7 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="relative py-1">
-                  <span class="num mb-1 block text-sm font-semibold text-muted-foreground sm:absolute sm:top-4 sm:-left-9 sm:mb-0 sm:w-14 sm:-translate-x-full sm:text-right sm:text-base" :class="item.isSurgery && item.status === 'scheduled' ? 'text-surgery' : ''">{{ item.time || '未定' }}</span>
+                  <span class="num mb-1 block text-sm font-semibold text-muted-foreground sm:absolute sm:top-4 sm:-left-9 sm:mb-0 sm:w-14 sm:-translate-x-full sm:text-right sm:text-base" :class="item.isSurgery && item.status === 'scheduled' ? 'text-surgery' : ''">{{ item.time }}</span>
                   <span class="absolute top-1/2 -left-4.25 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card sm:-left-5.25" :class="item.ui.tone.dot" aria-hidden="true"></span>
 
                   <!-- 整張卡片可點（開處理視窗／初診審核／修改掛號）；裡面的按鈕各自 stop，不會連帶觸發。 -->
@@ -569,7 +569,7 @@ onBeforeUnmount(() => {
                             <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
                             <LatenessBadge :minutes="item.ui.lateMinutes" />
                           </div>
-                          <p class="truncate" :class="item.reason ? 'text-foreground' : 'text-subtle-foreground'" v-tip.overflow="item.reason">{{ item.reason || '未填來院原因' }}</p>
+                          <p class="min-h-lh truncate text-foreground" v-tip.overflow="item.reason">{{ item.reason }}</p>
                           <p v-if="item.ui.kind === 'handoff' && item.specialCareNote" class="truncate rounded-md bg-warning-surface px-2.5 py-1 text-sm font-medium text-warning" v-tip.overflow="item.specialCareNote"><span class="font-semibold">請轉告飼主</span>　{{ item.specialCareNote }}</p>
                           <PatientNotes :notes="item.ui.notes" />
                           <p v-if="item.internalNote && item.status === 'scheduled'" class="truncate text-sm text-muted-foreground" v-tip.overflow="item.internalNote"><span class="font-medium text-foreground">掛號備註</span>　{{ item.internalNote }}</p>
@@ -582,7 +582,7 @@ onBeforeUnmount(() => {
                       <!-- 右側三欄：飼主、電話、進度，每張卡片上下對齊，掃一眼就能對上是誰、打給誰、到哪一步。 -->
                       <div class="min-w-0 xl:pl-2">
                         <span class="spec-label block">飼主</span>
-                        <span class="block truncate" :class="item.ownerName ? '' : 'text-subtle-foreground'"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink><template v-else>未留姓名</template></span>
+                        <span class="block min-h-lh truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink></span>
                       </div>
                       <div class="min-w-0">
                         <span class="spec-label block">電話</span>
@@ -643,7 +643,7 @@ onBeforeUnmount(() => {
                 <button v-for="item in finished" :key="item._id" type="button" class="flex min-h-12 w-full min-w-0 items-center gap-3 rounded-lg bg-card px-3 py-2 text-left hover:bg-hover" @click="openSheet(item)">
                   <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-success-surface text-success"><Check class="size-4" stroke-width="2" /></span>
                   <span class="min-w-0 flex-1 truncate font-semibold text-primary">{{ item.petName }}</span>
-                  <span class="truncate text-sm text-muted-foreground">{{ item.ownerName || '未留姓名' }}</span>
+                  <span class="truncate text-sm text-muted-foreground">{{ item.ownerName }}</span>
                   <span v-if="item.deskCompletedAt" class="num shrink-0 text-sm text-subtle-foreground">{{ clinicTimeInput(item.deskCompletedAt) }}</span>
                   <Badge v-if="item.followUpAppointmentId" variant="status" class="bg-accent text-accent-foreground">回診 <span class="num">{{ item.followUpDate?.slice(5) }}</span></Badge>
                 </button>
@@ -660,7 +660,7 @@ onBeforeUnmount(() => {
                   <Badge variant="status" :class="closedStatusMeta(item).class">{{ closedStatusMeta(item).label }}</Badge>
                   <div class="min-w-0 flex-1">
                     <p class="truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></p>
-                    <p class="truncate text-sm text-muted-foreground"><span class="num">{{ item.time || '未定' }}</span>　{{ item.cancelReason || item.ownerName }}</p>
+                    <p class="truncate text-sm text-muted-foreground"><span class="num">{{ item.time }}</span>　{{ item.cancelReason || item.ownerName }}</p>
                   </div>
                   <RowActions :actions="[{ key: 'restore', label: '恢復待報到' }, { key: 'edit', label: '修改預約' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
                 </article>

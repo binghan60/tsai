@@ -3,20 +3,18 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useField, useForm } from 'vee-validate';
 import { History, Search, UserPlus, X } from '@lucide/vue';
 import { http } from '../api/http';
-import SlotGrid from './SlotGrid.vue';
+import AppointmentSlotPicker from './AppointmentSlotPicker.vue';
+import SurgeryField from './SurgeryField.vue';
 import SegmentedControl from './SegmentedControl.vue';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
-import { Checkbox } from './ui/checkbox';
 import { Alert, AlertDescription } from './ui/alert';
-import { DatePicker } from './ui/date-picker';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { buildSlotGrid, duplicateBookings } from '../lib/receptionBoard';
-import { DEFAULT_ESTIMATED_DURATION_MINUTES, MAX_ESTIMATED_DURATION_MINUTES } from '../lib/appointmentTime';
-import { clinicDateInput, clinicTimeInput, formatDate, formatDateTime, weekdayLabel } from '../lib/datetime';
+import { DEFAULT_ESTIMATED_DURATION_MINUTES, durationOverflowError } from '../lib/appointmentTime';
+import { formatDate, formatDateTime, weekdayLabel } from '../lib/datetime';
 import { breedText } from '../lib/petDisplay';
 import { checkMobilePhone } from '../../../shared/phone.js';
 
@@ -44,7 +42,6 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'close']);
 
 const isEdit = computed(() => Boolean(props.appointment));
-const today = clinicDateInput();
 
 const MODE_OPTIONS = [
   { value: 'return', label: '回診', icon: History },
@@ -165,51 +162,12 @@ const attendanceWarnings = computed(() => {
   return [];
 });
 
-// ── 日期與時段格 ────────────────────────────────────────────────────────────
-// 預設是頁面上的日期面板（新增掛號就是今天），換到別天直接在日期選單裡打字或翻日曆；
-// 換到頁面沒載入的那天，才自己去抓那天的掛號。
-const otherDayItems = ref(null);
-watch(slotDate, async (value) => {
-  otherDayItems.value = null;
-  if (!value || value === props.date) return;
-  try {
-    const { data } = await http.get('/appointments', { params: { date: value } });
-    if (slotDate.value === value) otherDayItems.value = data.items ?? [];
-  } catch {
-    if (slotDate.value === value) otherDayItems.value = [];
-  }
-});
-const slotItems = computed(() => (slotDate.value === props.date ? props.dayItems : otherDayItems.value ?? []));
-const slotSessions = computed(() => buildSlotGrid(slotItems.value, {
-  excludeId: props.appointment?._id,
-  minTime: slotDate.value === today ? clinicTimeInput(new Date()) : '',
-}));
-const durationError = computed(() => {
-  if (!time.value) return '';
-  const start = Number(time.value.slice(0, 2)) * 60 + Number(time.value.slice(3, 5));
-  for (const session of slotSessions.value) {
-    const sessionStart = Number(session.start.slice(0, 2)) * 60 + Number(session.start.slice(3, 5));
-    const sessionEnd = Number(session.end.slice(0, 2)) * 60 + Number(session.end.slice(3, 5)) + 15;
-    if (start >= sessionStart && start < sessionEnd) {
-      return start + Number(estimatedDurationMinutes.value) <= sessionEnd ? '' : '預估診療時間超出可掛號時段，請縮短時間或改選其他時段';
-    }
-  }
-  return '';
-});
-
-function changeDuration(delta) {
-  estimatedDurationMinutes.value = Math.min(MAX_ESTIMATED_DURATION_MINUTES, Math.max(15, Number(estimatedDurationMinutes.value) + delta));
-}
-
+// ── 日期與時段格（AppointmentSlotPicker，跟約回診、初診表審核同一塊）──────────────
+// 預設是頁面上的日期面板（新增掛號就是今天）；頁面已經載入的那天直接拿 dayItems 算格子。
+const durationError = computed(() => (time.value ? durationOverflowError(time.value, estimatedDurationMinutes.value) : ''));
 // 同一隻貓咪那天已經有掛號時先提醒——電話裡飼主常忘記早上已經掛過。
 const duplicatePetId = computed(() => (isEdit.value ? props.appointment.petId : mode.value === 'return' ? selectedPet.value?._id : null));
-const duplicateWarning = computed(() => {
-  const found = duplicateBookings(slotItems.value, duplicatePetId.value, props.appointment?._id);
-  if (!found.length) return '';
-  const name = isEdit.value ? props.appointment.petName : selectedPet.value?.name;
-  const when = slotDate.value === today ? '今天' : formatDate(slotDate.value);
-  return `${name}${when} ${found.map((item) => item.time).join('、')} 已有掛號${found[0].reason ? `（${found[0].reason}）` : ''}，確認不是重複掛號。`;
-});
+const duplicatePetName = computed(() => (isEdit.value ? props.appointment.petName : selectedPet.value?.name));
 
 // ── 送出 ─────────────────────────────────────────────────────────────────
 const title = computed(() => (isEdit.value ? `修改掛號：${props.appointment.petName}` : '新增掛號'));
@@ -294,7 +252,7 @@ const onSubmit = handleSubmit((values) => {
                 <div v-if="selectedPet" class="flex items-center gap-3 rounded-lg border border-primary bg-accent px-3 py-2.5">
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-sm font-semibold text-accent-foreground">{{ selectedPet.name }}<span class="ml-2 text-xs font-normal">{{ breedText(selectedPet, '貓咪') }}</span></p>
-                    <p class="flex gap-x-3 truncate text-xs text-accent-foreground/80"><span>{{ selectedPet.ownerId?.name || '飼主未知' }}</span><span v-if="selectedPet.ownerId?.phone" class="num">{{ selectedPet.ownerId.phone }}</span></p>
+                    <p class="flex gap-x-3 truncate text-xs text-accent-foreground/80"><span>{{ selectedPet.ownerId?.name }}</span><span v-if="selectedPet.ownerId?.phone" class="num">{{ selectedPet.ownerId.phone }}</span></p>
                   </div>
                   <Button type="button" variant="secondary" size="sm" @click="selectedPet = null">更換</Button>
                 </div>
@@ -315,7 +273,7 @@ const onSubmit = handleSubmit((values) => {
                       class="flex w-full items-center gap-3 border-b border-border bg-card px-3 py-2.5 text-left last:border-b-0 hover:bg-field"
                       @click="selectPet(pet)"
                     >
-                      <span class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold text-primary">{{ pet.name }}</span><span v-if="pet.breed" class="ml-2 text-xs text-muted-foreground">{{ pet.breed }}</span><span class="ml-3 text-xs text-muted-foreground">{{ pet.ownerId?.name || '飼主未知' }}</span><span v-if="pet.ownerId?.phone" class="num ml-3 text-xs text-muted-foreground">{{ pet.ownerId.phone }}</span></span>
+                      <span class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold text-primary">{{ pet.name }}</span><span v-if="pet.breed" class="ml-2 text-xs text-muted-foreground">{{ pet.breed }}</span><span v-if="pet.ownerId?.name" class="ml-3 text-xs text-muted-foreground">{{ pet.ownerId.name }}</span><span v-if="pet.ownerId?.phone" class="num ml-3 text-xs text-muted-foreground">{{ pet.ownerId.phone }}</span></span>
                     </button>
                   </div>
                 </template>
@@ -327,7 +285,7 @@ const onSubmit = handleSubmit((values) => {
                 <div v-if="ownerMode === 'existing'" class="space-y-1.5">
                   <Label for="dialog-owner-search" class="text-xs font-medium">既有飼主<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
                   <div v-if="selectedOwner" class="flex items-center gap-3 rounded-lg border border-primary bg-accent px-3 py-2.5">
-                    <p class="min-w-0 flex-1 truncate text-sm font-semibold text-accent-foreground">{{ selectedOwner.name }}<span class="ml-2 text-xs font-normal">{{ selectedOwner.phone || '未填寫電話' }}</span></p>
+                    <p class="min-w-0 flex-1 truncate text-sm font-semibold text-accent-foreground">{{ selectedOwner.name }}<span v-if="selectedOwner.phone" class="num ml-2 text-xs font-normal">{{ selectedOwner.phone }}</span></p>
                     <Button type="button" variant="secondary" size="sm" @click="selectedOwner = null">更換</Button>
                   </div>
                   <template v-else>
@@ -347,7 +305,7 @@ const onSubmit = handleSubmit((values) => {
                         class="flex w-full items-center gap-3 border-b border-border bg-card px-3 py-2.5 text-left text-sm last:border-b-0 hover:bg-field"
                         @click="selectOwner(owner)"
                       >
-                        <span class="font-semibold text-primary">{{ owner.name }}</span><span class="text-xs text-muted-foreground">{{ owner.phone || '未填寫電話' }}</span>
+                        <span class="font-semibold text-primary">{{ owner.name }}</span><span v-if="owner.phone" class="num text-xs text-muted-foreground">{{ owner.phone }}</span>
                       </button>
                     </div>
                   </template>
@@ -411,17 +369,7 @@ const onSubmit = handleSubmit((values) => {
               <Input id="dialog-reason" v-model="reason" placeholder="例：打疫苗、回診拿藥、不舒服" />
             </div>
 
-            <!-- 手術只是標記：勾了整列變淡紫底（跟時間軸上的手術卡片同一套），時段規則跟一般門診相同。 -->
-            <div class="flex items-start gap-3 rounded-lg px-3 py-1.5 transition-colors" :class="isSurgery ? 'bg-surgery-surface' : 'bg-sunken'">
-              <label for="dialog-is-surgery" class="flex min-h-11 shrink-0 cursor-pointer items-center gap-2 text-sm font-medium" :class="isSurgery ? 'text-surgery' : ''">
-                <Checkbox id="dialog-is-surgery" v-model="isSurgery" />
-                手術
-              </label>
-              <div class="min-w-0 flex-1 space-y-1 py-1">
-                <Input v-model="surgeryName" :disabled="!isSurgery" placeholder="手術名稱" aria-label="手術名稱" />
-                <p v-if="surgeryNameError" class="text-sm font-medium text-destructive">{{ surgeryNameError }}</p>
-              </div>
-            </div>
+            <SurgeryField v-model:is-surgery="isSurgery" v-model:surgery-name="surgeryName" :error="surgeryNameError" />
 
             <div class="space-y-1.5">
               <Label for="dialog-template" class="text-xs font-medium">健檢表單</Label>
@@ -440,35 +388,17 @@ const onSubmit = handleSubmit((values) => {
           </div>
 
           <!-- 右欄：什麼時候 -->
-          <div class="space-y-3">
-            <div class="space-y-2">
-              <Label class="text-xs font-medium">日期與時段<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <!-- 預設跟著頁面日期；可一鍵回到今天，其他日子直接在日期選單裡輸入或翻日曆。 -->
-              <div class="flex items-center gap-2">
-                <DatePicker v-model="slotDate" :clearable="false" aria-label="預約日期" class="min-w-0 flex-1" />
-                <Button type="button" class="h-10 shrink-0 px-5 font-semibold shadow-sm" @click="slotDate = today">今天</Button>
-              </div>
-            </div>
-            <div class="space-y-2 rounded-lg border border-border bg-field/40 p-3">
-              <div class="flex items-center justify-between gap-3">
-                <Label class="text-xs font-medium">預估診療時間</Label>
-                <div class="flex items-center gap-2">
-                  <Button type="button" variant="secondary" size="sm" class="h-9 min-w-12 px-2 text-xs font-bold shadow-sm" :disabled="estimatedDurationMinutes <= 15" aria-label="減少 15 分鐘" @click="changeDuration(-15)">−</Button>
-                  <span class="min-w-16 text-center text-xs font-semibold tabular-nums">{{ estimatedDurationMinutes }} 分鐘</span>
-                  <Button type="button" variant="secondary" size="sm" class="h-9 min-w-12 px-2 text-xs font-bold shadow-sm" :disabled="estimatedDurationMinutes >= MAX_ESTIMATED_DURATION_MINUTES" aria-label="增加 15 分鐘" @click="changeDuration(15)">＋</Button>
-                </div>
-              </div>
-              <div class="flex flex-wrap gap-1.5">
-                <Button v-for="minutes in [15, 30, 45, 60, 90, 120]" :key="minutes" type="button" size="sm" class="h-9 min-w-12 px-2 text-xs font-semibold shadow-sm" :variant="estimatedDurationMinutes === minutes ? 'default' : 'secondary'" @click="estimatedDurationMinutes = minutes">{{ minutes }}</Button>
-              </div>
-            </div>
-            <SlotGrid v-model="time" :sessions="slotSessions" :duration-minutes="Number(estimatedDurationMinutes)" :invalid="submitCount > 0 && Boolean(timeError || durationError)" />
-            <p v-if="timeError && submitCount > 0" class="text-xs font-medium text-destructive">{{ timeError }}</p>
-            <p v-if="durationError" class="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{{ durationError }}</p>
-            <Alert v-if="duplicateWarning" class="border-warning/35 bg-warning-surface text-warning">
-              <AlertDescription>{{ duplicateWarning }}</AlertDescription>
-            </Alert>
-          </div>
+          <AppointmentSlotPicker
+            v-model:date="slotDate"
+            v-model:time="time"
+            v-model:duration="estimatedDurationMinutes"
+            :day-items="dayItems"
+            :day-items-date="date"
+            :exclude-id="appointment?._id ? String(appointment._id) : ''"
+            :pet-id="duplicatePetId ? String(duplicatePetId) : ''"
+            :pet-name="duplicatePetName || ''"
+            :show-errors="submitCount > 0"
+          />
         </div>
 
         <Alert v-if="errorMessage" variant="destructive" class="mt-4">

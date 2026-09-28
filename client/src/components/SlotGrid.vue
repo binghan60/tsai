@@ -90,7 +90,7 @@ const selectedExists = computed(() => props.sessions.some((session) => (
                 class="flex max-w-sm flex-col items-stretch gap-2 whitespace-normal rounded-xl border border-border bg-popover p-3 text-sm text-popover-foreground shadow-menu"
               >
                 <div v-for="entry in cell.entries" :key="entry._id" class="space-y-1">
-                  <p><span class="font-semibold">{{ entry.petName }}</span>　<span class="text-muted-foreground">{{ String(entry.reason || '').trim() || '未填來院原因' }}</span></p>
+                  <p><span class="font-semibold">{{ entry.petName }}</span>　<span class="text-muted-foreground">{{ String(entry.reason || '').trim() }}</span></p>
                 </div>
               </TooltipContent>
             </Tooltip>

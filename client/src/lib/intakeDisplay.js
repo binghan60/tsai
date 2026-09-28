@@ -26,7 +26,7 @@ function joined(list, other, separator = '、') {
   return [list?.join(separator), other].filter(Boolean).join('；');
 }
 
-// 回傳 [{ title, rows: [{ label, value }] }]；沒填的欄位值是空字串，畫面顯示「未填寫」。
+// 回傳 [{ title, rows: [{ label, value }] }]；沒填的欄位值是空字串，畫面留白。
 export function intakeSections(submission) {
   const pet = submission?.pet ?? {};
   const owner = submission?.owner ?? {};

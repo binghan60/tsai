@@ -419,7 +419,7 @@ onBeforeUnmount(() => {
                   @keydown.enter.self.prevent="openPatient(item)"
                   @keydown.space.self.prevent="openPatient(item)"
                 >
-                  <span v-if="group.key === 'scheduled'" class="num w-12 shrink-0 text-base font-semibold" :class="item.isSurgery ? 'text-surgery' : 'text-foreground'">{{ item.time || '未定' }}</span>
+                  <span v-if="group.key === 'scheduled'" class="num w-12 shrink-0 text-base font-semibold" :class="item.isSurgery ? 'text-surgery' : 'text-foreground'">{{ item.time }}</span>
                   <CheckinNumber v-else :appointment="item" :size="compact ? 'sm' : 'md'" />
 
                   <div class="min-w-0 flex-1" :class="compact ? '' : 'space-y-1'">
@@ -434,7 +434,7 @@ onBeforeUnmount(() => {
                             <TooltipTrigger as-child>
                               <span class="flex size-5 items-center justify-center" :aria-label="`手術：${item.surgeryName || ''}`"><Scissors class="size-4 text-surgery" stroke-width="2" /></span>
                             </TooltipTrigger>
-                            <TooltipContent side="top"><span class="font-semibold">手術</span> {{ item.surgeryName || '未填名稱' }}</TooltipContent>
+                            <TooltipContent side="top"><span class="font-semibold">手術</span> {{ item.surgeryName }}</TooltipContent>
                           </Tooltip>
                           <Tooltip v-if="item.latenessMinutes > 0">
                             <TooltipTrigger as-child>
@@ -461,7 +461,7 @@ onBeforeUnmount(() => {
                       </span>
                     </div>
                     <template v-if="!compact">
-                      <p class="text-base leading-snug" :class="item.reason ? 'text-foreground' : 'text-subtle-foreground'">{{ item.reason || '未填來院原因' }}</p>
+                      <p class="min-h-lh text-base leading-snug text-foreground">{{ item.reason }}</p>
                       <div v-if="item.isSurgery || item.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
                         <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
                         <LatenessBadge :minutes="item.latenessMinutes" />

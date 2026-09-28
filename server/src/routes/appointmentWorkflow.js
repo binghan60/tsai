@@ -10,20 +10,27 @@ import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { applyWorkflowAction, assertWorkflowVersion, workflowError } from '../lib/appointmentWorkflow.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
 import { templateLabItems } from '../lib/recordVisitLink.js';
+import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 
 const router = Router({ mergeParams: true });
 
-function validateFollowUp(date, time, appointmentDate) {
+// 約回診跟新增掛號是同一套規則（lib/appointmentTime.js）：時段、預估診療時間、手術標記都一樣，
+// 只多一條「不可早於本次就診」。改期既有的回診掛號時（existing），沒帶的欄位沿用那筆的值。
+function followUpBooking(body, appointment, existing = null) {
+  const date = String(body.followUpDate || '');
+  const time = String(body.followUpTime || '');
   const parsed = new Date(`${date}T00:00:00Z`);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date || date < appointmentDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date || date < appointment.date) {
     throw workflowError('請選擇有效的回診日期，且不可早於本次就診');
   }
-  if (!/^\d{2}:\d{2}$/.test(time)) throw workflowError('請選擇回診時間');
-  const [hour, minute] = time.split(':').map(Number);
-  const minutes = hour * 60 + minute;
-  if (hour > 23 || minute > 59 || minute % 15 || !((minutes >= 600 && minutes <= 690) || (minutes >= 840 && minutes <= 1170))) {
-    throw workflowError('回診時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格');
-  }
+  if (!time) throw workflowError('請選擇回診時段');
+  if (!isValidAppointmentTime(time)) throw workflowError(APPOINTMENT_TIME_ERROR);
+  const estimatedDurationMinutes = normalizeEstimatedDuration(body.estimatedDurationMinutes ?? existing?.estimatedDurationMinutes);
+  validateAppointmentDuration(time, estimatedDurationMinutes);
+  const { isSurgery, surgeryName } = normalizeSurgeryFields(body.isSurgery !== undefined || !existing ? body : existing);
+  // 來院原因沒帶時用醫師寫的回診原因；櫃台送空白就是空白，不替使用者補字。
+  const reason = String(body.reason ?? existing?.reason ?? (appointment.followUpReason || appointment.followUpRecommendation || '')).trim();
+  return { date, time, estimatedDurationMinutes, isSurgery, surgeryName, reason };
 }
 
 // A single transaction protects the appointment, diary, follow-up and linked draft.
@@ -78,30 +85,28 @@ router.post('/:action', async (req, res, next) => {
       }
 
       if (action === 'followup') {
-        const date = String(req.body.followUpDate || '');
-        const time = String(req.body.followUpTime || '');
-        validateFollowUp(date, time, appointment.date);
+        let booking;
         if (appointment.followUpAppointmentId) {
           followUp = await Appointment.findById(appointment.followUpAppointmentId).session(session);
           if (!followUp || followUp.status !== 'scheduled') throw workflowError('原回診預約已被處理，請從該筆預約確認安排', 409);
+          booking = followUpBooking(req.body, appointment, followUp);
           followUpPreviousDate = followUp.date;
-          followUp.date = date;
-          followUp.time = time;
-          followUp.scheduledAt = combineClinicDateTime(date, time);
+          Object.assign(followUp, booking, { scheduledAt: combineClinicDateTime(booking.date, booking.time) });
           await followUp.save({ session });
         } else {
+          booking = followUpBooking(req.body, appointment);
           [followUp] = await Appointment.create([{
-            date, time, scheduledAt: combineClinicDateTime(date, time),
+            ...booking, scheduledAt: combineClinicDateTime(booking.date, booking.time),
             ownerId: appointment.ownerId, petId: appointment.petId,
             ownerName: appointment.ownerName, ownerPhone: appointment.ownerPhone,
             petName: appointment.petName, species: appointment.species,
-            visitType: 'return', reason: appointment.followUpReason || appointment.followUpRecommendation || '回診',
+            visitType: 'return',
             templateId: appointment.templateId,
           }], { session });
           appointment.followUpAppointmentId = followUp._id;
         }
-        appointment.followUpDate = date;
-        appointment.followUpTime = time;
+        appointment.followUpDate = booking.date;
+        appointment.followUpTime = booking.time;
       }
       // Even no-op commands advance the revision, so stale confirmations cannot succeed.
       appointment.increment();

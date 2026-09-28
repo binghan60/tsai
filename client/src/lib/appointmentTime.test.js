@@ -1,6 +1,24 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { APPOINTMENT_TIME_ERROR, appointmentSlotErrors } from './appointmentTime.js';
+import { APPOINTMENT_TIME_ERROR, DURATION_OVERFLOW_ERROR, appointmentSlotErrors, durationOverflowError } from './appointmentTime.js';
+
+describe('durationOverflowError', () => {
+  it('診療時間塞得進開始時間所在的診別就沒事', () => {
+    assert.equal(durationOverflowError('11:15', 30), '');
+    assert.equal(durationOverflowError('19:30', 15), '');
+    assert.equal(durationOverflowError('14:00', 240), '');
+  });
+
+  it('跨出診別結束（含午休）就提示', () => {
+    assert.equal(durationOverflowError('11:30', 30), DURATION_OVERFLOW_ERROR);
+    assert.equal(durationOverflowError('19:00', 60), DURATION_OVERFLOW_ERROR);
+  });
+
+  it('沒選或不在診別內的時段不歸它管', () => {
+    assert.equal(durationOverflowError('', 60), '');
+    assert.equal(durationOverflowError('12:00', 60), '');
+  });
+});
 
 describe('appointmentSlotErrors', () => {
   it('日期與時段都必填', () => {

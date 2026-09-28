@@ -80,7 +80,7 @@ export function buildSlotGrid(appointments = [], { sessions = SESSIONS, step = A
 // 時段格一格裡要顯示的名字：15 分鐘一格時格子夠寬，直接列名字；三人以上只列前兩位加「+N」，
 // 不然名字擠成一團反而一個都讀不到。回傳 { names, more }，由元件決定怎麼排。
 export function slotCellLabel(entries = [], limit = 2) {
-  const names = entries.map((entry) => entry.petName || '未填名字');
+  const names = entries.map((entry) => entry.petName || '');
   return { names: names.slice(0, limit), more: Math.max(0, names.length - limit) };
 }
 

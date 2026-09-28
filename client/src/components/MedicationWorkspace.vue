@@ -412,7 +412,7 @@ onBeforeUnmount(() => {
             <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
             <span class="min-w-0">
               <span class="block truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
-              <span class="flex gap-2 text-sm text-muted-foreground"><span class="truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink><template v-else>飼主未記錄</template></span><span class="num shrink-0">{{ item.ownerPhone }}</span></span>
+              <span class="flex gap-2 text-sm text-muted-foreground"><span class="truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink></span><span class="num shrink-0">{{ item.ownerPhone }}</span></span>
             </span>
           </span>
           <!-- 貓咪名、飼主名連到貓咪詳情；點藥單內容才是開這張藥單。 -->
@@ -504,7 +504,7 @@ onBeforeUnmount(() => {
           <Badge v-if="dirty" variant="status" class="ml-auto bg-warning-surface text-warning">有未儲存內容</Badge>
         </div>
         <SpecGrid>
-          <SpecCell label="飼主"><PatientLink v-if="selected.ownerName" :pet-id="selected.petId" quiet>{{ selected.ownerName }}</PatientLink><template v-else>未記錄</template></SpecCell>
+          <SpecCell label="飼主"><PatientLink v-if="selected.ownerName" :pet-id="selected.petId" quiet>{{ selected.ownerName }}</PatientLink></SpecCell>
           <SpecCell label="電話" mono>
             <span class="flex items-center gap-1.5">{{ selected.ownerPhone || '—' }}<Button v-if="selected.ownerPhone" type="button" variant="secondary" size="icon-xs" :aria-label="`複製 ${selected.ownerName || selected.petName} 的電話`" @click="copyPhone(selected.ownerPhone)"><Copy stroke-width="1.75" /></Button></span>
           </SpecCell>
@@ -546,9 +546,8 @@ onBeforeUnmount(() => {
         <template v-if="!showEditor">
           <section class="space-y-2" aria-labelledby="med-prescription-title">
             <h3 id="med-prescription-title" class="text-sm font-semibold text-muted-foreground">藥單內容</h3>
-            <div class="rounded-xl border border-border-strong bg-sunken px-5 py-4 text-lg leading-relaxed">
-              <RichText v-if="richTextToPlain(selected.prescription).trim()" tag="div" :text="selected.prescription" class="whitespace-pre-line" />
-              <p v-else class="text-base text-subtle-foreground">尚未填寫藥單內容</p>
+            <div class="min-h-[calc(1lh+2rem)] rounded-xl border border-border-strong bg-sunken px-5 py-4 text-lg leading-relaxed">
+              <RichText tag="div" :text="selected.prescription || ''" class="whitespace-pre-line" />
             </div>
           </section>
           <dl class="divide-y divide-border rounded-xl border border-border">
@@ -585,7 +584,7 @@ onBeforeUnmount(() => {
                 <div v-if="pet" class="flex items-center gap-3 rounded-xl bg-accent px-4 py-3">
                   <div class="min-w-0 flex-1">
                     <p class="truncate font-semibold text-accent-foreground">{{ pet.name }}<span v-if="pet.breed || pet.species" class="ml-2 text-sm font-normal text-accent-foreground/75">{{ pet.breed || pet.species }}</span></p>
-                    <p class="mt-0.5 flex gap-3 truncate text-sm text-accent-foreground/80"><span>{{ pet.ownerId?.name || '飼主資料未填' }}</span><span v-if="pet.ownerId?.phone" class="num">{{ pet.ownerId.phone }}</span></p>
+                    <p class="mt-0.5 flex gap-3 truncate text-sm text-accent-foreground/80"><span>{{ pet.ownerId?.name }}</span><span v-if="pet.ownerId?.phone" class="num">{{ pet.ownerId.phone }}</span></p>
                   </div>
                   <Button size="sm" variant="secondary" :disabled="busy" @click="changePet">更換</Button>
                 </div>

@@ -132,7 +132,7 @@ append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩�
 
 這幾欄加上 `weightKg`／`temperatureC`／`labValues` 是同一支 `POST /workflow/clinical` 的可選欄位，前端自動存檔（1.2 秒 debounce）；連著的健檢報告草稿不必同步——它讀的就是這裡（見第二節 medicalRecords）。**櫃台按下完成處理之後就整組鎖定**（回 409）。醫生↔櫃台真正想聊、跟哪個病患無關的內容（例如「今天下午提早關診」），走工具欄的全站聊天，不是這些欄位——見第六節與第二節 `chatMessages`。
 
-`followUpDate`（`YYYY-MM-DD`）與 `followUpTime`（`HH:MM`）分開存，理由跟 `date`／`time` 一樣是避免日期因伺服器時區偏移。它們只由 `POST /workflow/followup` 寫入——那是櫃台跟飼主敲定時段的那一刻，會在同一個 transaction 裡建立（或就地改期）下一筆掛號（`visitType: 'return'`、身分快照與 `templateId` 都照抄這次掛號，`reason` 取 `followUpReason`，沒填則用「回診」墊底），新掛號的 `_id` 記在 `followUpAppointmentId` 上。回診時段有驗證（10:00–11:30、14:00–19:30，每 15 分鐘一格，且不得早於本次就診）；已經被現場另外處理過（不再是 `scheduled`）的下一筆掛號不回頭改期，改回 409 要求從那筆掛號本身處理。
+`followUpDate`（`YYYY-MM-DD`）與 `followUpTime`（`HH:MM`）分開存，理由跟 `date`／`time` 一樣是避免日期因伺服器時區偏移。它們只由 `POST /workflow/followup` 寫入——那是櫃台跟飼主敲定時段的那一刻，會在同一個 transaction 裡建立（或就地改期）下一筆掛號（`visitType: 'return'`、身分快照與 `templateId` 都照抄這次掛號），新掛號的 `_id` 記在 `followUpAppointmentId` 上。**約回診跟新增掛號是同一套**：body 另收 `estimatedDurationMinutes`、`reason`、`isSurgery`／`surgeryName`，時段、預估診療時間、手術標記的驗證都走 `lib/appointmentTime.js`（外加不得早於本次就診）；`reason` 留空退回 `followUpReason`→`followUpRecommendation`→「回診」；改期既有回診掛號時沒帶的欄位沿用那筆的值（櫃台處理視窗上已約好的回診有「修改」，帶入那筆回診目前的值、用同一塊時段選擇改期）。**所有排掛號的畫面也是同一塊**：日期＋預估診療時間＋時段格是 `AppointmentSlotPicker.vue`、手術標記是 `SurgeryField.vue`，掛號視窗、櫃台處理視窗的回診安排、初診表審核共用，不要在哪裡再放回時間下拉選單；已經被現場另外處理過（不再是 `scheduled`）的下一筆掛號不回頭改期，改回 409 要求從那筆掛號本身處理。
 
 **`checkinNumber` 是發給飼主的實體號碼牌，不是佇列位置。** 報到時後端配一張「當天從未發出過」的號碼（`checkinNumberHistory` 記下每一張發過的牌，歸還後也不會再配發），櫃台可以在報到時或事後（`PATCH /:id/check-in-number`）改成手上實際發出去的號碼。**候診先後由 `checkedInAt` 決定，跟號碼大小無關**，所以改號碼不會改變誰先看診。離開佇列（完成／取消／未到／取消報到）就把自己的號碼清成 null，不動其他人的號碼。**送交櫃台轉入 `pending_checkout` 時不歸還號碼牌**——人還要去櫃台領藥付錢，號碼牌代表「現場還在」，不是「還沒看診」。兩人同時報到算到同一張牌時由唯一索引擋下、後端自動重試（`routes/appointments.js` 的 `withQueueRetry`）。配號與候診排序規則在 `lib/appointmentQueue.js`（`nextAvailableCheckinNumber`／`queueOrder`，純邏輯，可測）。
 
@@ -245,7 +245,8 @@ POST   .../workflow/start               開啟工作區＝開始看診，寫 vis
 POST   .../workflow/handoff             完成看診，送交櫃台：寫 handoffAt → pending_checkout，號碼牌不歸還
 POST   .../workflow/reclaim             取回這筆：清 handoffAt → 退回 arrived；deskCompletedAt 已寫入時回 409
 POST   .../workflow/complete            櫃台完成處理：寫 deskCompletedAt → completed，歸還號碼牌
-POST   .../workflow/followup            櫃台敲定回診時段：寫 followUpDate/Time 並建立（或改期）下一筆掛號
+POST   .../workflow/followup            櫃台敲定回診時段：寫 followUpDate/Time 並建立（或改期）下一筆掛號；另收
+                                       estimatedDurationMinutes/reason/isSurgery/surgeryName，規則同新增掛號
 POST   .../workflow/record              建立／取得本次就診綁定的健檢報告草稿（body.templateId）
 
 內部聊天（全站，不綁掛號／病患）
@@ -259,7 +260,8 @@ GET    /api/intake-submissions          待審清單（?status=pending|approved|
 GET    /api/intake-submissions/:id
 PUT    /api/intake-submissions/:id      審核前修改飼主填的內容，body { version, owner?, pet? }；只限待審核（否則 409），
                                        規則在 lib/intakeEdit.js，同一個 transaction 更新掛號上的姓名／電話／貓咪名快照
-POST   /api/intake-submissions/:id/approve  建立飼主與貓咪並排定掛號；date、time 必填，時段規則跟新增掛號相同（lib/appointmentTime.js）
+POST   /api/intake-submissions/:id/approve  建立飼主與貓咪並排定掛號；date、time 必填，另收 estimatedDurationMinutes/isSurgery/surgeryName，
+                                       規則跟新增掛號相同（lib/appointmentTime.js）
 POST   /api/intake-submissions/:id/reject
 
 寵物暫存區（全站一份，見第二節 pinnedPets）

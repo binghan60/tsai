@@ -247,5 +247,31 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal(second.status, 200);
     assert.equal(first.body.followUpAppointmentId, second.body.followUpAppointmentId);
     assert.equal(store.size, 2);
+    assert.equal(store.get(String(first.body.followUpAppointmentId)).reason, '追蹤傷口', '沒帶來院原因就用醫師的回診原因');
+  });
+  it('books the follow-up with the same fields and rules as a regular appointment', async () => {
+    await post('clinical', { followUpReason: '追蹤傷口' });
+    // 預估診療時間、手術標記跟新增掛號同一套驗證。
+    assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '11:30', estimatedDurationMinutes: 30 })).status, 422);
+    assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '10:00', estimatedDurationMinutes: 20 })).status, 422);
+    assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '10:00', isSurgery: true })).status, 422);
+    assert.equal(store.size, 1, '驗證失敗不建立回診掛號');
+
+    const booked = await post('followup', { followUpDate: '2026-09-14', followUpTime: '14:00', estimatedDurationMinutes: 60, isSurgery: true, surgeryName: '拆線', reason: '' });
+    assert.equal(booked.status, 200);
+    const next = store.get(String(booked.body.followUpAppointmentId));
+    assert.equal(next.estimatedDurationMinutes, 60);
+    assert.equal(next.isSurgery, true);
+    assert.equal(next.surgeryName, '拆線');
+    assert.equal(next.reason, '', '櫃台送空白就是空白，不補字');
+    assert.equal(next.visitType, 'return');
+
+    // 改期時沒帶的欄位沿用那筆回診掛號原本的值。
+    const moved = await post('followup', { followUpDate: '2026-09-15', followUpTime: '15:00' });
+    assert.equal(moved.status, 200);
+    const rescheduled = store.get(String(booked.body.followUpAppointmentId));
+    assert.equal(rescheduled.time, '15:00');
+    assert.equal(rescheduled.estimatedDurationMinutes, 60);
+    assert.equal(rescheduled.surgeryName, '拆線');
   });
 });

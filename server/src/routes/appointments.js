@@ -16,7 +16,7 @@ import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsChe
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import appointmentWorkflowRouter from './appointmentWorkflow.js';
-import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, validateAppointmentDuration } from '../lib/appointmentTime.js';
+import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
 
 const router = Router();
@@ -45,16 +45,6 @@ function newIntakeVerificationCode() {
 
 
 
-function normalizeSurgeryFields(body) {
-  const isSurgery = Boolean(body.isSurgery);
-  const surgeryName = String(body.surgeryName || '').trim();
-  if (isSurgery && !surgeryName) {
-    const error = new Error('請填寫手術名稱');
-    error.status = 422;
-    throw error;
-  }
-  return { isSurgery, surgeryName: isSurgery ? surgeryName : '' };
-}
 
 async function resolveAppointmentTemplate(templateId, { optional = false } = {}) {
   const selectedId = templateId || (await ClinicSettings.findOne().lean())?.defaultAppointmentTemplateId;
