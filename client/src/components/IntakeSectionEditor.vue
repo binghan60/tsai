@@ -63,7 +63,7 @@ function payload() {
   if (props.section === 'medical') {
     return { pet: { vaccineStatus: p.vaccineStatus, vaccineDate: p.vaccineDate, medicalHistory: p.medicalHistory, medicalHistoryOther: p.medicalHistoryOther, allergyStatus: p.allergyStatus, allergyType: p.allergyType, checkupStatus: p.checkupStatus, checkupDate: p.checkupDate } };
   }
-  return { pet: { name: p.name, sex: p.sex, neutered: p.neutered, birthDate: p.birthDate || null, breed: p.breed, color: p.color, householdCatCount: p.householdCatCount, foods: p.foods, foodsOther: p.foodsOther, feedingType: p.feedingType, mealsPerDay: p.mealsPerDay } };
+  return { pet: { name: p.name, sex: p.sex, neutered: p.neutered, birthDate: p.birthDate || null, birthDateEstimated: p.birthDateEstimated, breed: p.breed, color: p.color, householdCatCount: p.householdCatCount, foods: p.foods, foodsOther: p.foodsOther, feedingType: p.feedingType, mealsPerDay: p.mealsPerDay } };
 }
 
 async function save() {
@@ -91,7 +91,7 @@ async function save() {
           <Input id="intake-edit-pet-name" v-model="pet.name" :aria-invalid="attempted && Boolean(required.petName)" />
           <p v-if="attempted && required.petName" class="text-xs font-medium text-destructive">{{ required.petName }}</p>
         </div>
-        <div class="space-y-1.5"><Label for="intake-edit-birth">出生日期</Label><DatePicker id="intake-edit-birth" v-model="pet.birthDate" aria-label="出生日期" /></div>
+        <div class="space-y-1.5"><Label for="intake-edit-birth">出生日期</Label><DatePicker id="intake-edit-birth" v-model="pet.birthDate" aria-label="出生日期" @update:model-value="pet.birthDateEstimated = false" /></div>
         <div class="space-y-1.5"><Label>性別</Label><SegmentedControl v-model="pet.sex" :options="SEX" aria-label="性別" size="sm" full-width /></div>
         <div class="space-y-1.5"><Label>結紮</Label><SegmentedControl v-model="pet.neutered" :options="NEUTERED" aria-label="結紮" size="sm" full-width /></div>
         <div class="space-y-1.5"><Label for="intake-edit-breed">品種</Label><Input id="intake-edit-breed" v-model="pet.breed" /></div>

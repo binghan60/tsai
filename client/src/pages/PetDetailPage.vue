@@ -175,7 +175,7 @@ function scrollNoteTo(noteId, position) {
 
 const sexLabel = computed(() => ({ male: '公', female: '母' })[pet.value?.sex] ?? '');
 const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育' })[pet.value?.neutered] ?? '');
-const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), ''));
+const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), '', { estimated: pet.value?.birthDateEstimated }));
 const feedingLabel = computed(() => ({ free: '任食', scheduled: `定食定量${pet.value?.mealsPerDay ? `，一日 ${pet.value.mealsPerDay} 餐` : ''}` })[pet.value?.feedingType] ?? '');
 const vaccineLabel = computed(() => ({ none: '未注射', done: `已注射${pet.value?.vaccineDate ? `，最後注射時間 ${pet.value.vaccineDate}` : ''}` })[pet.value?.vaccineStatus] ?? '');
 const allergyLabel = computed(() => ({ none: '無過敏', yes: `有${pet.value?.allergyType ? `，${pet.value.allergyType}` : ''}` })[pet.value?.allergyStatus] ?? '');

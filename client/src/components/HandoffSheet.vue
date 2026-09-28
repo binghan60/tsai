@@ -347,7 +347,6 @@ async function approveReopen() {
             <section class="space-y-3">
               <div>
                 <h3 class="text-base font-semibold">回診安排</h3>
-                <p class="text-sm text-muted-foreground">跟掛號視窗一樣選時段與預估診療時間，確認後會建立下一筆回診掛號；已經約好的按「修改」改期，會一起改那一筆。</p>
               </div>
               <!-- 醫師沒寫也照樣留這一格、內容空白，不補說明文字。 -->
               <div class="rounded-xl bg-accent px-4 py-3">
@@ -384,7 +383,6 @@ async function approveReopen() {
                   <Button variant="soft" size="sm" :disabled="busy || !followUpStarted" @click="bookFollowUp">儲存回診變更</Button>
                 </div>
                 <div v-else class="flex items-center gap-3">
-                  <p class="text-sm text-muted-foreground">飼主還沒決定就先留空，這筆會留在「待安排回診」。</p>
                   <Button v-if="state.completed" variant="soft" size="sm" class="ml-auto" :disabled="busy || !followUpStarted" @click="bookFollowUp">確認回診預約</Button>
                 </div>
               </template>
@@ -413,7 +411,6 @@ async function approveReopen() {
         </div>
 
         <footer class="flex shrink-0 items-center gap-3 border-t border-border bg-sunken px-6 py-3.5">
-          <p class="text-sm text-muted-foreground">系統不計價，收費與領藥由櫃台直接處理</p>
           <div class="ml-auto flex gap-2">
             <Button variant="secondary" :disabled="busy" @click="close">{{ state.completed ? '關閉' : '稍後處理' }}</Button>
             <Button v-if="state.completed && appointment.reopenRequest?.requestedAt && !appointment.reopenRequest?.approvedAt" :disabled="busy" @click="approveReopen">核准修改</Button>

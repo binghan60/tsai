@@ -171,6 +171,7 @@ function reportPayload(record, sections) {
           sex: pet.sex,
           neutered: pet.neutered,
           birthDate: pet.birthDate,
+          birthDateEstimated: pet.birthDateEstimated,
           vaccineStatus: pet.vaccineStatus,
           vaccineDate: pet.vaccineDate,
           medicalHistory: pet.medicalHistory,

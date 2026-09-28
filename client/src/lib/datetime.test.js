@@ -8,7 +8,11 @@ describe('clinic date helpers', () => {
   });
 
   it('calculates age against the visit date instead of the current clock', () => {
-    assert.equal(ageLabel('2025-06-15T00:00:00.000Z', '2026-08-14T00:00:00.000Z'), '1 歲 1 個月（西元 2025 年 6 月生）');
+    assert.equal(ageLabel('2025-06-15T00:00:00.000Z', '2026-08-14T00:00:00.000Z'), '1 歲 1 個月（2025 年 6 月 15 日生）');
+  });
+
+  it('writes "-" for the day of a birth date estimated from age', () => {
+    assert.equal(ageLabel('2012-02-01T00:00:00.000Z', '2026-09-28T00:00:00.000Z', '', { estimated: true }), '14 歲 7 個月（2012 年 2 月 - 日生）');
   });
 
   it('does not display a plausible age for a future birth date', () => {

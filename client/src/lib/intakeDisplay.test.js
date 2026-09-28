@@ -12,7 +12,8 @@ test('初診表逐欄轉成審核用的文字，沒填的是空字串', () => {
   const pet = rowsOf(sections, 'pet');
   assert.equal(pet['性別'], '母');
   assert.equal(pet['結紮'], '已結紮');
-  assert.equal(pet['出生'], '西元 2021 年 3 月生');
+  assert.equal(pet['出生'], '2021 年 3 月 1 日生');
+  assert.equal(rowsOf(intakeSections({ pet: { birthDate: '2021-03-01', birthDateEstimated: true } }), 'pet')['出生'], '2021 年 3 月 - 日生');
   assert.equal(pet['家中貓口'], '0 隻', '0 隻是有填，不是沒填');
   assert.equal(pet['放飯頻率'], '定食定量，一日 2 餐');
   assert.equal(pet['花色'], '');

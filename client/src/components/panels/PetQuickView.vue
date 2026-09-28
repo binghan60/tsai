@@ -53,7 +53,7 @@ const tabItems = [
   { key: 'notes', label: '病歷日誌' },
   { key: 'records', label: '健檢報告' },
 ];
-const age = computed(() => ageLabel(pet.value?.birthDate, new Date(), ''));
+const age = computed(() => ageLabel(pet.value?.birthDate, new Date(), '', { estimated: pet.value?.birthDateEstimated }));
 // 醫師回答用藥問題前最需要先看到的兩件事：藥物過敏用危險色，病史用警示色。
 const allergy = computed(() => (pet.value?.allergyStatus === 'yes' ? `有${pet.value.allergyType ? `：${pet.value.allergyType}` : ''}` : ''));
 const history = computed(() => [pet.value?.medicalHistory?.join('、'), pet.value?.medicalHistoryOther].filter(Boolean).join('；'));

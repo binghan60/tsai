@@ -35,6 +35,7 @@ import ListSkeleton from '../components/ListSkeleton.vue';
 import YearMonthSelect from '../components/YearMonthSelect.vue';
 import { checkMobilePhone } from '../../../shared/phone.js';
 import { emptyOwnerDraft, emptyPetDraft } from '../lib/formDrafts';
+import { birthDateLabel } from '../lib/datetime';
 import { useToast } from '../composables/useToast';
 
 const router = useRouter();
@@ -259,7 +260,7 @@ const computedAgeText = computed(() => {
 
   const now = new Date();
   if (birth > now) return '尚未出生 / 未來日期';
-  const birthMonth = `（西元 ${birth.getFullYear()} 年 ${birth.getMonth() + 1} 月生）`;
+  const birthLabel =`（${birthDateLabel(birth, { estimated: petForm.value.birthDateEstimated })}）`;
 
   let years = now.getFullYear() - birth.getFullYear();
   let months = now.getMonth() - birth.getMonth();
@@ -273,12 +274,12 @@ const computedAgeText = computed(() => {
 
   if (years === 0 && months === 0) {
     const diffDays = Math.floor((now - birth) / (1000 * 60 * 60 * 24));
-    return `${diffDays <= 7 ? '新生幼寵' : `約 ${Math.max(Math.floor(diffDays / 7), 1)} 週大`}${birthMonth}`;
+    return `${diffDays <= 7 ? '新生幼寵' : `約 ${Math.max(Math.floor(diffDays / 7), 1)} 週大`}${birthLabel}`;
   }
   if (years === 0) {
-    return `約 ${months} 個月大${birthMonth}`;
+    return `約 ${months} 個月大${birthLabel}`;
   }
-  return `${months > 0 ? `現年 ${years} 歲 ${months} 個月` : `現年 ${years} 歲整`}${birthMonth}`;
+  return `${months > 0 ? `現年 ${years} 歲 ${months} 個月` : `現年 ${years} 歲整`}${birthLabel}`;
 });
 
 function applyAgeCalculation() {

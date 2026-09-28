@@ -171,7 +171,7 @@ function valueByRole(role) {
 // 貓咪資料中的「未記錄」是尚未填寫，不應在正式報告中佔一個欄位。
 const sexAndAgeLabel = computed(() => [
   sexLabel(record.value?.pet?.sex),
-  ageLabel(record.value?.pet?.birthDate, valueByRole('visitDate') || record.value?.visitDate, ''),
+  ageLabel(record.value?.pet?.birthDate, valueByRole('visitDate') || record.value?.visitDate, '', { estimated: record.value?.pet?.birthDateEstimated }),
 ].filter(Boolean).join('／'));
 
 async function finalizeReport() {

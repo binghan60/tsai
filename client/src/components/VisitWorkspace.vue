@@ -91,7 +91,7 @@ const ownerFields = computed(() => {
     { label: '地址', value: data?.address || '' },
   ].filter((field) => field.value)
 })
-const age = computed(() => ageLabel(pet.value?.birthDate, new Date(), ''))
+const age = computed(() => ageLabel(pet.value?.birthDate, new Date(), '', { estimated: pet.value?.birthDateEstimated }))
 // 醫療警示分級：藥物過敏最高（實心紅）、病史次之（紅框），疫苗／健檢只是參考（灰）。
 const medicalTags = computed(() => {
   if (!pet.value) return []

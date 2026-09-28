@@ -137,7 +137,15 @@ export function formatDateTime(value, options = { dateStyle: 'medium', timeStyle
   return date ? date.toLocaleString('zh-TW', { ...options, timeZone: CLINIC_TIME_ZONE }) : fallback;
 }
 
-export function ageLabel(birthDate, referenceDate = new Date(), fallback = '未記錄') {
+// 「2012 年 2 月 15 日生」。由年齡回推的生日（birthDateEstimated）只知道年月，日寫「-」。
+export function birthDateLabel(birthDate, { estimated = false } = {}) {
+  const birthValue = toValidDate(birthDate);
+  if (!birthValue) return '';
+  const { year, month, day } = dateParts(birthValue);
+  return `${year} 年 ${month} 月 ${estimated ? '-' : day} 日生`;
+}
+
+export function ageLabel(birthDate, referenceDate = new Date(), fallback = '未記錄', { estimated = false } = {}) {
   const birthValue = toValidDate(birthDate);
   const referenceValue = toValidDate(referenceDate) ?? new Date();
   if (!birthValue) return fallback;
@@ -153,7 +161,7 @@ export function ageLabel(birthDate, referenceDate = new Date(), fallback = '未�
     months += 12;
   }
   const age = years > 0 ? `${years} 歲 ${months} 個月` : `${Math.max(months, 0)} 個月`;
-  return `${age}（西元 ${birth.year} 年 ${birth.month} 月生）`;
+  return `${age}（${birthDateLabel(birthValue, { estimated })}）`;
 }
 
 // 手打日期的解析：日期輸入框可以直接打字，年份差很多時比在日曆上一個月一個月翻快得多。

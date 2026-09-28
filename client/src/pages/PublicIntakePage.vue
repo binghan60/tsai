@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group'
 import { MOBILE_PHONE_ERROR, normalizeMobilePhone } from '../../../shared/phone.js'
 import YearMonthSelect from '../components/YearMonthSelect.vue'
 import { INTAKE_BREED_SUGGESTIONS, INTAKE_COLOR_SUGGESTIONS, INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay'
+import { birthDateLabel } from '../lib/datetime'
 
 const submitting = ref(false)
 const submitted = ref(false)
@@ -116,9 +117,7 @@ const issueCount = computed(() => attemptedSubmit.value
   : 0)
 const estimatedBirthLabel = computed(() => {
   const date = estimatedBirthDate()
-  if (!date) return ''
-  const value = new Date(date)
-  return `西元 ${value.getUTCFullYear()} 年 ${value.getUTCMonth() + 1} 月生`
+  return date ? birthDateLabel(date, { estimated: true }) : ''
 })
 
 function estimatedBirthDate() {

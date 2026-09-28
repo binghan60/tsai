@@ -8,13 +8,9 @@ export const INTAKE_HISTORY_OPTIONS = ['心臟病', '腎臟病', '糖尿病', '�
 export const INTAKE_BREED_SUGGESTIONS = ['米克斯', '英國短毛貓', '美國短毛貓', '布偶貓', '蘇格蘭摺耳貓', '異國短毛貓', '波斯貓', '緬因貓', '俄羅斯藍貓', '暹羅貓', '孟加拉貓', '曼赤肯貓', '不確定'];
 export const INTAKE_COLOR_SUGGESTIONS = ['橘', '橘白', '虎斑', '白底虎斑', '三花', '玳瑁', '賓士（黑白）', '黑', '白', '灰', '重點色'];
 
-const blank = (value) => value === null || value === undefined || value === '';
+import { birthDateLabel } from './datetime.js';
 
-function birthMonth(value) {
-  if (!value) return '';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '' : `西元 ${date.getUTCFullYear()} 年 ${date.getUTCMonth() + 1} 月生`;
-}
+const blank = (value) => value === null || value === undefined || value === '';
 
 function feeding(pet) {
   if (pet?.feedingType === 'free') return '任食';
@@ -38,7 +34,7 @@ export function intakeSections(submission) {
         { label: '名字', value: pet.name },
         { label: '性別', value: { male: '公', female: '母' }[pet.sex] },
         { label: '結紮', value: { yes: '已結紮', no: '未結紮' }[pet.neutered] },
-        { label: '出生', value: birthMonth(pet.birthDate) },
+        { label: '出生', value: birthDateLabel(pet.birthDate, { estimated: pet.birthDateEstimated }) },
         { label: '品種', value: pet.breed },
         { label: '花色', value: pet.color },
         { label: '家中貓口', value: blank(pet.householdCatCount) ? '' : `${pet.householdCatCount} 隻` },
