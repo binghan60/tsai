@@ -101,6 +101,36 @@ describe('sanitizeSections：key 的沿用與汰換', () => {
   });
 });
 
+describe('sanitizeSections：IDEXX 代號', () => {
+  it('檢驗項目的代號去空白、去重複（不分大小寫），用逗號或頓號分隔；代號本身可以有空格', () => {
+    const { sections } = sanitizeSections(
+      [section('', '檢驗', [
+        item('', '紅血球', 'lab', { idexxCodes: ' RBC、rbc_bld,RBC ' }),
+        item('', '膽酸', 'lab', { idexxCodes: ['Bile acids Preprandial'] }),
+      ])],
+      existing()
+    );
+    assert.deepEqual(sections[0].items[0].idexxCodes, ['RBC', 'rbc_bld']);
+    assert.deepEqual(sections[0].items[1].idexxCodes, ['Bile acids Preprandial']);
+  });
+
+  it('不是檢驗項目就不留代號', () => {
+    const { sections } = sanitizeSections([section('', '量測', [item('', '體重', 'measurement', { idexxCodes: ['WT'] })])], existing());
+    assert.deepEqual(sections[0].items[0].idexxCodes, []);
+  });
+
+  it('同一個代號對到兩個項目：拒收，儀器驗完才不會不知道要填哪一格', () => {
+    const result = sanitizeSections(
+      [
+        section('', '生化', [item('', '腎臟功能（CRE）', 'lab', { idexxCodes: 'CREA' })]),
+        section('', '其他', [item('', '肌酸酐', 'lab', { idexxCodes: 'crea' })]),
+      ],
+      existing()
+    );
+    assert.match(result.error, /IDEXX 代號重複：crea（「腎臟功能（CRE）」與「肌酸酐」）/);
+  });
+});
+
 describe('sanitizeSections：欄位正規化', () => {
   it('不在白名單裡的型別、角色、版式與寬度都退回預設值', () => {
     const { sections } = sanitizeSections(

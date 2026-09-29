@@ -3,6 +3,7 @@ import MedicalRecord from '../models/MedicalRecord.js';
 import { buildSeedTemplates } from '../config/formTemplateSeed.js';
 import { normalizeSpecies } from '../config/labTests.js';
 import { defaultValueForItem, normalizeTemplateValue, presetEligible } from '../../../shared/formDefaults.js';
+import { idexxCodeKey, normalizeIdexxCodes } from '../../../shared/labValues.js';
 
 // 這個型別填出來的值長什麼樣，以及 schema 欄位收的是什麼值。
 const TYPE_VALUE_KIND = {
@@ -190,7 +191,24 @@ function sanitizeItem(raw, key, index) {
     step: numberOrNull(raw.step),
     referenceMin: numberOrNull(raw.referenceMin),
     referenceMax: numberOrNull(raw.referenceMax),
+    idexxCodes: type === 'lab' ? normalizeIdexxCodes(raw.idexxCodes) : [],
   };
+}
+
+// 同一個 IDEXX 代號對到兩個檢驗項目，儀器驗完就不知道要填哪一格——存檔時直接擋下。
+function duplicateIdexxCodes(sections) {
+  const owners = new Map();
+  const problems = [];
+  for (const section of sections) {
+    for (const item of section.items) {
+      for (const code of item.idexxCodes ?? []) {
+        const owner = owners.get(idexxCodeKey(code));
+        if (owner) problems.push(`${code}（「${owner}」與「${item.label}」）`);
+        else owners.set(idexxCodeKey(code), item.label);
+      }
+    }
+  }
+  return problems;
 }
 
 // 區塊與項目是兩個獨立的命名空間 —— 預設範本裡「結論」既是區塊也是項目，
@@ -240,6 +258,9 @@ export function sanitizeSections(rawSections, existing) {
       sanitizeItem(rawItem, reusableItem(rawItem.key) ? rawItem.key : nextKey('custom', takenItems), itemIndex)
     ),
   }));
+
+  const duplicateCodes = duplicateIdexxCodes(sections);
+  if (duplicateCodes.length) return { error: `IDEXX 代號重複：${duplicateCodes.join('、')}。同一個代號只能對到一個檢驗項目。` };
 
   // 這次存檔後消失的 key 全部歸入 retiredKeys。
   const survivingSections = new Set(sections.map((section) => section.key));

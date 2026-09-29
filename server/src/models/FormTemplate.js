@@ -38,6 +38,9 @@ const formItemSchema = new mongoose.Schema(
     // 所以複製表單時會一起複製，改 A 表單不影響 B 表單。
     referenceMin: { type: Number, default: null },
     referenceMax: { type: Number, default: null },
+    // 只有檢驗項目用：IDEXX 儀器回傳的項目代號（例如 CREA），驗完會自動填進這一格（見 lib/labResultFill.js）。
+    // 同一份表單裡同一個代號只能對到一個項目。
+    idexxCodes: { type: [String], default: [] },
   },
   { _id: false }
 );

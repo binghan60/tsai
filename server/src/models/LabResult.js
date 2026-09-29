@@ -56,6 +56,19 @@ const labResultSchema = new mongoose.Schema(
     revisedAt: { type: Date, default: null },
     petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', default: null },
     matchedAt: { type: Date, default: null },
+    // patient_id：IDEXX 帶回報到時送出的貓咪編號，自動認出；manual：人在待確認清單選的。
+    matchSource: { type: String, enum: ['patient_id', 'manual', null], default: null },
+    // 自動填進哪一次看診（lib/labResultApply.js）。appliedAt 是填入的時間；找不到看診就留空、之後可以再套用。
+    appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
+    appliedAt: { type: Date, default: null },
+    filledKeys: { type: [String], default: [] },
+    // 看診上已經有人填了不同的值，沒有蓋掉——給醫師看、自己決定要不要換。
+    conflicts: {
+      type: [new mongoose.Schema({ key: String, label: String, current: String, idexx: String }, { _id: false })],
+      default: [],
+    },
+    // 表單裡沒有對應 IDEXX 代號的項目；一直出現在這裡代表表單設計頁的代號還沒設。
+    unmappedCodes: { type: [String], default: [] },
   },
   { timestamps: true }
 );

@@ -5,6 +5,7 @@ import LabBridgeStatus from '../models/LabBridgeStatus.js';
 import { hasIdexxBridgeAccess, idexxBridgeConfigured } from '../config/idexxBridge.js';
 import { IdexxParseError, decodeIdexxXml, parseIdexxResult } from '../lib/idexxResult.js';
 import { labResultContent, planLabResultImport } from '../lib/labResultImport.js';
+import { applyLabResult, matchByPatientId } from '../lib/labResultApply.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 
 // 給診所電腦上的抓檔程式用：只有 POST /import 與 POST /heartbeat，改用 IDEXX_BRIDGE_TOKEN 驗證
@@ -38,7 +39,7 @@ async function importLabResult(parsed, { rawXml, fileName }) {
     if (plan === 'create') {
       try {
         const created = await LabResult.create({ ...content, rawXml, fileName, lastReceivedAt: now });
-        return { status: 'created', id: created._id };
+        return { status: 'created', id: created._id, petId: null };
       } catch (err) {
         // 同一份檔案同時被送了兩次，另一次先寫進去了；重讀一次就會變成「重複」。
         if (err?.code === 11000 && attempt === 0) continue;
@@ -49,7 +50,22 @@ async function importLabResult(parsed, { rawXml, fileName }) {
     // 配對欄位（petId、matchedAt）不動：更正版還是同一隻貓的同一次檢驗。
     if (plan === 'update') Object.assign(update.$set, content, { rawXml, fileName, revisedAt: now });
     await LabResult.updateOne({ _id: existing._id }, update);
-    return { status: plan === 'update' ? 'updated' : plan, id: existing._id };
+    return { status: plan === 'update' ? 'updated' : plan, id: existing._id, petId: existing.petId ?? null };
+  }
+}
+
+// 收下之後自動認貓、填進看診（lib/labResultApply.js）。檔案已經存好了，這一步失敗只記錯誤、
+// 不讓整個上傳失敗——抓檔程式重送同一份時（duplicate）會再試一次。
+// 還不知道是哪隻貓的就不碰資料庫，直接回 unmatched。
+async function autoFill(imported, parsed) {
+  if (imported.status === 'stale') return null;
+  try {
+    const petId = imported.petId ?? (await matchByPatientId(imported.id, parsed.patient.id));
+    if (!petId) return { status: 'unmatched' };
+    return await applyLabResult(imported.id, { force: imported.status === 'updated' });
+  } catch (err) {
+    console.error('[lab-results] 自動填入看診失敗', err);
+    return { status: 'error', message: err.message };
   }
 }
 
@@ -75,8 +91,9 @@ labResultBridgeRouter.post(
         if (err.code === 'not_result') return res.json({ status: 'ignored', reason: err.message });
         return res.status(422).json({ message: err.message, code: err.code });
       }
-      const result = await importLabResult(parsed, { rawXml, fileName: uploadedFileName(req) });
-      res.status(result.status === 'created' ? 201 : 200).json(result);
+      const imported = await importLabResult(parsed, { rawXml, fileName: uploadedFileName(req) });
+      const fill = await autoFill(imported, parsed);
+      res.status(imported.status === 'created' ? 201 : 200).json({ status: imported.status, id: imported.id, fill });
     } catch (err) {
       next(err);
     }

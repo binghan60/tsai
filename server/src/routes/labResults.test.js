@@ -5,6 +5,8 @@ import { readFileSync } from 'node:fs';
 import { app } from '../app.js';
 import LabResult from '../models/LabResult.js';
 import LabBridgeStatus from '../models/LabBridgeStatus.js';
+import Pet from '../models/Pet.js';
+import Appointment from '../models/Appointment.js';
 import { labResultContent } from '../lib/labResultImport.js';
 import { parseIdexxResult } from '../lib/idexxResult.js';
 
@@ -23,6 +25,10 @@ describe('lab results routes', () => {
     countDocuments: LabResult.countDocuments,
     statusUpdateOne: LabBridgeStatus.updateOne,
     statusFind: LabBridgeStatus.find,
+    findOneAndUpdate: LabResult.findOneAndUpdate,
+    findById: LabResult.findById,
+    petExists: Pet.exists,
+    appointmentFind: Appointment.find,
   };
 
   before(async () => {
@@ -41,6 +47,9 @@ describe('lab results routes', () => {
       countDocuments: original.countDocuments,
     });
     Object.assign(LabBridgeStatus, { updateOne: original.statusUpdateOne, find: original.statusFind });
+    Object.assign(LabResult, { findOneAndUpdate: original.findOneAndUpdate, findById: original.findById });
+    Pet.exists = original.petExists;
+    Appointment.find = original.appointmentFind;
   });
 
   after(async () => {
@@ -78,7 +87,8 @@ describe('lab results routes', () => {
     LabResult.create = async (doc) => { saved = doc; return { _id: 'lab-1' }; };
     const response = await upload(catalyst);
     assert.equal(response.status, 201);
-    assert.deepEqual(await response.json(), { status: 'created', id: 'lab-1' });
+    // 範例裡的病患編號是 000001（不是我們的貓咪編號），認不出是哪隻貓，不碰看診。
+    assert.deepEqual(await response.json(), { status: 'created', id: 'lab-1', fill: { status: 'unmatched' } });
     assert.equal(saved.instrument, 'Catalyst_One');
     assert.equal(saved.patient.name, '娜娜');
     assert.equal(saved.assays.length, 4);
@@ -89,7 +99,7 @@ describe('lab results routes', () => {
   it('同一份再送一次只記收到次數，不覆寫內容與配對', async () => {
     process.env.IDEXX_BRIDGE_TOKEN = token;
     let update;
-    mockExisting({ _id: 'lab-1', petId: 'pet-1', ...labResultContent(parseIdexxResult(catalyst)) });
+    mockExisting({ _id: 'lab-1', petId: null, ...labResultContent(parseIdexxResult(catalyst)) });
     LabResult.updateOne = async (_filter, value) => { update = value; };
     const response = await upload(catalyst);
     assert.equal(response.status, 200);
@@ -102,13 +112,35 @@ describe('lab results routes', () => {
     process.env.IDEXX_BRIDGE_TOKEN = token;
     let update;
     const old = labResultContent(parseIdexxResult(catalyst));
-    mockExisting({ _id: 'lab-1', petId: 'pet-1', ...old, messageAt: new Date('2000-01-01'), assays: old.assays.slice(0, 1) });
+    mockExisting({ _id: 'lab-1', petId: null, ...old, messageAt: new Date('2000-01-01'), assays: old.assays.slice(0, 1) });
     LabResult.updateOne = async (_filter, value) => { update = value; };
     const response = await upload(catalyst);
     assert.equal((await response.json()).status, 'updated');
     assert.equal(update.$set.assays.length, 4);
     assert.ok(update.$set.revisedAt instanceof Date);
     assert.equal('petId' in update.$set, false);
+  });
+
+  it('IDEXX 帶回我們的貓咪編號：自動認貓，再找當天的看診（這裡當天沒掛號）', async () => {
+    process.env.IDEXX_BRIDGE_TOKEN = token;
+    const petId = '64b000000000000000000001';
+    const withPetId = catalyst.toString('utf8').replace('patient_id="000001"', `patient_id="${petId}"`);
+    let matched;
+    let visitQuery;
+    mockExisting(null);
+    LabResult.create = async () => ({ _id: 'lab-1' });
+    Pet.exists = async () => ({ _id: petId });
+    LabResult.findOneAndUpdate = async (filter, update) => { matched = { filter, update }; return { petId }; };
+    LabResult.findById = () => ({ lean: async () => ({ _id: 'lab-1', petId, appliedAt: null, runAt: new Date('2011-09-09T02:36:47.880Z'), assays: [] }) });
+    Appointment.find = (filter) => { visitQuery = filter; return { select: () => ({ lean: async () => [] }) }; };
+
+    const response = await upload(withPetId);
+    assert.equal(response.status, 201);
+    assert.deepEqual(matched.filter, { _id: 'lab-1', petId: null });
+    assert.equal(matched.update.$set.matchSource, 'patient_id');
+    // 當天＝檢驗時間換算成台北的日期。
+    assert.deepEqual(visitQuery, { petId, date: '2011-09-09' });
+    assert.deepEqual((await response.json()).fill, { status: 'no_visit', date: '2011-09-09' });
   });
 
   it('不是檢驗結果的訊息收下不處理，讓抓檔程式歸檔', async () => {

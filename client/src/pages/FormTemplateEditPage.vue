@@ -38,6 +38,7 @@ import { Switch } from '../components/ui/switch';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import FormSectionPreview from '../components/formfields/FormSectionPreview.vue';
 import { DEFAULT_VALUE_TYPES } from '../../../shared/formDefaults';
+import { normalizeIdexxCodes } from '../../../shared/labValues.js';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
@@ -171,6 +172,16 @@ const selectedItem = computed(() =>
 const selectedIndex = computed(() =>
   selectedItem.value ? (activeSection.value?.items ?? []).indexOf(selectedItem.value) : -1
 );
+// IDEXX 代號用一個文字框輸入、「、」分隔。輸入中的文字另外存：直接綁整理後的陣列的話，
+// 打到一半的「CREA、」會被整理掉頓號，永遠打不出第二個代號。
+const idexxCodesText = ref('');
+watch(selectedItem, (item) => {
+  idexxCodesText.value = (item?.idexxCodes ?? []).join('、');
+}, { immediate: true });
+function setIdexxCodes(text) {
+  idexxCodesText.value = text;
+  if (selectedItem.value) selectedItem.value.idexxCodes = normalizeIdexxCodes(text);
+}
 const visibleSections = computed(() =>
   sections.value.filter((section) => section.enabled !== false && section.items?.some((item) => item.enabled !== false))
 );
@@ -319,6 +330,7 @@ function addItem(type) {
     step: null,
     referenceMin: null,
     referenceMax: null,
+    idexxCodes: [],
   });
   selectedItemKey.value = key;
   mobileEditorPane.value = 'settings';
@@ -781,6 +793,17 @@ function resolveLeave(confirmed) {
                         <span class="block text-xs text-muted-foreground">可設參考範圍自動判讀</span>
                       </span>
                       <Switch :model-value="selectedItem.numeric !== false" aria-label="數值型項目" @update:model-value="selectedItem.numeric = $event" />
+                    </div>
+                    <div class="space-y-1.5">
+                      <Label for="item-idexx-codes" class="text-xs font-medium">IDEXX 代號</Label>
+                      <Input
+                        id="item-idexx-codes"
+                        :model-value="idexxCodesText"
+                        class="num"
+                        placeholder="例如：CREA"
+                        @update:model-value="setIdexxCodes"
+                      />
+                      <p class="text-xs text-muted-foreground">IDEXX 儀器驗完會自動填進這一格。不同儀器代號不同時用「、」分開，例如 RBC、RBC_BLD。</p>
                     </div>
                   </template>
 
