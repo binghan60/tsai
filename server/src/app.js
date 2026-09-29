@@ -24,6 +24,7 @@ import settingsRouter from './routes/settings.js';
 import textTemplatesRouter from './routes/textTemplates.js';
 import uploadsRouter from './routes/uploads.js';
 import { intakeSubmissionsRouter, publicIntakeRouter } from './routes/intakeSubmissions.js';
+import { labResultBridgeRouter, labResultsRouter } from './routes/labResults.js';
 import { closeBrowser } from './lib/pdf.js';
 import { resumePdfJobs } from './lib/reportPdfJobs.js';
 import { initRealtime } from './lib/realtime.js';
@@ -69,6 +70,9 @@ app.get('/api/health', async (req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/public/reports', publicReportsRouter);
 app.use('/api/public/intake-submissions', publicIntakeRouter);
+// 診所電腦上的抓檔程式不會登入，POST /import、/heartbeat 改用 IDEXX_BRIDGE_TOKEN 驗證，所以掛在登入檢查之前；
+// 這個 router 只認這兩條，其他 /api/lab-results/* 會繼續往下走登入檢查。
+app.use('/api/lab-results', labResultBridgeRouter);
 app.use('/api', requireAuthentication);
 app.use('/api/intake-submissions', intakeSubmissionsRouter);
 app.use('/api/owners/:ownerId/pets', ownerPetsRouter);
@@ -89,6 +93,7 @@ app.use('/api/search', searchRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/text-templates', textTemplatesRouter);
 app.use('/api/uploads', uploadsRouter);
+app.use('/api/lab-results', labResultsRouter);
 
 app.use('/api', (req, res) => {
   res.status(404).json({ message: '找不到 API 路由' });

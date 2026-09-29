@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="Big5"?>
+<!DOCTYPE message SYSTEM "result_20.dtd">
+<message message_id="1" message_dt="06/20/2022 12:36:31.828 PM" message_type="Result" message_sub_type="New_Results" message_dtd_version_number="2.0">
+<header>
+<from_application_id>85ab1b2e-d86c-4ee2-9ed2-3fdfba6fb8cb</from_application_id>
+<to_application_id>be38beab-7b78-4593-90f1-9ed1f0a7c0e9</to_application_id>
+</header>
+<body>
+<result requisition_number="1" diagnostic_set_id="20110909_103647_92" instrument="Catalyst_One">
+<run_dt>09/09/2011 10:36:47.880 AM</run_dt>
+<client client_id="000001">
+<first_name>王小明</first_name>
+<last_name>OO</last_name>
+</client>
+<patient patient_id="000001" patient_species="CANINE" patient_gender="MALE_INTACT">
+<patient_name>娜娜</patient_name>
+<patient_breed>比熊</patient_breed>
+<patient_birth_dt>01/01/1991</patient_birth_dt>
+<patient_weight patient_weight_uom="kgs">
+<weight>0</weight>
+</patient_weight>
+</patient>
+<doctor>
+<first_name>doctor</first_name>
+<last_name>vet</last_name>
+</doctor>
+<results>
+<assay_result assay_name="GLU">
+<result_value_uom_cd>mg/dL</result_value_uom_cd>
+<result_value>117</result_value>
+<assay_reference_range>
+<critical_low>15</critical_low>
+<low>74</low>
+<high>143</high>
+<critical_high>700</critical_high>
+</assay_reference_range>
+41
+<result_qualifier>=</result_qualifier>
+</assay_result>
+<assay_result assay_name="BUN">
+<result_value_uom_cd>mg/dL</result_value_uom_cd>
+<result_value>25</result_value>
+<assay_reference_range>
+<critical_low>0</critical_low>
+<low>7</low>
+<high>27</high>
+<critical_high>300</critical_high>
+</assay_reference_range>
+<result_qualifier>=</result_qualifier>
+</assay_result>
+<assay_result assay_name="CREA">
+<result_value_uom_cd>mg/dL</result_value_uom_cd>
+<result_value>1.7</result_value>
+<assay_reference_range>
+<critical_low>0.0</critical_low>
+<low>0.5</low>
+<high>1.8</high>
+<critical_high>15.0</critical_high>
+</assay_reference_range>
+<result_qualifier>=</result_qualifier>
+</assay_result>
+<assay_result assay_name="SDMA">
+<result_value_uom_cd>μg/dL</result_value_uom_cd>
+<result_value>9</result_value>
+<assay_reference_range>
+<critical_low>0.0</critical_low>
+<low>0</low>
+<high>14</high>
+<critical_high>15.0</critical_high>
+</assay_reference_range>
+<result_qualifier>=</result_qualifier>
+</assay_result>
+</results>
+</result>
+</body>
+</message>

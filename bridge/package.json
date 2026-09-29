@@ -1,0 +1,15 @@
+{
+  "name": "idexx-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "IDEXX InterLink 抓檔程式：把 InterLink 存下的檢驗結果上傳到系統",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node idexxBridge.js",
+    "check": "node idexxBridge.js --check",
+    "test": "node --test idexxBridge.test.js"
+  }
+}

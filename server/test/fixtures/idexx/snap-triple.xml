@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE message SYSTEM "result_20.dtd">
+<message message_id="1" message_dt="05/16/2024 03:06:54.839 PM" message_type="Result" message_sub_type="New_Results" message_dtd_version_number="2.0">
+  <header>
+    <from_application_id>fcb44ec9-5e86-42f0-9555-6791e5565f3e</from_application_id>
+    <to_application_id>link2203-bc9a-4233-ae69-0a7dfd312837</to_application_id>
+  </header>
+  <body>
+    <result requisition_number="" diagnostic_set_id="20240516_150509_15933" instrument="SNAP">
+      <run_dt>05/16/2024 03:06:49.618 PM</run_dt>
+      <client client_id="">
+        <first_name></first_name>
+        <last_name></last_name>
+      </client>
+      <patient patient_id="" patient_species="FELINE">
+        <patient_name>test2</patient_name>
+      </patient>
+      <doctor>
+        <first_name></first_name>
+        <last_name></last_name>
+      </doctor>
+      <results>
+        <assay_result assay_name="FeLV">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>Positive</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="FIV">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>Negative</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="HW">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>Positive</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+      </results>
+    </result>
+  </body>
+</message>

@@ -1,0 +1,8 @@
+{
+  "serverUrl": "https://你的系統網址",
+  "token": "跟伺服器 IDEXX_BRIDGE_TOKEN 相同的值",
+  "resultsDir": "C:\\IDEXX\\Results",
+  "pollSeconds": 10,
+  "settleSeconds": 3,
+  "failAfterMinutes": 30
+}

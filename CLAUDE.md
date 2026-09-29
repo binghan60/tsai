@@ -90,6 +90,9 @@
 
 `GET /api/todos` 回的是**未完成（上限 200，有期限的由早到晚排前面、沒期限的照建立順序接後面）＋最近完成 50 筆**的單一清單，前端依 `status` 分頁籤；任何異動後伺服器整份重讀並廣播 `todos:updated`，前端直接取代。排序在記憶體裡做（`lib/todos.js` 的 `sortOpenTodos`），筆數有上限所以沒有 32MB 排序上限的問題。索引 `{status, createdAt}`（未完成清單）、`{status, doneAt: -1}`（最近完成）、`{mentions.petId}`（刪寵物時找標記）。
 
+### labResults IDEXX 檢驗結果
+設定、部署、本機測試與排查見 [docs/IDEXX_INTERLINK.md](docs/IDEXX_INTERLINK.md)。IDEXX 不開放 API，院內檢驗儀的結果要靠 **IDEXX InterLink**（裝在跟 IDEXX 主機同一個區網的 Windows 電腦上）存成 XML＋PDF 檔，再由那台電腦上的抓檔程式上傳進來（`POST /api/lab-results/import`，用 `IDEXX_BRIDGE_TOKEN` 驗證、不走登入）。系統在雲端讀不到診所電腦的資料夾，所以一定要有這支抓檔程式。抓檔程式在 `bridge/`（獨立於 server、不裝任何套件，整個資料夾複製到診所電腦、裝 Node.js 就能跑；設定檔 `idexx-bridge.config.json` 含密鑰不進版控）：它不解析 XML、原檔照送，等檔案靜止才上傳，成功移到 `已上傳\年-月\`、伺服器一直讀不了移到 `無法讀取\`、連不上就留在原地重試，**檔案絕不刪除**。`bridge/install.ps1` 把它註冊成 SYSTEM 帳號的排程工作（開機就跑、不用登入、每 5 分鐘補叫一次），每分鐘送心跳到 `labBridgeStatuses`（一台電腦一筆：`bridgeId`（設定檔 name 或電腦名稱，unique）、`lastSeenAt`（伺服器收到的時刻）、`lastUploadAt`、`pendingFiles`、`lastError`、`version`），超過三分鐘沒心跳就算離線——開發者人不在診所，停了要從系統上看得出來。一筆＝一台儀器對一隻貓的一次檢驗：`diagnosticSetId`＋`instrument` 唯一（同一次看診跑生化又跑血球是兩筆），欄位是 `lib/idexxResult.js` 解析出來的樣子——`runAt`、IDEXX 主機上登記的 `client`／`patient`（`patient.id` 是 IDEXX 回傳的病患編號，不是 `petId`）、`assays[]`（`code`／`value` 一律字串／`unit`／`referenceMin`／`referenceMax`／`criticalMin`／`criticalMax`／`qualifier`，欄位名稱跟看診的 `labValues` 一致，可直接用 `shared/labValues.js` 的 `labFlag`）、`notes[]`，外加原始檔 `rawXml`（`select: false`，解析規則修正後可重新解析）。**`petId` 是空的＝待配對**，沒有另外的狀態欄位。IDEXX 會重送與更正同一份結果，`lib/labResultImport.js` 的 `planLabResultImport` 決定怎麼處理：內容一樣只加 `receiveCount`、內容不同以訊息時間較新的為準並記 `revisedAt`、比已存的舊就不採用；配對欄位永遠不被上傳覆寫。解析刻意寬鬆、不驗證 DTD——IDEXX 的實際輸出不完全符合它自己的 DTD（見該檔開頭）。索引 `{diagnosticSetId, instrument}`(unique)、`{petId, runAt: -1, _id: -1}`。
+
 ### deliveryLogs 寄送流水帳
 append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩筆，同一個 `attemptId`；API 回傳時合併成一次寄送一筆）：`recordId`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
 
@@ -155,6 +158,7 @@ append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩�
 | 富文字 | Tiptap（`@tiptap/vue-3`，只裝 Document／Paragraph／Text／Bold／`@tiptap/extensions`） | 只給本次簡易紀錄、藥單、待辦上色與加粗；**不用 StarterKit**，另有自訂的 `tint` 顏色 mark。存的是 `shared/richText.js` 的標記字串，不是 HTML，見第二節「格式標記」 |
 | PDF | Puppeteer | 見下節 |
 | Email | Nodemailer | SMTP（Gmail 應用程式密碼） |
+| XML 解析 | fast-xml-parser | 讀 IDEXX InterLink 存下的檢驗結果檔（`server/src/lib/idexxResult.js`）；寬鬆解析、不驗證 DTD——IDEXX 的實際輸出不完全符合它自己的 DTD |
 | 測試 | Node 內建 `node --test` | 不裝額外框架 |
 
 ## 四、PDF 產生方式（關鍵架構決策）
@@ -175,7 +179,7 @@ append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩�
 ## 五、API 設計
 
 ```
-帳號（唯一免登入的 /api/* 路由，連同 /api/public/reports/:token 與 GET /api/health）
+帳號（唯一免登入的 /api/* 路由，連同 /api/public/reports/:token、GET /api/health，以及改用密鑰驗證的 POST /api/lab-results/import、/heartbeat）
 GET    /api/auth/me                     查詢目前登入狀態
 POST   /api/auth/login                  登入，成功後回 HttpOnly JWT cookie（30 天到期，有限流）
 POST   /api/auth/logout                 登出，清除 cookie
@@ -288,6 +292,15 @@ todos:updated（server→client）         待辦任何異動（新增、修改�
 medication:updated（server→client）    藥單任何異動；前端重讀清單與工具欄上的待辦數字
 intake:updated（server→client）        初診表送出、修改、核准、退回；前端重讀待審筆數（工具欄「初診」）
 
+IDEXX 檢驗結果（見第二節 labResults）
+POST   /api/lab-results/import          診所電腦上的抓檔程式上傳 InterLink 存下的 XML：body 是檔案原本的位元組（Content-Type: application/xml），
+                                       X-File-Name 放 URL 編碼的原檔名；Authorization: Bearer <IDEXX_BRIDGE_TOKEN>，掛在登入檢查之前。
+                                       回 201 created／200 duplicate|updated|stale|ignored（不是檢驗結果的訊息）；
+                                       檔案不完整或看不懂回 422（抓檔程式之後再試）；伺服器沒設密鑰回 503
+POST   /api/lab-results/heartbeat       抓檔程式每分鐘回報一次（同樣用 IDEXX_BRIDGE_TOKEN、掛在登入檢查之前），依 bridgeId upsert
+GET    /api/lab-results                 預設列待配對（petId 為空），?petId= 列那隻貓的；新到舊、分頁
+GET    /api/lab-results/bridge-status   各台抓檔程式的最新心跳，另帶 online（三分鐘內有心跳）
+
 寄送紀錄
 GET    /api/delivery-logs               流水帳，一筆＝一次寄送（queued 與結果依 attemptId 在資料庫裡先合併再分頁，lib/deliveryAttempts.js）；?recordId= / ?event=（這次寄送的最終結果）/ ?q= / ?from=&to= / 分頁
 
@@ -394,9 +407,15 @@ npm run dev            # 使用者自己開，不要主動啟動（會搶 port�
 npm test               # node --test
 npm run lint           # eslint
 npm run dev            # 使用者自己開
+
+# IDEXX 抓檔程式（bridge/，跑在診所電腦上，見第二節 labResults）
+npm test               # node --test，不需要伺服器，會在系統暫存資料夾裡實際搬檔案
+npm start              # 依 idexx-bridge.config.json 開始監看資料夾（前景執行，測試用）
+npm run check          # 只檢查設定檔、資料夾與伺服器連線，送一次心跳就結束
+# 正式安裝／移除／查看狀態：install.ps1 / uninstall.ps1 / status.ps1（檔案要存成 UTF-8 with BOM，PowerShell 5.1 才讀得懂中文）
 ```
 
-改完後的驗證順序：後端 `npm run lint` + `npm test`，前端 `npm run build` + `npm test`。**前端那個 `npm test` 很容易漏掉**——它只涵蓋 `src/lib` 底下的純邏輯，但改動色彩 token 或狀態語意時正是它會抓到問題（斷言綁的是語意 token 名，不是色階名）。dev server 通常已經在跑（3000 / 5173），可以直接 curl API 驗證。
+改完後的驗證順序：後端 `npm run lint` + `npm test`，前端 `npm run build` + `npm test`；動到 `bridge/` 再加跑它的 `npm test`。**前端那個 `npm test` 很容易漏掉**——它只涵蓋 `src/lib` 底下的純邏輯，但改動色彩 token 或狀態語意時正是它會抓到問題（斷言綁的是語意 token 名，不是色階名）。dev server 通常已經在跑（3000 / 5173），可以直接 curl API 驗證。
 
 幾件要注意的：
 

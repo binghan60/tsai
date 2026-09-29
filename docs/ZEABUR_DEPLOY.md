@@ -40,6 +40,9 @@ CLOUDINARY_API_KEY=<Cloudinary API key>
 CLOUDINARY_API_SECRET=<Cloudinary API secret>
 CLOUDINARY_IMAGE_UPLOAD_PRESET=tsai-medical-record-images
 CLOUDINARY_IMAGE_FOLDER=tsai-medical-records
+
+# 選填：接收 IDEXX 檢驗結果（見 docs/IDEXX_INTERLINK.md），留空＝不接收
+IDEXX_BRIDGE_TOKEN=<至少 32 字元的隨機字串，跟診所抓檔程式的設定相同>
 ```
 
 注意事項：

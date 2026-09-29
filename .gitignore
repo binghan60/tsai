@@ -9,4 +9,6 @@ dist/
 Data
 server/scripts/legacy-migration/*.jsonl
 server/scripts/legacy-migration/*.log
+# 抓檔程式的設定檔含密鑰，只放 idexx-bridge.config.example.json 進版控
+bridge/idexx-bridge.config.json
 

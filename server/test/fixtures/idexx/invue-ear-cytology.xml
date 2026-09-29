@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE message SYSTEM "result_20.dtd">
+<message message_id="18" message_dt="02/25/2026 01:17:03.628 PM" message_type="Result" message_sub_type="New_Results" message_dtd_version_number="2.0">
+  <header>
+    <from_application_id>2297f0d9-2b2f-4f4f-8aee-a2d9f90b9917</from_application_id>
+    <to_application_id>link26e2-3610-49fe-8df4-4a0450c74da0</to_application_id>
+  </header>
+  <body>
+    <result requisition_number="" diagnostic_set_id="20260224_141813_1362" instrument="IDEXX_inVue_Dx">
+      <run_dt>02/24/2026 02:25:49.321 PM</run_dt>
+      <client client_id="">
+        <first_name>t</first_name>
+        <last_name>t</last_name>
+      </client>
+      <patient patient_id="" patient_species="CANINE">
+        <patient_name>test</patient_name>
+      </patient>
+      <doctor>
+        <first_name></first_name>
+        <last_name></last_name>
+      </doctor>
+      <results>
+        <assay_result assay_name="BACc_LEFT">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>0 None to trace seen.</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="BACr_LEFT">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>0 None.</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="YEA_LEFT">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>1+ Few yeast seen.</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="WBC_LEFT">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>Absent</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="MITE_LEFT">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>Absent</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="BACc_RIGHT">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>0 None to trace seen.</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="BACr_RIGHT">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>0 None.</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="YEA_RIGHT">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>--.-- Result Suppressed. See below.</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>-</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="WBC_RIGHT">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>--.-- Result Suppressed. See below.</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>-</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="MITE_RIGHT">
+          <result_value_uom_cd></result_value_uom_cd>
+          <result_value>Absent</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+      </results>
+      <instrument_notes>
+        <instrument_note>Visit type: First time. Case duration: Acute. Clinical signs: Patient presented signs of otitis including: Left ear: discharge (waxy).</instrument_note>
+        <instrument_note>Left Ear: Results: Few yeast seen. Consideration: In the presence of white blood cells, a true infection is possible. If white blood cells are absent, the presence of a few yeast may represent either commensal flora or dysbiosis. Next Step(s): Interpret in light of clinical signs. If clinical signs of otitis are present, consider dysbiosis and potential underlying causes such as atopic dermatitis (food or environmentally triggered), endocrinopathy, or a cornification defect as contributing factors.</instrument_note>
+        <instrument_note>Yeast, WBC: This result has been suppressed due to sample quality issues (e.g., sample clumps, bubbles, or overcrowding). To avoid this issue in the future, avoid collecting large clumps of sample, use the plastic ribs inside of the sample tube to release the sample from the swab, use the swab to break up/liquify any small clumps, and invert the sample tube 5–10 times to mix (do not shake the tube). If the problem persists, contact IDEXX Support.</instrument_note>
+        <instrument_note>View your results in VetConnect PLUS for patient-specific interpretations that incorporate clinical signs.</instrument_note>
+      </instrument_notes>
+    </result>
+  </body>
+</message>

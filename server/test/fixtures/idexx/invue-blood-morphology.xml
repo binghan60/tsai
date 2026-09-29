@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE message SYSTEM "result_20.dtd">
+<message message_id="3" message_dt="02/25/2026 01:14:46.348 PM" message_type="Result" message_sub_type="New_Results" message_dtd_version_number="2.0">
+  <header>
+    <from_application_id>2297f0d9-2b2f-4f4f-8aee-a2d9f90b9917</from_application_id>
+    <to_application_id>link26e2-3610-49fe-8df4-4a0450c74da0</to_application_id>
+  </header>
+  <body>
+    <result requisition_number="" diagnostic_set_id="20260225_104644_1371" instrument="IDEXX_inVue_Dx">
+      <run_dt>02/25/2026 11:00:59.224 AM</run_dt>
+      <client client_id="">
+        <first_name></first_name>
+        <last_name></last_name>
+      </client>
+      <patient patient_id="" patient_species="CANINE">
+        <patient_name>test-a</patient_name>
+      </patient>
+      <doctor>
+        <first_name></first_name>
+        <last_name></last_name>
+      </doctor>
+      <results>
+        <assay_result assay_name="RBC_BLD">
+          <result_value_uom_cd>M/μL</result_value_uom_cd>
+          <result_value>5.00</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="HCT_BLD">
+          <result_value_uom_cd>%</result_value_uom_cd>
+          <result_value>35.0</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="RETIC_PCT">
+          <result_value_uom_cd>%</result_value_uom_cd>
+          <result_value>0.1</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="RETIC_BLD">
+          <result_value_uom_cd>K/μL</result_value_uom_cd>
+          <result_value>6.0</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="WBC_BLD">
+          <result_value_uom_cd>K/μL</result_value_uom_cd>
+          <result_value>12.00</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="NEUPCT_BLD">
+          <result_value_uom_cd>%</result_value_uom_cd>
+          <result_value>72.6</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="LYMPCT_BLD">
+          <result_value_uom_cd>%</result_value_uom_cd>
+          <result_value>6.8</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="MONOPCT_BLD">
+          <result_value_uom_cd>%</result_value_uom_cd>
+          <result_value>3.7</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="EOSPCT_BLD">
+          <result_value_uom_cd>%</result_value_uom_cd>
+          <result_value>15.7</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="BASOPCT_BLD">
+          <result_value_uom_cd>%</result_value_uom_cd>
+          <result_value>1.2</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="NEUABS_BLD">
+          <result_value_uom_cd>K/μL</result_value_uom_cd>
+          <result_value>8.71</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="LYMABS_BLD">
+          <result_value_uom_cd>K/μL</result_value_uom_cd>
+          <result_value>0.82</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="MONOABS_BLD">
+          <result_value_uom_cd>K/μL</result_value_uom_cd>
+          <result_value>0.44</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="EOABS_BLD">
+          <result_value_uom_cd>K/μL</result_value_uom_cd>
+          <result_value>1.89</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="BASOABS_BLD">
+          <result_value_uom_cd>K/μL</result_value_uom_cd>
+          <result_value>0.14</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+        <assay_result assay_name="PLT_EST">
+          <result_value_uom_cd>K/μL</result_value_uom_cd>
+          <result_value>100-150 K/uL (Mildly decreased)</result_value>
+          <assay_reference_range>
+            <critical_low></critical_low>
+            <low></low>
+            <high></high>
+            <critical_high></critical_high>
+          </assay_reference_range>
+          <result_qualifier>=</result_qualifier>
+        </assay_result>
+      </results>
+      <instrument_notes>
+        <instrument_note>Agglutination and spherocytes were not detected.</instrument_note>
+        <instrument_note>This platelet estimate incorporates enumeration of individual platelets and platelets within clumps. Mildly decreased platelet counts are not typically the cause of abnormal bleeding unless there is a concurrent platelet function defect.</instrument_note>
+        <instrument_note>RBC, Hematocrit: Results entered manually.</instrument_note>
+        <instrument_note>WBC: WBC results entered manually. The white blood cell differential has been updated based on cellular analysis.</instrument_note>
+        <instrument_note>View your results in VetConnect PLUS for patient-specific interpretations that incorporate clinical signs.</instrument_note>
+      </instrument_notes>
+    </result>
+  </body>
+</message>
