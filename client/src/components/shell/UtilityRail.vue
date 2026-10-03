@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { useRoute } from 'vue-router';
-import { ClipboardPlus, ListTodo, MessageCircle, Pill, Pin } from '@lucide/vue';
+import { ClipboardPlus, FlaskConical, ListTodo, MessageCircle, Pill, Pin } from '@lucide/vue';
 import { medicationTodoCount } from '../../../../shared/medicationWorkflow.js';
 import { useStaffIdentity } from '../../composables/useStaffIdentity';
 import { useChatStore } from '../../stores/chat';
@@ -12,7 +12,7 @@ import { useWorkCountsStore } from '../../stores/workCounts';
 
 // 右側 64px 工具欄：開側滑面板的按鈕。數字只有兩種讀法——
 //   灰色（neutral）＝狀態讀數：暫存區裡有幾隻，0 也照顯示；
-//   紅色（todo）＝要人動手：藥單、待辦、初診、聊天未讀，0 就不畫。
+//   紅色（todo）＝要人動手：藥單、待辦、待確認的檢驗結果、初診、聊天未讀，0 就不畫。
 // 初診只在掛號台出現（只有櫃台在審）；聊天放在最下面。
 const route = useRoute();
 const panel = useUtilityPanelStore();
@@ -34,6 +34,8 @@ const items = computed(() => [
     tone: 'todo',
   },
   { key: 'todos', icon: ListTodo, short: '待辦', label: '院內待辦（未完成）', count: todos.openCount, tone: 'todo' },
+  // IDEXX 結果認不出是哪隻貓時放在這裡等人選；醫師、櫃台都能處理，所以每一頁都有。
+  { key: 'lab', icon: FlaskConical, short: '檢驗', label: 'IDEXX 檢驗結果（待確認）', count: counts.labResults, tone: 'todo' },
   ...(route.path.startsWith('/reception') ? [{ key: 'intake', icon: ClipboardPlus, short: '初診', label: '初診表（待審核）', count: counts.intake, tone: 'todo' }] : []),
 ]);
 const chatItem = computed(() => ({ key: 'chat', icon: MessageCircle, short: '聊天', label: '內部聊天（未讀）', count: chat.unreadCount, tone: 'todo' }));

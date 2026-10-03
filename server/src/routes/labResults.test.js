@@ -216,7 +216,52 @@ describe('lab results routes', () => {
     LabResult.countDocuments = async () => 0;
     assert.equal((await fetch(`${origin}/api/lab-results`)).status, 200);
     assert.equal((await fetch(`${origin}/api/lab-results?petId=64b000000000000000000001`)).status, 200);
-    assert.deepEqual(filters, [{ petId: null }, { petId: '64b000000000000000000001' }]);
+    assert.deepEqual(filters, [{ petId: null, dismissedAt: null }, { petId: '64b000000000000000000001' }]);
     assert.equal((await fetch(`${origin}/api/lab-results?petId=abc`)).status, 422);
+  });
+
+  it('待確認清單附上檢驗當天的候選掛號，同名唯一的預選', async () => {
+    LabResult.find = () => ({ sort: () => ({ skip: () => ({ limit: () => ({ lean: async () => [
+      { _id: 'lab-1', runAt: new Date('2026-09-30T02:00:00Z'), patient: { name: '牛奶' } },
+    ] }) }) }) });
+    LabResult.countDocuments = async () => 1;
+    let visitFilter;
+    Appointment.find = (filter) => {
+      visitFilter = filter;
+      return { select: () => ({ lean: async () => [
+        { _id: 'v1', date: '2026-09-30', time: '15:00', petId: 'p1', petName: '牛奶', ownerName: '陳大文', status: 'arrived' },
+        { _id: 'v2', date: '2026-09-30', time: '09:00', petId: 'p2', petName: '咖啡', ownerName: '林小姐', status: 'arrived' },
+        { _id: 'v3', date: '2026-09-29', time: '09:00', petId: 'p3', petName: '牛奶', ownerName: '別天', status: 'arrived' },
+      ] }) };
+    };
+    const { items } = await (await fetch(`${origin}/api/lab-results`)).json();
+    // 台北 9/30 整天＝9/29 16:00Z～9/30 16:00Z。
+    assert.equal(visitFilter.$or[0].scheduledAt.$gte.toISOString(), '2026-09-29T16:00:00.000Z');
+    assert.deepEqual(items[0].candidates.map((candidate) => [candidate.petName, candidate.suggested]), [['牛奶', true], ['咖啡', false]]);
+  });
+
+  it('選貓：參數不對回 422，別台已經處理掉回 409', async () => {
+    const id = '64b000000000000000000009';
+    const post = (path, body) => fetch(`${origin}/api/lab-results/${path}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body ?? {}),
+    });
+    assert.equal((await post('abc/match', { petId: '64b000000000000000000001' })).status, 422);
+    assert.equal((await post(`${id}/match`, { petId: 'abc' })).status, 422);
+    Pet.exists = async () => ({ _id: '64b000000000000000000001' });
+    LabResult.findOneAndUpdate = async () => null;
+    assert.equal((await post(`${id}/match`, { petId: '64b000000000000000000001' })).status, 409);
+    Pet.exists = async () => null;
+    assert.equal((await post(`${id}/match`, { petId: '64b000000000000000000001' })).status, 404);
+  });
+
+  it('忽略：只有還在待確認清單上的能忽略', async () => {
+    const id = '64b000000000000000000009';
+    let filter;
+    LabResult.findOneAndUpdate = async (value) => { filter = value; return { _id: id }; };
+    const ok = await fetch(`${origin}/api/lab-results/${id}/dismiss`, { method: 'POST' });
+    assert.equal(ok.status, 200);
+    assert.deepEqual(filter, { _id: id, petId: null, dismissedAt: null });
+    LabResult.findOneAndUpdate = async () => null;
+    assert.equal((await fetch(`${origin}/api/lab-results/${id}/dismiss`, { method: 'POST' })).status, 409);
   });
 });

@@ -55,6 +55,10 @@ export function useGlobalChat() {
     counts.loadIntake();
   }
 
+  function handleLabResults() {
+    counts.loadLabResults();
+  }
+
   // 斷線期間錯過的暫存區與待辦異動，重新連上時整份重讀補回來。
   function handleReconnect() {
     if (!auth.isAuthenticated) return;
@@ -69,6 +73,7 @@ export function useGlobalChat() {
     socket.on('todos:updated', handleTodos);
     socket.on('medication:updated', handleMedications);
     socket.on('intake:updated', handleIntake);
+    socket.on('lab-results:updated', handleLabResults);
     socket.io.on('reconnect', handleReconnect);
   });
 
@@ -102,6 +107,7 @@ export function useGlobalChat() {
     socket.off('todos:updated', handleTodos);
     socket.off('medication:updated', handleMedications);
     socket.off('intake:updated', handleIntake);
+    socket.off('lab-results:updated', handleLabResults);
     socket.io.off('reconnect', handleReconnect);
   });
 }

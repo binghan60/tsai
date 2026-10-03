@@ -7,13 +7,14 @@ import PinnedPanel from '../panels/PinnedPanel.vue';
 import MedicationsPanel from '../panels/MedicationsPanel.vue';
 import TodosPanel from '../panels/TodosPanel.vue';
 import IntakePanel from '../panels/IntakePanel.vue';
+import LabResultsPanel from '../panels/LabResultsPanel.vue';
 import ChatPanel from '../panels/ChatPanel.vue';
 
 // 工具欄面板的容器，460px 寬，貼在工具欄左邊。
 // 1600px 以上是版面裡的一欄，會把工作區往左推（並排看）；更窄時浮在工作區上面、不推版面。
 // 兩種情況都不加遮罩、不鎖背景：面板是「一邊做事一邊查」的工具。
 // KeepAlive：關掉再打開時藥單表單、聊天草稿、捲動位置都還在。
-const PANELS = { pinned: PinnedPanel, medications: MedicationsPanel, todos: TodosPanel, intake: IntakePanel, chat: ChatPanel };
+const PANELS = { pinned: PinnedPanel, medications: MedicationsPanel, todos: TodosPanel, lab: LabResultsPanel, intake: IntakePanel, chat: ChatPanel };
 const panel = useUtilityPanelStore();
 const chat = useChatStore();
 const route = useRoute();

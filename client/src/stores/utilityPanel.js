@@ -6,7 +6,7 @@ import { defineStore } from 'pinia';
 //
 // 面板內容用 KeepAlive 保留，關掉再打開時藥單表單、聊天草稿都還在。
 // 每個面板各自記住自己推入到哪一層，切到別的面板再切回來也回到原處。
-export const PANEL_KEYS = ['pinned', 'medications', 'todos', 'intake', 'chat'];
+export const PANEL_KEYS = ['pinned', 'medications', 'todos', 'lab', 'intake', 'chat'];
 
 export const useUtilityPanelStore = defineStore('utilityPanel', {
   state: () => ({

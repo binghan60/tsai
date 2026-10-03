@@ -7,9 +7,11 @@ import { http } from '../api/http';
 // （醫師看待確認、櫃台看待包藥＋待領藥），見 shared/medicationWorkflow.js。
 let medicationRequest = 0;
 let intakeRequest = 0;
+let labResultsRequest = 0;
 
+// 另有 IDEXX 檢驗結果的待確認筆數（lab-results:updated 時重讀）。
 export const useWorkCountsStore = defineStore('workCounts', {
-  state: () => ({ medications: {}, intake: 0 }),
+  state: () => ({ medications: {}, intake: 0, labResults: 0 }),
   actions: {
     async loadMedications() {
       const id = ++medicationRequest;
@@ -33,15 +35,27 @@ export const useWorkCountsStore = defineStore('workCounts', {
         // 同上。
       }
     },
+    async loadLabResults() {
+      const id = ++labResultsRequest;
+      try {
+        const { data } = await http.get('/lab-results', { params: { limit: 1 } });
+        if (id === labResultsRequest) this.labResults = data.total ?? 0;
+      } catch {
+        // 同上。
+      }
+    },
     load() {
       this.loadMedications();
       this.loadIntake();
+      this.loadLabResults();
     },
     reset() {
       medicationRequest += 1;
       intakeRequest += 1;
+      labResultsRequest += 1;
       this.medications = {};
       this.intake = 0;
+      this.labResults = 0;
     },
   },
 });

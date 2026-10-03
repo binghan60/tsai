@@ -25,6 +25,50 @@ export function pickVisit(appointments, runAt) {
   return checkedIn[0] ?? null;
 }
 
+// ── 待確認清單（工具欄「檢驗」）：認不出貓的結果讓人選 ──
+
+// IDEXX 上的名字是技術員手打的，比對時去掉所有空白、不分大小寫。
+function nameKey(name) {
+  return String(name ?? '').replace(/\s+/g, '').toLowerCase();
+}
+
+export function sameName(a, b) {
+  return Boolean(nameKey(a)) && nameKey(a) === nameKey(b);
+}
+
+// 候選＝當天的掛號（取消、未到除外、已建檔的貓才算）。同名的排最前面，其餘依時段。
+// 同名而且只有一隻，前端就預先選好（suggested）。
+export function rankCandidates(appointments, patientName) {
+  const candidates = (appointments ?? [])
+    .filter((appointment) => appointment.petId && !INACTIVE_STATUSES.has(appointment.status))
+    .map((appointment) => ({
+      appointmentId: appointment._id,
+      petId: appointment.petId,
+      petName: appointment.petName ?? '',
+      ownerName: appointment.ownerName ?? '',
+      time: appointment.time ?? '',
+      status: appointment.status,
+      sameName: sameName(appointment.petName, patientName),
+    }))
+    .sort((a, b) => Number(b.sameName) - Number(a.sameName) || a.time.localeCompare(b.time));
+  const matches = candidates.filter((candidate) => candidate.sameName);
+  return candidates.map((candidate) => ({ ...candidate, suggested: matches.length === 1 && candidate.sameName }));
+}
+
+// 復原（選錯貓）：只清「現在還是當初填進去的值」的欄位；已經被人改過的留著，回報給使用者。
+export function planUndo(currentLabValues, filled) {
+  const current = new Map((currentLabValues ?? []).map((lab) => [lab.key, String(lab.value ?? '').trim()]));
+  const clear = [];
+  const kept = [];
+  for (const entry of filled ?? []) {
+    const value = current.get(entry.key);
+    if (value === undefined) continue;
+    if (value === String(entry.value ?? '').trim()) clear.push(entry.key);
+    else kept.push(entry.label || entry.key);
+  }
+  return { clear, kept };
+}
+
 // 儀器自己判定沒結果（!）或結果無效（-，例如 inVue 因檢體品質壓掉的結果）的項目不填。
 const UNUSABLE_QUALIFIERS = new Set(['!', '-']);
 // 跟看診 labValues 的欄位長度上限一致（models/Appointment.js）。

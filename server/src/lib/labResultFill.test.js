@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseIdexxResult } from './idexxResult.js';
-import { petIdFromPatientId, pickVisit, planLabFill } from './labResultFill.js';
+import { petIdFromPatientId, pickVisit, planLabFill, planUndo, rankCandidates, sameName } from './labResultFill.js';
 
 const catalyst = parseIdexxResult(readFileSync(new URL('../../test/fixtures/idexx/catalyst-one.xml', import.meta.url)));
 const earCytology = parseIdexxResult(readFileSync(new URL('../../test/fixtures/idexx/invue-ear-cytology.xml', import.meta.url)));
@@ -45,6 +45,50 @@ describe('pickVisit：是哪一次看診', () => {
 
   it('好幾筆但都還沒報到就不猜', () => {
     assert.equal(pickVisit([{ _id: 'a', status: 'scheduled' }, { _id: 'b', status: 'scheduled' }], runAt), null);
+  });
+});
+
+describe('待確認清單：候選與復原', () => {
+  it('同名比對去掉空白、不分大小寫；空名字不算同名', () => {
+    assert.equal(sameName('Mi Mi', 'mimi'), true);
+    assert.equal(sameName('牛奶', ' 牛 奶 '), true);
+    assert.equal(sameName('', ''), false);
+    assert.equal(sameName('牛奶', '咖啡'), false);
+  });
+
+  it('候選排除取消、未到、還沒建檔的；同名排前面，其餘依時段', () => {
+    const visits = [
+      { _id: 'a', petId: 'p1', petName: '咖啡', time: '09:00', status: 'arrived' },
+      { _id: 'b', petId: 'p2', petName: '牛奶', time: '15:00', status: 'arrived' },
+      { _id: 'c', petId: 'p3', petName: '豆豆', time: '10:00', status: 'cancelled' },
+      { _id: 'd', petId: null, petName: '初診', time: '11:00', status: 'scheduled' },
+      { _id: 'e', petId: 'p4', petName: '小白', time: '08:00', status: 'completed' },
+    ];
+    const ranked = rankCandidates(visits, '牛奶');
+    assert.deepEqual(ranked.map((candidate) => candidate.appointmentId), ['b', 'e', 'a']);
+    assert.equal(ranked[0].suggested, true);
+    assert.equal(ranked[1].suggested, false);
+  });
+
+  it('同名的不只一隻就不預選', () => {
+    const visits = [
+      { _id: 'a', petId: 'p1', petName: '咪咪', time: '09:00', status: 'arrived' },
+      { _id: 'b', petId: 'p2', petName: '咪咪', time: '15:00', status: 'arrived' },
+    ];
+    assert.deepEqual(rankCandidates(visits, '咪咪').map((candidate) => candidate.suggested), [false, false]);
+  });
+
+  it('復原只清還是當初填的值的欄位，被人改過的留著', () => {
+    const filled = [
+      { key: 'glucose', label: '血糖', value: '117' },
+      { key: 'bun', label: 'BUN', value: '25' },
+      { key: 'cre', label: 'CRE', value: '1.7' },
+    ];
+    const current = [
+      { key: 'glucose', value: '117' },
+      { key: 'bun', value: '30' },
+    ];
+    assert.deepEqual(planUndo(current, filled), { clear: ['glucose'], kept: ['BUN'] });
   });
 });
 

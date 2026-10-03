@@ -95,7 +95,9 @@
 ### labResults IDEXX 檢驗結果
 設定、部署、本機測試與排查見 [docs/IDEXX_INTERLINK.md](docs/IDEXX_INTERLINK.md)。IDEXX 不開放 API，院內檢驗儀的結果要靠 **IDEXX InterLink**（裝在跟 IDEXX 主機同一個區網的 Windows 電腦上）存成 XML＋PDF 檔，再由那台電腦上的抓檔程式上傳進來（`POST /api/lab-results/import`，用 `IDEXX_BRIDGE_TOKEN` 驗證、不走登入）。系統在雲端讀不到診所電腦的資料夾，所以一定要有這支抓檔程式。抓檔程式在 `bridge/`（獨立於 server、不裝任何套件，整個資料夾複製到診所電腦、裝 Node.js 就能跑；設定檔 `idexx-bridge.config.json` 含密鑰不進版控）：它不解析 XML、原檔照送，等檔案靜止才上傳，成功移到 `已上傳\年-月\`、伺服器一直讀不了移到 `無法讀取\`、連不上就留在原地重試，**檔案絕不刪除**。`bridge/install.ps1` 把它註冊成 SYSTEM 帳號的排程工作（開機就跑、不用登入、每 5 分鐘補叫一次），每分鐘送心跳到 `labBridgeStatuses`（一台電腦一筆：`bridgeId`（設定檔 name 或電腦名稱，unique）、`lastSeenAt`（伺服器收到的時刻）、`lastUploadAt`、`pendingFiles`、`lastError`、`version`），超過三分鐘沒心跳就算離線——開發者人不在診所，停了要從系統上看得出來。一筆＝一台儀器對一隻貓的一次檢驗：`diagnosticSetId`＋`instrument` 唯一（同一次看診跑生化又跑血球是兩筆），欄位是 `lib/idexxResult.js` 解析出來的樣子——`runAt`、IDEXX 主機上登記的 `client`／`patient`（`patient.id` 是 IDEXX 回傳的病患編號，不是 `petId`）、`assays[]`（`code`／`value` 一律字串／`unit`／`referenceMin`／`referenceMax`／`criticalMin`／`criticalMax`／`qualifier`，欄位名稱跟看診的 `labValues` 一致，可直接用 `shared/labValues.js` 的 `labFlag`）、`notes[]`，外加原始檔 `rawXml`（`select: false`，解析規則修正後可重新解析）。**`petId` 是空的＝待配對**，沒有另外的狀態欄位。
 
-**儀器驗完自動填進健檢報告**（使用者的要求：檢驗結果就是健檢報告的檢驗欄位，不另外做一個「檢驗結果」的地方）：上傳後 `lib/labResultApply.js` 先認貓——`patient.id` 是 24 位的貓咪 `_id` 而且那隻貓存在，就記 `petId`、`matchSource: 'patient_id'`（報到時送到 IDEXX 主機的編號會原樣帶回來；Census 報到通知尚未實作）；再找那隻貓**檢驗當天**（`runAt` 換算成台北日期）的看診，排除取消／未到，好幾筆時挑檢驗前最後報到的那筆（`lib/labResultFill.js` 的 `pickVisit`）；最後依看診表單檢驗項目的 `idexxCodes` 對照，在同一個 transaction 裡寫進 `appointment.labValues`、同步病歷日誌，之後廣播 `appointment:updated`。報告草稿本來就讀看診的值，所以填進看診＝報告打開就看得到。規則（`planLabFill`）：**空的格子才填**；已經有不同的值不蓋掉，記在 `conflicts[]` 給醫師決定；儀器判定無結果（`!`）或無效（`-`）、或超過 40 字的不填；表單沒對應代號的記在 `unmappedCodes[]`。填過的記 `appointmentId`、`appliedAt`、`filledKeys[]`；找不到看診或看診沒選表單時不記 `appliedAt`，之後重送同一份檔案會再試。IDEXX 送更正版時會重新比一次，但一樣不蓋掉已經有的值。自動填入失敗不影響上傳本身（檔案已經存好）。已結案的報告不受影響（結案時已凍結）。IDEXX 會重送與更正同一份結果，`lib/labResultImport.js` 的 `planLabResultImport` 決定怎麼處理：內容一樣只加 `receiveCount`、內容不同以訊息時間較新的為準並記 `revisedAt`、比已存的舊就不採用；配對欄位永遠不被上傳覆寫。解析刻意寬鬆、不驗證 DTD——IDEXX 的實際輸出不完全符合它自己的 DTD（見該檔開頭）。索引 `{diagnosticSetId, instrument}`(unique)、`{petId, runAt: -1, _id: -1}`；找當天看診用 appointments 的 `{petId, date}`。
+**儀器驗完自動填進健檢報告**（使用者的要求：檢驗結果就是健檢報告的檢驗欄位，不另外做一個「檢驗結果」的地方）：上傳後 `lib/labResultApply.js` 先認貓——`patient.id` 是 24 位的貓咪 `_id` 而且那隻貓存在，就記 `petId`、`matchSource: 'patient_id'`（報到時送到 IDEXX 主機的編號會原樣帶回來；Census 報到通知尚未實作）；再找那隻貓**檢驗當天**（`runAt` 換算成台北日期）的看診，排除取消／未到，好幾筆時挑檢驗前最後報到的那筆（`lib/labResultFill.js` 的 `pickVisit`）；最後依看診表單檢驗項目的 `idexxCodes` 對照，在同一個 transaction 裡寫進 `appointment.labValues`、同步病歷日誌，之後廣播 `appointment:updated`。報告草稿本來就讀看診的值，所以填進看診＝報告打開就看得到。規則（`planLabFill`）：**空的格子才填**；已經有不同的值不蓋掉，記在 `conflicts[]` 給醫師決定；儀器判定無結果（`!`）或無效（`-`）、或超過 40 字的不填；表單沒對應代號的記在 `unmappedCodes[]`。填過的記 `appointmentId`、`appliedAt`、`filled[]`（`{ key, label, value }`）；找不到看診或看診沒選表單時不記 `appliedAt`，之後重送同一份檔案會再試。IDEXX 送更正版時會重新比一次，但一樣不蓋掉已經有的值。自動填入失敗不影響上傳本身（檔案已經存好）。已結案的報告不受影響（結案時已凍結）。
+
+**認不出貓的結果進「待確認」清單**（工具欄「檢驗」，`panels/LabResultsPanel.vue`）：Census 報到通知還沒做（要到診所才能測），加上技術員在 IDEXX 主機上手打名字時也不會帶編號，所以要有人選。清單＝`petId` 空、`dismissedAt` 空的結果，每筆附**檢驗當天的掛號**當候選（`lib/labResultFill.js` 的 `rankCandidates`：取消／未到／沒建檔的不算，同名——去空白、不分大小寫——排前面，同名而且只有一隻就預選）。人選了貓就記 `matchSource: 'manual'`、照上面同一套規則填入（`matchManually`）；選錯可以「復原」（`unmatchLabResult`：只清**現在還是當初填進去的值**的欄位，被人改過的留著，`planUndo`），結果回到清單；品管測試、練習用的檢驗可以「忽略」（`dismissedAt`）。任何異動都廣播 `lab-results:updated`，各台工具欄的數字跟著變。IDEXX 會重送與更正同一份結果，`lib/labResultImport.js` 的 `planLabResultImport` 決定怎麼處理：內容一樣只加 `receiveCount`、內容不同以訊息時間較新的為準並記 `revisedAt`、比已存的舊就不採用；配對欄位永遠不被上傳覆寫。解析刻意寬鬆、不驗證 DTD——IDEXX 的實際輸出不完全符合它自己的 DTD（見該檔開頭）。索引 `{diagnosticSetId, instrument}`(unique)、`{petId, runAt: -1, _id: -1}`；找當天看診用 appointments 的 `{petId, date}`。
 
 ### deliveryLogs 寄送流水帳
 append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩筆，同一個 `attemptId`；API 回傳時合併成一次寄送一筆）：`recordId`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
@@ -295,6 +297,7 @@ pinned-pets:updated（server→client）   暫存區任何異動（# 標記、�
 todos:updated（server→client）         待辦任何異動（新增、修改、完成、重開、刪除，以及刪寵物解除連結）後廣播 { items } 完整清單，前端直接取代
 medication:updated（server→client）    藥單任何異動；前端重讀清單與工具欄上的待辦數字
 intake:updated（server→client）        初診表送出、修改、核准、退回；前端重讀待審筆數（工具欄「初診」）
+lab-results:updated（server→client）   IDEXX 結果收到新的／更正版、待確認清單有人確認／復原／忽略；前端重讀待確認筆數（工具欄「檢驗」）
 
 IDEXX 檢驗結果（見第二節 labResults）
 POST   /api/lab-results/import          診所電腦上的抓檔程式上傳 InterLink 存下的 XML：body 是檔案原本的位元組（Content-Type: application/xml），
@@ -303,7 +306,11 @@ POST   /api/lab-results/import          診所電腦上的抓檔程式上傳 Int
                                        自動填入看診的結果（unmatched／no_visit／no_template／applied／already_applied／error）；
                                        檔案不完整或看不懂回 422（抓檔程式之後再試）；伺服器沒設密鑰回 503
 POST   /api/lab-results/heartbeat       抓檔程式每分鐘回報一次（同樣用 IDEXX_BRIDGE_TOKEN、掛在登入檢查之前），依 bridgeId upsert
-GET    /api/lab-results                 預設列待配對（petId 為空），?petId= 列那隻貓的；新到舊、分頁
+GET    /api/lab-results                 預設列待確認（petId、dismissedAt 都空），每筆附 candidates（檢驗當天的掛號，同名唯一的 suggested）；
+                                       ?petId= 列那隻貓的；新到舊、分頁（工具欄數字用 limit=1 的 total）
+POST   /api/lab-results/:id/match       待確認清單選了貓，body { petId }；照自動填入規則填進當天看診，回 { fill }；已配對或已忽略回 409
+POST   /api/lab-results/:id/unmatch     復原：清掉這份結果填進看診、還沒被改過的值，回到待確認，回 { cleared, kept }
+POST   /api/lab-results/:id/dismiss     忽略（品管測試、練習）；已處理的回 409
 GET    /api/lab-results/bridge-status   各台抓檔程式的最新心跳，另帶 online（三分鐘內有心跳）
 
 寄送紀錄
@@ -349,7 +356,7 @@ GET    /api/health
 
 - **左側導覽**（`components/shell/NavRail.vue`，項目定義在 `lib/navigation.js`）：圖示＋兩三個字，分三組——看診（總覽、診療台、掛號台、藥單）、資料（貓咪、報告、寄送）、設定（表單、模板、預填）。最上面是 Logo 與搜尋（`Ctrl/Cmd+K` 命令面板，不換路由），最下面是設定選單（`AppSettingsMenu`：這台裝置的身分醫師／櫃台、明暗主題、自動通知設定、登出）與目前身分。不做收合——字已經在圖示下面。手機寬度改成頁首的漢堡選單。
 - active 判斷用網址前綴（`router-link` 內建的比對路由記錄，抓不到獨立註冊的深層路由）；路由可以用 `meta.nav` 指定歸屬，更長的導覽項吃得下目前網址時讓給它（`/records/deliveries` 不算 `/records`）。
-- **右側工具欄**（`components/shell/UtilityRail.vue`）開側滑面板：暫存、藥單、待辦、初診（只在掛號台）、聊天（最下面）。數字目前全部是**紅色徽章＝要人動手**（暫存區幾隻、藥單、待辦、初診、聊天未讀，0 就不畫）；暫存區原本是灰色「狀態讀數」，使用者要求改紅——有貓被丟進暫存區就是有人要對方看。元件仍保留灰色讀數（`tone: 'neutral'`，0 也照顯示）給之後真正的狀態數字用。藥單的口徑依這台裝置的身分（醫師看待確認、櫃台看待包藥＋待領藥，`shared/medicationWorkflow.js` 的 `medicationTodoCount`）。藥單與初診的數字在 `stores/workCounts.js`，由 `useGlobalChat` 那條連線在 `medication:updated`／`intake:updated` 時重讀。
+- **右側工具欄**（`components/shell/UtilityRail.vue`）開側滑面板：暫存、藥單、待辦、檢驗（IDEXX 結果待確認，每一頁都有，見第二節 labResults）、初診（只在掛號台）、聊天（最下面）。數字目前全部是**紅色徽章＝要人動手**（暫存區幾隻、藥單、待辦、待確認的檢驗結果、初診、聊天未讀，0 就不畫）；暫存區原本是灰色「狀態讀數」，使用者要求改紅——有貓被丟進暫存區就是有人要對方看。元件仍保留灰色讀數（`tone: 'neutral'`，0 也照顯示）給之後真正的狀態數字用。藥單的口徑依這台裝置的身分（醫師看待確認、櫃台看待包藥＋待領藥，`shared/medicationWorkflow.js` 的 `medicationTodoCount`）。藥單、初診、檢驗的數字在 `stores/workCounts.js`，由 `useGlobalChat` 那條連線在 `medication:updated`／`intake:updated`／`lab-results:updated` 時重讀。
 - **側滑面板**（`components/shell/UtilityPanelHost.vue`＋`stores/utilityPanel.js`）：一次開一個，**不加遮罩、不鎖背景**（一邊做事一邊查）；1600px 以上是版面裡的一欄、把工作區往左推，更窄時浮在工作區上面。面板內可以再「推入」一層、左上角返回：暫存區點一隻貓推入**病歷速覽**（`panels/PetQuickView.vue`，聊天與待辦的 `#` 標記也開這裡，`pinnedPets.openQuickView`）、藥單推入「新增藥單」、初診推入逐欄審核（初診面板分「待審核／已發出」兩個頁籤，預設待審核、發碼後切到已發出；已發出的驗證碼可複製、作廢，不必到時間軸逐天找）。面板用 `KeepAlive`，關掉再開表單草稿、聊天輸入都還在。面板外框統一用 `panels/SidePanel.vue`。
 - 聊天是面板之一（`panels/ChatPanel.vue`），不再有右下角泡泡；標頭有「通知」鈕（顯示已開幾項），開「自動通知」的逐項開關（`NotificationSettingsDialog`，設定選單也有同一個入口）——開關決定的是**這台裝置做那些動作時要不要自動發訊息**（`useAppointmentNotifier`），不是這台看不看得到；改版時曾經只留在設定選單，使用者在聊天室找不到，不要再拿掉；面板開著時 `chat.open()`，未讀數由 chat store 依 `isOpen` 判斷。身分是裝置固定的（`useStaffIdentity`）。
 - Toast 一律在畫面底部置中（`ToastContainer`，所有頁面同一個位置；早期診療台與掛號台放頁首下方、其他頁放右下，使用者要求統一改成中間下面）。

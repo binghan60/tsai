@@ -55,6 +55,11 @@ export function emitAppointmentUpdate(appointment, previousDate) {
 }
 
 // 貓咪暫存區跟聊天一樣是全站一份，不分房間；payload 是完整清單。
+// IDEXX 檢驗結果的待確認清單有變動（收到新結果、有人確認／復原／忽略）；前端重讀工具欄的數字。
+export function emitLabResultsUpdate() {
+  io?.emit('lab-results:updated');
+}
+
 export function emitPinnedPetsUpdate(items) {
   io?.emit('pinned-pets:updated', { items });
 }

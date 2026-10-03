@@ -5,8 +5,12 @@ import LabBridgeStatus from '../models/LabBridgeStatus.js';
 import { hasIdexxBridgeAccess, idexxBridgeConfigured } from '../config/idexxBridge.js';
 import { IdexxParseError, decodeIdexxXml, parseIdexxResult } from '../lib/idexxResult.js';
 import { labResultContent, planLabResultImport } from '../lib/labResultImport.js';
-import { applyLabResult, matchByPatientId } from '../lib/labResultApply.js';
+import { applyLabResult, dismissLabResult, matchByPatientId, matchManually, unmatchLabResult } from '../lib/labResultApply.js';
+import { rankCandidates } from '../lib/labResultFill.js';
+import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
+import { emitLabResultsUpdate } from '../lib/realtime.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
+import Appointment from '../models/Appointment.js';
 
 // 給診所電腦上的抓檔程式用：只有 POST /import 與 POST /heartbeat，改用 IDEXX_BRIDGE_TOKEN 驗證
 // （見 config/idexxBridge.js）。掛在 /api/lab-results、登入檢查之前；其他路徑不在這裡，照常往下走登入檢查。
@@ -93,6 +97,8 @@ labResultBridgeRouter.post(
       }
       const imported = await importLabResult(parsed, { rawXml, fileName: uploadedFileName(req) });
       const fill = await autoFill(imported, parsed);
+      // 新的或更正過的結果：工具欄「檢驗」的數字要跟著變（自動認出貓的就不會進待確認清單）。
+      if (imported.status === 'created' || imported.status === 'updated') emitLabResultsUpdate();
       res.status(imported.status === 'created' ? 201 : 200).json({ status: imported.status, id: imported.id, fill });
     } catch (err) {
       next(err);
@@ -158,18 +164,76 @@ labResultsRouter.get('/bridge-status', async (req, res, next) => {
   }
 });
 
-// 預設列出待配對（還沒確認是哪隻貓）的結果；帶 petId 則列那隻貓的。新到舊，索引 {petId, runAt, _id} 接得上排序。
+// 待確認清單的每一筆附上「檢驗當天」的掛號當候選。一次查完所有日期，走 scheduledAt 的索引。
+async function withCandidates(items) {
+  const dateOf = (item) => clinicToday(item.runAt ?? item.createdAt);
+  const dates = [...new Set(items.map(dateOf))];
+  if (!dates.length) return items;
+  const visits = await Appointment.find({
+    $or: dates.map((date) => ({ scheduledAt: { $gte: clinicDayStart(date), $lt: clinicDayStart(date, 1) } })),
+  }).select('_id date time petId petName ownerName status').lean();
+  return items.map((item) => ({
+    ...item,
+    candidates: rankCandidates(visits.filter((visit) => visit.date === dateOf(item)), item.patient?.name),
+  }));
+}
+
+// 預設列出待確認（還沒確認是哪隻貓、也沒被忽略）的結果，附當天的候選掛號；帶 petId 則列那隻貓的。
+// 新到舊，索引 {petId, runAt, _id} 接得上排序。
 labResultsRouter.get('/', async (req, res, next) => {
   try {
     const petId = req.query.petId ? String(req.query.petId) : null;
     if (petId && !mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '貓咪參數不正確' });
-    const filter = { petId };
+    const filter = petId ? { petId } : { petId: null, dismissedAt: null };
     const pagination = paginationOptions(req.query);
     const [items, total] = await Promise.all([
       LabResult.find(filter).sort({ runAt: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit).lean(),
       LabResult.countDocuments(filter),
     ]);
-    res.json(paginatedPayload(items, total, pagination));
+    res.json(paginatedPayload(petId ? items : await withCandidates(items), total, pagination));
+  } catch (err) {
+    next(err);
+  }
+});
+
+function validId(req, res) {
+  if (mongoose.isValidObjectId(req.params.id)) return true;
+  res.status(422).json({ message: '檢驗結果參數不正確' });
+  return false;
+}
+
+// 人選了是哪隻貓 → 照自動填入的規則填進那隻貓當天的看診，回傳填了什麼（lib/labResultApply.js）。
+labResultsRouter.post('/:id/match', async (req, res, next) => {
+  try {
+    if (!validId(req, res)) return;
+    const petId = String(req.body?.petId ?? '');
+    if (!mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '請選擇貓咪' });
+    const fill = await matchManually(req.params.id, petId);
+    emitLabResultsUpdate();
+    res.json({ fill });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 選錯貓：清掉剛才填進去、還沒被人改過的數值，結果回到待確認清單。
+labResultsRouter.post('/:id/unmatch', async (req, res, next) => {
+  try {
+    if (!validId(req, res)) return;
+    const undo = await unmatchLabResult(req.params.id);
+    emitLabResultsUpdate();
+    res.json(undo);
+  } catch (err) {
+    next(err);
+  }
+});
+
+labResultsRouter.post('/:id/dismiss', async (req, res, next) => {
+  try {
+    if (!validId(req, res)) return;
+    await dismissLabResult(req.params.id);
+    emitLabResultsUpdate();
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

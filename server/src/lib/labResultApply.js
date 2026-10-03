@@ -6,7 +6,7 @@ import { templateLabItems } from '../../../shared/labValues.js';
 import { mergeLabValues } from './appointmentWorkflow.js';
 import { syncAppointmentJournal } from './appointmentJournal.js';
 import { clinicToday } from './clinicTime.js';
-import { petIdFromPatientId, pickVisit, planLabFill } from './labResultFill.js';
+import { petIdFromPatientId, pickVisit, planLabFill, planUndo } from './labResultFill.js';
 import { emitAppointmentUpdate } from './realtime.js';
 import { withTransaction } from './transaction.js';
 
@@ -46,7 +46,9 @@ export async function applyLabResult(labResultId, { force = false } = {}) {
     const template = await FormTemplate.findById(appointment.templateId).session(session);
     const labItems = templateLabItems(template);
     plan = planLabFill(result.assays, labItems, appointment.labValues);
-    if (Object.keys(plan.fill).length) {
+    const labels = new Map(labItems.map((item) => [item.key, item.label]));
+    plan.filled = Object.entries(plan.fill).map(([key, value]) => ({ key, label: labels.get(key) ?? key, value }));
+    if (plan.filled.length) {
       appointment.labValues = mergeLabValues(appointment.labValues, plan.fill, labItems);
       appointment.increment();
       await appointment.save({ session });
@@ -60,7 +62,7 @@ export async function applyLabResult(labResultId, { force = false } = {}) {
         $set: {
           appointmentId: appointment._id,
           appliedAt: new Date(),
-          filledKeys: Object.keys(plan.fill),
+          filled: plan.filled,
           conflicts: plan.conflicts,
           unmappedCodes: plan.unmapped,
         },
@@ -73,8 +75,64 @@ export async function applyLabResult(labResultId, { force = false } = {}) {
   return {
     status: 'applied',
     appointmentId: visit._id,
-    filled: Object.keys(plan.fill),
+    filled: plan.filled.map((entry) => entry.label),
     conflicts: plan.conflicts.length,
     unmapped: plan.unmapped.length,
   };
+}
+
+// 待確認清單裡人選了是哪隻貓。已經配對或忽略的不能再選（別台剛處理掉）。
+export async function matchManually(labResultId, petId) {
+  if (!(await Pet.exists({ _id: petId }))) throw Object.assign(new Error('找不到這隻貓咪'), { status: 404 });
+  const updated = await LabResult.findOneAndUpdate(
+    { _id: labResultId, petId: null, dismissedAt: null },
+    { $set: { petId, matchedAt: new Date(), matchSource: 'manual' } },
+    { new: true }
+  );
+  if (!updated) throw Object.assign(new Error('這份檢驗結果已經被處理了，請重新整理'), { status: 409 });
+  return applyLabResult(labResultId);
+}
+
+// 復原（選錯貓）：清掉這份結果填進看診、而且還沒被人改過的數值，結果回到待確認清單。
+export async function unmatchLabResult(labResultId) {
+  let undo = { clear: [], kept: [] };
+  let changed = null;
+  await withTransaction(async (session) => {
+    changed = null;
+    undo = { clear: [], kept: [] };
+    const result = await LabResult.findById(labResultId).session(session);
+    if (!result) throw Object.assign(new Error('找不到檢驗結果'), { status: 404 });
+    if (!result.petId) throw Object.assign(new Error('這份檢驗結果還沒有配對'), { status: 409 });
+    if (result.appointmentId) {
+      const appointment = await Appointment.findById(result.appointmentId).session(session);
+      if (appointment) {
+        undo = planUndo(appointment.labValues, result.filled);
+        if (undo.clear.length) {
+          const clear = new Set(undo.clear);
+          appointment.labValues = appointment.labValues.filter((lab) => !clear.has(lab.key));
+          appointment.increment();
+          await appointment.save({ session });
+          await syncAppointmentJournal(appointment, { session });
+          changed = appointment;
+        }
+      }
+    }
+    Object.assign(result, {
+      petId: null, matchedAt: null, matchSource: null, appointmentId: null,
+      appliedAt: null, filled: [], conflicts: [], unmappedCodes: [],
+    });
+    await result.save({ session });
+  });
+  if (changed) emitAppointmentUpdate(changed);
+  return { cleared: undo.clear.length, kept: undo.kept };
+}
+
+// 忽略：品管測試、練習用的檢驗。只有還在待確認清單上的能忽略。
+export async function dismissLabResult(labResultId) {
+  const updated = await LabResult.findOneAndUpdate(
+    { _id: labResultId, petId: null, dismissedAt: null },
+    { $set: { dismissedAt: new Date() } },
+    { new: true }
+  );
+  if (!updated) throw Object.assign(new Error('這份檢驗結果已經被處理了，請重新整理'), { status: 409 });
 }
