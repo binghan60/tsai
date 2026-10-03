@@ -217,7 +217,7 @@ IDEXX_BRIDGE_TOKEN=<至少 32 字元的隨機字串>
 2. ~~待確認清單~~（已完成，見第 6 節）。原本規劃的貓咪詳情頁「檢驗結果」頁籤取消：使用者確認檢驗結果就是健檢報告的內容，不另外做一個地方。
 3. **報告上的 IDEXX 標記**：填寫頁的檢驗欄位標出「來自 IDEXX」；醫師手打的值跟 IDEXX 不同時（`conflicts`）顯示 IDEXX 的值、可一鍵換掉。
 4. **PDF 報告**上傳，依 IDEXX 文件，PDF 檔名是該次檢驗的 `diagnostic_set_id`。
-5. **心跳的畫面**：心跳已經在收（`GET /api/lab-results/bridge-status`），還沒有畫面顯示「最後回報 N 分鐘前」，也還不會在離線時提醒。
+5. ~~心跳的畫面~~（已完成）：工具欄「檢驗」面板標頭（關閉鈕左邊）每台診所電腦一顆燈號——綠燈「連線中」、黃燈「連線中，但上傳有問題」（附卡住的檔案數與錯誤）、紅燈「沒有回報，新的檢驗結果進不來」；滑鼠移到燈上才顯示這些說明與最後回報時間。離線時工具欄的「檢驗」按鈕亮紅色「!」。畫面每分鐘更新一次。診所下班關機後會顯示紅色，這是正常的。目前沒有移除舊紀錄的功能：換電腦或改了設定檔的 `name` 後，舊的那筆會一直顯示離線，要直接從資料庫的 `labbridgestatuses` 刪掉。
 
 **要到診所實測才知道**
 
@@ -232,7 +232,8 @@ IDEXX_BRIDGE_TOKEN=<至少 32 字元的隨機字串>
 | 電腦右下角 InterLink 圖示是黃色 | 防火牆有沒有允許、網路是不是「私人」、跟 IDEXX 主機是否同一台路由器；IDEXX 主機那邊第 3 節的第 2～4 項有沒有設 |
 | 圖示綠色但 `Results\Data\` 沒有檔案 | IDEXX 主機 Instruments → Practice Management 是否選了 On；「Do not transmit records created before」的日期是不是設得太晚 |
 | 有 XML 但系統沒收到 | 遠端連進去跑 `status.ps1` 看 log：401＝兩邊密鑰不一致；503＝伺服器沒設 `IDEXX_BRIDGE_TOKEN`；連不上＝電腦沒網路或 `serverUrl` 錯。`npm run check` 可以單獨測連線 |
-| 檔案一直留在 `Results\Data\` 不動 | 抓檔程式沒在跑：`status.ps1` 看排程工作狀態；系統的 `bridge-status` 超過三分鐘沒心跳就是停了或電腦沒網路 |
+| 工具欄「檢驗」亮紅色「!」、面板標頭是紅燈 | 抓檔程式超過三分鐘沒心跳：那台電腦關機、沒網路，或排程工作停了。遠端連進去跑 `status.ps1` |
+| 檔案一直留在 `Results\Data\` 不動 | 抓檔程式沒在跑：`status.ps1` 看排程工作狀態；系統的「檢驗」面板會亮紅燈 |
 | `status.ps1` 找不到排程工作 | 沒用系統管理員身分開 PowerShell（SYSTEM 的排程工作一般使用者看不到），或還沒跑 `install.ps1` |
 | 檔案被移到 `無法讀取\` | 伺服器一直解析失敗：把檔案帶回來，用 `server/test/fixtures/idexx/` 的方式加成測試範例再修 `idexxResult.js` |
 | 中文貓名是亂碼 | 看 XML 開頭宣告的 `encoding` 與實際編碼是否一致 |

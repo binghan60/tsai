@@ -35,15 +35,21 @@ const items = computed(() => [
   },
   { key: 'todos', icon: ListTodo, short: '待辦', label: '院內待辦（未完成）', count: todos.openCount, tone: 'todo' },
   // IDEXX 結果認不出是哪隻貓時放在這裡等人選；醫師、櫃台都能處理，所以每一頁都有。
-  { key: 'lab', icon: FlaskConical, short: '檢驗', label: 'IDEXX 檢驗結果（待確認）', count: counts.labResults, tone: 'todo' },
+  // alert：診所電腦上的抓檔程式沒有回報（結果進不來）。沒有待確認的結果時也要亮，顯示「!」。
+  {
+    key: 'lab', icon: FlaskConical, short: '檢驗', count: counts.labResults, tone: 'todo', alert: counts.bridgeOffline,
+    label: counts.bridgeOffline ? 'IDEXX 檢驗結果（待確認）診所電腦沒有回報' : 'IDEXX 檢驗結果（待確認）',
+  },
   ...(route.path.startsWith('/reception') ? [{ key: 'intake', icon: ClipboardPlus, short: '初診', label: '初診表（待審核）', count: counts.intake, tone: 'todo' }] : []),
 ]);
 const chatItem = computed(() => ({ key: 'chat', icon: MessageCircle, short: '聊天', label: '內部聊天（未讀）', count: chat.unreadCount, tone: 'todo' }));
 
-function countText(count) {
-  return count > 99 ? '99+' : String(count);
+function countText(item) {
+  if (item.alert && !item.count) return '!';
+  return item.count > 99 ? '99+' : String(item.count);
 }
 function showCount(item) {
+  if (item.alert) return true;
   return item.tone === 'todo' ? item.count > 0 : item.count != null;
 }
 </script>
@@ -68,7 +74,7 @@ function showCount(item) {
           class="num absolute top-0.5 right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-2xs leading-none font-bold"
           :class="item.tone === 'todo' ? 'bg-badge text-badge-foreground ring-2 ring-card' : 'bg-sunken text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)]'"
           aria-hidden="true"
-        >{{ countText(item.count) }}</span>
+        >{{ countText(item) }}</span>
       </button>
     </template>
   </aside>

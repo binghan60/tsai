@@ -25,6 +25,7 @@ export function useGlobalChat() {
   const todos = useTodosStore();
   const counts = useWorkCountsStore();
   const panel = useUtilityPanelStore();
+  let bridgeTimer = null;
 
   async function loadHistory() {
     try {
@@ -83,12 +84,15 @@ export function useGlobalChat() {
   watch(
     () => auth.isAuthenticated,
     (loggedIn) => {
+      clearInterval(bridgeTimer);
       if (loggedIn) {
         socket.connect();
         loadHistory();
         pinned.load();
         todos.load();
         counts.load();
+        // 抓檔程式離線＝沒有心跳，伺服器沒有事件可以推，只能定時問。
+        bridgeTimer = setInterval(() => counts.loadBridges(), 60_000);
       } else {
         store.reset();
         pinned.reset();
@@ -102,6 +106,7 @@ export function useGlobalChat() {
   );
 
   onBeforeUnmount(() => {
+    clearInterval(bridgeTimer);
     socket.off('chat:new', handleMessage);
     socket.off('pinned-pets:updated', handlePinnedPets);
     socket.off('todos:updated', handleTodos);

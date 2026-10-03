@@ -11,7 +11,12 @@ let labResultsRequest = 0;
 
 // 另有 IDEXX 檢驗結果的待確認筆數（lab-results:updated 時重讀）。
 export const useWorkCountsStore = defineStore('workCounts', {
-  state: () => ({ medications: {}, intake: 0, labResults: 0 }),
+  // bridges：診所電腦上 IDEXX 抓檔程式的心跳狀態。離線沒有事件可以通知（就是沒消息），所以由 useGlobalChat 每分鐘讀一次。
+  state: () => ({ medications: {}, intake: 0, labResults: 0, bridges: [] }),
+  getters: {
+    // 從來沒有抓檔程式回報過（診所還沒裝）不算離線。
+    bridgeOffline: (state) => state.bridges.some((bridge) => !bridge.online),
+  },
   actions: {
     async loadMedications() {
       const id = ++medicationRequest;
@@ -44,10 +49,19 @@ export const useWorkCountsStore = defineStore('workCounts', {
         // 同上。
       }
     },
+    async loadBridges() {
+      try {
+        const { data } = await http.get('/lab-results/bridge-status');
+        this.bridges = data.items || [];
+      } catch {
+        // 同上。
+      }
+    },
     load() {
       this.loadMedications();
       this.loadIntake();
       this.loadLabResults();
+      this.loadBridges();
     },
     reset() {
       medicationRequest += 1;
@@ -56,6 +70,7 @@ export const useWorkCountsStore = defineStore('workCounts', {
       this.medications = {};
       this.intake = 0;
       this.labResults = 0;
+      this.bridges = [];
     },
   },
 });

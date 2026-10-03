@@ -1,3 +1,5 @@
+import { relativeTimeLabel } from './datetime.js';
+
 // IDEXX 檢驗結果的待確認清單（工具欄「檢驗」）用的顯示規則。
 
 // 儀器名稱照 IDEXX 原樣（Catalyst_One、IDEXX_inVue_Dx…），前面加上櫃台看得懂的用途。
@@ -29,6 +31,19 @@ const VISIT_STATUS = {
 
 export function visitStatusLabel(status) {
   return VISIT_STATUS[status] ?? '';
+}
+
+// 診所電腦上抓檔程式的狀態列（「檢驗」面板最上面）。開發者人不在診所，它停了要讓人一眼看得出來。
+//   success 正常；warning 還連著但上傳卡住；danger 超過三分鐘沒回報（online 由伺服器判斷）。
+export function bridgeStatusLine(bridge, now = new Date()) {
+  const name = `診所電腦（${bridge.bridgeId}）`;
+  const seen = `最後回報：${relativeTimeLabel(bridge.lastSeenAt, now)}`;
+  if (!bridge.online) return { tone: 'danger', text: `${name}沒有回報，新的檢驗結果進不來`, detail: seen };
+  if (bridge.lastError) {
+    const pending = bridge.pendingFiles ? `${bridge.pendingFiles} 個檔案還沒上傳：` : '';
+    return { tone: 'warning', text: `${name}連線中，但上傳有問題`, detail: `${pending}${bridge.lastError}` };
+  }
+  return { tone: 'success', text: `${name}連線中`, detail: seen };
 }
 
 // 確認之後跟使用者說發生了什麼。沒填進報告時一定要講原因，不然會以為壞掉了。

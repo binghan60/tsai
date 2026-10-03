@@ -4,7 +4,7 @@ import { FlaskConical, Search } from '@lucide/vue';
 import { http } from '../../api/http';
 import { useToast } from '../../composables/useToast';
 import { formatDateTime } from '../../lib/datetime';
-import { fillMessage, instrumentLabel, visitStatusLabel } from '../../lib/labResults';
+import { bridgeStatusLine, fillMessage, instrumentLabel, visitStatusLabel } from '../../lib/labResults';
 import { labFlag } from '../../../../shared/labValues.js';
 import { useUtilityPanelStore } from '../../stores/utilityPanel';
 import { useWorkCountsStore } from '../../stores/workCounts';
@@ -154,10 +154,24 @@ async function confirmDismiss() {
   }
 }
 
+// 診所電腦上抓檔程式的狀態（每分鐘由 useGlobalChat 重讀；打開面板時再讀一次，看到的才是最新的）。
+// 從來沒有回報過（診所還沒裝）就不顯示。
+// 使用者要求做成燈號（綠／黃／紅），滑過去才顯示詳細資訊，不要佔一整列。
+const BRIDGE_LIGHTS = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger' };
+const bridgeLights = computed(() => counts.bridges.map((bridge) => {
+  const line = bridgeStatusLine(bridge);
+  return { id: bridge.bridgeId, tone: line.tone, tip: `${line.text}　${line.detail}` };
+}));
+
+function refreshAll() {
+  refresh();
+  counts.loadBridges();
+}
+
 // 工具欄上的數字變了（新結果進來、別台處理掉）就重讀清單。
 watch(() => counts.labResults, refresh);
-onMounted(refresh);
-onActivated(refresh);
+onMounted(refreshAll);
+onActivated(refreshAll);
 </script>
 
 <template>
@@ -245,6 +259,20 @@ onActivated(refresh);
     </SidePanel>
 
     <SidePanel v-else title="檢驗" description="選好是哪隻貓，就會填進健檢報告" flush @close="panel.close()">
+      <template v-if="bridgeLights.length" #actions>
+        <!-- 燈號外面留 36px 的感應範圍，滑鼠才好停；tabindex 讓鍵盤也看得到提示。 -->
+        <span
+          v-for="light in bridgeLights"
+          :key="light.id"
+          v-tip="light.tip"
+          role="img"
+          tabindex="0"
+          :aria-label="light.tip"
+          class="flex size-9 items-center justify-center rounded-lg"
+        >
+          <span class="size-3 rounded-full ring-2 ring-card" :class="BRIDGE_LIGHTS[light.tone]"></span>
+        </span>
+      </template>
       <ListSkeleton v-if="loading" :rows="3" inset />
       <Alert v-else-if="error" variant="destructive" class="mx-5 mt-4 w-auto"><AlertDescription>{{ error }}</AlertDescription></Alert>
       <EmptyState v-else-if="!items.length" :icon="FlaskConical" title="沒有待確認的檢驗結果" inset />
