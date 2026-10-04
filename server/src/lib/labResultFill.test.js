@@ -2,7 +2,29 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseIdexxResult } from './idexxResult.js';
-import { petIdFromPatientId, pickVisit, planLabFill, planUndo, rankCandidates, sameName } from './labResultFill.js';
+import { liveConflicts, overwriteValues, petIdFromPatientId, pickVisit, planLabFill, planUndo, rankCandidates, sameName } from './labResultFill.js';
+
+describe('數值差異：比對視窗', () => {
+  const conflicts = [
+    { key: 'cre', label: 'CRE', current: '1.5', idexx: '1.7' },
+    { key: 'glucose', label: '血糖', current: '110', idexx: '117' },
+    { key: 'alt', label: 'ALT', current: '45', idexx: '54' },
+  ];
+
+  it('用報告上現在的值重新比：已經改成跟 IDEXX 一樣的不列，被清空的列成空白', () => {
+    const current = [{ key: 'cre', value: '1.6' }, { key: 'glucose', value: '117' }];
+    assert.deepEqual(liveConflicts(conflicts, current), [
+      { key: 'cre', label: 'CRE', current: '1.6', idexx: '1.7' },
+      { key: 'alt', label: 'ALT', current: '', idexx: '54' },
+    ]);
+  });
+
+  it('覆蓋只收這份結果真的有差異的欄位，前端送別的 key 忽略', () => {
+    assert.deepEqual(overwriteValues(conflicts, ['cre', 'alt', 'weight']), { cre: '1.7', alt: '54' });
+    assert.deepEqual(overwriteValues(conflicts, []), {});
+    assert.deepEqual(overwriteValues(conflicts, 'cre'), {});
+  });
+});
 
 const catalyst = parseIdexxResult(readFileSync(new URL('../../test/fixtures/idexx/catalyst-one.xml', import.meta.url)));
 const earCytology = parseIdexxResult(readFileSync(new URL('../../test/fixtures/idexx/invue-ear-cytology.xml', import.meta.url)));

@@ -13,6 +13,7 @@ import EmptyState from '../EmptyState.vue';
 import ListSkeleton from '../ListSkeleton.vue';
 import ConfirmDialog from '../ConfirmDialog.vue';
 import PetPickerDialog from '../PetPickerDialog.vue';
+import LabConflictDialog from '../LabConflictDialog.vue';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
@@ -50,10 +51,18 @@ const options = computed(() => {
 });
 const selectedName = computed(() => options.value.find((option) => option.petId === selectedPetId.value)?.petName ?? '');
 
+// 數值跟報告不同、還沒處理的（自動認出貓的結果當時沒人在場，放在這裡；打開健檢報告時也會跳出來）。
+const conflicts = ref([]);
+const conflictGroup = ref(null);
+
 async function refresh() {
   try {
-    const { data } = await http.get('/lab-results', { params: { limit: 50 } });
+    const [{ data }, { data: conflictData }] = await Promise.all([
+      http.get('/lab-results', { params: { limit: 50 } }),
+      http.get('/lab-results/conflicts'),
+    ]);
     items.value = data.items || [];
+    conflicts.value = conflictData.items || [];
     error.value = '';
   } catch {
     error.value = '檢驗結果載入失敗，請重試。';
@@ -129,6 +138,11 @@ async function confirmMatch() {
       action: { label: '復原', handler: () => undo(item._id, petName) },
     });
     panel.back();
+    // 有跟報告不同的值：馬上跳出比對視窗讓人決定要不要換。
+    if (data.fill?.conflicts) {
+      const { data: conflictData } = await http.get('/lab-results/conflicts', { params: { appointmentId: data.fill.appointmentId } });
+      conflictGroup.value = (conflictData.items || []).find((group) => String(group.id) === String(item._id)) ?? null;
+    }
   } catch (err) {
     toast.error(err.response?.data?.message || '確認失敗，請稍後再試');
   } finally {
@@ -295,9 +309,23 @@ onActivated(refreshAll);
           <span class="size-3 rounded-full ring-2 ring-card" :class="BRIDGE_LIGHTS[light.tone]"></span>
         </component>
       </template>
+      <section v-if="conflicts.length" class="border-b border-border" aria-labelledby="lab-conflicts-title">
+        <h3 id="lab-conflicts-title" class="px-5 pt-3 pb-1 text-sm font-semibold">數值跟報告不同</h3>
+        <ul class="divide-y divide-border">
+          <li v-for="group in conflicts" :key="group.id">
+            <button type="button" class="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-hover" @click="conflictGroup = group">
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-base font-semibold">{{ group.petName }}</span>
+                <span class="block truncate text-sm text-muted-foreground">{{ group.items.map((entry) => entry.label).join('、') }}</span>
+              </span>
+              <span class="num shrink-0 rounded-md bg-warning-surface px-2 py-0.5 text-xs font-semibold text-warning">{{ group.items.length }} 項</span>
+            </button>
+          </li>
+        </ul>
+      </section>
       <ListSkeleton v-if="loading" :rows="3" inset />
       <Alert v-else-if="error" variant="destructive" class="mx-5 mt-4 w-auto"><AlertDescription>{{ error }}</AlertDescription></Alert>
-      <EmptyState v-else-if="!items.length" :icon="FlaskConical" title="沒有待確認的檢驗結果" inset />
+      <EmptyState v-else-if="!items.length && !conflicts.length" :icon="FlaskConical" title="沒有待確認的檢驗結果" inset />
       <ul v-else class="divide-y divide-border">
         <li v-for="item in items" :key="item._id">
           <button type="button" class="flex w-full flex-col gap-0.5 px-5 py-3 text-left hover:bg-hover" @click="openItem(item)">
@@ -321,6 +349,12 @@ onActivated(refreshAll);
       :loading="removeBusy"
       @update:open="(value) => !value && (removingBridge = '')"
       @confirm="confirmRemoveBridge"
+    />
+    <LabConflictDialog
+      v-if="conflictGroup"
+      :group="conflictGroup"
+      @close="conflictGroup = null"
+      @resolved="conflictGroup = null; afterChange()"
     />
     <PetPickerDialog :open="pickerOpen" @close="pickerOpen = false" @select="onPick" />
     <ConfirmDialog

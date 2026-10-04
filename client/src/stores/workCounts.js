@@ -40,11 +40,15 @@ export const useWorkCountsStore = defineStore('workCounts', {
         // 同上。
       }
     },
+    // 「檢驗」的數字＝待確認（選貓）＋數值跟報告不同還沒處理的。
     async loadLabResults() {
       const id = ++labResultsRequest;
       try {
-        const { data } = await http.get('/lab-results', { params: { limit: 1 } });
-        if (id === labResultsRequest) this.labResults = data.total ?? 0;
+        const [unmatched, conflicts] = await Promise.all([
+          http.get('/lab-results', { params: { limit: 1 } }),
+          http.get('/lab-results/conflicts'),
+        ]);
+        if (id === labResultsRequest) this.labResults = (unmatched.data.total ?? 0) + (conflicts.data.items?.length ?? 0);
       } catch {
         // 同上。
       }

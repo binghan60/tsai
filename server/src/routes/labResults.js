@@ -5,7 +5,9 @@ import LabBridgeStatus from '../models/LabBridgeStatus.js';
 import { hasIdexxBridgeAccess, idexxBridgeConfigured } from '../config/idexxBridge.js';
 import { IdexxParseError, decodeIdexxXml, parseIdexxResult } from '../lib/idexxResult.js';
 import { labResultContent, planLabResultImport } from '../lib/labResultImport.js';
-import { applyLabResult, dismissLabResult, matchByPatientId, matchManually, unmatchLabResult } from '../lib/labResultApply.js';
+import {
+  applyLabResult, dismissLabResult, matchByPatientId, matchManually, openConflicts, resolveConflicts, unmatchLabResult,
+} from '../lib/labResultApply.js';
 import { rankCandidates } from '../lib/labResultFill.js';
 import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
 import { emitLabResultsUpdate } from '../lib/realtime.js';
@@ -238,6 +240,29 @@ labResultsRouter.post('/:id/unmatch', async (req, res, next) => {
     const undo = await unmatchLabResult(req.params.id);
     emitLabResultsUpdate();
     res.json(undo);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 還沒處理的數值差異（醫師已填不同的值、IDEXX 沒有蓋掉）。「檢驗」面板列全部；健檢報告帶 appointmentId 只看那次看診。
+labResultsRouter.get('/conflicts', async (req, res, next) => {
+  try {
+    const appointmentId = req.query.appointmentId ? String(req.query.appointmentId) : null;
+    if (appointmentId && !mongoose.isValidObjectId(appointmentId)) return res.status(422).json({ message: '看診參數不正確' });
+    res.json({ items: await openConflicts({ appointmentId }) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 比對視窗的選擇：body.overwrite 是要換成 IDEXX 值的欄位 key（「都不要」＝空陣列）。
+labResultsRouter.post('/:id/conflicts/resolve', async (req, res, next) => {
+  try {
+    if (!validId(req, res)) return;
+    const result = await resolveConflicts(req.params.id, req.body?.overwrite);
+    emitLabResultsUpdate();
+    res.json(result);
   } catch (err) {
     next(err);
   }

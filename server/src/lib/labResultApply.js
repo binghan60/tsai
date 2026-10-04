@@ -6,7 +6,7 @@ import { templateLabItems } from '../../../shared/labValues.js';
 import { mergeLabValues } from './appointmentWorkflow.js';
 import { syncAppointmentJournal } from './appointmentJournal.js';
 import { clinicToday } from './clinicTime.js';
-import { petIdFromPatientId, pickVisit, planLabFill, planUndo } from './labResultFill.js';
+import { liveConflicts, overwriteValues, petIdFromPatientId, pickVisit, planLabFill, planUndo } from './labResultFill.js';
 import { emitAppointmentUpdate } from './realtime.js';
 import { withTransaction } from './transaction.js';
 
@@ -64,6 +64,8 @@ export async function applyLabResult(labResultId, { force = false } = {}) {
           appliedAt: new Date(),
           filled: plan.filled,
           conflicts: plan.conflicts,
+          conflictsOpen: plan.conflicts.length > 0,
+          conflictsResolvedAt: null,
           unmappedCodes: plan.unmapped,
         },
       },
@@ -119,12 +121,73 @@ export async function unmatchLabResult(labResultId) {
     }
     Object.assign(result, {
       petId: null, matchedAt: null, matchSource: null, appointmentId: null,
-      appliedAt: null, filled: [], conflicts: [], unmappedCodes: [],
+      appliedAt: null, filled: [], conflicts: [], conflictsOpen: false, conflictsResolvedAt: null, unmappedCodes: [],
     });
     await result.save({ session });
   });
   if (changed) emitAppointmentUpdate(changed);
   return { cleared: undo.clear.length, kept: undo.kept };
+}
+
+// 還沒處理的數值差異，用報告上現在的值重新比過。appointmentId 有值時只看那次看診（健檢報告打開時）。
+// 比完已經沒有差異的（醫師自己改成一樣了）順手關掉，免得「檢驗」面板一直掛著空的一筆。
+export async function openConflicts({ appointmentId = null } = {}) {
+  const filter = { conflictsOpen: true, ...(appointmentId ? { appointmentId } : {}) };
+  const results = await LabResult.find(filter).sort({ runAt: -1, _id: -1 }).select('_id instrument runAt petId appointmentId conflicts').lean();
+  if (!results.length) return [];
+  const visits = await Appointment.find({ _id: { $in: results.map((result) => result.appointmentId) } })
+    .select('_id petName date labValues').lean();
+  const visitById = new Map(visits.map((visit) => [String(visit._id), visit]));
+  const groups = [];
+  const stale = [];
+  for (const result of results) {
+    const visit = visitById.get(String(result.appointmentId));
+    const items = visit ? liveConflicts(result.conflicts, visit.labValues) : [];
+    if (!items.length) {
+      stale.push(result._id);
+      continue;
+    }
+    groups.push({
+      id: result._id, instrument: result.instrument, runAt: result.runAt,
+      petId: result.petId, petName: visit.petName, appointmentId: result.appointmentId, visitDate: visit.date, items,
+    });
+  }
+  if (stale.length) await LabResult.updateMany({ _id: { $in: stale } }, { $set: { conflictsOpen: false, conflictsResolvedAt: new Date() } });
+  return groups;
+}
+
+// 比對視窗按下去：勾選的欄位換成 IDEXX 的值（「都不要」就是空陣列），這份結果的差異就算處理完。
+export async function resolveConflicts(labResultId, keys) {
+  let overwritten = [];
+  let changed = null;
+  await withTransaction(async (session) => {
+    overwritten = [];
+    changed = null;
+    const result = await LabResult.findById(labResultId).session(session);
+    if (!result) throw Object.assign(new Error('找不到檢驗結果'), { status: 404 });
+    if (!result.conflictsOpen) throw Object.assign(new Error('這份檢驗結果的差異已經處理過了'), { status: 409 });
+    const appointment = result.appointmentId ? await Appointment.findById(result.appointmentId).session(session) : null;
+    if (appointment) {
+      const template = appointment.templateId ? await FormTemplate.findById(appointment.templateId).session(session) : null;
+      const labItems = templateLabItems(template);
+      // 表單後來拿掉的項目寫不進去（mergeLabValues 只收表單裡有的），就不覆蓋。
+      const allowed = new Set(labItems.map((item) => item.key));
+      const values = Object.fromEntries(Object.entries(overwriteValues(result.conflicts, keys)).filter(([key]) => allowed.has(key)));
+      overwritten = Object.keys(values);
+      if (overwritten.length) {
+        appointment.labValues = mergeLabValues(appointment.labValues, values, labItems);
+        appointment.increment();
+        await appointment.save({ session });
+        await syncAppointmentJournal(appointment, { session });
+        changed = appointment;
+      }
+    }
+    result.conflictsOpen = false;
+    result.conflictsResolvedAt = new Date();
+    await result.save({ session });
+  });
+  if (changed) emitAppointmentUpdate(changed);
+  return { overwritten };
 }
 
 // 忽略：品管測試、練習用的檢驗。只有還在待確認清單上的能忽略。

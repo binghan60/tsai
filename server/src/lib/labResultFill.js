@@ -69,6 +69,22 @@ export function planUndo(currentLabValues, filled) {
   return { clear, kept };
 }
 
+// ── 數值差異（醫師已經填了不同的值，IDEXX 沒有蓋掉）──
+
+// 比對視窗打開時，用報告上「現在」的值重新比：醫師後來自己改成跟 IDEXX 一樣的就不再列。
+export function liveConflicts(conflicts, currentLabValues) {
+  const current = new Map((currentLabValues ?? []).map((lab) => [lab.key, String(lab.value ?? '').trim()]));
+  return (conflicts ?? [])
+    .map((conflict) => ({ key: conflict.key, label: conflict.label, current: current.get(conflict.key) ?? '', idexx: String(conflict.idexx ?? '') }))
+    .filter((conflict) => conflict.current !== conflict.idexx);
+}
+
+// 使用者勾選要覆蓋的：只收這份結果真的有差異的欄位，前端送來別的 key 一律忽略。
+export function overwriteValues(conflicts, keys) {
+  const wanted = new Set((Array.isArray(keys) ? keys : []).map(String));
+  return Object.fromEntries((conflicts ?? []).filter((conflict) => wanted.has(conflict.key)).map((conflict) => [conflict.key, conflict.idexx]));
+}
+
 // 儀器自己判定沒結果（!）或結果無效（-，例如 inVue 因檢體品質壓掉的結果）的項目不填。
 const UNUSABLE_QUALIFIERS = new Set(['!', '-']);
 // 跟看診 labValues 的欄位長度上限一致（models/Appointment.js）。

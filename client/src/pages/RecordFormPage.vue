@@ -30,12 +30,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '../components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
+import LabConflictDialog from '../components/LabConflictDialog.vue';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import FormSection from '../components/formfields/FormSection.vue';
 import TextTemplatePickerDialog from '../components/formfields/TextTemplatePickerDialog.vue';
 import { provideRecordForm } from '../components/formfields/context';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { useToast } from '../composables/useToast';
+import { useWorkCountsStore } from '../stores/workCounts';
 
 const { template, loadTemplate, listTemplates } = useFormTemplate();
 const { loadTemplates: loadTextTemplates } = useTextTemplates();
@@ -146,6 +148,70 @@ function applyVisitValue(key, data) {
     if (row) Object.assign(row, { value: saved?.value ?? '', status: saved?.status ?? 'not_checked', statusSource: saved?.statusSource ?? row.statusSource });
   }
 }
+// IDEXX 結果跟報告上已經填的檢驗值不同、還沒處理的（伺服器 GET /lab-results/conflicts）。
+// 打開報告時跳出比對視窗；按 ✕ 稍後再說就在「引用本次看診」下面留一條提示。「檢驗」面板也看得到同一批，哪邊處理完另一邊就消失。
+const labConflicts = ref([]);
+const labConflictGroup = ref(null);
+
+async function loadLabConflicts({ popup = false } = {}) {
+  if (!isVisitLinked.value || !visitLink.value?.appointmentId) return;
+  try {
+    const { data } = await http.get('/lab-results/conflicts', { params: { appointmentId: visitLink.value.appointmentId } });
+    labConflicts.value = data.items || [];
+    if (popup && labConflicts.value.length) labConflictGroup.value = labConflicts.value[0];
+  } catch {
+    // 比對視窗只是提醒，載入失敗不擋填寫。
+  }
+}
+
+// 伺服器已經把勾選的欄位寫回看診。畫面上的值與「上次伺服器的值」（visitBaseline）都要一起換掉——
+// 只換畫面的話，下一次自動存檔會以為醫師改了這幾格，把舊值當成 visitEdits 送回去蓋掉。
+async function onLabConflictsResolved(overwritten) {
+  labConflictGroup.value = null;
+  if (overwritten.length && recordId.value) {
+    try {
+      const { data } = await http.get(`/records/${recordId.value}`);
+      const server = visitSnapshot(data, labKeys.value);
+      const baseline = { ...(visitBaseline.value ?? {}) };
+      for (const key of overwritten) {
+        applyVisitValue(`lab:${key}`, data);
+        baseline[`lab:${key}`] = server[`lab:${key}`] ?? '';
+      }
+      visitBaseline.value = baseline;
+    } catch {
+      toast.error('已換成 IDEXX 的數值，但畫面沒有更新，請重新整理頁面');
+    }
+  }
+  await loadLabConflicts();
+  // 同一次看診有好幾份結果都有差異（例如生化、血球各一份）就接著問下一份。
+  if (labConflicts.value.length) labConflictGroup.value = labConflicts.value[0];
+}
+
+// 別台（或「檢驗」面板）處理掉、或新的結果進來時，工具欄的數字會跟著 lab-results:updated 重讀；
+// 這裡借那個數字的變化重新比對，提示條才不會留著已經處理掉的項目。
+const workCounts = useWorkCountsStore();
+watch(() => workCounts.labResults, async () => {
+  const before = labConflicts.value.map((group) => group.id);
+  await loadLabConflicts();
+  if (labConflictGroup.value && !labConflicts.value.some((group) => group.id === labConflictGroup.value.id)) labConflictGroup.value = null;
+  // 在別處按了覆蓋，看診上的值已經換掉：醫師在這裡沒動過的格子跟著換成新值（跟存檔回來的規則一樣）。
+  if (before.some((id) => !labConflicts.value.some((group) => group.id === id))) await refreshVisitValues();
+});
+
+async function refreshVisitValues() {
+  if (!isVisitLinked.value || !visitBaseline.value || !recordId.value) return;
+  try {
+    const { data } = await http.get(`/records/${recordId.value}`);
+    const server = visitSnapshot(data, labKeys.value);
+    const keys = refreshedVisitKeys({ current: currentVisitSnapshot(), sent: visitBaseline.value, server });
+    if (!keys.length) return;
+    for (const key of keys) applyVisitValue(key, data);
+    visitBaseline.value = { ...visitBaseline.value, ...Object.fromEntries(keys.map((key) => [key, server[key]])) };
+  } catch {
+    // 下一次存檔回來也會換成伺服器的值。
+  }
+}
+
 const showDiscardConfirm = ref(false);
 const discarding = ref(false);
 // 重新帶入：一開始選錯來源報告時，不用捨棄草稿重來，直接在填寫畫面換一份已結案報告覆蓋文字欄位。
@@ -599,6 +665,8 @@ async function init() {
       await loadPreviousValues();
       // 草稿才可能用到「重新帶入」；已結案報告唯讀，不必多打這支 API。
       if (data.status === 'draft') await loadFinalizedSources();
+      // 已結案的報告已經凍結，不再比對；isVisitLinked 已經排除了。
+      await loadLabConflicts({ popup: true });
     } else {
       // 新報告：先知道是哪隻貓咪，才能只列出適用該物種的表單。
       // 這個階段「不」載入任何表單結構，等使用者確認類型後才載入。
@@ -1140,6 +1208,16 @@ function handleBeforeUnload(event) {
         <p class="text-sm text-foreground">體重、體溫、檢驗數值與診療台、病歷日誌是同一份，在這裡改會一起更新；回診日期由掛號台安排。結案時凍結成報告的內容。</p>
       </div>
 
+      <!-- IDEXX 結果跟這裡已經填的檢驗值不同、比對視窗按了稍後再說。 -->
+      <div v-if="isVisitLinked && labConflicts.length && !labConflictGroup" role="alert" class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-warning-surface px-5 py-3">
+        <p class="flex items-center gap-2 font-semibold text-warning">
+          <AlertTriangle class="size-5" stroke-width="2" />IDEXX 檢驗結果有
+          <span class="num">{{ labConflicts.reduce((sum, group) => sum + group.items.length, 0) }}</span>
+          項跟報告上的數值不同
+        </p>
+        <Button variant="soft" size="sm" class="ml-auto" @click="labConflictGroup = labConflicts[0]">逐項比對</Button>
+      </div>
+
       <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序。
            區段不多時橫向清單一次看到全部；超過門檻改用固定寬度的目前位置＋抽屜，見下方 useCompactNav 分支。 -->
       <nav
@@ -1322,6 +1400,7 @@ function handleBeforeUnload(event) {
         </div>
       </div>
     </template>
+    <LabConflictDialog v-if="labConflictGroup" :group="labConflictGroup" @close="labConflictGroup = null" @resolved="onLabConflictsResolved" />
     <ConfirmDialog
       :open="showDiscardConfirm"
       title="捨棄健檢草稿"

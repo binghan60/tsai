@@ -71,6 +71,9 @@ const labResultSchema = new mongoose.Schema(
       type: [new mongoose.Schema({ key: String, label: String, current: String, idexx: String }, { _id: false })],
       default: [],
     },
+    // conflicts 還沒有人處理（「檢驗」面板與健檢報告會跳出比對視窗，選覆蓋或保留後關掉）。
+    conflictsOpen: { type: Boolean, default: false },
+    conflictsResolvedAt: { type: Date, default: null },
     // 表單裡沒有對應 IDEXX 代號的項目；一直出現在這裡代表表單設計頁的代號還沒設。
     unmappedCodes: { type: [String], default: [] },
     // 忽略：IDEXX 的品管測試（QC）、練習用的檢驗，不是任何一隻貓的，從待確認清單拿掉。
@@ -83,5 +86,7 @@ labResultSchema.index({ diagnosticSetId: 1, instrument: 1 }, { unique: true });
 // 待配對清單（petId: null）與貓咪詳情頁都依檢驗時間新到舊；_id 是同一時間的排序依據，
 // 放進索引才不會變成記憶體排序（32MB 上限）。
 labResultSchema.index({ petId: 1, runAt: -1, _id: -1 });
+// 還沒處理的數值差異（「檢驗」面板、健檢報告打開時查）；只收有開著的那幾筆。
+labResultSchema.index({ appointmentId: 1 }, { partialFilterExpression: { conflictsOpen: true } });
 
 export default mongoose.model('LabResult', labResultSchema);

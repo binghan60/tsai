@@ -207,6 +207,35 @@ describe('lab results routes', () => {
     assert.deepEqual(items.map(({ bridgeId, online }) => [bridgeId, online]), [['A', true], ['B', false]]);
   });
 
+  it('數值差異清單：報告上已經改成一樣的不列，順手關掉那筆', async () => {
+    const appointmentId = '64b0000000000000000000a1';
+    let queried;
+    let closed;
+    const originalUpdateMany = LabResult.updateMany;
+    LabResult.find = (filter) => {
+      queried = filter;
+      return { sort: () => ({ select: () => ({ lean: async () => [
+        { _id: 'r1', instrument: 'Catalyst_One', appointmentId, conflicts: [{ key: 'cre', label: 'CRE', idexx: '1.7' }] },
+        { _id: 'r2', instrument: 'SNAP', appointmentId, conflicts: [{ key: 'felv', label: 'FeLV', idexx: 'Negative' }] },
+      ] }) }) };
+    };
+    Appointment.find = () => ({ select: () => ({ lean: async () => [
+      { _id: appointmentId, petName: '牛奶', date: '2026-10-04', labValues: [{ key: 'cre', value: '1.5' }, { key: 'felv', value: 'Negative' }] },
+    ] }) });
+    LabResult.updateMany = async (filter) => { closed = filter; };
+    try {
+      const { items } = await (await fetch(`${origin}/api/lab-results/conflicts?appointmentId=${appointmentId}`)).json();
+      assert.deepEqual(queried, { conflictsOpen: true, appointmentId });
+      assert.equal(items.length, 1);
+      assert.deepEqual(items[0].items, [{ key: 'cre', label: 'CRE', current: '1.5', idexx: '1.7' }]);
+      assert.equal(items[0].petName, '牛奶');
+      assert.deepEqual(closed._id, { $in: ['r2'] });
+      assert.equal((await fetch(`${origin}/api/lab-results/conflicts?appointmentId=abc`)).status, 422);
+    } finally {
+      LabResult.updateMany = originalUpdateMany;
+    }
+  });
+
   it('移除抓檔程式紀錄：只有已經停掉的能移除', async () => {
     const remove = (id) => fetch(`${origin}/api/lab-results/bridge-status/${encodeURIComponent(id)}`, { method: 'DELETE' });
     const originalFindOne = LabBridgeStatus.findOne;
