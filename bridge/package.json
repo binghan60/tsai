@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node idexxBridge.js",
     "check": "node idexxBridge.js --check",
-    "test": "node --test idexxBridge.test.js"
+    "build:installer": "node buildInstaller.mjs",
+    "test": "node --test idexxBridge.test.js buildInstaller.test.js"
   }
 }

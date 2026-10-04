@@ -5,7 +5,10 @@
 #
 # 重複執行＝重新安裝（先移除舊的排程工作再建新的），改了設定檔或換了 Node.js 版本後再跑一次即可。
 # 移除用 uninstall.ps1，查看狀態用 status.ps1。
-param([string]$TaskName = 'IDEXX Bridge')
+#
+# 一般不用直接跑這支：單一安裝檔 IDEXX-Bridge-Setup.cmd（npm run build:installer 產生）會放好檔案、
+# 寫好設定檔再呼叫它。NodePath 是安裝檔剛裝好 Node.js、PATH 還沒更新時用來指定 node.exe 的位置。
+param([string]$TaskName = 'IDEXX Bridge', [string]$NodePath = '')
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -29,9 +32,13 @@ if ($here -like '*OneDrive*') {
 }
 
 # 排程工作要寫死 node.exe 的完整路徑：SYSTEM 帳號的 PATH 跟登入的使用者不同，只寫 node 會找不到。
-$node = Get-Command node -ErrorAction SilentlyContinue
-if (-not $node) { Fail '找不到 Node.js。請先用官方安裝程式（https://nodejs.org）安裝 LTS 版，重開 PowerShell 後再跑一次。' }
-$nodePath = $node.Source
+if ($NodePath -and (Test-Path $NodePath)) {
+  $nodePath = $NodePath
+} else {
+  $node = Get-Command node -ErrorAction SilentlyContinue
+  if (-not $node) { Fail '找不到 Node.js。請先用官方安裝程式（https://nodejs.org）安裝 LTS 版，重開 PowerShell 後再跑一次。' }
+  $nodePath = $node.Source
+}
 $nodeVersion = (& $nodePath --version).Trim()
 if ([int]($nodeVersion.TrimStart('v').Split('.')[0]) -lt 20) { Fail "Node.js 版本 $nodeVersion 太舊，需要 20 以上。" }
 # nvm 這類工具會把 node 放在 C:\nvm4w\nodejs 之類的捷徑（symlink）後面，實際檔案在個人資料夾，要追到真正位置才判斷得出來。

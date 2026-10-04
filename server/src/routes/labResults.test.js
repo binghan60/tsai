@@ -207,6 +207,27 @@ describe('lab results routes', () => {
     assert.deepEqual(items.map(({ bridgeId, online }) => [bridgeId, online]), [['A', true], ['B', false]]);
   });
 
+  it('移除抓檔程式紀錄：只有已經停掉的能移除', async () => {
+    const remove = (id) => fetch(`${origin}/api/lab-results/bridge-status/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const originalFindOne = LabBridgeStatus.findOne;
+    const originalDeleteOne = LabBridgeStatus.deleteOne;
+    let deleted;
+    LabBridgeStatus.deleteOne = async (filter) => { deleted = filter; };
+    try {
+      LabBridgeStatus.findOne = () => ({ lean: async () => ({ bridgeId: 'binghan', lastSeenAt: new Date(Date.now() - 10 * 60_000) }) });
+      assert.equal((await remove('binghan')).status, 200);
+      assert.deepEqual(deleted, { bridgeId: 'binghan' });
+
+      deleted = null;
+      LabBridgeStatus.findOne = () => ({ lean: async () => ({ bridgeId: 'BINGHAN', lastSeenAt: new Date() }) });
+      assert.equal((await remove('BINGHAN')).status, 409);
+      assert.equal(deleted, null);
+    } finally {
+      LabBridgeStatus.findOne = originalFindOne;
+      LabBridgeStatus.deleteOne = originalDeleteOne;
+    }
+  });
+
   it('GET 預設列待配對，帶 petId 列那隻貓的', async () => {
     const filters = [];
     LabResult.find = (filter) => {

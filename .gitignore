@@ -11,4 +11,6 @@ server/scripts/legacy-migration/*.jsonl
 server/scripts/legacy-migration/*.log
 # 抓檔程式的設定檔含密鑰，只放 idexx-bridge.config.example.json 進版控
 bridge/idexx-bridge.config.json
+# 打包安裝檔用的預設值（含密鑰）；產生的安裝檔在 bridge/dist/，已被上面的 dist/ 擋掉
+bridge/installer.preset.json
 

@@ -93,7 +93,7 @@
 `GET /api/todos` 回的是**未完成（上限 200，有期限的由早到晚排前面、沒期限的照建立順序接後面）＋最近完成 50 筆**的單一清單，前端依 `status` 分頁籤；任何異動後伺服器整份重讀並廣播 `todos:updated`，前端直接取代。排序在記憶體裡做（`lib/todos.js` 的 `sortOpenTodos`），筆數有上限所以沒有 32MB 排序上限的問題。索引 `{status, createdAt}`（未完成清單）、`{status, doneAt: -1}`（最近完成）、`{mentions.petId}`（刪寵物時找標記）。
 
 ### labResults IDEXX 檢驗結果
-設定、部署、本機測試與排查見 [docs/IDEXX_INTERLINK.md](docs/IDEXX_INTERLINK.md)。IDEXX 不開放 API，院內檢驗儀的結果要靠 **IDEXX InterLink**（裝在跟 IDEXX 主機同一個區網的 Windows 電腦上）存成 XML＋PDF 檔，再由那台電腦上的抓檔程式上傳進來（`POST /api/lab-results/import`，用 `IDEXX_BRIDGE_TOKEN` 驗證、不走登入）。系統在雲端讀不到診所電腦的資料夾，所以一定要有這支抓檔程式。抓檔程式在 `bridge/`（獨立於 server、不裝任何套件，整個資料夾複製到診所電腦、裝 Node.js 就能跑；設定檔 `idexx-bridge.config.json` 含密鑰不進版控）：它不解析 XML、原檔照送，等檔案靜止才上傳，成功移到 `已上傳\年-月\`、伺服器一直讀不了移到 `無法讀取\`、連不上就留在原地重試，**檔案絕不刪除**。`bridge/install.ps1` 把它註冊成 SYSTEM 帳號的排程工作（開機就跑、不用登入、每 5 分鐘補叫一次），每分鐘送心跳到 `labBridgeStatuses`（一台電腦一筆：`bridgeId`（設定檔 name 或電腦名稱，unique）、`lastSeenAt`（伺服器收到的時刻）、`lastUploadAt`、`pendingFiles`、`lastError`、`version`），超過三分鐘沒心跳就算離線——開發者人不在診所，停了要從系統上看得出來。一筆＝一台儀器對一隻貓的一次檢驗：`diagnosticSetId`＋`instrument` 唯一（同一次看診跑生化又跑血球是兩筆），欄位是 `lib/idexxResult.js` 解析出來的樣子——`runAt`、IDEXX 主機上登記的 `client`／`patient`（`patient.id` 是 IDEXX 回傳的病患編號，不是 `petId`）、`assays[]`（`code`／`value` 一律字串／`unit`／`referenceMin`／`referenceMax`／`criticalMin`／`criticalMax`／`qualifier`，欄位名稱跟看診的 `labValues` 一致，可直接用 `shared/labValues.js` 的 `labFlag`）、`notes[]`，外加原始檔 `rawXml`（`select: false`，解析規則修正後可重新解析）。**`petId` 是空的＝待配對**，沒有另外的狀態欄位。
+設定、部署、本機測試與排查見 [docs/IDEXX_INTERLINK.md](docs/IDEXX_INTERLINK.md)。IDEXX 不開放 API，院內檢驗儀的結果要靠 **IDEXX InterLink**（裝在跟 IDEXX 主機同一個區網的 Windows 電腦上）存成 XML＋PDF 檔，再由那台電腦上的抓檔程式上傳進來（`POST /api/lab-results/import`，用 `IDEXX_BRIDGE_TOKEN` 驗證、不走登入）。系統在雲端讀不到診所電腦的資料夾，所以一定要有這支抓檔程式。抓檔程式在 `bridge/`（獨立於 server、不裝任何套件，整個資料夾複製到診所電腦、裝 Node.js 就能跑；設定檔 `idexx-bridge.config.json` 含密鑰不進版控）：它不解析 XML、原檔照送，等檔案靜止才上傳，成功移到 `已上傳\年-月\`、伺服器一直讀不了移到 `無法讀取\`、連不上就留在原地重試，**檔案絕不刪除**。安裝用單一安裝檔 `IDEXX-Bridge-Setup.cmd`（`npm run build:installer` 產生；有 `installer.preset.json` 時網址與密鑰預先放在裡面、診所點兩下就裝完，沒有時安裝時才問），它最後呼叫 `bridge/install.ps1` 把抓檔程式註冊成 SYSTEM 帳號的排程工作（開機就跑、不用登入、每 5 分鐘補叫一次），每分鐘送心跳到 `labBridgeStatuses`（一台電腦一筆：`bridgeId`（設定檔 name 或電腦名稱，unique）、`lastSeenAt`（伺服器收到的時刻）、`lastUploadAt`、`pendingFiles`、`lastError`、`version`），超過三分鐘沒心跳就算離線——開發者人不在診所，停了要從系統上看得出來。一筆＝一台儀器對一隻貓的一次檢驗：`diagnosticSetId`＋`instrument` 唯一（同一次看診跑生化又跑血球是兩筆），欄位是 `lib/idexxResult.js` 解析出來的樣子——`runAt`、IDEXX 主機上登記的 `client`／`patient`（`patient.id` 是 IDEXX 回傳的病患編號，不是 `petId`）、`assays[]`（`code`／`value` 一律字串／`unit`／`referenceMin`／`referenceMax`／`criticalMin`／`criticalMax`／`qualifier`，欄位名稱跟看診的 `labValues` 一致，可直接用 `shared/labValues.js` 的 `labFlag`）、`notes[]`，外加原始檔 `rawXml`（`select: false`，解析規則修正後可重新解析）。**`petId` 是空的＝待配對**，沒有另外的狀態欄位。
 
 **儀器驗完自動填進健檢報告**（使用者的要求：檢驗結果就是健檢報告的檢驗欄位，不另外做一個「檢驗結果」的地方）：上傳後 `lib/labResultApply.js` 先認貓——`patient.id` 是 24 位的貓咪 `_id` 而且那隻貓存在，就記 `petId`、`matchSource: 'patient_id'`（報到時送到 IDEXX 主機的編號會原樣帶回來；Census 報到通知尚未實作）；再找那隻貓**檢驗當天**（`runAt` 換算成台北日期）的看診，排除取消／未到，好幾筆時挑檢驗前最後報到的那筆（`lib/labResultFill.js` 的 `pickVisit`）；最後依看診表單檢驗項目的 `idexxCodes` 對照，在同一個 transaction 裡寫進 `appointment.labValues`、同步病歷日誌，之後廣播 `appointment:updated`。報告草稿本來就讀看診的值，所以填進看診＝報告打開就看得到。規則（`planLabFill`）：**空的格子才填**；已經有不同的值不蓋掉，記在 `conflicts[]` 給醫師決定；儀器判定無結果（`!`）或無效（`-`）、或超過 40 字的不填；表單沒對應代號的記在 `unmappedCodes[]`。填過的記 `appointmentId`、`appliedAt`、`filled[]`（`{ key, label, value }`）；找不到看診或看診沒選表單時不記 `appliedAt`，之後重送同一份檔案會再試。IDEXX 送更正版時會重新比一次，但一樣不蓋掉已經有的值。自動填入失敗不影響上傳本身（檔案已經存好）。已結案的報告不受影響（結案時已凍結）。
 
@@ -312,6 +312,7 @@ POST   /api/lab-results/:id/match       待確認清單選了貓，body { petId 
 POST   /api/lab-results/:id/unmatch     復原：清掉這份結果填進看診、還沒被改過的值，回到待確認，回 { cleared, kept }
 POST   /api/lab-results/:id/dismiss     忽略（品管測試、練習）；已處理的回 409
 GET    /api/lab-results/bridge-status   各台抓檔程式的最新心跳，另帶 online（三分鐘內有心跳）
+DELETE /api/lab-results/bridge-status/:bridgeId  移除已經停掉的抓檔程式紀錄（換電腦、改名稱後的舊紀錄；面板上點紅燈）；還在回報的回 409
 
 寄送紀錄
 GET    /api/delivery-logs               流水帳，一筆＝一次寄送（queued 與結果依 attemptId 在資料庫裡先合併再分頁，lib/deliveryAttempts.js）；?recordId= / ?event=（這次寄送的最終結果）/ ?q= / ?from=&to= / 分頁
@@ -424,6 +425,9 @@ npm run dev            # 使用者自己開
 npm test               # node --test，不需要伺服器，會在系統暫存資料夾裡實際搬檔案
 npm start              # 依 idexx-bridge.config.json 開始監看資料夾（前景執行，測試用）
 npm run check          # 只檢查設定檔、資料夾與伺服器連線，送一次心跳就結束
+npm run build:installer  # 產生 dist/IDEXX-Bridge-Setup.cmd：單一安裝檔，傳到診所電腦點兩下就裝好（要管理員權限、裝 Node、問設定、建排程工作）；
+                         # 流程在 setupTemplate.ps1、打包在 buildInstaller.mjs。改了 bridge 的程式要重新產生。
+                         # 有 bridge/installer.preset.json（網址＋密鑰，不進版控）時產生全自動的安裝檔、不問任何問題——那個檔案裡有密鑰
 # 正式安裝／移除／查看狀態：install.ps1 / uninstall.ps1 / status.ps1（檔案要存成 UTF-8 with BOM，PowerShell 5.1 才讀得懂中文）
 ```
 

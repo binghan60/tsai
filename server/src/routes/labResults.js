@@ -164,6 +164,21 @@ labResultsRouter.get('/bridge-status', async (req, res, next) => {
   }
 });
 
+// 移除一筆已經停掉的抓檔程式紀錄（換了電腦、改了名稱）。還在回報的不能移除——一分鐘後又會出現，只會讓人困惑。
+labResultsRouter.delete('/bridge-status/:bridgeId', async (req, res, next) => {
+  try {
+    const bridge = await LabBridgeStatus.findOne({ bridgeId: req.params.bridgeId }).lean();
+    if (bridge && Date.now() - new Date(bridge.lastSeenAt).getTime() < BRIDGE_OFFLINE_AFTER_MS) {
+      return res.status(409).json({ message: '這台電腦還在回報，不能移除' });
+    }
+    // 已經被別台移除也算成功。
+    await LabBridgeStatus.deleteOne({ bridgeId: req.params.bridgeId });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 待確認清單的每一筆附上「檢驗當天」的掛號當候選。一次查完所有日期，走 scheduledAt 的索引。
 async function withCandidates(items) {
   const dateOf = (item) => clinicToday(item.runAt ?? item.createdAt);

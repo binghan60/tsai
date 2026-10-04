@@ -158,10 +158,28 @@ async function confirmDismiss() {
 // 從來沒有回報過（診所還沒裝）就不顯示。
 // 使用者要求做成燈號（綠／黃／紅），滑過去才顯示詳細資訊，不要佔一整列。
 const BRIDGE_LIGHTS = { success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger' };
+// 紅燈（已經沒在回報）可以點掉：換了電腦或改了名稱，舊的那筆會一直亮紅燈。還在回報的不能移除。
 const bridgeLights = computed(() => counts.bridges.map((bridge) => {
   const line = bridgeStatusLine(bridge);
-  return { id: bridge.bridgeId, tone: line.tone, tip: `${line.text}　${line.detail}` };
+  const removable = line.tone === 'danger';
+  return { id: bridge.bridgeId, tone: line.tone, removable, tip: `${line.text}　${line.detail}${removable ? '　點一下可以移除這筆紀錄' : ''}` };
 }));
+const removingBridge = ref('');
+const removeBusy = ref(false);
+
+async function confirmRemoveBridge() {
+  if (!removingBridge.value || removeBusy.value) return;
+  removeBusy.value = true;
+  try {
+    await http.delete(`/lab-results/bridge-status/${encodeURIComponent(removingBridge.value)}`);
+    removingBridge.value = '';
+  } catch (err) {
+    toast.error(err.response?.data?.message || '移除失敗，請稍後再試');
+  } finally {
+    removeBusy.value = false;
+    counts.loadBridges();
+  }
+}
 
 function refreshAll() {
   refresh();
@@ -261,17 +279,21 @@ onActivated(refreshAll);
     <SidePanel v-else title="檢驗" description="選好是哪隻貓，就會填進健檢報告" flush @close="panel.close()">
       <template v-if="bridgeLights.length" #actions>
         <!-- 燈號外面留 36px 的感應範圍，滑鼠才好停；tabindex 讓鍵盤也看得到提示。 -->
-        <span
+        <component
+          :is="light.removable ? 'button' : 'span'"
           v-for="light in bridgeLights"
           :key="light.id"
           v-tip="light.tip"
-          role="img"
-          tabindex="0"
+          :type="light.removable ? 'button' : undefined"
+          :role="light.removable ? undefined : 'img'"
+          :tabindex="light.removable ? undefined : 0"
           :aria-label="light.tip"
           class="flex size-9 items-center justify-center rounded-lg"
+          :class="light.removable ? 'cursor-pointer hover:bg-hover' : ''"
+          @click="light.removable && (removingBridge = light.id)"
         >
           <span class="size-3 rounded-full ring-2 ring-card" :class="BRIDGE_LIGHTS[light.tone]"></span>
-        </span>
+        </component>
       </template>
       <ListSkeleton v-if="loading" :rows="3" inset />
       <Alert v-else-if="error" variant="destructive" class="mx-5 mt-4 w-auto"><AlertDescription>{{ error }}</AlertDescription></Alert>
@@ -291,6 +313,15 @@ onActivated(refreshAll);
       </ul>
     </SidePanel>
 
+    <ConfirmDialog
+      :open="Boolean(removingBridge)"
+      title="移除這台電腦的紀錄？"
+      :description="`「${removingBridge}」已經沒有在回報。移除後燈號會消失；如果它之後又開始回報，會自動再出現。`"
+      confirm-label="移除"
+      :loading="removeBusy"
+      @update:open="(value) => !value && (removingBridge = '')"
+      @confirm="confirmRemoveBridge"
+    />
     <PetPickerDialog :open="pickerOpen" @close="pickerOpen = false" @select="onPick" />
     <ConfirmDialog
       :open="dismissing"
