@@ -8,7 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // 安裝到診所電腦的檔案。設定檔不在裡面——安裝時依輸入的內容產生。
-export const INSTALLED_FILES = ['idexxBridge.js', 'package.json', 'install.ps1', 'uninstall.ps1', 'status.ps1'];
+// uninstall.cmd／status.cmd 是給人點兩下用的（自己要求管理員權限、跑完停住），只能有 ASCII。
+export const INSTALLED_FILES = ['idexxBridge.js', 'package.json', 'install.ps1', 'uninstall.ps1', 'uninstall.cmd', 'status.ps1', 'status.cmd'];
 export const FILES_PLACEHOLDER = '$files = @{} #__FILES__';
 // 寫成兩段：開頭那行 cmd 要用這個標記找到 PowerShell 的起點，標記本身不能先出現在那行裡。
 const MARKER = '#__PS_' + 'BEGIN__';

@@ -28,6 +28,12 @@ describe('buildInstaller：單一安裝檔', () => {
     assert.equal(files['install.ps1'][0], 0xef, 'install.ps1 要存成 UTF-8 with BOM');
   });
 
+  it('點兩下用的 .cmd 只有 ASCII、沒有 BOM，cmd 才讀得對', () => {
+    for (const name of INSTALLED_FILES.filter((file) => file.endsWith('.cmd'))) {
+      assert.match(files[name].toString('latin1'), /^@echo off\r\n[\x00-\x7f]*$/, name);
+    }
+  });
+
   it('不包含設定檔與密鑰：密鑰是安裝時在診所電腦上輸入的', () => {
     assert.equal(INSTALLED_FILES.includes('idexx-bridge.config.json'), false);
     assert.equal(installer.includes(FILES_PLACEHOLDER), false);

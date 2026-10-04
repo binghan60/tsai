@@ -86,7 +86,7 @@ IDEXX_BRIDGE_TOKEN=<至少 32 字元的隨機字串>
 |---|---|
 | `idexxBridge.js` | 要，程式本體 |
 | `package.json` | 要，`npm start`／`npm run check` 靠它，心跳回報的版本號也從這裡讀 |
-| `install.ps1`、`uninstall.ps1`、`status.ps1` | 要，安裝成開機自動執行、移除、遠端查看狀態 |
+| `install.ps1`、`uninstall.ps1`／`uninstall.cmd`、`status.ps1`／`status.cmd` | 要，安裝成開機自動執行、移除、查看狀態（`.cmd` 是點兩下用的） |
 | `idexx-bridge.config.json` | 要，**在診所電腦上另外建**（見第 3 步） |
 | `idexx-bridge.config.example.json` | 可有可無，只是範本 |
 | `idexxBridge.test.js` | 不需要，開發用的測試，放了也不影響 |
@@ -145,7 +145,9 @@ IDEXX_BRIDGE_TOKEN=<至少 32 字元的隨機字串>
 
 **同一個資料夾不要同時跑兩份**：裝了排程工作之後，就不要再另外開視窗 `npm start`。兩份會搶同一個檔案，雖然伺服器會判斷成重複、不會多存，但會在 log 留下搬檔失敗的錯誤。
 
-移除：以系統管理員身分執行 `uninstall.ps1`。只移除排程工作，程式、設定檔、log、已上傳的檔案都不會刪。
+**移除：點兩下 `C:\IDEXX Bridge\uninstall.cmd`**（會自己要求管理員權限、跑完停住讓你看結果）。它會刪掉排程工作，**並直接結束正在跑的抓檔程式**——實測發現「停止排程工作」不一定會把已經在跑的程式關掉，工作刪了、程式還在背景繼續送心跳。程式、設定檔、log、已上傳的檔案都不會刪。移除後燈號約三、四分鐘才變紅。
+
+**看狀態：點兩下 `C:\IDEXX Bridge\status.cmd`**（同樣自己要求管理員權限、停住）。不要用右鍵「用 PowerShell 執行」開 `.ps1`：那樣不是管理員、視窗一閃就關，看不到結果也做不了事。
 
 三支 `.ps1` 都存成 **UTF-8 with BOM**。Windows 內建的 PowerShell 5.1 沒有 BOM 就不會用 UTF-8 讀，中文訊息會變亂碼。修改後要維持這個編碼。
 

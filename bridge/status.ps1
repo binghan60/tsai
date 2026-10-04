@@ -2,7 +2,20 @@
 #
 # 用法（切到這個資料夾後執行；看排程工作的狀態需要系統管理員身分）：
 #   powershell -ExecutionPolicy Bypass -File .\status.ps1
-param([string]$TaskName = 'IDEXX Bridge', [int]$Lines = 20)
+#
+# 一般直接點兩下同資料夾的 status.cmd：它帶 -Pause，這裡自己要求管理員權限（SYSTEM 的排程工作一般使用者看不到）、
+# 跑完停住讓人看結果。
+param([string]$TaskName = 'IDEXX Bridge', [int]$Lines = 20, [switch]$Pause)
+
+$identity = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if ($Pause -and -not $identity.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+  try {
+    Start-Process powershell.exe -Verb RunAs -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$PSCommandPath`"", '-TaskName', "`"$TaskName`"", '-Lines', $Lines, '-Pause')
+    exit
+  } catch {
+    Write-Host '沒有取得管理員權限，看不到排程工作的狀態，只顯示 log。' -ForegroundColor Yellow
+  }
+}
 
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 
@@ -36,3 +49,5 @@ if (Test-Path $log) {
 } else {
   Write-Host '還沒有 log（抓檔程式沒跑過）。'
 }
+
+if ($Pause) { Write-Host ''; Read-Host '按 Enter 關閉' }

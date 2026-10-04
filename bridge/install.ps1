@@ -60,6 +60,10 @@ if ($existing) {
   Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
   Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
 }
+# 「停止排程工作」不一定會關掉已經在跑的程式（見 uninstall.ps1）；不關的話新舊兩份會同時盯同一個資料夾。
+Get-CimInstance Win32_Process -Filter "Name='node.exe'" |
+  Where-Object { $_.CommandLine -like '*idexxBridge.js*' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
 $action = New-ScheduledTaskAction -Execute $nodePath -Argument "`"$script`"" -WorkingDirectory $here
 $atStartup = New-ScheduledTaskTrigger -AtStartup
