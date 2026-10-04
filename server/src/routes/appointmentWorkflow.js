@@ -7,6 +7,7 @@ import { withTransaction } from '../lib/transaction.js';
 import { combineClinicDateTime } from '../lib/clinicTime.js';
 import { defaultRecordFields } from '../lib/formTemplate.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
+import { queueIdexxCensus } from '../lib/idexxRequests.js';
 import { applyWorkflowAction, assertWorkflowVersion, workflowError } from '../lib/appointmentWorkflow.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
 import { templateLabItems } from '../lib/recordVisitLink.js';
@@ -112,6 +113,8 @@ router.post('/:action', async (req, res, next) => {
       appointment.increment();
       await appointment.save({ session });
     });
+    // 櫃台完成處理＝離開診所：從 IDEXX 主機的在院清單收掉（伺服器有開才會排隊）。
+    if (action === 'complete') await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
     if (followUp) emitAppointmentUpdate(followUp, followUpPreviousDate);
     res.json({ ...appointment.toObject(), ...(record ? { record } : {}) });

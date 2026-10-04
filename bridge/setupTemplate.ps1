@@ -116,6 +116,14 @@ if ($preset['serverUrl'] -and $preset['token']) {
   $config['name'] = Ask '在系統上顯示的名稱（不填就用電腦名稱）' $config['name']
 }
 
+# 報到通知寫進 InterLink 的 Requests 資料夾（跟 Results 同一層）。不問：InterLink 裝好就有，
+# 找不到就留空、不送報到通知（填了不存在的資料夾，系統上的燈號會一直是黃的）。
+if (-not $config['requestsDir']) {
+  $candidate = Join-Path (Split-Path (Split-Path $config['resultsDir'])) 'Requests'
+  $config['requestsDir'] = if (Test-Path $candidate) { $candidate } else { '' }
+}
+if ($config['requestsDir']) { Say "✔ 報到通知寫進 $($config['requestsDir'])" 'Green' }
+
 # 4. 放檔案。先停掉正在跑的抓檔程式（排程工作或手動開的），同一個資料夾不能同時跑兩份。
 Say ''
 Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue

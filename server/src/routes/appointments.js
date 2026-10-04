@@ -15,6 +15,7 @@ import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsCheckinNumber } from '../lib/appointmentStatus.js';
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
+import { queueIdexxCensus } from '../lib/idexxRequests.js';
 import appointmentWorkflowRouter from './appointmentWorkflow.js';
 import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
@@ -568,6 +569,8 @@ router.post('/:id/check-in', async (req, res, next) => {
       if (isLate) await recordAttendanceIncident(appointment, 'late', appointment.checkedInAt, session);
     }));
 
+    // 送到 IDEXX 主機的在院清單（伺服器有開才會排隊，見 lib/idexxCensus.js）。
+    await queueIdexxCensus(appointment);
     // 報到讓這筆掛號進入候診佇列，醫師頁要立刻看到，不必等 60 秒輪詢。
     emitAppointmentUpdate(appointment);
     res.json(appointment);
@@ -588,6 +591,7 @@ router.post('/:id/cancel', async (req, res, next) => {
     appointment.cancelReason = String(req.body?.cancelReason || '').trim();
     appointment.checkedInAt = null;
     await saveLeavingQueue(appointment, wasQueued);
+    await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
     res.json(appointment);
   } catch (err) {
@@ -611,6 +615,7 @@ router.post('/:id/no-show', async (req, res, next) => {
       await saveLeavingQueue(appointment, wasQueued, session);
       await recordAttendanceIncident(appointment, 'noShow', happenedAt, session);
     });
+    await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
     res.json(appointment);
   } catch (err) {
@@ -631,6 +636,7 @@ router.post('/:id/restore', async (req, res, next) => {
     appointment.cancelReason = '';
     appointment.checkedInAt = null;
     await saveLeavingQueue(appointment, wasQueued);
+    await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
     res.json(appointment);
   } catch (err) {

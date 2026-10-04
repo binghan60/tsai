@@ -1,8 +1,8 @@
 {
   "name": "idexx-bridge",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "IDEXX InterLink 抓檔程式：把 InterLink 存下的檢驗結果上傳到系統",
+  "description": "IDEXX InterLink 抓檔程式：把 InterLink 存下的檢驗結果上傳到系統，並把報到通知寫進 InterLink",
   "type": "module",
   "engines": {
     "node": ">=20"

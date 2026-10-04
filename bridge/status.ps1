@@ -31,13 +31,25 @@ if ($task) {
 
 $config = Join-Path $here 'idexx-bridge.config.json'
 if (Test-Path $config) {
-  $resultsDir = (Get-Content $config -Raw -Encoding UTF8 | ConvertFrom-Json).resultsDir
+  $settings = Get-Content $config -Raw -Encoding UTF8 | ConvertFrom-Json
+  $resultsDir = $settings.resultsDir
   if (Test-Path $resultsDir) {
     $pending = @(Get-ChildItem $resultsDir -Filter '*.xml' -File).Count
     $failed = if (Test-Path (Join-Path $resultsDir '無法讀取')) { @(Get-ChildItem (Join-Path $resultsDir '無法讀取') -File).Count } else { 0 }
     Write-Host "資料夾 $resultsDir：待上傳 $pending 個、無法讀取 $failed 個"
   } else {
     Write-Host "找不到設定檔裡的資料夾：$resultsDir" -ForegroundColor Yellow
+  }
+  # 報到通知：InterLink 收到同一隻貓的離院通知時，會把到院、離院兩份一起刪掉；所以在院內的貓各留一份是正常的，
+  # 下班後還有一大堆，代表 InterLink 沒在處理（沒開、或跟 IDEXX 主機斷線）。
+  $requestsDir = $settings.requestsDir
+  if ($requestsDir -and (Test-Path $requestsDir)) {
+    $waiting = @(Get-ChildItem $requestsDir -Filter '*.xml' -File).Count
+    Write-Host "報到通知資料夾 $requestsDir：$waiting 個檔案"
+  } elseif ($requestsDir) {
+    Write-Host "找不到報到通知資料夾：$requestsDir" -ForegroundColor Yellow
+  } else {
+    Write-Host '沒有設定報到通知資料夾，報到時不會送貓咪到 IDEXX 主機'
   }
 }
 

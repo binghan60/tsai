@@ -9,6 +9,19 @@ export function idexxBridgeConfigured() {
   return (process.env.IDEXX_BRIDGE_TOKEN ?? '').length >= MIN_TOKEN_LENGTH;
 }
 
+// 報到時要不要把貓咪送到 IDEXX 主機（lib/idexxCensus.js）。預設關閉：要到診所跟 IDEXX 的人一起確認後才打開。
+//   IDEXX_CENSUS_MODE      off（預設）／census／work_request——兩種訊息哪一種在 IDEXX 主機上比較順，要現場試
+//   IDEXX_CENSUS_ENCODING  big5（預設，IDEXX 範例的編碼）／utf-8——中文貓名在主機上亂碼就換另一種
+export const IDEXX_CENSUS_MODES = ['off', 'census', 'work_request'];
+
+export function idexxCensusSettings(env = process.env) {
+  const mode = String(env.IDEXX_CENSUS_MODE ?? '').trim().toLowerCase();
+  return {
+    mode: IDEXX_CENSUS_MODES.includes(mode) ? mode : 'off',
+    encoding: /^utf-?8$/i.test(String(env.IDEXX_CENSUS_ENCODING ?? '').trim()) ? 'utf-8' : 'big5',
+  };
+}
+
 export function hasIdexxBridgeAccess(req) {
   if (!idexxBridgeConfigured()) return false;
   const supplied = /^Bearer\s+(\S+)$/i.exec(req.get('authorization') ?? '')?.[1];

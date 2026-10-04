@@ -7,6 +7,7 @@ import LabResult from '../models/LabResult.js';
 import LabBridgeStatus from '../models/LabBridgeStatus.js';
 import Pet from '../models/Pet.js';
 import Appointment from '../models/Appointment.js';
+import IdexxRequest from '../models/IdexxRequest.js';
 import { labResultContent } from '../lib/labResultImport.js';
 import { parseIdexxResult } from '../lib/idexxResult.js';
 
@@ -29,6 +30,8 @@ describe('lab results routes', () => {
     findById: LabResult.findById,
     petExists: Pet.exists,
     appointmentFind: Appointment.find,
+    requestFind: IdexxRequest.find,
+    requestUpdateOne: IdexxRequest.updateOne,
   };
 
   before(async () => {
@@ -50,6 +53,7 @@ describe('lab results routes', () => {
     Object.assign(LabResult, { findOneAndUpdate: original.findOneAndUpdate, findById: original.findById });
     Pet.exists = original.petExists;
     Appointment.find = original.appointmentFind;
+    Object.assign(IdexxRequest, { find: original.requestFind, updateOne: original.requestUpdateOne });
   });
 
   after(async () => {
@@ -313,5 +317,36 @@ describe('lab results routes', () => {
     assert.deepEqual(filter, { _id: id, petId: null, dismissedAt: null });
     LabResult.findOneAndUpdate = async () => null;
     assert.equal((await fetch(`${origin}/api/lab-results/${id}/dismiss`, { method: 'POST' })).status, 409);
+  });
+
+  it('報到通知：抓檔程式用密鑰拿待送的檔案（base64），寫好後回報', async () => {
+    process.env.IDEXX_BRIDGE_TOKEN = token;
+    const auth = { authorization: `Bearer ${token}` };
+    assert.equal((await fetch(`${origin}/api/lab-results/requests`)).status, 401);
+
+    const body = Buffer.from([0x3c, 0xa4, 0xfb, 0xa5, 0xa4]);
+    let query;
+    IdexxRequest.find = (filter) => {
+      query = filter;
+      const chain = { sort: () => chain, limit: () => chain, select: async () => [{ _id: '64b0000000000000000000aa', fileName: '1.xml', body }] };
+      return chain;
+    };
+    const listed = await fetch(`${origin}/api/lab-results/requests`, { headers: auth });
+    assert.equal(listed.status, 200);
+    assert.deepEqual(query, { status: 'pending' });
+    const { items } = await listed.json();
+    assert.deepEqual(items, [{ id: '64b0000000000000000000aa', fileName: '1.xml', body: body.toString('base64') }]);
+
+    let update;
+    IdexxRequest.updateOne = async (filter, value) => { update = { filter, value }; return { modifiedCount: 0 }; };
+    const delivered = await fetch(`${origin}/api/lab-results/requests/64b0000000000000000000aa/delivered`, {
+      method: 'POST', headers: { ...auth, 'content-type': 'application/json' }, body: JSON.stringify({ bridgeId: 'CLINIC-PC' }),
+    });
+    // 已經回報過（modifiedCount 0）一樣回成功。
+    assert.equal(delivered.status, 200);
+    assert.deepEqual(update.filter, { _id: '64b0000000000000000000aa', status: 'pending' });
+    assert.equal(update.value.$set.deliveredBy, 'CLINIC-PC');
+    const bad = await fetch(`${origin}/api/lab-results/requests/abc/delivered`, { method: 'POST', headers: auth });
+    assert.equal(bad.status, 422);
   });
 });

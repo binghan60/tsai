@@ -99,6 +99,8 @@
 
 **認不出貓的結果進「待確認」清單**（工具欄「檢驗」，`panels/LabResultsPanel.vue`）：Census 報到通知還沒做（要到診所才能測），加上技術員在 IDEXX 主機上手打名字時也不會帶編號，所以要有人選。清單＝`petId` 空、`dismissedAt` 空的結果，每筆附**檢驗當天的掛號**當候選（`lib/labResultFill.js` 的 `rankCandidates`：取消／未到／沒建檔的不算，同名——去空白、不分大小寫——排前面，同名而且只有一隻就預選）。人選了貓就記 `matchSource: 'manual'`、照上面同一套規則填入（`matchManually`）；選錯可以「復原」（`unmatchLabResult`：只清**現在還是當初填進去的值**的欄位，被人改過的留著，`planUndo`），結果回到清單；品管測試、練習用的檢驗可以「忽略」（`dismissedAt`）。任何異動都廣播 `lab-results:updated`，各台工具欄的數字跟著變。IDEXX 會重送與更正同一份結果，`lib/labResultImport.js` 的 `planLabResultImport` 決定怎麼處理：內容一樣只加 `receiveCount`、內容不同以訊息時間較新的為準並記 `revisedAt`、比已存的舊就不採用；配對欄位永遠不被上傳覆寫。解析刻意寬鬆、不驗證 DTD——IDEXX 的實際輸出不完全符合它自己的 DTD（見該檔開頭）。索引 `{diagnosticSetId, instrument}`(unique)、`{petId, runAt: -1, _id: -1}`；找當天看診用 appointments 的 `{petId, date}`。
 
+**反方向：報到時把貓咪送到 IDEXX 主機的在院清單**（`idexxRequests` collection，**已實作、預設關閉**——要到診所跟 IDEXX 的人一起確認才打開，見 docs/IDEXX_INTERLINK.md）。技術員從主機清單點那隻貓跑檢驗，結果帶回的 `patient_id` 就是貓咪 `_id`，上面的自動認貓就接得上。雲端碰不到診所的資料夾，所以伺服器先把通知**組好 XML、照設定編碼成位元組存起來排隊**，抓檔程式每輪（10 秒）來拿（`GET /api/lab-results/requests`）、原封寫進 InterLink 的 `Requests\`（先寫在旁邊的 `.idexx-bridge-tmp\` 再搬進去）、回報寫好了；抓檔程式一樣不懂 XML，格式要改只改伺服器。掛號狀態改變的地方（報到、取消、未到、取消報到、櫃台完成處理）呼叫 `lib/idexxRequests.js` 的 `queueIdexxCensus`：看這張掛號上一份送了什麼（`nextCensusKind`）——在院內（`arrived`／`pending_checkout` 且有 `petId`）而上一份不是到院就排到院、不在院內而上一份是到院就排離院，所以重複呼叫不會重複送；**排不進去只記 log、不讓報到失敗**（最壞就是貓咪沒出現在主機上，結果進待確認清單）。離院沿用到院那一份的訊息種類與編碼。兩種訊息由環境變數切換，因為台灣 IDEXX 實際用哪一種要現場試：`IDEXX_CENSUS_MODE`＝`off`（預設）／`census`（`Census_Notice` in／out）／`work_request`（`Work_Request` New／Cancel，單號是掛號 `_id`，IDEXX 台灣給的範例是這種）；`IDEXX_CENSUS_ENCODING`＝`big5`（預設，範例的編碼；`lib/big5.js` 用內建 TextDecoder 反查成對照表，不裝 iconv-lite，Big5 沒有的字換成「?」並記在 `unmappable`）／`utf-8`。XML 組法在 `lib/idexxCensus.js`（純邏輯）：物種固定 `FELINE`、性別＋結紮換成四種、生日／體重有才送、品種不送（IDEXX 有自己的品種清單）、飼主全名放 `last_name`、訊息編號是診所時間到毫秒加三位亂數的純數字（＝檔名）。欄位：`appointmentId`、`petId`、`kind`（`in`／`out`）、`mode`、`encoding`、`messageId`(unique)、`fileName`、`body`（Buffer）、`unmappable`、`status`（`pending`／`delivered`）、`deliveredAt`、`deliveredBy`。索引 `{status, createdAt}`（抓檔程式拿待送的）、`{appointmentId, createdAt: -1}`（上一份送了什麼）。
+
 ### deliveryLogs 寄送流水帳
 append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩筆，同一個 `attemptId`；API 回傳時合併成一次寄送一筆）：`recordId`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
 
@@ -185,7 +187,7 @@ append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩�
 ## 五、API 設計
 
 ```
-帳號（唯一免登入的 /api/* 路由，連同 /api/public/reports/:token、GET /api/health，以及改用密鑰驗證的 POST /api/lab-results/import、/heartbeat）
+帳號（唯一免登入的 /api/* 路由，連同 /api/public/reports/:token、GET /api/health，以及改用密鑰驗證的 /api/lab-results/import、/heartbeat、/requests）
 GET    /api/auth/me                     查詢目前登入狀態
 POST   /api/auth/login                  登入，成功後回 HttpOnly JWT cookie（30 天到期，有限流）
 POST   /api/auth/logout                 登出，清除 cookie
@@ -306,6 +308,9 @@ POST   /api/lab-results/import          診所電腦上的抓檔程式上傳 Int
                                        自動填入看診的結果（unmatched／no_visit／no_template／applied／already_applied／error）；
                                        檔案不完整或看不懂回 422（抓檔程式之後再試）；伺服器沒設密鑰回 503
 POST   /api/lab-results/heartbeat       抓檔程式每分鐘回報一次（同樣用 IDEXX_BRIDGE_TOKEN、掛在登入檢查之前），依 bridgeId upsert
+GET    /api/lab-results/requests        抓檔程式拿待送的報到／離院通知（同上用密鑰、掛在登入檢查之前），舊到新最多 20 筆，
+                                       每筆 { id, fileName, body: base64 }——已經編好碼的檔案位元組，原封寫進 Requests 資料夾
+POST   /api/lab-results/requests/:id/delivered  抓檔程式寫好檔案後回報，body { bridgeId }；重複回報也回 200
 GET    /api/lab-results                 預設列待確認（petId、dismissedAt 都空），每筆附 candidates（檢驗當天的掛號，同名唯一的 suggested）；
                                        ?petId= 列那隻貓的；新到舊、分頁（工具欄數字用 limit=1 的 total）
 POST   /api/lab-results/:id/match       待確認清單選了貓，body { petId }；照自動填入規則填進當天看診，回 { fill }；已配對或已忽略回 409

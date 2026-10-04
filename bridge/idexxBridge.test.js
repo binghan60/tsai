@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   ARCHIVE_DIR,
   FAILED_DIR,
+  REQUESTS_TEMP_DIR,
   archivePath,
+  deliverRequests,
   heartbeatPayload,
+  requestFileName,
   isSettled,
   normalizeConfig,
   outcomeFor,
@@ -90,6 +93,7 @@ describe('heartbeatPayload', () => {
       hostname: 'FRONT-DESK',
       version: '1.0.0',
       resultsDir: 'C:\\Data',
+      requestsDir: '',
       startedAt: '2026-09-30T01:00:00.000Z',
       lastUploadAt: '2026-09-30T02:00:00.000Z',
       pendingFiles: 3,
@@ -175,5 +179,66 @@ describe('processFolder：實際在暫存資料夾裡跑一輪', () => {
     await processFolder(config, { seen, upload });
     assert.deepEqual(uploaded, ['a.xml']);
     assert.ok(existsSync(path.join(dir, 'report.pdf')));
+  });
+});
+
+describe('deliverRequests：報到通知寫進 Requests 資料夾', () => {
+  let root;
+  let requestsDir;
+  const big5 = Buffer.from([0x3c, 0xa4, 0xfb, 0xa5, 0xa4, 0x3e]);
+  const item = (id, fileName) => ({ id, fileName, body: big5.toString('base64') });
+
+  beforeEach(() => {
+    root = mkdtempSync(path.join(tmpdir(), 'idexx-requests-'));
+    requestsDir = path.join(root, 'Requests');
+    mkdirSync(requestsDir);
+  });
+
+  afterEach(() => rmSync(root, { recursive: true, force: true }));
+
+  it('沒設定 requestsDir 就不去問伺服器', async () => {
+    const list = async () => { throw new Error('不該問'); };
+    assert.deepEqual(await deliverRequests({ requestsDir: '' }, { list }), { written: 0 });
+  });
+
+  it('原封寫出位元組（不碰編碼），暫存資料夾留在 Requests 外面，寫好才回報', async () => {
+    const confirmed = [];
+    const list = async () => ({ status: 200, body: { items: [item('r1', '20261004140509123042.xml'), item('r2', '20261004150000000001.xml')] } });
+    const confirm = async (_config, id, bridgeId) => {
+      // 回報時檔案已經在 Requests 裡了。
+      assert.ok(existsSync(path.join(requestsDir, id === 'r1' ? '20261004140509123042.xml' : '20261004150000000001.xml')));
+      confirmed.push([id, bridgeId]);
+      return { status: 200, body: { ok: true } };
+    };
+    const summary = await deliverRequests({ requestsDir }, { list, confirm, bridgeId: 'CLINIC-PC' });
+    assert.deepEqual(summary, { written: 2 });
+    assert.deepEqual(confirmed, [['r1', 'CLINIC-PC'], ['r2', 'CLINIC-PC']]);
+    assert.deepEqual(readFileSync(path.join(requestsDir, '20261004140509123042.xml')), big5);
+    assert.deepEqual(readdirSync(requestsDir).sort(), ['20261004140509123042.xml', '20261004150000000001.xml']);
+    assert.deepEqual(readdirSync(path.join(root, REQUESTS_TEMP_DIR)), []);
+  });
+
+  it('回報失敗：這一輪停下，下一輪再拿到同一份時覆蓋同一個檔名，不會多一份', async () => {
+    const list = async () => ({ status: 200, body: { items: [item('r1', '1.xml'), item('r2', '2.xml')] } });
+    const failing = async () => ({ status: 0, body: null, error: 'fetch failed' });
+    assert.deepEqual(await deliverRequests({ requestsDir }, { list, confirm: failing }), { written: 1, error: 'fetch failed' });
+    const ok = async () => ({ status: 200, body: { ok: true } });
+    assert.deepEqual(await deliverRequests({ requestsDir }, { list, confirm: ok }), { written: 2 });
+    assert.deepEqual(readdirSync(requestsDir).sort(), ['1.xml', '2.xml']);
+  });
+
+  it('連不上伺服器、資料夾不存在都回報錯誤，不丟例外', async () => {
+    const down = async () => ({ status: 0, body: null, error: 'fetch failed' });
+    assert.equal((await deliverRequests({ requestsDir }, { list: down })).error, 'fetch failed');
+    const missing = path.join(root, 'nope');
+    assert.match((await deliverRequests({ requestsDir: missing }, { list: down })).error, /找不到報到通知資料夾/);
+  });
+
+  it('檔名只留安全的字元，不能寫到 Requests 以外', () => {
+    assert.equal(requestFileName('20261004.xml'), '20261004.xml');
+    assert.equal(requestFileName('..\\..\\Windows\\evil.xml'), 'evil.xml');
+    assert.equal(requestFileName('../a b.xml'), 'ab.xml');
+    assert.equal(requestFileName('run.exe'), null);
+    assert.equal(requestFileName('.xml'), null);
   });
 });

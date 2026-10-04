@@ -30,7 +30,7 @@ const CMD_HEADER = [
 
 export const PRESET_PLACEHOLDER = '$preset = @{} #__PRESET__';
 // 可以預先放進安裝檔的設定。有 serverUrl 與 token 時安裝檔就全自動、不問任何問題。
-const PRESET_KEYS = ['serverUrl', 'token', 'resultsDir', 'name'];
+const PRESET_KEYS = ['serverUrl', 'token', 'resultsDir', 'requestsDir', 'name'];
 
 // 預設值檔案（installer.preset.json）的檢查：打錯欄位名、密鑰太短都在打包時就擋下，不要等到診所才發現。
 export function normalizePreset(raw) {

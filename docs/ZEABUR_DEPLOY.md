@@ -43,6 +43,9 @@ CLOUDINARY_IMAGE_FOLDER=tsai-medical-records
 
 # 選填：接收 IDEXX 檢驗結果（見 docs/IDEXX_INTERLINK.md），留空＝不接收
 IDEXX_BRIDGE_TOKEN=<至少 32 字元的隨機字串，跟診所抓檔程式的設定相同>
+# 選填：報到時把貓咪送到 IDEXX 主機的在院清單，留空＝off（到診所跟 IDEXX 的人一起確認後才打開）
+IDEXX_CENSUS_MODE=<off | census | work_request>
+IDEXX_CENSUS_ENCODING=<big5（預設）| utf-8>
 ```
 
 注意事項：

@@ -9,6 +9,7 @@ import {
   applyLabResult, dismissLabResult, matchByPatientId, matchManually, openConflicts, resolveConflicts, unmatchLabResult,
 } from '../lib/labResultApply.js';
 import { rankCandidates } from '../lib/labResultFill.js';
+import { markIdexxRequestDelivered, pendingIdexxRequests } from '../lib/idexxRequests.js';
 import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
 import { emitLabResultsUpdate } from '../lib/realtime.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
@@ -131,6 +132,7 @@ labResultBridgeRouter.post('/heartbeat', requireBridge, async (req, res, next) =
           hostname: heartbeatText(body.hostname, 100),
           version: heartbeatText(body.version, 50),
           resultsDir: heartbeatText(body.resultsDir),
+          requestsDir: heartbeatText(body.requestsDir),
           startedAt: heartbeatDate(body.startedAt),
           lastSeenAt: new Date(),
           lastUploadAt: heartbeatDate(body.lastUploadAt),
@@ -140,6 +142,34 @@ labResultBridgeRouter.post('/heartbeat', requireBridge, async (req, res, next) =
       },
       { upsert: true }
     );
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 報到／離院通知（lib/idexxRequests.js）：抓檔程式每輪來拿待送的，原封寫進 InterLink 的 Requests 資料夾。
+// 檔案內容已經照設定的編碼（Big5／UTF-8）編好，用 base64 傳，抓檔程式不必懂 XML 也不必懂編碼。
+labResultBridgeRouter.get('/requests', requireBridge, async (req, res, next) => {
+  try {
+    const items = await pendingIdexxRequests();
+    res.json({
+      items: items.map((item) => ({
+        id: String(item._id),
+        fileName: item.fileName,
+        body: Buffer.from(item.body).toString('base64'),
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 寫好檔案後回報；重複回報（網路斷掉後重送）也回成功。
+labResultBridgeRouter.post('/requests/:id/delivered', requireBridge, async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(422).json({ message: '通知編號不正確' });
+    await markIdexxRequestDelivered(req.params.id, heartbeatText(req.body?.bridgeId, 100));
     res.json({ ok: true });
   } catch (err) {
     next(err);

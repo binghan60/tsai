@@ -9,6 +9,8 @@ const labBridgeStatusSchema = new mongoose.Schema(
     hostname: { type: String, default: '' },
     version: { type: String, default: '' },
     resultsDir: { type: String, default: '' },
+    // 報到通知寫進去的 InterLink Requests 資料夾；空的＝這台沒設定，報到通知不會送出去。
+    requestsDir: { type: String, default: '' },
     startedAt: { type: Date, default: null },
     lastSeenAt: { type: Date, required: true },
     lastUploadAt: { type: Date, default: null },

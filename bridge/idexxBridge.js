@@ -5,7 +5,11 @@
 // 它也不解析 XML——檔案原封不動送上去，解析規則要改只改伺服器，不必再動診所那台電腦。
 //
 // 檔案絕不刪除：上傳成功移到「已上傳\年-月\」，伺服器一直讀不了的移到「無法讀取\」，連不上伺服器就留在原地重試。
-import { mkdir, readFile, readdir, rename, stat, appendFile } from 'node:fs/promises';
+//
+// 反方向（報到通知）：設定了 requestsDir 時，每一輪也去伺服器拿待送的報到／離院通知（GET /api/lab-results/requests），
+// 原封寫進 InterLink 的 Requests 資料夾、再回報寫好了。XML 由伺服器組好、編碼也編好，這裡一樣不碰內容。
+// Requests 資料夾裡的檔案由 InterLink 自己收掉，這裡只放不刪。
+import { mkdir, readFile, readdir, rename, stat, appendFile, writeFile } from 'node:fs/promises';
 import { existsSync, statSync, renameSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,7 +28,13 @@ const DEFAULTS = {
   heartbeatSeconds: 60,
   // 系統上顯示的名稱；沒填就用電腦名稱。
   name: '',
+  // InterLink 收報到通知的資料夾（預設 C:\IDEXX Interlink\Requests）；空的就不送報到通知。
+  requestsDir: '',
 };
+
+// 寫報到通知時先寫在這個資料夾、寫完才搬進 Requests，InterLink 才不會讀到寫一半的檔案。
+// 放在 Requests 旁邊（同一顆硬碟，搬移是一瞬間的事），不放在 Requests 裡面——InterLink 會不會去讀子資料夾不確定。
+export const REQUESTS_TEMP_DIR = '.idexx-bridge-tmp';
 
 export function normalizeConfig(raw) {
   const config = { ...DEFAULTS, ...raw };
@@ -158,12 +168,73 @@ export async function processFolder(config, { seen, upload = uploadFile, now = (
   return summary;
 }
 
+async function bridgeRequest(config, pathname, { method = 'GET', body } = {}) {
+  try {
+    const response = await fetch(`${config.serverUrl}${pathname}`, {
+      method,
+      headers: { authorization: `Bearer ${config.token}`, ...(body ? { 'content-type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(15_000),
+    });
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    return { status: response.status, body: payload };
+  } catch (err) {
+    return { status: 0, body: null, error: err.message };
+  }
+}
+
+export function fetchRequests(config) {
+  return bridgeRequest(config, '/api/lab-results/requests');
+}
+
+export function confirmRequest(config, id, bridgeId) {
+  return bridgeRequest(config, `/api/lab-results/requests/${encodeURIComponent(id)}/delivered`, { method: 'POST', body: { bridgeId } });
+}
+
+// 檔名由伺服器給（訊息編號.xml），還是只留安全的字元，不讓任何內容寫到 Requests 以外的地方。
+export function requestFileName(name) {
+  const base = path.basename(String(name ?? '')).replace(/[^\w.-]/g, '');
+  return /\.xml$/i.test(base) && base.length > 4 ? base : null;
+}
+
+// 拿一輪報到通知寫進 Requests。回傳 { written, error }。
+// 寫好才回報伺服器；回報失敗下一輪會再拿到同一份，寫成同一個檔名（覆蓋），不會多出第二份。
+export async function deliverRequests(config, { list = fetchRequests, confirm = confirmRequest, bridgeId = config.name || os.hostname(), log = () => {} } = {}) {
+  const summary = { written: 0 };
+  if (!config.requestsDir) return summary;
+  if (!existsSync(config.requestsDir)) return { ...summary, error: `找不到報到通知資料夾：${config.requestsDir}` };
+  const response = await list(config);
+  if (response.status !== 200) {
+    return { ...summary, error: response.error ?? `拿報到通知失敗 HTTP ${response.status}：${response.body?.message ?? ''}` };
+  }
+  const tempDir = path.join(path.dirname(path.resolve(config.requestsDir)), REQUESTS_TEMP_DIR);
+  for (const item of response.body?.items ?? []) {
+    const fileName = requestFileName(item.fileName);
+    if (!fileName || typeof item.body !== 'string') continue;
+    await mkdir(tempDir, { recursive: true });
+    const tempPath = path.join(tempDir, fileName);
+    await writeFile(tempPath, Buffer.from(item.body, 'base64'));
+    await rename(tempPath, path.join(config.requestsDir, fileName));
+    summary.written += 1;
+    log(`已寫入報到通知 ${fileName}`);
+    const confirmed = await confirm(config, item.id, bridgeId);
+    if (confirmed.status !== 200) return { ...summary, error: confirmed.error ?? `回報報到通知失敗 HTTP ${confirmed.status}` };
+  }
+  return summary;
+}
+
 export function heartbeatPayload(config, state, { hostname = os.hostname(), version = '' } = {}) {
   return {
     bridgeId: config.name || hostname,
     hostname,
     version,
     resultsDir: config.resultsDir,
+    requestsDir: config.requestsDir ?? '',
     startedAt: state.startedAt?.toISOString() ?? null,
     lastUploadAt: state.lastUploadAt?.toISOString() ?? null,
     pendingFiles: state.pendingFiles ?? 0,
@@ -217,7 +288,11 @@ async function check(config, version) {
   } else {
     problems.push(`伺服器回應 HTTP ${response.status}：${response.body?.message ?? ''}`);
   }
-  if (!problems.length) console.log(`✔ 資料夾存在（${config.resultsDir}）`);
+  if (config.requestsDir && !existsSync(config.requestsDir)) problems.push(`找不到報到通知資料夾：${config.requestsDir}`);
+  if (!problems.length) {
+    console.log(`✔ 資料夾存在（${config.resultsDir}）`);
+    if (config.requestsDir) console.log(`✔ 報到通知資料夾存在（${config.requestsDir}）`);
+  }
   for (const problem of problems) console.error(`✘ ${problem}`);
   return problems.length === 0;
 }
@@ -249,9 +324,11 @@ async function main() {
   }
 
   await log(`開始監看 ${config.resultsDir}，上傳到 ${config.serverUrl}（每 ${config.pollSeconds} 秒一輪，版本 ${version}）`);
+  if (config.requestsDir) await log(`報到通知寫進 ${config.requestsDir}`);
   const seen = new Map();
   const state = { startedAt: new Date(), lastUploadAt: null, pendingFiles: 0, lastError: '' };
   let lastError = null;
+  let lastRequestError = null;
   let lastHeartbeatAt = 0;
   for (;;) {
     try {
@@ -266,7 +343,17 @@ async function main() {
       if (err.message !== lastError) await log(`掃描資料夾失敗：${err.message}`);
       lastError = err.message;
     }
-    state.lastError = lastError ?? '';
+    // 報到通知跟上傳結果互不影響：一邊壞了另一邊照樣做。
+    let requestError = null;
+    try {
+      requestError = (await deliverRequests(config, { log })).error ?? null;
+    } catch (err) {
+      requestError = `寫入報到通知失敗：${err.message}`;
+    }
+    if (requestError && requestError !== lastRequestError) await log(requestError);
+    if (!requestError && lastRequestError) await log('報到通知已恢復');
+    lastRequestError = requestError;
+    state.lastError = [lastError, requestError].filter(Boolean).join('；');
     // 心跳失敗不另外記 log：連不上伺服器時上面的上傳錯誤已經記過了。
     if (Date.now() - lastHeartbeatAt >= config.heartbeatSeconds * 1000) {
       lastHeartbeatAt = Date.now();
