@@ -14,6 +14,7 @@ import ListSkeleton from '../ListSkeleton.vue';
 import ConfirmDialog from '../ConfirmDialog.vue';
 import PetPickerDialog from '../PetPickerDialog.vue';
 import LabConflictDialog from '../LabConflictDialog.vue';
+import Pagination from '../Pagination.vue';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
@@ -34,8 +35,23 @@ const pickedPet = ref(null);
 const pickerOpen = ref(false);
 const dismissing = ref(false);
 
+// 待確認的結果可能堆到上百筆，清單分頁、標題列出總筆數。
+const PAGE_SIZE = 20;
+const page = ref(1);
+const total = ref(0);
+const totalPages = ref(1);
+const listTop = ref(null);
+let listRequest = 0;
+
 const view = computed(() => (panel.stacks.lab || []).at(-1) || null);
-const current = computed(() => items.value.find((item) => String(item._id) === view.value?.id) ?? null);
+// 確認畫面開著時，新結果進來會把這筆擠到下一頁，所以留一份點開當下的資料當後備；
+// 別台已經處理掉的話，按確認／忽略時伺服器回 409。
+const openedItem = ref(null);
+const current = computed(() => {
+  const id = view.value?.id;
+  if (!id) return null;
+  return items.value.find((item) => String(item._id) === id) ?? (String(openedItem.value?._id) === id ? openedItem.value : null);
+});
 const options = computed(() => {
   const candidates = (current.value?.candidates ?? []).map((candidate) => ({
     petId: String(candidate.petId),
@@ -56,20 +72,34 @@ const conflicts = ref([]);
 const conflictGroup = ref(null);
 
 async function refresh() {
+  const id = ++listRequest;
   try {
     const [{ data }, { data: conflictData }] = await Promise.all([
-      http.get('/lab-results', { params: { limit: 50 } }),
+      http.get('/lab-results', { params: { page: page.value, limit: PAGE_SIZE } }),
       http.get('/lab-results/conflicts'),
     ]);
-    items.value = data.items || [];
+    if (id !== listRequest) return;
+    total.value = data.total ?? 0;
+    totalPages.value = data.totalPages || 1;
     conflicts.value = conflictData.items || [];
     error.value = '';
+    // 最後一頁的都處理完了：退回新的最後一頁（watch(page) 會再讀一次）。
+    if (page.value > totalPages.value) {
+      page.value = totalPages.value;
+      return;
+    }
+    items.value = data.items || [];
   } catch {
-    error.value = '檢驗結果載入失敗，請重試。';
+    if (id === listRequest) error.value = '檢驗結果載入失敗，請重試。';
   } finally {
-    loading.value = false;
+    if (id === listRequest) loading.value = false;
   }
 }
+
+watch(page, () => {
+  refresh();
+  listTop.value?.scrollIntoView({ block: 'start' });
+});
 
 function idexxOwner(item) {
   return [item.client?.firstName, item.client?.lastName].filter(Boolean).join(' ');
@@ -87,6 +117,7 @@ function range(assay) {
 }
 
 function openItem(item) {
+  openedItem.value = item;
   panel.push({ type: 'confirm', id: String(item._id) }, 'lab');
 }
 
@@ -309,6 +340,7 @@ onActivated(refreshAll);
           <span class="size-3 rounded-full ring-2 ring-card" :class="BRIDGE_LIGHTS[light.tone]"></span>
         </component>
       </template>
+      <span ref="listTop" aria-hidden="true"></span>
       <section v-if="conflicts.length" class="border-b border-border" aria-labelledby="lab-conflicts-title">
         <h3 id="lab-conflicts-title" class="px-5 pt-3 pb-1 text-sm font-semibold">數值跟報告不同</h3>
         <ul class="divide-y divide-border">
@@ -326,19 +358,29 @@ onActivated(refreshAll);
       <ListSkeleton v-if="loading" :rows="3" inset />
       <Alert v-else-if="error" variant="destructive" class="mx-5 mt-4 w-auto"><AlertDescription>{{ error }}</AlertDescription></Alert>
       <EmptyState v-else-if="!items.length && !conflicts.length" :icon="FlaskConical" title="沒有待確認的檢驗結果" inset />
-      <ul v-else class="divide-y divide-border">
-        <li v-for="item in items" :key="item._id">
-          <button type="button" class="flex w-full flex-col gap-0.5 px-5 py-3 text-left hover:bg-hover" @click="openItem(item)">
-            <span class="flex items-baseline gap-2">
-              <span class="text-base font-semibold">{{ instrumentLabel(item.instrument).purpose }}</span>
-              <span class="truncate text-sm text-muted-foreground">{{ instrumentLabel(item.instrument).name }}</span>
-              <span class="num ml-auto shrink-0 text-xs text-subtle-foreground">{{ formatDateTime(item.runAt) }}</span>
-            </span>
-            <span class="text-sm text-muted-foreground">IDEXX 上的名字：<span class="font-medium text-foreground">{{ item.patient?.name }}</span></span>
-            <span v-if="suggestion(item)" class="text-sm text-primary">建議：{{ suggestion(item).petName }}（{{ suggestion(item).time }}）</span>
-          </button>
-        </li>
-      </ul>
+      <section v-else-if="items.length" aria-labelledby="lab-pending-title">
+        <h3 id="lab-pending-title" class="flex items-baseline gap-2 px-5 pt-3 pb-1 text-sm font-semibold">
+          還沒選貓
+          <span class="num font-normal text-muted-foreground">共 {{ total.toLocaleString('zh-TW') }} 筆</span>
+          <span v-if="totalPages > 1" class="num ml-auto text-xs font-normal text-subtle-foreground">第 {{ page }}／{{ totalPages }} 頁</span>
+        </h3>
+        <ul class="divide-y divide-border">
+          <li v-for="item in items" :key="item._id">
+            <button type="button" class="flex w-full flex-col gap-0.5 px-5 py-3 text-left hover:bg-hover" @click="openItem(item)">
+              <span class="flex items-baseline gap-2">
+                <span class="text-base font-semibold">{{ instrumentLabel(item.instrument).purpose }}</span>
+                <span class="truncate text-sm text-muted-foreground">{{ instrumentLabel(item.instrument).name }}</span>
+                <span class="num ml-auto shrink-0 text-xs text-subtle-foreground">{{ formatDateTime(item.runAt) }}</span>
+              </span>
+              <span class="text-sm text-muted-foreground">IDEXX 上的名字：<span class="font-medium text-foreground">{{ item.patient?.name }}</span></span>
+              <span v-if="suggestion(item)" class="text-sm text-primary">建議：{{ suggestion(item).petName }}（{{ suggestion(item).time }}）</span>
+            </button>
+          </li>
+        </ul>
+      </section>
+      <template v-if="totalPages > 1" #footer>
+        <Pagination v-model:page="page" class="w-full" :total-pages="totalPages" />
+      </template>
     </SidePanel>
 
     <ConfirmDialog

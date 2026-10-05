@@ -46,7 +46,8 @@ const chatItem = computed(() => ({ key: 'chat', icon: MessageCircle, short: '聊
 
 function countText(item) {
   if (item.alert && !item.count) return '!';
-  return item.count > 99 ? '99+' : String(item.count);
+  // 使用者要求看得到三位數（檢驗待確認常堆到上百筆），超過才收成 999+。
+  return item.count > 999 ? '999+' : String(item.count);
 }
 function showCount(item) {
   if (item.alert) return true;
