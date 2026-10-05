@@ -4,10 +4,11 @@ import { emitTodosUpdate } from './realtime.js';
 export const MAX_OPEN_TODOS = 200;
 export const MAX_DONE_TODOS = 50;
 
-// 有期限的排前面（越早越前），沒期限的照建立順序接在後面。
+// 標了星號的置頂；同一組裡有期限的排前面（越早越前），沒期限的照建立順序接在後面。
 // 未完成清單上限 200 筆、在記憶體裡排，跟資料庫的 32MB 排序上限無關。
 export function sortOpenTodos(rows) {
   return [...rows].sort((a, b) => {
+    if (Boolean(a.starred) !== Boolean(b.starred)) return a.starred ? -1 : 1;
     if (a.dueDate && b.dueDate && a.dueDate !== b.dueDate) return a.dueDate < b.dueDate ? -1 : 1;
     if (Boolean(a.dueDate) !== Boolean(b.dueDate)) return a.dueDate ? -1 : 1;
     return new Date(a.createdAt) - new Date(b.createdAt);

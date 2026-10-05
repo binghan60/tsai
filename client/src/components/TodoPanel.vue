@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Check, ListTodo, Pencil, Plus, Trash2, Undo2, X } from '@lucide/vue';
+import { Check, ListTodo, Pencil, Plus, Star, Trash2, X } from '@lucide/vue';
 import { useTodosStore } from '../stores/todos';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
@@ -10,6 +10,7 @@ import { mentionsStillInContent, splitMentionSegments } from '../lib/chatMention
 import { DUE_TONE_CLASS, dueStatus } from '../lib/todoDisplay';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
+import { Checkbox } from './ui/checkbox';
 import { DatePicker } from './ui/date-picker';
 import EmptyState from './EmptyState.vue';
 import FilterTabs from './FilterTabs.vue';
@@ -103,6 +104,14 @@ async function run(id, action, fallback) {
   }
 }
 
+function toggleDone(item) {
+  return run(
+    item._id,
+    () => (item.status === 'done' ? store.reopen(item._id) : store.complete(item._id, identity.value)),
+    '操作失敗，請稍後再試'
+  );
+}
+
 // 內文可以上色、加粗（shared/richText.js）。空白判斷、#標記比對、aria-label 一律看純文字。
 const plain = (value) => richTextToPlain(value).trim();
 
@@ -176,30 +185,18 @@ async function saveEdit(item) {
          列高隨內容，不套 desktop-data-row 的固定 56px——待辦內文最長 500 字，要能完整換行。 -->
     <ul v-else class="-mx-5 divide-y divide-border border-y border-border">
       <li v-for="item in pageItems" :key="item._id" class="group grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-3 px-5 py-3">
-        <Button
-          v-if="item.status === 'open'"
-          type="button"
-          variant="soft"
-          size="icon-xs"
-          class="rounded-full"
+        <!-- 勾選框：勾起來＝完成（內文槓掉），取消勾選＝改回未完成。狀態以伺服器回來的清單為準，
+             所以只綁 model-value、不用 v-model。比表單裡的勾選框大（28px，預設 20px 太難點）；
+             mt-0.5 讓框對齊內文第一行。 -->
+        <Checkbox
+          class="mt-0.5 size-7 justify-self-center rounded-md"
+          :model-value="item.status === 'done'"
           :disabled="busyId === item._id"
-          :aria-label="`完成：${plain(item.content)}`"
-          @click="run(item._id, () => store.complete(item._id, identity), '操作失敗，請稍後再試')"
+          :aria-label="`${item.status === 'done' ? '改回未完成' : '完成'}：${plain(item.content)}`"
+          @update:model-value="toggleDone(item)"
         >
-          <!-- 按鈕本身就是那個空心圓；滑過才出勾勾，靜止時不會被誤讀成已完成。 -->
-          <Check class="size-4 opacity-0 transition-opacity group-hover/button:opacity-100" stroke-width="2" />
-        </Button>
-        <Button
-          v-else
-          type="button"
-          variant="secondary"
-          size="icon-xs"
-          :disabled="busyId === item._id"
-          :aria-label="`改回未完成：${plain(item.content)}`"
-          @click="run(item._id, () => store.reopen(item._id), '操作失敗，請稍後再試')"
-        >
-          <Undo2 class="h-4 w-4" stroke-width="1.75" />
-        </Button>
+          <template #indicator><Check class="size-5" stroke-width="3" /></template>
+        </Checkbox>
 
         <div class="min-w-0 space-y-0.5">
           <form v-if="editingId === item._id" class="flex items-center gap-1.5" @submit.prevent="saveEdit(item)">
@@ -219,6 +216,21 @@ async function saveEdit(item) {
         </div>
 
         <div class="flex shrink-0 items-center gap-1">
+          <!-- 星號＝置頂：排序由伺服器決定（sortOpenTodos），按下去整份清單換新、這一筆自己跳到最上面。
+               只有未完成的能標；完成後星號留在資料上，改回未完成時照樣置頂。 -->
+          <Button
+            v-if="item.status === 'open'"
+            type="button"
+            variant="secondary"
+            size="icon-xs"
+            :disabled="busyId === item._id"
+            :aria-pressed="Boolean(item.starred)"
+            :aria-label="`${item.starred ? '取消置頂' : '置頂'}：${plain(item.content)}`"
+            v-tip="item.starred ? '取消置頂' : '置頂'"
+            @click="run(item._id, () => store.update(item._id, { starred: !item.starred }), '操作失敗，請稍後再試')"
+          >
+            <Star class="h-4 w-4" :class="item.starred ? 'fill-warning text-warning' : ''" stroke-width="1.75" />
+          </Button>
           <Button v-if="item.status === 'open' && editingId !== item._id" type="button" variant="secondary" size="icon-xs" :aria-label="`編輯：${plain(item.content)}`" @click="startEdit(item)">
             <Pencil class="h-4 w-4" stroke-width="1.75" />
           </Button>

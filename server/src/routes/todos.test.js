@@ -40,6 +40,16 @@ describe('todo lib', () => {
     assert.deepEqual(sortOpenTodos(rows).map((row) => row._id), ['e', 'd', 'b', 'c', 'a']);
   });
 
+  it('未完成清單：標星號的置頂，星號那一組裡照樣依期限與建立順序排', () => {
+    const rows = [
+      { _id: 'a', dueDate: '2026-09-01', createdAt: '2026-09-01T00:00:00Z' },
+      { _id: 'b', starred: true, dueDate: null, createdAt: '2026-09-03T00:00:00Z' },
+      { _id: 'c', starred: false, dueDate: null, createdAt: '2026-08-01T00:00:00Z' },
+      { _id: 'd', starred: true, dueDate: '2026-09-30', createdAt: '2026-09-05T00:00:00Z' },
+    ];
+    assert.deepEqual(sortOpenTodos(rows).map((row) => row._id), ['d', 'b', 'a', 'c']);
+  });
+
   it('日期驗證只接受真實存在的日曆日', () => {
     assert.equal(isValidDateInput('2026-09-22'), true);
     assert.equal(isValidDateInput('2026-02-31'), false);
@@ -143,6 +153,19 @@ describe('todos routes', () => {
     assert.equal(doc.dueDate, null);
     Todo.findById = async () => null;
     assert.equal((await put(`/${todoId}`, { content: '內容' })).status, 404);
+  });
+
+  it('PUT starred 標上／拿掉星號，不動其他欄位；不是布林回 422', async () => {
+    const doc = mockTodoDoc({ content: '內容', dueDate: '2026-09-25', starred: false });
+    mockList();
+    assert.equal((await put(`/${todoId}`, { starred: true })).status, 200);
+    assert.equal(doc.starred, true);
+    assert.equal(doc.content, '內容');
+    assert.equal(doc.dueDate, '2026-09-25');
+    assert.equal((await put(`/${todoId}`, { starred: false })).status, 200);
+    assert.equal(doc.starred, false);
+    assert.equal((await put(`/${todoId}`, { starred: 'yes' })).status, 422);
+    assert.equal(doc.saved, 2);
   });
 
   it('完成是冪等的：已完成的不會被覆寫完成時間', async () => {

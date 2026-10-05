@@ -14,6 +14,8 @@ const todoSchema = new mongoose.Schema(
     createdBy: { type: String, enum: ['vet', 'front_desk'], required: true },
     // YYYY-MM-DD 字串，理由跟 Appointment.date 一樣：避免日期因伺服器時區偏移。
     dueDate: { type: String, default: null, match: /^\d{4}-\d{2}-\d{2}$/ },
+    // 星號＝置頂：未完成清單裡排在所有沒標星號的前面（lib/todos.js 的 sortOpenTodos）。
+    starred: { type: Boolean, default: false },
     status: { type: String, enum: ['open', 'done'], default: 'open' },
     doneAt: { type: Date, default: null },
     doneBy: { type: String, enum: ['vet', 'front_desk', null], default: null },

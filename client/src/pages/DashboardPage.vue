@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import PatientLink from '../components/PatientLink.vue'
-import { AlertTriangle, ArrowRight, ListTodo } from '@lucide/vue'
+import { AlertTriangle, ArrowRight, ListTodo, Star } from '@lucide/vue'
 import { clinicDateInput, clinicTimeInput, weekdayLabel } from '../lib/datetime'
 import { DUE_TONE_CLASS, dueStatus } from '../lib/todoDisplay'
 import { http } from '../api/http'
@@ -11,6 +11,7 @@ import { useStaffIdentity } from '../composables/useStaffIdentity'
 import { useToast } from '../composables/useToast'
 import { richTextToPlain } from '../../../shared/richText.js'
 import { Button } from '../components/ui/button'
+import { Checkbox } from '../components/ui/checkbox'
 import { Alert, AlertDescription } from '../components/ui/alert'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip'
 import EmptyState from '../components/EmptyState.vue'
@@ -204,15 +205,15 @@ async function completeTodo(item) {
           <EmptyState v-if="todos.loaded && !openTodos.length" :icon="ListTodo" title="目前沒有未完成的待辦" description="從右側工具欄的「待辦」新增。" inset />
           <ul v-else>
             <li v-for="item in openTodos" :key="item._id" class="flex items-center gap-2.5 border-b border-border py-2">
-              <button
-                type="button"
-                class="group/check flex size-5 shrink-0 items-center justify-center rounded-full bg-secondary shadow-[inset_0_0_0_1.5px_var(--border-strong)] transition-colors hover:bg-success-surface hover:shadow-[inset_0_0_0_1.5px_var(--success)] disabled:opacity-50"
+              <!-- 這裡只列未完成的，勾下去就完成、從清單消失；樣子跟待辦面板的勾選框一致。 -->
+              <Checkbox
+                class="size-6 rounded-md"
+                :model-value="false"
                 :disabled="busyTodo === item._id"
                 :aria-label="`完成：${richTextToPlain(item.content)}`"
-                @click="completeTodo(item)"
-              >
-                <span class="size-2 rounded-full bg-success opacity-0 transition-opacity group-hover/check:opacity-100" aria-hidden="true"></span>
-              </button>
+                @update:model-value="completeTodo(item)"
+              />
+              <Star v-if="item.starred" class="size-4 shrink-0 fill-warning text-warning" stroke-width="1.75" role="img" aria-label="已置頂" />
               <button type="button" class="min-w-0 flex-1 truncate text-left hover:text-primary" v-tip.overflow="richTextToPlain(item.content)" @click="panel.open('todos')">{{ richTextToPlain(item.content) }}</button>
               <span v-if="dueStatus(item.dueDate, todayInput)" class="inline-flex h-6 shrink-0 items-center rounded-full px-2 text-2xs leading-none font-semibold" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, todayInput).tone]">{{ dueStatus(item.dueDate, todayInput).label }}</span>
             </li>

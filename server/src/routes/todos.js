@@ -75,6 +75,10 @@ router.put('/:id', async (req, res, next) => {
       if (dueDate !== null && !isValidDateInput(String(dueDate))) return invalid(res, '期限日期格式不正確');
       todo.dueDate = dueDate;
     }
+    if (body.starred !== undefined) {
+      if (typeof body.starred !== 'boolean') return invalid(res, '星號參數不正確');
+      todo.starred = body.starred;
+    }
     // mentions 帶了就整組取代（前端改內文時會把還留在內文裡的標記一起送回來）；沒帶則不動。
     if (body.mentions !== undefined) {
       const { mentions, error } = await resolveMentions(body.mentions);
