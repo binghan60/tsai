@@ -258,6 +258,24 @@ labResultsRouter.get('/', async (req, res, next) => {
     const petId = req.query.petId ? String(req.query.petId) : null;
     if (petId && !mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '貓咪參數不正確' });
     const filter = petId ? { petId } : { petId: null, dismissedAt: null };
+    // 診療台的「檢驗報告」：這隻貓在這次看診要看的 IDEXX 原始結果——當天驗的（date），
+    // 加上醫師從別天匯入、指定給這次看診的（appointmentId）。兩個條件是「或」。
+    const appointmentId = req.query.appointmentId ? String(req.query.appointmentId) : null;
+    if (appointmentId && !mongoose.isValidObjectId(appointmentId)) return res.status(422).json({ message: '看診參數不正確' });
+    const scopes = [];
+    if (req.query.date !== undefined) {
+      const start = clinicDayStart(req.query.date);
+      if (!start) return res.status(422).json({ message: '日期參數不正確' });
+      scopes.push({ runAt: { $gte: start, $lt: clinicDayStart(req.query.date, 1) } });
+    }
+    if (petId && appointmentId) scopes.push({ appointmentId });
+    if (scopes.length) filter.$or = scopes;
+    // 「匯入檢驗結果」的搜尋：比對技術員在 IDEXX 主機上打的貓名、飼主名（待確認清單頂多幾百筆，不必索引）。
+    const keyword = String(req.query.q ?? '').trim().slice(0, 50);
+    if (!petId && keyword) {
+      const pattern = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$and = [{ $or: [{ 'patient.name': pattern }, { 'client.lastName': pattern }, { 'client.firstName': pattern }] }];
+    }
     const pagination = paginationOptions(req.query);
     const [items, total] = await Promise.all([
       LabResult.find(filter).sort({ runAt: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit).lean(),
@@ -281,7 +299,10 @@ labResultsRouter.post('/:id/match', async (req, res, next) => {
     if (!validId(req, res)) return;
     const petId = String(req.body?.petId ?? '');
     if (!mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '請選擇貓咪' });
-    const fill = await matchManually(req.params.id, petId);
+    // appointmentId（選填）：診療台的匯入指定要填進哪一次看診，不限檢驗當天。
+    const appointmentId = req.body?.appointmentId ? String(req.body.appointmentId) : null;
+    if (appointmentId && !mongoose.isValidObjectId(appointmentId)) return res.status(422).json({ message: '看診參數不正確' });
+    const fill = await matchManually(req.params.id, petId, { appointmentId });
     emitLabResultsUpdate();
     res.json({ fill });
   } catch (err) {

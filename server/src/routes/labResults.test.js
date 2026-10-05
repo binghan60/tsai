@@ -308,6 +308,50 @@ describe('lab results routes', () => {
     assert.equal((await post(`${id}/match`, { petId: '64b000000000000000000001' })).status, 404);
   });
 
+  it('匯入到指定的看診：看診不是這隻貓的回 422，不會動到檢驗結果', async () => {
+    const id = '64b000000000000000000009';
+    const petId = '64b000000000000000000001';
+    const post = (body) => fetch(`${origin}/api/lab-results/${id}/match`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+    assert.equal((await post({ petId, appointmentId: 'abc' })).status, 422);
+    Pet.exists = async () => ({ _id: petId });
+    let asked;
+    const originalExists = Appointment.exists;
+    Appointment.exists = async (filter) => { asked = filter; return null; };
+    LabResult.findOneAndUpdate = async () => { throw new Error('不該動到檢驗結果'); };
+    try {
+      assert.equal((await post({ petId, appointmentId: '64b0000000000000000000a1' })).status, 422);
+      assert.deepEqual(asked, { _id: '64b0000000000000000000a1', petId });
+    } finally {
+      Appointment.exists = originalExists;
+    }
+  });
+
+  it('待確認清單可以用 IDEXX 上的名字搜尋；指定看診時列「當天驗的」或「匯入到這次看診的」', async () => {
+    const filters = [];
+    LabResult.find = (filter) => {
+      filters.push(filter);
+      const chain = { sort: () => chain, skip: () => chain, limit: () => chain, lean: async () => [] };
+      return chain;
+    };
+    LabResult.countDocuments = async () => 0;
+    assert.equal((await fetch(`${origin}/api/lab-results?q=${encodeURIComponent('牛奶(1)')}`)).status, 200);
+    const pattern = filters[0].$and[0].$or[0]['patient.name'];
+    assert.ok(pattern.test('小牛奶(1)'));
+    assert.ok(!pattern.test('牛奶1'));
+    assert.equal(filters[0].petId, null);
+
+    const petId = '64b000000000000000000001';
+    const appointmentId = '64b0000000000000000000a1';
+    assert.equal((await fetch(`${origin}/api/lab-results?petId=${petId}&date=2026-10-06&appointmentId=${appointmentId}`)).status, 200);
+    assert.equal(filters[1].petId, petId);
+    assert.equal(filters[1].$or.length, 2);
+    assert.equal(filters[1].$or[0].runAt.$gte.toISOString(), '2026-10-05T16:00:00.000Z');
+    assert.deepEqual(filters[1].$or[1], { appointmentId });
+    assert.equal((await fetch(`${origin}/api/lab-results?petId=${petId}&appointmentId=abc`)).status, 422);
+  });
+
   it('忽略：只有還在待確認清單上的能忽略', async () => {
     const id = '64b000000000000000000009';
     let filter;

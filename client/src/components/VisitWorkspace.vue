@@ -19,6 +19,8 @@ import { workflowState } from '../../../shared/appointmentWorkflow.js'
 import { clinicalDraft, draftPatch, mergeClinicalUpdate, takeBaseline } from '../lib/visitDraft'
 import { ageLabel, clinicTimeInput } from '../lib/datetime'
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue'
+import VisitLabTable from './VisitLabTable.vue'
+import LabImportDialog from './LabImportDialog.vue'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
@@ -45,7 +47,10 @@ const { openPicker } = useTextTemplates()
 // notes-updated：貓咪／飼主備註改了，讓佇列上的備註標籤跟著更新。
 const emit = defineEmits(['updated', 'open-record', 'start', 'notes-updated'])
 
-// 送 IDEXX不走看診的自動存檔，也不動掛號的版本號：它只是一個時間戳記，跟正在打的紀錄互不影響。
+const labTable = ref(null)
+const labImportOpen = ref(false)
+
+// 送 IDEXX 不走看診的自動存檔，也不動掛號的版本號：它只是一個時間戳記，跟正在打的紀錄互不影響。
 const labRequest = useLabRequest()
 async function toggleLabRequest(requested) {
   const data = await labRequest.setLabRequest(props.appointment, requested)
@@ -585,6 +590,19 @@ onBeforeUnmount(() => {
                 <div class="relative"><Input :id="`visit-temp-${appointment._id}`" v-model="draft.temperatureC" type="text" inputmode="decimal" class="num pr-11" :disabled="!editable || committing" /><span class="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-subtle-foreground">°C</span></div>
               </div>
             </div>
+          </section>
+
+          <!-- 檢驗報告：這隻貓當天的 IDEXX 原始結果（不是健檢報告上的數值），只顯示不能改，
+               放在本次簡易紀錄正上方，醫師邊看邊打紀錄。它是參考資料、不是這裡寫的東西，所以沒有去處標記。 -->
+          <section class="space-y-2" :aria-labelledby="`lab-heading-${appointment._id}`">
+            <div class="flex items-center gap-2">
+              <h3 :id="`lab-heading-${appointment._id}`" class="text-base font-semibold">檢驗報告</h3>
+              <Badge v-if="labTable?.abnormal" variant="status" class="bg-danger-surface text-danger">異常 <span class="num">{{ labTable.abnormal }}</span> 項</Badge>
+              <!-- 技術員在 IDEXX 主機上手打名字驗的結果不會自己歸過來：從這裡挑當天還沒認領的那一份。 -->
+              <Button v-if="appointment.petId" variant="soft" size="sm" class="ml-auto" @click="labImportOpen = true"><FlaskConical stroke-width="1.75" />匯入檢驗結果</Button>
+            </div>
+            <VisitLabTable ref="labTable" :appointment="appointment" />
+            <LabImportDialog v-if="labImportOpen" :appointment="appointment" @close="labImportOpen = false" @imported="labTable?.reload()" />
           </section>
 
           <!-- 用 div 不用 label：label 會把點擊轉給裡面第一個可點的元素，也就是編輯器工具列的粗體鈕。 -->

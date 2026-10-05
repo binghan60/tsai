@@ -27,16 +27,28 @@ export async function matchByPatientId(labResultId, patientId) {
 // 把已經知道是哪隻貓的結果，填進那隻貓檢驗當天的看診。
 // 找不到看診、看診沒選健檢表單時不記 appliedAt——之後掛號補上或重送檔案時還能再套用一次。
 // force：IDEXX 送了更正版，要重新比一次；平常已經填過的就不重填。
-export async function applyLabResult(labResultId, { force = false } = {}) {
+// appointmentId：醫師在診療台「匯入檢驗結果」指定要填進哪一次看診——不限檢驗當天（昨天驗、今天回來看報告）。
+// 指定了就不再自己找看診；就算那次看診沒選健檢表單、填不進去，也記下關聯，診療台的檢驗報告才顯示得出這一份。
+export async function applyLabResult(labResultId, { force = false, appointmentId = null } = {}) {
   const result = await LabResult.findById(labResultId).lean();
   if (!result?.petId) return { status: 'unmatched' };
   if (result.appliedAt && !force) return { status: 'already_applied' };
 
-  const date = clinicToday(result.runAt ?? result.createdAt);
-  const visits = await Appointment.find({ petId: result.petId, date }).select('_id status checkedInAt templateId').lean();
-  const visit = pickVisit(visits, result.runAt);
-  if (!visit) return { status: 'no_visit', date };
-  if (!visit.templateId) return { status: 'no_template', appointmentId: visit._id };
+  let visit;
+  if (appointmentId) {
+    visit = await Appointment.findOne({ _id: appointmentId, petId: result.petId }).select('_id status checkedInAt templateId').lean();
+    if (!visit) throw Object.assign(new Error('這次看診不是這隻貓咪的'), { status: 422 });
+    if (!visit.templateId) {
+      await LabResult.updateOne({ _id: result._id }, { $set: { appointmentId: visit._id } });
+      return { status: 'no_template', appointmentId: visit._id };
+    }
+  } else {
+    const date = clinicToday(result.runAt ?? result.createdAt);
+    const visits = await Appointment.find({ petId: result.petId, date }).select('_id status checkedInAt templateId').lean();
+    visit = pickVisit(visits, result.runAt);
+    if (!visit) return { status: 'no_visit', date };
+    if (!visit.templateId) return { status: 'no_template', appointmentId: visit._id };
+  }
 
   let plan = null;
   let changed = null;
@@ -84,15 +96,19 @@ export async function applyLabResult(labResultId, { force = false } = {}) {
 }
 
 // 待確認清單裡人選了是哪隻貓。已經配對或忽略的不能再選（別台剛處理掉）。
-export async function matchManually(labResultId, petId) {
+// appointmentId（選填）：指定要填進哪一次看診（診療台的匯入）；沒給就照檢驗當天找。
+export async function matchManually(labResultId, petId, { appointmentId = null } = {}) {
   if (!(await Pet.exists({ _id: petId }))) throw Object.assign(new Error('找不到這隻貓咪'), { status: 404 });
+  if (appointmentId && !(await Appointment.exists({ _id: appointmentId, petId }))) {
+    throw Object.assign(new Error('這次看診不是這隻貓咪的'), { status: 422 });
+  }
   const updated = await LabResult.findOneAndUpdate(
     { _id: labResultId, petId: null, dismissedAt: null },
     { $set: { petId, matchedAt: new Date(), matchSource: 'manual' } },
     { new: true }
   );
   if (!updated) throw Object.assign(new Error('這份檢驗結果已經被處理了，請重新整理'), { status: 409 });
-  return applyLabResult(labResultId);
+  return applyLabResult(labResultId, { appointmentId });
 }
 
 // 復原（選錯貓）：清掉這份結果填進看診、而且還沒被人改過的數值，結果回到待確認清單。
