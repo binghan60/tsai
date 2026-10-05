@@ -145,6 +145,24 @@ describe('processFolder：實際在暫存資料夾裡跑一輪', () => {
     assert.deepEqual(readdirSync(path.join(dir, ARCHIVE_DIR, month)), ['娜娜.xml']);
   });
 
+  it('一次出現很多檔案：一輪只送額度內的份數（舊的先送），剩下的下一輪接著送', async () => {
+    for (let index = 0; index < 7; index += 1) drop(`${index}.xml`, '<message/>', new Date(oldTime.getTime() + index * 1000));
+    const limited = { ...config, maxFilesPerRound: 3, uploadGapMs: 0 };
+    const seen = new Map();
+    const uploaded = [];
+    const upload = async (_config, file) => { uploaded.push(path.basename(file)); return { status: 201, body: { status: 'created' } }; };
+
+    await processFolder(limited, { seen, upload });
+    const second = await processFolder(limited, { seen, upload });
+    assert.deepEqual(uploaded, ['0.xml', '1.xml', '2.xml']);
+    // 還沒送的算在待上傳裡，心跳會回報。
+    assert.equal(second.pending, 4);
+    await processFolder(limited, { seen, upload });
+    const last = await processFolder(limited, { seen, upload });
+    assert.deepEqual(uploaded, ['0.xml', '1.xml', '2.xml', '3.xml', '4.xml', '5.xml', '6.xml']);
+    assert.equal(last.pending, 0);
+  });
+
   it('連不上伺服器時檔案留在原地，這一輪停下', async () => {
     drop('a.xml');
     drop('b.xml');

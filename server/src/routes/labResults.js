@@ -76,6 +76,27 @@ async function autoFill(imported, parsed) {
   }
 }
 
+// 上傳一份一份排隊處理，兩份之間至少隔 IMPORT_GAP_MS。抓檔程式是掃到幾份就連續送幾份——
+// IDEXX 主機補傳歷史紀錄時一次幾百份，全部擠進來會跟診所正在用的畫面搶資料庫。
+// 在伺服器這一頭放慢，已經裝在診所的舊版抓檔程式不用重裝也受保護（它本來就是等上一份回應才送下一份）。
+export const IMPORT_GAP_MS = 250;
+let importQueue = Promise.resolve();
+let lastImportAt = 0;
+
+function paced(task) {
+  const run = importQueue.then(async () => {
+    const wait = IMPORT_GAP_MS - (Date.now() - lastImportAt);
+    if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait));
+    try {
+      return await task();
+    } finally {
+      lastImportAt = Date.now();
+    }
+  });
+  importQueue = run.catch(() => {});
+  return run;
+}
+
 // 抓檔程式送的是檔案原本的位元組（Content-Type: application/xml），編碼由這裡照 XML 宣告判斷，
 // 抓檔程式不必懂 XML——之後要修解析規則只改伺服器，不必動診所那台電腦。
 labResultBridgeRouter.post(
@@ -98,8 +119,11 @@ labResultBridgeRouter.post(
         if (err.code === 'not_result') return res.json({ status: 'ignored', reason: err.message });
         return res.status(422).json({ message: err.message, code: err.code });
       }
-      const imported = await importLabResult(parsed, { rawXml, fileName: uploadedFileName(req) });
-      const fill = await autoFill(imported, parsed);
+      const fileName = uploadedFileName(req);
+      const { imported, fill } = await paced(async () => {
+        const stored = await importLabResult(parsed, { rawXml, fileName });
+        return { imported: stored, fill: await autoFill(stored, parsed) };
+      });
       // 新的或更正過的結果：工具欄「檢驗」的數字要跟著變（自動認出貓的就不會進待確認清單）。
       if (imported.status === 'created' || imported.status === 'updated') emitLabResultsUpdate();
       res.status(imported.status === 'created' ? 201 : 200).json({ status: imported.status, id: imported.id, fill });

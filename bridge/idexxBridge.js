@@ -26,6 +26,10 @@ const DEFAULTS = {
   failAfterMinutes: 30,
   // 多久回報一次心跳。伺服器超過三分鐘沒收到就當作停了，所以不要設超過一分鐘。
   heartbeatSeconds: 60,
+  // 一輪最多上傳幾份、兩份之間隔多久。IDEXX 主機補傳歷史紀錄時資料夾裡會一次出現幾百份，
+  // 分批慢慢送（預設每 10 秒 20 份，300 份約兩分半），不要一口氣全部壓到伺服器上。
+  maxFilesPerRound: 20,
+  uploadGapMs: 200,
   // 系統上顯示的名稱；沒填就用電腦名稱。
   name: '',
   // InterLink 收報到通知的資料夾（預設 C:\IDEXX Interlink\Requests）；空的就不送報到通知。
@@ -128,6 +132,8 @@ export async function processFolder(config, { seen, upload = uploadFile, now = (
   const present = new Set(files.map((file) => file.name));
   for (const name of seen.keys()) if (!present.has(name)) seen.delete(name);
 
+  const maxUploads = config.maxFilesPerRound > 0 ? config.maxFilesPerRound : Infinity;
+  let uploads = 0;
   for (const file of files) {
     const previous = seen.get(file.name);
     const entry = { size: file.size, mtimeMs: file.mtimeMs, warned: previous?.warned ?? false };
@@ -137,6 +143,10 @@ export async function processFolder(config, { seen, upload = uploadFile, now = (
       summary.waiting += 1;
       continue;
     }
+    // 這一輪的額度用完了：剩下的留在資料夾，下一輪接著送（仍然記住它們寫完了，不必重新等）。
+    if (uploads >= maxUploads) continue;
+    if (uploads > 0 && config.uploadGapMs > 0) await new Promise((resolve) => setTimeout(resolve, config.uploadGapMs));
+    uploads += 1;
 
     const response = await upload(config, file.filePath);
     const outcome = outcomeFor(response, current.getTime() - file.mtimeMs, config.failAfterMinutes * 60_000);

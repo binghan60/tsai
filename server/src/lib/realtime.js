@@ -56,8 +56,28 @@ export function emitAppointmentUpdate(appointment, previousDate) {
 
 // 貓咪暫存區跟聊天一樣是全站一份，不分房間；payload 是完整清單。
 // IDEXX 檢驗結果的待確認清單有變動（收到新結果、有人確認／復原／忽略）；前端重讀工具欄的數字。
+//
+// 這只是「請重讀」的通知，沒有內容，所以短時間內的多次合併成一次：第一次馬上送，接下來 LAB_RESULTS_EMIT_GAP_MS 內的
+// 不管幾次只在結束時補送一次。IDEXX 主機補傳歷史紀錄時會一口氣進來幾百份，每份都廣播的話，
+// 每一台開著的瀏覽器都會跟著各打好幾支 API，等於把一次補傳放大成幾千個請求。
+export const LAB_RESULTS_EMIT_GAP_MS = 3000;
+let labResultsEmitTimer = null;
+let labResultsEmitPending = false;
+
 export function emitLabResultsUpdate() {
+  if (labResultsEmitTimer) {
+    labResultsEmitPending = true;
+    return;
+  }
   io?.emit('lab-results:updated');
+  labResultsEmitTimer = setTimeout(() => {
+    labResultsEmitTimer = null;
+    if (!labResultsEmitPending) return;
+    labResultsEmitPending = false;
+    emitLabResultsUpdate();
+  }, LAB_RESULTS_EMIT_GAP_MS);
+  // 不要因為這個計時器讓測試或關機卡住。
+  labResultsEmitTimer.unref?.();
 }
 
 export function emitPinnedPetsUpdate(items) {

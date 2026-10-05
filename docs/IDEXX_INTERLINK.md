@@ -322,6 +322,7 @@ IDEXX_BRIDGE_TOKEN=<至少 32 字元的隨機字串>
 |---|---|
 | 電腦右下角 InterLink 圖示是黃色 | 防火牆有沒有允許、網路是不是「私人」、跟 IDEXX 主機是否同一台路由器；IDEXX 主機那邊第 3 節的第 2～4 項有沒有設 |
 | 圖示綠色但 `Results\Data\` 沒有檔案 | IDEXX 主機 Instruments → Practice Management 是否選了 On；「Do not transmit records created before」的日期是不是設得太晚 |
+| 一口氣進來幾百份舊結果、「待確認」暴增 | IDEXX 主機在補傳歷史紀錄：首頁 InterLink 圖示裡「Do not transmit records created before」的日期設得太早，或有人按了 Resend。**把日期改成今天**。系統這邊有三道緩衝：抓檔程式一輪最多送 20 份（1.1.1 起，`maxFilesPerRound`／`uploadGapMs`）、伺服器上傳入口一份一份處理且至少隔 0.25 秒、「檢驗清單有更新」的廣播 3 秒內合併成一次（2026-10-05 補傳 377 份時，每份都廣播一次，每台開著的瀏覽器跟著各打好幾支 API，伺服器被拖垮） |
 | 有 XML 但系統沒收到 | 遠端連進去跑 `status.ps1` 看 log：401＝兩邊密鑰不一致；503＝伺服器沒設 `IDEXX_BRIDGE_TOKEN`；連不上＝電腦沒網路或 `serverUrl` 錯。`npm run check` 可以單獨測連線 |
 | 工具欄「檢驗」亮紅色「!」、面板標頭是紅燈 | 抓檔程式超過三分鐘沒心跳：那台電腦關機、沒網路，或排程工作停了。遠端連進去跑 `status.ps1` |
 | 檔案一直留在 `Results\Data\` 不動 | 抓檔程式沒在跑：`status.ps1` 看排程工作狀態；系統的「檢驗」面板會亮紅燈 |
