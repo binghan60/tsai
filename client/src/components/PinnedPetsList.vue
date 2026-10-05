@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { Hash, X } from '@lucide/vue';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 import { useToast } from '../composables/useToast';
@@ -9,7 +9,10 @@ import { Button } from './ui/button';
 // 暫存區清單（右側暫存區面板的首頁）。點整列推入病歷速覽，右邊的 X 手動移除——
 // 暫存區不會自己清空，只有人按了才拿掉。
 const store = usePinnedPetsStore();
+// 外層面板分頁時只傳這一頁的；沒傳就列整份。
+const props = defineProps({ items: { type: Array, default: null } });
 const emit = defineEmits(['open']);
+const list = computed(() => props.items ?? store.items);
 const toast = useToast();
 const removing = ref('');
 const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
@@ -39,8 +42,8 @@ async function remove(item) {
 </script>
 
 <template>
-  <ul v-if="store.items.length" class="divide-y divide-border">
-    <li v-for="item in store.items" :key="item._id" class="group relative">
+  <ul v-if="list.length" class="divide-y divide-border">
+    <li v-for="item in list" :key="item._id" class="group relative">
       <button
         type="button"
         class="flex w-full flex-col gap-1 px-5 py-3 pr-14 text-left transition-colors hover:bg-hover focus-visible:bg-hover focus-visible:outline-none"

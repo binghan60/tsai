@@ -3,7 +3,7 @@ import { computed, onActivated, onMounted, ref, watch } from 'vue';
 import { FlaskConical, Search } from '@lucide/vue';
 import { http } from '../../api/http';
 import { useToast } from '../../composables/useToast';
-import { formatDateTime } from '../../lib/datetime';
+import { clinicDateInput, formatDateTime, weekdayLabel } from '../../lib/datetime';
 import { bridgeStatusLine, fillMessage, instrumentLabel, visitStatusLabel } from '../../lib/labResults';
 import { labFlag } from '../../../../shared/labValues.js';
 import { useUtilityPanelStore } from '../../stores/utilityPanel';
@@ -103,6 +103,16 @@ watch(page, () => {
 
 function idexxOwner(item) {
   return [item.client?.firstName, item.client?.lastName].filter(Boolean).join(' ');
+}
+
+// 候選掛號是哪一天的（跟伺服器 withCandidates 同一個口徑：檢驗時間，沒有就用收到的時間，照診所時區取日期）。
+// 隔天才處理的結果很常見，標出日期才不會誤以為是今天的掛號。
+function runDayLabel(item) {
+  const date = clinicDateInput(item.runAt ?? item.createdAt);
+  if (!date) return '';
+  const [, month, day] = date.split('-');
+  const label = `${Number(month)}/${Number(day)}（${weekdayLabel(date)}）`;
+  return date === clinicDateInput() ? `今天 ${label}` : label;
 }
 
 function suggestion(item) {
@@ -265,7 +275,7 @@ onActivated(refreshAll);
         </div>
 
         <section class="space-y-3 border-b border-border px-5 py-4" aria-labelledby="lab-match-title">
-          <h3 id="lab-match-title" class="text-sm font-semibold">是哪一隻？<span class="font-normal text-muted-foreground">（檢驗當天的掛號）</span></h3>
+          <h3 id="lab-match-title" class="text-sm font-semibold">是哪一隻？<span class="num ml-2 font-normal text-muted-foreground">{{ runDayLabel(current) }}的掛號</span></h3>
           <RadioGroup v-if="options.length" v-model="selectedPetId" aria-labelledby="lab-match-title" class="gap-1.5">
             <label
               v-for="option in options"
@@ -286,7 +296,7 @@ onActivated(refreshAll);
               </span>
             </label>
           </RadioGroup>
-          <p v-else class="text-sm text-muted-foreground">檢驗當天沒有掛號，請用搜尋找貓咪。</p>
+          <p v-else class="text-sm text-muted-foreground">{{ runDayLabel(current) }}沒有掛號，請用搜尋找貓咪。</p>
           <Button variant="secondary" size="sm" @click="pickerOpen = true"><Search stroke-width="1.75" />搜尋其他貓咪</Button>
         </section>
 

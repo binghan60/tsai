@@ -14,6 +14,7 @@ import ListSkeleton from '../ListSkeleton.vue';
 import RowActions from '../RowActions.vue';
 import FilterTabs from '../FilterTabs.vue';
 import ConfirmDialog from '../ConfirmDialog.vue';
+import Pagination from '../Pagination.vue';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
 
@@ -42,6 +43,23 @@ const TABS = [
 const tab = ref('pending');
 const tabCounts = computed(() => ({ pending: items.value.length, codes: codes.value.length }));
 const CODE_ACTIONS = [{ key: 'void', label: '作廢（取消這筆掛號）', danger: true }];
+
+// 兩份清單都是整份拿回來，前端分頁；頁碼列固定在面板底部，跟其他面板一樣。換頁籤回第一頁。
+const PAGE_SIZE = 20;
+const page = ref(1);
+const listTop = ref(null);
+const tabList = computed(() => (tab.value === 'pending' ? items.value : codes.value));
+const totalPages = computed(() => Math.max(1, Math.ceil(tabList.value.length / PAGE_SIZE)));
+const pageSlice = (list) => list.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE);
+const pageItems = computed(() => pageSlice(items.value));
+const pageCodes = computed(() => pageSlice(codes.value));
+watch(tab, () => { page.value = 1; });
+// 審核掉、作廢讓最後一頁空掉時退回新的最後一頁。
+watch(totalPages, (value) => { if (page.value > value) page.value = value; });
+function goToPage(value) {
+  page.value = value;
+  listTop.value?.scrollIntoView({ block: 'start' });
+}
 
 async function refresh() {
   try {
@@ -82,6 +100,8 @@ async function issueCode() {
     const { data } = await http.post('/appointments', { date: clinicDateInput(), petName: '初診資料待填' });
     lastIssuedId.value = String(data._id);
     tab.value = 'codes';
+    // 新發的排在最前面（新到舊）；原本就停在「已發出」的第 2 頁時切頁籤不會歸零，要自己跳回來。
+    page.value = 1;
     toast.success(`初診驗證碼：${data.intakeVerificationCode}`);
     refreshCodes();
   } catch (err) {
@@ -152,7 +172,7 @@ onActivated(refreshAll);
       <IntakeReview :key="view.submissionId" :submission-id="view.submissionId" @decided="onDecided" />
     </SidePanel>
     <SidePanel v-else title="初診" description="飼主用驗證碼在初診頁填表，送出後在這裡審核" flush @close="panel.close()">
-      <div class="space-y-3 border-b border-border px-5 py-4">
+      <div ref="listTop" class="space-y-3 border-b border-border px-5 py-4">
         <Button variant="soft" class="w-full" :disabled="issuing" @click="issueCode"><KeyRound stroke-width="1.75" />發初診驗證碼</Button>
         <FilterTabs v-model="tab" :items="TABS" :counts="tabCounts" aria-label="初診清單" fit />
       </div>
@@ -166,7 +186,7 @@ onActivated(refreshAll);
         <Alert v-else-if="error" variant="destructive" class="mx-5 w-auto"><AlertDescription>{{ error }}</AlertDescription></Alert>
         <EmptyState v-else-if="!items.length" :icon="ClipboardList" title="沒有待審核的初診表" inset />
         <ul v-else class="divide-y divide-border border-t border-border">
-          <li v-for="item in items" :key="item._id">
+          <li v-for="item in pageItems" :key="item._id">
             <button type="button" class="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-hover" @click="panel.push({ type: 'review', submissionId: item._id }, 'intake')">
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-base font-semibold text-primary">{{ item.pet?.name }}</span>
@@ -186,7 +206,7 @@ onActivated(refreshAll);
         <EmptyState v-else-if="!codes.length" :icon="KeyRound" title="沒有等待填寫的驗證碼" inset />
         <ul v-else class="divide-y divide-border border-t border-border">
           <li
-            v-for="item in codes"
+            v-for="item in pageCodes"
             :key="item._id"
             class="flex items-center gap-3 px-5 py-3"
             :class="String(item._id) === lastIssuedId ? 'bg-accent' : ''"
@@ -203,6 +223,9 @@ onActivated(refreshAll);
             <RowActions :actions="CODE_ACTIONS" :label="`${item.petName} 的其他操作`" @select="voiding = item" />
           </li>
         </ul>
+      </template>
+      <template v-if="totalPages > 1" #footer>
+        <Pagination class="w-full" :page="page" :total-pages="totalPages" @update:page="goToPage" />
       </template>
     </SidePanel>
 

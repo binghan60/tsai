@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { Check, ListTodo, Pencil, Plus, Trash2, Undo2, X } from '@lucide/vue';
 import { useTodosStore } from '../stores/todos';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
@@ -54,6 +54,21 @@ const shown = computed(() => {
   if (view.value === 'done') return store.doneItems;
   return [...store.openItems, ...store.doneItems];
 });
+
+// 清單在前端分頁（store 拿到的已經是整份）；頁碼列由外層面板畫在底部（TodosPanel.vue），所以這裡 expose 出去。
+const PAGE_SIZE = 20;
+const root = ref(null);
+const page = ref(1);
+const totalPages = computed(() => Math.max(1, Math.ceil(shown.value.length / PAGE_SIZE)));
+const pageItems = computed(() => shown.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
+watch(view, () => { page.value = 1; });
+// 完成／刪除讓最後一頁空掉時退回新的最後一頁。
+watch(totalPages, (value) => { if (page.value > value) page.value = value; });
+function goToPage(value) {
+  page.value = value;
+  root.value?.scrollIntoView({ block: 'start' });
+}
+defineExpose({ page, totalPages, goToPage });
 const EMPTY_TEXT = {
   all: { title: '還沒有任何待辦', description: '在上面輸入就能新增，打 # 可以標記貓咪，兩邊的電腦會即時同步' },
   open: { title: '沒有未完成的待辦', description: '在上面輸入就能新增，打 # 可以標記貓咪，兩邊的電腦會即時同步' },
@@ -138,7 +153,7 @@ async function saveEdit(item) {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div ref="root" class="space-y-4">
     <form class="space-y-2" @submit.prevent="submit">
       <TodoMentionInput v-model="content" v-model:mentions="mentions" placeholder="要做的事，打 # 可以標記貓咪" aria-label="待辦內容" maxlength="500" @submit="submit" />
       <div class="flex items-center gap-2">
@@ -160,7 +175,7 @@ async function saveEdit(item) {
     <!-- 單欄清單：待辦有先後（期限早的在上面），兩欄卡片的 Z 字讀序看不出來。
          列高隨內容，不套 desktop-data-row 的固定 56px——待辦內文最長 500 字，要能完整換行。 -->
     <ul v-else class="-mx-5 divide-y divide-border border-y border-border">
-      <li v-for="item in shown" :key="item._id" class="group grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-3 px-5 py-3">
+      <li v-for="item in pageItems" :key="item._id" class="group grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-3 px-5 py-3">
         <Button
           v-if="item.status === 'open'"
           type="button"

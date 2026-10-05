@@ -17,7 +17,6 @@ import SpecGrid from './SpecGrid.vue';
 import SpecCell from './SpecCell.vue';
 import FilterTabs from './FilterTabs.vue';
 import FilterBar from './FilterBar.vue';
-import Pagination from './Pagination.vue';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import RichText from './RichText.vue';
@@ -291,7 +290,7 @@ function close() {
   if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', description: props.createOnly ? '關閉後，本次尚未儲存的輸入會清除。' : '返回清單後，本次尚未儲存的輸入會清除。', run: leave };
   else leave();
 }
-defineExpose({ close, create });
+defineExpose({ close, create, page, totalPages, opened, goToPage });
 function reload() {
   confirmation.value = { title: '載入最新藥單？', description: '會以最新藥單取代目前輸入，請先保留需要的文字。', run: () => openOrder(selected.value) };
 }
@@ -489,7 +488,7 @@ onBeforeUnmount(() => {
         </div>
       </li>
     </ul>
-    <Pagination :page="page" :total-pages="totalPages" @update:page="goToPage" />
+    <!-- 頁碼列由外層面板畫在底部（MedicationsPanel.vue），跟其他面板一樣不跟著捲走。 -->
     </template>
 
     <!-- 詳情。全頁版是一張卡片（取代清單）；面板版直接排在容器裡（contents，不多一層）。 -->

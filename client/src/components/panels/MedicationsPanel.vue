@@ -5,6 +5,7 @@ import { useUtilityPanelStore } from '../../stores/utilityPanel';
 import { useWorkCountsStore } from '../../stores/workCounts';
 import SidePanel from './SidePanel.vue';
 import MedicationWorkspace from '../MedicationWorkspace.vue';
+import Pagination from '../Pagination.vue';
 
 // 藥單面板：清單＋單筆詳情在同一層切換（MedicationWorkspace 自己管），
 // 「新增藥單」是推入的一層，有自己的返回鈕。醫師與櫃台看的階段不同，依這台裝置的身分決定。
@@ -16,6 +17,8 @@ const view = computed(() => (panel.stacks.medications || []).at(-1) || null);
 // 從新增表單按返回：交給表單自己的 close()，有未儲存內容時會先問要不要捨棄，確定後它 emit('close') 才真的退回清單。
 // 右上角的關閉只是收起面板（KeepAlive 留著），不會丟掉草稿。
 const createForm = ref(null);
+// 清單的頁碼列固定在面板底部（分頁狀態在 MedicationWorkspace 裡）；點進單筆詳情時不顯示。
+const list = ref(null);
 function backFromCreate() {
   if (createForm.value) createForm.value.close();
   else panel.back();
@@ -30,6 +33,7 @@ function backFromCreate() {
     </SidePanel>
     <SidePanel v-else title="藥單" :description="doctor ? '待醫師確認的藥單在最前面' : '包藥與領藥'" @close="panel.close()">
       <MedicationWorkspace
+        ref="list"
         :key="identity"
         :mode="doctor ? 'doctor' : 'reception'"
         :initial-filter="doctor ? 'review' : 'approved'"
@@ -38,6 +42,9 @@ function backFromCreate() {
         @counts="counts.setMedications"
         @create="panel.push({ type: 'create' }, 'medications')"
       />
+      <template v-if="list && !list.opened && list.totalPages > 1" #footer>
+        <Pagination class="w-full" :page="list.page" :total-pages="list.totalPages" @update:page="list.goToPage" />
+      </template>
     </SidePanel>
   </div>
 </template>
