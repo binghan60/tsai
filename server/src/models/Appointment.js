@@ -74,6 +74,10 @@ const appointmentSchema = new mongoose.Schema(
       }, { _id: false })],
       default: [],
     },
+    // 醫師或櫃台按下「送 IDEXX」的時間：這一刻才把貓咪送到 IDEXX 主機的待驗清單（lib/idexxCensus.js）。
+    // 報到不自動送——預防針、拆線這類看診不驗血，全部送過去技術員反而要自己分辨。
+    // 取消送 IDEXX、取消報到、取消掛號、標記未到時清成 null。
+    labRequestedAt: { type: Date, default: null },
     // 看診結束時約定的下次回診日。保留 date-only 字串，避免日期因伺服器時區偏移。
     followUpDate: { type: String, default: '', match: /^$|^\d{4}-\d{2}-\d{2}$/ },
     // 回診時間（選填，HH:MM）。沒填時併入 MedicalRecord.followUpDate 會落在當天 00:00。

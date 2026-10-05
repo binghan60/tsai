@@ -448,7 +448,7 @@ async function approveReopen() {
           <div class="ml-auto flex gap-2">
             <Button variant="secondary" :disabled="busy" @click="close">{{ state.completed ? '關閉' : '稍後處理' }}</Button>
             <Button v-if="state.completed && appointment.reopenRequest?.requestedAt && !appointment.reopenRequest?.approvedAt" :disabled="busy" @click="approveReopen">核准修改</Button>
-            <Button v-else-if="!state.completed" size="lg" :disabled="busy || editingNote || !state.handedOff" @click="complete"><Check stroke-width="2" />完成處理</Button>
+            <Button v-else-if="!state.completed" :disabled="busy || editingNote || !state.handedOff" @click="complete"><Check stroke-width="2" />完成處理</Button>
           </div>
         </footer>
       </div>

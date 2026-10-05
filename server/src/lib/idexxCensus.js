@@ -1,9 +1,9 @@
 // 報到時把貓咪送到 IDEXX 主機的在院清單（純邏輯，資料庫那一半在 lib/idexxRequests.js）。
 //
-// 流程：櫃台按報到 → 這裡組好 XML、存進 idexxRequests 排隊 → 診所電腦上的抓檔程式每輪來拿、
+// 流程：醫師或櫃台按「送 IDEXX」→ 這裡組好 XML、存進 idexxRequests 排隊 → 診所電腦上的抓檔程式每輪來拿、
 // 原封寫進 C:\IDEXX Interlink\Requests\ → InterLink 送到 IDEXX 主機 → 貓咪出現在主機清單。
 // 技術員從清單點那隻貓跑檢驗，結果帶著同一個 patient_id（貓咪的 _id）回來，就能自動認貓（labResultApply 的 matchByPatientId）。
-// 離開診所（櫃台完成、取消、取消報到）時送離院通知，主機清單才不會越堆越多。
+// 取消送 IDEXX或離開診所（櫃台完成、取消、取消報到）時送離院／取消，主機清單才不會越堆越多。
 //
 // IDEXX 規格有兩種訊息都能讓貓咪出現在主機上，台灣這邊實際用哪一種要到診所才知道，所以兩種都做、由伺服器設定切換：
 //   census       Census_Notice in / out（census_20.dtd）：只是「這隻貓在院內」
@@ -11,9 +11,15 @@
 import { holdsCheckinNumber } from './appointmentStatus.js';
 import { CLINIC_TIMEZONE, clinicToday } from './clinicTime.js';
 
-// 這筆掛號現在「在院內」嗎：報到之後、櫃台完成之前，而且已經建檔（初診報到時才有 petId）。
-export function inClinic(appointment) {
+// 這筆掛號現在能不能送 IDEXX：報到之後、櫃台完成之前，而且已經建檔（初診報到時才有 petId）。
+export function canRequestLab(appointment) {
   return Boolean(appointment?.petId) && holdsCheckinNumber(appointment?.status);
+}
+
+// 這隻貓現在該不該在 IDEXX 主機的清單上：有人按了「送 IDEXX」（labRequestedAt），而且還在院內。
+// 報到本身不算——不是每次看診都驗血。
+export function inClinic(appointment) {
+  return canRequestLab(appointment) && Boolean(appointment?.labRequestedAt);
 }
 
 // 依上一份送出的通知決定這次要不要送、送哪一種。同一個狀態重複呼叫不會重複送，所以每個會改變狀態的地方放心呼叫。

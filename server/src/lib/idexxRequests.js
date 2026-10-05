@@ -1,6 +1,7 @@
-// 報到／離院通知排隊（XML 怎麼組在 lib/idexxCensus.js）。掛號狀態每次改變後呼叫 queueIdexxCensus，
-// 它看這張掛號上一次送了什麼，需要時才排一份新的；抓檔程式之後來拿。
+// 送 IDEXX／離院通知排隊（XML 怎麼組在 lib/idexxCensus.js）。按下送 IDEXX、取消送 IDEXX，以及掛號離開診所的每個地方
+// 都呼叫 queueIdexxCensus，它看這張掛號上一次送了什麼，需要時才排一份新的；抓檔程式之後來拿。
 import IdexxRequest from '../models/IdexxRequest.js';
+import LabResult from '../models/LabResult.js';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import { idexxCensusSettings } from '../config/idexxBridge.js';
@@ -16,6 +17,15 @@ export async function syncIdexxCensus(appointment, { settings = idexxCensusSetti
   const petId = kind === 'out' ? last.petId : appointment.petId;
   const mode = kind === 'out' ? last.mode : settings.mode;
   const encoding = kind === 'out' ? last.encoding : settings.encoding;
+  // 開單的檢驗已經做完（有結果填進這次看診）：主機上那張單已經自己完成，再送取消只會讓主機收到一張對不上的單。
+  // 記一筆 skipped 當作「已經收掉」，之後再按「送 IDEXX」才會重新開單。報到通知（census）沒有這個問題，離院照送。
+  if (kind === 'out' && mode === 'work_request' && await LabResult.exists({ appointmentId: appointment._id })) {
+    const skippedId = idexxMessageId(now);
+    return IdexxRequest.create({
+      appointmentId: appointment._id, petId, kind, mode, encoding,
+      messageId: skippedId, fileName: `${skippedId}.xml`, status: 'skipped',
+    });
+  }
   const pet = await Pet.findById(petId).lean();
   if (!pet) return null;
   const owner = pet.ownerId ? await Owner.findById(pet.ownerId).lean() : null;

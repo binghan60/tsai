@@ -659,7 +659,7 @@ onBeforeUnmount(() => {
           <Button :disabled="busy || stale || !dirty" @click="requestAction('edit')">{{ changedClinical && selected.status !== 'review' ? '修改並重新送審' : '儲存修改' }}</Button>
         </template>
         <template v-else>
-          <RowActions v-if="moreActions.length" :actions="moreActions" :label="`${selected.petName} 藥單的更多操作`" @select="runMoreAction" />
+          <RowActions v-if="moreActions.length" size="default" :actions="moreActions" :label="`${selected.petName} 藥單的更多操作`" @select="runMoreAction" />
           <Button v-if="primaryAction" :disabled="busy || stale || primaryAction.disabled" @click="requestAction(primaryAction.key)">{{ primaryAction.label }}</Button>
         </template>
       </footer>

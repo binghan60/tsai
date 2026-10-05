@@ -4,7 +4,7 @@ import { TextDecoder } from 'node:util';
 import { XMLParser } from 'fast-xml-parser';
 import { encodeBig5 } from './big5.js';
 import {
-  buildIdexxRequestXml, idexxDate, idexxDateTime, idexxGender, idexxMessageId, idexxSpecies, inClinic, nextCensusKind, xmlText,
+  buildIdexxRequestXml, canRequestLab, idexxDate, idexxDateTime, idexxGender, idexxMessageId, idexxSpecies, inClinic, nextCensusKind, xmlText,
 } from './idexxCensus.js';
 import { idexxCensusSettings } from '../config/idexxBridge.js';
 
@@ -18,12 +18,21 @@ const now = new Date('2026-10-04T06:05:09.123Z');
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' });
 
 describe('idexxCensus', () => {
-  it('報到之後、櫃台完成之前而且已建檔，才算在院內', () => {
-    assert.equal(inClinic({ petId: 'p', status: 'arrived' }), true);
-    assert.equal(inClinic({ petId: 'p', status: 'pending_checkout' }), true);
-    assert.equal(inClinic({ petId: 'p', status: 'completed' }), false);
-    assert.equal(inClinic({ petId: 'p', status: 'scheduled' }), false);
-    assert.equal(inClinic({ petId: null, status: 'arrived' }), false);
+  it('報到之後、櫃台完成之前而且已建檔，才能送 IDEXX', () => {
+    assert.equal(canRequestLab({ petId: 'p', status: 'arrived' }), true);
+    assert.equal(canRequestLab({ petId: 'p', status: 'pending_checkout' }), true);
+    assert.equal(canRequestLab({ petId: 'p', status: 'completed' }), false);
+    assert.equal(canRequestLab({ petId: 'p', status: 'scheduled' }), false);
+    assert.equal(canRequestLab({ petId: null, status: 'arrived' }), false);
+  });
+
+  it('報到不算：有人按了送 IDEXX、而且還在院內，才該在 IDEXX 主機的清單上', () => {
+    const requested = new Date();
+    assert.equal(inClinic({ petId: 'p', status: 'arrived' }), false);
+    assert.equal(inClinic({ petId: 'p', status: 'arrived', labRequestedAt: requested }), true);
+    assert.equal(inClinic({ petId: 'p', status: 'pending_checkout', labRequestedAt: requested }), true);
+    assert.equal(inClinic({ petId: 'p', status: 'completed', labRequestedAt: requested }), false);
+    assert.equal(inClinic({ petId: 'p', status: 'arrived', labRequestedAt: null }), false);
   });
 
   it('看上一次送了什麼決定要不要送，同一個狀態不重複送', () => {

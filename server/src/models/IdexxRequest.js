@@ -16,10 +16,11 @@ const idexxRequestSchema = new mongoose.Schema(
     // 抓檔程式寫進 Requests 資料夾用的檔名（＝messageId.xml，跟 IDEXX 範例一樣）。
     fileName: { type: String, required: true },
     // 已經照 encoding 編好的檔案位元組，抓檔程式原封寫出、不必懂 XML。
-    body: { type: Buffer, required: true },
+    body: { type: Buffer, default: () => Buffer.alloc(0) },
     // Big5 沒有、被換成「?」的字（罕用字、表情符號），排查亂碼時看。
     unmappable: { type: [String], default: [] },
-    status: { type: String, enum: ['pending', 'delivered'], default: 'pending' },
+    // skipped：不必送出去、只記下「這一張已經收掉」——開單的檢驗已經做完（結果回來了），主機上那張單已經自己完成，不再送取消。
+    status: { type: String, enum: ['pending', 'delivered', 'skipped'], default: 'pending' },
     deliveredAt: { type: Date, default: null },
     deliveredBy: { type: String, default: '' },
   },

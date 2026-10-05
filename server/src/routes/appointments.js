@@ -16,6 +16,8 @@ import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsChe
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { queueIdexxCensus } from '../lib/idexxRequests.js';
+import { canRequestLab } from '../lib/idexxCensus.js';
+import { idexxCensusSettings } from '../config/idexxBridge.js';
 import appointmentWorkflowRouter from './appointmentWorkflow.js';
 import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
@@ -135,6 +137,8 @@ async function recordAttendanceIncident(appointment, type, happenedAt, session =
 async function saveLeavingQueue(appointment, wasQueued, session = null) {
   if (wasQueued) rememberCheckinNumber(appointment, appointment.checkinNumber);
   if (wasQueued || appointment.checkinNumber != null) appointment.checkinNumber = null;
+  // 離開候診＝這次的送 IDEXX也作廢，再次報到時不會自己又送一次。
+  appointment.labRequestedAt = null;
   await appointment.save(session ? { session } : undefined);
 }
 
@@ -569,9 +573,30 @@ router.post('/:id/check-in', async (req, res, next) => {
       if (isLate) await recordAttendanceIncident(appointment, 'late', appointment.checkedInAt, session);
     }));
 
-    // 送到 IDEXX 主機的在院清單（伺服器有開才會排隊，見 lib/idexxCensus.js）。
-    await queueIdexxCensus(appointment);
     // 報到讓這筆掛號進入候診佇列，醫師頁要立刻看到，不必等 60 秒輪詢。
+    emitAppointmentUpdate(appointment);
+    res.json(appointment);
+  } catch (err) { next(err); }
+});
+
+// 送 IDEXX／取消送 IDEXX：這一刻才把貓咪送到 IDEXX 主機的待驗清單（報到不自動送，不是每次看診都驗血）。
+// body { requested: true|false, version }。只有在院內（已報到、櫃台還沒完成）而且已建檔的掛號能送；
+// 伺服器沒開 IDEXX_CENSUS_MODE 時回 409——按鈕本來就不該出現（GET /lab-results/bridge-status 的 labRequest.enabled）。
+router.post('/:id/lab-request', async (req, res, next) => {
+  try {
+    if (idexxCensusSettings().mode === 'off') return res.status(409).json({ message: '系統尚未開啟送 IDEXX 的功能' });
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) return res.status(404).json({ message: '找不到掛號' });
+    checkWorkflowCompatibility(appointment, req.path, req.body?.version);
+    const requested = req.body?.requested !== false;
+    if (requested && !canRequestLab(appointment)) {
+      return res.status(422).json({ message: '報到之後、櫃台完成處理之前才能送 IDEXX' });
+    }
+    // 重複按不重設時間，也不會重送（queueIdexxCensus 看上一份送了什麼）。
+    if (requested && !appointment.labRequestedAt) appointment.labRequestedAt = new Date();
+    if (!requested) appointment.labRequestedAt = null;
+    await appointment.save();
+    await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
     res.json(appointment);
   } catch (err) { next(err); }

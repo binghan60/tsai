@@ -7,6 +7,7 @@ import { useToast } from '../composables/useToast'
 import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
+import { canRequestLab, useLabRequest } from '../composables/useLabRequest'
 import { clinicDateInput, clinicTimeInput, shiftDateInput, weekdayLabel } from '../lib/datetime'
 import { appointmentsForTimeline, groupBySession, isIdentityConfirmed, MIDDAY_BREAK, nowIndexInSession } from '../lib/appointmentTimeline'
 import { isOverdue, minutesPastSchedule, sessionAutoCollapsed } from '../lib/receptionBoard'
@@ -120,7 +121,14 @@ function toggleStage(key) {
 const timelineItems = computed(() => appointmentsForTimeline(items.value.filter((item) => matches(item) && (!stageFilter.value || workflowFilter(item, stageFilter.value)))))
 // 每張卡片要用到的階段外觀、進度、按鈕先在這裡算好一次，模板裡不逐項呼叫函式——
 // 每 30 秒的時鐘一動，整條時間軸都會重算一遍，卡片多的日子開視窗會頓。
-const ARRIVED_ACTIONS = [{ key: 'restore', label: '取消報到' }, { key: 'edit', label: '修改掛號' }]
+// 在院的卡片：伺服器有開「送 IDEXX」時多一項送 IDEXX／取消送 IDEXX（跟診療台的按鈕是同一件事）。
+const labRequest = useLabRequest()
+function arrivedActions(item) {
+  const lab = labRequest.enabled.value && canRequestLab(item)
+    ? [item.labRequestedAt ? { key: 'lab-cancel', label: '取消送 IDEXX' } : { key: 'lab-request', label: '送 IDEXX' }]
+    : []
+  return [...lab, { key: 'restore', label: '取消報到' }, { key: 'edit', label: '修改掛號' }]
+}
 function decorate(item) {
   const kind = cardTone(item)
   return {
@@ -132,7 +140,7 @@ function decorate(item) {
       progress: progress(item, kind),
       notes: notesFor(item),
       primary: item.status === 'scheduled' ? scheduledPrimary(item) : null,
-      actions: item.status === 'scheduled' ? scheduledActions(item) : ARRIVED_ACTIONS,
+      actions: item.status === 'scheduled' ? scheduledActions(item) : arrivedActions(item),
       lateMinutes: item.status === 'scheduled' ? (itemIsOverdue(item) ? overdueMinutes(item) : 0) : item.latenessMinutes,
     },
   }
@@ -326,7 +334,13 @@ function closeDrawer() {
 }
 
 // 次要操作（⋯ 選單、未到／取消）共用同一個分派。
+async function toggleLabRequest(appointment, requested) {
+  const data = await labRequest.setLabRequest(appointment, requested)
+  if (data) applyUpdate(data)
+}
+
 function admin(kind, appointment) {
+  if (kind === 'lab-request' || kind === 'lab-cancel') return toggleLabRequest(appointment, kind === 'lab-request')
   target.value = appointment
   dialogError.value = ''
   if (kind === 'edit') return openDrawer('edit', appointment)
@@ -439,10 +453,11 @@ onBeforeUnmount(() => {
     <PageHeader title="掛號台">
       <template #meta><span class="num text-lg text-subtle-foreground">{{ currentTime }}</span></template>
       <template #actions>
-        <Button v-if="!isToday" variant="soft" size="sm" @click="date = today">回到今天</Button>
-        <Button variant="secondary" size="icon-sm" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft stroke-width="1.75" /></Button>
+        <!-- 這一排的控制項都是 40 高：日期前後鈕跟日期欄、右邊的主要動作同高。 -->
+        <Button v-if="!isToday" variant="soft" @click="date = today">回到今天</Button>
+        <Button variant="secondary" size="icon" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft stroke-width="1.75" /></Button>
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
-        <Button variant="secondary" size="icon-sm" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
+        <Button variant="secondary" size="icon" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
         <span class="mx-1.5 h-6 w-px bg-border" aria-hidden="true"></span>
         <Button variant="soft" @click="newMedication"><Pill stroke-width="1.75" />新增藥單</Button>
         <Button @click="openDrawer('new')"><Plus stroke-width="1.75" />掛號</Button>
@@ -507,7 +522,7 @@ onBeforeUnmount(() => {
         <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
           <h2 id="timeline-title" class="text-lg font-semibold">{{ isToday ? '今日看診' : '看診時間軸' }} <span class="num ml-1 text-base font-medium text-subtle-foreground">{{ timelineCount }}</span></h2>
           <div class="flex shrink-0 items-center gap-2">
-            <Button v-if="stageFilter" variant="soft" size="sm" @click="stageFilter = ''"><X stroke-width="1.75" />清除篩選</Button>
+            <Button v-if="stageFilter" variant="soft" @click="stageFilter = ''"><X stroke-width="1.75" />清除篩選</Button>
             <FilterBar id="reception-search" v-model="search" label="搜尋診務" placeholder="貓咪、飼主、電話" class="w-64" />
           </div>
         </div>
@@ -568,6 +583,7 @@ onBeforeUnmount(() => {
                             <Badge v-if="item.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
                             <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
                             <LatenessBadge :minutes="item.ui.lateMinutes" />
+                            <Badge v-if="item.labRequestedAt && canRequestLab(item)" variant="status" class="bg-info-surface text-info">已送 IDEXX</Badge>
                           </div>
                           <p class="min-h-lh truncate text-foreground" v-tip.overflow="item.reason">{{ item.reason }}</p>
                           <p v-if="item.ui.kind === 'handoff' && item.specialCareNote" class="truncate rounded-md bg-warning-surface px-2.5 py-1 text-sm font-medium text-warning" v-tip.overflow="item.specialCareNote"><span class="font-semibold">請轉告飼主</span>　{{ item.specialCareNote }}</p>
@@ -602,13 +618,13 @@ onBeforeUnmount(() => {
                         <template v-if="item.ui.kind === 'handoff'">
                           <Button @click="openSheet(item)">處理</Button>
                           <!-- 沒有 ⋯ 選單時補一個同尺寸的空位，主要按鈕才跟其他卡片對齊。 -->
-                          <span class="size-9 shrink-0" aria-hidden="true"></span>
+                          <span class="size-10 shrink-0" aria-hidden="true"></span>
                         </template>
                         <template v-else-if="item.status === 'scheduled'">
                           <Button v-if="item.ui.primary" :variant="item.ui.primary.late ? 'destructive-solid' : 'default'" :disabled="busy" @click="item.ui.primary.run()">{{ item.ui.primary.label }}</Button>
-                          <RowActions :actions="item.ui.actions" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
+                          <RowActions size="default" :actions="item.ui.actions" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
                         </template>
-                        <RowActions v-else :actions="ARRIVED_ACTIONS" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
+                        <RowActions v-else size="default" :actions="arrivedActions(item)" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
                       </div>
                     </div>
                   </article>

@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from './PatientLink.vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { ArrowRight, FileText, Pencil, Stethoscope, Undo2 } from '@lucide/vue'
+import { ArrowRight, FileText, FlaskConical, Pencil, Stethoscope, Undo2 } from '@lucide/vue'
 import SurgeryBadge from './SurgeryBadge.vue'
 import LatenessBadge from './LatenessBadge.vue'
 import CheckinNumber from './CheckinNumber.vue'
@@ -14,6 +14,7 @@ import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { useTextTemplates } from '../composables/useTextTemplates'
+import { canRequestLab, useLabRequest } from '../composables/useLabRequest'
 import { workflowState } from '../../../shared/appointmentWorkflow.js'
 import { clinicalDraft, draftPatch, mergeClinicalUpdate, takeBaseline } from '../lib/visitDraft'
 import { ageLabel, clinicTimeInput } from '../lib/datetime'
@@ -43,6 +44,13 @@ const { openPicker } = useTextTemplates()
 // start：還沒開始看診時按「開始看診」；
 // notes-updated：貓咪／飼主備註改了，讓佇列上的備註標籤跟著更新。
 const emit = defineEmits(['updated', 'open-record', 'start', 'notes-updated'])
+
+// 送 IDEXX不走看診的自動存檔，也不動掛號的版本號：它只是一個時間戳記，跟正在打的紀錄互不影響。
+const labRequest = useLabRequest()
+async function toggleLabRequest(requested) {
+  const data = await labRequest.setLabRequest(props.appointment, requested)
+  if (data) emit('updated', data, 'lab-request')
+}
 
 const draft = reactive(clinicalDraft(props.appointment))
 const baseline = ref(clinicalDraft(props.appointment))
@@ -624,13 +632,22 @@ onBeforeUnmount(() => {
     <footer class="flex shrink-0 flex-wrap items-center gap-3 border-t border-border bg-sunken px-6 py-3">
       <p class="text-sm text-muted-foreground" role="status">{{ !state.started && appointment.status === 'arrived' ? '尚未開始看診，可以先看資料' : savedLabel }}</p>
       <div class="ml-auto flex flex-wrap items-center gap-2">
+        <!-- 送 IDEXX：按下去才把貓咪送到 IDEXX 主機的待驗清單（報到不自動送，不是每次看診都驗血）。
+             跟其他動作放同一排，不用捲動就按得到；伺服器沒開這個功能就不出現。 -->
+        <template v-if="labRequest.enabled.value && canRequestLab(appointment)">
+          <template v-if="appointment.labRequestedAt">
+            <Badge variant="status" class="bg-info-surface text-info"><FlaskConical class="size-4" stroke-width="1.75" aria-hidden="true" />已送 IDEXX <span class="num">{{ clinicTimeInput(appointment.labRequestedAt) }}</span></Badge>
+            <Button variant="secondary" :disabled="labRequest.busy.value" @click="toggleLabRequest(false)">取消送 IDEXX</Button>
+          </template>
+          <Button v-else variant="soft" :disabled="labRequest.busy.value" @click="toggleLabRequest(true)"><FlaskConical stroke-width="1.75" />送 IDEXX</Button>
+        </template>
         <Button variant="soft" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')"><FileText stroke-width="1.75" />{{ appointment.recordId ? '開啟健檢報告' : '建立健檢報告' }}</Button>
         <Button v-if="state.completed" variant="secondary" :disabled="busy || !!appointment.reopenRequest?.requestedAt" @click="openReopenRequest">
           {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
         </Button>
         <Button v-else-if="state.handedOff" variant="secondary" :disabled="busy" @click="run('reclaim')"><Undo2 stroke-width="1.75" />取回修改</Button>
-        <Button v-else-if="appointment.status === 'arrived' && !state.started" size="lg" :disabled="busy" @click="emit('start', appointment)"><Stethoscope stroke-width="1.75" />開始看診</Button>
-        <Button v-else-if="editable" size="lg" :disabled="busy || !!conflicts.length" @click="run('handoff')">完成看診，送交櫃台<ArrowRight stroke-width="1.75" /></Button>
+        <Button v-else-if="appointment.status === 'arrived' && !state.started" :disabled="busy" @click="emit('start', appointment)"><Stethoscope stroke-width="1.75" />開始看診</Button>
+        <Button v-else-if="editable" :disabled="busy || !!conflicts.length" @click="run('handoff')">完成看診，送交櫃台<ArrowRight stroke-width="1.75" /></Button>
       </div>
     </footer>
 

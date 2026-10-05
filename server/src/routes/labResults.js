@@ -2,7 +2,7 @@ import express, { Router } from 'express';
 import mongoose from 'mongoose';
 import LabResult from '../models/LabResult.js';
 import LabBridgeStatus from '../models/LabBridgeStatus.js';
-import { hasIdexxBridgeAccess, idexxBridgeConfigured } from '../config/idexxBridge.js';
+import { hasIdexxBridgeAccess, idexxBridgeConfigured, idexxCensusSettings } from '../config/idexxBridge.js';
 import { IdexxParseError, decodeIdexxXml, parseIdexxResult } from '../lib/idexxResult.js';
 import { labResultContent, planLabResultImport } from '../lib/labResultImport.js';
 import {
@@ -214,6 +214,8 @@ labResultsRouter.get('/bridge-status', async (req, res, next) => {
         ...item,
         online: now - new Date(item.lastSeenAt).getTime() < BRIDGE_OFFLINE_AFTER_MS,
       })),
+      // 伺服器有沒有開「送 IDEXX」（IDEXX_CENSUS_MODE）；沒開時畫面上不出「送 IDEXX」按鈕。
+      labRequest: { enabled: idexxCensusSettings().mode !== 'off' },
     });
   } catch (err) {
     next(err);

@@ -12,7 +12,14 @@ const props = defineProps({
   triggerText: { type: String, default: '' },
   // 觸發鈕圖示，預設「更多操作」的刪節號。
   icon: { type: [Function, Object], default: null },
+  // 跟同一排的主要按鈕同高：清單列的按鈕是 sm（36），所以預設 sm；旁邊是一般大小（40）的按鈕時傳 default。
+  size: { type: String, default: 'sm', validator: (value) => ['sm', 'default'].includes(value) },
 });
+
+function triggerSize() {
+  if (props.triggerText) return props.size;
+  return props.size === 'default' ? 'icon' : 'icon-sm';
+}
 
 const emit = defineEmits(['select']);
 
@@ -24,7 +31,7 @@ function isFirstDanger(action, index) {
 <template>
   <DropdownMenu :modal="false">
     <DropdownMenuTrigger as-child>
-      <Button type="button" variant="secondary" :size="props.triggerText ? 'sm' : 'icon-sm'" :class="props.triggerText ? 'w-full justify-center' : ''" :aria-label="props.label">
+      <Button type="button" variant="secondary" :size="triggerSize()" :class="props.triggerText ? 'w-full justify-center' : ''" :aria-label="props.label">
         <component :is="props.icon || MoreHorizontal" stroke-width="1.75" />
         <span v-if="props.triggerText">{{ props.triggerText }}</span>
       </Button>
