@@ -29,20 +29,76 @@ export function nextCensusKind(lastKind, isInClinic) {
   return null;
 }
 
-// 診所只看貓；物種欄位是自由文字（預設「貓」），認不出的送 OTHER（DTD 規定必填）。
+// 診所只看貓：除非物種欄位明寫是狗，一律送 FELINE。
+// 物種欄位是自由文字，原本認不出的（「貓咪」「米克斯貓」…）送 OTHER，結果主機上看不到是貓、參考範圍也套不上。
 export function idexxSpecies(species) {
   const text = String(species ?? '').trim().toLowerCase();
-  if (!text || ['貓', '猫', 'cat', 'feline'].includes(text)) return 'FELINE';
-  if (['狗', '犬', 'dog', 'canine'].includes(text)) return 'CANINE';
-  return 'OTHER';
+  if (/狗|犬|dog|canine/.test(text) && !/貓|猫|cat|feline/.test(text)) return 'CANINE';
+  return 'FELINE';
 }
 
-// 性別＋結紮換成 IDEXX 的四種；任一邊不知道就不送（DTD 是選填）。
+// 性別＋結紮換成 IDEXX 的四種。IDEXX 沒有「不知道有沒有結紮」這個選項：
+// 知道性別、結紮沒記錄時送「未結紮」那一種（主機上顯示成單純的公／母）——整個不送的話主機上連性別都是空的。
+// 性別不知道才不送（DTD 是選填）。
 export function idexxGender(sex, neutered) {
-  if (neutered !== 'yes' && neutered !== 'no') return null;
   if (sex === 'male') return neutered === 'yes' ? 'MALE_NEUTERED' : 'MALE_INTACT';
   if (sex === 'female') return neutered === 'yes' ? 'FEMALE_SPAYED' : 'FEMALE_INTACT';
   return null;
+}
+
+// 品種：IDEXX 主機有自己的品種清單（英文名稱，貓 56 種），系統裡的品種是自由輸入的中文。
+// 這裡把常見的中文寫法對到 IDEXX 的名稱；本來就打英文、而且在清單上的照送；對不到的不送（主機上留白，技術員自己選）。
+// 順序有意義：比較長、比較明確的寫在前面（「異國短毛」要在「短毛」之前）。
+const IDEXX_CAT_BREEDS = [
+  'Abyssinian', 'American Bobtail', 'American Curl', 'American Shorthair', 'American Wirehair', 'Balinese', 'Bengal', 'Birman', 'Bombay',
+  'British Shorthair', 'Burmese', 'Chartreux', 'Colorpoint Shorthair', 'Cornish Rex', 'Devon Rex', 'Domestic Longhair', 'Domestic Shorthair',
+  'Egyptian Mau', 'European Burmese', 'Exotic', 'Exotic Shorthair', 'Havana Brown', 'Himalayan', 'Japanese', 'Japanese Bobtail', 'Korat', 'LaPerm',
+  'Maine Coon', 'Manx', 'Mixed', 'Munchkin', 'Nebelung', 'Norwegian Forest Cat', 'Ocicat', 'Oriental', 'Other', 'Persian', 'Pixie-Bob', 'RagaMuffin',
+  'Ragdoll', 'Russian Blue', 'Savannah', 'Scottish Fold', 'Selkirk Rex', 'Siamese', 'Siberian', 'Singapura', 'Snowshoe', 'Sokoke', 'Somali', 'Sphynx',
+  'Tonkinese', 'Toyger', 'Turkish Angora', 'Turkish Van',
+];
+const BREED_KEYWORDS = [
+  [/米克斯|混種|混血|mix/i, 'Mixed'],
+  [/異國短毛|異短|加菲/, 'Exotic Shorthair'],
+  [/英國短毛|英短/, 'British Shorthair'],
+  [/美國短毛|美短/, 'American Shorthair'],
+  [/美國捲耳|捲耳|卷耳/, 'American Curl'],
+  [/布偶/, 'Ragdoll'],
+  [/曼赤肯|曼基康|短腿/, 'Munchkin'],
+  [/金吉拉|波斯/, 'Persian'],
+  [/喜馬拉雅/, 'Himalayan'],
+  [/緬因/, 'Maine Coon'],
+  [/暹羅|暹邏/, 'Siamese'],
+  [/俄羅斯藍|俄藍/, 'Russian Blue'],
+  [/阿比西尼亞/, 'Abyssinian'],
+  [/索馬利/, 'Somali'],
+  [/無毛|斯芬克斯|史芬克斯/, 'Sphynx'],
+  [/摺耳|折耳/, 'Scottish Fold'],
+  [/孟加拉|豹貓/, 'Bengal'],
+  [/挪威森林/, 'Norwegian Forest Cat'],
+  [/西伯利亞/, 'Siberian'],
+  [/伯曼/, 'Birman'],
+  [/緬甸/, 'Burmese'],
+  [/孟買/, 'Bombay'],
+  [/東方/, 'Oriental'],
+  [/德文/, 'Devon Rex'],
+  [/柯尼斯|康沃爾/, 'Cornish Rex'],
+  [/安哥拉/, 'Turkish Angora'],
+  [/土耳其梵/, 'Turkish Van'],
+  [/新加坡/, 'Singapura'],
+  [/東奇尼/, 'Tonkinese'],
+  [/沙特爾/, 'Chartreux'],
+  [/日本短尾/, 'Japanese Bobtail'],
+  [/長毛家貓|家貓長毛/, 'Domestic Longhair'],
+  [/短毛家貓|家貓短毛|家貓/, 'Domestic Shorthair'],
+];
+
+export function idexxBreed(breed) {
+  const text = String(breed ?? '').trim();
+  if (!text) return '';
+  const exact = IDEXX_CAT_BREEDS.find((name) => name.toLowerCase() === text.toLowerCase());
+  if (exact) return exact;
+  return BREED_KEYWORDS.find(([pattern]) => pattern.test(text))?.[1] ?? '';
 }
 
 function clinicParts(instant) {
@@ -96,21 +152,45 @@ function weightText(value) {
   return Number.isFinite(number) && number > 0 ? String(Math.round(number * 100) / 100) : '';
 }
 
-// 飼主姓名：中文名字拆不出姓和名，整個放進 last_name（IDEXX 主機通常以 last_name 顯示飼主）。到診所再看要不要調整。
+// 飼主姓名拆成姓、名：IDEXX 主機的畫面是「姓」「名字」兩格（last_name／first_name），系統裡只有一個全名欄位。
+//   中文（2～4 個字）：第一個字是姓，其餘是名；常見複姓兩個字。
+//   有空白的（英文名 Stanley Wang）：最後一段是姓，前面是名。
+//   其他拆不出來的（單名一個字、公司名、五個字以上）：整個放姓。
+const COMPOUND_SURNAMES = ['歐陽', '司馬', '上官', '諸葛', '司徒', '端木', '皇甫', '尉遲', '公孫', '慕容', '長孫', '宇文', '夏侯', '令狐', '東方', '范姜', '張簡'];
+
+export function splitOwnerName(name) {
+  const text = String(name ?? '').trim().replace(/\s+/g, ' ');
+  if (!text) return { lastName: '', firstName: '' };
+  if (text.includes(' ')) {
+    const parts = text.split(' ');
+    return { lastName: parts.at(-1), firstName: parts.slice(0, -1).join(' ') };
+  }
+  const chars = [...text];
+  if (chars.length >= 2 && chars.length <= 4 && chars.every((char) => /\p{Script=Han}/u.test(char))) {
+    const compound = chars.length >= 3 && COMPOUND_SURNAMES.includes(chars.slice(0, 2).join(''));
+    const cut = compound ? 2 : 1;
+    return { lastName: chars.slice(0, cut).join(''), firstName: chars.slice(cut).join('') };
+  }
+  return { lastName: text, firstName: '' };
+}
+
 function clientXml(owner) {
   if (!owner) return '';
   const id = owner._id ? ` client_id="${xmlText(owner._id)}"` : '';
-  return `      <client${id}>\n        <first_name></first_name>\n        <last_name>${xmlText(owner.name)}</last_name>\n      </client>\n`;
+  const { lastName, firstName } = splitOwnerName(owner.name);
+  return `      <client${id}>\n        <first_name>${xmlText(firstName)}</first_name>\n        <last_name>${xmlText(lastName)}</last_name>\n      </client>\n`;
 }
 
-// 品種不送：IDEXX 主機有自己的品種清單，自由文字的中文品種對不上。
+// DTD 規定的順序：patient_name → patient_breed → patient_birth_dt → patient_weight。
 function patientXml(pet, weightKg) {
   const gender = idexxGender(pet.sex, pet.neutered);
+  const breed = idexxBreed(pet.breed);
   const birth = idexxDate(pet.birthDate);
   const weight = weightText(weightKg);
   return [
     `      <patient patient_id="${xmlText(pet._id)}" patient_species="${idexxSpecies(pet.species)}"${gender ? ` patient_gender="${gender}"` : ''}>`,
     `        <patient_name>${xmlText(pet.name)}</patient_name>`,
+    breed ? `        <patient_breed>${xmlText(breed)}</patient_breed>` : '',
     birth ? `        <patient_birth_dt>${birth}</patient_birth_dt>` : '',
     weight ? `        <patient_weight patient_weight_uom="kgs">\n          <weight>${weight}</weight>\n        </patient_weight>` : '',
     '      </patient>',

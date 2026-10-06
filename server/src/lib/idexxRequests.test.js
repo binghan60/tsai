@@ -55,7 +55,7 @@ describe('idexxRequests.syncIdexxCensus', () => {
     // 用系統自己的 IDEXX 解碼器讀回來：照 XML 宣告的 Big5 解得出中文。
     const xml = decodeIdexxXml(doc.body);
     assert.match(xml, /<patient_name>牛奶<\/patient_name>/);
-    assert.match(xml, /<last_name>王小明<\/last_name>/);
+    assert.match(xml, /<first_name>小明<\/first_name>\s*<last_name>王<\/last_name>/);
     assert.match(xml, /<weight>4.2<\/weight>/);
     assert.deepEqual(doc.unmappable, []);
   });

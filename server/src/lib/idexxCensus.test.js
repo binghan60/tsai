@@ -4,12 +4,12 @@ import { TextDecoder } from 'node:util';
 import { XMLParser } from 'fast-xml-parser';
 import { encodeBig5 } from './big5.js';
 import {
-  buildIdexxRequestXml, canRequestLab, idexxDate, idexxDateTime, idexxGender, idexxMessageId, idexxSpecies, inClinic, nextCensusKind, xmlText,
+  buildIdexxRequestXml, canRequestLab, idexxBreed, idexxDate, idexxDateTime, idexxGender, idexxMessageId, idexxSpecies, inClinic, nextCensusKind, splitOwnerName, xmlText,
 } from './idexxCensus.js';
 import { idexxCensusSettings } from '../config/idexxBridge.js';
 
 const pet = {
-  _id: '66f0a1b2c3d4e5f601234567', name: '牛奶', species: '貓', sex: 'female', neutered: 'yes',
+  _id: '66f0a1b2c3d4e5f601234567', name: '牛奶', species: '貓', breed: '米克斯', sex: 'female', neutered: 'yes',
   birthDate: new Date('2023-04-30T16:00:00Z'), ownerId: 'o1',
 };
 const owner = { _id: '66f0a1b2c3d4e5f60123aaaa', name: '王小明' };
@@ -48,13 +48,48 @@ describe('idexxCensus', () => {
     assert.equal(idexxSpecies('貓'), 'FELINE');
     assert.equal(idexxSpecies(''), 'FELINE');
     assert.equal(idexxSpecies('狗'), 'CANINE');
-    assert.equal(idexxSpecies('兔'), 'OTHER');
+    // 診所只看貓：自由輸入的寫法（貓咪、米克斯貓）都要是 FELINE，不能變成主機認不得的 OTHER。
+    assert.equal(idexxSpecies('貓咪'), 'FELINE');
+    assert.equal(idexxSpecies('米克斯貓'), 'FELINE');
+    assert.equal(idexxSpecies('Cat'), 'FELINE');
     assert.equal(idexxGender('male', 'yes'), 'MALE_NEUTERED');
     assert.equal(idexxGender('male', 'no'), 'MALE_INTACT');
     assert.equal(idexxGender('female', 'yes'), 'FEMALE_SPAYED');
     assert.equal(idexxGender('female', 'no'), 'FEMALE_INTACT');
-    assert.equal(idexxGender('female', 'unknown'), null);
+    // 結紮沒記錄：IDEXX 沒有「不知道」，送未結紮那一種，主機上至少看得到公母。
+    assert.equal(idexxGender('female', 'unknown'), 'FEMALE_INTACT');
+    assert.equal(idexxGender('male', undefined), 'MALE_INTACT');
     assert.equal(idexxGender('unknown', 'yes'), null);
+  });
+
+  it('飼主姓名拆成姓、名（IDEXX 主機是兩格）', () => {
+    assert.deepEqual(splitOwnerName('蔡智堯'), { lastName: '蔡', firstName: '智堯' });
+    assert.deepEqual(splitOwnerName('王明'), { lastName: '王', firstName: '明' });
+    assert.deepEqual(splitOwnerName('歐陽小美'), { lastName: '歐陽', firstName: '小美' });
+    // 兩個字的「歐陽」是姓歐名陽，不當複姓。
+    assert.deepEqual(splitOwnerName('歐陽'), { lastName: '歐', firstName: '陽' });
+    assert.deepEqual(splitOwnerName('Stanley Wang'), { lastName: 'Wang', firstName: 'Stanley' });
+    // 拆不出來的整個放姓：單一個字、英數混合、太長的（多半不是人名）。
+    assert.deepEqual(splitOwnerName('牛奶媽媽0912'), { lastName: '牛奶媽媽0912', firstName: '' });
+    assert.deepEqual(splitOwnerName('愛貓動物之家'), { lastName: '愛貓動物之家', firstName: '' });
+    assert.deepEqual(splitOwnerName('林'), { lastName: '林', firstName: '' });
+    assert.deepEqual(splitOwnerName(''), { lastName: '', firstName: '' });
+  });
+
+  it('品種對到 IDEXX 主機清單上的英文名稱；對不到的不送', () => {
+    assert.equal(idexxBreed('米克斯'), 'Mixed');
+    assert.equal(idexxBreed('英國短毛貓'), 'British Shorthair');
+    assert.equal(idexxBreed('美短'), 'American Shorthair');
+    assert.equal(idexxBreed('異國短毛貓'), 'Exotic Shorthair');
+    assert.equal(idexxBreed('布偶貓'), 'Ragdoll');
+    assert.equal(idexxBreed('金吉拉'), 'Persian');
+    assert.equal(idexxBreed('緬因貓'), 'Maine Coon');
+    assert.equal(idexxBreed('緬甸貓'), 'Burmese');
+    assert.equal(idexxBreed('蘇格蘭摺耳貓'), 'Scottish Fold');
+    assert.equal(idexxBreed('無毛貓'), 'Sphynx');
+    assert.equal(idexxBreed(' maine coon '), 'Maine Coon');
+    assert.equal(idexxBreed('橘貓'), '');
+    assert.equal(idexxBreed(''), '');
   });
 
   it('日期與時間照診所時區、IDEXX 範例的格式', () => {
@@ -80,7 +115,8 @@ describe('idexxCensus', () => {
     const notice = message.body.census_notice;
     assert.equal(notice.census_notice_reason, 'inclinic');
     assert.equal(notice.client.client_id, owner._id);
-    assert.equal(notice.client.last_name, '王小明');
+    assert.equal(notice.client.last_name, '王');
+    assert.equal(notice.client.first_name, '小明');
     assert.equal(notice.patient.patient_id, pet._id);
     assert.equal(notice.patient.patient_species, 'FELINE');
     assert.equal(notice.patient.patient_gender, 'FEMALE_SPAYED');
@@ -90,7 +126,9 @@ describe('idexxCensus', () => {
     assert.equal(notice.patient.patient_weight.patient_weight_uom, 'kgs');
     // DTD 的順序：client 在 patient 前面；patient 裡 name → birth → weight。
     assert.ok(xml.indexOf('<client') < xml.indexOf('<patient '));
-    assert.ok(xml.indexOf('<patient_name>') < xml.indexOf('<patient_birth_dt>'));
+    assert.equal(notice.patient.patient_breed, 'Mixed');
+    assert.ok(xml.indexOf('<patient_name>') < xml.indexOf('<patient_breed>'));
+    assert.ok(xml.indexOf('<patient_breed>') < xml.indexOf('<patient_birth_dt>'));
   });
 
   it('離院通知；沒有的欄位不送（不送空的生日、0 體重、不知道的性別）', () => {
