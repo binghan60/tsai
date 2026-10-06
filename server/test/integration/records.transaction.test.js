@@ -21,6 +21,8 @@ describe('record transaction workflow against a replica set', { skip: !uri }, ()
     if (!/test/i.test(mongoose.connection.name)) {
       throw new Error('TEST_MONGODB_URI 必須指向名稱含 test 的隔離測試資料庫');
     }
+    // 本機 .env 若設了後台密碼，下面直接打 API 的請求會被登入門禁擋成 401。
+    delete process.env.ADMIN_PASSWORD;
     server = app.listen(0, '127.0.0.1');
     if (!server.listening) await once(server, 'listening');
     origin = `http://127.0.0.1:${server.address().port}`;

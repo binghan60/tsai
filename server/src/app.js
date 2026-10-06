@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url';
 import mongoose from 'mongoose';
 import { connectDB } from './config/db.js';
 import { assertAppOriginConfigured } from './config/publicUrl.js';
+import { assertAdminAuthConfigured, requireAuth } from './config/adminAuth.js';
+import authRouter from './routes/auth.js';
 import ownersRouter from './routes/owners.js';
 import { ownerPetsRouter, petsRouter } from './routes/pets.js';
 import { petRecordsRouter, recordsRouter, publicReportsRouter } from './routes/records.js';
@@ -25,7 +27,9 @@ app.set('trust proxy', 1);
 // cors 套件在 origin 為 falsy 時會回 `Access-Control-Allow-Origin: *`，
 // 所以未設定 CLIENT_ORIGIN 時直接不掛載，只接受同源請求。
 if (process.env.CLIENT_ORIGIN) {
-  app.use(cors({ origin: process.env.CLIENT_ORIGIN }));
+  // credentials：開發時前端（5173）是跨來源打這裡，登入 cookie 要帶得過來。
+  // 正式環境前後端同源，這個設定用不到。
+  app.use(cors({ origin: process.env.CLIENT_ORIGIN, credentials: true }));
 } else {
   console.warn('[cors] 未設定 CLIENT_ORIGIN，僅允許同源請求');
 }
@@ -54,12 +58,20 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// ── 不需要登入的路由 ──
+// 健康檢查（上面兩支）、登入本身、飼主用分享連結看報告。產 PDF 的 Puppeteer
+// 也只走 /api/public/reports，所以它不需要任何登入狀態。
+// 放行名單就是「掛在 requireAuth 之前」這件事 —— 新增路由時掛在它後面，預設就受保護。
+app.use('/api/auth', authRouter);
+app.use('/api/public/reports', publicReportsRouter);
+
+app.use('/api', requireAuth);
+
 app.use('/api/owners/:ownerId/pets', ownerPetsRouter);
 app.use('/api/owners', ownersRouter);
 app.use('/api/pets/:petId/records', petRecordsRouter);
 app.use('/api/pets', petsRouter);
 app.use('/api/records', recordsRouter);
-app.use('/api/public/reports', publicReportsRouter);
 app.use('/api/delivery-logs', deliveryLogsRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/search', searchRouter);
@@ -108,6 +120,8 @@ export async function startServer() {
 
   // 對外連結的網域要在啟動時就確定。漏設 PUBLIC_APP_URL 在正式環境是致命的。
   assertAppOriginConfigured();
+  // 後台密碼同理：漏設時寧可起不來，也不要不設防地上線。
+  assertAdminAuthConfigured();
   await connectDB();
   httpServer = app.listen(port, () => console.log(`[server] listening on http://localhost:${port}`));
   return httpServer;

@@ -9,4 +9,7 @@ export const http = axios.create({
   // 沒有 timeout 的話 axios 會無限等待：後端卡住時畫面只會一直轉，
   // 使用者除了重整沒有別的線索。一般 CRUD 撐到十五秒還沒回，多半已經出事了。
   timeout: 15000,
+  // 登入狀態在 HttpOnly cookie 裡。正式環境前後端同源，本來就會帶；
+  // 開發時前端（5173）是跨來源打 API（3000），要明講才會帶上。
+  withCredentials: true,
 });

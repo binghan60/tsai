@@ -9,6 +9,9 @@ describe('health endpoints', () => {
   let origin;
 
   before(async () => {
+    // 這裡測的是各路由自己的行為，不是登入。本機 .env 若為了試登入設了密碼，
+    // 下面打後台路由的測試會全部變成 401（登入的接線測試在 routes/auth.test.js）。
+    delete process.env.ADMIN_PASSWORD;
     server = app.listen(0, '127.0.0.1');
     if (!server.listening) await once(server, 'listening');
     origin = `http://127.0.0.1:${server.address().port}`;

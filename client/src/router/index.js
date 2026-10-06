@@ -1,6 +1,9 @@
 import { ref } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
+import { ensureSession } from '../composables/useAuth';
+import { safeRedirectPath } from '../lib/authRedirect';
 
+const LoginPage = () => import('../pages/LoginPage.vue');
 const DashboardPage = () => import('../pages/DashboardPage.vue');
 const OwnersListPage = () => import('../pages/OwnersListPage.vue');
 const OwnerDetailPage = () => import('../pages/OwnerDetailPage.vue');
@@ -47,8 +50,26 @@ const router = createRouter({
     { path: '/records/:id/edit', component: RecordFormPage, meta: { title: '編輯健檢' } },
     { path: '/records/:id/preview', name: 'record-preview', component: ReportViewPage, meta: { bare: true, title: '報告預覽' } },
     // 公開頁面：無後台導覽列，飼主查看用 + Puppeteer PDF 截圖來源
-    { path: '/report/:token', component: ReportViewPage, meta: { bare: true, title: '健檢報告' } },
+    { path: '/report/:token', component: ReportViewPage, meta: { bare: true, public: true, title: '健檢報告' } },
+    { path: '/login', component: LoginPage, meta: { bare: true, public: true, title: '登入' } },
   ],
+});
+
+// 後台頁面要先登入。預設就是受保護的 —— 只有標了 meta.public 的路由不檢查，
+// 新增頁面時忘了標，結果是多一道登入而不是少一道。
+//
+// 這只決定「畫面給不給看」，真正擋住資料的是後端的 requireAuth；
+// 這裡的工作是讓沒登入的人看到登入頁，而不是一個每個區塊都載入失敗的後台。
+router.beforeEach(async (to) => {
+  if (to.path === '/login') {
+    // 已經登入（或伺服器根本沒啟用登入）還來登入頁，直接送去原本要去的地方。
+    return (await ensureSession()) === 'authenticated' ? safeRedirectPath(to.query.redirect) : true;
+  }
+  // 公開報告頁連問都不問：飼主沒有登入狀態可言，Puppeteer 截圖時也少一個要等的請求。
+  if (to.meta.public) return true;
+  // 只有確定沒登入才導走。unknown（伺服器問不到）照常放行，見 ensureSession。
+  if ((await ensureSession()) !== 'anonymous') return true;
+  return { path: '/login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } };
 });
 
 // 記住使用者是從哪一頁進到目前這頁的，讓各頁的返回鍵能回到真正的出發點，

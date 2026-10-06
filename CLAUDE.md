@@ -38,9 +38,11 @@
 | 分享 | `shareToken`（uuid，unique）、`shareEnabled`、`sharedAt` |
 | 生命週期 | `status`：`draft` / `finalized`、`finalizedAt`、`pdfGeneratedAt` |
 | 修訂 | `reportVersion`、`revisionOf`、`revisionRootId`、`revisionReason`、`supersededBy` |
-| 寄送 | `deliveryStatus`：`not_sent` / `sending` / `sent` / `failed`、`deliveryError`、`lastDeliveryAttemptAt`、`sentAt`、`sentTo`、`emailMessageId` |
+| 寄送 | `deliveryStatus`：`not_sent` / `sending` / `sent` / `failed` / `uncertain`、`deliveryError`、`lastDeliveryAttemptAt`、`sentAt`、`sentTo`、`emailMessageId` |
 
 **`status` 與 `deliveryStatus` 是兩個獨立的維度**，不要混成一個。報告結案與否是臨床流程，寄不寄得出去是通訊結果——寄送失敗不該讓報告退回草稿。
+
+`uncertain` 是「SMTP 可能已經接受郵件，但伺服器沒能寫回結果」（連線在確認前中斷、程序在寄送中途消失）。它不是失敗：不能自動重送，要由使用者先確認收件匣再決定。
 
 已結案報告的內容一律讀 `sections` 快照，報告檢視頁不再讀具名欄位。
 
@@ -53,7 +55,7 @@
 `name`、`content`、`availableForAllFields`、`applicableItemKeys`、`enabled`、`usageCount`。填表時可插入文字欄位的長篇內容，取代了早期的 quickPhrases 常用語（該 collection 與其路由已移除）。
 
 ### deliveryLogs 寄送流水帳
-append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
+append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`/`uncertain`）、`attemptId`（把同一次寄送的 `queued` 與最終結果串起來）、`recipient`、`messageId`、`error`、`createdAt`。
 
 **刻意不設 `ref`、改冗餘存報告編號與姓名**——報告可以被刪除，而這筆紀錄的價值正是在報告消失後還查得到寄給了誰。同理它是獨立 collection 而不是內嵌陣列。medicalRecords 上的 `sentTo`/`sentAt` 只留得住最後一次，重寄就覆蓋。
 
@@ -74,6 +76,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 | 資料庫 | MongoDB + Mongoose | |
 | PDF | Puppeteer | 見下節 |
 | Email | Nodemailer | SMTP（Gmail 應用程式密碼） |
+| 認證 | 環境變數密碼 + HMAC 簽章 cookie | 單人使用，不裝 session／JWT 套件，用 `node:crypto` 自己做；見第五節 |
 | 測試 | Node 內建 `node --test` | 不裝額外框架 |
 
 ## 四、PDF 產生方式（關鍵架構決策）
@@ -94,6 +97,11 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ## 五、API 設計
 
 ```
+認證（公開）
+GET    /api/auth/session                登入狀態：{ authRequired, authenticated }，一律 200
+POST   /api/auth/login                  密碼登入，種下登入 cookie；同一 IP 15 分鐘內錯 10 次回 429
+POST   /api/auth/logout                 清除登入 cookie
+
 飼主
 GET    /api/owners                      列表（?q= 搜尋姓名/電話）
 POST   /api/owners
@@ -112,6 +120,7 @@ DELETE /api/pets/:id
 報告
 GET    /api/pets/:petId/records         該寵物的報告
 GET    /api/pets/:petId/records/previous-values   填表時的「上次數值」對照
+GET    /api/pets/:petId/records/finalized-sources 新增健檢時可帶入內容的已結案報告（最近 20 份）
 POST   /api/pets/:petId/records         新增
 GET    /api/records                     跨寵物清單（?view= 工作佇列 / ?q= / 分頁）
 GET    /api/records/:id
@@ -146,12 +155,21 @@ DELETE /api/text-templates/:id
 GET    /api/search                      全站搜尋（飼主 + 寵物）
 GET    /api/dashboard                   彙總數字 + 最近報告
 GET    /api/public/reports/:token        公開，飼主查看報告用
-GET    /api/health
+GET    /api/health                      公開，就緒檢查（含資料庫與 transaction 支援）
+GET    /api/health/live                 公開，存活檢查（不碰資料庫）
 ```
+
+**除了標「公開」的那幾支，所有 `/api/*` 都要登入**（`server/src/config/adminAuth.js` 的 `requireAuth`，未登入回 401）。放行名單不是一份清單，而是 `app.js` 裡的掛載順序：公開路由掛在 `app.use('/api', requireAuth)` 之前，其餘掛在後面。**新增路由時掛在它後面，預設就受保護。**
+
+- 密碼放環境變數 `ADMIN_PASSWORD`，不進資料庫。正式環境沒設就啟動失敗；非正式環境沒設＝不啟用登入（開發與測試都靠這點）。
+- 登入狀態是簽章 cookie（`HttpOnly`、`SameSite=Lax`），伺服器不存 session，所以重新部署不會把人登出。有效 30 天，使用中每天自動換發。
+- 簽章金鑰由密碼衍生：**改密碼＝所有裝置登出**，這也是唯一的撤銷手段（無法單獨作廢某一張）。
+- 產 PDF 的 Puppeteer 只走 `/report/:token` 與 `/api/public/reports/:token`，不需要登入狀態。**不要為了 PDF 在門禁上開洞。**
+- CSRF 靠 `SameSite=Lax`：會改資料的端點都不是 GET。新增端點時維持這一點。
 
 `GET /api/records` 的 `view` 是預設工作佇列：`todo`（預設）/ `drafts` / `pending` / `failed` / `sent` / `all`。回傳帶 `counts` 給前端佇列徽章。**儀錶板卡片的數字必須跟對應佇列的筆數對得起來**——卡片可以點進清單，兩邊算法不同會直接讓人困惑。
 
-刪除限制：`deliveryStatus` 為 `sent` 或 `sending` 的報告不給刪。
+刪除限制：`deliveryStatus` 為 `sent`、`sending` 或 `uncertain` 的報告不給刪。
 
 刪除確認：**只有已結案報告要打字確認**（`confirmText` 必須等於寵物名稱），草稿直接刪。打字確認防的是誤刪正式報告——它產過 PDF、可能已經給過飼主連結；草稿是工作中狀態，多一道抄名字只會訓練使用者無視確認。前端也照這個判準分流：草稿走 `ConfirmDialog`，已結案走 `DeleteRecordDialog`。
 
@@ -168,6 +186,16 @@ GET    /api/health
 | `/records/:id/preview` | 報告預覽 | `meta.bare`，後台用，有結案／寄送／分享操作 |
 | `/report/:token` | 報告檢視頁 | `meta.bare`，**公開**，飼主查看用 + PDF 截圖來源 |
 | `/settings/forms`、`/settings/forms/:id` | 健檢表單管理／設計 | |
+| `/settings/text-templates` | 文字模板管理 | |
+| `/login` | 登入 | `meta.bare`、`meta.public`；伺服器沒啟用登入時會直接跳回工作台 |
+
+登入相關的約定（`router/index.js`、`composables/useAuth.js`）：
+
+- **頁面預設要登入**，只有標了 `meta.public` 的路由不檢查（目前是 `/report/:token` 與 `/login`）。新增後台頁面什麼都不用做；新增公開頁面才需要標。公開報告頁連登入狀態都不問，Puppeteer 截圖時不會多一個要等的請求。
+- 路由守衛只決定畫面給不給看，真正擋住資料的是後端的 `requireAuth`。
+- **用到一半登入失效時不換頁**。axios 攔截器收到 401 會開 `ReloginDialog`（掛在 `App.vue` 根層，兩種版型都蓋得到），登入後自動重送剛才失敗的請求。直接導去登入頁的話，填到一半的報告會被「離開前攔截未儲存變更」卡住或丟失。不該觸發這個流程的請求（登入本身）要帶 `skipAuthRetry`。
+- 登出後用整頁導向而不是 `router.push`，才清得掉記憶體裡已載入的資料。
+- `main.js` 等 `router.isReady()` 才掛載，否則沒登入的人會先看到側邊欄閃一下。
 
 導覽與返回的幾個約定（`client/src/App.vue`、`router/index.js`）：
 
@@ -188,7 +216,7 @@ GET    /api/health
 - **報告狀態色彩語意**（徽章與圖表都要遵循同一套對應）：
   - `draft` 草稿 → 中性（徽章用 `bg-muted/60 text-foreground`；圖表用 zinc-500）
   - `finalized` 已結案 → 品牌色階 `brand`（淺色 `brand-50/700`、深色 `brand-500/10` + `brand-300`）
-  - `sent` 已寄送 → 綠（emerald-600）；`failed` 寄送失敗 → 紅；`sending` 寄送中 → 天藍
+  - `sent` 已寄送 → 綠（emerald-600）；`failed` 寄送失敗 → 紅；`sending` 寄送中 → 天藍；`uncertain` 結果待確認 → 琥珀（amber）
   - 徽章一律用 `<Badge variant="status" :class="META[...].class">`，形狀與留白由 variant 決定、顏色由 `lib/recordStatus.js` 的 meta 提供，不要在使用端再覆寫 padding 或圓角。
 - **圖示**：統一用 `@lucide/vue`，**不要用 emoji**。線條粗細統一 `stroke-width="1.75"`，顏色預設跟隨 `currentColor`。
 - **圖表**：照 `dataviz` skill 的方法做──先選圖表形式（part-to-whole 用堆疊長條，不用圓餅圖）、色彩最後決定且要跑該 skill 附的 `validate_palette.js` 驗證對比與色盲安全性，不要憑感覺挑色。深色卡片（`#121b22` 底）上的分類色要比一般品牌色再深一階才過驗證。會隨主題變色的圖表，色碼要放進 `computed()`（依 `isDark` 切換），不要寫死。
@@ -253,19 +281,22 @@ npm run dev            # 使用者自己開
 - 產 PDF（`GET /api/records/:id/pdf`）不對外，可以放心呼叫。
 - 開發連的 MongoDB 是測試環境，寫入測試資料不必主動清除。
 - 純邏輯要能被測到就別留在路由檔裡——測試若 import `routes/records.js` 會連帶載入 puppeteer 與 nodemailer。結案驗證已抽到 `server/src/lib/recordValidation.js`。
+- **本機預設不需要登入**：`server/.env` 沒設 `ADMIN_PASSWORD` 時登入是關閉的，可以照舊直接 curl。要試登入流程就在 `server/.env` 加上它（測試檔會自己把這個變數拿掉，不受影響）。
+- 動到登入、路由守衛或報告頁時，光跑測試不夠，要用正式模式實測一次——那是唯一會同時走到「Express 出靜態檔 + 同源 cookie + Puppeteer 連自己」的組合：前端以 `VITE_API_BASE_URL=/api` 建置後，用 `NODE_ENV=production PORT=<沒人用的埠> PUBLIC_APP_URL=http://localhost:<埠> ADMIN_PASSWORD=<隨便>` 啟動 `node src/app.js`，登入後下載一份 PDF。
+  - **這個建置要在 PowerShell 做。** Git Bash 會把值是 `/` 開頭的環境變數當成路徑轉換，`/api` 會變成 `C:/Program Files/Git/api` 被打包進前端，症狀是報告頁顯示「找不到這份報告」、PDF 逾時。
 
 ## 九、現況與待辦
 
-已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋。
+已完成：三個核心 collection 與 CRUD、健檢表單自訂、報告填寫與草稿自動存檔、結案與鎖定、修訂版、PDF 產生、Email 寄送與流水帳、分享連結、工作台、跨寵物報告清單、全站搜尋、後台登入（單一密碼 + 簽章 cookie，見第五節）。
 
 待處理（依急迫性）：
 
-1. **認證機制** — 目前 `/api/*` 完全沒有保護。部署後任何人都能讀寫全部資料，並用 `POST /api/records/:id/send-email` 借你的 Gmail 發信（被濫用時 Google 封的是帳號本身）。單人使用不需要 JWT，一組環境變數密碼 + signed cookie 即可，但要放行 `/api/public/reports/:token` 與 PDF 存取。同時值得替寄信單獨加頻率限制。
-   （已處理一半：對外連結的網域改由 `config/publicUrl.js` 決定，正式環境必須設定 `PUBLIC_APP_URL`，否則啟動失敗。濫用寄信至少不會再寄出指向他人網域的連結，但寄信本身仍然沒有任何門檻。）
+1. **寄信沒有獨立的頻率限制** — 登入後才能觸發 `send-email`，被外人濫用的路已經堵住；但登入狀態外流或前端出錯連發時，仍然沒有任何上限（被濫用時 Google 封的是帳號本身）。登入的失敗次數限制在 `lib/attemptLimiter.js`，可以沿用。
 2. **前端 `validateForPreview()` 沒有測試** — `RecordFormPage.vue` 裡與後端 `validateFinalRecord` 對應的那份判準是各寫一份的，後端已經釘住，前端改動會單方面漂移。
 3. **`deletedMedicalRecords` 沒有查詢介面** — 只寫不讀。
-4. **寄送失敗（`failed`）的報告仍可刪除** — 只擋了 `sent` 與 `sending`。
+4. **寄送失敗（`failed`）的報告仍可刪除** — 只擋了 `sent`、`sending` 與 `uncertain`。
 5. `/owners`、`/pets` 列表沒有分頁；搜尋是全表 regex 掃描，走不到索引。目前資料量還撐得住。
+6. 沒有改密碼的介面與登入紀錄 — 改密碼要到部署平台改 `ADMIN_PASSWORD` 後重新部署。單人使用目前夠用。
 
 部署見 [docs/ZEABUR_DEPLOY.md](docs/ZEABUR_DEPLOY.md)。
 

@@ -1,17 +1,36 @@
 <script setup>
 import { computed, provide, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { Cat, ClipboardList, FileText, LayoutDashboard, Mail, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
+import { Cat, ClipboardList, FileText, LayoutDashboard, LogOut, Mail, Menu, Moon, Search, Sun, Users } from '@lucide/vue';
+import { useAuth } from './composables/useAuth';
 import { useTheme } from './composables/useTheme';
+import { useToast } from './composables/useToast';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
 import ToastContainer from './components/ToastContainer.vue';
 import GlobalSearchDialog from './components/GlobalSearchDialog.vue';
+import ReloginDialog from './components/ReloginDialog.vue';
 
 const route = useRoute();
 const { isDark, toggleTheme } = useTheme();
+const { auth, logout } = useAuth();
+const toast = useToast();
 const mobileOpen = ref(false);
 const searchOpen = ref(false);
+const loggingOut = ref(false);
+
+async function signOut() {
+  if (loggingOut.value) return;
+  loggingOut.value = true;
+  try {
+    // 成功的話 logout() 會整頁導向登入頁，這裡不必把 loggingOut 改回來。
+    await logout();
+  } catch {
+    // 請求沒成功，cookie 還在，人其實還是登入狀態 —— 要講清楚，不能假裝已經登出。
+    toast.error('無法連線到伺服器，目前仍是登入狀態', '登出失敗');
+    loggingOut.value = false;
+  }
+}
 
 // Vue Router 會重用同一條動態路由的元件實例。以資料識別碼作 key，確保從飼主 A
 // 切到飼主 B（或從舊版報告切到新版）時，舊元件與尚未完成的請求不會殘留在畫面上。
@@ -124,7 +143,7 @@ watch(
           </div>
         </nav>
 
-        <div class="border-t border-sidebar-border p-3">
+        <div class="space-y-2 border-t border-sidebar-border p-3">
           <button
             type="button"
             class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -133,6 +152,17 @@ watch(
             <Sun v-if="isDark" class="h-4 w-4" stroke-width="1.9" />
             <Moon v-else class="h-4 w-4" stroke-width="1.9" />
             {{ isDark ? '淺色模式' : '深色模式' }}
+          </button>
+          <!-- 伺服器沒啟用登入（本機開發）時沒有東西可以登出。 -->
+          <button
+            v-if="auth.authRequired"
+            type="button"
+            class="flex min-h-10 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-60"
+            :disabled="loggingOut"
+            @click="signOut"
+          >
+            <LogOut class="h-4 w-4" stroke-width="1.9" />
+            {{ loggingOut ? '登出中…' : '登出' }}
           </button>
         </div>
       </aside>
@@ -210,7 +240,7 @@ watch(
                 {{ item.label }}
               </router-link>
             </nav>
-            <div class="border-t border-sidebar-border p-3">
+            <div class="space-y-2 border-t border-sidebar-border p-3">
               <button
                 type="button"
                 class="flex min-h-11 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -219,6 +249,16 @@ watch(
                 <Sun v-if="isDark" class="h-4 w-4" stroke-width="1.9" />
                 <Moon v-else class="h-4 w-4" stroke-width="1.9" />
                 {{ isDark ? '淺色模式' : '深色模式' }}
+              </button>
+              <button
+                v-if="auth.authRequired"
+                type="button"
+                class="flex min-h-11 w-full items-center gap-3 rounded-lg border border-sidebar-border/80 bg-sidebar-accent/45 px-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-60"
+                :disabled="loggingOut"
+                @click="signOut"
+              >
+                <LogOut class="h-4 w-4" stroke-width="1.9" />
+                {{ loggingOut ? '登出中…' : '登出' }}
               </button>
             </div>
           </SheetContent>
@@ -232,4 +272,7 @@ watch(
     <GlobalSearchDialog v-model:open="searchOpen" />
     <ToastContainer />
   </template>
+
+  <!-- 放在兩種版型之外：報告預覽頁是 bare 版型，但它也是後台頁面，登入一樣會過期。 -->
+  <ReloginDialog />
 </template>

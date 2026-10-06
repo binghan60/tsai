@@ -7,4 +7,9 @@ import './style.css'
 import App from './App.vue'
 import router from './router'
 
-createApp(App).use(router).mount('#app')
+const app = createApp(App).use(router)
+
+// 等第一次導覽跑完才掛載。路由守衛要先問伺服器有沒有登入，在那之前 route 還是空的，
+// App.vue 會把它當成一般後台頁面，沒登入的人就會先看到側邊欄閃一下才跳到登入頁。
+// 導覽失敗（例如頁面的 chunk 載不到）也照樣掛載，否則畫面會永遠空白。
+router.isReady().catch(() => {}).then(() => app.mount('#app'))
