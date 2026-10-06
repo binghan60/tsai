@@ -407,7 +407,7 @@ async function submit(values, kind) {
     confirmation.value = null
     if (kind === 'new' && data.visitType === 'new') toast.success(`初診掛號已建立，驗證碼：${data.intakeVerificationCode}`)
     // 掛到別天的不會出現在今天的時間軸上，提示要講清楚掛在哪一天。
-    else if (kind === 'new' || kind === 'edit') toast.success(`${data.date}（${weekdayLabel(data.date)}）${data.time}`, `${data.petName} 已掛號`)
+    else if (kind === 'new' || kind === 'edit') toast.success(`${data.date}（${weekdayLabel(data.date)}）${data.time}`, `${data.petName} ${kind === 'edit' ? '掛號已更新' : '已掛號'}`)
     else toast.success('診務資料已更新')
   } catch (err) {
     dialogError.value = apiErrorMessage(err, '操作失敗，請稍後重試')

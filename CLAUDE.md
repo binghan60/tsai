@@ -44,9 +44,9 @@
 | **範本快照** | `templateId`、`templateVersion`、`sections`（結案時凍結的完整表單結構＋作答） |
 | 具名臨床欄位 | `weightKg`、`temperatureC`、`heartRate`、`chiefComplaint`、`diagnosis`、`conclusion`、`other`、`customValues` 等 |
 | 分享 | `shareToken`（uuid，unique）、`shareEnabled`、`sharedAt` |
-| 生命週期 | `status`：`draft` / `finalized`、`finalizedAt`、`pdfGeneratedAt` |
+| 生命週期 | `status`：`draft` / `finalized`、`finalizedAt`、`pdfGeneratedAt`、`pdfStatus`：`pending` / `generating` / `ready` / `failed` |
 | 修訂 | `reportVersion`、`revisionOf`、`revisionRootId`、`revisionReason`、`supersededBy` |
-| 寄送 | `deliveryStatus`：`not_sent` / `sending` / `sent` / `failed`、`deliveryError`、`lastDeliveryAttemptAt`、`sentAt`、`sentTo`、`emailMessageId` |
+| 寄送 | `deliveryStatus`：`not_sent` / `sending` / `sent` / `failed` / `uncertain`（SMTP 可能已收下、結果沒能可靠寫回；清單上叫「結果待確認」，同時算進「待寄送」與「寄送失敗」兩個佇列）、`deliveryError`、`lastDeliveryAttemptAt`、`sentAt`、`sentTo`、`emailMessageId` |
 
 **`status` 與 `deliveryStatus` 是兩個獨立的維度**，不要混成一個。報告結案與否是臨床流程，寄不寄得出去是通訊結果——寄送失敗不該讓報告退回草稿。
 
@@ -134,6 +134,8 @@ append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩�
 
 **`POST /workflow/reclaim`（取回這筆）是唯一的回頭路**：`handoffAt` 清成 null，這筆退回 `arrived` 讓醫師補資料。**櫃台按下「完成處理」之後就不能再取回**（`deskCompletedAt` 有值時回 409）——那時號碼牌已歸還、就診已結案。這條回頭路是刻意保留的：舊版「批價完成就再也改不了」正是當時最卡的地方。
 
+**完成之後要改，走「申請修改」**（`reopenRequest: { reason, requestedAt, approvedAt }`）：醫師在已完成的工作區按「申請修改」（`POST /workflow/request-reopen`），掛號台警示列出現「醫師申請修改」，櫃台在處理視窗核准（`POST /workflow/approve-reopen`）後 `deskCompletedAt` 清掉、退回 `pending_checkout`，醫師再「取回」就能改。有待核准申請的那筆在掛號台不算進「已完成」那一格（它在警示列），所以這時候掛號台的已完成數會比總覽少。
+
 `workflowVersion` 標記這筆用的是哪一代流程：`2` ＝這條四步流水線，`1` 是舊的批價／收款版本，`0` 是更早只有 `status` 的版本。舊版欄位（`billingItems`／`billingSubtotal`／`checkoutTotal`／`paymentMethod`／`billingCompletedAt`／`paymentCompletedAt`／`billingRevision`／`pendingCheckoutAt`／`visitCompletedAt`／`handoffAcknowledgedAt`）**已經從 schema 移除、讀不回來**，所以 `shared/appointmentWorkflow.js` 的 legacy 分支改由 `status` 回推階段（`pending_checkout` ＝已交櫃台、`completed` ＝已完成），不做資料庫遷移——沒有人會再去操作已結案的舊掛號，回推只是要讓它們在清單上落在正確的那一格。第一次被新流程碰到時 `adoptWorkflow` 會補上里程碑並把 `workflowVersion` 設成 2。
 
 **文字欄位，各有各的讀者**（診所不用系統計價：批價清單、金額、付款方式都已退場；後來連「給櫃台的交辦」`handoffNote` 也整個移除，收費與領藥由櫃台直接處理）：
@@ -220,12 +222,14 @@ DELETE /api/clinical-notes/:id          刪除手動／舊系統匯入的日誌�
 報告
 GET    /api/pets/:petId/records         該寵物的報告
 GET    /api/pets/:petId/records/previous-values   填表時的「上次數值」對照
+GET    /api/pets/:petId/records/finalized-sources 新增健檢時「從既有報告帶入文字」的來源清單（只回來源資訊，內容仍由 GET /api/records/:id 取）
 POST   /api/pets/:petId/records         新增
 GET    /api/records                     跨寵物清單（?view= 工作佇列 / ?q= / 分頁）
 GET    /api/records/:id                 連著看診的草稿另帶 visitLink（見第二節 medicalRecords）
 PUT    /api/records/:id                 連著看診的草稿：體重／體溫／回診日期／檢驗數值不存在報告上；body.visitEdits 帶醫師改過的欄位，
                                        同一個 transaction 寫回看診與病歷日誌；回應同樣疊上看診的最新值
 POST   /api/records/:id/finalize        結案：驗證 → 凍結 sections → 產 PDF → 鎖定
+POST   /api/records/:id/pdf/retry       已結案但 PDF 沒產出來（pdfStatus 為 failed／pending）時重新產生
 GET    /api/records/:id/pdf             下載 PDF（用飼主手機後 6 碼加密；沒有可用電話就不加密）
 POST   /api/records/:id/revisions       建立修訂版
 DELETE /api/records/:id                 刪除（已結案報告需帶 confirmText＝寵物名稱；草稿不需要）
@@ -265,6 +269,8 @@ POST   .../workflow/complete            櫃台完成處理：寫 deskCompletedAt
 POST   .../workflow/followup            櫃台敲定回診時段：寫 followUpDate/Time 並建立（或改期）下一筆掛號；另收
                                        estimatedDurationMinutes/reason/isSurgery/surgeryName，規則同新增掛號
 POST   .../workflow/record              建立／取得本次就診綁定的健檢報告草稿（body.templateId）
+POST   .../workflow/request-reopen      醫師對已完成的就診申請修改，body { reason }；已有待核准的申請回 409
+POST   .../workflow/approve-reopen      櫃台核准：清 deskCompletedAt → 退回 pending_checkout（之後醫師可取回）
 
 內部聊天（全站，不綁掛號／病患）
 GET    /api/chat/messages               最近訊息（?limit=，預設 100），依時間正序回傳
@@ -337,6 +343,8 @@ POST   /api/settings/form-templates
 GET    /api/settings/form-templates/:id
 PUT    /api/settings/form-templates/:id
 DELETE /api/settings/form-templates/:id
+GET    /api/settings/appointment-settings   掛號預設帶入的健檢表單 { defaultAppointmentTemplateId }
+PUT    /api/settings/appointment-settings   設定預設表單（要是啟用中的表單，否則 422）
 
 文字模板
 GET    /api/text-templates              列表（?includeDisabled= / ?q=）
@@ -345,6 +353,15 @@ POST   /api/text-templates
 PUT    /api/text-templates/:id
 POST   /api/text-templates/:id/use      累計使用次數
 DELETE /api/text-templates/:id
+
+藥單（medicationOrders；階段 review 待醫師確認 → approved 待包藥 → ready 待領藥 → collected 已領藥，另有 cancelled，定義在 shared/medicationWorkflow.js）
+GET    /api/medications                 清單，?status= active（預設：review＋approved＋ready）／all／單一階段，?petId=，分頁
+GET    /api/medications/:id
+POST   /api/medications                 櫃台登記一張藥單（從 review 開始）
+POST   /api/medications/:id/actions/:action  edit／approve／return／ready／collect／cancel；藥單與它的病歷日誌在同一個 transaction
+
+圖片上傳
+GET    /api/uploads/image-signature     健檢報告圖片欄位直傳 Cloudinary 用的簽章（有限流；環境變數 CLOUDINARY_*）
 
 其他
 GET    /api/search                      全站搜尋（飼主 + 寵物）
