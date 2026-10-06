@@ -27,17 +27,6 @@ async function removePdf(fileId) {
   await bucket().delete(fileId).catch(() => {});
 }
 
-export async function streamStoredPdf(record, response) {
-  if (!record.pdfFileId) return false;
-  const stream = bucket().openDownloadStream(record.pdfFileId);
-  await new Promise((resolve, reject) => {
-    stream.once('error', reject);
-    stream.once('end', resolve);
-    stream.pipe(response);
-  });
-  return true;
-}
-
 export async function readStoredPdf(record) {
   if (!record.pdfFileId) return null;
   const chunks = [];

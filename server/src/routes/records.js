@@ -6,7 +6,9 @@ import DeliveryLog from '../models/DeliveryLog.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import Appointment from '../models/Appointment.js';
-import { enqueueReportPdf, readStoredPdf, streamStoredPdf } from '../lib/reportPdfJobs.js';
+import { enqueueReportPdf, readStoredPdf } from '../lib/reportPdfJobs.js';
+import { encryptPdf } from '../lib/pdfEncrypt.js';
+import { createFailureLimiter, reportPasscode, reportPasscodeMatches } from '../lib/reportPasscode.js';
 import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from '../lib/mailer.js';
 import { hasPdfRenderAccess } from '../config/pdfAccess.js';
 import { publicAppOrigin } from '../config/publicUrl.js';
@@ -719,7 +721,11 @@ recordsRouter.post('/:id/pdf/retry', async (req, res, next) => {
 
 recordsRouter.get('/:id/pdf', async (req, res, next) => {
   try {
-    const record = await MedicalRecord.findById(req.params.id).select('+pdfFileId').populate('petId', 'name');
+    const record = await MedicalRecord.findById(req.params.id).select('+pdfFileId').populate({
+      path: 'petId',
+      select: 'name ownerId',
+      populate: { path: 'ownerId', select: 'phone' },
+    });
     if (!record) return res.status(404).json({ message: '找不到報告' });
     if (!isFinalizedRecord(record)) {
       return res.status(409).json({ message: '請先結案，再下載正式 PDF' });
@@ -727,12 +733,14 @@ recordsRouter.get('/:id/pdf', async (req, res, next) => {
     if (record.pdfStatus !== 'ready') {
       return res.status(409).json({ message: record.pdfStatus === 'failed' ? 'PDF 產生失敗，請重試。' : 'PDF 正在產生中，完成後即可下載。' });
     }
-    // The finished PDF is immutable and streamed directly from GridFS.
+    const storedPdf = await readStoredPdf(record);
+    if (!storedPdf) return res.status(409).json({ message: 'PDF 正在準備中，請稍後再試。' });
+    // 存著的是沒有密碼的原檔；下載的這份多半是要轉交給飼主的，所以跟 Email 附件一樣
+    // 用飼主手機後 6 碼加密（見 lib/pdfEncrypt.js）。
+    const pdfBuffer = await encryptPdf(storedPdf, reportPasscode(record.petId?.ownerId?.phone));
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', pdfContentDisposition(record));
-    if (!(await streamStoredPdf(record, res))) {
-      return res.status(409).json({ message: 'PDF 正在準備中，請稍後再試。' });
-    }
+    res.send(pdfBuffer);
   } catch (err) {
     next(err);
   }
@@ -1002,7 +1010,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
   try {
     record = await MedicalRecord.findById(req.params.id).select('+pdfFileId').populate({
       path: 'petId',
-      populate: { path: 'ownerId', select: 'name email' },
+      populate: { path: 'ownerId', select: 'name email phone' },
     }).select('+deliveryAttemptId +deliveryLeaseExpiresAt');
     if (!record) return res.status(404).json({ message: '找不到報告' });
     if (!isFinalizedRecord(record)) {
@@ -1078,12 +1086,14 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
     await logDelivery(record, 'queued', { recipient, attemptId: deliveryAttemptId });
 
     assertMailConfigured();
-    const pdfBuffer = await readStoredPdf(record);
-    if (!pdfBuffer) {
+    const storedPdf = await readStoredPdf(record);
+    if (!storedPdf) {
       const pdfError = new Error('PDF 檔案暫時無法讀取，請重新產生。');
       pdfError.status = 409;
       throw pdfError;
     }
+    const passcode = reportPasscode(owner.phone);
+    const pdfBuffer = await encryptPdf(storedPdf, passcode);
     const reportUrl = `${publicAppOrigin(req)}/report/${record.shareToken}`;
 
     // 郵件寄出前先確保信內的分享連結已經可用，並把 lease 往後延長涵蓋 SMTP 階段。
@@ -1115,6 +1125,7 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       visitDate: record.visitDate,
       reportUrl,
       reportExpiresAt: activeShareExpiresAt,
+      passcodeProtected: Boolean(passcode),
       pdfBuffer,
     });
 
@@ -1217,11 +1228,14 @@ recordsRouter.post('/:id/revoke-share', async (req, res, next) => {
 // 掛載於 /api/public/reports（公開路由，無需登入）
 export const publicReportsRouter = Router();
 
+// 同一個分享連結 15 分鐘內最多打錯 10 次。
+const passcodeFailures = createFailureLimiter({ windowMs: 15 * 60 * 1000, max: 10 });
+
 publicReportsRouter.get('/:token', async (req, res, next) => {
   try {
     const record = await MedicalRecord.findOne({ shareToken: req.params.token }).populate({
       path: 'petId',
-      populate: { path: 'ownerId', select: 'name' },
+      populate: { path: 'ownerId', select: 'name phone' },
     });
     if (!record) return res.status(404).json({ message: '找不到這份報告，連結可能已失效' });
 
@@ -1230,6 +1244,23 @@ publicReportsRouter.get('/:token', async (req, res, next) => {
     const shareExpired = !record.shareExpiresAt || record.shareExpiresAt <= new Date();
     if (!isInternalRender && (!record.shareEnabled || !isFinalizedRecord(record) || shareExpired)) {
       return res.status(410).json({ message: '這份報告的分享連結已失效' });
+    }
+
+    // 連結之外再要一道密碼（飼主手機後 6 碼）：連結被轉寄或貼錯對象時，報告內容不會跟著外流。
+    // 密碼放在標頭、不放網址，才不會留在瀏覽紀錄與存取紀錄裡。產 PDF 的內部渲染不必帶。
+    const passcode = isInternalRender ? '' : reportPasscode(record.petId?.ownerId?.phone);
+    if (passcode) {
+      const retryAfter = passcodeFailures.retryAfterSeconds(record.shareToken);
+      if (retryAfter) {
+        res.set('Retry-After', String(retryAfter));
+        return res.status(429).json({ message: '密碼錯誤次數過多，請稍後再試', passcodeRequired: true });
+      }
+      const supplied = req.get('x-report-passcode');
+      if (!supplied) return res.status(401).json({ message: '請輸入密碼', passcodeRequired: true });
+      if (!reportPasscodeMatches(supplied, passcode)) {
+        passcodeFailures.fail(record.shareToken);
+        return res.status(401).json({ message: '密碼不正確，請再確認一次', passcodeRequired: true });
+      }
     }
 
     const sections = await sectionsForView(record);

@@ -71,6 +71,7 @@ export async function sendHealthReportEmail({
   visitDate,
   reportUrl,
   reportExpiresAt,
+  passcodeProtected = false,
   pdfBuffer,
 }) {
   const fromAddress = process.env.MAIL_FROM?.trim() || process.env.SMTP_EMAIL?.trim() || process.env.SMTP_USER?.trim();
@@ -82,12 +83,15 @@ export async function sendHealthReportEmail({
     ? new Date(reportExpiresAt).toLocaleDateString('zh-TW', { timeZone: 'Asia/Taipei' })
     : '';
   const expiryText = expiryLabel ? `（連結有效至 ${expiryLabel}）` : '';
-  const text = `${greeting}\n\n${safePetName}在謙華動物醫院的健檢報告已完成，PDF報告已附在本封郵件中。\n\n也可以透過以下限時連結查看${expiryText}：\n${reportUrl}\n\n若需提早停止分享，請聯絡謙華動物醫院撤銷連結。`;
+  // 只提示密碼是什麼，不把密碼本身寫進信裡——信被轉寄時密碼才不會跟著走。
+  const passcodeHint = passcodeProtected ? '開啟 PDF 附件與連結時，請輸入您留給本院的手機號碼後 6 碼。' : '';
+  const text = `${greeting}\n\n${safePetName}在謙華動物醫院的健檢報告已完成，PDF報告已附在本封郵件中。\n\n也可以透過以下限時連結查看${expiryText}：\n${reportUrl}\n\n${passcodeHint ? `${passcodeHint}\n\n` : ''}若需提早停止分享，請聯絡謙華動物醫院撤銷連結。`;
   const html = `
     <p>${escapeHtml(greeting)}</p>
     <p>${escapeHtml(safePetName)}在<strong>謙華動物醫院</strong>的健檢報告已完成，PDF報告已附在本封郵件中。</p>
     <p>也可以透過以下限時連結查看${expiryLabel ? `（有效至 ${escapeHtml(expiryLabel)}）` : ''}：</p>
     <p><a href="${escapeHtml(reportUrl)}">開啟健檢報告</a></p>
+    ${passcodeHint ? `<p><strong>${escapeHtml(passcodeHint)}</strong></p>` : ''}
     <p style="color:#666;font-size:13px">若需提早停止分享，請聯絡謙華動物醫院撤銷連結。</p>
   `;
 

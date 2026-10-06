@@ -16,6 +16,7 @@
     "test:integration": "node --test test/integration/records.transaction.test.js test/integration/external-delivery.test.js"
   },
   "dependencies": {
+    "@cantoo/pdf-lib": "^2.11.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

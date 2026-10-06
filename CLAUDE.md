@@ -52,6 +52,8 @@
 
 已結案報告的內容一律讀 `sections` 快照，報告檢視頁不再讀具名欄位。
 
+**飼主開啟報告連結與 PDF 要密碼：飼主手機（`owners.phone`）後 6 碼**（`lib/reportPasscode.js`）。**不另外存欄位**，每次用當下的電話算——飼主改電話密碼就跟著變；舊資料的市話一樣取數字後 6 碼，湊不滿 6 碼（沒填）就沒有密碼、照舊直接開（分享提示會用警示字告訴院方）。公開頁：`GET /api/public/reports/:token` 要帶 `X-Report-Passcode` 標頭（不放網址），沒帶或不對回 401 `{ passcodeRequired: true }`；**同一個連結 15 分鐘內打錯 10 次就鎖**（回 429；以連結為單位、不看 IP，只算打錯的）；產 PDF 的內部渲染（`x-pdf-render-secret`）不必帶。PDF：Puppeteer 產不出加密檔，所以 **GridFS 裡存的是沒有密碼的原檔，交出去的那一刻才加密**（`lib/pdfEncrypt.js`，下載與 Email 附件都是；飼主在報告頁自己按列印另存的那份沒有密碼）。Email 內文只提示「手機後 6 碼」，不寫出密碼本身。
+
 **報到建立的草稿引用看診，不複製**（`lib/recordVisitLink.js`）：看診（掛號，`appointment.recordId` 指向草稿）是 `weightKg`、`temperatureC`、`followUpDate`（回診日期＋時間）與檢驗數值（依範本「檢驗」項目的 key）的**唯一存放處**，草稿本身不存這幾欄——跟病歷日誌同一個做法：
 - **讀**：`GET /api/records/:id`（填寫頁、預覽）把看診的值疊到草稿上再回傳（`visitOverlay`，只改記憶體、不存回），另帶 `visitLink: { appointmentId, date }`。檢驗的手動判讀與備註是報告自己的內容，留在草稿上，只有數值來自看診。
 - **寫**：`PUT` 送來的這幾欄一律清掉不存（`stripVisitFields`）；醫師在報告上改過的放在 `visitEdits: { weightKg?, temperatureC?, labValues?: { key: 值 } }`，同一個 transaction 裡寫回看診、同步病歷日誌（`applyVisitEdits`＋`lib/appointmentJournal.js`），報告寫不進去（版本衝突）看診也回滾。填寫頁只送跟上次伺服器值不同的欄位（`client/src/lib/recordVisitLink.js`），才不會拿舊畫面蓋掉診療台剛改的值；跟病歷日誌一樣不看流程階段。**回診日期只能讀**——它是櫃台敲定、同時建立下一筆掛號的那一步，只在掛號台改。
@@ -165,6 +167,7 @@ append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩�
 | 即時通訊 | Socket.IO | 兩種用途：掛號狀態即時同步（醫生↔櫃台，房間以「天」為單位 `appointments:<date>`）、全站內部聊天（不分房間，`io.emit` 廣播給所有連線）；伺服器掛在 Express 的 httpServer 上（`server/src/lib/realtime.js`），沿用既有的 cookie session 驗證連線 |
 | 富文字 | Tiptap（`@tiptap/vue-3`，只裝 Document／Paragraph／Text／Bold／`@tiptap/extensions`） | 只給本次簡易紀錄、藥單、待辦上色與加粗；**不用 StarterKit**，另有自訂的 `tint` 顏色 mark。存的是 `shared/richText.js` 的標記字串，不是 HTML，見第二節「格式標記」 |
 | PDF | Puppeteer | 見下節 |
+| PDF 加密 | `@cantoo/pdf-lib` | 只用來替交出去的 PDF 加開啟密碼（飼主手機後 6 碼），見第二節 medicalRecords；純 JS，部署不必另外裝 qpdf |
 | Email | Nodemailer | SMTP（Gmail 應用程式密碼） |
 | XML 解析 | fast-xml-parser | 讀 IDEXX InterLink 存下的檢驗結果檔（`server/src/lib/idexxResult.js`）；寬鬆解析、不驗證 DTD——IDEXX 的實際輸出不完全符合它自己的 DTD |
 | 測試 | Node 內建 `node --test` | 不裝額外框架 |
@@ -223,7 +226,7 @@ GET    /api/records/:id                 連著看診的草稿另帶 visitLink（
 PUT    /api/records/:id                 連著看診的草稿：體重／體溫／回診日期／檢驗數值不存在報告上；body.visitEdits 帶醫師改過的欄位，
                                        同一個 transaction 寫回看診與病歷日誌；回應同樣疊上看診的最新值
 POST   /api/records/:id/finalize        結案：驗證 → 凍結 sections → 產 PDF → 鎖定
-GET    /api/records/:id/pdf             下載 PDF
+GET    /api/records/:id/pdf             下載 PDF（用飼主手機後 6 碼加密；沒有可用電話就不加密）
 POST   /api/records/:id/revisions       建立修訂版
 DELETE /api/records/:id                 刪除（已結案報告需帶 confirmText＝寵物名稱；草稿不需要）
 POST   /api/records/:id/share           建立分享連結
@@ -348,7 +351,8 @@ GET    /api/search                      全站搜尋（飼主 + 寵物）
 GET    /api/dashboard                   總覽：today（今日掛號／上午下午／在院＝看診中＋候診／待櫃台處理／已完成／待安排回診，
                                        跟掛號台流程列同一套分段）、reports（草稿＋超過一天／待寄送／寄送失敗／本月已寄送與上月）、
                                        latestFailed（最近一份寄送失敗的貓咪與原因）、weeklyTrend（近 8 週，含 weekStart）
-GET    /api/public/reports/:token        公開，飼主查看報告用
+GET    /api/public/reports/:token        公開，飼主查看報告用；要帶 X-Report-Passcode（飼主手機後 6 碼），
+                                       沒帶或不對回 401 { passcodeRequired: true }，錯太多次回 429（見第二節 medicalRecords）
 GET    /api/health
 ```
 
@@ -387,7 +391,7 @@ GET    /api/health
 | `/records/deliveries` | 寄送紀錄 | 流水帳，含已刪除報告的紀錄 |
 | `/pets/:petId/records/new`、`/records/:id/edit` | 健檢報告填寫 | 自動存草稿、離開前攔截；連著看診的草稿在資訊列下方有「引用本次看診」說明條：體重、體溫、檢驗數值在這裡改會寫回看診（`lib/recordVisitLink.js`），回診日期唯讀。1280px 以上區段導覽是左側直排的步驟清單，更窄時改回上方橫排。底部操作列貼齊左右兩條欄。 |
 | `/records/:id/preview` | 報告預覽 | `meta.bare`，後台用，有結案／寄送／分享操作 |
-| `/report/:token` | 報告檢視頁 | `meta.bare`，**公開**，飼主查看用 + PDF 截圖來源 |
+| `/report/:token` | 報告檢視頁 | `meta.bare`，**公開**，飼主查看用 + PDF 截圖來源。飼主先看到密碼畫面（手機後 6 碼），驗過的密碼記在 `sessionStorage`、重新整理不必再打 |
 | `/intake` | 初診填寫（公開） | `meta.bare`，飼主在診所現場用手機、以櫃台給的 4 位驗證碼填。手機優先的獨立版面（`--intake-*` token，不跟主題），電腦版同外觀；草稿存 `sessionStorage`、不出提示。規則見 STYLE_GUIDE 第 10 節 |
 | `/reception/intakes` | 初診表審核 | 全頁版（左清單、右逐欄審核，`IntakeReview.vue`，跟初診面板共用）。貓咪／醫療紀錄／飼主三段各有「修改」，就地改完存回初診表（`IntakeSectionEditor.vue`）；掛號日期與時段必填，規則跟掛號視窗的時段格相同（`lib/appointmentTime.js` 的 `appointmentSlotErrors`） |
 | `/settings/forms`、`/settings/forms/:id` | 健檢表單管理／設計 | |

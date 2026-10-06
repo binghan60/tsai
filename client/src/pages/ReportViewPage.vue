@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AlertTriangle, ArrowLeft, ArrowUp, CheckCircle2, ClipboardPlus, Copy, Download, FilePenLine, List, Mail, Printer, Share2 } from '@lucide/vue';
+import { AlertTriangle, ArrowLeft, ArrowUp, CheckCircle2, ClipboardPlus, Copy, Download, FilePenLine, List, LockKeyhole, Mail, Printer, Share2 } from '@lucide/vue';
 import { PDF_TIMEOUT_MS, http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { ageLabel, formatDate, formatDateTime } from '../lib/datetime';
@@ -50,6 +50,8 @@ const shareActionLabel = computed(() => {
   return '建立飼主分享連結';
 });
 const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
+// 跟伺服器同一條規則（server/src/lib/reportPasscode.js）：電話湊得出 6 碼數字才有密碼。
+const passcodeProtected = computed(() => String(record.value?.owner?.phone ?? '').replace(/\D/g, '').length >= 6);
 const petReminderFields = computed(() => {
   const pet = record.value?.pet;
   if (!pet) return [];
@@ -138,15 +140,69 @@ async function fetchReport() {
       record.value = normalizePreview(data);
     } else {
       const token = route.params.token;
-      const { data } = await http.get(`/public/reports/${token}`);
+      const passcode = storedPasscode(token);
+      const { data } = await http.get(`/public/reports/${token}`, {
+        headers: passcode ? { 'x-report-passcode': passcode } : {},
+      });
       if (currentRequest !== reportRequestSequence || identity !== reportIdentity()) return;
+      passcodeRequired.value = false;
       record.value = data;
     }
   } catch (err) {
-    if (currentRequest === reportRequestSequence && identity === reportIdentity()) {
-      error.value = err.response?.data?.message ?? '找不到這份報告，連結可能已失效';
+    if (currentRequest !== reportRequestSequence || identity !== reportIdentity()) return;
+    if (!isPreview.value && err.response?.data?.passcodeRequired) {
+      // 沒帶密碼的第一次請求只是「這份要密碼」，不算錯；帶了還被退才顯示訊息。
+      const attempted = Boolean(storedPasscode(route.params.token));
+      rememberPasscode(route.params.token, '');
+      passcodeRequired.value = true;
+      passcodeError.value = attempted || err.response.status === 429 ? err.response.data.message : '';
+      return;
     }
+    error.value = err.response?.data?.message ?? '找不到這份報告，連結可能已失效';
   }
+}
+
+// ── 開啟密碼（飼主手機後 6 碼）──
+// 驗過的密碼記在 sessionStorage，重新整理不必再打一次；關掉分頁就沒了。
+// 無痕模式或被封鎖時存取會丟錯，那就只留在記憶體裡。
+const PASSCODE_LENGTH = 6;
+const passcodeRequired = ref(false);
+const passcodeInput = ref('');
+const passcodeError = ref('');
+const checkingPasscode = ref(false);
+const sessionPasscodes = new Map();
+
+function storedPasscode(token) {
+  if (sessionPasscodes.has(token)) return sessionPasscodes.get(token);
+  try {
+    return window.sessionStorage.getItem(`report-passcode:${token}`) || '';
+  } catch {
+    return '';
+  }
+}
+
+function rememberPasscode(token, value) {
+  sessionPasscodes.set(token, value);
+  try {
+    if (value) window.sessionStorage.setItem(`report-passcode:${token}`, value);
+    else window.sessionStorage.removeItem(`report-passcode:${token}`);
+  } catch {
+    // 存不進去不影響這次開啟
+  }
+}
+
+async function submitPasscode() {
+  const value = passcodeInput.value.replace(/\D/g, '');
+  if (value.length !== PASSCODE_LENGTH) {
+    passcodeError.value = `請輸入 ${PASSCODE_LENGTH} 碼數字`;
+    return;
+  }
+  checkingPasscode.value = true;
+  passcodeError.value = '';
+  rememberPasscode(route.params.token, value);
+  await fetchReport();
+  checkingPasscode.value = false;
+  if (passcodeRequired.value) passcodeInput.value = '';
 }
 
 function sexLabel(sex) {
@@ -387,6 +443,9 @@ watch(
     record.value = null;
     deliveryLogs.value = [];
     error.value = '';
+    passcodeRequired.value = false;
+    passcodeInput.value = '';
+    passcodeError.value = '';
     shareNotice.value = null;
     showFinalizeConfirm.value = false;
     showEmailConfirm.value = false;
@@ -472,6 +531,7 @@ watch(
         <p class="font-semibold text-report-success-strong">{{ shareNotice.emailed ? `郵件伺服器已接受寄送至 ${record.sentTo}` : shareNotice.copied ? '分享連結已建立並複製' : '分享連結已建立' }}</p>
         <p class="mt-2 break-all rounded-lg bg-report-canvas px-3 py-2 font-mono text-xs">{{ shareNotice.url }}</p>
         <p class="mt-2 text-xs text-report-muted">{{ shareExpiryNote }}</p>
+        <p class="mt-1 text-xs" :class="passcodeProtected ? 'text-report-muted' : 'text-report-warning'">{{ passcodeProtected ? '飼主開啟連結與 PDF 時要輸入手機後 6 碼' : '這位飼主沒有可用的手機號碼，連結與 PDF 都不會有密碼' }}</p>
         <div class="mt-3 flex flex-wrap gap-2">
           <Button type="button" variant="secondary" size="sm" class="border-report-border-strong bg-report-surface text-report-text hover:border-report-subtle hover:bg-report-surface-muted" @click="copyShareLink"><Copy class="h-4 w-4" />複製連結</Button>
         </div>
@@ -529,6 +589,35 @@ watch(
         <footer class="mt-10 flex flex-wrap justify-center gap-x-6 gap-y-1 border-t border-brand-100 pt-4 text-xs text-report-muted"><span>本報告由謙華動物醫院製作</span><span>第 {{ record.reportVersion || 1 }} 版</span><span>{{ isDraft ? '草稿更新時間' : 'PDF 產生時間' }} {{ formatDateTime(isDraft ? (record.updatedAt || record.createdAt) : (record.pdfGeneratedAt || record.finalizedAt || record.updatedAt || record.createdAt)) }}</span></footer>
       </article>
     </section>
+
+    <form
+      v-else-if="passcodeRequired"
+      class="mx-auto mt-[12vh] flex max-w-sm flex-col gap-4 rounded-2xl border border-report-border bg-report-surface p-6 text-report-foreground shadow-sm"
+      @submit.prevent="submitPasscode"
+    >
+      <div class="flex items-center gap-3">
+        <img src="/chien-hua-logo-mark-v2.png" alt="" aria-hidden="true" class="h-12 w-14 object-contain" />
+        <div>
+          <div class="text-xl font-semibold text-brand-700">謙華動物醫院</div>
+          <div class="mt-0.5 text-sm font-medium text-report-text">貓咪健康檢查報告</div>
+        </div>
+      </div>
+      <label class="flex flex-col gap-2">
+        <span class="flex items-center gap-2 text-sm font-medium text-report-text"><LockKeyhole class="h-4 w-4 shrink-0" stroke-width="1.75" />請輸入您留給本院的手機號碼後 6 碼</span>
+        <input
+          v-model="passcodeInput"
+          type="password"
+          inputmode="numeric"
+          autocomplete="off"
+          :maxlength="PASSCODE_LENGTH"
+          autofocus
+          class="num h-12 w-full rounded-lg border border-report-border-strong bg-report-surface px-3 text-center text-lg tracking-[0.4em] text-report-foreground outline-none focus:border-report-action"
+          :aria-invalid="Boolean(passcodeError)"
+        />
+      </label>
+      <p v-if="passcodeError" class="rounded-lg border border-report-danger-border bg-report-danger-surface px-3 py-2 text-sm text-report-danger" role="alert">{{ passcodeError }}</p>
+      <Button type="submit" size="lg" class="w-full bg-report-action text-white hover:bg-report-action-hover" :disabled="checkingPasscode">{{ checkingPasscode ? '確認中…' : '開啟報告' }}</Button>
+    </form>
 
     <p v-else-if="error" class="mx-auto max-w-3xl rounded-xl border border-report-danger-border bg-report-danger-surface px-6 py-4 text-center text-sm text-report-danger">{{ error }}</p>
     <p v-else class="mx-auto max-w-3xl px-6 text-center text-sm text-report-muted" role="status">載入健檢報告…</p>
