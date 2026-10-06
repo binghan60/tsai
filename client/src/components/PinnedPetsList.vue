@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError';
 import { computed, ref } from 'vue';
 import { Hash, X } from '@lucide/vue';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
@@ -34,7 +35,7 @@ async function remove(item) {
   try {
     await store.unpin(item.petId);
   } catch (err) {
-    toast.error(err.response?.data?.message || '移除失敗，請稍後再試');
+    toast.error(apiErrorMessage(err, '移除失敗，請稍後再試'));
   } finally {
     removing.value = '';
   }

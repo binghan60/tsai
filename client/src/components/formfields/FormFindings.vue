@@ -11,7 +11,7 @@ import { sectionRuns } from '../../lib/sectionRuns';
 import { spanClass } from '../../lib/fieldSpan';
 
 const props = defineProps({ section: { type: Object, required: true } });
-const { findingsFor, valueFor, setValue } = useRecordForm();
+const { findingsFor } = useRecordForm();
 
 // 作答列與範本項目是兩份資料，要用 key 對起來才能照範本的順序渲染。
 const findings = computed(() => findingsFor(props.section));

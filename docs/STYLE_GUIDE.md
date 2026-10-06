@@ -70,7 +70,7 @@
 | `text-2xs` | 14 | 規格欄小標題（`spec-label`），最小字級 |
 | `text-display` | 36 | 總覽數字格的大數字（配 `num`），只給「一眼看數字」的讀數，不當標題 |
 
-尺寸與行高都在 `@theme`，改字級改那裡。不要寫 `text-[13px]` 這種任意值。報告紙面走自己的尺度，見第 8 節。
+尺寸與行高都在 `@theme`，改字級改那裡。不要寫 `text-[13px]` 這種任意值（audit 會擋）。報告紙面走自己的尺度，見第 8 節。
 
 ## 4. 形狀與尺寸
 
@@ -124,7 +124,7 @@ DataCard title="貓咪清單" :count
 
 | 需求 | 用什麼 | 注意 |
 |---|---|---|
-| 按鈕 | `<Button variant>`：`default` 實色、`secondary` 下凹底＋細邊、`soft` 主色淡面、`destructive` 淡紅底、`destructive-solid` 實心紅 | **靜止時一定有底色**；淺色的 `secondary`／`soft`／`destructive` 都帶一圈同色系細邊（使用者要求，淡面放在白卡片上邊緣會糊掉）：圖示鈕、關閉鈕、日期前後鈕、分頁、⋯ 選單都用 `secondary`（透明的 `ghost` 已拿掉）。實心紅只給確認視窗裡的最終動作；編輯鈕用 `secondary`、刪除鈕用 `destructive` 系列（audit 會檢查）。**推進流程的動作用 `soft`**（繼續填寫、新增健檢、審核、報到、處理、安排回診、開啟健檢報告、藥單的開啟／查看、套用、完成待辦…）；取消、返回、關閉、分頁、重試、取回，以及就地編輯的鉛筆鈕，這類輔助動作維持 `secondary`；清單列上唯一的主要動作一律 `soft`（見第 5 節清單頁）。藥單的「開啟」看起來像查閱，但櫃台點進去就是要包藥、交藥，所以算推進流程。實色 `default` 仍只給那一區唯一的主要動作 |
+| 按鈕 | `<Button variant>`：`default` 實色、`secondary` 下凹底＋細邊、`soft` 主色淡面、`destructive` 淡紅底、`destructive-solid` 實心紅 | **靜止時一定有底色**；淺色的 `secondary`／`soft`／`destructive` 都帶一圈同色系細邊（使用者要求，淡面放在白卡片上邊緣會糊掉）：圖示鈕、關閉鈕、日期前後鈕、分頁、⋯ 選單都用 `secondary`（透明的 `ghost` 已拿掉）。實心紅只給確認視窗裡的最終動作（刪除、捨棄、取消掛號／藥單、標記未到；`ConfirmDialog` 加 `destructive`），**沒有例外**——掛號台遲到的報到鈕曾經是實心紅，已改回主色，遲到靠卡片紅底與徽章表示；編輯鈕用 `secondary`、刪除鈕用 `destructive` 系列（audit 會檢查）。**推進流程的動作用 `soft`**（繼續填寫、新增健檢、審核、報到、處理、安排回診、開啟健檢報告、藥單的開啟／查看、套用、完成待辦…）；取消、返回、關閉、分頁、重試、取回，以及就地編輯的鉛筆鈕，這類輔助動作維持 `secondary`；清單列上唯一的主要動作一律 `soft`（見第 5 節清單頁）。藥單的「開啟」看起來像查閱，但櫃台點進去就是要包藥、交藥，所以算推進流程。實色 `default` 仍只給那一區唯一的主要動作 |
 | 頁首 | `PageHeader` | 每頁第一個子元素；詳情／編輯頁用 `back-to`，不用麵包屑 |
 | 清單主卡片 | `DataCard`＋`ListFooter` | 見第 5 節「清單頁模板」 |
 | 卡片 | `<Card>` | 自帶邊框、底色、陰影，使用端不要再加 |
@@ -145,11 +145,13 @@ DataCard title="貓咪清單" :count
 | 錯誤 | `<Alert variant="destructive">` | |
 | 確認／提示 | `ConfirmDialog`、`useToast()` | 禁止 `confirm()`／`alert()` |
 | 篩選 | `FilterBar` | 一律提交式（按 Enter 或送出鈕才查）；選人用的候選清單（`#` 標記）例外 |
+| 分頁 | 清單頁 `ListFooter`、面板底部 `Pagination`；邏輯用 `usePagedList`（伺服器分頁、頁碼在網址）或 `useClientPagination`（整份已在前端） | 不要在頁面裡再手寫頁數計算與「超出最後一頁退回」 |
+| 複製 | `useCopy()` 的 `copyPhone`／`copyIntakeCode`（複製＋提示） | 提示文案全站一致 |
 | 牙齒圖 | `formfields/DentalChart.vue` | 貓 Modified Triadan d3 幾何；在報告紙面上也用它（唯讀），見第 8 節 |
 | 年月（疫苗最後注射、上次健檢） | `YearMonthSelect`（後台預設 `ui/select`；公開初診頁 `appearance="intake"` 用原生下拉） | 月可以選「不確定」、今年未到的月份不能選。存成文字「2026 年 1 月」／「2026 年」（`lib/yearMonth.js`），病歷、報告照原文顯示；看不懂的舊資料（「8/10」）保留原文、旁邊顯示「原本填寫」 |
 | 手機欄 | `shared/phone.js` 的 `checkMobilePhone`（前後端共用） | 09 開頭 10 碼，存之前整理成純數字；市話放 `landline`。修改時沒動到的舊值照收（舊系統匯入的常是市話）。標籤一律寫「手機」、加 `num` 與 `inputmode="tel"` |
 
-圖示統一 `@lucide/vue`、`stroke-width="1.75"`，不用 emoji；頭像一律貓圖示（診所只看貓）。
+圖示統一 `@lucide/vue`、`stroke-width="1.75"`（12–14px 的小勾與小標記可以加粗到 2 以上，細線在那個尺寸看不清楚），不用 emoji；頭像一律貓圖示（診所只看貓）。
 
 ## 7. 用語
 

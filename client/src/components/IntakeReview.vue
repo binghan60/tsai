@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError';
 import { computed, ref, watch } from 'vue';
 import { Check, Pencil, X } from '@lucide/vue';
 import { http } from '../api/http';
@@ -113,7 +114,7 @@ async function decide() {
     toast.success(action === 'approve' ? `已建立「${data.pet.name}」與飼主的正式資料` : '已退回這份初診表');
     emit('decided', { action, data });
   } catch (err) {
-    toast.error(err.response?.data?.message || '審核失敗，請重新整理後再試');
+    toast.error(apiErrorMessage(err, '審核失敗，請重新整理後再試'));
   } finally {
     busy.value = false;
   }

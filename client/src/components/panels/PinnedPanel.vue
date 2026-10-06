@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { useClientPagination } from '../../composables/useClientPagination';
+import { computed, ref } from 'vue';
 import { Pin } from '@lucide/vue';
 import { usePinnedPetsStore } from '../../stores/pinnedPets';
 import { useUtilityPanelStore } from '../../stores/utilityPanel';
@@ -15,17 +16,8 @@ const panel = useUtilityPanelStore();
 const view = computed(() => (panel.active === 'pinned' ? panel.view : (panel.stacks.pinned || []).at(-1) || null));
 
 // 暫存區不會自己清空，堆多了就分頁（store 拿到的是整份，前端切）。頁碼列固定在面板底部，跟其他面板一樣。
-const PAGE_SIZE = 20;
-const page = ref(1);
 const listTop = ref(null);
-const totalPages = computed(() => Math.max(1, Math.ceil(pinned.items.length / PAGE_SIZE)));
-const pageItems = computed(() => pinned.items.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
-// 移除讓最後一頁空掉時退回新的最後一頁。
-watch(totalPages, (value) => { if (page.value > value) page.value = value; });
-function goToPage(value) {
-  page.value = value;
-  listTop.value?.scrollIntoView({ block: 'start' });
-}
+const { page, totalPages, pageItems, goToPage } = useClientPagination(() => pinned.items, { scrollTarget: listTop });
 </script>
 
 <template>

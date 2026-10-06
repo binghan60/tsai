@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { AlertTriangle, CalendarClock, ChevronDown, ChevronLeft, ChevronRight, Clock, RefreshCw, Scissors, Stethoscope, Undo2 } from '@lucide/vue'
@@ -279,7 +280,7 @@ async function startVisit(appointment) {
     openPatient(data)
     toast.success('已開始看診')
   } catch (err) {
-    toast.error(err.response?.data?.message || '開始看診失敗，請稍後重試')
+    toast.error(apiErrorMessage(err, '開始看診失敗，請稍後重試'))
   } finally {
     busy.value = false
   }
@@ -321,7 +322,7 @@ async function reclaim(appointment) {
     openPatient(data)
     queueTab.value = 'active'
   } catch (err) {
-    toast.error(err.response?.data?.message || '取回失敗，請稍後重試')
+    toast.error(apiErrorMessage(err, '取回失敗，請稍後重試'))
   } finally {
     busy.value = false
   }

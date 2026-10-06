@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError.js';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import {
@@ -304,19 +305,6 @@ function applyAgeCalculation() {
 }
 
 // ----------------------------------------------------
-// 醫療病史（選填，永遠攤開——理由同上，這頁不做收合展開）
-// ----------------------------------------------------
-const filledMedicalCount = computed(() => {
-  let count = 0;
-  if (petForm.value.vaccineStatus !== 'unknown' || petForm.value.vaccineDate?.trim()) count++;
-  if (petForm.value.medicalHistory?.length || petForm.value.medicalHistoryOther?.trim()) count++;
-  if (petForm.value.allergyStatus !== 'unknown' || petForm.value.allergyType?.trim()) count++;
-  if (petForm.value.checkupStatus !== 'unknown' || petForm.value.checkupDate?.trim()) count++;
-  if (petForm.value.notes?.trim()) count++;
-  return count;
-});
-
-// ----------------------------------------------------
 // 行內表單驗證 (Inline Validation & Smart Focus)
 // ----------------------------------------------------
 const errors = reactive({
@@ -431,7 +419,7 @@ async function submit() {
     leavingAfterAction.value = true;
     await router.push(`/pets/${pet._id}`);
   } catch (err) {
-    submitError.value = err.response?.data?.message ?? '新增貓咪失敗，請稍後再試。';
+    submitError.value = apiErrorMessage(err, '新增貓咪失敗，請稍後再試。');
   } finally {
     submitting.value = false;
   }

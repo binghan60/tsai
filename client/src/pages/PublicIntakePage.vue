@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useField, useForm } from 'vee-validate'
 import { Check } from '@lucide/vue'
@@ -206,7 +207,7 @@ async function verifyCode() {
   try {
     await http.post('/public/intake-submissions/verify', { verificationCode: code })
   } catch (err) {
-    message = err.response?.data?.message || '驗證失敗，請確認驗證碼後再試。'
+    message = apiErrorMessage(err, '驗證失敗，請確認驗證碼後再試。')
   } finally {
     verifying.value = false
   }
@@ -292,7 +293,7 @@ async function submit() {
     submitted.value = true
     writeDraft(null)
   } catch (err) {
-    error.value = err.response?.data?.message || '送出失敗，請確認網路後再試。'
+    error.value = apiErrorMessage(err, '送出失敗，請確認網路後再試。')
     if (err.response?.status === 409) verified.value = false
   } finally {
     submitting.value = false

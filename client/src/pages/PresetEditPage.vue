@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { Check, Trash2 } from '@lucide/vue';
@@ -115,7 +116,7 @@ async function save() {
     }
     toast.success(`用「${formName.value}」填寫報告時，就能在頁首套用。`, `「${name.value}」已儲存`);
   } catch (err) {
-    error.value = err.response?.data?.message ?? '預填模板儲存失敗，請稍後再試。';
+    error.value = apiErrorMessage(err, '預填模板儲存失敗，請稍後再試。');
     toast.error(error.value, '儲存失敗');
   } finally {
     saving.value = false;
@@ -132,7 +133,7 @@ async function confirmDelete() {
     toast.success(`已從「${formName.value}」移除。`, `「${name.value}」已刪除`);
     router.push({ path: '/settings/presets', query: { form: template.value._id } });
   } catch (err) {
-    error.value = err.response?.data?.message ?? '刪除失敗，請稍後再試。';
+    error.value = apiErrorMessage(err, '刪除失敗，請稍後再試。');
     toast.error(error.value, '刪除失敗');
   } finally {
     deleting.value = false;

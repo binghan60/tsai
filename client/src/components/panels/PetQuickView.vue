@@ -1,4 +1,6 @@
 <script setup>
+import { usePetClinicalNotes } from '../../composables/usePetClinicalNotes';
+import { apiErrorMessage } from '../../lib/apiError';
 import { computed, ref, watch } from 'vue';
 import PatientLink from '../PatientLink.vue';
 import { useRoute } from 'vue-router';
@@ -38,14 +40,11 @@ const pet = ref(null);
 const loading = ref(false);
 const error = ref('');
 const tab = ref('notes');
-const notes = ref([]);
-const notePage = ref(1);
-const noteTotalPages = ref(1);
-const notesLoading = ref(false);
-const notesError = ref('');
+const { notes, page: notePage, totalPages: noteTotalPages, loading: notesLoading, error: notesError, load: loadNotes } = usePetClinicalNotes({
+  petId: () => props.petId,
+});
 const pinBusy = ref(false);
 let request = 0;
-let notesRequest = 0;
 
 const owner = computed(() => pet.value?.ownerId ?? null);
 const pinned = computed(() => store.isPinned(props.petId));
@@ -73,29 +72,8 @@ async function loadPet(id) {
   }
 }
 
-async function loadNotes(page = 1) {
-  const token = ++notesRequest;
-  notesLoading.value = true;
-  notesError.value = '';
-  try {
-    const { data } = await http.get(`/pets/${props.petId}/clinical-notes`, { params: { page, limit: 5 } });
-    if (token !== notesRequest) return;
-    const totalPages = data.totalPages || 1;
-    if (page > totalPages) return await loadNotes(totalPages);
-    notes.value = data.items || [];
-    notePage.value = page;
-    noteTotalPages.value = totalPages;
-  } catch {
-    if (token === notesRequest) notesError.value = '病歷日誌未能載入，請重試。';
-  } finally {
-    if (token === notesRequest) notesLoading.value = false;
-  }
-}
-
 watch(() => props.petId, (id) => {
   tab.value = 'notes';
-  notes.value = [];
-  notePage.value = 1;
   loadPet(id);
   loadNotes(1);
 }, { immediate: true });
@@ -119,7 +97,7 @@ async function togglePin() {
       toast.success('已加入暫存區');
     }
   } catch (err) {
-    toast.error(err.response?.data?.message || '暫存區更新失敗，請稍後再試');
+    toast.error(apiErrorMessage(err, '暫存區更新失敗，請稍後再試'));
   } finally {
     pinBusy.value = false;
   }
@@ -133,7 +111,7 @@ async function togglePin() {
 
     <div v-else-if="pet" class="space-y-5">
       <SpecGrid>
-        <SpecCell label="品種">{{ pet.breed || pet.species || '—' }}</SpecCell>
+        <SpecCell label="品種">{{ pet.breed || pet.species }}</SpecCell>
         <SpecCell v-if="pet.sex === 'male' || pet.sex === 'female'" label="性別"><PetSex :sex="pet.sex" :neutered="pet.neutered" with-label /></SpecCell>
         <SpecCell v-if="age" label="年齡">{{ age }}</SpecCell>
         <SpecCell v-if="pet.weightKg != null" label="體重" mono>{{ pet.weightKg }} kg</SpecCell>

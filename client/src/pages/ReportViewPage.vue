@@ -1,4 +1,6 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError.js';
+import { copyText } from '../lib/clipboard';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { AlertTriangle, ArrowLeft, ArrowUp, CheckCircle2, ClipboardPlus, Copy, Download, FilePenLine, List, LockKeyhole, Mail, Printer, Share2 } from '@lucide/vue';
@@ -158,7 +160,7 @@ async function fetchReport() {
       passcodeError.value = attempted || err.response.status === 429 ? err.response.data.message : '';
       return;
     }
-    error.value = err.response?.data?.message ?? '找不到這份報告，連結可能已失效';
+    error.value = apiErrorMessage(err, '找不到這份報告，連結可能已失效');
   }
 }
 
@@ -252,19 +254,10 @@ async function finalizeReport() {
   } catch (err) {
     if (identity !== reportIdentity()) return;
     if (err.response?.status === 409) await fetchReport();
-    error.value = err.response?.data?.message ?? '結案失敗，報告仍維持草稿';
+    error.value = apiErrorMessage(err, '結案失敗，報告仍維持草稿');
     showFinalizeConfirm.value = false;
   } finally {
     finalizing.value = false;
-  }
-}
-
-async function copyText(value) {
-  try {
-    await navigator.clipboard.writeText(value);
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -284,7 +277,7 @@ async function createShareLink() {
     const copied = await copyText(data.url);
     shareNotice.value = { url: data.url, copied };
   } catch (err) {
-    error.value = err.response?.data?.message ?? '建立分享連結失敗';
+    error.value = apiErrorMessage(err, '建立分享連結失敗');
   } finally {
     sharing.value = false;
   }
@@ -331,7 +324,7 @@ async function createRevision(reason) {
       await router.push(`/records/${err.response.data.revisionId}/edit`);
       return;
     }
-    revisionError.value = err.response?.data?.message ?? '建立修訂草稿失敗';
+    revisionError.value = apiErrorMessage(err, '建立修訂草稿失敗');
   } finally {
     revising.value = false;
   }
@@ -400,7 +393,7 @@ async function retryPdf() {
     record.value.pdfStatus = data.pdfStatus || 'pending';
     record.value.pdfError = '';
   } catch (err) {
-    error.value = err.response?.data?.message ?? '無法重新產生 PDF，請稍後再試。';
+    error.value = apiErrorMessage(err, '無法重新產生 PDF，請稍後再試。');
   }
 }
 

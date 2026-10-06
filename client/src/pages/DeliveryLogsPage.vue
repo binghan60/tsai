@@ -1,10 +1,11 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 import { ChevronDown, ChevronUp, Mail, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate, formatDateTime } from '../lib/datetime';
 import { DELIVERY_EVENT_META } from '../lib/recordStatus';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
+import { usePagedList } from '../composables/usePagedList';
 import { useRoute } from 'vue-router';
 import { Badge } from '../components/ui/badge';
 import DataCard from '../components/DataCard.vue';
@@ -29,7 +30,6 @@ const EVENTS = [
 const EVENT_PREFERENCE_KEY = 'health-check:delivery-event';
 
 const event = useSearchQueryParam('event');
-const page = useSearchQueryParam('page', '1');
 const query = useSearchQueryParam('q');
 const dateFrom = useSearchQueryParam('from');
 const dateTo = useSearchQueryParam('to');
@@ -45,59 +45,26 @@ if (!route.query.event) {
   }
 }
 
-const logs = ref([]);
-const total = ref(0);
-const limit = ref(10);
-const loading = ref(false);
-const error = ref('');
 const expandedDetails = ref(new Set());
 
-let requestSequence = 0;
+// 關鍵字與日期是選好、按下搜尋才查（applyFilters）——打關鍵字或翻開日期選單挑月份的過程
+// 都會經過好幾個「還沒決定好」的中間值，每次都送一次查詢沒有意義。
+const { items: logs, total, limit, loading, error, page: currentPage, totalPages, goToPage, applyFilters } = usePagedList({
+  errorMessage: '寄送歷程暫時無法載入，請稍後重試',
+  fetch: async ({ page }) => (await http.get('/delivery-logs', {
+    params: {
+      page,
+      ...(event.value ? { event: event.value } : {}),
+      ...(query.value.trim() ? { q: query.value.trim() } : {}),
+      ...(dateFrom.value ? { from: dateFrom.value } : {}),
+      ...(dateTo.value ? { to: dateTo.value } : {}),
+    },
+  })).data,
+});
 
-async function fetchLogs() {
-  const currentRequest = ++requestSequence;
-  loading.value = true;
-  error.value = '';
-  try {
-    const { data } = await http.get('/delivery-logs', {
-      params: {
-        page: Number(page.value) || 1,
-        ...(event.value ? { event: event.value } : {}),
-        ...(query.value.trim() ? { q: query.value.trim() } : {}),
-        ...(dateFrom.value ? { from: dateFrom.value } : {}),
-        ...(dateTo.value ? { to: dateTo.value } : {}),
-      },
-    });
-    if (currentRequest !== requestSequence) return;
-    logs.value = data.items ?? [];
-    total.value = data.total ?? 0;
-    limit.value = data.limit ?? 10;
-  } catch (err) {
-    if (currentRequest === requestSequence) error.value = '寄送歷程暫時無法載入，請稍後重試';
-  } finally {
-    if (currentRequest === requestSequence) loading.value = false;
-  }
-}
-
-const currentPage = computed(() => Number(page.value) || 1);
-const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
 function selectEvent(key) {
   if (event.value === key) return;
   event.value = key;
-}
-
-function goToPage(next) {
-  const target = Math.min(Math.max(next, 1), totalPages.value);
-  if (target === currentPage.value) return;
-  page.value = String(target);
-}
-
-// 關鍵字與日期是選好、按下搜尋才查——邊選邊查在切換事件分頁時很自然，
-// 但打關鍵字或翻開日期選單挑月份的過程都會經過好幾個「還沒決定好」的中間值，
-// 每次都送一次查詢沒有意義。
-function applyFilters() {
-  if (page.value !== '1') page.value = '1';
-  else fetchLogs();
 }
 
 function detailKey(log) {
@@ -117,7 +84,6 @@ function toggleDetail(log) {
 }
 
 watch(event, applyFilters);
-watch(page, fetchLogs, { immediate: true });
 watch(event, (nextEvent) => {
   try {
     localStorage.setItem(EVENT_PREFERENCE_KEY, nextEvent || '');
@@ -125,10 +91,6 @@ watch(event, (nextEvent) => {
     // 儲存偏好失敗不影響寄送歷程查詢。
   }
 });
-onBeforeUnmount(() => {
-  requestSequence += 1;
-});
-
 </script>
 
 <template>
@@ -179,7 +141,7 @@ onBeforeUnmount(() => {
             <span v-else class="flex min-w-0 items-center gap-1.5 text-muted-foreground"><Trash2 class="size-4 shrink-0" stroke-width="1.75" /><span class="truncate">{{ log.petName }}</span></span>
             <span class="block min-h-lh truncate text-xs text-subtle-foreground">{{ log.ownerName }}<template v-if="!log.recordExists">{{ log.ownerName ? '，' : '' }}報告已刪除</template></span>
           </span>
-          <span class="desktop-data-cell truncate text-sm" v-tip.overflow="log.recipient || ''">{{ log.recipient || '—' }}</span>
+          <span class="desktop-data-cell truncate text-sm" v-tip.overflow="log.recipient || ''">{{ log.recipient }}</span>
           <span class="desktop-data-cell">
             <div v-if="log.error" class="flex min-w-0 gap-1.5 text-sm text-danger" :class="detailExpanded(log) ? 'items-start' : 'items-center'">
               <span class="min-w-0 flex-1 wrap-break-word" :class="detailExpanded(log) ? 'whitespace-normal' : 'truncate'" v-tip.overflow="log.error">{{ log.error }}</span>
@@ -189,7 +151,7 @@ onBeforeUnmount(() => {
             </div>
             <span v-else-if="log.event === 'queued'" class="text-sm text-info">等待寄送完成</span>
             <span v-else-if="log.event === 'uncertain'" class="text-sm text-warning">寄送結果待確認</span>
-            <span v-else class="text-sm text-subtle-foreground">—</span>
+            
           </span>
         </div>
       </div>
@@ -202,7 +164,7 @@ onBeforeUnmount(() => {
             <span class="num text-sm text-subtle-foreground">{{ formatDateTime(log.completedAt || log.startedAt) }}</span>
           </div>
           <p class="flex gap-3"><router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="font-semibold text-primary">{{ log.petName }}</router-link><span v-else class="text-muted-foreground">{{ log.petName }}（報告已刪除）</span><span class="text-muted-foreground">{{ log.ownerName }}</span></p>
-          <p class="truncate text-sm">{{ log.recipient || '—' }}</p>
+          <p class="truncate text-sm">{{ log.recipient }}</p>
           <p v-if="log.error" class="text-sm text-danger">{{ log.error }}</p>
         </li>
       </ul>

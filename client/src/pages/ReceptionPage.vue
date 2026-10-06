@@ -1,9 +1,11 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from '../components/PatientLink.vue'
 import { AlertTriangle, CalendarPlus, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, Pill, Plus, RefreshCw, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import { useCopy } from '../composables/useCopy'
 import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
@@ -224,27 +226,21 @@ function cardClick(item) {
   if (item.visitType === 'new' && item.intakeSubmissionId && !item.petId) return openIntakeReview(item)
   return openDrawer('edit', item)
 }
-async function copyPhone(phone) {
-  try {
-    await navigator.clipboard.writeText(phone)
-    toast.success(phone, '已複製電話')
-  } catch {
-    toast.error('無法複製，請手動選取電話')
-  }
-}
+const { copyPhone } = useCopy()
 
 function isInitialDataPending(appointment) {
   return appointment.visitType === 'new' && !appointment.petId && Boolean(appointment.intakeVerificationCode) && !appointment.intakeSubmissionId
 }
 
 // 待報到卡片上唯一的主要按鈕。資料齊全的回診一鍵報到；初診要建檔，開抽屜。
-// 已超過寬限還沒報到的，報到鈕改成實心紅——在一整排主色按鈕裡一眼挑得出來。
+// 已超過寬限還沒報到的，按鈕文字換成「遲到」，顏色不變——報到是正常的推進動作，遲到靠卡片的紅底與徽章表示；
+// 實心紅只留給確認視窗裡的最終動作。
 function scheduledPrimary(item) {
   if (item.visitType === 'new' && item.intakeSubmissionId && !item.petId) return { label: '審核', run: () => openIntakeReview(item) }
   if (isInitialDataPending(item)) return null
   const late = itemIsOverdue(item)
-  if (!item.petId) return { label: '報到…', late, run: () => openDrawer('check-in', item) }
-  return { label: late ? '遲到' : '報到', late, run: () => quickCheckIn(item) }
+  if (!item.petId) return { label: '報到…', run: () => openDrawer('check-in', item) }
+  return { label: late ? '遲到' : '報到', run: () => quickCheckIn(item) }
 }
 function scheduledActions(item) {
   const actions = []
@@ -367,7 +363,7 @@ async function quickCheckIn(item) {
     const detail = [`號碼牌 ${data.checkinNumber}`, late && data.latenessMinutes ? `記遲到 ${data.latenessMinutes} 分` : ''].filter(Boolean).join('，')
     toast.success(detail, `${data.petName} 已報到`, { action: { label: '復原', handler: () => undoCheckIn(data._id) } })
   } catch (err) {
-    toast.error(err.response?.data?.message || '報到失敗，請稍後重試')
+    toast.error(apiErrorMessage(err, '報到失敗，請稍後重試'))
   } finally {
     busy.value = false
   }
@@ -385,7 +381,7 @@ async function undoCheckIn(id) {
     notifyChat(data, 'undo_check_in')
     toast.success(`${data.petName} 已退回待報到`, '已復原')
   } catch (err) {
-    toast.error(err.response?.data?.message || '復原失敗，請從卡片取消報到')
+    toast.error(apiErrorMessage(err, '復原失敗，請從卡片取消報到'))
   }
 }
 
@@ -414,7 +410,7 @@ async function submit(values, kind) {
     else if (kind === 'new' || kind === 'edit') toast.success(`${data.date}（${weekdayLabel(data.date)}）${data.time}`, `${data.petName} 已掛號`)
     else toast.success('診務資料已更新')
   } catch (err) {
-    dialogError.value = err.response?.data?.message || '操作失敗，請稍後重試'
+    dialogError.value = apiErrorMessage(err, '操作失敗，請稍後重試')
     if (confirmation.value) toast.error(dialogError.value)
   } finally {
     busy.value = false
@@ -484,7 +480,7 @@ onBeforeUnmount(() => {
         </button>
         <div v-if="stage.key === 'handoff' && handoffs.length" class="flex shrink-0 flex-wrap justify-end gap-1.5">
           <button v-for="item in handoffs.slice(0, 4)" :key="item._id" type="button" class="inline-flex h-8 items-center gap-1.5 rounded-full bg-warning-surface pr-3 pl-1 text-sm font-semibold text-warning hover:bg-warning/15" :aria-label="`處理 ${item.petName}`" @click="openSheet(item)">
-            <span class="num flex size-6 items-center justify-center rounded-full bg-warning text-xs font-semibold text-card">{{ item.checkinNumber || '–' }}</span>{{ item.petName }}
+            <span class="num flex size-6 items-center justify-center rounded-full bg-warning text-xs font-semibold text-card">{{ item.checkinNumber }}</span>{{ item.petName }}
           </button>
         </div>
       </div>
@@ -579,7 +575,7 @@ onBeforeUnmount(() => {
                         <span class="flex size-10 shrink-0 items-center justify-center rounded-full" :class="item.ui.confirmed ? 'bg-accent text-accent-foreground' : 'bg-sunken text-subtle-foreground'"><Cat class="size-5" stroke-width="1.75" /></span>
                         <div class="min-w-0 flex-1 space-y-1">
                           <div class="flex min-w-0 flex-wrap items-center gap-2">
-                            <span class="truncate text-base font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName || '—' }}</PatientLink></span>
+                            <span class="truncate text-base font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
                             <Badge v-if="item.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
                             <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
                             <LatenessBadge :minutes="item.ui.lateMinutes" />
@@ -606,7 +602,7 @@ onBeforeUnmount(() => {
                           <span class="num truncate">{{ item.ownerPhone }}</span>
                           <button type="button" class="flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)] hover:bg-secondary-hover hover:text-foreground" :aria-label="`複製 ${item.ownerName || item.petName} 的電話`" @click.stop="copyPhone(item.ownerPhone)"><Copy class="size-4" stroke-width="1.75" /></button>
                         </span>
-                        <span v-else class="text-subtle-foreground">—</span>
+                        
                       </div>
                       <div class="min-w-0">
                         <span class="spec-label block">進度<template v-if="item.ui.progress.number">　<span class="num">{{ item.ui.progress.number }}</span></template></span>
@@ -621,7 +617,7 @@ onBeforeUnmount(() => {
                           <span class="size-10 shrink-0" aria-hidden="true"></span>
                         </template>
                         <template v-else-if="item.status === 'scheduled'">
-                          <Button v-if="item.ui.primary" :variant="item.ui.primary.late ? 'destructive-solid' : 'default'" :disabled="busy" @click="item.ui.primary.run()">{{ item.ui.primary.label }}</Button>
+                          <Button v-if="item.ui.primary" :disabled="busy" @click="item.ui.primary.run()">{{ item.ui.primary.label }}</Button>
                           <RowActions size="default" :actions="item.ui.actions" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
                         </template>
                         <RowActions v-else size="default" :actions="arrivedActions(item)" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
@@ -732,6 +728,6 @@ onBeforeUnmount(() => {
     <HandoffSheet v-if="activePatient" :key="activePatient._id" :appointment="activePatient" :patient-notes="patientNotesFor(activePatient, patientNotes).filter((note) => note.key === 'owner')" @updated="onSheetUpdate" @close="selected = ''" />
     <CheckInDialog v-if="dialog === 'check-in-detail' && target" :appointment="target" :late="itemIsOverdue(target)" :suggested-checkin-number="suggestedCheckinNumber()" :submitting="busy" :error-message="dialogError" @submit="(values) => submit(values, 'check-in-detail')" @close="dialog = ''" />
     <CancelAppointmentDialog v-if="dialog === 'cancel' && target" :appointment="target" :submitting="busy" :error-message="dialogError" @submit="(reason) => submit({ cancelReason: reason }, 'cancel')" @close="dialog = ''" />
-    <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :description="`病患：${target.petName}`" :loading="busy" @confirm="submit({}, confirmation.kind)" @cancel="confirmation = null" />
+    <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :destructive="confirmation.kind === 'no-show'" :description="`病患：${target.petName}`" :loading="busy" @confirm="submit({}, confirmation.kind)" @cancel="confirmation = null" />
   </div>
 </template>

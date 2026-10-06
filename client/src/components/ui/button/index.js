@@ -22,7 +22,6 @@ export const buttonVariants = cva(
           "border-destructive/30 bg-destructive-surface text-destructive hover:bg-destructive/15 focus-visible:ring-destructive/25 dark:hover:bg-destructive/20",
         "destructive-solid":
           "bg-destructive-solid text-destructive-solid-foreground hover:bg-destructive-solid/90 focus-visible:ring-destructive-solid/30",
-        link: "bg-transparent px-0 text-primary underline-offset-4 hover:underline",
       },
       // 高度 36／40／44／48，預設 40。圖示按鈕跟一般按鈕同圓角（8px），不另外做成圓形。
       size: {

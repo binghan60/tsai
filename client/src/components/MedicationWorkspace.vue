@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError.js';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import PatientLink from './PatientLink.vue';
 import { onBeforeRouteLeave } from 'vue-router';
@@ -26,7 +27,7 @@ import { Label } from './ui/label';
 import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, Cat, ChevronDown, ChevronRight, ClipboardPlus, Copy, Pill, Plus, Search } from '@lucide/vue';
-import { useToast } from '../composables/useToast';
+import { useCopy } from '../composables/useCopy';
 
 // 藥單工作區。清單與單筆詳情是同一個容器內的兩個檢視（opened 切換），不是兩層 Modal——
 // 舊版在 xl 的面板裡再開一個 xl 的 Modal，同尺寸疊同尺寸畫面幾乎不變、看起來像沒反應，
@@ -50,7 +51,6 @@ const doctor = computed(() => props.mode === 'doctor');
 const fullPage = computed(() => !props.compact && !props.createOnly);
 const editing = ref(false);
 const showNotes = ref(false);
-const toast = useToast();
 const filter = ref(props.initialFilter || (doctor.value ? 'review' : 'active'));
 const queryInput = ref('');
 const query = ref('');
@@ -128,7 +128,7 @@ async function refresh() {
     error.value = '';
     if (page.value > totalPages.value) page.value = totalPages.value;
   } catch (err) {
-    if (sequence === listSequence) error.value = err.response?.data?.message || '藥單更新失敗，請重試。';
+    if (sequence === listSequence) error.value = apiErrorMessage(err, '藥單更新失敗，請重試。');
   } finally {
     if (sequence === listSequence) loading.value = false;
   }
@@ -171,19 +171,12 @@ function cancelFromList(item) {
   resetForm(item);
   confirmation.value = {
     title: `取消 ${item.petName} 的藥單？`,
-    description: '取消後不再包藥或交付。',
+    description: '取消後不再包藥或交付。', destructive: true,
     run: () => execute('cancel'),
     cancel: () => { selected.value = null; },
   };
 }
-async function copyPhone(phone) {
-  try {
-    await navigator.clipboard.writeText(phone);
-    toast.success(phone, '已複製電話');
-  } catch {
-    toast.error('無法複製，請手動選取電話');
-  }
-}
+const { copyPhone } = useCopy();
 watch(petQuery, value => {
   clearTimeout(searchTimer);
   const sequence = ++searchSequence;
@@ -258,7 +251,7 @@ async function openOrder(item) {
     opened.value = true;
     clearNotes();
     loadNotes();
-  } catch (err) { error.value = err.response?.data?.message || '無法開啟藥單'; }
+  } catch (err) { error.value = apiErrorMessage(err, '無法開啟藥單'); }
   finally { busy.value = false; }
 }
 function pickPet(value) {
@@ -269,7 +262,7 @@ function pickPet(value) {
 }
 function changePet() {
   const clear = () => { pet.value = null; resetForm(null); clearNotes(); detailSequence += 1; };
-  if (dirty.value) confirmation.value = { title: '重新選擇貓咪？', description: '為避免混用藥單，會清除目前的近況、藥單和備註。', run: clear };
+  if (dirty.value) confirmation.value = { title: '重新選擇貓咪？', destructive: true, description: '為避免混用藥單，會清除目前的近況、藥單和備註。', run: clear };
   else clear();
 }
 function leave() {
@@ -282,12 +275,12 @@ function cancelEditing() {
     if (selected.value) resetForm(selected.value);
     else leave();
   };
-  if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', description: '本次尚未儲存的輸入會清除。', run };
+  if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', destructive: true, description: '本次尚未儲存的輸入會清除。', run };
   else run();
 }
 function close() {
   if (busy.value) return;
-  if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', description: props.createOnly ? '關閉後，本次尚未儲存的輸入會清除。' : '返回清單後，本次尚未儲存的輸入會清除。', run: leave };
+  if (dirty.value) confirmation.value = { title: '捨棄未儲存的內容？', destructive: true, description: props.createOnly ? '關閉後，本次尚未儲存的輸入會清除。' : '返回清單後，本次尚未儲存的輸入會清除。', run: leave };
   else leave();
 }
 defineExpose({ close, create, page, totalPages, opened, goToPage });
@@ -306,7 +299,7 @@ async function execute(action, extra = {}) {
     selected.value = null;
     await refresh();
   } catch (err) {
-    modalError.value = err.response?.data?.message || '儲存失敗，請重試';
+    modalError.value = apiErrorMessage(err, '儲存失敗，請重試');
     if (err.response?.status === 409) stale.value = true;
     // 從清單直接操作時沒有開著的詳情可以顯示 modalError，要改報在清單上，並放掉暫存的 selected，
     // 否則它會留著跟後續列表更新比對版本、把之後每一次操作都擋成「已過期」。
@@ -321,7 +314,7 @@ function requestAction(action) {
   } else if (action === 'collect') {
     confirmation.value = { title: `確認 ${selected.value.petName} 已領藥？`, description: `請核對飼主 ${selected.value.ownerName}（${selected.value.ownerPhone}）與藥包，確認已交付。`, run: () => execute(action) };
   } else if (action === 'cancel') {
-    confirmation.value = { title: `取消 ${selected.value.petName} 的藥單？`, description: '取消後不再包藥或交付。', run: () => execute(action) };
+    confirmation.value = { title: `取消 ${selected.value.petName} 的藥單？`, description: '取消後不再包藥或交付。', destructive: true, run: () => execute(action) };
   } else execute(action);
 }
 // 清單上的「完成」：跟詳情裡的「完成包藥」「確認領藥」是同一個動作，只是不必先點進去。
@@ -370,7 +363,7 @@ if (props.createOnly) create();
 onBeforeRouteLeave(() => {
   if (busy.value) return false;
   if (!dirty.value) return true;
-  return new Promise(resolve => { confirmation.value = { title: '離開並捨棄未儲存的藥單？', description: '本次尚未儲存的輸入會清除。', run: () => resolve(true), cancel: () => resolve(false) }; });
+  return new Promise(resolve => { confirmation.value = { title: '離開並捨棄未儲存的藥單？', destructive: true, description: '本次尚未儲存的輸入會清除。', run: () => resolve(true), cancel: () => resolve(false) }; });
 });
 onMounted(() => {
   refresh();
@@ -415,7 +408,7 @@ onBeforeUnmount(() => {
             </span>
           </span>
           <!-- 貓咪名、飼主名連到貓咪詳情；點藥單內容才是開這張藥單。 -->
-          <button type="button" class="desktop-data-cell truncate text-left text-sm hover:text-primary" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" v-tip.overflow="richTextToPlain(item.prescription)" @click="openOrder(item)">{{ richTextToPlain(item.prescription).replace(/\n+/g, '；') || '—' }}</button>
+          <button type="button" class="desktop-data-cell truncate text-left text-sm hover:text-primary" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" v-tip.overflow="richTextToPlain(item.prescription)" @click="openOrder(item)">{{ richTextToPlain(item.prescription).replace(/\n+/g, '；') }}</button>
           <span class="desktop-data-cell">
             <span class="num block text-sm">{{ formatDateTime(item.createdAt, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) }}</span>
             <span class="block text-xs text-subtle-foreground">{{ relativeTimeLabel(item.createdAt) }}</span>
@@ -443,7 +436,7 @@ onBeforeUnmount(() => {
             </div>
             <RowActions v-if="nextAction(item) || !['collected', 'cancelled'].includes(item.status)" :actions="rowActions(item)" :label="`${item.petName} 藥單的更多操作`" @select="(key) => runRowAction(key, item)" />
           </div>
-          <p class="line-clamp-2 text-sm">{{ richTextToPlain(item.prescription) || '—' }}</p>
+          <p class="line-clamp-2 text-sm">{{ richTextToPlain(item.prescription) }}</p>
           <div class="flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
             <Badge v-if="item.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>
@@ -505,7 +498,7 @@ onBeforeUnmount(() => {
         <SpecGrid>
           <SpecCell label="飼主"><PatientLink v-if="selected.ownerName" :pet-id="selected.petId" quiet>{{ selected.ownerName }}</PatientLink></SpecCell>
           <SpecCell label="電話" mono>
-            <span class="flex items-center gap-1.5">{{ selected.ownerPhone || '—' }}<Button v-if="selected.ownerPhone" type="button" variant="secondary" size="icon-xs" :aria-label="`複製 ${selected.ownerName || selected.petName} 的電話`" @click="copyPhone(selected.ownerPhone)"><Copy stroke-width="1.75" /></Button></span>
+            <span class="flex items-center gap-1.5">{{ selected.ownerPhone }}<Button v-if="selected.ownerPhone" type="button" variant="secondary" size="icon-xs" :aria-label="`複製 ${selected.ownerName || selected.petName} 的電話`" @click="copyPhone(selected.ownerPhone)"><Copy stroke-width="1.75" /></Button></span>
           </SpecCell>
           <SpecCell label="登記" mono>{{ formatDateTime(selected.createdAt, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) }}</SpecCell>
         </SpecGrid>
@@ -552,11 +545,11 @@ onBeforeUnmount(() => {
           <dl class="divide-y divide-border rounded-xl border border-border">
             <div class="grid gap-1 px-4 py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4">
               <dt class="text-sm font-medium text-muted-foreground">飼主回報</dt>
-              <dd><RichText v-if="richTextToPlain(selected.condition).trim()" tag="div" :text="selected.condition" class="whitespace-pre-line" /><span v-else class="text-subtle-foreground">—</span></dd>
+              <dd><RichText v-if="richTextToPlain(selected.condition).trim()" tag="div" :text="selected.condition" class="whitespace-pre-line" /></dd>
             </div>
             <div class="grid gap-1 px-4 py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4">
               <dt class="text-sm font-medium text-muted-foreground">處理備註</dt>
-              <dd><RichText v-if="richTextToPlain(selected.note).trim()" tag="div" :text="selected.note" class="whitespace-pre-line" /><span v-else class="text-subtle-foreground">—</span></dd>
+              <dd><RichText v-if="richTextToPlain(selected.note).trim()" tag="div" :text="selected.note" class="whitespace-pre-line" /></dd>
             </div>
           </dl>
           <div v-if="returning" class="space-y-2"><Label for="med-return">給醫師的意見</Label><Input id="med-return" v-model="returnReason" maxlength="500" :disabled="busy" placeholder="請說明需要重新確認的內容" /><p class="text-xs text-muted-foreground">送出後狀態會回到待醫師確認。</p></div>
@@ -682,5 +675,5 @@ onBeforeUnmount(() => {
     </div>
   </section>
 
-  <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :description="confirmation.description" @confirm="runConfirmation" @cancel="cancelConfirmation" />
+  <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :description="confirmation.description" :destructive="Boolean(confirmation.destructive)" @confirm="runConfirmation" @cancel="cancelConfirmation" />
 </template>

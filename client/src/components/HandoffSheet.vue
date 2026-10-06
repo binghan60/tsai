@@ -1,4 +1,6 @@
 ﻿<script setup>
+import { usePetClinicalNotes } from '../composables/usePetClinicalNotes';
+import { apiErrorMessage } from '../lib/apiError.js';
 import { computed, nextTick, ref, watch } from 'vue';
 import PatientLink from './PatientLink.vue';
 import { CalendarCheck, Check, Pencil, X } from '@lucide/vue';
@@ -47,12 +49,10 @@ const noteDirty = computed(() => visitNote.value !== noteBaseline.value);
 const noteConflict = computed(() => noteDirty.value && (props.appointment.visitNote || '') !== noteBaseline.value);
 const noteSaved = ref(false);
 const editingNote = ref(false);
-const notes = ref([]);
-const notePage = ref(1);
-const noteTotalPages = ref(1);
-const notesLoading = ref(false);
-const notesError = ref('');
-let notesRequest = 0;
+const { notes, page: notePage, totalPages: noteTotalPages, loading: notesLoading, error: notesError, load: loadNotes } = usePetClinicalNotes({
+  petId: () => props.appointment.petId,
+  excludeAppointmentId: () => props.appointment._id,
+});
 
 // 回診安排跟掛號視窗是同一套：來院原因、手術標記、日期、預估診療時間、時段格（AppointmentSlotPicker）。
 // 來院原因預設帶醫師寫的回診原因；醫師沒寫就留空，不替使用者補字。
@@ -100,7 +100,6 @@ watch(() => props.appointment._id, () => {
   resetNote();
   editingNote.value = false;
   error.value = '';
-  notePage.value = 1;
   loadNotes(1);
 });
 
@@ -157,30 +156,6 @@ async function run(action, values = {}, options = {}) {
   return data;
 }
 
-async function loadNotes(page = 1) {
-  const token = ++notesRequest;
-  const petId = props.appointment.petId;
-  notes.value = [];
-  noteTotalPages.value = 1;
-  if (!petId) return;
-  notesLoading.value = true;
-  notesError.value = '';
-  try {
-    const { data } = await http.get(`/pets/${petId}/clinical-notes`, {
-      params: { page, limit: 5, excludeAppointmentId: props.appointment._id },
-    });
-    if (token !== notesRequest || petId !== props.appointment.petId) return;
-    const totalPages = data.totalPages || 1;
-    if (page > totalPages) return await loadNotes(totalPages);
-    notes.value = data.items || [];
-    notePage.value = page;
-    noteTotalPages.value = totalPages;
-  } catch {
-    if (token === notesRequest) notesError.value = '病歷日誌未能載入，請重試。';
-  } finally {
-    if (token === notesRequest) notesLoading.value = false;
-  }
-}
 loadNotes();
 
 function handleHistoricalNoteSaved({ note, content }) {
@@ -224,7 +199,7 @@ async function bookFollowUp() {
     await run('followup', followUpPayload());
     rescheduling.value = false;
   }
-  catch (err) { error.value = err.response?.data?.message || '回診預約失敗，請稍後重試'; }
+  catch (err) { error.value = apiErrorMessage(err, '回診預約失敗，請稍後重試'); }
   finally { busy.value = false; }
 }
 
@@ -250,7 +225,7 @@ async function startReschedule() {
     followUpAttempted.value = false;
     rescheduling.value = true;
   } catch (err) {
-    error.value = err.response?.data?.message || '回診掛號載入失敗，請稍後重試';
+    error.value = apiErrorMessage(err, '回診掛號載入失敗，請稍後重試');
   } finally { busy.value = false; }
 }
 function cancelReschedule() {
@@ -282,7 +257,7 @@ async function approveReopen() {
   try {
     await run('approve-reopen');
   } catch (err) {
-    error.value = err.response?.data?.message || '操作失敗，請稍後重試';
+    error.value = apiErrorMessage(err, '操作失敗，請稍後重試');
   } finally { busy.value = false; }
 }
 </script>

@@ -127,12 +127,12 @@ function dateParts(date) {
   return { year, month, day };
 }
 
-export function formatDate(value, fallback = '—') {
+export function formatDate(value, fallback = '') {
   const date = toValidDate(value);
   return date ? date.toLocaleDateString('zh-TW', { timeZone: CLINIC_TIME_ZONE }) : fallback;
 }
 
-export function formatDateTime(value, options = { dateStyle: 'medium', timeStyle: 'short' }, fallback = '—') {
+export function formatDateTime(value, options = { dateStyle: 'medium', timeStyle: 'short' }, fallback = '') {
   const date = toValidDate(value);
   return date ? date.toLocaleString('zh-TW', { ...options, timeZone: CLINIC_TIME_ZONE }) : fallback;
 }

@@ -1,4 +1,6 @@
 <script setup>
+import { useClientPagination } from '../composables/useClientPagination';
+import { apiErrorMessage } from '../lib/apiError';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { LayoutList, Plus, SearchX } from '@lucide/vue';
@@ -46,8 +48,6 @@ const queryInput = ref('');
 const query = ref('');
 const statusFilter = ref('any');
 
-const SPECIES_LABELS = { cat: '貓', dog: '犬', all: '不限物種' };
-
 // 用詞跟表單自己的「適用物種」對齊，整頁只有一套講法。
 const STATUS_FILTERS = [
   { value: 'any', label: '全部狀態' },
@@ -62,7 +62,6 @@ const START_MODES = [
 // 「至少保留一份表單」看的是總數，不是篩選後的結果 ——
 // 篩掉剩一筆並不代表刪掉它之後就沒表單了。
 const canDelete = computed(() => templates.value.length > 1);
-const hasFilters = computed(() => Boolean(query.value.trim() || statusFilter.value !== 'any'));
 const visibleTemplates = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   return templates.value.filter((template) => {
@@ -83,9 +82,7 @@ function templateAction(key, template) {
   if (key === 'duplicate') openDuplicate(template);
   else if (key === 'delete') templateToDelete.value = template;
 }
-const page = ref(1);
-const totalPages = computed(() => Math.max(Math.ceil(visibleTemplates.value.length / PAGE_SIZE), 1));
-const pagedTemplates = computed(() => visibleTemplates.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
+const { page, totalPages, pageItems: pagedTemplates } = useClientPagination(visibleTemplates, { pageSize: PAGE_SIZE });
 
 // 關鍵字選好、按下搜尋才查——全站搜尋一律走提交式，不做即時。
 function applyFilters() {
@@ -175,7 +172,7 @@ async function createTemplate() {
     );
     await router.push(`/settings/forms/${data._id}`);
   } catch (err) {
-    createError.value = err.response?.data?.message ?? '新增表單失敗';
+    createError.value = apiErrorMessage(err, '新增表單失敗');
   } finally {
     creating.value = false;
   }
@@ -193,7 +190,7 @@ async function toggleEnabled(template, enabled) {
     template.documentVersion = data.documentVersion;
     toast.success(enabled ? `「${template.name}」已可供建立報告` : `「${template.name}」已停用`, '狀態已更新');
   } catch (err) {
-    toast.error(err.response?.data?.message ?? '更新失敗', '更新失敗');
+    toast.error(apiErrorMessage(err, '更新失敗'), '更新失敗');
     await load();
   } finally {
     busyId.value = '';
@@ -212,7 +209,7 @@ async function remove() {
     toast.success(`已刪除「${target.name}」`, '刪除成功');
   } catch (err) {
     templateToDelete.value = null;
-    toast.error(err.response?.data?.message ?? '刪除表單失敗', '刪除失敗');
+    toast.error(apiErrorMessage(err, '刪除表單失敗'), '刪除失敗');
   } finally {
     busyId.value = '';
   }

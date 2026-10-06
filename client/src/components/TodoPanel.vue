@@ -1,4 +1,6 @@
 <script setup>
+import { useClientPagination } from '../composables/useClientPagination';
+import { apiErrorMessage } from '../lib/apiError.js';
 import { computed, ref, watch } from 'vue';
 import { Check, ListTodo, Pencil, Plus, Star, Trash2, X } from '@lucide/vue';
 import { useTodosStore } from '../stores/todos';
@@ -57,18 +59,9 @@ const shown = computed(() => {
 });
 
 // 清單在前端分頁（store 拿到的已經是整份）；頁碼列由外層面板畫在底部（TodosPanel.vue），所以這裡 expose 出去。
-const PAGE_SIZE = 20;
 const root = ref(null);
-const page = ref(1);
-const totalPages = computed(() => Math.max(1, Math.ceil(shown.value.length / PAGE_SIZE)));
-const pageItems = computed(() => shown.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
+const { page, totalPages, pageItems, goToPage } = useClientPagination(shown, { scrollTarget: root });
 watch(view, () => { page.value = 1; });
-// 完成／刪除讓最後一頁空掉時退回新的最後一頁。
-watch(totalPages, (value) => { if (page.value > value) page.value = value; });
-function goToPage(value) {
-  page.value = value;
-  root.value?.scrollIntoView({ block: 'start' });
-}
 defineExpose({ page, totalPages, goToPage });
 const EMPTY_TEXT = {
   all: { title: '還沒有任何待辦', description: '在上面輸入就能新增，打 # 可以標記貓咪，兩邊的電腦會即時同步' },
@@ -98,7 +91,7 @@ async function run(id, action, fallback) {
   try {
     await action();
   } catch (err) {
-    toast.error(err.response?.data?.message || fallback);
+    toast.error(apiErrorMessage(err, fallback));
   } finally {
     busyId.value = '';
   }
@@ -127,7 +120,7 @@ async function submit() {
     // 新增的一定是未完成；停在「最近完成」會看不到它，停在「全部」就留著。
     if (view.value === 'done') view.value = 'open';
   } catch (err) {
-    toast.error(err.response?.data?.message || '新增失敗，請稍後再試');
+    toast.error(apiErrorMessage(err, '新增失敗，請稍後再試'));
   } finally {
     adding.value = false;
   }

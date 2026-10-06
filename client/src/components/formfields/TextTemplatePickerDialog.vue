@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../../lib/apiError';
 import { computed, ref, watch } from 'vue';
 import { ChevronRight, FilePlus2, Search, Trash2, Zap } from '@lucide/vue';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '../ui/dialog';
@@ -78,7 +79,7 @@ async function confirmDelete() {
     toast.success(`已刪除「${deleteTarget.value.name}」`);
     deleteTarget.value = null;
   } catch (err) {
-    toast.error(err.response?.data?.message ?? '刪除文字模板失敗');
+    toast.error(apiErrorMessage(err, '刪除文字模板失敗'));
   } finally {
     deleting.value = false;
   }
@@ -110,7 +111,7 @@ async function saveTemplate() {
     expandedId.value = template._id;
     creating.value = false;
   } catch (err) {
-    createError.value = err.response?.data?.message ?? '新增文字模板失敗，請稍後再試。';
+    createError.value = apiErrorMessage(err, '新增文字模板失敗，請稍後再試。');
   } finally {
     saving.value = false;
   }

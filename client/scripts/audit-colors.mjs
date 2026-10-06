@@ -12,6 +12,8 @@ const paletteNames = [
 
 const stockPalettePattern = new RegExp(`\\b(?:${paletteNames.join('|')})-(?:50|100|200|300|400|500|600|700|800|900|950)\\b`, 'g')
 const literalColorPattern = /#[0-9a-f]{3,8}\b|(?:rgb|rgba|hsl|hsla)\s*\(/gi
+// 字級只有 @theme 定義的那幾階（text-2xs … text-xl、text-display），不寫 text-[13px] 這種任意值。
+const arbitraryFontSizePattern = /\btext-\[[\d.]+(?:px|rem|em)\]/g
 
 function withoutComments(source) {
   return source
@@ -107,6 +109,7 @@ for (const file of await sourceFiles(sourceRoot)) {
   const source = withoutComments(await readFile(file, 'utf8'))
   collectMatches(file, source, stockPalettePattern, '請改用語意色 token', findings)
   collectMatches(file, source, literalColorPattern, '色碼只能定義在 src/style.css', findings)
+  collectMatches(file, source, arbitraryFontSizePattern, '字級請用 @theme 定義的階層', findings)
   if (path.extname(file) === '.vue') {
     collectActionSemantics(file, source, findings)
     collectNativeTitles(file, source, findings)

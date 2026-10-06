@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError';
 import { computed, ref, watch } from 'vue';
 import { ArrowRight } from '@lucide/vue';
 import { http } from '../api/http';
@@ -47,7 +48,7 @@ async function resolve(keys) {
     });
     emit('resolved', data.overwritten);
   } catch (err) {
-    toast.error(err.response?.data?.message || '處理失敗，請稍後再試');
+    toast.error(apiErrorMessage(err, '處理失敗，請稍後再試'));
     // 別台已經處理掉（409）就不必再顯示。
     if (err.response?.status === 409) emit('resolved', []);
   } finally {

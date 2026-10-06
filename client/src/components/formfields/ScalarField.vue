@@ -37,7 +37,6 @@ const selectValue = computed({
 });
 
 // 文字模板只掛在真正需要打字的欄位；日期、數字與選項類欄位不需要插入長文。
-const isTextual = computed(() => props.item.type === 'text' || props.item.type === 'textarea');
 const isMulti = computed(() => props.item.type === 'checkbox');
 const checkedList = computed(() => (Array.isArray(props.modelValue) ? props.modelValue : []));
 

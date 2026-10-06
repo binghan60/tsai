@@ -1,3 +1,4 @@
+import { apiErrorMessage } from '../lib/apiError';
 import { computed, ref } from 'vue';
 import { http } from '../api/http';
 import { useToast } from './useToast';
@@ -31,7 +32,7 @@ export function useLabRequest() {
       }
       return data;
     } catch (err) {
-      toast.error(err.response?.data?.message || '送 IDEXX 失敗，請稍後再試');
+      toast.error(apiErrorMessage(err, '送 IDEXX 失敗，請稍後再試'));
       return null;
     } finally {
       busy.value = false;

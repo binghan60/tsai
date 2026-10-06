@@ -15,7 +15,7 @@ import { spanClass } from '../../lib/fieldSpan';
 
 const props = defineProps({ section: { type: Object, required: true } });
 const {
-  valueFor, setValue, labRanges, labRangeLabel,
+  labRanges, labRangeLabel,
   labsFor, setLabStatus, autoJudgeLab, autoJudgeLabText, markEmptyLabGroupNormal,
 } = useRecordForm();
 

@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { FlaskConical, Search } from '@lucide/vue'
 import { http } from '../api/http'
@@ -69,7 +70,7 @@ async function load() {
     items.value = [...first, ...(latest.data.items || []).filter((item) => !seen.has(item._id))]
     total.value = latest.data.total ?? items.value.length
   } catch (err) {
-    if (id === request) toast.error(err.response?.data?.message || '讀不到檢驗結果，請稍後再試')
+    if (id === request) toast.error(apiErrorMessage(err, '讀不到檢驗結果，請稍後再試'))
   } finally {
     if (id === request) loading.value = false
   }
@@ -85,7 +86,7 @@ async function undo(id) {
     await http.post(`/lab-results/${id}/unmatch`)
     toast.success(`已從${props.appointment.petName}拿掉這份結果，回到待確認`, '已復原')
   } catch (err) {
-    toast.error(err.response?.data?.message || '復原失敗，請稍後再試')
+    toast.error(apiErrorMessage(err, '復原失敗，請稍後再試'))
   } finally {
     counts.loadLabResults()
     emit('imported')
@@ -109,7 +110,7 @@ async function importResult(row) {
     counts.loadLabResults()
     emit('imported')
   } catch (err) {
-    toast.error(err.response?.data?.message || '匯入失敗，請稍後再試')
+    toast.error(apiErrorMessage(err, '匯入失敗，請稍後再試'))
     // 別台已經處理掉了：重讀清單。
     if (err.response?.status === 409) load()
   } finally {

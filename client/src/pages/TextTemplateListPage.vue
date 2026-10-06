@@ -1,4 +1,6 @@
 <script setup>
+import { useClientPagination } from '../composables/useClientPagination';
+import { apiErrorMessage } from '../lib/apiError';
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { CornerDownLeft, FileText, Plus, Search, SearchX } from '@lucide/vue';
 import FilterBar from '../components/FilterBar.vue';
@@ -91,15 +93,6 @@ function applyFilters() {
   page.value = 1;
 }
 
-function clearFilters() {
-  queryInput.value = '';
-  query.value = '';
-  status.value = 'all';
-  page.value = 1;
-}
-
-const hasFilters = computed(() => Boolean(query.value.trim() || status.value !== 'all'));
-
 const visibleTemplates = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   return templates.value.filter((template) => {
@@ -111,9 +104,7 @@ const visibleTemplates = computed(() => {
 
 // 這頁清單是前端過濾，分頁也跟著在前端切，不另外打 API。
 const PAGE_SIZE = 10;
-const page = ref(1);
-const totalPages = computed(() => Math.max(Math.ceil(visibleTemplates.value.length / PAGE_SIZE), 1));
-const pagedTemplates = computed(() => visibleTemplates.value.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE));
+const { page, totalPages, pageItems: pagedTemplates } = useClientPagination(visibleTemplates, { pageSize: PAGE_SIZE });
 
 // 狀態切換鈕組是即時篩選，不經過 applyFilters，換條件時單獨重置頁碼。
 watch(status, () => {
@@ -195,7 +186,7 @@ async function save() {
     toast.success(editingId.value ? '文字模板已更新' : '文字模板已建立');
     editorOpen.value = false;
   } catch (err) {
-    editorError.value = err.response?.data?.message ?? '文字模板儲存失敗';
+    editorError.value = apiErrorMessage(err, '文字模板儲存失敗');
     if (err.response?.status === 409) await loadTemplates({ force: true, includeDisabled: true });
   } finally {
     saving.value = false;
@@ -213,7 +204,7 @@ async function toggleEnabled(template, enabled) {
       expectedVersion: template.__v,
     });
   } catch (err) {
-    toast.error(err.response?.data?.message ?? '更新模板狀態失敗');
+    toast.error(apiErrorMessage(err, '更新模板狀態失敗'));
     await loadTemplates({ force: true, includeDisabled: true });
   }
 }
@@ -226,7 +217,7 @@ async function confirmDelete() {
     toast.success(`已刪除「${deleteTarget.value.name}」`);
     deleteTarget.value = null;
   } catch (err) {
-    toast.error(err.response?.data?.message ?? '刪除文字模板失敗');
+    toast.error(apiErrorMessage(err, '刪除文字模板失敗'));
   } finally {
     deleting.value = false;
   }

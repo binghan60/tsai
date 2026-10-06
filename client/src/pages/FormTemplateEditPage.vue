@@ -645,7 +645,7 @@ function resolveLeave(confirmed) {
               class="rounded-xl border p-4 transition-all sm:p-5"
               :class="[
                 activeKey === section.key
-                  ? 'border-primary bg-field shadow-md ring-2 ring-primary/20 dark:shadow-[0_0_24px_-8px_var(--color-brand-500)]'
+                  ? 'border-primary bg-field shadow-md ring-2 ring-primary/20'
                   : 'cursor-pointer border-border bg-card shadow-card hover:border-primary/35',
                 activeKey !== section.key
                   ? (desktopCanvasMode === 'overview' ? 'hidden xl:block' : 'hidden')
@@ -687,7 +687,7 @@ function resolveLeave(confirmed) {
           </div>
 
           <div v-else class="rounded-xl border border-dashed border-border px-5 py-14 text-center" :class="mobileEditorPane === 'content' ? 'block' : 'hidden xl:block'">
-            <LayoutList class="mx-auto h-8 w-8 text-muted-foreground" stroke-width="1.5" />
+            <LayoutList class="mx-auto h-8 w-8 text-muted-foreground" stroke-width="1.75" />
             <p class="mt-3 text-sm font-semibold text-foreground">尚未建立表單區塊</p>
             <p class="mt-1 text-xs text-muted-foreground">先建立一個區塊，再從工具箱加入欄位。</p>
             <Button type="button" class="mt-4" @click="addSection">
@@ -920,7 +920,7 @@ function resolveLeave(confirmed) {
               </template>
 
               <div v-else class="py-10 text-center">
-                <MousePointerClick class="mx-auto h-7 w-7 text-muted-foreground" stroke-width="1.5" />
+                <MousePointerClick class="mx-auto h-7 w-7 text-muted-foreground" stroke-width="1.75" />
                 <p class="mt-3 text-sm font-medium text-foreground">選一個區塊開始編輯</p>
               </div>
             </div>

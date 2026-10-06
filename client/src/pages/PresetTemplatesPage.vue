@@ -105,7 +105,7 @@ onMounted(async () => {
               >
                 <span class="min-w-0 flex-1 truncate font-semibold" :class="String(form._id) === selectedId ? 'text-accent-foreground' : form.enabled === false ? 'text-muted-foreground' : 'text-foreground'">{{ form.name }}</span>
                 <span v-if="form.presets?.length" class="num shrink-0 text-sm font-semibold text-primary">{{ form.presets.length }}</span>
-                <span v-else class="shrink-0 text-sm text-subtle-foreground" aria-label="沒有模板">—</span>
+                
               </button>
             </template>
           </template>

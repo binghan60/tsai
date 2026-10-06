@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError.js';
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, CalendarDays, Check, Copy, FileText, Link2Off, Mail, MapPin, NotebookPen, Cat, Pencil, Pin, PinOff, Plus, Share2, Trash2, X } from '@lucide/vue';
@@ -29,6 +30,8 @@ import YearMonthSelect from '../components/YearMonthSelect.vue';
 import { checkMobilePhone } from '../../../shared/phone.js';
 
 import { useToast } from '../composables/useToast';
+import { useCopy } from '../composables/useCopy';
+import { copyText } from '../lib/clipboard';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 
@@ -52,7 +55,7 @@ async function togglePin() {
       toast.success('已加入暫存區，診療台與櫃台都看得到');
     }
   } catch (err) {
-    toast.error(err.response?.data?.message || '暫存區更新失敗，請稍後再試');
+    toast.error(apiErrorMessage(err, '暫存區更新失敗，請稍後再試'));
   } finally {
     pinBusy.value = false;
   }
@@ -271,7 +274,7 @@ function handleRowAction(record, action) {
   if (action === 'delete') return openRemoveRecord(record);
 }
 function formatDate(value) {
-  return formatClinicDate(value, '—');
+  return formatClinicDate(value);
 }
 
 function isShareActive(record) {
@@ -353,7 +356,7 @@ async function submitPetEdit() {
     toast.success(`已成功更新「${petForm.name}」的資料`, '修改資料成功');
     await fetchPet();
   } catch (err) {
-    petError.value = err.response?.data?.message ?? '貓咪資料儲存失敗';
+    petError.value = apiErrorMessage(err, '貓咪資料儲存失敗');
     toast.error(petError.value, '修改資料失敗');
     if (err.response?.status === 409) {
       petEditing.value = false;
@@ -406,7 +409,7 @@ async function submitOwnerEdit() {
     toast.success(`已成功更新飼主「${ownerForm.name}」的資料`, '修改資料成功');
     await fetchPet();
   } catch (err) {
-    ownerError.value = err.response?.data?.message ?? '飼主資料儲存失敗';
+    ownerError.value = apiErrorMessage(err, '飼主資料儲存失敗');
     toast.error(ownerError.value, '修改資料失敗');
     if (err.response?.status === 409) {
       ownerEditing.value = false;
@@ -417,19 +420,7 @@ async function submitOwnerEdit() {
   }
 }
 
-async function copyPhone(phone) {
-  if (await copyText(phone)) toast.success(phone, '已複製電話');
-  else toast.error('無法複製，請手動選取電話');
-}
-
-async function copyText(value) {
-  try {
-    await navigator.clipboard.writeText(value);
-    return true;
-  } catch (err) {
-    return false;
-  }
-}
+const { copyPhone } = useCopy();
 
 async function shareRecord(record) {
   sharingId.value = record._id;
@@ -444,7 +435,7 @@ async function shareRecord(record) {
     );
     await fetchPet();
   } catch (err) {
-    error.value = err.response?.data?.message ?? '建立分享連結失敗';
+    error.value = apiErrorMessage(err, '建立分享連結失敗');
     toast.error(error.value, '建立分享失敗');
   } finally {
     sharingId.value = null;
@@ -473,7 +464,7 @@ async function revokeShare(record) {
     toast.success('已成功撤銷分享連結', '撤銷成功');
     await fetchPet();
   } catch (err) {
-    error.value = err.response?.data?.message ?? '撤銷分享失敗';
+    error.value = apiErrorMessage(err, '撤銷分享失敗');
     toast.error(error.value, '撤銷失敗');
   } finally {
     revokingId.value = null;
@@ -502,7 +493,7 @@ async function removeRecord(confirmText) {
     toast.success(`已成功刪除「${formatDate(record.visitDate)}」的健檢報告`, '刪除紀錄成功');
     await fetchPet();
   } catch (err) {
-    const msg = err.response?.data?.message ?? '刪除健檢報告失敗';
+    const msg = apiErrorMessage(err, '刪除健檢報告失敗');
     removeError.value = msg;
     toast.error(msg, '刪除失敗');
   } finally {
@@ -529,7 +520,7 @@ async function addNote() {
     toast.success('已新增病歷日誌', '新增成功');
     await fetchPet();
   } catch (err) {
-    const msg = err.response?.data?.message ?? '新增病歷日誌失敗';
+    const msg = apiErrorMessage(err, '新增病歷日誌失敗');
     noteError.value = msg;
     toast.error(msg, '新增失敗');
   } finally {
@@ -552,7 +543,7 @@ async function removeNote() {
     toast.success('已刪除病歷日誌', '刪除成功');
     await fetchPet();
   } catch (err) {
-    toast.error(err.response?.data?.message ?? '刪除病歷日誌失敗', '刪除失敗');
+    toast.error(apiErrorMessage(err, '刪除病歷日誌失敗'), '刪除失敗');
   } finally {
     deletingNoteId.value = null;
   }
@@ -659,7 +650,7 @@ watch(pet, async (value) => {
           <div class="space-y-1.5">
             <Label for="pet-edit-birth-date" class="text-xs font-medium text-foreground">{{ petForm.birthDateEstimated ? '預估生日' : '生日' }}</Label>
             <DatePicker id="pet-edit-birth-date" v-model="petForm.birthDate" aria-label="生日" class="w-full" @update:model-value="petForm.birthDateEstimated = false" />
-            <p v-if="petForm.birthDateEstimated" class="text-[11px] text-muted-foreground">此日期為依年齡推估的月份。</p>
+            <p v-if="petForm.birthDateEstimated" class="text-xs text-muted-foreground">此日期為依年齡推估的月份。</p>
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-sex" class="text-xs font-medium text-foreground">性別</Label>
@@ -936,7 +927,7 @@ watch(pet, async (value) => {
               </div>
               <div v-for="record in pet.medicalRecords" :key="record._id" class="desktop-data-row">
                 <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ formatDate(record.visitDate) }}</span>
-                <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" v-tip.overflow="record.examType || '—'">{{ record.examType || '—' }}<span v-if="record.reportVersion > 1" class="ml-2 text-xs text-muted-foreground">第 {{ record.reportVersion }} 版</span></span>
+                <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" v-tip.overflow="record.examType || ''">{{ record.examType }}<span v-if="record.reportVersion > 1" class="ml-2 text-xs text-muted-foreground">第 {{ record.reportVersion }} 版</span></span>
                 <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap"><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge></span>
                 <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的健檢報告`" @select="(action) => handleRowAction(record, action)" /><span v-else class="size-9 shrink-0" aria-hidden="true" /></span>
               </div>

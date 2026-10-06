@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError'
 import { computed, reactive, ref } from 'vue'
 import { Pencil } from '@lucide/vue'
 import { http } from '../api/http'
@@ -77,7 +78,7 @@ async function save() {
     toast.success('已更新病歷日誌')
     emit('saved', { note: props.note, updated: data, content: data?.content ?? '' })
   } catch (err) {
-    serverError.value = err.response?.data?.message || '病歷日誌更新失敗，請重試。'
+    serverError.value = apiErrorMessage(err, '病歷日誌更新失敗，請重試。')
     toast.error(serverError.value)
   } finally {
     saving.value = false

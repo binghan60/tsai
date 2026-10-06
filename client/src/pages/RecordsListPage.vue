@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref, watch } from 'vue';
+import { apiErrorMessage } from '../lib/apiError';
+import { ref, watch } from 'vue';
 import PatientLink from '../components/PatientLink.vue';
 import { Cat, FileText, Plus } from '@lucide/vue';
 import { http } from '../api/http';
@@ -7,6 +8,7 @@ import { formatDate as formatClinicDate, relativeDayLabel } from '../lib/datetim
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { useRoute, useRouter } from 'vue-router';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
+import { usePagedList } from '../composables/usePagedList';
 import { useToast } from '../composables/useToast';
 import PetPickerDialog from '../components/PetPickerDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
@@ -34,7 +36,6 @@ const VIEWS = [
 const VIEW_PREFERENCE_KEY = 'health-check:records-view';
 
 const view = useSearchQueryParam('view', 'all');
-const page = useSearchQueryParam('page', '1');
 const query = useSearchQueryParam('q');
 const dateFrom = useSearchQueryParam('from');
 const dateTo = useSearchQueryParam('to');
@@ -53,73 +54,34 @@ if (!route.query.view) {
   }
 }
 
-const records = ref([]);
 const counts = ref({});
-const total = ref(0);
-const limit = ref(10);
-const loading = ref(false);
-const error = ref('');
 const petPickerOpen = ref(false);
 const recordToRemove = ref(null);
 const deletingRecordId = ref(null);
 const removeError = ref('');
 
-let requestSequence = 0;
-
-async function fetchRecords() {
-  const currentRequest = ++requestSequence;
-  loading.value = true;
-  error.value = '';
-  try {
-    const { data } = await http.get('/records', {
-      params: {
-        view: view.value || 'all',
-        page: Number(page.value) || 1,
-        ...(query.value.trim() ? { q: query.value.trim() } : {}),
-        ...(dateFrom.value ? { from: dateFrom.value } : {}),
-        ...(dateTo.value ? { to: dateTo.value } : {}),
-      },
-    });
-    if (currentRequest !== requestSequence) return;
-    records.value = data.items ?? [];
-    counts.value = data.counts ?? {};
-    total.value = data.total ?? 0;
-    limit.value = data.limit ?? 10;
-    const returnedTotalPages = Math.max(Math.ceil(total.value / limit.value), 1);
-    // 其他人刪除資料或新篩選條件縮小結果時，原本頁碼可能超出最後一頁；
-    // 立即回到有效頁碼，避免只看到空白狀態且沒有分頁可以離開。
-    if (!records.value.length && total.value > 0 && currentPage.value > returnedTotalPages) {
-      page.value = String(returnedTotalPages);
-    }
-  } catch (err) {
-    if (currentRequest === requestSequence) error.value = '健檢報告暫時無法載入，請稍後重試';
-  } finally {
-    if (currentRequest === requestSequence) loading.value = false;
-  }
-}
-
-const currentPage = computed(() => Number(page.value) || 1);
-const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
+// 關鍵字與日期是選好、按下搜尋才查（applyFilters）——邊選邊查在切換佇列分頁時很自然，
+// 但打關鍵字或翻開日期選單挑月份的過程都會經過好幾個「還沒決定好」的中間值，
+// 每次都送一次查詢沒有意義。
+const { items: records, total, limit, loading, error, page: currentPage, totalPages, goToPage, applyFilters, reload: fetchRecords } = usePagedList({
+  errorMessage: '健檢報告暫時無法載入，請稍後重試',
+  fetch: async ({ page }) => (await http.get('/records', {
+    params: {
+      view: view.value || 'all',
+      page,
+      ...(query.value.trim() ? { q: query.value.trim() } : {}),
+      ...(dateFrom.value ? { from: dateFrom.value } : {}),
+      ...(dateTo.value ? { to: dateTo.value } : {}),
+    },
+  })).data,
+  onData: (data) => { counts.value = data.counts ?? {}; },
+});
 
 function selectView(key) {
   if ((view.value || 'all') === key) return;
   // 換佇列等於換一份清單，停在第 3 頁沒有意義（那一頁多半根本不存在）——
   // 交給下面的 watcher 統一處理頁碼重置，避免這裡跟日期篩選各自重置一次觸發兩次查詢。
   view.value = key;
-}
-
-function goToPage(next) {
-  const target = Math.min(Math.max(next, 1), totalPages.value);
-  if (target === currentPage.value) return;
-  page.value = String(target);
-}
-
-// 關鍵字與日期是選好、按下搜尋才查——邊選邊查在切換佇列分頁時很自然，
-// 但打關鍵字或翻開日期選單挑月份的過程都會經過好幾個「還沒決定好」的中間值，
-// 每次都送一次查詢沒有意義。
-function applyFilters() {
-  if (page.value !== '1') page.value = '1';
-  else fetchRecords();
 }
 
 function openPetPicker() {
@@ -146,7 +108,6 @@ async function startRecordForPet(pet) {
 }
 
 watch(view, applyFilters);
-watch(page, fetchRecords, { immediate: true });
 watch(view, (nextView) => {
   try {
     localStorage.setItem(VIEW_PREFERENCE_KEY, nextView || 'all');
@@ -159,7 +120,7 @@ watch(() => route.query.new, (value) => {
 }, { immediate: true });
 
 function formatDate(value) {
-  return formatClinicDate(value, '—');
+  return formatClinicDate(value);
 }
 
 function recordLink(record) {
@@ -195,7 +156,7 @@ async function removeRecord(confirmText) {
     // 刪掉這頁最後一筆時，fetchRecords 會自己退回有效頁碼。
     await fetchRecords();
   } catch (err) {
-    const msg = err.response?.data?.message ?? '刪除健檢報告失敗';
+    const msg = apiErrorMessage(err, '刪除健檢報告失敗');
     removeError.value = msg;
     toast.error(msg, '刪除失敗');
   } finally {
@@ -254,9 +215,9 @@ async function removeRecord(confirmText) {
             <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
             <span class="min-w-0 truncate font-semibold text-primary">{{ record.petId?.name || '找不到貓咪' }}</span>
           </router-link>
-          <span class="desktop-data-cell truncate text-sm"><PatientLink v-if="record.petId?.ownerId?.name" :pet-id="record.petId" quiet>{{ record.petId.ownerId.name }}</PatientLink><template v-else>—</template></span>
+          <span class="desktop-data-cell truncate text-sm"><PatientLink v-if="record.petId?.ownerId?.name" :pet-id="record.petId" quiet>{{ record.petId.ownerId.name }}</PatientLink></span>
           <span class="desktop-data-cell">
-            <span class="block truncate text-sm" v-tip.overflow="record.examType || ''">{{ record.examType || '—' }}</span>
+            <span class="block truncate text-sm" v-tip.overflow="record.examType || ''">{{ record.examType }}</span>
             <span v-if="record.reportVersion > 1" class="block text-xs text-subtle-foreground">第 <span class="num">{{ record.reportVersion }}</span> 版</span>
           </span>
           <span class="desktop-data-cell">

@@ -1,8 +1,11 @@
 <script setup>
+import { useClientPagination } from '../../composables/useClientPagination';
+import { apiErrorMessage } from '../../lib/apiError';
 import { computed, onActivated, onMounted, ref, watch } from 'vue';
 import { ClipboardList, Copy, KeyRound } from '@lucide/vue';
 import { http } from '../../api/http';
 import { useToast } from '../../composables/useToast';
+import { useCopy } from '../../composables/useCopy';
 import { useAppointmentNotifier } from '../../composables/useAppointmentNotifier';
 import { clinicDateInput, formatDateTime, weekdayLabel } from '../../lib/datetime';
 import { useUtilityPanelStore } from '../../stores/utilityPanel';
@@ -45,21 +48,10 @@ const tabCounts = computed(() => ({ pending: items.value.length, codes: codes.va
 const CODE_ACTIONS = [{ key: 'void', label: '作廢（取消這筆掛號）', danger: true }];
 
 // 兩份清單都是整份拿回來，前端分頁；頁碼列固定在面板底部，跟其他面板一樣。換頁籤回第一頁。
-const PAGE_SIZE = 20;
-const page = ref(1);
 const listTop = ref(null);
 const tabList = computed(() => (tab.value === 'pending' ? items.value : codes.value));
-const totalPages = computed(() => Math.max(1, Math.ceil(tabList.value.length / PAGE_SIZE)));
-const pageSlice = (list) => list.slice((page.value - 1) * PAGE_SIZE, page.value * PAGE_SIZE);
-const pageItems = computed(() => pageSlice(items.value));
-const pageCodes = computed(() => pageSlice(codes.value));
+const { page, totalPages, pageItems: pageRows, goToPage } = useClientPagination(tabList, { scrollTarget: listTop });
 watch(tab, () => { page.value = 1; });
-// 審核掉、作廢讓最後一頁空掉時退回新的最後一頁。
-watch(totalPages, (value) => { if (page.value > value) page.value = value; });
-function goToPage(value) {
-  page.value = value;
-  listTop.value?.scrollIntoView({ block: 'start' });
-}
 
 async function refresh() {
   try {
@@ -105,7 +97,7 @@ async function issueCode() {
     toast.success(`初診驗證碼：${data.intakeVerificationCode}`);
     refreshCodes();
   } catch (err) {
-    toast.error(err.response?.data?.message || '無法產生初診驗證碼，請稍後再試');
+    toast.error(apiErrorMessage(err, '無法產生初診驗證碼，請稍後再試'));
   } finally {
     issuing.value = false;
   }
@@ -119,14 +111,7 @@ function scheduleLabel(item) {
   return `${Number(month)}/${Number(day)}（${weekdayLabel(item.date)}）${time}`;
 }
 
-async function copyCode(code) {
-  try {
-    await navigator.clipboard.writeText(code);
-    toast.success(code, '已複製驗證碼');
-  } catch {
-    toast.error('無法複製，請手動抄下驗證碼');
-  }
-}
+const { copyIntakeCode: copyCode } = useCopy();
 
 // 驗證碼綁在掛號上，作廢＝取消那筆掛號；取消後公開初診頁就不再接受這組碼。
 async function confirmVoid() {
@@ -140,7 +125,7 @@ async function confirmVoid() {
     voiding.value = null;
     refreshCodes();
   } catch (err) {
-    toast.error(err.response?.data?.message || '作廢失敗，請稍後重試');
+    toast.error(apiErrorMessage(err, '作廢失敗，請稍後重試'));
   } finally {
     voidBusy.value = false;
   }
@@ -186,7 +171,7 @@ onActivated(refreshAll);
         <Alert v-else-if="error" variant="destructive" class="mx-5 w-auto"><AlertDescription>{{ error }}</AlertDescription></Alert>
         <EmptyState v-else-if="!items.length" :icon="ClipboardList" title="沒有待審核的初診表" inset />
         <ul v-else class="divide-y divide-border border-t border-border">
-          <li v-for="item in pageItems" :key="item._id">
+          <li v-for="item in pageRows" :key="item._id">
             <button type="button" class="flex w-full items-center gap-3 px-5 py-3 text-left hover:bg-hover" @click="panel.push({ type: 'review', submissionId: item._id }, 'intake')">
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-base font-semibold text-primary">{{ item.pet?.name }}</span>
@@ -206,7 +191,7 @@ onActivated(refreshAll);
         <EmptyState v-else-if="!codes.length" :icon="KeyRound" title="沒有等待填寫的驗證碼" inset />
         <ul v-else class="divide-y divide-border border-t border-border">
           <li
-            v-for="item in pageCodes"
+            v-for="item in pageRows"
             :key="item._id"
             class="flex items-center gap-3 px-5 py-3"
             :class="String(item._id) === lastIssuedId ? 'bg-accent' : ''"

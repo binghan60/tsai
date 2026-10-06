@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import PatientLink from '../components/PatientLink.vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
@@ -337,7 +338,7 @@ async function confirmExamType() {
     isDirty.value = false;
     saveState.value = 'saved';
   } catch (err) {
-    typeChoiceError.value = err.response?.data?.message || '健檢表單載入失敗，請稍後再試';
+    typeChoiceError.value = apiErrorMessage(err, '健檢表單載入失敗，請稍後再試');
   } finally {
     hydrated.value = true;
     confirmingExamType.value = false;
@@ -414,7 +415,7 @@ async function confirmRecopy() {
       copiedCount ? '已重新帶入報告內容' : '沒有可帶入的內容',
     );
   } catch (err) {
-    toast.error(err.response?.data?.message || '重新帶入失敗，請稍後再試', '重新帶入失敗');
+    toast.error(apiErrorMessage(err, '重新帶入失敗，請稍後再試'), '重新帶入失敗');
   } finally {
     recopying.value = false;
   }
@@ -1030,7 +1031,7 @@ async function confirmDiscard() {
     showDiscardConfirm.value = false;
     await router.push(petId.value ? `/pets/${petId.value}` : '/pets');
   } catch (err) {
-    const msg = err.response?.data?.message || '捨棄草稿失敗';
+    const msg = apiErrorMessage(err, '捨棄草稿失敗');
     toast.error(msg, '捨棄失敗');
   } finally {
     discarding.value = false;
@@ -1064,7 +1065,7 @@ function handleBeforeUnload(event) {
       :description="revisionReason ? `修訂原因：${revisionReason}` : ''"
     >
       <template #meta>
-        <Badge v-if="!isLocked && !needsTypeChoice" variant="neutral">草稿</Badge>
+        <Badge v-if="!isLocked && !needsTypeChoice" variant="status" class="bg-info-surface text-info">草稿</Badge>
         <span v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="inline-flex items-center gap-1.5 text-sm" :class="saveState === 'error' ? 'text-danger' : 'text-subtle-foreground'" v-tip="'停止輸入約 1.5 秒後自動儲存為草稿'">
           <Check v-if="saveState === 'saved'" class="size-4 text-success" stroke-width="2.4" /><Clock3 v-else class="size-4" stroke-width="1.75" />{{ saveLabel }}
         </span>
@@ -1181,11 +1182,11 @@ function handleBeforeUnload(event) {
       <div v-if="!isLocked" id="record-context-bar" class="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-xl border border-border bg-card px-5 py-3 shadow-card">
         <div class="flex items-center gap-3">
           <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
-          <span class="text-lg font-semibold"><PatientLink :pet-id="pet?._id">{{ pet?.name ?? '—' }}</PatientLink></span>
+          <span class="text-lg font-semibold"><PatientLink :pet-id="pet?._id">{{ pet?.name }}</PatientLink></span>
         </div>
         <SpecGrid>
-          <SpecCell label="品種"><span>{{ pet?.breed || pet?.species || '—' }}</span><PetSex :sex="pet?.sex" /></SpecCell>
-          <SpecCell label="飼主"><PatientLink v-if="pet?.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink><template v-else>—</template></SpecCell>
+          <SpecCell label="品種"><span>{{ pet?.breed || pet?.species }}</span><PetSex :sex="pet?.sex" /></SpecCell>
+          <SpecCell label="飼主"><PatientLink v-if="pet?.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink></SpecCell>
           <SpecCell v-if="examTypeName" label="類型">{{ examTypeName }}</SpecCell>
           <SpecCell v-if="visitDate" label="看診日" mono>{{ visitDate.slice(5).replace('-', '/') }}</SpecCell>
         </SpecGrid>

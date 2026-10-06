@@ -72,7 +72,7 @@ const onSubmit = handleSubmit((values) => emit('submit', {
   <ModalDialog size="sm" @close="$emit('close')">
     <div class="flex items-center gap-3.5 p-6 pb-2 sm:p-7 sm:pb-2">
       <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-primary/70 bg-accent/80 text-accent-foreground shadow-sm">
-        <UserCheck class="h-5.5 w-5.5" stroke-width="1.8" />
+        <UserCheck class="h-5.5 w-5.5" stroke-width="1.75" />
       </div>
       <div>
         <DialogTitle>報到</DialogTitle>

@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError.js';
 import { computed, ref } from 'vue';
 import { Check, X } from '@lucide/vue';
 import { http } from '../api/http';
@@ -75,7 +76,7 @@ async function save() {
     const { data } = await http.put(`/intake-submissions/${source._id}`, { version: source.__v ?? 0, ...payload() });
     emit('saved', data);
   } catch (err) {
-    error.value = err.response?.data?.message || '儲存失敗，請稍後再試';
+    error.value = apiErrorMessage(err, '儲存失敗，請稍後再試');
   } finally {
     saving.value = false;
   }

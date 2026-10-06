@@ -415,7 +415,7 @@ GET    /api/health
 - **清單頁一個模板**（照兩個工作台的卡片骨架）：`PageHeader`（只放標題與主要動作；詳情／編輯頁用 `back-to` 出圓形返回鈕，不再有麵包屑）→ 一張 `DataCard`：標頭左邊清單標題＋筆數、右邊 `#filters`（搜尋膠囊 `FilterBar`、`SegmentedControl`），下方 `#tabs` 一條 `FilterTabs`，內容是 `.desktop-data-header`（44px）＋`.desktop-data-row`（64px，欄寬用 `--data-columns`），`#footer` 放 `ListFooter`（「第 x–y 筆，共 n 筆」＋分頁）。**篩選放卡片標頭、不放頁首**；載入中與空狀態放在卡片裡（`inset`）。列上只留一顆主要動作，其餘收進 `RowActions` 的 ⋯ 選單；某列沒有選單時用同尺寸的空位補齊，按鈕才對得齊。1280px 以下改成一筆一張小卡。
 - **身分資訊不用「·」「・」串成一行。** 標頭用規格欄（`SpecGrid`＋`SpecCell`：小標題在上、值在下、細線分隔）；清單只寫「品種＋♂♀」（`PetLine`／`PetSex`）；初診才出徽章，回診不出。
 - **頁籤／分段切換**：`FilterTabs`（有計數）與 `SegmentedControl` 外觀相同（`segment-track`＋`segment-active`）。**下拉選單**用 `ui/dropdown-menu`（`RowActions` 已改用它），危險項放最後、前面一條線、靜止時就是紅字。
-- **欄位沒有值就留白，不補提示文字。** 不要寫 `reason || '未填來院原因'`、`v-else>醫師沒有要轉告的事`、`'待確認'`、`'尚無備註'` 這類替資料說話的字；原本的格子（底色、標籤）照樣畫出來、內容空著，需要時用 `min-h-lh` 撐住一行高度。使用者明確要求過。例外：清單整個是空的空狀態（`EmptyState`「尚無健檢報告」）、載入／搜尋／錯誤訊息、修改前後對照裡的「（空白）」（那是在說「改成了空白」這件事本身）、下拉選項本身的「未記錄」。
+- **欄位沒有值就留白，不補提示文字。** 不要寫 `reason || '未填來院原因'`、`v-else>醫師沒有要轉告的事`、`'待確認'`、`'尚無備註'` 這類替資料說話的字，**也不補「—」破折號**（`formatDate`／`formatDateTime` 沒有值時回空字串）；原本的格子（底色、標籤）照樣畫出來、內容空著，需要時用 `min-h-lh` 撐住一行高度。使用者明確要求過。例外：清單整個是空的空狀態（`EmptyState`「尚無健檢報告」）、載入／搜尋／錯誤訊息、修改前後對照裡的「（空白）」（那是在說「改成了空白」這件事本身）、下拉選項本身的「未記錄」。
 - **不要用 `v-html`、`confirm()`／`alert()`**：確認走 `ConfirmDialog`，提示走 `useToast()`，格式文字走 `RichText`。滑過提示用 `v-tip="文字"`（截斷文字用 `v-tip.overflow`，只有真的被截斷才出；`lib/tooltipDirective.js`），**不要用原生 `title`**——要停很久才出現、樣式不一致；`npm run build` 的 audit 會擋。
 - **貓咪名、飼主名一律是超連結**（`PatientLink`，連到 `/pets/:id`；飼主沒有自己的頁面，飼主名也連到那隻貓）：貓咪名主色字，飼主名與警示列裡的名字用 `quiet`（原字色＋細底線）。例外：名字在按鈕或選項裡（點下去做別的事，連結不能放進按鈕）、沒建檔的初診、飼主看的報告頁、貓咪詳情頁自己。
 - 圖示統一 `@lucide/vue`，`stroke-width="1.75"`；頭像一律貓圖示（診所只看貓）。
@@ -454,6 +454,7 @@ npm run build:installer  # 產生 dist/IDEXX-Bridge-Setup.cmd：單一安裝檔�
 - 產 PDF（`GET /api/records/:id/pdf`）不對外，可以放心呼叫。
 - 開發連的 MongoDB 是測試環境，寫入測試資料不必主動清除。
 - 純邏輯要能被測到就別留在路由檔裡——測試若 import `routes/records.js` 會連帶載入 puppeteer 與 nodemailer。結案驗證已抽到 `server/src/lib/recordValidation.js`。
+- **前端這幾段不要再各頁手寫一份**（2026-10 整理時每一段都有三到七十份複本）：後端錯誤訊息用 `lib/apiError.js` 的 `apiErrorMessage(err, '後備文字')`；複製到剪貼簿用 `lib/clipboard.js` 的 `copyText`，要順便跳提示（電話、初診驗證碼）用 `composables/useCopy.js`；伺服器分頁的清單頁用 `composables/usePagedList.js`（頁碼記在網址、只採用最後一次查詢、超出最後一頁自動退回）；整份資料已在前端的清單用 `composables/useClientPagination.js`；某隻貓的歷次病歷日誌用 `composables/usePetClinicalNotes.js`（配 `ClinicalNotesPanel`）。頁數計算在 `lib/pagination.js`（`pageCount`／`clampPage`／`pageSlice`）。
 - 帳號密碼相關的維護動作一律走 `server/scripts/`（`auth:hash-password`／`auth:set-password`／`auth:revoke-sessions`），不要手動寫 MongoDB——這幾支腳本會同時處理密碼雜湊格式與 `tokenVersion` 撤銷，手動改容易漏掉其中一步。
 
 ## 九、現況與待辦

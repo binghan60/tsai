@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../../lib/apiError.js';
 import { computed, onActivated, onMounted, ref, watch } from 'vue';
 import { FlaskConical, Search } from '@lucide/vue';
 import { http } from '../../api/http';
@@ -157,7 +158,7 @@ async function undo(id, petName) {
     const kept = data.kept?.length ? `；${data.kept.join('、')} 已經被改過，保留下來` : '';
     toast.addToast({ type: 'success', title: '已復原', message: `已從${petName}的報告拿掉 IDEXX 的數值，結果回到待確認${kept}`, duration: 5000 });
   } catch (err) {
-    toast.error(err.response?.data?.message || '復原失敗，請稍後再試');
+    toast.error(apiErrorMessage(err, '復原失敗，請稍後再試'));
   } finally {
     afterChange();
   }
@@ -185,7 +186,7 @@ async function confirmMatch() {
       conflictGroup.value = (conflictData.items || []).find((group) => String(group.id) === String(item._id)) ?? null;
     }
   } catch (err) {
-    toast.error(err.response?.data?.message || '確認失敗，請稍後再試');
+    toast.error(apiErrorMessage(err, '確認失敗，請稍後再試'));
   } finally {
     busy.value = false;
     afterChange();
@@ -202,7 +203,7 @@ async function confirmDismiss() {
     dismissing.value = false;
     panel.back();
   } catch (err) {
-    toast.error(err.response?.data?.message || '忽略失敗，請稍後再試');
+    toast.error(apiErrorMessage(err, '忽略失敗，請稍後再試'));
   } finally {
     busy.value = false;
     afterChange();
@@ -229,7 +230,7 @@ async function confirmRemoveBridge() {
     await http.delete(`/lab-results/bridge-status/${encodeURIComponent(removingBridge.value)}`);
     removingBridge.value = '';
   } catch (err) {
-    toast.error(err.response?.data?.message || '移除失敗，請稍後再試');
+    toast.error(apiErrorMessage(err, '移除失敗，請稍後再試'));
   } finally {
     removeBusy.value = false;
     counts.loadBridges();

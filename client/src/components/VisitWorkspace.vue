@@ -1,4 +1,6 @@
 <script setup>
+import { usePetClinicalNotes } from '../composables/usePetClinicalNotes'
+import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from './PatientLink.vue'
 import { onBeforeRouteLeave } from 'vue-router'
@@ -68,12 +70,10 @@ const reopenReason = ref('')
 const reopenError = ref('')
 const savedAt = ref(null)
 const pet = ref(null)
-const notes = ref([])
-const notePage = ref(1)
-const noteTotalPages = ref(1)
-const notesLoading = ref(false)
-const notesError = ref('')
-let notesRequest = 0
+const { notes, page: notePage, totalPages: noteTotalPages, loading: notesLoading, error: notesError, load: loadNotes } = usePetClinicalNotes({
+  petId: () => props.appointment.petId,
+  excludeAppointmentId: () => props.appointment._id,
+})
 const contextError = ref('')
 const editingOwnerNote = ref(false)
 const ownerNoteDraft = ref('')
@@ -262,7 +262,7 @@ async function savePetNote() {
   } catch (err) {
     petNoteError.value = err.response?.status === 409
       ? '貓咪資料已由其他人更新，請重新載入後再修改。'
-      : err.response?.data?.message || '貓咪備註儲存失敗，請重試。'
+      : apiErrorMessage(err, '貓咪備註儲存失敗，請重試。')
   } finally {
     petNoteSaving.value = false
   }
@@ -289,32 +289,9 @@ async function saveOwnerNote() {
     editingOwnerNote.value = false
     toast.success('已更新飼主備註')
   } catch (err) {
-    ownerNoteError.value = err.response?.status === 409 ? '飼主資料已由其他人更新，請重新載入後再修改。' : err.response?.data?.message || '飼主備註儲存失敗，請重試。'
+    ownerNoteError.value = err.response?.status === 409 ? '飼主資料已由其他人更新，請重新載入後再修改。' : apiErrorMessage(err, '飼主備註儲存失敗，請重試。')
   } finally {
     ownerNoteSaving.value = false
-  }
-}
-async function loadNotes(page = 1) {
-  const token = ++notesRequest
-  const petId = props.appointment.petId
-  notes.value = []
-  if (!petId) return
-  notesLoading.value = true
-  notesError.value = ''
-  try {
-    const { data } = await http.get(`/pets/${petId}/clinical-notes`, {
-      params: { page, limit: 5, excludeAppointmentId: props.appointment._id },
-    })
-    if (disposed || token !== notesRequest || petId !== props.appointment.petId) return
-    const totalPages = data.totalPages || 1
-    if (page > totalPages) return await loadNotes(totalPages)
-    notes.value = data.items || []
-    notePage.value = page
-    noteTotalPages.value = totalPages
-  } catch {
-    if (!disposed && token === notesRequest) notesError.value = '病歷日誌未能載入，請重試。'
-  } finally {
-    if (token === notesRequest) notesLoading.value = false
   }
 }
 loadContext()
@@ -343,7 +320,7 @@ async function save() {
       emit('updated', data)
       return true
     } catch (err) {
-      error.value = err.response?.data?.message || '儲存失敗，請重試。'
+      error.value = apiErrorMessage(err, '儲存失敗，請重試。')
       return false
     } finally {
       savePromise = null
@@ -399,7 +376,7 @@ async function run(action, payload = {}) {
     if (action === 'record' && data.recordId) emit('open-record', data)
     return true
   } catch (err) {
-    error.value = err.response?.data?.message || '操作失敗，請重試。'
+    error.value = apiErrorMessage(err, '操作失敗，請重試。')
     return false
   } finally {
     busy.value = false
@@ -481,7 +458,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="flex flex-wrap items-start justify-between gap-x-8 gap-y-2.5">
               <SpecGrid>
-                <SpecCell label="品種">{{ pet?.breed || appointment.species || '—' }}</SpecCell>
+                <SpecCell label="品種">{{ pet?.breed || appointment.species }}</SpecCell>
                 <SpecCell v-if="pet?.sex === 'male' || pet?.sex === 'female'" label="性別"><PetSex :sex="pet.sex" :neutered="pet.neutered" with-label /></SpecCell>
                 <SpecCell v-if="age" label="年齡">{{ age }}</SpecCell>
                 <SpecCell v-if="draft.weightKg !== '' || pet?.weightKg != null" label="體重" mono>

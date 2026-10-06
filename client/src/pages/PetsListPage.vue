@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { apiErrorMessage } from '../lib/apiError';
 import PatientLink from '../components/PatientLink.vue';
 import { Cat, Plus } from '@lucide/vue';
 import { http } from '../api/http';
@@ -19,42 +19,18 @@ import { useToast } from '../composables/useToast';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
+import { usePagedList } from '../composables/usePagedList';
 import { formatDate, relativeDayLabel } from '../lib/datetime';
 
-const pets = ref([]);
-const page = useSearchQueryParam('page', '1');
 const query = useSearchQueryParam('q');
-const total = ref(0);
-const limit = ref(10);
-const loading = ref(false);
-const error = ref('');
-let requestSequence = 0;
-
-async function fetchPets() {
-  const currentRequest = ++requestSequence;
-  loading.value = true;
-  error.value = '';
-  try {
-    const { data } = await http.get('/pets', {
-      params: {
-        page: Number(page.value) || 1,
-        ...(query.value.trim() ? { q: query.value.trim() } : {}),
-      },
-    });
-    if (currentRequest === requestSequence) {
-      pets.value = data.items ?? [];
-      total.value = data.total ?? 0;
-      limit.value = data.limit ?? 10;
-      if (!pets.value.length && total.value > 0 && currentPage.value > data.totalPages) {
-        page.value = String(data.totalPages);
-      }
-    }
-  } catch (err) {
-    if (currentRequest === requestSequence) error.value = '貓咪資料暫時無法載入，請稍後重試';
-  } finally {
-    if (currentRequest === requestSequence) loading.value = false;
-  }
-}
+// 關鍵字選好、按下搜尋才查（applyFilters）——邊打邊查在每個系統打字習慣不一樣的情況下容易誤觸，
+// 全站搜尋一律走提交式，不做即時。
+const { items: pets, total, limit, loading, error, page: currentPage, totalPages, goToPage, applyFilters } = usePagedList({
+  errorMessage: '貓咪資料暫時無法載入，請稍後重試',
+  fetch: async ({ page }) => (await http.get('/pets', {
+    params: { page, ...(query.value.trim() ? { q: query.value.trim() } : {}) },
+  })).data,
+});
 
 const pinned = usePinnedPetsStore();
 const { identity } = useStaffIdentity();
@@ -73,31 +49,9 @@ async function rowAction(key, pet) {
     if (pinned.isPinned(pet._id)) await pinned.unpin(pet._id);
     else await pinned.pin(pet._id, identity.value);
   } catch (err) {
-    toast.error(err.response?.data?.message || '暫存區更新失敗，請稍後再試');
+    toast.error(apiErrorMessage(err, '暫存區更新失敗，請稍後再試'));
   }
 }
-
-// 關鍵字選好、按下搜尋才查——邊打邊查在每個系統打字習慣不一樣的情況下容易誤觸，
-// 全站搜尋一律走提交式，不做即時。
-function applyFilters() {
-  if (page.value !== '1') page.value = '1';
-  else fetchPets();
-}
-
-watch(page, fetchPets, { immediate: true });
-
-onBeforeUnmount(() => {
-  requestSequence += 1;
-});
-
-const currentPage = computed(() => Number(page.value) || 1);
-const totalPages = computed(() => Math.max(Math.ceil(total.value / limit.value), 1));
-
-function goToPage(next) {
-  const target = Math.min(Math.max(next, 1), totalPages.value);
-  if (target !== currentPage.value) page.value = String(target);
-}
-
 </script>
 
 <template>
@@ -127,10 +81,10 @@ function goToPage(next) {
               <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
               <span class="min-w-0 truncate font-semibold text-primary">{{ pet.name }}</span>
             </router-link>
-            <span class="desktop-data-cell truncate text-sm text-muted-foreground" v-tip.overflow="pet.breed || ''">{{ pet.breed || '—' }}</span>
-            <span class="desktop-data-cell text-sm text-muted-foreground"><PetSex v-if="pet.sex === 'male' || pet.sex === 'female'" :sex="pet.sex" with-label /><template v-else>—</template></span>
+            <span class="desktop-data-cell truncate text-sm text-muted-foreground" v-tip.overflow="pet.breed || ''">{{ pet.breed }}</span>
+            <span class="desktop-data-cell text-sm text-muted-foreground"><PetSex v-if="pet.sex === 'male' || pet.sex === 'female'" :sex="pet.sex" with-label /></span>
             <span class="desktop-data-cell">
-              <span class="block truncate text-sm"><PatientLink v-if="pet.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink><template v-else>—</template></span>
+              <span class="block truncate text-sm"><PatientLink v-if="pet.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink></span>
               <span v-if="pet.ownerId?.phone" class="num block truncate text-xs text-subtle-foreground">{{ pet.ownerId.phone }}</span>
             </span>
             <span class="desktop-data-cell">

@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../lib/apiError';
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
@@ -25,7 +26,7 @@ async function login() {
     await auth.login({ username: username.value, password: password.value });
     await router.replace(redirectTo.value);
   } catch (err) {
-    error.value = err.response?.data?.message ?? '登入失敗，請稍後再試。';
+    error.value = apiErrorMessage(err, '登入失敗，請稍後再試。');
   } finally {
     submitting.value = false;
   }

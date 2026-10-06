@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { paginationItems } from './pagination.js';
+import { clampPage, pageCount, pageSlice, paginationItems } from './pagination.js';
 
 const labels = (items) => items.map((item) => item.type === 'page' ? item.value : '…');
 
@@ -24,4 +24,25 @@ describe('paginationItems', () => {
   it('輸入超出範圍時仍產生有效頁碼', () => {
     assert.deepEqual(labels(paginationItems(99, 3)), [1, 2, 3]);
   });
+});
+
+it('pageCount 至少一頁，尾數進位', () => {
+  assert.equal(pageCount(0, 10), 1);
+  assert.equal(pageCount(10, 10), 1);
+  assert.equal(pageCount(11, 10), 2);
+  assert.equal(pageCount(undefined, 0), 1);
+});
+
+it('clampPage 把頁碼夾在 1 到最後一頁之間', () => {
+  assert.equal(clampPage(0, 5), 1);
+  assert.equal(clampPage(9, 5), 5);
+  assert.equal(clampPage('3', 5), 3);
+  assert.equal(clampPage('abc', 5), 1);
+});
+
+it('pageSlice 取出那一頁的項目', () => {
+  const items = [1, 2, 3, 4, 5];
+  assert.deepEqual(pageSlice(items, 1, 2), [1, 2]);
+  assert.deepEqual(pageSlice(items, 3, 2), [5]);
+  assert.deepEqual(pageSlice(items, 4, 2), []);
 });

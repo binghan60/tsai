@@ -1,4 +1,5 @@
 <script setup>
+import { apiErrorMessage } from '../../lib/apiError';
 import { computed, nextTick, onActivated, onBeforeUnmount, ref, watch } from 'vue';
 import { Bell, BellOff, Send } from '@lucide/vue';
 import { useAppointmentNotificationPreferences } from '../../lib/appointmentNotificationPreferences';
@@ -77,7 +78,7 @@ async function submit() {
     draft.value = '';
     resetMentions();
   } catch (err) {
-    toast.error(err.response?.data?.message || '訊息送出失敗，請稍後再試', '傳送失敗');
+    toast.error(apiErrorMessage(err, '訊息送出失敗，請稍後再試'), '傳送失敗');
   } finally {
     sending.value = false;
   }

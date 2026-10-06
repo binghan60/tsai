@@ -9,13 +9,11 @@ export const badgeVariants = cva(
     variants: {
       variant: {
         default: "bg-accent text-accent-foreground",
-        neutral: "bg-sunken text-muted-foreground",
         secondary: "bg-sunken text-muted-foreground",
         destructive: "bg-destructive-surface text-destructive",
         outline: "bg-transparent text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)]",
         // 狀態徽章：顏色由 lib/recordStatus.js 等 meta 提供，這裡只管形狀。
         status: "",
-        link: "text-primary underline-offset-4 hover:underline",
       },
     },
     defaultVariants: {
