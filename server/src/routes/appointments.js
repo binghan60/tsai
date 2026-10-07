@@ -21,6 +21,7 @@ import { idexxCensusSettings } from '../config/idexxBridge.js';
 import appointmentWorkflowRouter from './appointmentWorkflow.js';
 import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
+import { checkCatBreed } from '../../../shared/catBreeds.js';
 
 const router = Router();
 router.use('/:id/workflow', appointmentWorkflowRouter);
@@ -517,6 +518,9 @@ router.post('/:id/check-in', async (req, res, next) => {
         }
         const ownerDetails = req.body?.owner ?? {};
         const petDetails = req.body?.pet ?? {};
+        // 品種只收清單上的，存成 IDEXX 的英文名稱；帶入初診表時，飼主當初填的原文（改版前送出的）照收。
+        const checkedBreed = checkCatBreed(petDetails.breed, intake?.pet?.breed);
+        if (checkedBreed.error) throw Object.assign(new Error(checkedBreed.error), { status: 422 });
         let owner;
         if (existingOwnerId) {
           owner = await Owner.findOneAndUpdate(
@@ -537,7 +541,7 @@ router.post('/:id/check-in', async (req, res, next) => {
         const [pet] = await Pet.create(
           [{
             name: String(req.body.petName).trim(), ownerId: owner._id, ...(species ? { species } : {}),
-            ...Object.fromEntries(['breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'foodsOther', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'].filter(key => petDetails[key] !== undefined).map(key => [key, petDetails[key]])),
+            ...Object.fromEntries(['breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'foodsOther', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'].filter(key => petDetails[key] !== undefined).map(key => [key, key === 'breed' ? checkedBreed.breed : petDetails[key]])),
           }],
           { session }
         );

@@ -6,6 +6,7 @@ import { usePinnedPetsStore } from '../stores/pinnedPets';
 import { useToast } from '../composables/useToast';
 import { clinicDateInput, formatDateTime } from '../lib/datetime';
 import { Button } from './ui/button';
+import { catBreedLabel } from '../../../shared/catBreeds.js';
 
 // 暫存區清單（右側暫存區面板的首頁）。點整列推入病歷速覽，右邊的 X 手動移除——
 // 暫存區不會自己清空，只有人按了才拿掉。
@@ -53,7 +54,7 @@ async function remove(item) {
       >
         <span class="flex items-baseline gap-2">
           <span class="truncate text-base font-semibold text-primary">{{ item.pet.name }}</span>
-          <span v-if="item.pet.breed || item.pet.species" class="truncate text-sm text-subtle-foreground">{{ item.pet.breed || item.pet.species }}</span>
+          <span v-if="item.pet.breed || item.pet.species" class="truncate text-sm text-subtle-foreground">{{ catBreedLabel(item.pet.breed) || item.pet.species }}</span>
         </span>
         <span v-if="item.pet.owner?.name || item.pet.owner?.phone" class="flex items-baseline gap-3 text-sm">
           <span class="truncate text-foreground">{{ item.pet.owner?.name }}</span>

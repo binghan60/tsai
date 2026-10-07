@@ -32,6 +32,7 @@ import { Textarea } from './ui/textarea'
 import RichText from './RichText.vue'
 import RichTextEditor from './RichTextEditor.vue'
 import { richTextToPlain } from '../../../shared/richText.js'
+import { catBreedLabel } from '../../../shared/catBreeds.js'
 import { Alert, AlertDescription } from './ui/alert'
 
 // 看診工作區：診療台右欄編輯單筆掛號的看診內容。
@@ -458,7 +459,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="flex flex-wrap items-start justify-between gap-x-8 gap-y-2.5">
               <SpecGrid>
-                <SpecCell label="品種">{{ pet?.breed || appointment.species }}</SpecCell>
+                <SpecCell label="品種">{{ catBreedLabel(pet?.breed) || appointment.species }}</SpecCell>
                 <SpecCell v-if="pet?.sex === 'male' || pet?.sex === 'female'" label="性別"><PetSex :sex="pet.sex" :neutered="pet.neutered" with-label /></SpecCell>
                 <SpecCell v-if="age" label="年齡">{{ age }}</SpecCell>
                 <SpecCell v-if="draft.weightKg !== '' || pet?.weightKg != null" label="體重" mono>

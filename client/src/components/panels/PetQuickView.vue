@@ -22,6 +22,7 @@ import EmptyState from '../EmptyState.vue';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
+import { catBreedLabel } from '../../../../shared/catBreeds.js';
 
 // 病歷速覽：櫃台接電話問醫師時，醫師不用離開手上的工作就能看這隻貓的病歷。
 // 在暫存區面板裡推入的一層，聊天室與待辦的 # 標記也開這裡。唯讀為主，要改資料就開完整病歷。
@@ -111,7 +112,7 @@ async function togglePin() {
 
     <div v-else-if="pet" class="space-y-5">
       <SpecGrid>
-        <SpecCell label="品種">{{ pet.breed || pet.species }}</SpecCell>
+        <SpecCell label="品種">{{ catBreedLabel(pet.breed) || pet.species }}</SpecCell>
         <SpecCell v-if="pet.sex === 'male' || pet.sex === 'female'" label="性別"><PetSex :sex="pet.sex" :neutered="pet.neutered" with-label /></SpecCell>
         <SpecCell v-if="age" label="年齡">{{ age }}</SpecCell>
         <SpecCell v-if="pet.weightKg != null" label="體重" mono>{{ pet.weightKg }} kg</SpecCell>

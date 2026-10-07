@@ -4,6 +4,7 @@
 // 不在這裡強制——櫃台改的是飼主填錯的地方，不該因為飼主漏填別欄就存不進去。
 
 import { checkMobilePhone } from '../../../shared/phone.js';
+import { checkCatBreed } from '../../../shared/catBreeds.js';
 
 export const INTAKE_OWNER_FIELDS = ['name', 'phone', 'landline', 'email', 'address'];
 export const INTAKE_PET_FIELDS = ['name', 'species', 'breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'foodsOther', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'];
@@ -90,5 +91,9 @@ export function mergeIntakeEdit(current, body = {}) {
   owner.phone = checkedPhone.phone;
   if (owner.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(owner.email)) throw invalid('Email 格式不正確');
   if (!pet.name) throw invalid('請填寫貓咪名字');
+  // 品種只收清單上的，存成 IDEXX 的英文名稱；沒動到的原文（改版前飼主自由輸入的）照收。
+  const checkedBreed = checkCatBreed(pet.breed, current.pet?.breed);
+  if (checkedBreed.error) throw invalid(checkedBreed.error);
+  pet.breed = checkedBreed.breed;
   return { owner, pet };
 }

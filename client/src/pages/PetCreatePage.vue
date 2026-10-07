@@ -33,6 +33,8 @@ import SegmentedControl from '../components/SegmentedControl.vue';
 import PickerOptionRow from '../components/PickerOptionRow.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import YearMonthSelect from '../components/YearMonthSelect.vue';
+import BreedSelect from '../components/BreedSelect.vue';
+import { catBreedLabel } from '../../../shared/catBreeds.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
 import { emptyOwnerDraft, emptyPetDraft } from '../lib/formDrafts';
 import { birthDateLabel } from '../lib/datetime';
@@ -176,16 +178,6 @@ watch(() => props.petDraft, (draft) => {
   if (!props.embedded || !draft) return;
   petForm.value = { ...emptyPetDraft(), species: '貓', ...draft };
 }, { deep: true });
-
-// 常見貓咪品種推薦標籤（點擊一鍵填入）
-const CAT_BREED_RECOMMENDATIONS = [
-  '米克斯', '英國短毛貓', '美國短毛貓', '布偶貓', '曼赤肯', '波斯貓',
-  '緬因貓', '金吉拉', '暹羅貓', '俄羅斯藍貓', '阿比西尼亞貓', '無毛貓',
-];
-
-function applyBreed(breed) {
-  petForm.value.breed = breed;
-}
 
 // 性別與絕育
 const SEX_OPTIONS = [
@@ -668,7 +660,7 @@ onBeforeUnmount(() => {
               <h2 class="text-base font-semibold text-foreground">貓咪基本資料</h2>
             </div>
 
-            <div class="grid grid-flow-row-dense gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
+            <div class="grid gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
               <div class="space-y-1.5">
                 <Label for="new-pet-name" class="text-xs font-medium text-foreground">貓咪名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
                 <Input
@@ -683,23 +675,7 @@ onBeforeUnmount(() => {
               </div>
               <div class="space-y-1.5">
                 <Label for="new-pet-breed" class="text-xs font-medium text-foreground">品種</Label>
-                <Input id="new-pet-breed" v-model="petForm.breed" placeholder="例：米克斯、美短、布偶貓" />
-              </div>
-              <!-- 品種快選：緊跟在品種後面、整列。三欄時花色靠 dense 補回第一列，兩欄時花色跟出生日期同一列。 -->
-              <div class="col-span-full space-y-1.5">
-                <span class="text-xs text-muted-foreground">常見貓品種快速帶入：</span>
-                <div class="flex flex-wrap gap-1.5">
-                  <button
-                    v-for="b in CAT_BREED_RECOMMENDATIONS"
-                    :key="b"
-                    type="button"
-                    class="rounded-lg border border-border px-2.5 py-1 text-xs text-foreground transition-colors hover:border-primary hover:bg-accent hover:text-primary"
-                    :class="{ 'border-primary bg-accent font-medium text-primary': petForm.breed === b }"
-                    @click="applyBreed(b)"
-                  >
-                    {{ b }}
-                  </button>
-                </div>
+                <BreedSelect id="new-pet-breed" v-model="petForm.breed" />
               </div>
               <div class="space-y-1.5">
                 <Label for="new-pet-color" class="text-xs font-medium text-foreground">花色</Label>
@@ -829,7 +805,7 @@ onBeforeUnmount(() => {
       <div class="flex items-center justify-between">
         <div class="hidden items-center gap-5 text-xs text-muted-foreground sm:flex">
           <span v-if="activeOwnerName">飼主：<strong class="font-medium text-foreground">{{ activeOwnerName }}</strong></span>
-          <span v-if="petForm.name">貓咪：<strong class="font-medium text-foreground">{{ petForm.name }}</strong><span v-if="petForm.breed">（{{ petForm.breed }}）</span></span>
+          <span v-if="petForm.name">貓咪：<strong class="font-medium text-foreground">{{ petForm.name }}</strong><span v-if="petForm.breed">（{{ catBreedLabel(petForm.breed) }}）</span></span>
         </div>
         <div class="flex w-full items-center justify-end gap-3 sm:w-auto">
           <Button v-if="!embedded" type="button" variant="secondary" :disabled="isSubmitting" @click="cancel">取消返回</Button>

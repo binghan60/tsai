@@ -28,6 +28,7 @@ import { Badge } from './ui/badge';
 import { Alert, AlertDescription } from './ui/alert';
 import { ArrowLeft, Cat, ChevronDown, ChevronRight, ClipboardPlus, Copy, Pill, Plus, Search } from '@lucide/vue';
 import { useCopy } from '../composables/useCopy';
+import { catBreedLabel } from '../../../shared/catBreeds.js';
 
 // 藥單工作區。清單與單筆詳情是同一個容器內的兩個檢視（opened 切換），不是兩層 Modal——
 // 舊版在 xl 的面板裡再開一個 xl 的 Modal，同尺寸疊同尺寸畫面幾乎不變、看起來像沒反應，
@@ -579,7 +580,7 @@ onBeforeUnmount(() => {
     
                 <div v-if="pet" class="flex items-center gap-3 rounded-xl bg-accent px-4 py-3">
                   <div class="min-w-0 flex-1">
-                    <p class="truncate font-semibold text-accent-foreground">{{ pet.name }}<span v-if="pet.breed || pet.species" class="ml-2 text-sm font-normal text-accent-foreground/75">{{ pet.breed || pet.species }}</span></p>
+                    <p class="truncate font-semibold text-accent-foreground">{{ pet.name }}<span v-if="pet.breed || pet.species" class="ml-2 text-sm font-normal text-accent-foreground/75">{{ catBreedLabel(pet.breed) || pet.species }}</span></p>
                     <p class="mt-0.5 flex gap-3 truncate text-sm text-accent-foreground/80"><span>{{ pet.ownerId?.name }}</span><span v-if="pet.ownerId?.phone" class="num">{{ pet.ownerId.phone }}</span></p>
                   </div>
                   <Button size="sm" variant="secondary" :disabled="busy" @click="changePet">更換</Button>
@@ -594,7 +595,7 @@ onBeforeUnmount(() => {
                     <p v-else-if="petError" class="px-4 py-3 text-sm text-danger">{{ petError }}</p>
                     <p v-else-if="!petResults.length" class="px-4 py-3 text-sm text-muted-foreground">找不到符合的貓咪，請確認是否已建檔。</p>
                     <button v-for="candidate in petResults" v-else :key="candidate._id" type="button" class="flex w-full items-center gap-3 border-b border-border bg-card px-4 py-3 text-left last:border-b-0 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none" @click="pickPet(candidate)">
-                      <span class="min-w-0 flex-1"><span class="flex items-baseline gap-2"><span class="truncate font-semibold text-primary">{{ candidate.name }}</span><span class="truncate text-sm text-subtle-foreground">{{ candidate.breed || candidate.species }}</span></span><span class="flex gap-3 text-sm text-muted-foreground"><span class="truncate">{{ candidate.ownerId?.name }}</span><span class="num shrink-0">{{ candidate.ownerId?.phone }}</span></span></span>
+                      <span class="min-w-0 flex-1"><span class="flex items-baseline gap-2"><span class="truncate font-semibold text-primary">{{ candidate.name }}</span><span class="truncate text-sm text-subtle-foreground">{{ catBreedLabel(candidate.breed) || candidate.species }}</span></span><span class="flex gap-3 text-sm text-muted-foreground"><span class="truncate">{{ candidate.ownerId?.name }}</span><span class="num shrink-0">{{ candidate.ownerId?.phone }}</span></span></span>
                     </button>
                     <p v-if="!petLoading && !petError && petTotal > petResults.length" class="px-4 py-3 text-sm text-muted-foreground">還有 <span class="num">{{ petTotal - petResults.length }}</span> 筆沒列出，請多打幾個字縮小範圍。</p>
                   </div>

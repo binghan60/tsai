@@ -5,6 +5,7 @@ import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
 import { escapeRegExp } from '../lib/regex.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
+import { checkCatBreed } from '../../../shared/catBreeds.js';
 
 const router = Router();
 const PET_FIELDS = [
@@ -84,8 +85,11 @@ router.post('/with-pet', async (req, res, next) => {
   try {
     const ownerInput = req.body?.owner ?? {};
     const petInput = req.body?.pet ?? {};
-    const validationError = validateOwnerInput(ownerInput);
+    const breed = checkCatBreed(petInput.breed);
+    const validationError = validateOwnerInput(ownerInput) || breed.error;
     if (validationError) return res.status(422).json({ message: validationError });
+    const petFields = pickPetFields(petInput);
+    if (petFields.breed !== undefined) petFields.breed = breed.breed;
 
     let pet;
     await withTransaction(async (session) => {
@@ -98,7 +102,7 @@ router.post('/with-pet', async (req, res, next) => {
         notes: ownerInput.notes,
         relationVersion: 1,
       }], { session });
-      [pet] = await Pet.create([{ ...pickPetFields(petInput), ownerId: owner._id }], { session });
+      [pet] = await Pet.create([{ ...petFields, ownerId: owner._id }], { session });
     });
     res.status(201).json(pet);
   } catch (err) {

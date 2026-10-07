@@ -10,6 +10,7 @@ import { publishTodos } from '../lib/todos.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
+import { checkCatBreed } from '../../../shared/catBreeds.js';
 
 const PET_FIELDS = [
   'name',
@@ -67,6 +68,10 @@ ownerPetsRouter.get('/', async (req, res, next) => {
 
 ownerPetsRouter.post('/', async (req, res, next) => {
   try {
+    const breed = checkCatBreed(req.body?.breed);
+    if (breed.error) return res.status(422).json({ message: breed.error });
+    const fields = pickPetFields(req.body);
+    if (fields.breed !== undefined) fields.breed = breed.breed;
     let pet;
     await withTransaction(async (session) => {
       const parent = await Owner.findOneAndUpdate(
@@ -79,7 +84,7 @@ ownerPetsRouter.post('/', async (req, res, next) => {
         error.status = 404;
         throw error;
       }
-      [pet] = await Pet.create([{ ...pickPetFields(req.body), ownerId: parent._id }], { session });
+      [pet] = await Pet.create([{ ...fields, ownerId: parent._id }], { session });
     });
     res.status(201).json(pet);
   } catch (err) {
@@ -184,9 +189,21 @@ petsRouter.put('/:id', async (req, res, next) => {
     if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
       return res.status(428).json({ message: '缺少貓咪資料版本，請重新整理後再試' });
     }
+    // 品種只收清單上的，存成 IDEXX 的英文名稱；沒動到的舊值（清單以外的）照收，見 shared/catBreeds.js。
+    const fields = pickPetFields(req.body);
+    if (fields.breed !== undefined) {
+      let breed = checkCatBreed(fields.breed);
+      if (breed.error) {
+        const stored = await Pet.findById(req.params.id).select('breed');
+        if (!stored) return res.status(404).json({ message: '找不到貓咪' });
+        breed = checkCatBreed(fields.breed, stored.breed);
+        if (breed.error) return res.status(422).json({ message: breed.error });
+      }
+      fields.breed = breed.breed;
+    }
     const pet = await Pet.findOneAndUpdate(
       { _id: req.params.id, __v: expectedVersion },
-      { $set: pickPetFields(req.body), $inc: { __v: 1 } },
+      { $set: fields, $inc: { __v: 1 } },
       { new: true, runValidators: true }
     );
     if (!pet) {

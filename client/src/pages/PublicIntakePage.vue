@@ -8,8 +8,10 @@ import { Checkbox } from '../components/ui/checkbox'
 import { Input } from '../components/ui/input'
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group'
 import { MOBILE_PHONE_ERROR, normalizeMobilePhone } from '../../../shared/phone.js'
+import { isCatBreed } from '../../../shared/catBreeds.js'
+import BreedSelect from '../components/BreedSelect.vue'
 import YearMonthSelect from '../components/YearMonthSelect.vue'
-import { INTAKE_BREED_SUGGESTIONS, INTAKE_COLOR_SUGGESTIONS, INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay'
+import { INTAKE_COLOR_SUGGESTIONS, INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay'
 import { birthDateLabel } from '../lib/datetime'
 
 const submitting = ref(false)
@@ -30,7 +32,7 @@ const { validate, errors } = useForm({
     ageYears: value => optionalInteger(value, 0, 99),
     ageMonths: value => optionalInteger(value, 0, 11),
     petAge: value => value || '請填寫歲數或月數',
-    petBreed: required,
+    petBreed: value => required(value) !== true ? '此欄位必填' : isCatBreed(value) || '請從清單選擇品種',
     householdCatCount: value => optionalInteger(value, 0, 99),
     mealsPerDay: value => pet.feedingType !== 'scheduled' || integer(value, 1, 20) || '請填寫每日 1–20 餐的整數',
     petNeutered: value => ['yes', 'no'].includes(value) || '請選擇結紮狀態',
@@ -66,7 +68,6 @@ const pet = reactive({
 })
 const historyOptions = INTAKE_HISTORY_OPTIONS
 const foodOptions = INTAKE_FOOD_OPTIONS
-const breedSuggestions = INTAKE_BREED_SUGGESTIONS
 const colorSuggestions = INTAKE_COLOR_SUGGESTIONS
 const historyOther = ref(false)
 const hospital = {
@@ -232,6 +233,8 @@ function formData() {
 function applyFormData(data) {
   for (const key of Object.keys(owner)) if (data?.owner?.[key] !== undefined) owner[key] = data.owner[key]
   for (const key of Object.keys(pet)) if (data?.pet?.[key] !== undefined) pet[key] = data.pet[key]
+  // 品種只能從清單選；清單上沒有的（改版前留在這個分頁的草稿）清掉，讓飼主重選。
+  if (!isCatBreed(pet.breed)) pet.breed = ''
   historyOther.value = !!data?.historyOther
 }
 function readDraft() {
@@ -351,9 +354,8 @@ async function submit() {
                 <span id="intake-pet-sex-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>性別：</span><RadioGroup v-model="pet.sex" aria-labelledby="intake-pet-sex-label" aria-required="true" v-bind="invalidAttrs('pet-sex', 'petSex')" class="contents"><label class="option-label"><RadioGroupItem value="male" />男生</label><label class="option-label"><RadioGroupItem value="female" />女生</label></RadioGroup><span v-if="errorFor('petSex')" :id="errorId('pet-sex')" class="field-error">{{ errorFor('petSex') }}</span>
               </div>
               <div id="intake-pet-age-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-age-field' }"><label for="intake-pet-age-years" class="field-label"><span class="required-mark" aria-hidden="true">*</span>年齡：</label><Input id="intake-pet-age-years" v-model="pet.ageYears" aria-label="年齡（年）" aria-required="true" v-bind="invalidAttrs('pet-age', 'petAge', 'ageYears', 'ageMonths')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 99)" /> 年 <Input v-model="pet.ageMonths" aria-label="年齡（個月）" v-bind="invalidAttrs('pet-age', 'petAge', 'ageYears', 'ageMonths')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 11)" /> 個月<span class="hint">（月齡 0–11）</span><span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="errorFor('petAge', 'ageYears', 'ageMonths')" :id="errorId('pet-age')" class="field-error">{{ errorFor('petAge', 'ageYears', 'ageMonths') }}</span></div>
-              <div id="intake-pet-breed-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-breed-field' }"><label for="intake-pet-breed" class="field-label"><span class="required-mark" aria-hidden="true">*</span>品種：</label><Input id="intake-pet-breed" v-model="pet.breed" list="intake-breed-suggestions" autocomplete="off" aria-required="true" v-bind="invalidAttrs('pet-breed', 'petBreed')" class="input-medium" /><span v-if="errorFor('petBreed')" :id="errorId('pet-breed')" class="field-error">{{ errorFor('petBreed') }}</span></div>
+              <div id="intake-pet-breed-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-breed-field' }"><label for="intake-pet-breed" class="field-label"><span class="required-mark" aria-hidden="true">*</span>品種：</label><BreedSelect id="intake-pet-breed" v-model="pet.breed" appearance="intake" placeholder="點一下選擇，或打字找" aria-required="true" v-bind="invalidAttrs('pet-breed', 'petBreed')" /><span v-if="errorFor('petBreed')" :id="errorId('pet-breed')" class="field-error">{{ errorFor('petBreed') }}</span><span class="hint field-note">不確定品種請選「米克斯」或「其他」。</span></div>
               <div class="field"><label for="intake-pet-color" class="field-label">花色：</label><Input id="intake-pet-color" v-model="pet.color" list="intake-color-suggestions" autocomplete="off" class="input-medium" /></div>
-              <datalist id="intake-breed-suggestions"><option v-for="option in breedSuggestions" :key="option" :value="option" /></datalist>
               <datalist id="intake-color-suggestions"><option v-for="option in colorSuggestions" :key="option" :value="option" /></datalist>
             </div>
             <div>
@@ -654,6 +656,8 @@ async function submit() {
   color: var(--intake-secondary);
   font-size: 14px;
 }
+/* 欄位下方的說明：獨佔一行，不跟輸入框搶寬度。 */
+.field-note { flex-basis: 100%; }
 .field-error { flex-basis: 100%; color: var(--intake-red); font-size: 14px; }
 .required-mark { color: var(--intake-red); }
 .field-highlight {

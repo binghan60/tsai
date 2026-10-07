@@ -4,6 +4,7 @@ import { computed, ref } from 'vue';
 import { Check, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay';
+import BreedSelect from './BreedSelect.vue';
 import SegmentedControl from './SegmentedControl.vue';
 import YearMonthSelect from './YearMonthSelect.vue';
 import { checkMobilePhone } from '../../../shared/phone.js';
@@ -95,7 +96,7 @@ async function save() {
         <div class="space-y-1.5"><Label for="intake-edit-birth">出生日期</Label><DatePicker id="intake-edit-birth" v-model="pet.birthDate" aria-label="出生日期" @update:model-value="pet.birthDateEstimated = false" /></div>
         <div class="space-y-1.5"><Label>性別</Label><SegmentedControl v-model="pet.sex" :options="SEX" aria-label="性別" size="sm" full-width /></div>
         <div class="space-y-1.5"><Label>結紮</Label><SegmentedControl v-model="pet.neutered" :options="NEUTERED" aria-label="結紮" size="sm" full-width /></div>
-        <div class="space-y-1.5"><Label for="intake-edit-breed">品種</Label><Input id="intake-edit-breed" v-model="pet.breed" /></div>
+        <div class="space-y-1.5"><Label for="intake-edit-breed">品種</Label><BreedSelect id="intake-edit-breed" v-model="pet.breed" /></div>
         <div class="space-y-1.5"><Label for="intake-edit-color">花色</Label><Input id="intake-edit-color" v-model="pet.color" /></div>
         <div class="space-y-1.5"><Label for="intake-edit-household">家中貓口（隻）</Label><Input id="intake-edit-household" v-model="pet.householdCatCount" class="num" type="number" min="0" max="99" step="1" inputmode="numeric" /></div>
         <div class="space-y-1.5 @lg:col-span-2">

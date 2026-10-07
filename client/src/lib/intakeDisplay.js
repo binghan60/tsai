@@ -4,11 +4,11 @@
 // 公開初診頁的勾選項目；櫃台審核時修改也用同一份，兩邊的選項才不會各說各話。
 export const INTAKE_FOOD_OPTIONS = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧', '其他'];
 export const INTAKE_HISTORY_OPTIONS = ['心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題'];
-// 品種、花色是自由文字，這兩份只是輸入時的建議（datalist）；很多飼主不知道品種，給個「不確定」才不會卡在必填。
-export const INTAKE_BREED_SUGGESTIONS = ['米克斯', '英國短毛貓', '美國短毛貓', '布偶貓', '蘇格蘭摺耳貓', '異國短毛貓', '波斯貓', '緬因貓', '俄羅斯藍貓', '暹羅貓', '孟加拉貓', '曼赤肯貓', '不確定'];
+// 花色是自由文字，這份只是輸入時的建議（datalist）。品種不是：只能從 shared/catBreeds.js 的清單選（BreedSelect）。
 export const INTAKE_COLOR_SUGGESTIONS = ['橘', '橘白', '虎斑', '白底虎斑', '三花', '玳瑁', '賓士（黑白）', '黑', '白', '灰', '重點色'];
 
 import { birthDateLabel } from './datetime.js';
+import { catBreedLabel } from '../../../shared/catBreeds.js';
 
 const blank = (value) => value === null || value === undefined || value === '';
 
@@ -35,7 +35,7 @@ export function intakeSections(submission) {
         { label: '性別', value: { male: '公', female: '母' }[pet.sex] },
         { label: '結紮', value: { yes: '已結紮', no: '未結紮' }[pet.neutered] },
         { label: '出生', value: birthDateLabel(pet.birthDate, { estimated: pet.birthDateEstimated }) },
-        { label: '品種', value: pet.breed },
+        { label: '品種', value: catBreedLabel(pet.breed) },
         { label: '花色', value: pet.color },
         { label: '家中貓口', value: blank(pet.householdCatCount) ? '' : `${pet.householdCatCount} 隻` },
         { label: '主餐配菜', value: [pet.foods?.join('、'), pet.foodsOther ? `（${pet.foodsOther}）` : ''].filter(Boolean).join('') },

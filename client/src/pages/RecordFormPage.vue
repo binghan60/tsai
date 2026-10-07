@@ -39,6 +39,7 @@ import { provideRecordForm } from '../components/formfields/context';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { useToast } from '../composables/useToast';
 import { useWorkCountsStore } from '../stores/workCounts';
+import { catBreedLabel } from '../../../shared/catBreeds.js';
 
 const { template, loadTemplate, listTemplates } = useFormTemplate();
 const { loadTemplates: loadTextTemplates } = useTextTemplates();
@@ -1185,7 +1186,7 @@ function handleBeforeUnload(event) {
           <span class="text-lg font-semibold"><PatientLink :pet-id="pet?._id">{{ pet?.name }}</PatientLink></span>
         </div>
         <SpecGrid>
-          <SpecCell label="品種"><span>{{ pet?.breed || pet?.species }}</span><PetSex :sex="pet?.sex" /></SpecCell>
+          <SpecCell label="品種"><span>{{ catBreedLabel(pet?.breed) || pet?.species }}</span><PetSex :sex="pet?.sex" /></SpecCell>
           <SpecCell label="飼主"><PatientLink v-if="pet?.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink></SpecCell>
           <SpecCell v-if="examTypeName" label="類型">{{ examTypeName }}</SpecCell>
           <SpecCell v-if="visitDate" label="看診日" mono>{{ visitDate.slice(5).replace('-', '/') }}</SpecCell>

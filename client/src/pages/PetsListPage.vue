@@ -21,6 +21,7 @@ import ListSkeleton from '../components/ListSkeleton.vue';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { usePagedList } from '../composables/usePagedList';
 import { formatDate, relativeDayLabel } from '../lib/datetime';
+import { catBreedLabel } from '../../../shared/catBreeds.js';
 
 const query = useSearchQueryParam('q');
 // 關鍵字選好、按下搜尋才查（applyFilters）——邊打邊查在每個系統打字習慣不一樣的情況下容易誤觸，
@@ -81,7 +82,7 @@ async function rowAction(key, pet) {
               <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
               <span class="min-w-0 truncate font-semibold text-primary">{{ pet.name }}</span>
             </router-link>
-            <span class="desktop-data-cell truncate text-sm text-muted-foreground" v-tip.overflow="pet.breed || ''">{{ pet.breed }}</span>
+            <span class="desktop-data-cell truncate text-sm text-muted-foreground" v-tip.overflow="catBreedLabel(pet.breed)">{{ catBreedLabel(pet.breed) }}</span>
             <span class="desktop-data-cell text-sm text-muted-foreground"><PetSex v-if="pet.sex === 'male' || pet.sex === 'female'" :sex="pet.sex" with-label /></span>
             <span class="desktop-data-cell">
               <span class="block truncate text-sm"><PatientLink v-if="pet.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink></span>

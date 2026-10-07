@@ -7,6 +7,7 @@ import {
   buildIdexxRequestXml, canRequestLab, idexxBreed, idexxDate, idexxDateTime, idexxGender, idexxMessageId, idexxSpecies, inClinic, nextCensusKind, splitOwnerName, xmlText,
 } from './idexxCensus.js';
 import { idexxCensusSettings } from '../config/idexxBridge.js';
+import { CAT_BREEDS } from '../../../shared/catBreeds.js';
 
 const pet = {
   _id: '66f0a1b2c3d4e5f601234567', name: '牛奶', species: '貓', breed: '米克斯', sex: 'female', neutered: 'yes',
@@ -90,6 +91,19 @@ describe('idexxCensus', () => {
     assert.equal(idexxBreed(' maine coon '), 'Maine Coon');
     assert.equal(idexxBreed('橘貓'), '');
     assert.equal(idexxBreed(''), '');
+  });
+
+  it('品種清單上的每一種都對得到自己的 IDEXX 名稱', () => {
+    for (const breed of CAT_BREEDS) {
+      assert.equal(idexxBreed(breed.idexx), breed.idexx, breed.idexx);
+      assert.equal(idexxBreed(breed.label), breed.idexx, breed.label);
+    }
+    // 舊資料的大小寫不一（mixed）照樣對得到。
+    assert.equal(idexxBreed('mixed'), 'Mixed');
+    // 清單上的名稱優先於關鍵字：「異國貓」不能被「異國短毛」之類的關鍵字帶走。
+    assert.equal(idexxBreed('異國貓'), 'Exotic');
+    assert.equal(idexxBreed('日本貓'), 'Japanese');
+    assert.equal(idexxBreed('其他'), 'Other');
   });
 
   it('日期與時間照診所時區、IDEXX 範例的格式', () => {

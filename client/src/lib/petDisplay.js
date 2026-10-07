@@ -1,6 +1,8 @@
 // 貓咪身分資訊的顯示規則。清單只寫「品種＋♂♀ 圖示」，標頭用規格欄（小標題在上、值在下）；
 // 不用「·」把品種、性別、年齡串成一行——那樣讀起來像一串雜訊，也看不出哪個值是什麼。
 
+import { catBreedLabel } from '../../../shared/catBreeds.js';
+
 export const SEX_LABELS = { male: '公', female: '母' };
 
 export function sexLabel(sex) {
@@ -13,8 +15,9 @@ export function isNeutered(neutered) {
 }
 
 // 清單上的一行：品種，沒有品種時退回掛號時記的物種文字。
+// 品種存的是 IDEXX 的英文名稱，顯示時轉成中文（shared/catBreeds.js）；清單以外的舊值照原文。
 export function breedText(pet, fallback = '') {
-  return String(pet?.breed || fallback || '').trim();
+  return catBreedLabel(pet?.breed) || String(fallback || '').trim();
 }
 
 // 清單「提醒」欄的小標籤：藥物過敏（實心紅）、病史（紅框）、貓咪備註（琥珀，提到咬人／兇就叫「注意」）。

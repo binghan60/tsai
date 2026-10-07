@@ -10,6 +10,7 @@
 //   work_request Work_Request New / Cancel（work_request_20.dtd）：IDEXX 台灣給的範例是這一種，檢驗項目留空
 import { holdsCheckinNumber } from './appointmentStatus.js';
 import { CLINIC_TIMEZONE, clinicToday } from './clinicTime.js';
+import { findCatBreed } from '../../../shared/catBreeds.js';
 
 // 這筆掛號現在能不能送 IDEXX：報到之後、櫃台完成之前，而且已經建檔（初診報到時才有 petId）。
 export function canRequestLab(appointment) {
@@ -46,17 +47,10 @@ export function idexxGender(sex, neutered) {
   return null;
 }
 
-// 品種：IDEXX 主機有自己的品種清單（英文名稱，貓 56 種），系統裡的品種是自由輸入的中文。
-// 這裡把常見的中文寫法對到 IDEXX 的名稱；本來就打英文、而且在清單上的照送；對不到的不送（主機上留白，技術員自己選）。
-// 順序有意義：比較長、比較明確的寫在前面（「異國短毛」要在「短毛」之前）。
-const IDEXX_CAT_BREEDS = [
-  'Abyssinian', 'American Bobtail', 'American Curl', 'American Shorthair', 'American Wirehair', 'Balinese', 'Bengal', 'Birman', 'Bombay',
-  'British Shorthair', 'Burmese', 'Chartreux', 'Colorpoint Shorthair', 'Cornish Rex', 'Devon Rex', 'Domestic Longhair', 'Domestic Shorthair',
-  'Egyptian Mau', 'European Burmese', 'Exotic', 'Exotic Shorthair', 'Havana Brown', 'Himalayan', 'Japanese', 'Japanese Bobtail', 'Korat', 'LaPerm',
-  'Maine Coon', 'Manx', 'Mixed', 'Munchkin', 'Nebelung', 'Norwegian Forest Cat', 'Ocicat', 'Oriental', 'Other', 'Persian', 'Pixie-Bob', 'RagaMuffin',
-  'Ragdoll', 'Russian Blue', 'Savannah', 'Scottish Fold', 'Selkirk Rex', 'Siamese', 'Siberian', 'Singapura', 'Snowshoe', 'Sokoke', 'Somali', 'Sphynx',
-  'Tonkinese', 'Toyger', 'Turkish Angora', 'Turkish Van',
-];
+// 品種：IDEXX 主機有自己的品種清單（英文名稱，貓 55 種）。系統的品種欄位只能從 shared/catBreeds.js 選，
+// 存的就是清單上的 IDEXX 英文名稱，直接送。
+// 清單以外的舊值（改版前自由輸入的中文）用下面的關鍵字對照常見寫法，對不到的不送（主機上留白，技術員自己選）。
+// 關鍵字的順序有意義：比較長、比較明確的寫在前面（「異國短毛」要在「短毛」之前）。
 const BREED_KEYWORDS = [
   [/米克斯|混種|混血|mix/i, 'Mixed'],
   [/異國短毛|異短|加菲/, 'Exotic Shorthair'],
@@ -96,8 +90,8 @@ const BREED_KEYWORDS = [
 export function idexxBreed(breed) {
   const text = String(breed ?? '').trim();
   if (!text) return '';
-  const exact = IDEXX_CAT_BREEDS.find((name) => name.toLowerCase() === text.toLowerCase());
-  if (exact) return exact;
+  const listed = findCatBreed(text);
+  if (listed) return listed.idexx;
   return BREED_KEYWORDS.find(([pattern]) => pattern.test(text))?.[1] ?? '';
 }
 

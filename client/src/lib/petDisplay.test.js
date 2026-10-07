@@ -17,6 +17,10 @@ test('只有確定結紮才出標記', () => {
 
 test('沒有品種時退回掛號記的物種文字', () => {
   assert.equal(breedText({ breed: '米克斯' }, '貓'), '米克斯');
+  // 存的是 IDEXX 英文名稱，顯示轉中文；清單以外的舊值照原文
+  assert.equal(breedText({ breed: 'British Shorthair' }, '貓'), '英國短毛貓');
+  assert.equal(breedText({ breed: 'mixed' }), '米克斯');
+  assert.equal(breedText({ breed: 'Poodle' }, '狗'), 'Poodle');
   assert.equal(breedText({ breed: '' }, '貓'), '貓');
   assert.equal(breedText(null), '');
 });

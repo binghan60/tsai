@@ -27,6 +27,8 @@ import Pagination from '../components/Pagination.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import YearMonthSelect from '../components/YearMonthSelect.vue';
+import BreedSelect from '../components/BreedSelect.vue';
+import { catBreedLabel } from '../../../shared/catBreeds.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
 
 import { useToast } from '../composables/useToast';
@@ -212,7 +214,7 @@ function togglePetMedicalHistory(value) {
 
 // 身分類欄位（品種／性別／絕育／年齡）一句話就能唸完，用一行 chip 呈現比逐格 dt/dd 更好掃視。
 const identityFields = computed(() => filledFields([
-  { label: '品種', value: pet.value?.breed ?? '' },
+  { label: '品種', value: catBreedLabel(pet.value?.breed) },
   { label: '花色', value: pet.value?.color ?? '' },
   { label: '性別', value: sexLabel.value },
   { label: '結紮', value: neuteredLabel.value },
@@ -641,7 +643,7 @@ watch(pet, async (value) => {
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-breed" class="text-xs font-medium text-foreground">品種</Label>
-            <Input id="pet-edit-breed" v-model="petForm.breed" class="border-border focus:border-primary" placeholder="例：米克斯、美短" />
+            <BreedSelect id="pet-edit-breed" v-model="petForm.breed" class="border-border focus:border-primary" />
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-color" class="text-xs font-medium text-foreground">花色</Label>

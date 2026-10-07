@@ -39,4 +39,18 @@ describe('mergeIntakeEdit', () => {
       assert.throws(() => mergeIntakeEdit(current(), body), (err) => err.status === 422);
     }
   });
+
+  it('品種只收清單上的、存成 IDEXX 的英文名稱；飼主當初自由輸入的原文沒動到就照收', () => {
+    assert.equal(mergeIntakeEdit(current(), { pet: { breed: 'Ragdoll' } }).pet.breed, 'Ragdoll');
+    assert.equal(mergeIntakeEdit(current(), { pet: { breed: '布偶貓' } }).pet.breed, 'Ragdoll');
+    // 改版中途存成中文的：改別的欄位時順手整理成英文
+    assert.equal(mergeIntakeEdit(current(), { pet: { name: '豆豆二號' } }).pet.breed, 'Mixed');
+    assert.equal(mergeIntakeEdit(current(), { pet: { breed: '' } }).pet.breed, '');
+    assert.throws(() => mergeIntakeEdit(current(), { pet: { breed: '虎斑' } }), (err) => err.status === 422);
+    const legacy = current();
+    legacy.pet.breed = '虎斑';
+    assert.equal(mergeIntakeEdit(legacy, { pet: { name: '豆豆二號' } }).pet.breed, '虎斑');
+    assert.equal(mergeIntakeEdit(legacy, { pet: { breed: '虎斑' } }).pet.breed, '虎斑');
+    assert.throws(() => mergeIntakeEdit(legacy, { pet: { breed: '三花' } }), (err) => err.status === 422);
+  });
 });

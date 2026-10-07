@@ -83,17 +83,17 @@ async function seed() {
   }
 
   const petDefs = [
-    { key: 'naicha', owner: 'chen', name: '奶茶', breed: '英國短毛貓', color: '奶油色', sex: 'female', neutered: 'yes', birthDate: '2019-04-10', weightKg: 4.6 },
-    { key: 'mochi', owner: 'chen', name: '麻糬', breed: '米克斯', color: '白底灰斑', sex: 'male', neutered: 'yes', birthDate: '2021-07-01', weightKg: 5.2 },
-    { key: 'orange', owner: 'wang', name: '小橘', breed: '米克斯', color: '橘虎斑', sex: 'male', neutered: 'yes', birthDate: '2022-03-15', weightKg: 6.1 },
-    { key: 'brownsugar', owner: 'lee', name: '黑糖', breed: '米克斯', color: '玳瑁', sex: 'female', neutered: 'no', birthDate: '2025-10-01', weightKg: 3.4 },
-    { key: 'lucky', owner: 'chang', name: 'Lucky', breed: '美國短毛貓', color: '銀虎斑', sex: 'male', neutered: 'yes', birthDate: '2016-05-20', weightKg: 5.8, medicalHistory: ['關節退化'] },
-    { key: 'douhua', owner: 'huang', name: '豆花', breed: '布偶貓', color: '海豹色重點', sex: 'female', neutered: 'yes', birthDate: '2020-11-11', weightKg: 4.9, allergyStatus: 'yes', allergyType: 'Amoxicillin', notes: '會咬人，抓取請戴手套' },
-    { key: 'pudding', owner: 'wu', name: '布丁', breed: '蘇格蘭摺耳貓', color: '藍白', sex: 'male', neutered: 'yes', birthDate: '2021-02-02', weightKg: 5.0 },
-    { key: 'sesame', owner: 'wu', name: '芝麻', breed: '米克斯', color: '黑', sex: 'female', neutered: 'yes', birthDate: '2018-08-08', weightKg: 3.9, medicalHistory: ['慢性腸胃炎'] },
-    { key: 'mimi', owner: 'liu', name: '咪咪', breed: '波斯貓', color: '白', sex: 'female', neutered: 'yes', birthDate: '2014-06-01', weightKg: 3.6, medicalHistory: ['慢性腎病'], notes: '抽血容易緊張，先讓她在提籠裡休息' },
-    { key: 'cola', owner: 'tsai', name: '可樂', breed: '俄羅斯藍貓', color: '藍灰', sex: 'male', neutered: 'yes', birthDate: '2020-01-20', weightKg: 4.4 },
-    { key: 'pidan', owner: 'tsai', name: '皮蛋', breed: '孟加拉貓', color: '豹紋', sex: 'male', neutered: 'no', birthDate: '2025-12-24', weightKg: 3.1 },
+    { key: 'naicha', owner: 'chen', name: '奶茶', breed: 'British Shorthair', color: '奶油色', sex: 'female', neutered: 'yes', birthDate: '2019-04-10', weightKg: 4.6 },
+    { key: 'mochi', owner: 'chen', name: '麻糬', breed: 'Mixed', color: '白底灰斑', sex: 'male', neutered: 'yes', birthDate: '2021-07-01', weightKg: 5.2 },
+    { key: 'orange', owner: 'wang', name: '小橘', breed: 'Mixed', color: '橘虎斑', sex: 'male', neutered: 'yes', birthDate: '2022-03-15', weightKg: 6.1 },
+    { key: 'brownsugar', owner: 'lee', name: '黑糖', breed: 'Mixed', color: '玳瑁', sex: 'female', neutered: 'no', birthDate: '2025-10-01', weightKg: 3.4 },
+    { key: 'lucky', owner: 'chang', name: 'Lucky', breed: 'American Shorthair', color: '銀虎斑', sex: 'male', neutered: 'yes', birthDate: '2016-05-20', weightKg: 5.8, medicalHistory: ['關節退化'] },
+    { key: 'douhua', owner: 'huang', name: '豆花', breed: 'Ragdoll', color: '海豹色重點', sex: 'female', neutered: 'yes', birthDate: '2020-11-11', weightKg: 4.9, allergyStatus: 'yes', allergyType: 'Amoxicillin', notes: '會咬人，抓取請戴手套' },
+    { key: 'pudding', owner: 'wu', name: '布丁', breed: 'Scottish Fold', color: '藍白', sex: 'male', neutered: 'yes', birthDate: '2021-02-02', weightKg: 5.0 },
+    { key: 'sesame', owner: 'wu', name: '芝麻', breed: 'Mixed', color: '黑', sex: 'female', neutered: 'yes', birthDate: '2018-08-08', weightKg: 3.9, medicalHistory: ['慢性腸胃炎'] },
+    { key: 'mimi', owner: 'liu', name: '咪咪', breed: 'Persian', color: '白', sex: 'female', neutered: 'yes', birthDate: '2014-06-01', weightKg: 3.6, medicalHistory: ['慢性腎病'], notes: '抽血容易緊張，先讓她在提籠裡休息' },
+    { key: 'cola', owner: 'tsai', name: '可樂', breed: 'Russian Blue', color: '藍灰', sex: 'male', neutered: 'yes', birthDate: '2020-01-20', weightKg: 4.4 },
+    { key: 'pidan', owner: 'tsai', name: '皮蛋', breed: 'Bengal', color: '豹紋', sex: 'male', neutered: 'no', birthDate: '2025-12-24', weightKg: 3.1 },
   ];
   const pets = {};
   for (const def of petDefs) {

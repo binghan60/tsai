@@ -280,7 +280,7 @@ const onSubmit = handleSubmit((values) => {
                       class="flex w-full items-center gap-3 border-b border-border bg-card px-3 py-2.5 text-left last:border-b-0 hover:bg-field"
                       @click="selectPet(pet)"
                     >
-                      <span class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold text-primary">{{ pet.name }}</span><span v-if="pet.breed" class="ml-2 text-xs text-muted-foreground">{{ pet.breed }}</span><span v-if="pet.ownerId?.name" class="ml-3 text-xs text-muted-foreground">{{ pet.ownerId.name }}</span><span v-if="pet.ownerId?.phone" class="num ml-3 text-xs text-muted-foreground">{{ pet.ownerId.phone }}</span></span>
+                      <span class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold text-primary">{{ pet.name }}</span><span v-if="pet.breed" class="ml-2 text-xs text-muted-foreground">{{ breedText(pet) }}</span><span v-if="pet.ownerId?.name" class="ml-3 text-xs text-muted-foreground">{{ pet.ownerId.name }}</span><span v-if="pet.ownerId?.phone" class="num ml-3 text-xs text-muted-foreground">{{ pet.ownerId.phone }}</span></span>
                     </button>
                     <p v-if="petSearch.hiddenCount.value" class="px-3 py-2.5 text-xs text-muted-foreground">還有 <span class="num">{{ petSearch.hiddenCount.value }}</span> 筆沒列出，請多打幾個字縮小範圍。</p>
                   </div>

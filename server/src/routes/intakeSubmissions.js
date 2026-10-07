@@ -11,6 +11,7 @@ import { emitAppointmentUpdate, emitIntakeUpdate } from '../lib/realtime.js';
 import { INTAKE_PET_FIELDS, mergeIntakeEdit } from '../lib/intakeEdit.js';
 import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 import { MOBILE_PHONE_ERROR, normalizeMobilePhone } from '../../../shared/phone.js';
+import { checkCatBreed } from '../../../shared/catBreeds.js';
 
 const pickPetFields = body => Object.fromEntries(INTAKE_PET_FIELDS.filter(field => body[field] !== undefined).map(field => [field, body[field]]));
 const publicSubmissionLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
@@ -66,7 +67,10 @@ publicIntakeRouter.post('/', publicSubmissionLimiter, async (req, res, next) => 
     const phone = normalizeMobilePhone(owner.phone);
     if (String(owner.phone || '').trim() && !phone) return res.status(422).json({ message: MOBILE_PHONE_ERROR });
     if (phone) owner.phone = phone;
-    if (!String(pet.breed || '').trim()) return res.status(422).json({ message: '請填寫品種' });
+    if (!String(pet.breed || '').trim()) return res.status(422).json({ message: '請選擇品種' });
+    const breed = checkCatBreed(pet.breed);
+    if (breed.error) return res.status(422).json({ message: breed.error });
+    pet.breed = breed.breed;
     if (!['male', 'female'].includes(pet.sex)) return res.status(422).json({ message: '請選擇性別' });
     if (!['yes', 'no'].includes(pet.neutered)) return res.status(422).json({ message: '請選擇結紮狀態' });
     if (!pet.birthDate || Number.isNaN(new Date(pet.birthDate).getTime())) return res.status(422).json({ message: '請填寫有效年齡' });
@@ -171,8 +175,11 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
         address: submission.owner.address,
         relationVersion: 1,
       }], { session });
+      // 改版前送出的初診表，品種可能是中文名稱或自由文字：清單上的整理成英文，其餘照原文帶過去。
+      const petFields = pickPetFields(submission.pet.toObject());
+      petFields.breed = checkCatBreed(petFields.breed, petFields.breed).breed;
       [pet] = await Pet.create([{
-        ...pickPetFields(submission.pet.toObject()),
+        ...petFields,
         ownerId: owner._id,
       }], { session });
       submission.status = 'approved';
