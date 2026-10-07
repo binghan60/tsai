@@ -91,6 +91,9 @@ const emit = defineEmits(['update:modelValue', 'update:placeholder']);
                   'data-[today]:font-semibold data-[today]:text-primary data-[today]:shadow-[inset_0_0_0_1.5px_var(--primary)]',
                   'data-[outside-view]:text-subtle-foreground/50',
                   'data-[selected]:bg-primary data-[selected]:font-semibold data-[selected]:text-primary-foreground data-[selected]:hover:bg-primary',
+                  // 選的剛好是今天：上面兩組都是單一 data 變體，CSS 裡 today 排在 selected 後面，會把字蓋回主色、
+                  // 跟主色底同色而整個看不見。疊兩個變體的選擇器比較具體，一定贏；細框改成白色，仍看得出是今天。
+                  'data-[selected]:data-[today]:text-primary-foreground data-[selected]:data-[today]:shadow-[inset_0_0_0_2px_var(--primary),inset_0_0_0_3.5px_var(--primary-foreground)]',
                   'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
                   'data-[unavailable]:pointer-events-none data-[unavailable]:text-muted-foreground/40 data-[unavailable]:line-through',
                 )
