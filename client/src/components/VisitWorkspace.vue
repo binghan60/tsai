@@ -641,7 +641,7 @@ onBeforeUnmount(() => {
         <Button v-if="state.completed" variant="secondary" :disabled="busy || !!appointment.reopenRequest?.requestedAt" @click="openReopenRequest">
           {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
         </Button>
-        <Button v-else-if="state.handedOff" variant="secondary" :disabled="busy" @click="run('reclaim')"><Undo2 stroke-width="1.75" />取回修改</Button>
+        <Button v-else-if="state.handedOff" :disabled="busy" @click="run('reclaim')"><Undo2 stroke-width="1.75" />取回修改</Button>
         <Button v-else-if="appointment.status === 'arrived' && !state.started" :disabled="busy" @click="emit('start', appointment)"><Stethoscope stroke-width="1.75" />開始看診</Button>
         <Button v-else-if="editable" :disabled="busy || !!conflicts.length" @click="run('handoff')">完成看診，送交櫃台<ArrowRight stroke-width="1.75" /></Button>
       </div>

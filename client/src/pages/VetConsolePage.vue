@@ -476,7 +476,7 @@ onBeforeUnmount(() => {
 
               <div class="min-w-0 flex-1" :class="compact ? '' : 'space-y-1'">
                 <div class="flex min-w-0 items-center gap-2">
-                  <span class="truncate text-base font-semibold text-foreground">{{ item.petName }}</span>
+                  <span class="max-w-[70%] shrink-0 truncate text-base font-semibold text-foreground" v-tip.overflow="item.petName">{{ item.petName }}</span>
                   <Badge v-if="item.visitType === 'new'" variant="status" class="h-6 bg-info-surface px-2 text-info">初診</Badge>
                   <!-- 精簡版只寫「手術」（一行放不下「手術：結紮」），手術名稱滑過才出；詳細版整顆帶名稱。 -->
                   <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" :short="compact" class="h-6 min-w-0 shrink px-2" />
@@ -507,7 +507,7 @@ onBeforeUnmount(() => {
                     <p class="min-h-lh min-w-0 flex-1 text-base leading-snug text-muted-foreground">{{ item.reason }}</p>
                     <span v-if="item.status === 'scheduled'" class="inline-flex h-9 w-20 shrink-0 items-center justify-center rounded-lg px-2 text-sm whitespace-nowrap leading-none font-semibold" :class="status?.tone === 'alert' ? 'border border-destructive/30 bg-destructive-surface text-destructive' : 'bg-secondary text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)]'">{{ status?.short || status?.label }}</span>
                     <Button v-if="canStart(item)" size="xs" class="w-20 shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope stroke-width="1.75" />看診</Button>
-                    <Button v-if="queueTab === 'handoff'" variant="secondary" size="xs" class="w-20 shrink-0" :disabled="busy" @click.stop="reclaim(item)"><Undo2 stroke-width="1.75" />取回</Button>
+                    <Button v-if="queueTab === 'handoff'" size="xs" class="w-20 shrink-0" :disabled="busy" @click.stop="reclaim(item)"><Undo2 stroke-width="1.75" />取回</Button>
                   </div>
                   <div v-if="item.latenessMinutes > 0" class="flex flex-wrap items-center gap-1.5">
                     <LatenessBadge :minutes="item.latenessMinutes" />
@@ -521,7 +521,7 @@ onBeforeUnmount(() => {
                 <Badge v-if="status && item.status !== 'scheduled'" variant="status" class="num h-6 px-2" :class="STATUS_TONE[status.tone]" v-tip="status.label" :aria-label="status.label"><component :is="status.icon" stroke-width="2" aria-hidden="true" />{{ status.value }}</Badge>
                 <span v-if="item.status === 'scheduled'" class="inline-flex h-9 w-20 shrink-0 items-center justify-center rounded-lg px-2 text-sm whitespace-nowrap leading-none font-semibold" :class="status?.tone === 'alert' ? 'border border-destructive/30 bg-destructive-surface text-destructive' : 'bg-secondary text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)]'">{{ status?.short || status?.label }}</span>
                 <Button v-if="canStart(item)" size="xs" class="w-20 shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope stroke-width="1.75" />看診</Button>
-                <Button v-if="queueTab === 'handoff'" variant="secondary" size="xs" class="w-20 shrink-0" :disabled="busy" @click.stop="reclaim(item)"><Undo2 stroke-width="1.75" />取回</Button>
+                <Button v-if="queueTab === 'handoff'" size="xs" class="w-20 shrink-0" :disabled="busy" @click.stop="reclaim(item)"><Undo2 stroke-width="1.75" />取回</Button>
               </template>
             </li>
             </template>
