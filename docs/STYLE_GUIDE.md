@@ -141,6 +141,8 @@ DataCard title="貓咪清單" :count
 | 去處標記 | `DestTag to="journal|report|internal"` | 診療台欄位旁：寫完會去哪裡 |
 | 號碼牌 | `CheckinNumber size` | 候診灰、看診中主色實心、待櫃台淡面、已完成淡灰 |
 | 手術／遲到 | `SurgeryBadge`、`LatenessBadge` | 紫與紅，並排時順序「手術 → 遲到」 |
+| 保證金 | `DepositBadge`（`:status` 掛號上的「已收保證金 200」／`:required` 貓咪上的「約診需收保證金 200」）、`DepositField`（約診時的二選一） | `warning` 琥珀：是要櫃台處理的錢，不是警示；跟紅色的遲到徽章並排時靠色相分開。「這次不收」的掛號不畫徽章。`DepositField` 只在這隻貓達到門檻時出現，掛號視窗與約回診共用 |
+| 做決定的二選一 | `OptionButtons`（`v-model`、`:options`） | 保證金的「已收／這次不收」、取消時的「先留著／已退還」。選中的整顆主色實心＋打勾，沒選的卡片底＋細邊，一開始可以都沒選。切換檢視才用 `SegmentedControl`——它的選取項只是浮起一塊卡片底，放在琥珀底的區塊上太淡，使用者要求選中狀態明顯一點 |
 | 出席徽章 | `AttendanceBadges`（`:counts`） | 貓咪詳情頁頁首貓咪名字旁的「遲到 N 次｜最近 9/28」「未到 N 次」（只標貓咪這邊、只算這隻貓，飼主欄不標）：`danger` 淡面膠囊、次數與日期中間一條細線（不用分隔點）、0 次不畫；是按鈕，點了切到「出席紀錄」頁籤 |
 | 格式文字 | 編輯 `RichTextEditor`（待辦 `single-line`＋`toolbar-position="top"`）、顯示 `RichText` | 不用 `v-html` |
 | 空狀態／載入 | `EmptyState`、`ListSkeleton` | 不要只寫「載入中…」 |

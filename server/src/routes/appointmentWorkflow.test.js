@@ -14,6 +14,8 @@ const id = '507f1f77bcf86cd799439011';
 const petId = '507f1f77bcf86cd799439012';
 const templateId = '507f1f77bcf86cd799439013';
 const chain = value => ({ session: async () => value });
+// 保證金查詢（lib/deposit.js）是一串 sort/select/lean/session 之後才 await，回傳一個可以一路串下去的假查詢。
+const query = value => { const q = { sort: () => q, select: () => q, lean: () => q, session: () => q, then: (resolve, reject) => Promise.resolve(value).then(resolve, reject) }; return q; };
 const labTemplate = {
   _id: templateId, version: 1, name: '一般健檢',
   sections: [{ key: 'labs', title: '檢驗', items: [
@@ -23,7 +25,7 @@ const labTemplate = {
 };
 
 describe('independent appointment workflow HTTP routes', () => {
-  let server, origin, store, diary, records, failDiary;
+  let server, origin, store, diary, records, failDiary, attendanceGroups;
   before(async () => {
     server = app.listen(0, '127.0.0.1');
     if (!server.listening) await once(server, 'listening');
@@ -33,7 +35,7 @@ describe('independent appointment workflow HTTP routes', () => {
   beforeEach(() => {
     mock.restoreAll();
     store = new Map([[id, { _id: id, petId, templateId, __v: 0, date: '2026-09-07', time: '10:00', scheduledAt: new Date('2026-09-07T02:00:00Z'), status: 'arrived', checkinNumber: 1, petName: '豆豆' }]]);
-    diary = new Map(); records = new Map(); failDiary = false;
+    diary = new Map(); records = new Map(); failDiary = false; attendanceGroups = [];
     function document(raw) {
       if (!raw) return null;
       const doc = new Appointment(raw);
@@ -59,6 +61,8 @@ describe('independent appointment workflow HTTP routes', () => {
     });
     mock.method(Appointment, 'find', () => ({ lean: async () => [...store.values()] }));
     mock.method(Appointment, 'findById', key => chain(document(store.get(String(key)))));
+    mock.method(Appointment, 'findOne', () => query(null));
+    mock.method(Appointment, 'aggregate', () => query(attendanceGroups));
     mock.method(Appointment, 'create', async ([values], options) => {
       const doc = document({ ...values, _id: new mongoose.Types.ObjectId(), __v: -1 });
       await doc.save(options);
@@ -248,6 +252,19 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal(first.body.followUpAppointmentId, second.body.followUpAppointmentId);
     assert.equal(store.size, 2);
     assert.equal(store.get(String(first.body.followUpAppointmentId)).reason, '追蹤傷口', '沒帶來院原因就用醫師的回診原因');
+  });
+  it('asks for a deposit decision before booking a follow-up for a cat past the limit', async () => {
+    attendanceGroups = [{ _id: 'late', count: 2, lastDate: '2026-09-07' }];
+    const booking = { followUpDate: '2026-09-14', followUpTime: '10:30' };
+    const blocked = await post('followup', booking);
+    assert.equal(blocked.status, 422);
+    assert.equal(blocked.body.depositRequired, true);
+    assert.equal((await post('followup', { ...booking, deposit: { status: 'waived', reason: ' ' } })).status, 422);
+    assert.equal(store.size, 1);
+    assert.equal((await post('followup', { ...booking, deposit: { status: 'collected' } })).status, 200);
+    const followUp = [...store.values()].find(item => String(item._id) !== id);
+    assert.equal(followUp.depositStatus, 'collected');
+    assert.ok(followUp.depositDecidedAt);
   });
   it('books the follow-up with the same fields and rules as a regular appointment', async () => {
     await post('clinical', { followUpReason: '追蹤傷口' });

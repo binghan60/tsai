@@ -4,10 +4,10 @@
 import { SESSIONS } from './appointmentTimeline.js';
 import { APPOINTMENT_TIME_MINUTE_STEP, DEFAULT_ESTIMATED_DURATION_MINUTES } from './appointmentTime.js';
 
-// 一鍵報到時超過預約時間多久才記成遲到。遲到會累計到飼主與貓咪的出席紀錄，
-// 下次掛號會跳「曾遲到 N 次」提醒——晚兩三分鐘就記一筆，那個提醒很快就沒人看了。
+// 超過預約時間多久才算遲到（一鍵報到自動記、掛號台與診療台的遲到標示都用這個）。
+// 5 分鐘是診所的保證金規則定的：遲到滿兩次，下次約診要先收保證金（shared/deposit.js）。原本是 10 分鐘。
 // 遲到分鐘數仍由後端從預約時間起算，寬限只決定「算不算」。
-export const LATE_GRACE_MINUTES = 10;
+export const LATE_GRACE_MINUTES = 5;
 
 const INACTIVE_STATUSES = new Set(['cancelled', 'no_show']);
 

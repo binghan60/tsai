@@ -55,6 +55,13 @@ const appointmentSchema = new mongoose.Schema(
     // 實際完成報到的時間。取消報到後清除，再次報到時重新記錄。
     checkedInAt: { type: Date, default: null },
     latenessMinutes: { type: Number, default: 0, min: 0, max: 1440 },
+    // 保證金（shared/deposit.js）：約這筆診時，這隻貓已經達到要收保證金的門檻，櫃台的決定記在這裡。
+    // ''＝不需要收；collected＝已收（從這一刻起次數歸零重算）；waived＝這次不收（要有原因，不歸零）；
+    // refunded＝這筆掛號取消時把保證金退了（不再歸零）；carried＝取消時先留著、後來沿用到下一筆掛號（錢記在那一筆上）。
+    // 看診完之後的退還／抵扣不追蹤。
+    depositStatus: { type: String, enum: ['', 'collected', 'waived', 'refunded', 'carried'], default: '' },
+    depositWaiveReason: { type: String, default: '', trim: true, maxlength: 200 },
+    depositDecidedAt: { type: Date, default: null },
 
     // 這次看診是看診資料的唯一存放處：體重、體溫、檢驗數值、本次紀錄、請轉告飼主、回診建議、
     // 內部備註與回診日期都只存在這裡。病歷日誌讀它即時組出來；報到時建立的健檢報告草稿

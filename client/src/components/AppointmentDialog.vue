@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dial
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { DEFAULT_ESTIMATED_DURATION_MINUTES, durationOverflowError } from '../lib/appointmentTime';
 import AttendanceSummaryTable from './AttendanceSummaryTable.vue';
+import DepositField from './DepositField.vue';
+import { checkDepositDecision } from '../../../shared/deposit.js';
 import { formatDate, weekdayLabel } from '../lib/datetime';
 import { breedText } from '../lib/petDisplay';
 import { checkMobilePhone } from '../../../shared/phone.js';
@@ -155,18 +157,30 @@ function selectOwner(owner) {
 const attendancePet = computed(() => (mode.value === 'return' ? selectedPet.value : null));
 const attendanceOwner = computed(() => (mode.value === 'new' && ownerMode.value === 'existing' ? selectedOwner.value : null));
 const attendanceCounts = ref({ pet: null, owner: null });
+// 保證金（shared/deposit.js）：這隻貓達到門檻時，櫃台要先選「已收」或「這次不收」才送得出去。
+// 同一支查詢一起帶回來；初診還沒有貓，不適用。換一隻貓就重選。
+const depositState = ref(null);
+const depositStatus = ref('');
+const depositReason = ref('');
+const depositError = ref('');
+watch([depositStatus, depositReason], () => { depositError.value = ''; });
 let attendanceRequest = 0;
 watch([attendancePet, attendanceOwner], async ([pet, owner]) => {
   const token = ++attendanceRequest;
   attendanceCounts.value = { pet: null, owner: null };
+  depositState.value = null;
+  depositStatus.value = '';
+  depositReason.value = '';
   if (!pet && !owner) return;
   try {
     const { data } = pet
       ? await http.get(`/pets/${pet._id}/attendance`, { params: { limit: 1 } })
       : await http.get(`/owners/${owner._id}/attendance`);
-    if (token === attendanceRequest) attendanceCounts.value = { pet: data.counts?.pet ?? null, owner: data.counts?.owner ?? null };
+    if (token !== attendanceRequest) return;
+    attendanceCounts.value = { pet: data.counts?.pet ?? null, owner: data.counts?.owner ?? null };
+    depositState.value = pet ? data.deposit ?? null : null;
   } catch {
-    // 提醒性質，查不到就留白。
+    // 出席紀錄是提醒性質，查不到就留白；保證金由後端把關，需要收而這裡沒問到時送出會被擋下並說明。
   }
 });
 const attendanceEntries = computed(() => {
@@ -224,7 +238,12 @@ const onSubmit = handleSubmit((values) => {
       pickPetError.value = '請先選擇貓咪';
       return;
     }
-    emit('submit', { ...common, visitType: 'return', petId: selectedPet.value._id });
+    const deposit = checkDepositDecision({ status: depositStatus.value, reason: depositReason.value }, Boolean(depositState.value?.required));
+    if (deposit.error) {
+      depositError.value = deposit.error;
+      return;
+    }
+    emit('submit', { ...common, visitType: 'return', petId: selectedPet.value._id, ...(deposit.status ? { deposit: { status: deposit.status, reason: deposit.reason } } : {}) });
     return;
   }
   if (ownerMode.value === 'existing' && !selectedOwner.value) {
@@ -354,6 +373,15 @@ const onSubmit = handleSubmit((values) => {
               </template>
 
               <AttendanceSummaryTable :entries="attendanceEntries" />
+              <DepositField
+                v-if="attendancePet"
+                v-model:status="depositStatus"
+                v-model:reason="depositReason"
+                :state="depositState"
+                :pet-name="attendancePet.name"
+                :error="depositError"
+                id-prefix="dialog-deposit"
+              />
             </template>
 
             <template v-else>

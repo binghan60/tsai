@@ -22,7 +22,7 @@ const rows = computed(() => attendanceRows(props.entries));
           <th scope="col" class="py-0.5 font-medium"><span class="inline-flex items-center gap-1.5"><Clock class="size-4" stroke-width="1.75" aria-hidden="true" />出席紀錄</span></th>
           <th scope="col" class="w-20 px-3 py-0.5 font-medium">遲到</th>
           <th scope="col" class="w-20 px-3 py-0.5 font-medium">未到</th>
-          <th scope="col" class="w-24 py-0.5 pl-3 font-medium">最近一次</th>
+          <th scope="col" class="w-28 py-0.5 pl-3 font-medium">最近一次</th>
         </tr>
       </thead>
       <tbody>

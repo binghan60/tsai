@@ -18,6 +18,9 @@ import SpecCell from './SpecCell.vue';
 import CheckinNumber from './CheckinNumber.vue';
 import { clinicTimeInput, weekdayLabel } from '../lib/datetime';
 import LatenessBadge from './LatenessBadge.vue';
+import DepositBadge from './DepositBadge.vue';
+import DepositField from './DepositField.vue';
+import { checkDepositDecision } from '../../../shared/deposit.js';
 import SurgeryBadge from './SurgeryBadge.vue';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
@@ -91,6 +94,29 @@ const followUpSummary = computed(() => {
   if (!followUpStarted.value) return { lead: recommended ? '這次不約回診，會留在「待安排回診」' : '這次不約回診', when: '', tail: '' };
   return null;
 });
+// 保證金（shared/deposit.js）：約回診也是約診。這隻貓達到門檻時（常常就是這次又遲到），新約的回診要先選
+// 「已收」或「這次不收」；改期已經約好的回診不再問。查不到狀態時不擋，由後端把關。
+const depositState = ref(null);
+const depositStatus = ref('');
+const depositReason = ref('');
+const depositError = ref('');
+watch([depositStatus, depositReason], () => { depositError.value = ''; });
+const depositNeeded = computed(() => !booked.value && Boolean(depositState.value?.required));
+let depositRequest = 0;
+async function loadDepositState() {
+  const token = ++depositRequest;
+  depositState.value = null;
+  depositStatus.value = '';
+  depositReason.value = '';
+  depositError.value = '';
+  if (!props.appointment.petId) return;
+  try {
+    const { data } = await http.get(`/pets/${props.appointment.petId}/attendance`, { params: { limit: 1 } });
+    if (token === depositRequest) depositState.value = data.deposit ?? null;
+  } catch {
+    // 查不到就不顯示；需要收而沒問到時，送出會被後端擋下並說明。
+  }
+}
 const surgeryNameError = computed(() => (followUpAttempted.value && followUp.value.isSurgery && !followUp.value.surgeryName.trim() ? '請填寫手術名稱' : ''));
 
 watch(() => props.appointment._id, () => {
@@ -101,6 +127,7 @@ watch(() => props.appointment._id, () => {
   editingNote.value = false;
   error.value = '';
   loadNotes(1);
+  loadDepositState();
 });
 
 function resetNote() {
@@ -157,6 +184,7 @@ async function run(action, values = {}, options = {}) {
 }
 
 loadNotes();
+loadDepositState();
 
 function handleHistoricalNoteSaved({ note, content }) {
   notifyChat(props.appointment, 'visit_data', {
@@ -175,6 +203,13 @@ function followUpError() {
   if (errors.date) return '請選擇回診日期';
   if (errors.time) return errors.time === '請選擇預約時段' ? '請選擇回診時段' : errors.time;
   if (isSurgery && !surgeryName.trim()) return '請填寫手術名稱';
+  if (depositNeeded.value) {
+    const deposit = checkDepositDecision({ status: depositStatus.value, reason: depositReason.value }, true);
+    if (deposit.error) {
+      depositError.value = deposit.error;
+      return deposit.error;
+    }
+  }
   return '';
 }
 
@@ -187,6 +222,7 @@ function followUpPayload() {
     reason: reason.trim(),
     isSurgery,
     surgeryName: isSurgery ? surgeryName.trim() : '',
+    ...(depositNeeded.value ? { deposit: { status: depositStatus.value, reason: depositReason.value.trim() } } : {}),
   };
 }
 
@@ -282,6 +318,7 @@ async function approveReopen() {
               <Badge v-if="appointment.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
               <SurgeryBadge v-if="appointment.isSurgery" :name="appointment.surgeryName" />
               <LatenessBadge :minutes="appointment.latenessMinutes" />
+              <DepositBadge :status="appointment.depositStatus" />
             </div>
             <div class="flex flex-wrap items-baseline gap-x-2.5">
               <span class="spec-label">來院原因</span>
@@ -396,6 +433,15 @@ async function approveReopen() {
                     <Input id="desk-followup-reason" v-model="followUp.reason" placeholder="例：拆線、複診" />
                   </div>
                   <SurgeryField v-model:is-surgery="followUp.isSurgery" v-model:surgery-name="followUp.surgeryName" :error="surgeryNameError" />
+                  <DepositField
+                    v-if="!booked"
+                    v-model:status="depositStatus"
+                    v-model:reason="depositReason"
+                    :state="depositState"
+                    :pet-name="appointment.petName"
+                    :error="depositError"
+                    id-prefix="desk-deposit"
+                  />
                 </template>
               </AppointmentSlotPicker>
               <div v-if="rescheduling" class="flex items-center justify-end gap-2">

@@ -37,6 +37,7 @@ import { copyText } from '../lib/clipboard';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 import AttendanceBadges from '../components/AttendanceBadges.vue';
+import DepositBadge from '../components/DepositBadge.vue';
 import AttendancePanel from '../components/AttendancePanel.vue';
 import { usePetAttendance } from '../composables/usePetAttendance';
 import { attendanceTotal } from '../lib/attendance';
@@ -244,6 +245,7 @@ const alertFields = computed(() => filledFields([
 const {
   items: attendanceItems,
   counts: attendanceCounts,
+  deposit: attendanceDeposit,
   page: attendancePage,
   totalPages: attendanceTotalPages,
   total: attendanceListTotal,
@@ -619,6 +621,7 @@ watch(pet, async (value) => {
         <span v-if="pet.legacyMedicalRecordNumber" class="text-sm text-subtle-foreground">舊病歷號 <span class="num">{{ pet.legacyMedicalRecordNumber }}</span></span>
         <span v-if="pet.allergyStatus === 'yes'" class="inline-flex h-7 items-center gap-1.5 rounded-full bg-destructive-solid px-2.5 text-sm font-semibold text-destructive-solid-foreground"><AlertTriangle class="size-4" stroke-width="2" />藥物過敏：{{ pet.allergyType || '未註明藥物' }}</span>
         <AttendanceBadges :counts="attendanceCounts.pet" :subject="pet.name" @select="openAttendance" />
+        <DepositBadge :required="Boolean(attendanceDeposit?.required)" />
       </template>
       <template #actions>
         <Button type="button" :variant="petPinned ? 'destructive' : 'secondary'" :disabled="pinBusy" @click="togglePin">
@@ -926,6 +929,7 @@ watch(pet, async (value) => {
             :loading="attendanceLoading"
             :error="attendanceError"
             @update:page="(page) => loadAttendance({ page })"
+            @changed="loadAttendance()"
           />
 
           <template v-else>

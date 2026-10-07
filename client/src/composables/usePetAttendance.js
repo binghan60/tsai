@@ -7,6 +7,8 @@ import { http } from '../api/http';
 export function usePetAttendance(petId, { limit = 10 } = {}) {
   const items = ref([]);
   const counts = ref({ pet: null, owner: null });
+  // 這隻貓現在約診要不要先收保證金（shared/deposit.js）。
+  const deposit = ref(null);
   const scope = ref('pet');
   const page = ref(1);
   const totalPages = ref(1);
@@ -23,6 +25,7 @@ export function usePetAttendance(petId, { limit = 10 } = {}) {
     if (id !== loadedPetId) {
       items.value = [];
       counts.value = { pet: null, owner: null };
+      deposit.value = null;
       total.value = 0;
       totalPages.value = 1;
       loadedPetId = id;
@@ -44,6 +47,7 @@ export function usePetAttendance(petId, { limit = 10 } = {}) {
       }
       items.value = data.items || [];
       counts.value = data.counts || { pet: null, owner: null };
+      deposit.value = data.deposit ?? null;
       page.value = nextPage;
       totalPages.value = pages;
       total.value = data.total || 0;
@@ -58,5 +62,5 @@ export function usePetAttendance(petId, { limit = 10 } = {}) {
     request += 1;
   });
 
-  return { items, counts, scope, page, totalPages, total, limit, loading, error, load };
+  return { items, counts, deposit, scope, page, totalPages, total, limit, loading, error, load };
 }

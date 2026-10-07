@@ -16,12 +16,12 @@ describe('minutesPastSchedule / isOverdue', () => {
     assert.equal(minutesPastSchedule({ status: 'scheduled', scheduledAt }, new Date('2026-09-15T05:50:00.000Z')), 0);
   });
 
-  // 寬限是「超過」才算：剛好晚 10 分鐘仍當準時，第 11 分鐘才記遲到。
+  // 寬限是「超過」才算：剛好晚 5 分鐘仍當準時，第 6 分鐘才記遲到。
   it('寬限分鐘數是嚴格大於', () => {
     const at = (minutes) => new Date(new Date(scheduledAt).getTime() + minutes * 60000);
-    assert.equal(LATE_GRACE_MINUTES, 10);
-    assert.equal(isOverdue({ status: 'scheduled', scheduledAt }, at(10)), false);
-    assert.equal(isOverdue({ status: 'scheduled', scheduledAt }, at(11)), true);
+    assert.equal(LATE_GRACE_MINUTES, 5);
+    assert.equal(isOverdue({ status: 'scheduled', scheduledAt }, at(5)), false);
+    assert.equal(isOverdue({ status: 'scheduled', scheduledAt }, at(6)), true);
   });
 });
 

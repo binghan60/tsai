@@ -5,6 +5,7 @@ import MedicalRecord from '../models/MedicalRecord.js';
 import FormTemplate from '../models/FormTemplate.js';
 import { withTransaction } from '../lib/transaction.js';
 import { combineClinicDateTime } from '../lib/clinicTime.js';
+import { depositFieldsForBooking, settleCarriedDeposit } from '../lib/deposit.js';
 import { defaultRecordFields } from '../lib/formTemplate.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { queueIdexxCensus } from '../lib/idexxRequests.js';
@@ -96,7 +97,12 @@ router.post('/:action', async (req, res, next) => {
           await followUp.save({ session });
         } else {
           booking = followUpBooking(req.body, appointment);
+          // 約回診也是約診：這隻貓達到保證金門檻時（常常就是這次又遲到），一樣要先決定已收或這次不收。
+          // 改期既有的回診不再問——那筆當初已經決定過了。
+          const deposit = await depositFieldsForBooking(appointment.petId, req.body.deposit, session);
+          await settleCarriedDeposit(deposit.carriedFromId, session);
           [followUp] = await Appointment.create([{
+            ...deposit.fields,
             ...booking, scheduledAt: combineClinicDateTime(booking.date, booking.time),
             ownerId: appointment.ownerId, petId: appointment.petId,
             ownerName: appointment.ownerName, ownerPhone: appointment.ownerPhone,

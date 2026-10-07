@@ -15,6 +15,18 @@ import { enumerateDates, fillDailyCounts } from './appointments.js';
 
 // 號碼牌相關路由會走 Appointment.find(...).session(...)（報到那條再接 .where(...)）。
 // 這裡把查詢鏈與 transaction 假掉，並監看是否誤用 bulkWrite 改到其他人的牌號。
+// 保證金查詢（lib/deposit.js）：沒有收過保證金，出席統計回 groups。回傳的物件可以一路串 sort/select/lean 再 await。
+function stubDepositQueries(groups) {
+  const original = { findOne: Appointment.findOne, aggregate: Appointment.aggregate };
+  const query = (value) => {
+    const q = { sort: () => q, select: () => q, lean: () => q, session: () => q, then: (resolve, reject) => Promise.resolve(value).then(resolve, reject) };
+    return q;
+  };
+  Appointment.findOne = () => query(null);
+  Appointment.aggregate = () => query(groups);
+  return { restore: () => Object.assign(Appointment, original) };
+}
+
 function stubQueue(rows) {
   const chain = {
     session: () => chain,
@@ -280,6 +292,7 @@ describe('appointments routes', () => {
       }),
     });
     Appointment.create = async (doc) => doc;
+    const deposit = stubDepositQueries([]);
     try {
       const response = await fetch(`${origin}/api/appointments`, {
         method: 'POST',
@@ -295,9 +308,42 @@ describe('appointments routes', () => {
       assert.equal(body.species, '貓');
       assert.equal(body.ownerId, 'owner-1');
       assert.equal(body.visitType, 'return');
+      assert.equal(body.depositStatus, '');
     } finally {
       Pet.findById = originalFindById;
       Appointment.create = originalCreate;
+      deposit.restore();
+    }
+  });
+
+  it('貓咪遲到滿兩次時，沒決定保證金不能約診；已收或寫了原因的不收才約得成', async () => {
+    const originalFindById = Pet.findById;
+    const originalCreate = Appointment.create;
+    Pet.findById = () => ({ populate: async () => ({ _id: '507f1f77bcf86cd799439011', name: '妞妞', species: '貓', ownerId: { _id: 'owner-1', name: '王小姐', phone: '0912345678' } }) });
+    Appointment.create = async (doc) => doc;
+    const deposit = stubDepositQueries([{ _id: 'late', count: 2, lastDate: '2026-09-28' }]);
+    const book = (extra) => fetch(`${origin}/api/appointments`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ petId: '507f1f77bcf86cd799439011', ...extra }),
+    });
+    try {
+      const blocked = await book({});
+      assert.equal(blocked.status, 422);
+      assert.equal((await blocked.json()).depositRequired, true);
+      assert.equal((await book({ deposit: { status: 'waived' } })).status, 422);
+
+      const collected = await book({ deposit: { status: 'collected' } });
+      assert.equal(collected.status, 201);
+      assert.equal((await collected.json()).depositStatus, 'collected');
+
+      const waived = await (await book({ deposit: { status: 'waived', reason: '醫師同意' } })).json();
+      assert.equal(waived.depositStatus, 'waived');
+      assert.equal(waived.depositWaiveReason, '醫師同意');
+    } finally {
+      Pet.findById = originalFindById;
+      Appointment.create = originalCreate;
+      deposit.restore();
     }
   });
 
@@ -563,6 +609,35 @@ describe('appointments routes', () => {
       assert.equal(response.status, 200);
       assert.equal(appointment.status, 'cancelled');
       assert.equal(appointment.cancelReason, '飼主臨時改期');
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('取消已收保證金的掛號要先說保證金的去向；退還就改記 refunded，留著維持已收', async () => {
+    const originalFindById = Appointment.findById;
+    const make = () => ({ _id: 'apt-deposit', status: 'scheduled', checkinNumber: null, cancelReason: '', depositStatus: 'collected', save: async () => {} });
+    let appointment = make();
+    Appointment.findById = async () => appointment;
+    const cancel = (body) => fetch(`${origin}/api/appointments/apt-deposit/cancel`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    try {
+      const blocked = await cancel({});
+      assert.equal(blocked.status, 422);
+      assert.equal((await blocked.json()).depositOutcomeRequired, true);
+      assert.equal(appointment.status, 'scheduled');
+
+      assert.equal((await cancel({ depositOutcome: 'refunded' })).status, 200);
+      assert.equal(appointment.status, 'cancelled');
+      assert.equal(appointment.depositStatus, 'refunded');
+
+      appointment = make();
+      assert.equal((await cancel({ depositOutcome: 'kept' })).status, 200);
+      assert.equal(appointment.status, 'cancelled');
+      assert.equal(appointment.depositStatus, 'collected');
     } finally {
       Appointment.findById = originalFindById;
     }

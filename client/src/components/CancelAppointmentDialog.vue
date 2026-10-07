@@ -1,14 +1,16 @@
 <script setup>
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { CalendarX2 } from '@lucide/vue';
 import ModalDialog from './ModalDialog.vue';
+import OptionButtons from './OptionButtons.vue';
+import { DEPOSIT_AMOUNT } from '../../../shared/deposit.js';
 import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 
-defineProps({
+const props = defineProps({
   appointment: { type: Object, required: true },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
@@ -16,8 +18,22 @@ defineProps({
 const emit = defineEmits(['submit', 'close']);
 const cancelReason = ref('');
 
+// 這筆掛號收過保證金：取消時要說這筆錢的去向（shared/deposit.js）。
+// 先留著＝下次約診沿用、不再收；已退還＝次數不歸零，下次約診照樣要求收。
+const hasDeposit = computed(() => props.appointment.depositStatus === 'collected');
+const depositOutcome = ref('');
+const depositError = ref('');
+const DEPOSIT_OPTIONS = [
+  { value: 'kept', label: '先留著，下次沿用' },
+  { value: 'refunded', label: '已退還' },
+];
+
 function submit() {
-  emit('submit', cancelReason.value.trim());
+  if (hasDeposit.value && !depositOutcome.value) {
+    depositError.value = '請選擇保證金先留著或已退還';
+    return;
+  }
+  emit('submit', cancelReason.value.trim(), hasDeposit.value ? depositOutcome.value : '');
 }
 </script>
 
@@ -45,6 +61,13 @@ function submit() {
             placeholder="例：飼主改期、症狀改善、聯絡不上"
           />
           <p class="text-right text-xs text-muted-foreground">{{ cancelReason.length }}/300</p>
+        </div>
+
+        <div v-if="hasDeposit" class="space-y-2 rounded-lg bg-warning-surface px-3.5 py-3 text-warning">
+          <p class="font-semibold">這筆掛號已收保證金 <span class="num">{{ DEPOSIT_AMOUNT }}</span> 元，這筆錢要怎麼處理？</p>
+          <OptionButtons :model-value="depositOutcome" :options="DEPOSIT_OPTIONS" aria-label="保證金的去向" @update:model-value="(value) => { depositOutcome = value; depositError = ''; }" />
+          <p v-if="depositOutcome === 'refunded'" class="text-sm">退還後這隻貓下次約診會再被要求收保證金。</p>
+          <p v-if="depositError" class="text-xs font-medium text-destructive">{{ depositError }}</p>
         </div>
 
         <Alert v-if="errorMessage" variant="destructive">

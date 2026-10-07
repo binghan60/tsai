@@ -12,6 +12,8 @@ import { defaultRecordFields } from '../lib/formTemplate.js';
 import { visitOverlay } from '../lib/recordVisitLink.js';
 import { withTransaction } from '../lib/transaction.js';
 import { clinicToday, combineClinicDateTime } from '../lib/clinicTime.js';
+import { depositFieldsForBooking, settleCarriedDeposit } from '../lib/deposit.js';
+import { DEPOSIT_CANCEL_OUTCOMES, checkDepositEdit } from '../../../shared/deposit.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsCheckinNumber } from '../lib/appointmentStatus.js';
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
@@ -316,7 +318,11 @@ router.post('/', async (req, res, next) => {
     const { isSurgery, surgeryName } = normalizeSurgeryFields(req.body);
     const estimatedDurationMinutes = normalizeEstimatedDuration(req.body.estimatedDurationMinutes);
     validateAppointmentDuration(time, estimatedDurationMinutes);
+    // 這隻貓遲到／未到達到門檻時，要先決定保證金（已收或這次不收）才約得成；初診還沒有貓，不適用。
+    // 之前取消掛號時留在診所的保證金會直接沿用到這一筆（carriedFromId），不再收一次。
+    const deposit = await depositFieldsForBooking(petId || null, req.body.deposit);
     const appointment = await Appointment.create({
+      ...deposit.fields,
       date,
       time: time || '',
       estimatedDurationMinutes,
@@ -337,6 +343,7 @@ router.post('/', async (req, res, next) => {
       intakeVerificationCode: petId ? '' : newIntakeVerificationCode(),
       intakeVerificationExpiresAt: petId ? null : new Date(scheduledAt.getTime() + 24 * 60 * 60 * 1000),
     });
+    await settleCarriedDeposit(deposit.carriedFromId);
     emitAppointmentUpdate(appointment);
     res.status(201).json(appointment);
   } catch (err) {
@@ -595,6 +602,30 @@ router.post('/:id/lab-request', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// 事後更正這筆掛號的保證金紀錄（貓咪詳情頁「出席紀錄」）：收錯、漏記、後來才退。
+// 不看掛號的流程階段——這是更正紀錄，完成或取消的掛號照樣改得動；也不帶版本，保證金欄位跟看診內容無關。
+// 改成已收而原本不是，決定時間記現在（次數從這一刻歸零）；原本就是已收的不動時間。
+router.patch('/:id/deposit', async (req, res, next) => {
+  try {
+    const appointment = await Appointment.findById(req.params.id);
+    if (!appointment) return res.status(404).json({ message: '找不到掛號' });
+    if (!appointment.petId) return res.status(422).json({ message: '這筆掛號還沒有建檔的貓咪，沒有保證金紀錄可改' });
+    if (appointment.depositStatus === 'carried') return res.status(409).json({ message: '這筆保證金已經沿用到下一筆掛號，請改那一筆' });
+    const edit = checkDepositEdit(req.body);
+    if (edit.error) return res.status(422).json({ message: edit.error });
+    if (edit.status !== appointment.depositStatus) {
+      appointment.depositDecidedAt = edit.status ? (edit.status === 'collected' || !appointment.depositDecidedAt ? new Date() : appointment.depositDecidedAt) : null;
+    }
+    appointment.depositStatus = edit.status;
+    appointment.depositWaiveReason = edit.reason;
+    await appointment.save();
+    emitAppointmentUpdate(appointment);
+    res.json(appointment);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post('/:id/cancel', async (req, res, next) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
@@ -605,6 +636,15 @@ router.post('/:id/cancel', async (req, res, next) => {
     }
     // 待結帳也可能被取消（結帳前臨時反悔/離開），一樣要歸還號碼牌。
     const wasQueued = holdsCheckinNumber(appointment.status);
+    // 這筆掛號收過保證金：取消時要說這筆錢的去向。先留著＝維持已收，下次約診沿用；
+    // 已退還＝改記 refunded，次數不再從這筆歸零，下次約診照樣要求收（見 lib/deposit.js）。
+    if (appointment.depositStatus === 'collected') {
+      const outcome = req.body?.depositOutcome;
+      if (!DEPOSIT_CANCEL_OUTCOMES.includes(outcome)) {
+        return res.status(422).json({ message: '這筆掛號已收保證金，請選擇保證金先留著或已退還', depositOutcomeRequired: true });
+      }
+      if (outcome === 'refunded') appointment.depositStatus = 'refunded';
+    }
     appointment.status = 'cancelled';
     appointment.cancelReason = String(req.body?.cancelReason || '').trim();
     appointment.checkedInAt = null;

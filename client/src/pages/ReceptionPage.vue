@@ -22,6 +22,7 @@ import HandoffSheet from '../components/HandoffSheet.vue'
 import RowActions from '../components/RowActions.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
+import DepositBadge from '../components/DepositBadge.vue'
 import AppointmentDialog from '../components/AppointmentDialog.vue'
 import CheckInDrawer from '../components/CheckInDrawer.vue'
 import CheckInDialog from '../components/CheckInDialog.vue'
@@ -579,6 +580,7 @@ onBeforeUnmount(() => {
                             <Badge v-if="item.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
                             <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
                             <LatenessBadge :minutes="item.ui.lateMinutes" />
+                            <DepositBadge :status="item.depositStatus" />
                             <Badge v-if="item.labRequestedAt && canRequestLab(item)" variant="status" class="bg-info-surface text-info">已送 IDEXX</Badge>
                           </div>
                           <p class="min-h-lh truncate text-foreground" v-tip.overflow="item.reason">{{ item.reason }}</p>
@@ -727,7 +729,7 @@ onBeforeUnmount(() => {
 
     <HandoffSheet v-if="activePatient" :key="activePatient._id" :appointment="activePatient" :patient-notes="patientNotesFor(activePatient, patientNotes).filter((note) => note.key === 'owner')" @updated="onSheetUpdate" @close="selected = ''" />
     <CheckInDialog v-if="dialog === 'check-in-detail' && target" :appointment="target" :late="itemIsOverdue(target)" :suggested-checkin-number="suggestedCheckinNumber()" :submitting="busy" :error-message="dialogError" @submit="(values) => submit(values, 'check-in-detail')" @close="dialog = ''" />
-    <CancelAppointmentDialog v-if="dialog === 'cancel' && target" :appointment="target" :submitting="busy" :error-message="dialogError" @submit="(reason) => submit({ cancelReason: reason }, 'cancel')" @close="dialog = ''" />
+    <CancelAppointmentDialog v-if="dialog === 'cancel' && target" :appointment="target" :submitting="busy" :error-message="dialogError" @submit="(reason, depositOutcome) => submit({ cancelReason: reason, ...(depositOutcome ? { depositOutcome } : {}) }, 'cancel')" @close="dialog = ''" />
     <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :destructive="confirmation.kind === 'no-show'" :description="`病患：${target.petName}`" :loading="busy" @confirm="submit({}, confirmation.kind)" @cancel="confirmation = null" />
   </div>
 </template>

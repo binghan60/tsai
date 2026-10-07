@@ -5,7 +5,8 @@ import MedicalRecord from '../models/MedicalRecord.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import PinnedPet from '../models/PinnedPet.js';
 import Appointment from '../models/Appointment.js';
-import { attendanceCountPipeline, attendanceCounts, attendanceFilter, attendanceRow } from '../lib/attendance.js';
+import { attendanceCountPipeline, attendanceCounts, attendanceListFilter, attendanceRow } from '../lib/attendance.js';
+import { petDepositState } from '../lib/deposit.js';
 import Todo from '../models/Todo.js';
 import { publishPinnedPets } from '../lib/pinnedPets.js';
 import { publishTodos } from '../lib/todos.js';
@@ -194,23 +195,27 @@ petsRouter.get('/:id/attendance', async (req, res, next) => {
     const petScope = { petId: pet._id };
     const ownerScope = pet.ownerId ? { ownerId: pet.ownerId } : petScope;
     const scope = req.query.scope === 'owner' ? 'owner' : 'pet';
-    const filter = attendanceFilter(scope === 'owner' ? ownerScope : petScope);
+    // 清單除了遲到與未到，也列出約診時決定過保證金的掛號；counts 仍只算遲到與未到。
+    const filter = attendanceListFilter(scope === 'owner' ? ownerScope : petScope);
     const pagination = paginationOptions(req.query, { defaultLimit: 10, maxLimit: 50 });
-    const [appointments, total, petGroups, ownerGroups] = await Promise.all([
+    const [appointments, total, petGroups, ownerGroups, deposit] = await Promise.all([
       Appointment.find(filter)
         .sort({ date: -1, time: -1, _id: -1 })
         .skip(pagination.skip)
         .limit(pagination.limit)
-        .select('date time status checkedInAt latenessMinutes petId petName reason')
+        .select('date time status checkedInAt latenessMinutes petId petName reason depositStatus depositWaiveReason depositDecidedAt')
         .lean(),
       Appointment.countDocuments(filter),
       Appointment.aggregate(attendanceCountPipeline(petScope)),
       Appointment.aggregate(attendanceCountPipeline(ownerScope)),
+      petDepositState(pet._id),
     ]);
     res.json({
       ...paginatedPayload(appointments.map(attendanceRow), total, pagination),
       scope,
       counts: { pet: attendanceCounts(petGroups), owner: attendanceCounts(ownerGroups) },
+      // 這隻貓現在約診要不要先收保證金（上次收了之後重新算的次數，見 lib/deposit.js）。
+      deposit,
     });
   } catch (err) {
     next(err);
