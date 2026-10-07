@@ -87,7 +87,7 @@ provideRecordForm({
   <div
     class="rounded-xl border border-dashed border-border bg-field p-4 sm:p-5"
     :class="selectable
-      ? '[&_input]:pointer-events-none [&_textarea]:pointer-events-none [&_button:not([data-canvas-action])]:pointer-events-none'
+      ? '[&_input]:pointer-events-none [&_textarea]:pointer-events-none [&_[contenteditable]]:pointer-events-none [&_button:not([data-canvas-action])]:pointer-events-none'
       : 'pointer-events-none select-none'"
     :aria-hidden="selectable ? undefined : 'true'"
   >

@@ -2,12 +2,12 @@
 import { computed } from 'vue';
 import FieldShell from './FieldShell.vue';
 import { Input } from '../ui/input';
-import { Textarea } from '../ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { DatePicker } from '../ui/date-picker';
 import { Checkbox } from '../ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
+import RichTextField from './RichTextField.vue';
 
 // 文字／多行／日期／數字／下拉／單選／複選這幾種一般欄位共用同一個元件，
 // 差別只在控制項本身，標籤與必填標記由 FieldShell 統一處理。
@@ -59,16 +59,7 @@ function toggle(option, checked) {
 
 <template>
   <FieldShell :item="item" :input-id="inputId">
-    <div v-if="item.type === 'textarea'" class="relative">
-      <Textarea
-        :id="inputId"
-        v-model="value"
-        :rows="item.rows ?? 3"
-        :placeholder="item.placeholder"
-        class="pr-20"
-      />
-      <TextTemplateTrigger v-model="value" :item-key="item.key" :label="item.label" :input-id="inputId" compact />
-    </div>
+    <RichTextField v-if="item.type === 'textarea'" :id="inputId" v-model="value" :item-key="item.key" :label="item.label" :rows="item.rows ?? 3" :placeholder="item.placeholder" />
     <Select v-else-if="item.type === 'select'" v-model="selectValue">
       <SelectTrigger :id="inputId" class="w-full"><SelectValue placeholder="請選擇" /></SelectTrigger>
       <SelectContent>

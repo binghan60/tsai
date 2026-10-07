@@ -9,10 +9,12 @@ import { BOLD_CLASS, tintClass } from '../lib/richTextStyle';
 const props = defineProps({
   text: { type: String, default: '' },
   tag: { type: String, default: 'div' },
+  // report＝報告紙面的固定淺色配色。
+  palette: { type: String, default: 'app' },
 });
 
 const lines = computed(() => parseRichText(props.text));
-const segmentClass = (segment) => [segment.bold ? BOLD_CLASS : '', tintClass(segment.color)].filter(Boolean).join(' ') || undefined;
+const segmentClass = (segment) => [segment.bold ? BOLD_CLASS : '', tintClass(segment.color, props.palette)].filter(Boolean).join(' ') || undefined;
 </script>
 
 <template>

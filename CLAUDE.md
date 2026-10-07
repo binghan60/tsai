@@ -24,9 +24,10 @@
 ## 二、資料模型（MongoDB collections）
 
 ### 格式標記（粗體／四色）
-本次簡易紀錄 `appointments.visitNote`、藥單 `medicationOrders.condition`／`prescription`／`note`、待辦 `todos.content` 這五個欄位可以加粗與上色（紅／橙／綠／藍，對應 `danger`／`warning`／`success`／`info` token）。**欄位仍是一般字串**，內容是 `shared/richText.js` 定義的極簡標記：粗體 `**字**`、顏色 `[red]字[/red]`，換行就是 `\n`、標記不跨行，`\` 跳脫 `\ * [`（不用 `#`，那是寵物標記）。前後端共用同一份 `parseRichText`／`normalizeRichText`／`richTextToPlain`／`richTextLength`：
+本次簡易紀錄 `appointments.visitNote`、藥單 `medicationOrders.condition`／`prescription`／`note`、待辦 `todos.content` 這五個欄位，以及**健檢報告裡所有「多行文字」型別的項目**（`type: 'textarea'`：診斷、結論、照護建議、自訂的多行欄位）可以加粗與上色（紅／橙／綠／藍，對應 `danger`／`warning`／`success`／`info` token）。**欄位仍是一般字串**，內容是 `shared/richText.js` 定義的極簡標記：粗體 `**字**`、顏色 `[red]字[/red]`，換行就是 `\n`、標記不跨行，`\` 跳脫 `\ * [`（不用 `#`，那是寵物標記）。前後端共用同一份 `parseRichText`／`normalizeRichText`／`richTextToPlain`／`richTextLength`：
 - **存之前一律 `normalizeRichText`**（前端編輯器送出的字串跟伺服器整理後的一致，自動存檔才不會一存就被判成「跟本機不同」）；**字數上限與「不可空白」都看純文字**（schema 用 `lib/richTextSchema.js` 的 `richTextMaxLength`，不是 `maxlength`），只剩標記算空白。
 - **顯示一律走 `RichText.vue` 拆成片段、文字插值輸出，永遠不用 `v-html`**，所以不需要 sanitizer。編輯用 `RichTextEditor.vue`（Tiptap）。
+- **健檢報告的多行文字**：填寫用 `formfields/RichTextField.vue`（`RichTextEditor`＋工具列右邊的文字模板鈕，`ScalarField` 與 `FormProse` 共用；預填模板編輯頁也是同一個控制項），值存在報告欄位與 `sections` 快照裡、就是標記字串，後端不必另外處理（這些欄位沒有字數上限，也沒有被拿去當純文字用的地方）；報告頁與 PDF 由 `report/ReportField.vue` 用 `RichText palette="report"` 顯示——紙面固定淺色，顏色走 `report-danger`／`report-warning`／`report-success`／`report-info`，不跟後台主題。單行文字、理學檢查與檢驗的備註、圖片說明不支援格式，照原文印。
 - 會被拿去當純文字用的地方一律 `richTextToPlain`：病歷日誌的 `content`、聊天快照、`aria-label`、`#寵物` 標記比對、文字模板（「存成模板」只存純文字）。病歷日誌的 `sections[].text` 則保留標記，日誌卡片才畫得出格式。
 
 ### owners 飼主
@@ -171,7 +172,7 @@ append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩�
 | 資料庫 | MongoDB + Mongoose | |
 | 登入 | `jsonwebtoken` + Node 內建 `crypto.scrypt` | JWT 放在 HttpOnly cookie；密碼雜湊用內建 scrypt，不另外裝 bcrypt |
 | 即時通訊 | Socket.IO | 兩種用途：掛號狀態即時同步（醫生↔櫃台，房間以「天」為單位 `appointments:<date>`）、全站內部聊天（不分房間，`io.emit` 廣播給所有連線）；伺服器掛在 Express 的 httpServer 上（`server/src/lib/realtime.js`），沿用既有的 cookie session 驗證連線 |
-| 富文字 | Tiptap（`@tiptap/vue-3`，只裝 Document／Paragraph／Text／Bold／`@tiptap/extensions`） | 只給本次簡易紀錄、藥單、待辦上色與加粗；**不用 StarterKit**，另有自訂的 `tint` 顏色 mark。存的是 `shared/richText.js` 的標記字串，不是 HTML，見第二節「格式標記」 |
+| 富文字 | Tiptap（`@tiptap/vue-3`，只裝 Document／Paragraph／Text／Bold／`@tiptap/extensions`） | 只給本次簡易紀錄、藥單、待辦、健檢報告的多行文字上色與加粗；**不用 StarterKit**，另有自訂的 `tint` 顏色 mark。存的是 `shared/richText.js` 的標記字串，不是 HTML，見第二節「格式標記」 |
 | PDF | Puppeteer | 見下節 |
 | PDF 加密 | `@cantoo/pdf-lib` | 只用來替交出去的 PDF 加開啟密碼（飼主手機後 6 碼），見第二節 medicalRecords；純 JS，部署不必另外裝 qpdf |
 | Email | Nodemailer | SMTP（Gmail 應用程式密碼） |

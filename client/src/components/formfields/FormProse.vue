@@ -1,10 +1,9 @@
 <script setup>
 import { computed } from 'vue';
 import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
 import FieldControl from './FieldControl.vue';
 import SelectableItem from './SelectableItem.vue';
-import TextTemplateTrigger from './TextTemplateTrigger.vue';
+import RichTextField from './RichTextField.vue';
 import { useRecordForm } from './context';
 import { sectionRuns } from '../../lib/sectionRuns';
 import { spanClass } from '../../lib/fieldSpan';
@@ -29,23 +28,7 @@ const runs = computed(() => sectionRuns(items.value, (item) => item.type === 'te
               {{ item.label }}
               <span v-if="item.required" class="text-danger" aria-hidden="true">*</span>
             </Label>
-            <div class="relative">
-              <Textarea
-              :id="`record-${item.key}`"
-              :model-value="valueFor(item)"
-              :rows="item.rows ?? 4"
-              :placeholder="item.placeholder"
-              class="pr-20"
-              @update:model-value="setValue(item, $event)"
-            />
-            <TextTemplateTrigger
-              :item-key="item.key"
-              :label="item.label"
-              :model-value="valueFor(item)"
-              compact
-              @update:model-value="setValue(item, $event)"
-            />
-            </div>
+            <RichTextField :id="`record-${item.key}`" :model-value="valueFor(item)" :item-key="item.key" :label="item.label" :rows="item.rows ?? 4" :placeholder="item.placeholder" @update:model-value="setValue(item, $event)" />
           </div>
         </SelectableItem>
       </div>

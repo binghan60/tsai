@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { labValueLabel, measurementLabel, statusText, valueText } from './reportItem';
 import { familyOf } from '../../lib/fieldFamily';
 import DentalChart from '../formfields/DentalChart.vue';
+import RichText from '../RichText.vue';
 
 // 任何欄位型別都可能出現在任何版式的區塊裡。這是「不在原生版式裡」時的通用呈現：
 // 一個標籤加一段內容，塞得進報告的任何容器。
@@ -44,7 +45,10 @@ const abnormal = computed(() => props.item.status === 'abnormal');
   </div>
   <div v-else-if="item.type !== 'image'" class="break-inside-avoid">
     <h3 class="text-xs font-semibold text-report-muted">{{ item.label }}</h3>
+    <!-- 多行文字欄位可以加粗、上色（shared/richText.js 的標記），其餘型別照原文印。 -->
+    <RichText v-if="item.type === 'textarea'" tag="p" palette="report" class="mt-1 text-sm leading-relaxed text-report-text" :text="String(item.value ?? '')" />
     <p
+      v-else
       class="mt-1 whitespace-pre-wrap text-sm leading-relaxed"
       :class="abnormal ? 'text-report-danger' : 'text-report-text'"
     >{{ text }}</p>
