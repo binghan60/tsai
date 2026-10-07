@@ -62,9 +62,8 @@ const recordToRemove = ref(null);
 const deletingRecordId = ref(null);
 const removeError = ref('');
 
-// 關鍵字與日期是選好、按下搜尋才查（applyFilters）——邊選邊查在切換佇列分頁時很自然，
-// 但打關鍵字或翻開日期選單挑月份的過程都會經過好幾個「還沒決定好」的中間值，
-// 每次都送一次查詢沒有意義。
+// 關鍵字是即時搜尋（FilterBar 等停止打字才送出 applyFilters）；日期要在選單裡按「套用」——
+// 翻月份的過程會經過好幾個「還沒決定好」的中間值。查詢中舊清單留著，不換成骨架。
 const { items: records, total, limit, loading, error, page: currentPage, totalPages, goToPage, applyFilters, reload: fetchRecords } = usePagedList({
   errorMessage: '健檢報告暫時無法載入，請稍後重試',
   fetch: async ({ page }) => (await http.get('/records', {
@@ -199,7 +198,7 @@ async function removeRecord(confirmText) {
       <template #tabs>
         <FilterTabs :model-value="view || 'all'" :items="VIEWS" :counts="counts" aria-label="健檢報告佇列" @update:model-value="selectView" />
       </template>
-      <ListSkeleton v-if="loading" :rows="6" inset />
+      <ListSkeleton v-if="loading && !records.length" :rows="6" inset />
       <EmptyState v-else-if="!records.length" :icon="FileText" title="這個佇列目前是空的" description="換一個佇列，或直接建立新的健檢報告。" inset />
       <template v-else>
       <!-- 桌機：一列一份。寄送失敗的列左側一條警示色條。 -->
@@ -258,7 +257,7 @@ async function removeRecord(confirmText) {
       </ul>
 
       </template>
-      <template v-if="!loading && records.length" #footer>
+      <template v-if="records.length" #footer>
         <ListFooter :page="currentPage" :total-pages="totalPages" :total="total" :page-size="limit" @update:page="goToPage" />
       </template>
     </DataCard>

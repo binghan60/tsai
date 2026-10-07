@@ -87,7 +87,7 @@ const filteredFieldGroups = computed(() => {
 });
 const selectedGroupCount = computed(() => fieldGroups.value
   .filter((group) => group.keys.some((key) => form.applicableItemKeys.includes(key))).length);
-// 關鍵字選好、按下搜尋才查——全站搜尋一律走提交式，不做即時（狀態是切換按鈕組，本來就該即時）。
+// 關鍵字是即時搜尋：FilterBar 等停止打字才送出。
 function applyFilters() {
   query.value = queryInput.value;
   page.value = 1;

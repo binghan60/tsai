@@ -93,7 +93,7 @@ const { value: isSurgery } = useField('isSurgery');
 const { value: surgeryName, errorMessage: surgeryNameError } = useField('surgeryName', requiredForSurgery);
 
 // ── 貓咪／飼主搜尋：直接放在 Modal 裡，不再疊一層選擇對話框 ─────────────────
-// 這是「選人用的候選清單」，跟頁面的提交式搜尋不同，邊打邊查。
+// 這是「選人用的候選清單」，邊打邊查。
 // 清單限高、超過就在框內捲動（同名的貓、同一位飼主養很多隻時，只列前幾筆會找不到要的那一隻）；
 // 一次最多拿 CANDIDATE_LIMIT 筆，再多就提示還有幾筆沒列出。
 const CANDIDATE_LIMIT = 50;

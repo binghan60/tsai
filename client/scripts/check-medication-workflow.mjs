@@ -205,7 +205,7 @@ try {
   await stage(desk, '已領藥');
   await desk.waitForFunction(() => document.querySelectorAll('[data-medication-row]').length === 2);
   await fill(desk, '[aria-label="搜尋藥單"]', '0912345678');
-  await desk.click('[aria-label="搜尋搜尋藥單"]');
+  await desk.keyboard.press('Enter');
   await desk.waitForFunction(() => document.querySelectorAll('[data-medication-row]').length === 2);
   await desk.goto(`${origin}/reception`);
   await openMedicationPanel(desk);

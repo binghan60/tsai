@@ -24,8 +24,7 @@ import { formatDate, relativeDayLabel } from '../lib/datetime';
 import { catBreedLabel } from '../../../shared/catBreeds.js';
 
 const query = useSearchQueryParam('q');
-// 關鍵字選好、按下搜尋才查（applyFilters）——邊打邊查在每個系統打字習慣不一樣的情況下容易誤觸，
-// 全站搜尋一律走提交式，不做即時。
+// 關鍵字是即時搜尋：FilterBar 等停止打字才送出（applyFilters）。查詢中舊清單留著，不換成骨架，才不會每停一次就閃一下。
 const { items: pets, total, limit, loading, error, page: currentPage, totalPages, goToPage, applyFilters } = usePagedList({
   errorMessage: '貓咪資料暫時無法載入，請稍後重試',
   fetch: async ({ page }) => (await http.get('/pets', {
@@ -69,7 +68,7 @@ async function rowAction(key, pet) {
       <template #filters>
         <FilterBar id="pet-list-search" v-model="query" label="搜尋貓咪" placeholder="名字、飼主、電話" class="w-full min-w-0 md:w-[26rem]" @submit="applyFilters" />
       </template>
-      <ListSkeleton v-if="loading" :rows="6" avatar inset />
+      <ListSkeleton v-if="loading && !pets.length" :rows="6" avatar inset />
       <EmptyState v-else-if="pets.length === 0" :icon="Cat" :title="query ? '找不到符合條件的貓咪' : '還沒有貓咪資料'" :description="query ? '換個關鍵字試試，或按「新增貓咪」建檔。' : '按右上角「新增貓咪」建立第一筆。'" inset />
       <template v-else>
         <!-- 桌機：一列一隻，欄位對齊。 -->
@@ -120,7 +119,7 @@ async function rowAction(key, pet) {
         </ul>
 
       </template>
-      <template v-if="!loading && pets.length" #footer>
+      <template v-if="pets.length" #footer>
         <ListFooter :page="currentPage" :total-pages="totalPages" :total="total" :page-size="limit" @update:page="goToPage" />
       </template>
     </DataCard>

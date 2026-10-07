@@ -1,6 +1,6 @@
 <script setup>
-import { computed, ref } from 'vue';
-import { ArrowRight, CalendarClock, Search, X } from '@lucide/vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { CalendarClock, Search, X } from '@lucide/vue';
 import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { DatePicker } from './ui/date-picker';
@@ -11,9 +11,8 @@ import { formatDate } from '@/lib/datetime';
 // 搜尋／清除四個並排元件）。日期範圍平常收在「篩選日期」這顆次要按鈕裡，點了才展開，
 // 沒在用日期篩選的頁面（飼主、貓咪）不會平白多一塊空的表單。
 //
-// 全站搜尋一律走提交式（見這裡沒有 debounce watch）：按 Enter、按送出鈕、或彈出層裡按
-// 套用才會真的查詢——這是先前特地從即時搜尋改回來的決定，理由是邊打邊查在每個系統
-// 打字習慣不一樣的情況下容易誤觸，這個元件延續同一個判準。
+// 關鍵字是即時搜尋，跟 Ctrl+K 的全站搜尋同一個做法：停止打字 SEARCH_DELAY_MS 才查，
+// 按 Enter 立刻查；沒有送出鈕。日期範圍仍要在彈出層按「套用」。
 const props = defineProps({
   id: { type: String, required: true },
   label: { type: String, required: true },
@@ -30,7 +29,23 @@ const emit = defineEmits(['update:modelValue', 'update:dateFrom', 'update:dateTo
 
 const dateOpen = ref(false);
 
-const hasActiveFilter = computed(() => Boolean(props.modelValue || props.dateFrom || props.dateTo));
+// 打到一半的字只留在這裡，停手之後才交給頁面。頁面的關鍵字多半同步在網址上（useSearchQueryParam），
+// 逐字往外送等於每按一個鍵（注音選字途中也算）就換一次網址、整頁重繪，打字會卡。
+const SEARCH_DELAY_MS = 250;
+const draft = ref(props.modelValue);
+let searchTimer;
+watch(() => props.modelValue, (value) => {
+  if (value.trim() !== draft.value.trim()) draft.value = value;
+});
+watch(draft, (value) => {
+  clearTimeout(searchTimer);
+  // 只多打了空白，或是頁面那邊帶回來的值：關鍵字沒變就不重查。
+  if (value.trim() === props.modelValue.trim()) return;
+  searchTimer = setTimeout(submit, SEARCH_DELAY_MS);
+});
+onBeforeUnmount(() => clearTimeout(searchTimer));
+
+const hasActiveFilter = computed(() => Boolean(draft.value || props.modelValue || props.dateFrom || props.dateTo));
 const hasDateRange = computed(() => Boolean(props.dateFrom || props.dateTo));
 
 const dateRangeLabel = computed(() => {
@@ -41,7 +56,15 @@ const dateRangeLabel = computed(() => {
   return from || to;
 });
 
+function submit() {
+  clearTimeout(searchTimer);
+  emit('update:modelValue', draft.value);
+  emit('submit');
+}
+
 function clearAll() {
+  clearTimeout(searchTimer);
+  draft.value = '';
   emit('update:modelValue', '');
   emit('update:dateFrom', '');
   emit('update:dateTo', '');
@@ -55,7 +78,7 @@ function clearDates() {
 
 function applyDates() {
   dateOpen.value = false;
-  emit('submit');
+  submit();
 }
 </script>
 
@@ -63,9 +86,9 @@ function applyDates() {
   <form
     class="flex h-10 items-center gap-1 rounded-full bg-field py-1 pr-1 shadow-[inset_0_0_0_1px_var(--border-strong)] focus-within:shadow-[inset_0_0_0_1px_var(--primary),0_0_0_3px_var(--focus-ring)]"
     role="search"
-    @submit.prevent="emit('submit')"
+    @submit.prevent="submit"
   >
-    <label class="flex min-w-0 flex-1 self-stretch items-center gap-2 pl-3.5">
+    <label class="flex min-w-0 flex-1 self-stretch items-center gap-2 pr-2 pl-3.5">
       <span class="sr-only">{{ label }}</span>
       <Search class="size-[1.125rem] shrink-0 text-subtle-foreground" stroke-width="1.75" aria-hidden="true" />
       <Input
@@ -73,10 +96,9 @@ function applyDates() {
         type="text"
         autocomplete="off"
         :placeholder="placeholder"
-        :value="modelValue"
+        v-model="draft"
         :aria-label="label"
         class="h-full min-w-0 flex-1 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-        @input="emit('update:modelValue', $event.target.value)"
       />
     </label>
 
@@ -111,9 +133,5 @@ function applyDates() {
         </PopoverContent>
       </Popover>
     </template>
-
-    <Button type="submit" size="icon-xs" :aria-label="`搜尋${label}`" class="shrink-0 rounded-full">
-      <ArrowRight stroke-width="2" />
-    </Button>
   </form>
 </template>

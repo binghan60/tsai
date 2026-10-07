@@ -47,8 +47,8 @@ if (!route.query.event) {
 
 const expandedDetails = ref(new Set());
 
-// 關鍵字與日期是選好、按下搜尋才查（applyFilters）——打關鍵字或翻開日期選單挑月份的過程
-// 都會經過好幾個「還沒決定好」的中間值，每次都送一次查詢沒有意義。
+// 關鍵字是即時搜尋（FilterBar 等停止打字才送出 applyFilters）；日期要在選單裡按「套用」——
+// 翻月份的過程會經過好幾個「還沒決定好」的中間值。查詢中舊清單留著，不換成骨架。
 const { items: logs, total, limit, loading, error, page: currentPage, totalPages, goToPage, applyFilters } = usePagedList({
   errorMessage: '寄送歷程暫時無法載入，請稍後重試',
   fetch: async ({ page }) => (await http.get('/delivery-logs', {
@@ -120,7 +120,7 @@ watch(event, (nextEvent) => {
       <template #tabs>
         <FilterTabs :model-value="event" :items="EVENTS" aria-label="寄送事件篩選" @update:model-value="selectEvent" />
       </template>
-      <ListSkeleton v-if="loading" :rows="5" :avatar="false" inset />
+      <ListSkeleton v-if="loading && !logs.length" :rows="5" :avatar="false" inset />
       <EmptyState v-else-if="!logs.length" :icon="Mail" title="目前沒有寄送歷程" inset />
       <template v-else>
       <!-- 桌機：一列一次寄送嘗試。失敗的列左側一條警示色條。 -->
@@ -170,7 +170,7 @@ watch(event, (nextEvent) => {
       </ul>
 
       </template>
-      <template v-if="!loading && logs.length" #footer>
+      <template v-if="logs.length" #footer>
         <ListFooter :page="currentPage" :total-pages="totalPages" :total="total" :page-size="limit" @update:page="goToPage" />
       </template>
     </DataCard>
