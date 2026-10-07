@@ -37,6 +37,15 @@ export function normalizeIdexxCodes(value) {
   return codes.slice(0, IDEXX_CODES_PER_ITEM);
 }
 
+// IDEXX 結果實際要顯示的數值：醫師在病歷日誌改過的（labResults.overrides）換成改後的值，
+// 另帶 edited 與 originalValue（IDEXX 原始值）。原始的 assays 不動——那是儀器原文，IDEXX 送更正版時也只更新它。
+export function effectiveAssays(result) {
+  const overrides = new Map((result?.overrides ?? []).map((entry) => [entry.code, entry.value]));
+  return (result?.assays ?? []).map((assay) => (overrides.has(assay.code)
+    ? { ...assay, value: overrides.get(assay.code), originalValue: assay.value, edited: true }
+    : assay));
+}
+
 // 偏高 ↑／偏低 ↓；不是數字、沒有參考範圍、在範圍內都回空字串。
 export function labFlag(lab) {
   const text = String(lab?.value ?? '').trim();

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { app } from '../app.js';
 import ClinicalNote from '../models/ClinicalNote.js';
+import LabResult from '../models/LabResult.js';
 import Appointment from '../models/Appointment.js';
 import MedicationOrder from '../models/MedicationOrder.js';
 import mongoose from 'mongoose';
@@ -25,6 +26,7 @@ describe('clinical notes routes', () => {
     mock.restoreAll();
     mock.method(ClinicalNote, 'findById', id => ({ session: async () => id.includes('med') ? { appointmentId: null, medicationOrderId: 'order-1' } : id.includes('linked') ? { appointmentId: 'apt-linked' } : { appointmentId: null } }));
     mock.method(Appointment, 'find', () => ({ lean: async () => [] }));
+    mock.method(LabResult, 'find', () => ({ select: () => ({ sort: () => ({ session: () => ({ lean: async () => [] }) }) }) }));
   });
 
   after(async () => {

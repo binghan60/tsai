@@ -1,6 +1,6 @@
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
-import { labFlag } from '../../../shared/labValues.js';
+import { effectiveAssays, labFlag } from '../../../shared/labValues.js';
 
 export const WORKFLOW_ACTIONS = ['clinical', 'start', 'handoff', 'reclaim', 'complete', 'record', 'followup', 'request-reopen', 'approve-reopen'];
 
@@ -22,6 +22,38 @@ export function labSummary(labValues) {
     .filter((lab) => String(lab.value ?? '').trim())
     .map((lab) => [lab.label, lab.value, lab.unit, labFlag(lab)].filter(Boolean).join(' '))
     .join('　');
+}
+
+const LAB_TIME = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+// 診所時區的「10/7 14:32」。自己組字串，不用 Intl 排好的那一串（各版本夾的空白字元不一樣）。
+function labTimeLabel(value) {
+  const parts = Object.fromEntries(LAB_TIME.formatToParts(new Date(value)).map((part) => [part.type, part.value]));
+  return `${Number(parts.month)}/${Number(parts.day)} ${parts.hour}:${parts.minute}`;
+}
+
+// 病歷日誌裡的 IDEXX 原始結果：連到這次看診的每一份（當天自動歸過來的、診療台「匯入檢驗結果」指定的）各一行，
+// 「Catalyst One（10/7 14:32）：CREA 1.8 mg/dL ↑　BUN 25 mg/dL」。儀器給的每一項都列，不管表單有沒有對應欄位——
+// 看診沒選表單、表單沒設代號時數值填不進 labValues，日誌上只能靠這一段看到檢驗結果。
+export function idexxJournalText(labResults) {
+  return (labResults ?? [])
+    .map((result) => {
+      const assays = effectiveAssays(result)
+        .filter((assay) => String(assay.value ?? '').trim())
+        .map((assay) => [assay.code, assay.value, assay.unit, labFlag(assay)].filter(Boolean).join(' '))
+        .join('　');
+      if (!assays) return '';
+      const when = result.runAt ? `（${labTimeLabel(result.runAt)}）` : '';
+      return `${result.instrument || 'IDEXX'}${when}：${assays}`;
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+// 「檢驗」那一行只留不是 IDEXX 帶進來的數值（手動輸入、或醫師改過的）：IDEXX 填進來而且沒被改過的，
+// 已經在「IDEXX 檢驗」那一段，不重複列。
+function labValuesOutsideIdexx(labValues, labResults) {
+  const filled = new Set((labResults ?? []).flatMap((result) => (result.filled ?? []).map((entry) => `${entry.key}\u0000${entry.value}`)));
+  return (labValues ?? []).filter((lab) => !filled.has(`${lab.key}\u0000${lab.value}`));
 }
 
 // 送來的檢驗數值（健檢報告填寫頁經 visitEdits 寫回）是 { key: value }；只收掛號範本裡真的有的檢驗項目，
@@ -58,14 +90,25 @@ const cleanText = (field, value) => {
 // internalNote 刻意不放進來——那是僅院內人員可見的備註，不該進入病歷日誌。
 // 回傳分欄的段落（空的不回），前端依 key 分段呈現；純文字版 appointmentJournalContent 由它串成。
 // visitNote 那一段保留格式標記，日誌卡片才畫得出粗體與顏色。
-export function appointmentJournalSections(appointment) {
+// 病歷日誌是由欄位拼成的報告，不是一段文字：檢驗兩段除了 text（純文字版，給 content 用）另帶結構，
+// 前端才能排成表格——labValues 帶 items（一項一格），idexx 帶 results（一台儀器一段、一項一列，跟診療台的檢驗報告同一張表）。
+// labResults：連到這次看診的 IDEXX 結果（lib/appointmentJournal.js 的 linkedLabResults），沒有就不帶。
+export function appointmentJournalSections(appointment, labResults = []) {
   const text = value => String(value ?? '').trim();
   const measured = value => value !== null && value !== undefined;
+  const reportLabs = labValuesOutsideIdexx(appointment.labValues, labResults).filter((lab) => String(lab.value ?? '').trim());
   return [
     { key: 'reason', label: '來院原因', text: text(appointment.reason) },
     { key: 'weightKg', label: '體重', text: measured(appointment.weightKg) ? `${appointment.weightKg} kg` : '' },
     { key: 'temperatureC', label: '體溫', text: measured(appointment.temperatureC) ? `${appointment.temperatureC} °C` : '' },
-    { key: 'labValues', label: '檢驗', text: labSummary(appointment.labValues) },
+    {
+      key: 'labValues', label: '檢驗', text: labSummary(reportLabs),
+      items: reportLabs.map((lab) => ({ key: lab.key, label: lab.label, value: String(lab.value), unit: lab.unit || '', flag: labFlag(lab) })),
+    },
+    {
+      key: 'idexx', label: 'IDEXX 檢驗', text: idexxJournalText(labResults),
+      results: (labResults ?? []).map((result) => ({ _id: result._id, instrument: result.instrument, runAt: result.runAt, assays: result.assays ?? [], overrides: result.overrides ?? [], notes: result.notes ?? [] })),
+    },
     { key: 'visitNote', label: '本次簡易紀錄', text: text(appointment.visitNote) },
     { key: 'specialCareNote', label: '請轉告飼主', text: text(appointment.specialCareNote) },
     { key: 'followUpRecommendation', label: '回診建議', text: text(appointment.followUpRecommendation) },
@@ -74,13 +117,14 @@ export function appointmentJournalSections(appointment) {
 
 // 純文字版：量測併成一行，本次簡易紀錄不帶標籤，其餘段落帶「標籤：」前綴。
 // 格式標記在這裡拿掉——content 給差異比對、長度判斷與聊天快照用，不該看到 ** 或 [red]。
-export function appointmentJournalContent(appointment) {
-  const byKey = new Map(appointmentJournalSections(appointment).map(section => [section.key, section]));
+export function appointmentJournalContent(appointment, labResults = []) {
+  const byKey = new Map(appointmentJournalSections(appointment, labResults).map(section => [section.key, section]));
   const labelled = key => (byKey.has(key) ? `${byKey.get(key).label}：${byKey.get(key).text}` : '');
   return [
     labelled('reason'),
     [labelled('weightKg'), labelled('temperatureC')].filter(Boolean).join('　'),
     labelled('labValues'),
+    labelled('idexx'),
     richTextToPlain(byKey.get('visitNote')?.text || ''),
     labelled('specialCareNote'),
     labelled('followUpRecommendation'),
@@ -98,7 +142,8 @@ export function appointmentJournalFields(appointment) {
 // 從病歷日誌直接改這次就診的內容。跟 workflow 的 clinical 不同，這裡**不看流程階段**：
 // 病歷日誌是事後回頭更正紀錄的地方，櫃台完成處理之後照樣要改得動（看診工作區那邊仍然鎖著）。
 // 只收日誌看得到的欄位，internalNote 不在這裡改；檢驗數值要對著範本的項目，只在健檢報告填寫頁改。
-export function applyJournalFields(appointment, body) {
+// labResults：連到這次看診的 IDEXX 結果——日誌上還有檢驗時，六個欄位全空也不算清空（日誌仍有內容）。
+export function applyJournalFields(appointment, body, { labResults = [] } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw workflowError('日誌欄位格式不正確');
   for (const [key, max] of Object.entries(JOURNAL_TEXT_LIMITS)) {
     if (body[key] === undefined) continue;
@@ -113,7 +158,7 @@ export function applyJournalFields(appointment, body) {
     if (value !== null && (!Number.isFinite(value) || value < 0)) throw workflowError('量測值必須是有效的非負數');
     appointment[key] = value;
   }
-  if (!appointmentJournalSections(appointment).length) throw workflowError('日誌內容不能全部清空');
+  if (!appointmentJournalSections(appointment, labResults).length) throw workflowError('日誌內容不能全部清空');
 }
 
 export function assertWorkflowVersion(appointment, version) {

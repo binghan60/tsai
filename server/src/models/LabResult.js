@@ -46,6 +46,8 @@ const labResultSchema = new mongoose.Schema(
     },
     doctor: personSchema,
     assays: { type: [assaySchema], default: [] },
+    // 醫師在病歷日誌改過的數值（代號 → 改後的值）。assays 是儀器原文、不動；顯示與日誌用 shared/labValues.js 的 effectiveAssays 疊上去。
+    overrides: { type: [new mongoose.Schema({ code: { type: String, required: true }, value: { type: String, required: true } }, { _id: false })], default: [] },
     notes: { type: [String], default: [] },
     // 原始檔留著：解析規則之後修正了，可以從原檔重新解析，不必回診所找檔案。
     rawXml: { type: String, required: true, select: false },
@@ -88,5 +90,7 @@ labResultSchema.index({ diagnosticSetId: 1, instrument: 1 }, { unique: true });
 labResultSchema.index({ petId: 1, runAt: -1, _id: -1 });
 // 還沒處理的數值差異（「檢驗」面板、健檢報告打開時查）；只收有開著的那幾筆。
 labResultSchema.index({ appointmentId: 1 }, { partialFilterExpression: { conflictsOpen: true } });
+// 病歷日誌讀「連到這次看診的結果」（lib/appointmentJournal.js 的 linkedLabResults）；沒連到看診的不收。
+labResultSchema.index({ appointmentId: 1, runAt: 1, _id: 1 }, { partialFilterExpression: { appointmentId: { $type: 'objectId' } } });
 
 export default mongoose.model('LabResult', labResultSchema);

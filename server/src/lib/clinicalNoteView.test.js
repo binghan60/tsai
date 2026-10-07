@@ -2,7 +2,38 @@ import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import Appointment from '../models/Appointment.js';
 import ClinicalNote from '../models/ClinicalNote.js';
+import LabResult from '../models/LabResult.js';
 import { clinicalNoteViews } from './clinicalNoteView.js';
+
+// 連到看診的 IDEXX 結果；預設沒有，要測的那一支自己放。
+let linkedLabs = [];
+mock.method(LabResult, 'find', () => ({ select: () => ({ sort: () => ({ session: () => ({ lean: async () => linkedLabs }) }) }) }));
+
+test('連到看診的 IDEXX 結果列在日誌的「IDEXX 檢驗」，已經在那一段的數值不在「檢驗」重複', async () => {
+  const appointment = {
+    _id: 'apt', reason: '回診',
+    labValues: [{ key: 'crea', label: '肌酸酐', value: '2.9', unit: 'mg/dL', referenceMin: 0.8, referenceMax: 2.4 }, { key: 'wbc', label: '白血球', value: '9', unit: '' }],
+  };
+  linkedLabs = [{
+    appointmentId: 'apt', instrument: 'Catalyst One', runAt: new Date('2026-10-07T06:32:00Z'),
+    assays: [{ code: 'CREA', value: '2.9', unit: 'mg/dL', referenceMin: 0.8, referenceMax: 2.4 }, { code: 'BUN', value: '25', unit: 'mg/dL' }, { code: 'ALT', value: '' }],
+    filled: [{ key: 'crea', label: '肌酸酐', value: '2.9' }],
+    // 醫師在日誌上改過的數值：日誌用改後的值，原始的 assays 不動。
+    overrides: [{ code: 'BUN', value: '31' }],
+  }];
+  const find = mock.method(Appointment, 'find', () => ({ lean: async () => [appointment] }));
+  try {
+    const [view] = await clinicalNoteViews([{ appointmentId: 'apt' }]);
+    const byKey = Object.fromEntries(view.sections.map((section) => [section.key, section.text]));
+    assert.equal(byKey.idexx, 'Catalyst One（10/7 14:32）：CREA 2.9 mg/dL ↑　BUN 31 mg/dL');
+    assert.equal(view.sections.find((section) => section.key === 'idexx').results[0].assays[1].value, '25');
+    assert.equal(byKey.labValues, '白血球 9');
+    assert.match(view.content, /IDEXX 檢驗：Catalyst One/);
+  } finally {
+    find.mock.restore();
+    linkedLabs = [];
+  }
+});
 
 test('linked journals read current appointment fields instead of legacy copied content', async () => {
   const appointment = { _id: 'apt', reason: '回診', visitNote: '最新紀錄' };

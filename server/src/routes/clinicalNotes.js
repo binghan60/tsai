@@ -7,6 +7,7 @@ import { applyJournalFields } from '../lib/appointmentWorkflow.js';
 import { applyMedicationJournalEdit } from '../lib/medicationWorkflow.js';
 import { syncMedicationJournal } from '../lib/medicationJournal.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
+import { linkedLabResults } from '../lib/appointmentJournal.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { withTransaction } from '../lib/transaction.js';
 import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitMedicationUpdate } from '../lib/realtime.js';
@@ -79,7 +80,10 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
       if (existing?.appointmentId) {
         appointment = await Appointment.findById(existing.appointmentId).session(session);
         if (!appointment) throw Object.assign(new Error('找不到對應的就診資料'), { status: 404 });
-        if (req.body.fields !== undefined) applyJournalFields(appointment, req.body.fields);
+        if (req.body.fields !== undefined) {
+          const labResults = (await linkedLabResults([appointment._id], { session })).get(String(appointment._id)) ?? [];
+          applyJournalFields(appointment, req.body.fields, { labResults });
+        }
         else if (fields.content !== undefined) appointment.visitNote = normalizeRichText(String(fields.content ?? '')).trim();
         appointment.increment();
         await appointment.save({ session });

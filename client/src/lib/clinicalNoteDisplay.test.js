@@ -69,6 +69,9 @@ test('appointment edits send every journal field, numbers as numbers and blanks 
   assert.equal(journalEditError(appointmentNote, { ...form, weightKg: '-1' }), '體重必須是有效的非負數')
   const empty = Object.fromEntries(journalEditFields(appointmentNote).map((field) => [field.key, '']))
   assert.equal(journalEditError(appointmentNote, empty), '日誌內容不能全部清空')
+  // 日誌上還有檢驗（改不到的段落）時，這幾欄全空也能存。
+  const withLabs = { ...appointmentNote, sections: [{ key: 'idexx', label: 'IDEXX 檢驗', text: 'CREA 1.8' }] }
+  assert.equal(journalEditError(withLabs, empty), '')
 })
 
 test('medication edits require a prescription, keep the date fixed and warn about re-review', () => {

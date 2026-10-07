@@ -6,7 +6,7 @@ import { hasIdexxBridgeAccess, idexxBridgeConfigured, idexxCensusSettings } from
 import { IdexxParseError, decodeIdexxXml, parseIdexxResult } from '../lib/idexxResult.js';
 import { labResultContent, planLabResultImport } from '../lib/labResultImport.js';
 import {
-  applyLabResult, dismissLabResult, matchByPatientId, matchManually, openConflicts, resolveConflicts, unmatchLabResult,
+  applyLabResult, dismissLabResult, editLabResultValues, matchByPatientId, matchManually, openConflicts, resolveConflicts, unmatchLabResult,
 } from '../lib/labResultApply.js';
 import { rankCandidates } from '../lib/labResultFill.js';
 import { markIdexxRequestDelivered, pendingIdexxRequests } from '../lib/idexxRequests.js';
@@ -305,6 +305,18 @@ labResultsRouter.post('/:id/match', async (req, res, next) => {
     const fill = await matchManually(req.params.id, petId, { appointmentId });
     emitLabResultsUpdate();
     res.json({ fill });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 病歷日誌上修改數值，body { values: { 代號: 新值 } }；空白或改回原始值＝還原。IDEXX 原始值保留。
+labResultsRouter.put('/:id/values', async (req, res, next) => {
+  try {
+    if (!validId(req, res)) return;
+    const edited = await editLabResultValues(req.params.id, req.body?.values);
+    if (edited.changed) emitLabResultsUpdate();
+    res.json(edited);
   } catch (err) {
     next(err);
   }

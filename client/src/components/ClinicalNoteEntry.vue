@@ -24,6 +24,7 @@ import { DatePicker } from './ui/date-picker'
 import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
 import RichText from './RichText.vue'
+import LabResultGroups from './LabResultGroups.vue'
 import RichTextEditor from './RichTextEditor.vue'
 
 // 一則病歷日誌，排成一張小報告：標頭（日期、類型、進度）＋「標籤｜內容」列。
@@ -50,6 +51,9 @@ const form = reactive({})
 const entryDate = ref('')
 
 const fields = computed(() => journalEditFields(props.note))
+// 連到這次看診的 IDEXX 結果：修改模式下可以改個別數值、或把整份移除（回到待確認清單）。
+const labResults = computed(() => rows.value?.find((row) => row.results)?.results ?? [])
+const labEditor = ref(null)
 const validation = computed(() => (editing.value ? journalEditError(props.note, form) : ''))
 const notice = computed(() => journalEditNotice(props.note))
 
@@ -73,7 +77,17 @@ async function save() {
   try {
     const body = { ...journalEditPayload(props.note, form) }
     if (journalDateEditable(props.note) && entryDate.value) body.entryDate = entryDate.value
-    const { data } = await http.put(`/clinical-notes/${props.note._id}`, body)
+    // 檢驗先送：最後那支日誌的 PUT 回來的內容才包含改過的檢驗。
+    const lab = labEditor.value?.changes() ?? { removed: [], edits: [] }
+    for (const { id, values } of lab.edits) await http.put(`/lab-results/${id}/values`, { values })
+    for (const id of lab.removed) await http.post(`/lab-results/${id}/unmatch`)
+    let data = null
+    try {
+      ({ data } = await http.put(`/clinical-notes/${props.note._id}`, body))
+    } catch (err) {
+      // 這則日誌只有檢驗、檢驗又全部移除了：日誌跟著消失，不算失敗。
+      if (!(lab.removed.length && err?.response?.status === 404)) throw err
+    }
     editing.value = false
     toast.success('已更新病歷日誌')
     emit('saved', { note: props.note, updated: data, content: data?.content ?? '' })
@@ -152,6 +166,10 @@ const kindBadgeClass = computed(() =>
         </div>
         <Input v-else :id="`journal-${field.key}-${note._id}`" v-model="form[field.key]" :maxlength="field.maxlength" :disabled="saving" class="bg-card" />
       </div>
+      <div v-if="labResults.length" :class="ROW">
+        <span :class="[LABEL, 'text-muted-foreground']">IDEXX 檢驗</span>
+        <LabResultGroups ref="labEditor" :results="labResults" :base-date="clinicDateInput(note.entryDate)" editable :disabled="saving" />
+      </div>
       <div class="space-y-3 px-4 py-3">
         <p v-if="notice" class="text-xs text-muted-foreground">{{ notice }}</p>
         <Alert v-if="serverError || validation" variant="destructive">
@@ -171,6 +189,15 @@ const kindBadgeClass = computed(() =>
           <span v-for="item in row.items" :key="item.key">
             <span class="mr-1.5 text-xs text-muted-foreground">{{ item.label }}</span>
             <span class="font-medium tabular-nums">{{ item.text }}</span>
+          </span>
+        </dd>
+        <!-- 檢驗不是一段文字：IDEXX 原始結果排成表格（跟診療台的檢驗報告同一張），報告上的數值一項一格。 -->
+        <dd v-else-if="row.results"><LabResultGroups :results="row.results" :base-date="clinicDateInput(note.entryDate)" dense /></dd>
+        <dd v-else-if="row.labs" class="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+          <span v-for="lab in row.labs" :key="lab.key">
+            <span class="mr-1.5 text-xs text-muted-foreground">{{ lab.label }}</span>
+            <span class="num font-medium" :class="lab.flag ? 'text-danger' : ''">{{ lab.value }}<span v-if="lab.flag" class="ml-0.5" :aria-label="lab.flag === '↑' ? '偏高' : '偏低'">{{ lab.flag }}</span></span>
+            <span v-if="lab.unit" class="num ml-1 text-xs text-subtle-foreground">{{ lab.unit }}</span>
           </span>
         </dd>
         <RichText

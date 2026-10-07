@@ -25,6 +25,7 @@ const EMPHASIS_KEYS = new Set(['reason', 'prescription'])
 export const RICH_TEXT_KEYS = new Set(['visitNote', 'condition', 'prescription', 'note'])
 
 // 報告的每一列：{ key, label, text, tone, emphasis, rich }；量測併成一列「生命徵象」，用 items 各自呈現。
+// 檢驗兩列帶結構、不是一段文字：labs＝報告上的檢驗數值（一項一格），results＝IDEXX 原始結果（排成表格）。
 // 沒有 sections（自由文字日誌、找不到來源）回 null，照舊整段顯示 content。
 export function journalRows(note) {
   if (!Array.isArray(note?.sections)) return null
@@ -43,6 +44,8 @@ export function journalRows(note) {
       tone: WARNING_KEYS.has(section.key) ? 'warning' : 'default',
       emphasis: EMPHASIS_KEYS.has(section.key),
       rich: RICH_TEXT_KEYS.has(section.key),
+      ...(Array.isArray(section.items) && section.items.length ? { labs: section.items } : {}),
+      ...(Array.isArray(section.results) && section.results.length ? { results: section.results } : {}),
     })
   }
   return rows
@@ -118,7 +121,10 @@ export function journalEditError(note, form) {
     if (field.numeric && !blank(value) && (!Number.isFinite(Number(value)) || Number(value) < 0)) return `${field.label}必須是有效的非負數`
     if (field.maxlength && fieldLength(field, value) > field.maxlength) return `${field.label}最多 ${field.maxlength} 字`
   }
-  if (fields === APPOINTMENT_EDIT_FIELDS && fields.every((field) => fieldBlank(field, form[field.key]))) return '日誌內容不能全部清空'
+  // 日誌上還有改不到的內容（檢驗、IDEXX 檢驗）時，這幾欄全空也不算清空——只有檢驗、沒寫紀錄的看診就是這樣。
+  const editableKeys = new Set(fields.map((field) => field.key))
+  const hasOtherContent = (note?.sections ?? []).some((section) => !editableKeys.has(section.key) && String(section?.text ?? '').trim())
+  if (fields === APPOINTMENT_EDIT_FIELDS && !hasOtherContent && fields.every((field) => fieldBlank(field, form[field.key]))) return '日誌內容不能全部清空'
   return ''
 }
 

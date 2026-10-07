@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { app } from '../app.js';
 import Appointment from '../models/Appointment.js';
 import ClinicalNote from '../models/ClinicalNote.js';
+import LabResult from '../models/LabResult.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import FormTemplate from '../models/FormTemplate.js';
 
@@ -80,6 +81,7 @@ describe('健檢報告草稿引用看診', () => {
     mock.method(Appointment, 'findOne', (filter) => query(() => [...appointments.values()].find((item) => String(item.recordId) === String(filter.recordId)) ?? null));
     mock.method(Appointment, 'findById', (key) => query(() => appointmentDoc(appointments.get(String(key)))));
     mock.method(FormTemplate, 'findById', () => query(() => template));
+    mock.method(LabResult, 'find', () => ({ select: () => ({ sort: () => ({ session: () => ({ lean: async () => [] }) }) }) }));
     mock.method(MedicalRecord, 'findById', (key) => query(() => (records.has(String(key)) ? new MedicalRecord(records.get(String(key))) : null)));
     mock.method(MedicalRecord, 'findOneAndUpdate', (filter, update) => query(() => {
       const current = records.get(String(filter._id));

@@ -1,6 +1,7 @@
 import Appointment from '../models/Appointment.js';
 import MedicationOrder from '../models/MedicationOrder.js';
 import { appointmentJournalContent, appointmentJournalFields, appointmentJournalSections } from './appointmentWorkflow.js';
+import { linkedLabResults } from './appointmentJournal.js';
 import { medicationJournalContent, medicationJournalFields, medicationJournalSections, medicationJournalStage, medicationJournalTitle } from './medicationWorkflow.js';
 
 // 日誌只保存掛號／藥單關聯；每次讀取都以來源文件的最新欄位組成內容。
@@ -13,8 +14,9 @@ export async function clinicalNoteViews(notes) {
   const orderIds = items.filter(note => note.medicationOrderId).map(note => note.medicationOrderId);
   if (!appointmentIds.length && !orderIds.length) return items;
 
-  const [appointments, orders] = await Promise.all([
+  const [appointments, labsByAppointment, orders] = await Promise.all([
     appointmentIds.length ? Appointment.find({ _id: { $in: appointmentIds } }).lean() : [],
+    linkedLabResults(appointmentIds),
     // history 只是異動軌跡，日誌內文用不到，不必整包撈回來。
     orderIds.length ? MedicationOrder.find({ _id: { $in: orderIds } }).select('-history').lean() : [],
   ]);
@@ -24,11 +26,12 @@ export async function clinicalNoteViews(notes) {
   return items.map(note => {
     if (note.appointmentId) {
       const appointment = appointmentById.get(String(note.appointmentId));
+      const labs = labsByAppointment.get(String(note.appointmentId)) ?? [];
       // fields 是編輯表單用的原始值；改完透過 PUT /clinical-notes/:id 的 body.fields 寫回掛號。
       return {
         ...note,
-        content: appointment ? appointmentJournalContent(appointment) : (note.content || '找不到對應的就診資料'),
-        ...(appointment && { sections: appointmentJournalSections(appointment), fields: appointmentJournalFields(appointment) }),
+        content: appointment ? appointmentJournalContent(appointment, labs) : (note.content || '找不到對應的就診資料'),
+        ...(appointment && { sections: appointmentJournalSections(appointment, labs), fields: appointmentJournalFields(appointment) }),
         editableContent: appointment?.visitNote ?? note.content ?? '',
         readOnly: !appointment,
       };

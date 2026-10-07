@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { app } from '../app.js';
 import Appointment from '../models/Appointment.js';
 import ClinicalNote from '../models/ClinicalNote.js';
+import LabResult from '../models/LabResult.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import FormTemplate from '../models/FormTemplate.js';
@@ -60,6 +61,8 @@ describe('independent appointment workflow HTTP routes', () => {
       return session;
     });
     mock.method(Appointment, 'find', () => ({ lean: async () => [...store.values()] }));
+    // 沒有連到看診的 IDEXX 結果。
+    mock.method(LabResult, 'find', () => ({ select: () => ({ sort: () => ({ session: () => ({ lean: async () => [] }) }) }) }));
     mock.method(Appointment, 'findById', key => chain(document(store.get(String(key)))));
     mock.method(Appointment, 'findOne', () => query(null));
     mock.method(Appointment, 'aggregate', () => query(attendanceGroups));
