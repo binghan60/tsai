@@ -674,8 +674,6 @@ watch(pet, async (value) => {
             <Label for="pet-edit-weight" class="text-xs font-medium text-foreground">目前體重（kg）</Label>
             <Input id="pet-edit-weight" v-model="petForm.weightKg" type="text" class="border-border focus:border-primary" placeholder="例：4.5" />
           </div>
-        </div>
-        <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
             <Label for="pet-edit-household-cat-count" class="text-xs font-medium text-foreground">家中貓口</Label>
             <Input id="pet-edit-household-cat-count" v-model="petForm.householdCatCount" type="number" min="0" class="border-border focus:border-primary" placeholder="例：1" />
@@ -748,7 +746,7 @@ watch(pet, async (value) => {
             </div>
             <Input v-if="petForm.medicalHistory.includes('其他')" v-model="petForm.medicalHistoryOther" class="border-border focus:border-primary" placeholder="其他病史" />
           </div>
-          <div class="space-y-1.5">
+          <div class="space-y-1.5 sm:col-span-2">
             <Label for="pet-edit-notes" class="text-xs font-medium text-foreground">其他備註</Label>
             <Textarea id="pet-edit-notes" v-model="petForm.notes" rows="2" class="border-border" placeholder="例：看診較為緊張" />
           </div>

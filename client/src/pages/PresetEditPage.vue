@@ -184,8 +184,8 @@ function resolveLeave(confirmed) {
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-if="loading" :rows="5" />
 
-    <!-- 頁首滿版跟其他頁對齊；下面的欄位限寬，1920 螢幕上才不會拉成一整條。 -->
-    <div v-else-if="template" class="flex w-full max-w-5xl flex-col gap-5">
+    <!-- 跟頁首一樣滿版（曾經限寬 max-w-5xl，1920 螢幕上只佔左半邊）；欄位由 FormSection 依自己的寬度分欄，跟健檢報告填寫頁同一套。 -->
+    <div v-else-if="template" class="flex w-full flex-col gap-5">
       <div class="rounded-xl border border-border bg-card p-5 shadow-card">
         <div class="max-w-md space-y-1.5">
           <Label for="preset-name" class="text-xs font-medium">模板名稱<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>

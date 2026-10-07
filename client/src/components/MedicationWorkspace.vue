@@ -83,6 +83,9 @@ const notePage = ref(1);
 const noteTotalPages = ref(1);
 const petQuery = ref('');
 const petResults = ref([]);
+// 候選清單限高、在框內捲動；一次最多拿 PET_CANDIDATE_LIMIT 筆，再多就提示還有幾筆沒列出（跟掛號視窗同一個做法）。
+const PET_CANDIDATE_LIMIT = 50;
+const petTotal = ref(0);
 const petLoading = ref(false);
 const petError = ref('');
 let listSequence = 0;
@@ -181,13 +184,14 @@ watch(petQuery, value => {
   clearTimeout(searchTimer);
   const sequence = ++searchSequence;
   petResults.value = [];
+  petTotal.value = 0;
   petError.value = '';
   petLoading.value = !!value.trim();
   if (!value.trim()) return;
   searchTimer = setTimeout(async () => {
     try {
-      const { data } = await http.get('/pets', { params: { q: value.trim(), limit: 8 } });
-      if (sequence === searchSequence) petResults.value = data.items || [];
+      const { data } = await http.get('/pets', { params: { q: value.trim(), limit: PET_CANDIDATE_LIMIT } });
+      if (sequence === searchSequence) { petResults.value = data.items || []; petTotal.value = data.total ?? petResults.value.length; }
     } catch { if (sequence === searchSequence) petError.value = '搜尋失敗，請重新輸入關鍵字。'; }
     finally { if (sequence === searchSequence) petLoading.value = false; }
   }, 250);
@@ -585,13 +589,14 @@ onBeforeUnmount(() => {
                     <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
                     <Input id="med-pet-search" v-model="petQuery" inputmode="search" autocomplete="off" autofocus class="h-11 pl-9" placeholder="搜尋貓咪名字、飼主姓名或電話" />
                   </div>
-                  <div v-if="petQuery.trim()" class="overflow-hidden rounded-xl border border-border" aria-live="polite">
+                  <div v-if="petQuery.trim()" class="max-h-80 overflow-y-auto rounded-xl border border-border" aria-live="polite">
                     <p v-if="petLoading" class="px-4 py-3 text-sm text-muted-foreground">搜尋中…</p>
                     <p v-else-if="petError" class="px-4 py-3 text-sm text-danger">{{ petError }}</p>
                     <p v-else-if="!petResults.length" class="px-4 py-3 text-sm text-muted-foreground">找不到符合的貓咪，請確認是否已建檔。</p>
                     <button v-for="candidate in petResults" v-else :key="candidate._id" type="button" class="flex w-full items-center gap-3 border-b border-border bg-card px-4 py-3 text-left last:border-b-0 hover:bg-accent focus-visible:bg-accent focus-visible:outline-none" @click="pickPet(candidate)">
                       <span class="min-w-0 flex-1"><span class="flex items-baseline gap-2"><span class="truncate font-semibold text-primary">{{ candidate.name }}</span><span class="truncate text-sm text-subtle-foreground">{{ candidate.breed || candidate.species }}</span></span><span class="flex gap-3 text-sm text-muted-foreground"><span class="truncate">{{ candidate.ownerId?.name }}</span><span class="num shrink-0">{{ candidate.ownerId?.phone }}</span></span></span>
                     </button>
+                    <p v-if="!petLoading && !petError && petTotal > petResults.length" class="px-4 py-3 text-sm text-muted-foreground">還有 <span class="num">{{ petTotal - petResults.length }}</span> 筆沒列出，請多打幾個字縮小範圍。</p>
                   </div>
                   <p v-else class="text-sm text-muted-foreground">建立藥單前要選定已建檔的貓咪；下方欄位可以先填。</p>
                 </template>
