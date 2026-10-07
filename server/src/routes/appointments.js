@@ -24,6 +24,8 @@ import appointmentWorkflowRouter from './appointmentWorkflow.js';
 import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
 import { checkCatBreed } from '../../../shared/catBreeds.js';
+import { escapeRegExp } from '../lib/regex.js';
+import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 
 const router = Router();
 router.use('/:id/workflow', appointmentWorkflowRouter);
@@ -233,6 +235,31 @@ router.get('/summary', async (req, res, next) => {
     const dates = enumerateDates(start, end);
     const items = fillDailyCounts(dates, buckets);
     res.json({ items });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/appointments/search?q=&page=&limit=
+// 掛號台的跨日搜尋：電話裡問「我約哪一天」「上次什麼時候來的」時不知道日期，沒辦法一天一天翻。
+// 找的是掛號不是貓——掛號比貓少得多，同名也少。不分日期、新到舊一條清單（還沒到的排最上面）、分頁；
+// 取消與未到的也列出來（「我約的還在嗎」）。沿著 scheduledAt 索引掃再比對文字，會掃過全部掛號。
+export function appointmentSearchFilter(q) {
+  const pattern = new RegExp(escapeRegExp(q), 'i');
+  return { $or: [{ petName: pattern }, { ownerName: pattern }, { ownerPhone: pattern }, { reason: pattern }] };
+}
+
+router.get('/search', async (req, res, next) => {
+  try {
+    const q = String(req.query.q ?? '').trim();
+    const pagination = paginationOptions(req.query, { defaultLimit: 10, maxLimit: 50 });
+    if (!q) return res.json(paginatedPayload([], 0, pagination));
+    const filter = appointmentSearchFilter(q);
+    const [items, total] = await Promise.all([
+      Appointment.find(filter).sort({ scheduledAt: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit),
+      Appointment.countDocuments(filter),
+    ]);
+    res.json(paginatedPayload(items, total, pagination));
   } catch (err) {
     next(err);
   }

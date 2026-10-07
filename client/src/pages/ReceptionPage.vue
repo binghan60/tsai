@@ -1,6 +1,6 @@
 <script setup>
 import { apiErrorMessage } from '../lib/apiError.js'
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from '../components/PatientLink.vue'
 import { AlertTriangle, CalendarPlus, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, Pill, Plus, RefreshCw, X } from '@lucide/vue'
 import { http } from '../api/http'
@@ -24,12 +24,15 @@ import SurgeryBadge from '../components/SurgeryBadge.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
 import DepositBadge from '../components/DepositBadge.vue'
 import AppointmentDialog from '../components/AppointmentDialog.vue'
+import AppointmentSearchResults from '../components/AppointmentSearchResults.vue'
 import CheckInDrawer from '../components/CheckInDrawer.vue'
 import CheckInDialog from '../components/CheckInDialog.vue'
 import CancelAppointmentDialog from '../components/CancelAppointmentDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import FilterBar from '../components/FilterBar.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
+import ListFooter from '../components/ListFooter.vue'
+import { clampPage, pageCount } from '../lib/pagination'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import PageHeader from '../components/PageHeader.vue'
@@ -71,13 +74,65 @@ let request = 0
 // 右側抽屜（初診報到）與掛號 Modal 共用這個狀態：一次只會開一個。
 const drawer = ref('')
 
-const keyword = computed(() => search.value.trim().toLowerCase())
-function matches(appointment) {
-  if (!keyword.value) return true
-  return `${appointment.petName} ${appointment.ownerName} ${appointment.ownerPhone} ${appointment.reason}`.toLowerCase().includes(keyword.value)
+// 搜尋是跨日的（電話裡問「我約哪一天」時不知道日期）：有關鍵字時時間軸換成一張搜尋結果表，
+// 不分日期、新到舊一條清單（還沒到的排最上面）、分頁；流程列與警示列照舊是這一天的數字，不跟著篩。
+const keyword = computed(() => search.value.trim())
+const found = reactive({ items: [], total: 0, limit: 10, page: 1, loading: false, error: '' })
+const foundPages = computed(() => pageCount(found.total, found.limit))
+let searchRequest = 0
+async function runSearch() {
+  const token = ++searchRequest
+  if (!keyword.value) {
+    Object.assign(found, { items: [], total: 0, page: 1, loading: false, error: '' })
+    return
+  }
+  found.loading = true
+  found.error = ''
+  try {
+    const { data } = await http.get('/appointments/search', { params: { q: keyword.value, page: found.page } })
+    if (token !== searchRequest) return
+    found.items = data.items || []
+    found.total = data.total || 0
+    found.limit = data.limit || found.limit
+  } catch (err) {
+    if (token === searchRequest) found.error = apiErrorMessage(err, '搜尋暫時無法使用')
+  } finally {
+    if (token === searchRequest) found.loading = false
+  }
 }
+// 換關鍵字回第一頁。
+watch(keyword, () => {
+  found.page = 1
+  runSearch()
+}, { immediate: true })
+function goToFoundPage(next) {
+  found.page = clampPage(next, foundPages.value)
+  runSearch()
+}
+
+// 從搜尋結果點一筆：回到那一天的時間軸，把那張卡片捲進畫面並框起來幾秒。
+const highlight = ref('')
+function goToAppointment(item) {
+  highlight.value = String(item._id)
+  stageFilter.value = ''
+  search.value = ''
+  if (item.date !== date.value) date.value = item.date
+  else reveal()
+}
+async function reveal() {
+  const id = highlight.value
+  if (!id) return
+  const group = timeline.value.find((entry) => entry.items.some((item) => String(item._id) === id))
+  if (group) manualCollapse[group.session.id] = false
+  await nextTick()
+  document.querySelector(`[data-appointment="${id}"]`)?.scrollIntoView({ block: 'center' })
+  setTimeout(() => {
+    if (highlight.value === id) highlight.value = ''
+  }, 2500)
+}
+
 function tray(filter, sortKey) {
-  return items.value.filter((item) => workflowFilter(item, filter) && matches(item)).sort((a, b) => new Date(a[sortKey] || a.scheduledAt) - new Date(b[sortKey] || b.scheduledAt))
+  return items.value.filter((item) => workflowFilter(item, filter)).sort((a, b) => new Date(a[sortKey] || a.scheduledAt) - new Date(b[sortKey] || b.scheduledAt))
 }
 
 const isToday = computed(() => date.value === today)
@@ -87,7 +142,7 @@ const visiting = computed(() => tray('visiting', 'visitStartedAt'))
 const scheduled = computed(() => tray('scheduled', 'scheduledAt'))
 const closedAppointments = computed(() => tray('cancelled', 'scheduledAt'))
 const followUps = computed(() => tray('followup', 'handoffAt').filter((item) => workflowState(item).completed))
-const reopenRequests = computed(() => items.value.filter((item) => workflowState(item).completed && item.reopenRequest?.requestedAt && !item.reopenRequest?.approvedAt && matches(item)).sort((a, b) => new Date(a.reopenRequest.requestedAt) - new Date(b.reopenRequest.requestedAt)))
+const reopenRequests = computed(() => items.value.filter((item) => workflowState(item).completed && item.reopenRequest?.requestedAt && !item.reopenRequest?.approvedAt).sort((a, b) => new Date(a.reopenRequest.requestedAt) - new Date(b.reopenRequest.requestedAt)))
 const finished = computed(() => tray('completed', 'deskCompletedAt').filter((item) => !item.reopenRequest?.requestedAt || item.reopenRequest?.approvedAt))
 const overdue = computed(() => (isToday.value ? scheduled.value.filter((item) => isOverdue(item, new Date(now.value))) : []))
 const activePatient = computed(() => items.value.find((item) => String(item._id) === selected.value) || null)
@@ -121,7 +176,7 @@ function toggleStage(key) {
 }
 
 // 時間軸只放進行中的掛號（待報到、候診／看診中、待櫃台），依預約時間排；已完成與未到／取消收在下面。
-const timelineItems = computed(() => appointmentsForTimeline(items.value.filter((item) => matches(item) && (!stageFilter.value || workflowFilter(item, stageFilter.value)))))
+const timelineItems = computed(() => appointmentsForTimeline(items.value.filter((item) => !stageFilter.value || workflowFilter(item, stageFilter.value))))
 // 每張卡片要用到的階段外觀、進度、按鈕先在這裡算好一次，模板裡不逐項呼叫函式——
 // 每 30 秒的時鐘一動，整條時間軸都會重算一遍，卡片多的日子開視窗會頓。
 // 在院的卡片：伺服器有開「送 IDEXX」時多一項送 IDEXX／取消送 IDEXX（跟診療台的按鈕是同一件事）。
@@ -269,11 +324,16 @@ async function refresh() {
   } catch {
     if (token === request) error.value = '資料更新失敗，請重新載入；目前顯示的可能不是最新進度。'
   } finally {
-    if (token === request) loading.value = false
+    if (token === request) {
+      loading.value = false
+      if (highlight.value) reveal()
+    }
   }
 }
 
 function applyUpdate(item) {
+  const foundIndex = found.items.findIndex((p) => String(p._id) === String(item._id))
+  if (foundIndex >= 0) found.items[foundIndex] = item
   if (item.date !== date.value) {
     items.value = items.value.filter((p) => String(p._id) !== String(item._id))
     return
@@ -441,6 +501,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   request += 1
+  searchRequest += 1
   clearInterval(clock)
 })
 </script>
@@ -517,14 +578,22 @@ onBeforeUnmount(() => {
       <!-- 時間軸：整頁的主體。依預約時段排、報到後仍保留原位置。 -->
       <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-card" aria-labelledby="timeline-title">
         <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
-          <h2 id="timeline-title" class="text-lg font-semibold">{{ isToday ? '今日看診' : '看診時間軸' }} <span class="num ml-1 text-base font-medium text-subtle-foreground">{{ timelineCount }}</span></h2>
+          <h2 v-if="keyword" id="timeline-title" class="text-lg font-semibold">搜尋結果 <span v-if="!found.loading || found.total" class="num ml-1 text-base font-medium text-subtle-foreground">{{ found.total }}</span></h2>
+          <h2 v-else id="timeline-title" class="text-lg font-semibold">{{ isToday ? '今日看診' : '看診時間軸' }} <span class="num ml-1 text-base font-medium text-subtle-foreground">{{ timelineCount }}</span></h2>
           <div class="flex shrink-0 items-center gap-2">
-            <Button v-if="stageFilter" variant="soft" @click="stageFilter = ''"><X stroke-width="1.75" />清除篩選</Button>
+            <Button v-if="stageFilter && !keyword" variant="soft" @click="stageFilter = ''"><X stroke-width="1.75" />清除篩選</Button>
             <FilterBar id="reception-search" v-model="search" label="搜尋診務" placeholder="貓咪、飼主、電話" class="w-64" />
           </div>
         </div>
 
-        <div class="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-5">
+        <template v-if="keyword">
+          <div class="min-h-0 flex-1 overflow-y-auto">
+            <AppointmentSearchResults :items="found.items" :loading="found.loading" :error="found.error" :keyword="keyword" :today="today" @open="goToAppointment" />
+          </div>
+          <ListFooter v-if="found.items.length" class="shrink-0" :page="found.page" :total-pages="foundPages" :total="found.total" :page-size="found.limit" @update:page="goToFoundPage" />
+        </template>
+
+        <div v-else class="min-h-0 flex-1 overflow-y-auto px-5 pt-3 pb-5">
           <div v-if="!timelineCount" class="mb-3 rounded-xl border border-dashed border-border-strong px-4 py-5 text-center" role="status">
             <p class="font-semibold">{{ stageFilter ? '這一段目前沒有掛號' : `${isToday ? '今天' : date}${items.length ? '沒有待報到或候診中的掛號' : '還沒有任何掛號'}` }}</p>
             <p v-if="!stageFilter" class="mt-1 text-sm text-muted-foreground">按右上角「掛號」，掛號會依預約時段排在時間軸上。</p>
@@ -568,7 +637,7 @@ onBeforeUnmount(() => {
                   <span class="absolute top-1/2 -left-4.25 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card sm:-left-5.25" :class="item.ui.tone.dot" aria-hidden="true"></span>
 
                   <!-- 整張卡片可點（開處理視窗／初診審核／修改掛號）；裡面的按鈕各自 stop，不會連帶觸發。 -->
-                  <article class="cursor-pointer rounded-xl border px-4 py-3 transition-colors" :class="item.ui.tone.card" @click="cardClick(item)">
+                  <article :data-appointment="item._id" class="cursor-pointer rounded-xl border px-4 py-3 transition-colors" :class="[item.ui.tone.card, highlight === String(item._id) ? 'ring-2 ring-primary' : '']" @click="cardClick(item)">
                     <!-- 每張卡片各自是一個 grid，欄寬必須全部固定：按鈕欄若是 auto，「處理」「報到＋⋯」「只有 ⋯」寬度不同，
                          前面的飼主、電話、進度就會一張卡片一個位置。按鈕欄的寬度以最寬的「報到…＋⋯」為準。 -->
                     <div class="grid items-center gap-x-5 gap-y-2 xl:grid-cols-[minmax(0,1fr)_8rem_10rem_9rem_8.5rem]">
@@ -654,7 +723,7 @@ onBeforeUnmount(() => {
                   <Button variant="soft" size="sm" @click="openSheet(item)">安排回診</Button>
                 </article>
                 <p v-if="!finished.length" class="py-2 text-sm text-subtle-foreground">還沒有完成的就診</p>
-                <button v-for="item in finished" :key="item._id" type="button" class="flex min-h-12 w-full min-w-0 items-center gap-3 rounded-lg bg-card px-3 py-2 text-left hover:bg-hover" @click="openSheet(item)">
+                <button v-for="item in finished" :key="item._id" type="button" :data-appointment="item._id" class="flex min-h-12 w-full min-w-0 items-center gap-3 rounded-lg bg-card px-3 py-2 text-left hover:bg-hover" :class="highlight === String(item._id) ? 'ring-2 ring-primary' : ''" @click="openSheet(item)">
                   <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-success-surface text-success"><Check class="size-4" stroke-width="2" /></span>
                   <span class="min-w-0 flex-1 truncate font-semibold text-primary">{{ item.petName }}</span>
                   <span class="truncate text-sm text-muted-foreground">{{ item.ownerName }}</span>
@@ -670,7 +739,7 @@ onBeforeUnmount(() => {
               </div>
               <div class="space-y-2">
                 <p v-if="!closedAppointments.length" class="py-2 text-sm text-subtle-foreground">沒有未到或取消的預約</p>
-                <article v-for="item in closedAppointments" :key="item._id" class="flex min-w-0 items-center gap-3 rounded-lg bg-card px-3 py-2">
+                <article v-for="item in closedAppointments" :key="item._id" :data-appointment="item._id" class="flex min-w-0 items-center gap-3 rounded-lg bg-card px-3 py-2" :class="highlight === String(item._id) ? 'ring-2 ring-primary' : ''">
                   <Badge variant="status" :class="closedStatusMeta(item).class">{{ closedStatusMeta(item).label }}</Badge>
                   <div class="min-w-0 flex-1">
                     <p class="truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></p>

@@ -11,7 +11,7 @@ import MedicalRecord from '../models/MedicalRecord.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import ClinicSettings from '../models/ClinicSettings.js';
 import { clinicToday } from '../lib/clinicTime.js';
-import { enumerateDates, fillDailyCounts } from './appointments.js';
+import { appointmentSearchFilter, enumerateDates, fillDailyCounts } from './appointments.js';
 
 // 號碼牌相關路由會走 Appointment.find(...).session(...)（報到那條再接 .where(...)）。
 // 這裡把查詢鏈與 transaction 假掉，並監看是否誤用 bulkWrite 改到其他人的牌號。
@@ -884,5 +884,16 @@ describe('appointments summary', () => {
         Appointment.aggregate = originalAggregate;
       }
     });
+  });
+});
+
+describe('appointments search', () => {
+  it('比對貓咪、飼主、電話、來院原因，不限日期', () => {
+    const filter = appointmentSearchFilter('a.b');
+    assert.deepEqual(Object.keys(filter), ['$or']);
+    assert.deepEqual(filter.$or.map((clause) => Object.keys(clause)[0]), ['petName', 'ownerName', 'ownerPhone', 'reason']);
+    // 關鍵字當成純文字，不當正規表示式。
+    assert.equal(filter.$or[0].petName.test('aXb'), false);
+    assert.equal(filter.$or[0].petName.test('A.B'), true);
   });
 });
