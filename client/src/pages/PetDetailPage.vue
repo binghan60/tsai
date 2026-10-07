@@ -36,6 +36,10 @@ import { useCopy } from '../composables/useCopy';
 import { copyText } from '../lib/clipboard';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
+import AttendanceBadges from '../components/AttendanceBadges.vue';
+import AttendancePanel from '../components/AttendancePanel.vue';
+import { usePetAttendance } from '../composables/usePetAttendance';
+import { attendanceTotal } from '../lib/attendance';
 
 const route = useRoute();
 const router = useRouter();
@@ -150,6 +154,7 @@ const activeSection = ref('notes');
 const SECTION_TABS = [
   { key: 'notes', label: '病歷日誌' },
   { key: 'records', label: '歷次健檢' },
+  { key: 'attendance', label: '出席紀錄' },
 ];
 
 const clinicalNotes = ref([]);
@@ -234,20 +239,25 @@ const alertFields = computed(() => filledFields([
   { label: '藥物過敏', value: allergyLabel.value },
   { label: '健檢', value: checkupLabel.value },
 ]));
-function attendanceSummaryText(entity, subject) {
-  const summary = entity?.attendanceSummary;
-  if (!summary) return '';
-  const parts = [];
-  if (summary.lateCount > 0) {
-    parts.push(`遲到 ${summary.lateCount} 次${summary.lastLateAt ? `，最近 ${formatDateTime(summary.lastLateAt)}` : ''}`);
-  }
-  if (summary.noShowCount > 0) {
-    parts.push(`未到 ${summary.noShowCount} 次${summary.lastNoShowAt ? `，最近 ${formatDateTime(summary.lastNoShowAt)}` : ''}`);
-  }
-  return parts.length ? `${subject}曾${parts.join('；')}。` : '';
+// 出席紀錄（遲到與未到）：頁首貓咪名字旁的徽章只給次數與最近一次，逐筆明細在「出席紀錄」頁籤，
+// 點徽章切過去。只算這隻貓自己的，飼主那邊不另外標。
+const {
+  items: attendanceItems,
+  counts: attendanceCounts,
+  page: attendancePage,
+  totalPages: attendanceTotalPages,
+  total: attendanceListTotal,
+  limit: attendanceLimit,
+  loading: attendanceLoading,
+  error: attendanceError,
+  load: loadAttendance,
+} = usePetAttendance(() => route.params.id);
+
+async function openAttendance() {
+  activeSection.value = 'attendance';
+  await nextTick();
+  document.getElementById('pet-sections')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
-const petAttendanceText = computed(() => attendanceSummaryText(pet.value, '此貓咪'));
-const ownerAttendanceText = computed(() => attendanceSummaryText(pet.value?.ownerId, '此飼主'));
 const hasAnyPetDetail = computed(() => Boolean(
   identityFields.value.length || secondaryFields.value.length || alertFields.value.length || pet.value?.notes
 ));
@@ -580,6 +590,7 @@ watch(
     recordToRemove.value = null;
     noteToRemove.value = null;
     fetchPet(petId);
+    loadAttendance({ page: 1 });
   },
   { immediate: true }
 );
@@ -607,6 +618,7 @@ watch(pet, async (value) => {
       <template #meta>
         <span v-if="pet.legacyMedicalRecordNumber" class="text-sm text-subtle-foreground">舊病歷號 <span class="num">{{ pet.legacyMedicalRecordNumber }}</span></span>
         <span v-if="pet.allergyStatus === 'yes'" class="inline-flex h-7 items-center gap-1.5 rounded-full bg-destructive-solid px-2.5 text-sm font-semibold text-destructive-solid-foreground"><AlertTriangle class="size-4" stroke-width="2" />藥物過敏：{{ pet.allergyType || '未註明藥物' }}</span>
+        <AttendanceBadges :counts="attendanceCounts.pet" :subject="pet.name" @select="openAttendance" />
       </template>
       <template #actions>
         <Button type="button" :variant="petPinned ? 'destructive' : 'secondary'" :disabled="pinBusy" @click="togglePin">
@@ -630,9 +642,6 @@ watch(pet, async (value) => {
       </div>
 
       <Alert v-if="petEditing && petError" variant="destructive"><AlertDescription>{{ petError }}</AlertDescription></Alert>
-      <Alert v-if="!petEditing && petAttendanceText" class="border-warning/35 bg-warning-surface text-warning">
-        <AlertDescription>{{ petAttendanceText }}</AlertDescription>
-      </Alert>
 
       <!-- 編輯模式：直接畫在卡片裡，不彈 Modal。 -->
       <div v-if="petEditing" class="space-y-4">
@@ -791,9 +800,6 @@ watch(pet, async (value) => {
         </div>
 
         <Alert v-if="ownerEditing && ownerError" variant="destructive"><AlertDescription>{{ ownerError }}</AlertDescription></Alert>
-        <Alert v-if="!ownerEditing && ownerAttendanceText" class="border-warning/35 bg-warning-surface text-warning">
-          <AlertDescription>{{ ownerAttendanceText }}</AlertDescription>
-        </Alert>
 
         <div v-if="ownerEditing" class="space-y-4">
           <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-1">
@@ -839,15 +845,15 @@ watch(pet, async (value) => {
       </div>
     </Card>
 
-    <div class="space-y-4">
+    <div id="pet-sections" class="scroll-mt-5 space-y-4">
       <!-- 病歷日誌／歷次健檢原本各自整段全展開、上下疊在同一頁，兩份長清單同時佔版面
            是這頁最大的雜亂來源。改成頁籤一次只顯示一段，切換時另一段完全不佔空間。 -->
       <div class="flex flex-wrap items-center justify-between gap-3">
         <FilterTabs
           v-model="activeSection"
           :items="SECTION_TABS"
-          :counts="{ notes: notePagination.total, records: recordPagination.total }"
-          aria-label="切換病歷日誌與歷次健檢"
+          :counts="{ notes: notePagination.total, records: recordPagination.total, attendance: attendanceTotal(attendanceCounts.pet) }"
+          aria-label="切換病歷日誌、歷次健檢與出席紀錄"
         />
         <span class="text-sm text-subtle-foreground">新到舊</span>
       </div>
@@ -909,6 +915,19 @@ watch(pet, async (value) => {
             <Pagination v-if="clinicalNotes.length" :page="notePage" :total-pages="totalNotePages" @update:page="goToNotePage" />
           </template>
     
+          <AttendancePanel
+            v-else-if="activeSection === 'attendance'"
+            :counts="attendanceCounts.pet"
+            :items="attendanceItems"
+            :page="attendancePage"
+            :total-pages="attendanceTotalPages"
+            :total="attendanceListTotal"
+            :page-size="attendanceLimit"
+            :loading="attendanceLoading"
+            :error="attendanceError"
+            @update:page="(page) => loadAttendance({ page })"
+          />
+
           <template v-else>
             <p class="text-xs text-muted-foreground">依健檢日期排序，草稿可繼續編輯。</p>
     

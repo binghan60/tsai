@@ -4,6 +4,8 @@ import Owner from '../models/Owner.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import PinnedPet from '../models/PinnedPet.js';
+import Appointment from '../models/Appointment.js';
+import { attendanceCountPipeline, attendanceCounts, attendanceFilter, attendanceRow } from '../lib/attendance.js';
 import Todo from '../models/Todo.js';
 import { publishPinnedPets } from '../lib/pinnedPets.js';
 import { publishTodos } from '../lib/todos.js';
@@ -177,6 +179,38 @@ petsRouter.get('/:id', async (req, res, next) => {
       recordPagination: paginationMeta(total, pagination),
       clinicalNotes: await clinicalNoteViews(clinicalNotes),
       notePagination: paginationMeta(noteTotal, notePagination),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/pets/:id/attendance?scope=pet|owner — 出席紀錄（遲到與未到），新到舊、分頁。
+// counts 兩組都回（這隻貓、飼主名下全部），頁首徽章與頁籤數字用的就是這份，跟清單筆數同一個口徑。
+petsRouter.get('/:id/attendance', async (req, res, next) => {
+  try {
+    const pet = await Pet.findById(req.params.id).select('ownerId').lean();
+    if (!pet) return res.status(404).json({ message: '找不到貓咪' });
+    const petScope = { petId: pet._id };
+    const ownerScope = pet.ownerId ? { ownerId: pet.ownerId } : petScope;
+    const scope = req.query.scope === 'owner' ? 'owner' : 'pet';
+    const filter = attendanceFilter(scope === 'owner' ? ownerScope : petScope);
+    const pagination = paginationOptions(req.query, { defaultLimit: 10, maxLimit: 50 });
+    const [appointments, total, petGroups, ownerGroups] = await Promise.all([
+      Appointment.find(filter)
+        .sort({ date: -1, time: -1, _id: -1 })
+        .skip(pagination.skip)
+        .limit(pagination.limit)
+        .select('date time status checkedInAt latenessMinutes petId petName reason')
+        .lean(),
+      Appointment.countDocuments(filter),
+      Appointment.aggregate(attendanceCountPipeline(petScope)),
+      Appointment.aggregate(attendanceCountPipeline(ownerScope)),
+    ]);
+    res.json({
+      ...paginatedPayload(appointments.map(attendanceRow), total, pagination),
+      scope,
+      counts: { pet: attendanceCounts(petGroups), owner: attendanceCounts(ownerGroups) },
     });
   } catch (err) {
     next(err);

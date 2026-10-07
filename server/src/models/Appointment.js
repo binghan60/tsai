@@ -127,6 +127,8 @@ appointmentSchema.index({ intakeVerificationCode: 1, intakeVerificationExpiresAt
 appointmentSchema.index({ intakeVerificationExpiresAt: 1 });
 // IDEXX 檢驗結果進來時找「這隻貓、檢驗當天」的看診（lib/labResultApply.js）。
 appointmentSchema.index({ petId: 1, date: 1 });
+// 出席紀錄的「飼主名下全部」：這位飼主所有貓的遲到與未到（lib/attendance.js）；只看一隻貓時用上面那個。
+appointmentSchema.index({ ownerId: 1, date: 1 });
 // 號碼牌可由櫃台自行決定，允許同日重複與再次使用；history 僅保留異動紀錄。
 
 export default mongoose.model('Appointment', appointmentSchema);
