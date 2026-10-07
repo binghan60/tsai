@@ -14,7 +14,8 @@ import { Alert, AlertDescription } from './ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { DEFAULT_ESTIMATED_DURATION_MINUTES, durationOverflowError } from '../lib/appointmentTime';
-import { formatDate, formatDateTime, weekdayLabel } from '../lib/datetime';
+import AttendanceSummaryTable from './AttendanceSummaryTable.vue';
+import { formatDate, weekdayLabel } from '../lib/datetime';
 import { breedText } from '../lib/petDisplay';
 import { checkMobilePhone } from '../../../shared/phone.js';
 
@@ -148,25 +149,32 @@ function selectOwner(owner) {
   pickOwnerError.value = '';
 }
 
-function attendanceSummaryText(entity, subject) {
-  const summary = entity?.attendanceSummary;
-  if (!summary) return '';
-  const parts = [];
-  if (summary.lateCount > 0) parts.push(`遲到 ${summary.lateCount} 次${summary.lastLateAt ? `，最近一次為 ${formatDateTime(summary.lastLateAt)}` : ''}`);
-  if (summary.noShowCount > 0) parts.push(`未到 ${summary.noShowCount} 次`);
-  return parts.length ? `${subject}曾${parts.join('、')}。` : '';
-}
-const attendanceWarnings = computed(() => {
-  if (mode.value === 'return' && selectedPet.value) {
-    return [
-      attendanceSummaryText(selectedPet.value, selectedPet.value.name || '貓咪'),
-      attendanceSummaryText(selectedPet.value.ownerId, selectedPet.value.ownerId?.name || '飼主'),
-    ].filter(Boolean);
+// 出席紀錄（遲到與未到）：選了貓就查這隻貓與飼主名下全部，初診選既有飼主時只有飼主。
+// 次數由掛號即時算，跟貓咪詳情頁同一個口徑。
+// 這只是提醒，讀不到就不顯示，不擋掛號。
+const attendancePet = computed(() => (mode.value === 'return' ? selectedPet.value : null));
+const attendanceOwner = computed(() => (mode.value === 'new' && ownerMode.value === 'existing' ? selectedOwner.value : null));
+const attendanceCounts = ref({ pet: null, owner: null });
+let attendanceRequest = 0;
+watch([attendancePet, attendanceOwner], async ([pet, owner]) => {
+  const token = ++attendanceRequest;
+  attendanceCounts.value = { pet: null, owner: null };
+  if (!pet && !owner) return;
+  try {
+    const { data } = pet
+      ? await http.get(`/pets/${pet._id}/attendance`, { params: { limit: 1 } })
+      : await http.get(`/owners/${owner._id}/attendance`);
+    if (token === attendanceRequest) attendanceCounts.value = { pet: data.counts?.pet ?? null, owner: data.counts?.owner ?? null };
+  } catch {
+    // 提醒性質，查不到就留白。
   }
-  if (mode.value === 'new' && ownerMode.value === 'existing' && selectedOwner.value) {
-    return [attendanceSummaryText(selectedOwner.value, selectedOwner.value.name || '飼主')].filter(Boolean);
-  }
-  return [];
+});
+const attendanceEntries = computed(() => {
+  const ownerName = attendancePet.value?.ownerId?.name || attendanceOwner.value?.name || '';
+  return [
+    ...(attendancePet.value ? [{ label: attendancePet.value.name || '貓咪', counts: attendanceCounts.value.pet }] : []),
+    { label: `飼主${ownerName}名下`, counts: attendanceCounts.value.owner },
+  ];
 });
 
 // ── 日期與時段格（AppointmentSlotPicker，跟約回診、初診表審核同一塊）──────────────
@@ -345,9 +353,7 @@ const onSubmit = handleSubmit((values) => {
                 </div>
               </template>
 
-              <Alert v-for="warning in attendanceWarnings" :key="warning" class="border-warning/35 bg-warning-surface text-warning">
-                <AlertDescription>{{ warning }}</AlertDescription>
-              </Alert>
+              <AttendanceSummaryTable :entries="attendanceEntries" />
             </template>
 
             <template v-else>

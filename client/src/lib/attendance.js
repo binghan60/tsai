@@ -16,6 +16,17 @@ export function shortDateLabel(date, today = clinicDateInput()) {
   return year === String(today).slice(0, 4) ? monthDay : `${year}/${monthDay}`;
 }
 
+// 掛號視窗的對照表：一列一個對象（貓咪、飼主名下），沒有紀錄的對象不列。
+// 「最近一次」不分遲到或未到，取較晚的那一天。
+export function attendanceRows(entries, today = clinicDateInput()) {
+  return entries
+    .filter((entry) => attendanceTotal(entry.counts) > 0)
+    .map(({ label, counts }) => {
+      const last = [counts.lastLateDate, counts.lastNoShowDate].filter(Boolean).sort().at(-1);
+      return { label, late: counts.lateCount ?? 0, noShow: counts.noShowCount ?? 0, last: shortDateLabel(last, today) };
+    });
+}
+
 // 要畫哪幾顆徽章：次數是 0 的不出現（欄位沒有值就留白）。
 export function attendanceBadges(counts, today = clinicDateInput()) {
   const badges = [];

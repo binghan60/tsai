@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
+import Appointment from '../models/Appointment.js';
+import { attendanceCountPipeline, attendanceCounts } from '../lib/attendance.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
 import { escapeRegExp } from '../lib/regex.js';
@@ -126,6 +128,19 @@ router.get('/:id', async (req, res, next) => {
       Pet.countDocuments(filter),
     ]);
     res.json({ ...owner.toObject(), pets, petPagination: paginationMeta(total, pagination) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/owners/:id/attendance — 這位飼主名下所有貓的遲到與未到次數（由掛號即時算，見 lib/attendance.js）。
+// 掛號視窗「初診＋既有飼主」用：那時還沒有貓可以查，只能依飼主查。只回次數，逐筆清單在貓咪詳情頁。
+router.get('/:id/attendance', async (req, res, next) => {
+  try {
+    const owner = await Owner.findById(req.params.id).select('_id').lean();
+    if (!owner) return res.status(404).json({ message: '找不到飼主' });
+    const groups = await Appointment.aggregate(attendanceCountPipeline({ ownerId: owner._id }));
+    res.json({ counts: { owner: attendanceCounts(groups) } });
   } catch (err) {
     next(err);
   }

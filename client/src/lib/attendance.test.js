@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { attendanceBadges, attendanceTotal, shortDateLabel } from './attendance.js';
+import { attendanceBadges, attendanceRows, attendanceTotal, shortDateLabel } from './attendance.js';
+
+test('attendanceRows：沒有紀錄的對象不列，最近一次取遲到與未到裡較晚的', () => {
+  const rows = attendanceRows([
+    { label: '豆豆', counts: { lateCount: 3, lastLateDate: '2026-09-28', noShowCount: 0, lastNoShowDate: null } },
+    { label: '麻糬', counts: { lateCount: 0, noShowCount: 0 } },
+    { label: '飼主王小明名下', counts: { lateCount: 5, lastLateDate: '2026-08-02', noShowCount: 1, lastNoShowDate: '2026-10-02' } },
+    { label: '還沒讀到', counts: null },
+  ], '2026-10-07');
+  assert.deepEqual(rows, [
+    { label: '豆豆', late: 3, noShow: 0, last: '9/28' },
+    { label: '飼主王小明名下', late: 5, noShow: 1, last: '10/2' },
+  ]);
+});
 
 test('attendanceTotal：遲到加未到，沒有資料算 0', () => {
   assert.equal(attendanceTotal({ lateCount: 3, noShowCount: 1 }), 4);

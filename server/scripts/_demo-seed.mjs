@@ -70,11 +70,11 @@ async function seed() {
     { key: 'chen', name: '陳怡君', phone: '0900100001', email: 'demo.chen@example.com' },
     { key: 'wang', name: '王建民', phone: '0900100002' },
     { key: 'lee', name: '李佩珊', phone: '0900100003' },
-    { key: 'chang', name: '張志豪', phone: '0900100004', notes: '電話常不接，請改傳 LINE', attendanceSummary: { lateCount: 1, lastLateAt: at(TODAY, '11:12') } },
+    { key: 'chang', name: '張志豪', phone: '0900100004', notes: '電話常不接，請改傳 LINE' },
     { key: 'huang', name: '黃雅婷', phone: '0900100005' },
     { key: 'wu', name: '吳宗翰', phone: '0900100006' },
     { key: 'liu', name: '劉淑芬', phone: '0900100007', notes: '高齡貓，飼主容易緊張，說明請放慢' },
-    { key: 'tsai', name: '蔡明哲', phone: '0900100008', attendanceSummary: { noShowCount: 1, lastNoShowAt: at(TODAY, '10:00') } },
+    { key: 'tsai', name: '蔡明哲', phone: '0900100008' },
   ];
   const owners = {};
   for (const def of ownerDefs) {

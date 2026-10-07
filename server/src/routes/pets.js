@@ -120,7 +120,7 @@ petsRouter.get('/', async (req, res, next) => {
         .sort({ updatedAt: -1, _id: -1 })
         .skip(pagination.skip)
         .limit(pagination.limit)
-        .populate('ownerId', 'name phone attendanceSummary'),
+        .populate('ownerId', 'name phone'),
       Pet.countDocuments(filter),
     ]);
     // 清單上的「最近紀錄」：這一頁每隻貓最新一則病歷日誌的日期（看診、藥單、手動記事都算）。
@@ -142,7 +142,7 @@ petsRouter.get('/', async (req, res, next) => {
 
 petsRouter.get('/:id', async (req, res, next) => {
   try {
-    const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone landline email address notes attendanceSummary __v');
+    const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone landline email address notes __v');
     if (!pet) return res.status(404).json({ message: '找不到貓咪' });
     const pagination = paginationOptions(req.query, {
       defaultLimit: 10,
