@@ -90,6 +90,7 @@
 寬度與外距只在 `App.vue` 的 `<main>` 決定：**滿版**（填滿兩條欄之間、不設 `max-w`），頁面自己不包外框，沒有例外。每頁根節點 `flex flex-col gap-5`，第一個子元素是 `PageHeader`（標題、選配的筆數＋單位、說明、`back-to` 返回鈕、右邊 `actions`）。
 
 - **表單型頁面**（新增貓咪、預填模板編輯）在頁內把表單限寬 `max-w-5xl`，頁首不限寬——1920 螢幕上單一輸入框拉成一整條沒辦法讀。
+- **一張表單只用一組欄**：每一區都是 `grid gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3`，長欄位用 `col-span` 跨欄、整列的用 `col-span-full`，各區欄位的左右緣才對得齊。欄數看表單容器自己的寬度（`@container`），不看視窗——新增貓咪的表單也嵌在初診報到的側欄裡。控制項一律用預設高度 40（`Input`／`DatePicker`／`SegmentedControl` 不要再縮成 `h-9`、`size="sm"`，並排時會差幾 px），區塊標題 `text-base font-semibold`。新增貓咪頁原本各區各排各的（飼主 5 欄、貓咪 3 欄、其餘 2 欄），限寬後飼主那一列擠成五個小格、備註只佔半邊。
 - **會被側滑面板擠窄的區塊**用 container query 依自己的寬度排（例如看診工作區 `@container/visit`），不要照視窗寬度排。
 - 兩個工作台（診療台、掛號台）用 `xl:h-[calc(100dvh-2.5rem)]` 撐滿高度，裡面各自捲動。
 

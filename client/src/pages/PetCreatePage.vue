@@ -4,7 +4,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import {
   AlertCircle,
-  Calculator,
   Cat,
   Check,
   CheckCircle2,
@@ -496,14 +495,18 @@ onBeforeUnmount(() => {
          但三張卡同時全部可見時「步驟」這個詞本身就名不符實；折成手風琴
          又會在切換時讓版面高度跳動。改成一張平面表單，卡片邊界、圖示方塊、
          每步驟自己的說明文字這些重複的裝飾都拿掉，靠留白與細分隔線分區。 -->
-    <!-- 頁首滿版跟其他頁對齊；表單限寬，1920 螢幕上欄位才不會被拉成一整條。 -->
-    <Card class="w-full max-w-5xl space-y-6 p-5 sm:p-6">
+    <!-- 頁首滿版跟其他頁對齊；表單限寬，1920 螢幕上欄位才不會被拉成一整條。
+         每一區都是同一組欄（1 → 2 → 3 欄），欄位的左右緣才對得齊；原本各區各排各的
+         （5 欄、3 欄、2 欄），飼主那一列在限寬後擠成五個小格。欄數看卡片自己的寬度
+         （container query）、不看視窗——這張表單也嵌在初診報到的側欄裡，那裡比視窗窄得多。
+         區與區的間距只用 gap-6（Card 本身是 flex＋gap，再加 space-y 會疊成兩份）。 -->
+    <Card class="@container w-full max-w-5xl gap-6 p-5 sm:p-6">
       <!-- 飼主 -->
       <div class="space-y-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <User class="h-4 w-4 text-primary" stroke-width="2" />
-            <h2 class="text-xs font-semibold tracking-wide text-foreground uppercase">飼主</h2>
+            <User class="size-4.5 text-primary" stroke-width="1.75" />
+            <h2 class="text-base font-semibold text-foreground">飼主</h2>
           </div>
           <Badge v-if="selectedOwner && ownerMode === 'existing'" variant="secondary" class="gap-1 border-success/30 bg-success-surface text-xs text-success">
             <CheckCircle2 class="h-3.5 w-3.5" />
@@ -516,7 +519,7 @@ onBeforeUnmount(() => {
         <!-- 模式 1：選擇既有飼主 -->
         <template v-if="ownerMode === 'existing'">
           <div v-if="selectedOwner" class="rounded-xl border border-primary/25 bg-accent/40 p-4">
-            <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div class="flex flex-col justify-between gap-4 @2xl:flex-row @2xl:items-center">
               <div class="flex items-center gap-3.5">
                 <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-lg font-bold text-primary-foreground shadow-xs">
                   {{ selectedOwner.name?.[0] ?? '?' }}
@@ -533,8 +536,8 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
               </div>
-              <Button type="button" variant="secondary" size="sm" class="h-8 shrink-0 gap-1.5 self-start text-xs sm:self-center" @click="clearSelectedOwner">
-                <RefreshCw class="h-3.5 w-3.5" />
+              <Button type="button" variant="secondary" size="sm" class="shrink-0 self-start @2xl:self-center" @click="clearSelectedOwner">
+                <RefreshCw stroke-width="1.75" />
                 更換飼主
               </Button>
             </div>
@@ -547,7 +550,7 @@ onBeforeUnmount(() => {
                 id="owner-search-input"
                 v-model="ownerQuery"
                 type="text"
-                class="h-10 pl-10 pr-8 text-sm"
+                class="pl-10 pr-8"
                 :class="{ 'border-destructive focus-visible:ring-destructive': errors.owner }"
                 placeholder="請輸入飼主姓名或手機電話進行搜尋…"
                 aria-label="搜尋飼主"
@@ -571,7 +574,7 @@ onBeforeUnmount(() => {
                 <span>搜尋結果（共 {{ ownerTotal }} 位相符，目前顯示 {{ owners.length }} 位）：</span>
                 <span>點擊即可選定</span>
               </div>
-              <div class="grid gap-2 sm:grid-cols-2">
+              <div class="grid gap-2 @2xl:grid-cols-2 @4xl:grid-cols-3">
                 <PickerOptionRow
                   v-for="owner in owners"
                   :key="owner._id"
@@ -585,13 +588,13 @@ onBeforeUnmount(() => {
                 </PickerOptionRow>
               </div>
               <div v-if="hasMoreOwners" class="pt-1 text-center">
-                <Button type="button" variant="secondary" size="sm" class="h-8 text-xs" :disabled="ownerLoading" @click="loadMoreOwners">載入更多結果</Button>
+                <Button type="button" variant="secondary" size="sm" :disabled="ownerLoading" @click="loadMoreOwners">載入更多結果</Button>
               </div>
             </div>
 
             <div v-else-if="ownerQuery.trim()" class="space-y-2 rounded-xl border border-dashed border-border px-4 py-6 text-center text-xs text-muted-foreground">
               <p>查無符合「<strong class="text-foreground">{{ ownerQuery }}</strong>」的既有飼主</p>
-              <Button type="button" variant="soft" size="sm" class="h-8 text-xs" @click="switchModeToNewWithQuery">直接建立此飼主資料 &rarr;</Button>
+              <Button type="button" variant="soft" size="sm" @click="switchModeToNewWithQuery">直接建立此飼主資料 &rarr;</Button>
             </div>
 
             <p v-else class="rounded-xl border border-border/50 bg-muted/20 px-4 py-6 text-center text-xs text-muted-foreground">輸入飼主姓名或手機號碼，系統將即時查詢並列出相符檔案。</p>
@@ -599,62 +602,58 @@ onBeforeUnmount(() => {
         </template>
 
         <!-- 模式 2：建立新飼主 -->
-        <div v-else class="space-y-4">
-          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            <div class="space-y-1.5">
-              <Label for="new-owner-name" class="text-xs font-medium text-foreground">飼主姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <Input
-                id="new-owner-name"
-                v-model="newOwner.name"
-                autocomplete="name"
-                class="h-9 text-sm"
-                :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerName }"
-                placeholder="例：王小明"
-                @input="errors.newOwnerName = ''"
-              />
-              <p v-if="errors.newOwnerName" class="text-xs text-destructive">{{ errors.newOwnerName }}</p>
-            </div>
-            <div class="space-y-1.5">
-              <Label for="new-owner-phone" class="text-xs font-medium text-foreground">手機 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <Input
-                id="new-owner-phone"
-                v-model="newOwner.phone"
-                type="tel"
-                autocomplete="tel"
-                inputmode="tel"
-                class="h-9 text-sm"
-                :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerPhone }"
-                placeholder="例：0912-345-678"
-                @input="errors.newOwnerPhone = ''"
-              />
-              <p v-if="errors.newOwnerPhone" class="text-xs text-destructive">{{ errors.newOwnerPhone }}</p>
-            </div>
-            <div class="space-y-1.5">
-              <Label for="new-owner-landline" class="text-xs font-medium text-foreground">市話（選填）</Label>
-              <Input id="new-owner-landline" v-model="newOwner.landline" type="tel" autocomplete="tel" inputmode="tel" class="h-9 text-sm" placeholder="例：03-561-9595" />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="new-owner-email" class="text-xs font-medium text-foreground">電子信箱（選填）</Label>
-              <Input
-                id="new-owner-email"
-                v-model="newOwner.email"
-                type="email"
-                autocomplete="email"
-                class="h-9 text-sm"
-                :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerEmail }"
-                placeholder="例：owner@example.com"
-                @input="errors.newOwnerEmail = ''"
-              />
-              <p v-if="errors.newOwnerEmail" class="text-xs text-destructive">{{ errors.newOwnerEmail }}</p>
-            </div>
-            <div class="space-y-1.5">
-              <Label for="new-owner-address" class="text-xs font-medium text-foreground">通訊地址（選填）</Label>
-              <Input id="new-owner-address" v-model="newOwner.address" autocomplete="street-address" class="h-9 text-sm" placeholder="例：台北市中山區中山北路…" />
-            </div>
+        <div v-else class="grid gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3">
+          <div class="space-y-1.5">
+            <Label for="new-owner-name" class="text-xs font-medium text-foreground">飼主姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+            <Input
+              id="new-owner-name"
+              v-model="newOwner.name"
+              autocomplete="name"
+              :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerName }"
+              placeholder="例：王小明"
+              @input="errors.newOwnerName = ''"
+            />
+            <p v-if="errors.newOwnerName" class="text-xs text-destructive">{{ errors.newOwnerName }}</p>
           </div>
           <div class="space-y-1.5">
+            <Label for="new-owner-phone" class="text-xs font-medium text-foreground">手機 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+            <Input
+              id="new-owner-phone"
+              v-model="newOwner.phone"
+              type="tel"
+              autocomplete="tel"
+              inputmode="tel"
+              class="num"
+              :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerPhone }"
+              placeholder="例：0912-345-678"
+              @input="errors.newOwnerPhone = ''"
+            />
+            <p v-if="errors.newOwnerPhone" class="text-xs text-destructive">{{ errors.newOwnerPhone }}</p>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="new-owner-landline" class="text-xs font-medium text-foreground">市話（選填）</Label>
+            <Input id="new-owner-landline" v-model="newOwner.landline" type="tel" autocomplete="tel" inputmode="tel" class="num" placeholder="例：03-561-9595" />
+          </div>
+          <div class="space-y-1.5">
+            <Label for="new-owner-email" class="text-xs font-medium text-foreground">電子信箱（選填）</Label>
+            <Input
+              id="new-owner-email"
+              v-model="newOwner.email"
+              type="email"
+              autocomplete="email"
+              :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerEmail }"
+              placeholder="例：owner@example.com"
+              @input="errors.newOwnerEmail = ''"
+            />
+            <p v-if="errors.newOwnerEmail" class="text-xs text-destructive">{{ errors.newOwnerEmail }}</p>
+          </div>
+          <div class="space-y-1.5 @2xl:col-span-2">
+            <Label for="new-owner-address" class="text-xs font-medium text-foreground">通訊地址（選填）</Label>
+            <Input id="new-owner-address" v-model="newOwner.address" autocomplete="street-address" placeholder="例：台北市中山區中山北路…" />
+          </div>
+          <div class="col-span-full space-y-1.5">
             <Label for="new-owner-notes" class="text-xs font-medium text-foreground">備註（選填）</Label>
-            <Textarea id="new-owner-notes" v-model="newOwner.notes" rows="2" class="text-sm" placeholder="例：習慣接聽時段、特殊聯絡方式提醒…" />
+            <Textarea id="new-owner-notes" v-model="newOwner.notes" rows="2" placeholder="例：習慣接聽時段、特殊聯絡方式提醒…" />
           </div>
         </div>
       </div>
@@ -662,18 +661,17 @@ onBeforeUnmount(() => {
       <!-- 貓咪基本資料 -->
       <div class="space-y-4 border-t border-border pt-6">
         <div class="flex items-center gap-2">
-          <Cat class="h-4 w-4 text-primary" stroke-width="2" />
-          <h2 class="text-xs font-semibold tracking-wide text-foreground uppercase">貓咪基本資料</h2>
+          <Cat class="size-4.5 text-primary" stroke-width="1.75" />
+          <h2 class="text-base font-semibold text-foreground">貓咪基本資料</h2>
         </div>
 
-        <div class="grid gap-4 sm:grid-cols-3">
+        <div class="grid gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3">
           <div class="space-y-1.5">
             <Label for="new-pet-name" class="text-xs font-medium text-foreground">貓咪名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
             <Input
               id="new-pet-name"
               v-model="petForm.name"
               autocomplete="off"
-              class="h-9 text-sm"
               :class="{ 'border-destructive focus-visible:ring-destructive': errors.petName }"
               placeholder="例：咪咪、茶茶、麻糬"
               @input="errors.petName = ''"
@@ -682,62 +680,59 @@ onBeforeUnmount(() => {
           </div>
           <div class="space-y-1.5">
             <Label for="new-pet-breed" class="text-xs font-medium text-foreground">品種</Label>
-            <Input id="new-pet-breed" v-model="petForm.breed" class="h-9 text-sm" placeholder="例：米克斯、美短、布偶貓" />
+            <Input id="new-pet-breed" v-model="petForm.breed" placeholder="例：米克斯、美短、布偶貓" />
           </div>
           <div class="space-y-1.5">
             <Label for="new-pet-color" class="text-xs font-medium text-foreground">花色</Label>
-            <Input id="new-pet-color" v-model="petForm.color" class="h-9 text-sm" placeholder="例：橘白、玳瑁、虎斑" />
+            <Input id="new-pet-color" v-model="petForm.color" placeholder="例：橘白、玳瑁、虎斑" />
           </div>
-        </div>
 
-        <!-- 品種快選：跟其他欄位齊平，不再另包一層邊框面板 -->
-        <div class="space-y-1.5">
-          <span class="text-xs text-muted-foreground">常見貓品種快速帶入：</span>
-          <div class="flex flex-wrap gap-1.5">
-            <button
-              v-for="b in CAT_BREED_RECOMMENDATIONS"
-              :key="b"
-              type="button"
-              class="rounded-lg border border-border px-2.5 py-1 text-xs text-foreground transition-colors hover:border-primary hover:bg-accent hover:text-primary"
-              :class="{ 'border-primary bg-accent font-medium text-primary': petForm.breed === b }"
-              @click="applyBreed(b)"
-            >
-              {{ b }}
-            </button>
-          </div>
-        </div>
-
-        <!-- 出生日期＋年齡推算：永遠並排顯示，不做展開收合 -->
-        <div class="space-y-2">
-          <Label for="new-pet-birth-date" class="text-xs font-medium text-foreground">{{ petForm.birthDateEstimated ? '預估生日' : '出生日期' }}</Label>
-          <div class="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <DatePicker id="new-pet-birth-date" v-model="petForm.birthDate" aria-label="出生日期" class="h-9 text-sm lg:w-52" @update:model-value="petForm.birthDateEstimated = false" />
-            <div v-if="computedAgeText" class="flex shrink-0 items-center gap-1.5 rounded-lg border border-success/30 bg-success-surface px-3 py-2 text-xs font-medium text-success">
-              <Clock class="h-3.5 w-3.5" />
-              <span>{{ computedAgeText }}</span>
+          <!-- 品種快選：跟其他欄位齊平，不再另包一層邊框面板 -->
+          <div class="col-span-full space-y-1.5">
+            <span class="text-xs text-muted-foreground">常見貓品種快速帶入：</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="b in CAT_BREED_RECOMMENDATIONS"
+                :key="b"
+                type="button"
+                class="rounded-lg border border-border px-2.5 py-1 text-xs text-foreground transition-colors hover:border-primary hover:bg-accent hover:text-primary"
+                :class="{ 'border-primary bg-accent font-medium text-primary': petForm.breed === b }"
+                @click="applyBreed(b)"
+              >
+                {{ b }}
+              </button>
             </div>
-            <div class="flex flex-wrap items-center gap-2 text-xs text-muted-foreground lg:ml-auto">
-              <Calculator class="h-3.5 w-3.5 shrink-0 text-primary" />
-              <span>不知道生日？概略年齡：</span>
-              <Input v-model.number="calcYears" type="number" min="0" max="30" class="h-8 w-14 text-center text-xs" aria-label="估算年數" />
+          </div>
+
+          <!-- 出生日期＋年齡推算：永遠並排顯示，不做展開收合 -->
+          <div class="space-y-1.5">
+            <Label for="new-pet-birth-date" class="text-xs font-medium text-foreground">{{ petForm.birthDateEstimated ? '預估生日' : '出生日期' }}</Label>
+            <DatePicker id="new-pet-birth-date" v-model="petForm.birthDate" aria-label="出生日期" @update:model-value="petForm.birthDateEstimated = false" />
+          </div>
+          <div class="space-y-1.5 @4xl:col-span-2">
+            <p class="text-xs leading-none font-medium text-foreground">不知道生日？用概略年齡推算</p>
+            <div class="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <Input v-model.number="calcYears" type="number" min="0" max="30" class="num w-20 text-center" aria-label="估算年數" />
               <span>歲</span>
-              <Input v-model.number="calcMonths" type="number" min="0" max="11" class="h-8 w-14 text-center text-xs" aria-label="估算月數" />
+              <Input v-model.number="calcMonths" type="number" min="0" max="11" class="num w-20 text-center" aria-label="估算月數" />
               <span>月</span>
-              <Button type="button" size="sm" class="h-8 gap-1 text-xs" @click="applyAgeCalculation"><Sparkles class="h-3 w-3" />套用</Button>
+              <Button type="button" variant="soft" @click="applyAgeCalculation"><Sparkles stroke-width="1.75" />套用</Button>
+              <span v-if="computedAgeText" class="flex items-center gap-1.5 rounded-lg border border-success/30 bg-success-surface px-3 py-2 text-xs font-medium text-success">
+                <Clock class="h-3.5 w-3.5" />
+                {{ computedAgeText }}
+              </span>
             </div>
+            <p v-if="petForm.birthDateEstimated" class="text-xs text-muted-foreground">此日期由概略年齡回推，僅代表預估月份；系統以該月 1 日儲存並標示為推估。</p>
           </div>
-          <p v-if="petForm.birthDateEstimated" class="text-xs text-muted-foreground">此日期由概略年齡回推，僅代表預估月份；系統以該月 1 日儲存並標示為推估。</p>
-        </div>
 
-        <div class="grid gap-4 sm:grid-cols-2">
           <div class="space-y-1.5">
             <Label class="text-xs font-medium text-foreground">性別</Label>
-            <SegmentedControl v-model="petForm.sex" :options="SEX_OPTIONS" aria-label="貓咪性別" size="sm" full-width />
+            <SegmentedControl v-model="petForm.sex" :options="SEX_OPTIONS" aria-label="貓咪性別" full-width />
           </div>
           <div class="space-y-1.5">
             <Label for="new-pet-weight" class="text-xs font-medium text-foreground">目前體重</Label>
             <div class="relative flex items-center">
-              <Input id="new-pet-weight" v-model="petForm.weightKg" type="number" step="0.05" min="0" class="h-9 pr-10 text-sm" placeholder="例：4.5" />
+              <Input id="new-pet-weight" v-model="petForm.weightKg" type="number" step="0.05" min="0" class="num pr-10" placeholder="例：4.5" />
               <span class="pointer-events-none absolute right-3 text-xs font-semibold text-muted-foreground">kg</span>
             </div>
           </div>
@@ -747,81 +742,77 @@ onBeforeUnmount(() => {
       <!-- 生活狀況 -->
       <div class="space-y-4 border-t border-border pt-6">
         <div class="flex items-center gap-2">
-          <PawPrint class="h-4 w-4 text-primary" stroke-width="2" />
-          <h2 class="text-xs font-semibold tracking-wide text-foreground uppercase">生活狀況</h2>
+          <PawPrint class="size-4.5 text-primary" stroke-width="1.75" />
+          <h2 class="text-base font-semibold text-foreground">生活狀況</h2>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <div class="grid gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3">
           <div class="space-y-1.5">
             <Label for="new-pet-household-cat-count" class="text-xs font-medium text-foreground">家中貓口</Label>
-            <Input id="new-pet-household-cat-count" v-model="petForm.householdCatCount" type="number" min="0" class="h-9 text-sm" placeholder="例：1" />
+            <Input id="new-pet-household-cat-count" v-model="petForm.householdCatCount" type="number" min="0" class="num" placeholder="例：1" />
           </div>
-          <div class="space-y-1.5">
+          <div class="space-y-1.5 @4xl:col-span-2">
             <Label for="new-pet-diet" class="text-xs font-medium text-foreground">飲食</Label>
-            <Input id="new-pet-diet" v-model="petForm.diet" class="h-9 text-sm" placeholder="例：品牌、配方、特殊飲食" />
+            <Input id="new-pet-diet" v-model="petForm.diet" placeholder="例：品牌、配方、特殊飲食" />
           </div>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs font-medium text-foreground">主餐配菜</Label>
-          <div class="flex flex-wrap gap-2">
-            <button v-for="option in FOOD_OPTIONS" :key="option" type="button" class="rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:bg-accent hover:text-primary" :class="{ 'border-primary bg-accent font-medium text-primary': petForm.foods.includes(option) }" @click="toggleArrayValue('foods', option)">
-              {{ option }}
-            </button>
+          <div class="col-span-full space-y-1.5">
+            <Label class="text-xs font-medium text-foreground">主餐配菜</Label>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="option in FOOD_OPTIONS" :key="option" type="button" class="rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:bg-accent hover:text-primary" :class="{ 'border-primary bg-accent font-medium text-primary': petForm.foods.includes(option) }" @click="toggleArrayValue('foods', option)">
+                {{ option }}
+              </button>
+            </div>
           </div>
-        </div>
-        <div class="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
           <div class="space-y-1.5">
             <Label class="text-xs font-medium text-foreground">放飯頻率</Label>
-            <SegmentedControl v-model="petForm.feedingType" :options="FEEDING_OPTIONS" aria-label="放飯頻率" size="sm" full-width />
+            <SegmentedControl v-model="petForm.feedingType" :options="FEEDING_OPTIONS" aria-label="放飯頻率" full-width />
           </div>
           <div v-if="petForm.feedingType === 'scheduled'" class="space-y-1.5">
             <Label for="new-pet-meals-per-day" class="text-xs font-medium text-foreground">一日餐數</Label>
-            <Input id="new-pet-meals-per-day" v-model="petForm.mealsPerDay" type="number" min="1" class="h-9 w-28 text-sm" placeholder="例：2" />
+            <Input id="new-pet-meals-per-day" v-model="petForm.mealsPerDay" type="number" min="1" class="num" placeholder="例：2" />
           </div>
         </div>
       </div>
 
       <!-- 醫療病史（選填，永遠攤開） -->
       <div class="space-y-4 border-t border-border pt-6">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2">
-            <HeartPulse class="h-4 w-4 text-primary" stroke-width="2" />
-            <h2 class="text-xs font-semibold tracking-wide text-foreground uppercase">醫療病史與生活備註（選填）</h2>
-          </div>
+        <div class="flex items-center gap-2">
+          <HeartPulse class="size-4.5 text-primary" stroke-width="1.75" />
+          <h2 class="text-base font-semibold text-foreground">醫療病史與生活備註（選填）</h2>
         </div>
-        <div class="grid gap-4 sm:grid-cols-2">
+        <!-- 結紮／疫苗／健檢三個同型的切換排一列（選了「已注射」「有健檢」才在下面多出年月）；
+             藥物過敏跟病史接在下一列，備註整列——原本備註是兩欄格子裡的第三個，只佔左半邊。 -->
+        <div class="grid gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3">
           <div class="space-y-1.5">
             <Label class="text-xs font-medium text-foreground">結紮</Label>
-            <SegmentedControl v-model="petForm.neutered" :options="NEUTERED_OPTIONS" aria-label="結紮" size="sm" full-width />
+            <SegmentedControl v-model="petForm.neutered" :options="NEUTERED_OPTIONS" aria-label="結紮" full-width />
           </div>
           <div class="space-y-1.5">
             <Label class="text-xs font-medium text-foreground">疫苗</Label>
-            <SegmentedControl v-model="petForm.vaccineStatus" :options="VACCINE_OPTIONS" aria-label="疫苗" size="sm" full-width />
+            <SegmentedControl v-model="petForm.vaccineStatus" :options="VACCINE_OPTIONS" aria-label="疫苗" full-width />
             <YearMonthSelect v-if="petForm.vaccineStatus === 'done'" v-model="petForm.vaccineDate" label="最後注射時間" />
-          </div>
-        </div>
-        <div class="space-y-1.5">
-          <Label class="text-xs font-medium text-foreground">病史</Label>
-          <div class="flex flex-wrap gap-2">
-            <button v-for="option in HISTORY_OPTIONS" :key="option" type="button" class="rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:bg-accent hover:text-primary" :class="{ 'border-primary bg-accent font-medium text-primary': petForm.medicalHistory.includes(option) }" @click="toggleMedicalHistory(option)">
-              {{ option }}
-            </button>
-          </div>
-          <Input v-if="petForm.medicalHistory.includes('其他')" v-model="petForm.medicalHistoryOther" class="h-9 text-sm" placeholder="其他病史" />
-        </div>
-        <div class="grid gap-4 sm:grid-cols-2">
-          <div class="space-y-1.5">
-            <Label class="text-xs font-medium text-foreground">藥物過敏</Label>
-            <SegmentedControl v-model="petForm.allergyStatus" :options="ALLERGY_OPTIONS" aria-label="藥物過敏" size="sm" full-width />
-            <Input v-if="petForm.allergyStatus === 'yes'" v-model="petForm.allergyType" class="h-9 text-sm" placeholder="過敏類別" />
           </div>
           <div class="space-y-1.5">
             <Label class="text-xs font-medium text-foreground">健檢</Label>
-            <SegmentedControl v-model="petForm.checkupStatus" :options="CHECKUP_OPTIONS" aria-label="健檢" size="sm" full-width />
+            <SegmentedControl v-model="petForm.checkupStatus" :options="CHECKUP_OPTIONS" aria-label="健檢" full-width />
             <YearMonthSelect v-if="petForm.checkupStatus === 'done'" v-model="petForm.checkupDate" label="上次健檢時間" />
           </div>
           <div class="space-y-1.5">
+            <Label class="text-xs font-medium text-foreground">藥物過敏</Label>
+            <SegmentedControl v-model="petForm.allergyStatus" :options="ALLERGY_OPTIONS" aria-label="藥物過敏" full-width />
+            <Input v-if="petForm.allergyStatus === 'yes'" v-model="petForm.allergyType" placeholder="過敏類別" />
+          </div>
+          <div class="space-y-1.5 @2xl:col-span-2">
+            <Label class="text-xs font-medium text-foreground">病史</Label>
+            <div class="flex flex-wrap gap-2">
+              <button v-for="option in HISTORY_OPTIONS" :key="option" type="button" class="rounded-lg border border-border px-3 py-1.5 text-xs transition-colors hover:border-primary hover:bg-accent hover:text-primary" :class="{ 'border-primary bg-accent font-medium text-primary': petForm.medicalHistory.includes(option) }" @click="toggleMedicalHistory(option)">
+                {{ option }}
+              </button>
+            </div>
+            <Input v-if="petForm.medicalHistory.includes('其他')" v-model="petForm.medicalHistoryOther" placeholder="其他病史" />
+          </div>
+          <div class="col-span-full space-y-1.5">
             <Label for="new-pet-notes" class="text-xs font-medium text-foreground">其他備註與個性提醒</Label>
-            <Textarea id="new-pet-notes" v-model="petForm.notes" rows="2" class="text-sm" placeholder="例：到院極易緊迫、需毛巾包覆保定、就診前已服用 Gabapentin、剪指甲較敏感…" />
+            <Textarea id="new-pet-notes" v-model="petForm.notes" rows="2" placeholder="例：到院極易緊迫、需毛巾包覆保定、就診前已服用 Gabapentin、剪指甲較敏感…" />
           </div>
         </div>
       </div>
