@@ -91,9 +91,13 @@ const { value: surgeryName, errorMessage: surgeryNameError } = useField('surgery
 
 // ── 貓咪／飼主搜尋：直接放在 Modal 裡，不再疊一層選擇對話框 ─────────────────
 // 這是「選人用的候選清單」，跟頁面的提交式搜尋不同，邊打邊查。
+// 清單限高、超過就在框內捲動（同名的貓、同一位飼主養很多隻時，只列前幾筆會找不到要的那一隻）；
+// 一次最多拿 CANDIDATE_LIMIT 筆，再多就提示還有幾筆沒列出。
+const CANDIDATE_LIMIT = 50;
 function useCandidateSearch(endpoint) {
   const query = ref('');
   const results = ref([]);
+  const total = ref(0);
   const loading = ref(false);
   const failed = ref(false);
   let timer;
@@ -103,6 +107,7 @@ function useCandidateSearch(endpoint) {
     const keyword = value.trim();
     if (!keyword) {
       results.value = [];
+      total.value = 0;
       loading.value = false;
       return;
     }
@@ -110,9 +115,10 @@ function useCandidateSearch(endpoint) {
     timer = setTimeout(async () => {
       const current = ++sequence;
       try {
-        const { data } = await http.get(endpoint, { params: { q: keyword, limit: 6 } });
+        const { data } = await http.get(endpoint, { params: { q: keyword, limit: CANDIDATE_LIMIT } });
         if (current !== sequence) return;
         results.value = data.items ?? [];
+        total.value = data.total ?? results.value.length;
         failed.value = false;
       } catch {
         if (current === sequence) failed.value = true;
@@ -122,7 +128,8 @@ function useCandidateSearch(endpoint) {
     }, 250);
   });
   onBeforeUnmount(() => clearTimeout(timer));
-  return { query, results, loading, failed };
+  const hiddenCount = computed(() => (loading.value || failed.value ? 0 : Math.max(total.value - results.value.length, 0)));
+  return { query, results, loading, failed, hiddenCount };
 }
 
 const petSearch = useCandidateSearch('/pets');
@@ -261,7 +268,7 @@ const onSubmit = handleSubmit((values) => {
                     <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
                     <Input id="dialog-pet-search" v-model="petSearch.query.value" autofocus inputmode="search" class="h-11 pl-9" placeholder="貓咪名、飼主姓名或電話" autocomplete="off" />
                   </div>
-                  <div v-if="petSearch.query.value.trim()" class="overflow-hidden rounded-lg border border-border" aria-live="polite">
+                  <div v-if="petSearch.query.value.trim()" class="max-h-72 overflow-y-auto rounded-lg border border-border" aria-live="polite">
                     <p v-if="petSearch.loading.value" class="px-3 py-3 text-xs text-muted-foreground">搜尋中…</p>
                     <p v-else-if="petSearch.failed.value" class="px-3 py-3 text-xs text-destructive">搜尋失敗，請稍後再試</p>
                     <p v-else-if="!petSearch.results.value.length" class="px-3 py-3 text-xs text-muted-foreground">找不到符合的貓咪；第一次來請切到「初診」。</p>
@@ -275,6 +282,7 @@ const onSubmit = handleSubmit((values) => {
                     >
                       <span class="min-w-0 flex-1 truncate text-sm"><span class="font-semibold text-primary">{{ pet.name }}</span><span v-if="pet.breed" class="ml-2 text-xs text-muted-foreground">{{ pet.breed }}</span><span v-if="pet.ownerId?.name" class="ml-3 text-xs text-muted-foreground">{{ pet.ownerId.name }}</span><span v-if="pet.ownerId?.phone" class="num ml-3 text-xs text-muted-foreground">{{ pet.ownerId.phone }}</span></span>
                     </button>
+                    <p v-if="petSearch.hiddenCount.value" class="px-3 py-2.5 text-xs text-muted-foreground">還有 <span class="num">{{ petSearch.hiddenCount.value }}</span> 筆沒列出，請多打幾個字縮小範圍。</p>
                   </div>
                 </template>
                 <p v-if="pickPetError" class="text-xs font-medium text-destructive">{{ pickPetError }}</p>
@@ -293,7 +301,7 @@ const onSubmit = handleSubmit((values) => {
                       <Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
                       <Input id="dialog-owner-search" v-model="ownerSearch.query.value" inputmode="search" class="h-11 pl-9" placeholder="飼主姓名或電話" autocomplete="off" />
                     </div>
-                    <div v-if="ownerSearch.query.value.trim()" class="overflow-hidden rounded-lg border border-border" aria-live="polite">
+                    <div v-if="ownerSearch.query.value.trim()" class="max-h-72 overflow-y-auto rounded-lg border border-border" aria-live="polite">
                       <p v-if="ownerSearch.loading.value" class="px-3 py-3 text-xs text-muted-foreground">搜尋中…</p>
                       <p v-else-if="ownerSearch.failed.value" class="px-3 py-3 text-xs text-destructive">搜尋失敗，請稍後再試</p>
                       <p v-else-if="!ownerSearch.results.value.length" class="px-3 py-3 text-xs text-muted-foreground">找不到符合的飼主</p>
@@ -307,6 +315,7 @@ const onSubmit = handleSubmit((values) => {
                       >
                         <span class="font-semibold text-primary">{{ owner.name }}</span><span v-if="owner.phone" class="num text-xs text-muted-foreground">{{ owner.phone }}</span>
                       </button>
+                      <p v-if="ownerSearch.hiddenCount.value" class="px-3 py-2.5 text-xs text-muted-foreground">還有 <span class="num">{{ ownerSearch.hiddenCount.value }}</span> 筆沒列出，請多打幾個字縮小範圍。</p>
                     </div>
                   </template>
                   <p v-if="pickOwnerError" class="text-xs font-medium text-destructive">{{ pickOwnerError }}</p>
