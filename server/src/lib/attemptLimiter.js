@@ -3,9 +3,12 @@
 // 狀態放在記憶體。這套系統是單一容器，不需要跨程序共用；重啟後歸零也無妨 ——
 // 重啟一次要花的時間，遠比這段期間能多猜的次數值錢。
 //
-// 視窗從第一次失敗起算，到期整筆清掉，不是滑動視窗：猜密碼的人不會因為
-// 「一直試」而把自己的鎖定期往後延，但也拿不到比 max 更多的機會。
-export function createAttemptLimiter({ max, windowMs, maxEntries = 10_000 }) {
+// 兩段時間分開算：
+// - windowMs 是累計失敗的期間，從第一次失敗起算，到期整筆清掉，不是滑動視窗。
+// - lockMs 是達到上限後擋多久，從達到上限的那一次起算（沒給就跟 windowMs 一樣長）。
+//   不從第一次失敗起算，是因為失敗若分散在視窗頭尾，鎖定會只剩視窗的零頭。
+// 鎖定期間繼續失敗不會把解鎖時間往後推，但也拿不到比 max 更多的機會。
+export function createAttemptLimiter({ max, windowMs, lockMs = windowMs, maxEntries = 10_000 }) {
   const entries = new Map();
 
   function current(key, now) {
@@ -36,18 +39,32 @@ export function createAttemptLimiter({ max, windowMs, maxEntries = 10_000 }) {
       return Math.ceil((entry.resetAt - now) / 1000);
     },
 
+    // 回傳被擋之前還能再失敗幾次；0 表示這一次之後就擋下了。
     recordFailure(key, now = Date.now()) {
-      const entry = current(key, now);
-      if (entry) {
-        entry.count += 1;
-        return;
+      let entry = current(key, now);
+      if (!entry) {
+        makeRoom(now);
+        entry = { count: 0, resetAt: now + windowMs };
+        entries.set(key, entry);
       }
-      makeRoom(now);
-      entries.set(key, { count: 1, resetAt: now + windowMs });
+      entry.count += 1;
+      // 只有剛好達到上限的那一次起算鎖定，之後的失敗不再動它。
+      if (entry.count === max) entry.resetAt = now + lockMs;
+      return Math.max(max - entry.count, 0);
     },
 
     reset(key) {
       entries.delete(key);
     },
   };
+}
+
+// 把等待秒數寫成給人看的字。無條件進位到分鐘 —— 寧可叫人多等幾秒，
+// 也不要照著提示的時間回來卻還是被擋。
+export function describeWait(seconds) {
+  const minutes = Math.max(Math.ceil(seconds / 60), 1);
+  if (minutes < 60) return `${minutes} 分鐘`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return rest ? `${hours} 小時 ${rest} 分鐘` : `${hours} 小時`;
 }

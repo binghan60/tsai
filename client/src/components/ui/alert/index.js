@@ -19,6 +19,10 @@ export const alertVariants = cva(
         // 用 destructive token 而不是 red-50/red-200，深色主題才會跟著翻。
         destructive:
           "border-destructive/30 bg-destructive/10 text-destructive *:data-[slot=alert-description]:text-destructive/90 *:[svg]:text-current",
+        // 還沒出錯、但再這樣下去會出事的提醒（例如登入再錯幾次就鎖定）。
+        // 琥珀色沒有對應的語意 token，明暗兩態在這裡寫一次，使用端只給 variant。
+        warning:
+          "border-amber-200 bg-amber-50 text-amber-950 *:data-[slot=alert-description]:text-amber-900 *:[svg]:text-current dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200 dark:*:data-[slot=alert-description]:text-amber-200",
       },
     },
     defaultVariants: {

@@ -99,7 +99,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 ```
 認證（公開）
 GET    /api/auth/session                登入狀態：{ authRequired, authenticated }，一律 200
-POST   /api/auth/login                  密碼登入，種下登入 cookie；同一 IP 15 分鐘內錯 10 次回 429
+POST   /api/auth/login                  密碼登入，種下登入 cookie；同一 IP 一天內錯 3 次就鎖 1 天（回 429）
 POST   /api/auth/logout                 清除登入 cookie
 
 飼主
@@ -164,6 +164,7 @@ GET    /api/health/live                 公開，存活檢查（不碰資料庫�
 - 密碼放環境變數 `ADMIN_PASSWORD`，不進資料庫。正式環境沒設就啟動失敗；非正式環境沒設＝不啟用登入（開發與測試都靠這點）。
 - 登入狀態是簽章 cookie（`HttpOnly`、`SameSite=Lax`），伺服器不存 session，所以重新部署不會把人登出。有效 30 天，使用中每天自動換發。
 - 簽章金鑰由密碼衍生：**改密碼＝所有裝置登出**，這也是唯一的撤銷手段（無法單獨作廢某一張）。
+- **同一 IP 一天內密碼錯 3 次，從第 3 次起鎖 1 天**，鎖定期間連正確密碼也不受理（`routes/auth.js` + `lib/attemptLimiter.js`）。鎖的是來源 IP，不影響已經登入的裝置。紀錄放在記憶體：**重啟服務＝解除所有鎖定**，自己被鎖在外面時這是唯一的解法。IP 取自 `req.ip`，靠 `app.js` 的 `trust proxy` 設定才是用戶端位址——設錯會變成所有人共用代理的位址、一起被鎖。
 - 產 PDF 的 Puppeteer 只走 `/report/:token` 與 `/api/public/reports/:token`，不需要登入狀態。**不要為了 PDF 在門禁上開洞。**
 - CSRF 靠 `SameSite=Lax`：會改資料的端點都不是 GET。新增端點時維持這一點。
 
@@ -247,6 +248,7 @@ GET    /api/health/live                 公開，存活檢查（不碰資料庫�
   | 空狀態 | `<EmptyState :icon :title :description>`，卡片內部加 `inset` | 不要手寫虛線框 |
   | 清單載入中 | `<ListSkeleton :rows>` | 不要用「載入中…」一行字（版面會塌陷再彈開） |
   | 錯誤訊息 | `<Alert variant="destructive"><AlertDescription>` | 不要手寫紅框 |
+  | 警告提醒（還沒出錯，但再下去會出事） | `<Alert variant="warning">` | 不要手寫琥珀色框 |
   | 對話框 | `<DialogContent size="sm|md|lg">` | 不要用 `class="sm:max-w-*"` 覆寫寬度 |
   | 狀態徽章 | `<Badge variant="status">` | 不要覆寫 padding／圓角 |
   | 刪除等危險操作確認 | `<ConfirmDialog>` | **禁止用瀏覽器原生 `confirm()`／`alert()`**——樣式跳出主題、行動裝置體驗差、也擋不住連點 |

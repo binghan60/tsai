@@ -92,10 +92,15 @@ describe('admin login', () => {
     assert.deepEqual(await authenticated.json(), { authRequired: true, authenticated: true });
   });
 
-  it('refuses a wrong password and sets no cookie', async () => {
+  it('refuses a wrong password, sets no cookie, and warns how many tries are left', async () => {
+    // 先成功登入一次把計數歸零，訊息裡的剩餘次數才不受前面的測試影響。
+    await loggedInCookie();
     const response = await login('not the password');
     assert.equal(response.status, 401);
-    assert.deepEqual(await response.json(), { message: '密碼不正確' });
+    assert.deepEqual(await response.json(), {
+      message: '密碼不正確',
+      warning: '剩餘嘗試次數：2 次。累計錯誤達 3 次時，此 IP 位址將鎖定 24 小時。',
+    });
     assert.deepEqual(response.headers.getSetCookie(), []);
   });
 
@@ -133,15 +138,22 @@ describe('admin login', () => {
   });
 
   // 放最後：鎖定之後這個來源（127.0.0.1）在同一個程序裡就登不進去了。
-  it('locks out the source after ten wrong passwords, even for the right one', async () => {
+  it('locks out the source for a day after three wrong passwords, even for the right one', async () => {
     // 先成功登入一次把計數歸零，前面測試留下的失敗次數才不會算進來。
     await loggedInCookie();
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      assert.equal((await login('wrong')).status, 401);
-    }
+    assert.equal((await login('wrong')).status, 401);
+    const second = await login('wrong');
+    assert.equal(second.status, 401);
+    assert.match((await second.json()).warning, /^剩餘嘗試次數：1 次/);
+    const third = await login('wrong');
+    assert.equal(third.status, 401);
+    assert.deepEqual(await third.json(), { message: '密碼錯誤已達 3 次，此 IP 位址已鎖定 24 小時', locked: true });
+
     const blocked = await login(PASSWORD);
     assert.equal(blocked.status, 429);
-    assert.ok(Number(blocked.headers.get('retry-after')) > 0);
+    const retryAfter = Number(blocked.headers.get('retry-after'));
+    assert.ok(retryAfter > 23 * 60 * 60 && retryAfter <= 24 * 60 * 60, `retry-after ${retryAfter}`);
+    assert.deepEqual(await blocked.json(), { message: '此 IP 位址已鎖定，請於 24 小時後再試', locked: true });
     assert.deepEqual(blocked.headers.getSetCookie(), []);
   });
 });
