@@ -364,6 +364,15 @@ async function approveReopen() {
                 <h3 id="desk-note-heading" class="text-base font-semibold">本次簡易紀錄</h3>
                 <Button v-if="!editingNote && !state.completed" variant="secondary" size="sm" class="ml-auto" :disabled="busy" @click="startEditNote"><Pencil stroke-width="1.75" />編輯</Button>
               </div>
+              <!-- 體重、體溫是這次看診的資料，跟紀錄放同一段、排在紀錄上面（講紀錄時常順便說「今天幾公斤」）。
+                   這裡只看不改：量測是診療台的欄位。沒量就留白，格子照畫。 -->
+              <!-- 左緣對齊下面紀錄框裡的文字（框是 p-4）。內距不能加在 SpecGrid 本身：它靠 overflow 裁掉第一格的分隔線。 -->
+              <div class="px-4">
+                <SpecGrid>
+                  <SpecCell label="體重" mono><template v-if="appointment.weightKg != null">{{ appointment.weightKg }} kg</template></SpecCell>
+                  <SpecCell label="體溫" mono><template v-if="appointment.temperatureC != null">{{ appointment.temperatureC }} °C</template></SpecCell>
+                </SpecGrid>
+              </div>
               <RichTextEditor v-if="editingNote" id="desk-visit-note" v-model="visitNote" aria-label="本次簡易紀錄" :min-rows="8" :disabled="busy || state.completed" placeholder="輸入本次看診紀錄…" />
               <RichText v-else class="min-h-[calc(1lh+2rem)] wrap-anywhere rounded-xl bg-sunken p-4 leading-relaxed" :text="appointment.visitNote || ''" />
               <Alert v-if="editingNote && noteConflict" variant="destructive">

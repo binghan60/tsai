@@ -102,7 +102,7 @@ const displayedStages = computed(() => props.stages?.length ? MEDICATION_STAGES.
 const terminal = computed(() => ['collected', 'cancelled'].includes(selected.value?.status));
 const dirty = computed(() => opened.value && JSON.stringify(form) !== initial.value);
 const clinicalEditable = computed(() => !terminal.value && (!selected.value || doctor.value || selected.value.status === 'review'));
-// 右欄顯示編輯框的時機：新增藥單、按了「修改藥單」，或醫師正在審核（全頁版目前只有櫃台在用，保留給醫師的路徑）。
+// 右欄顯示編輯框的時機：新增藥單、按了「修改藥單」，或醫師打開還沒結束的藥單（醫師隨時可以改藥單內容，跟面板一樣）。
 const showEditor = computed(() => !fullPage.value || !selected.value || editing.value || (doctor.value && clinicalEditable.value));
 const changedClinical = computed(() => selected.value && ['condition', 'prescription', 'note'].some(key => form[key].trim() !== selected.value[key]));
 function tone(status) {
@@ -159,12 +159,15 @@ function goToPage(value) {
 }
 function setFilter(value) { page.value = 1; filter.value = value; }
 // 全頁版清單列上的 ⋯：列上的主要動作是確認領藥／完成包藥時，「查看藥單」收在這裡；取消藥單放最後。
+// 醫師端跟面板一樣不從清單取消藥單（取消是櫃台跟飼主確認後的事），所以醫師的列沒有選單。
 function rowActions(item) {
   return [
     ...(nextAction(item) ? [{ key: 'open', label: '查看藥單' }] : []),
-    ...(!['collected', 'cancelled'].includes(item.status) ? [{ key: 'cancel', label: '取消藥單', danger: true }] : []),
+    ...(!doctor.value && !['collected', 'cancelled'].includes(item.status) ? [{ key: 'cancel', label: '取消藥單', danger: true }] : []),
   ];
 }
+// 清單列上沒有下一步可按時的那顆：醫師遇到待確認的藥單是「審核」，其餘都是「查看」。
+function openLabel(item) { return doctor.value && item.status === 'review' ? '審核' : '查看'; }
 function runRowAction(key, item) {
   if (key === 'open') openOrder(item);
   else cancelFromList(item);
@@ -323,8 +326,8 @@ function requestAction(action) {
   } else execute(action);
 }
 // 清單上的「完成」：跟詳情裡的「完成包藥」「確認領藥」是同一個動作，只是不必先點進去。
-// 待醫師確認（還在等醫師）與已結束的藥單沒有下一步，所以不出現。
-function nextAction(item) { return { approved: 'ready', ready: 'collect' }[item.status] || ''; }
+// 待醫師確認（還在等醫師）與已結束的藥單沒有下一步，所以不出現；包藥與交付是櫃台的事，醫師端也不出現。
+function nextAction(item) { return doctor.value ? '' : { approved: 'ready', ready: 'collect' }[item.status] || ''; }
 function completeLabel(item) { return nextAction(item) === 'ready' ? `完成 ${item.petName} 的包藥` : `確認 ${item.petName} 已領藥`; }
 function completeFromList(item) {
   const action = nextAction(item);
@@ -397,7 +400,7 @@ onBeforeUnmount(() => {
       </template>
       <Alert v-if="error" variant="destructive" class="m-4"><AlertDescription>{{ error }}</AlertDescription></Alert>
       <ListSkeleton v-if="loading && !items.length" :rows="5" inset />
-      <EmptyState v-else-if="!items.length" :icon="Pill" :title="error ? '暫時無法載入藥單' : '目前沒有符合條件的藥單'" description="飼主來電續藥時，按右上角「新增藥單」登記。" inset />
+      <EmptyState v-else-if="!items.length" :icon="Pill" :title="error ? '暫時無法載入藥單' : '目前沒有符合條件的藥單'" :description="doctor ? '' : '飼主來電續藥時，按右上角「新增藥單」登記。'" inset />
       <template v-else>
       <!-- 桌機：一列一張藥單。需重新包藥的列左側一條紅線。 -->
       <div class="hidden xl:block">
@@ -424,8 +427,8 @@ onBeforeUnmount(() => {
           </span>
           <span class="desktop-data-cell flex items-center justify-end gap-1">
             <Button v-if="nextAction(item)" variant="soft" size="sm" :disabled="busy" :aria-label="completeLabel(item)" @click="completeFromList(item)">{{ nextAction(item) === 'ready' ? '完成包藥' : '確認領藥' }}</Button>
-            <Button v-else variant="soft" size="sm" :disabled="busy" @click="openOrder(item)">查看</Button>
-            <RowActions v-if="nextAction(item) || !['collected', 'cancelled'].includes(item.status)" :actions="rowActions(item)" :label="`${item.petName} 藥單的更多操作`" @select="(key) => runRowAction(key, item)" />
+            <Button v-else variant="soft" size="sm" :disabled="busy" :aria-label="`${openLabel(item)} ${item.petName} 的藥單`" @click="openOrder(item)">{{ openLabel(item) }}</Button>
+            <RowActions v-if="rowActions(item).length" :actions="rowActions(item)" :label="`${item.petName} 藥單的更多操作`" @select="(key) => runRowAction(key, item)" />
             <span v-else class="size-9 shrink-0" aria-hidden="true" />
           </span>
         </div>
@@ -439,14 +442,14 @@ onBeforeUnmount(() => {
               <span class="block truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
               <span class="flex gap-3 text-sm text-muted-foreground"><span class="truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink></span><span class="num shrink-0">{{ relativeTimeLabel(item.createdAt) }}</span></span>
             </div>
-            <RowActions v-if="nextAction(item) || !['collected', 'cancelled'].includes(item.status)" :actions="rowActions(item)" :label="`${item.petName} 藥單的更多操作`" @select="(key) => runRowAction(key, item)" />
+            <RowActions v-if="rowActions(item).length" :actions="rowActions(item)" :label="`${item.petName} 藥單的更多操作`" @select="(key) => runRowAction(key, item)" />
           </div>
           <p class="line-clamp-2 text-sm">{{ richTextToPlain(item.prescription) }}</p>
           <div class="flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
             <Badge v-if="item.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>
             <Button v-if="nextAction(item)" variant="soft" size="sm" class="ml-auto" :disabled="busy" @click="completeFromList(item)">{{ nextAction(item) === 'ready' ? '完成包藥' : '確認領藥' }}</Button>
-            <Button v-else variant="soft" size="sm" class="ml-auto" :disabled="busy" @click="openOrder(item)">查看</Button>
+            <Button v-else variant="soft" size="sm" class="ml-auto" :disabled="busy" @click="openOrder(item)">{{ openLabel(item) }}</Button>
           </div>
         </li>
       </ul>
@@ -658,6 +661,8 @@ onBeforeUnmount(() => {
           <Button :disabled="busy || stale || !dirty" @click="requestAction('edit')">{{ changedClinical && selected.status !== 'review' ? '修改並重新送審' : '儲存修改' }}</Button>
         </template>
         <template v-else>
+          <!-- 醫師端：跟面板一樣，還沒結束的藥單都能直接改；已確認的改了會退回待確認（requestAction 會先問）。 -->
+          <Button v-if="doctor && clinicalEditable" variant="secondary" :disabled="busy || stale || !dirty" @click="requestAction('edit')">{{ changedClinical && selected.status !== 'review' ? '修改並重新送審' : '儲存修改' }}</Button>
           <RowActions v-if="moreActions.length" size="default" :actions="moreActions" :label="`${selected.petName} 藥單的更多操作`" @select="runMoreAction" />
           <Button v-if="primaryAction" :disabled="busy || stale || primaryAction.disabled" @click="requestAction(primaryAction.key)">{{ primaryAction.label }}</Button>
         </template>

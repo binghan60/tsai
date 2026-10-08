@@ -200,7 +200,7 @@ try {
   await click(desk, '完成重新包藥'); await click(desk, '確認'); await closed(desk);
   await stage(desk, '待領藥'); await open(desk); await click(desk, '確認領藥'); await click(desk, '確認'); await closed(desk);
   assert.equal(orders.get(String(created._id)).status, 'collected');
-  // 已領藥的歷史：/medications 全頁版（stages ready+collected）看得到，頁首的藥單面板最後一個分頁也是「已領藥」。
+  // 已領藥的歷史：/medications 全頁版（全部階段，跟面板同一套）看得到，頁首的藥單面板最後一個分頁也是「已領藥」。
   await desk.goto(`${origin}/medications`);
   await stage(desk, '已領藥');
   await desk.waitForFunction(() => document.querySelectorAll('[data-medication-row]').length === 2);

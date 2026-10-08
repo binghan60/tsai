@@ -38,7 +38,7 @@ const router = createRouter({
     { path: '/', component: DashboardPage, meta: { title: '總覽' } },
     { path: '/appointments', component: VetConsolePage, meta: { title: '診療台' } },
     { path: '/reception', component: ReceptionPage, meta: { title: '掛號台' } },
-    { path: '/medications', component: MedicationPickupPage, meta: { title: '領藥' } },
+    { path: '/medications', component: MedicationPickupPage, meta: { title: '藥單' } },
     { path: '/reception/intakes', component: IntakeReviewPage, meta: { title: '初診表審核', nav: '/reception' } },
     // 舊書籤：看診不再是獨立頁面，改成診療台右欄的工作區。
     { path: '/appointments/:id/visit', redirect: '/appointments' },

@@ -36,7 +36,7 @@ import YearMonthSelect from '../components/YearMonthSelect.vue';
 import BreedSelect from '../components/BreedSelect.vue';
 import { catBreedLabel } from '../../../shared/catBreeds.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
-import { emptyOwnerDraft, emptyPetDraft } from '../lib/formDrafts';
+import { emptyOwnerDraft, emptyPetDraft, ownerDraftTouched, petDraftTouched } from '../lib/formDrafts';
 import { birthDateLabel } from '../lib/datetime';
 import { useToast } from '../composables/useToast';
 
@@ -371,14 +371,11 @@ const submitError = ref('');
 const leavingAfterAction = ref(false);
 const pendingLeavePath = ref('');
 
+// 表單還是空的就不攔離開。從貓咪詳情頁「新增貓咪」帶 ?ownerId= 進來時飼主是自動鎖定的，不算使用者填過；
+// 自己搜尋選了飼主才算。
 const isDirty = computed(() => {
-  if (selectedOwner.value) return true;
-  if (Object.values(newOwner.value).some((v) => String(v ?? '').trim())) return true;
-  return Object.entries(petForm.value).some(([key, value]) => {
-    if (key === 'sex' || key === 'neutered') return false;
-    if (key === 'species' && value === '貓') return false;
-    return String(value ?? '').trim();
-  });
+  if (selectedOwner.value && selectedOwner.value._id !== route.query.ownerId) return true;
+  return ownerDraftTouched(newOwner.value) || petDraftTouched(petForm.value);
 });
 
 async function submit() {
