@@ -2,8 +2,9 @@
 import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { AlertTriangle, ArrowRight, CalendarClock, Check, ChevronLeft, ChevronRight, CircleDashed, Clock, Hourglass, RefreshCw, Stethoscope, Undo2 } from '@lucide/vue'
+import { AlertTriangle, ArrowRight, CalendarClock, Check, ChevronLeft, ChevronRight, CircleDashed, Clock, FlaskConical, Hourglass, RefreshCw, Stethoscope, Undo2 } from '@lucide/vue'
 import { http } from '../api/http'
+import { getSocket } from '../api/socket'
 import { useToast } from '../composables/useToast'
 import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
@@ -11,6 +12,7 @@ import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { clinicDateInput, clinicTimeInput, shiftDateInput } from '../lib/datetime'
 import { workflowFilter, workflowState } from '../../../shared/appointmentWorkflow.js'
 import { latenessLabel, patientNotesFor } from '../lib/appointmentDisplay'
+import { LAB_PROGRESS, labProgress } from '../lib/labResults'
 import { isOverdue, minutesPastSchedule } from '../lib/receptionBoard'
 import { MIDDAY_BREAK, nowIndexInSession, SESSIONS } from '../lib/appointmentTimeline'
 import PatientNotes from '../components/PatientNotes.vue'
@@ -59,6 +61,9 @@ const busy = ref(false)
 const templates = ref([])
 // 貓咪／飼主備註存在主檔上，列表 API 另外回一份以 id 為鍵的對照表（見 routes/appointments.js）。
 const patientNotes = ref({ pets: {}, owners: {} })
+// 每筆掛號連到幾份 IDEXX 結果（伺服器另外回的對照表）：清單上標「檢驗中／檢驗已出」。
+const labResultCounts = ref({})
+const labOf = (item) => LAB_PROGRESS[labProgress(item, labResultCounts.value[String(item._id)])] ?? null
 
 // 精簡（一行一筆）／詳細（原因、備註全展開）是這台電腦的顯示偏好，存 localStorage。
 const DENSITY_STORAGE_KEY = 'clinic.vetConsoleDensity'
@@ -242,6 +247,7 @@ async function refresh() {
     if (previous.size) for (const item of data.items || []) announceCheckIn(previous.get(String(item._id)) || null, item)
     items.value = data.items || []
     patientNotes.value = { pets: data.patientNotes?.pets || {}, owners: data.patientNotes?.owners || {} }
+    labResultCounts.value = data.labResultCounts || {}
     error.value = ''
     // 已經不存在的病患（換日期、被刪除）自動關掉，避免停在一筆看不到的病患上。
     if (!byId.value.has(activeId.value)) activeId.value = ''
@@ -403,9 +409,12 @@ onMounted(() => {
   loadTemplates()
   loadTextTemplates().catch(() => {})
   refresh()
+  // 檢驗結果進來、被確認或匯入：清單上的「檢驗中／檢驗已出」要跟著變。
+  getSocket().on('lab-results:updated', refresh)
 })
 onBeforeUnmount(() => {
   request += 1
+  getSocket().off('lab-results:updated', refresh)
   clearInterval(clock)
 })
 </script>
@@ -480,9 +489,17 @@ onBeforeUnmount(() => {
                   <Badge v-if="item.visitType === 'new'" variant="status" class="h-6 bg-info-surface px-2 text-info">初診</Badge>
                   <!-- 精簡版只寫「手術」（一行放不下「手術：結紮」），手術名稱滑過才出；詳細版整顆帶名稱。 -->
                   <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" :short="compact" class="h-6 min-w-0 shrink px-2" />
+                  <!-- 檢驗進度：詳細版寫字，精簡版只放一個燒瓶圖示（跟遲到、備註圖示同一排）。 -->
+                  <Badge v-if="!compact && labOf(item)" variant="status" class="h-6 shrink-0 px-2" :class="labOf(item).badge"><FlaskConical stroke-width="2" aria-hidden="true" />{{ labOf(item).label }}</Badge>
                   <span v-if="compact" class="min-w-0 flex-1 truncate text-sm text-muted-foreground" v-tip.overflow="item.reason || undefined">{{ item.reason }}</span>
                   <TooltipProvider v-if="compact" :delay-duration="150">
                     <span class="flex shrink-0 items-center gap-1">
+                      <Tooltip v-if="labOf(item)">
+                        <TooltipTrigger as-child>
+                          <span class="flex size-5 items-center justify-center" :aria-label="labOf(item).label"><FlaskConical class="size-4" :class="labOf(item).icon" stroke-width="2" /></span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top"><span class="font-semibold">{{ labOf(item).label }}</span></TooltipContent>
+                      </Tooltip>
                       <Tooltip v-if="item.latenessMinutes > 0">
                         <TooltipTrigger as-child>
                           <span class="flex size-5 items-center justify-center" :aria-label="`遲到 ${item.latenessMinutes} 分`"><Clock class="size-4 text-danger" stroke-width="2" /></span>

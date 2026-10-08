@@ -1,8 +1,9 @@
 <script setup>
 import { apiErrorMessage } from '../../lib/apiError.js';
-import { computed, onActivated, onMounted, ref, watch } from 'vue';
-import { FlaskConical } from '@lucide/vue';
+import { computed, onActivated, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { FlaskConical, Search } from '@lucide/vue';
 import { http } from '../../api/http';
+import { getSocket } from '../../api/socket';
 import { useToast } from '../../composables/useToast';
 import { clinicDateInput, formatDateTime, weekdayLabel } from '../../lib/datetime';
 import { bridgeStatusLine, fillMessage, instrumentLabel, visitStatusLabel } from '../../lib/labResults';
@@ -14,9 +15,12 @@ import EmptyState from '../EmptyState.vue';
 import ListSkeleton from '../ListSkeleton.vue';
 import ConfirmDialog from '../ConfirmDialog.vue';
 import LabConflictDialog from '../LabConflictDialog.vue';
+import ModalDialog from '../ModalDialog.vue';
 import Pagination from '../Pagination.vue';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
+import { DatePicker } from '../ui/date-picker';
+import { Input } from '../ui/input';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 
 // IDEXX 檢驗結果的待確認清單：認不出是哪隻貓的結果（IDEXX 主機上手打名字、沒帶系統的貓咪編號）放在這裡，
@@ -41,6 +45,9 @@ const total = ref(0);
 const totalPages = ref(1);
 const listTop = ref(null);
 let listRequest = 0;
+// 搜尋 IDEXX 上的貓名／飼主名（跟診療台「匯入檢驗結果」同一個參數）。清單可能有幾百筆，一頁一頁翻找不到。
+const keyword = ref('');
+let searchTimer;
 
 const view = computed(() => (panel.stacks.lab || []).at(-1) || null);
 // 確認畫面開著時，新結果進來會把這筆擠到下一頁，所以留一份點開當下的資料當後備；
@@ -68,7 +75,7 @@ async function refresh() {
   const id = ++listRequest;
   try {
     const [{ data }, { data: conflictData }] = await Promise.all([
-      http.get('/lab-results', { params: { page: page.value, limit: PAGE_SIZE } }),
+      http.get('/lab-results', { params: { page: page.value, limit: PAGE_SIZE, ...(keyword.value.trim() ? { q: keyword.value.trim() } : {}) } }),
       http.get('/lab-results/conflicts'),
     ]);
     if (id !== listRequest) return;
@@ -92,6 +99,13 @@ async function refresh() {
 watch(page, () => {
   refresh();
   listTop.value?.scrollIntoView({ block: 'start' });
+});
+watch(keyword, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    if (page.value === 1) refresh();
+    else page.value = 1;
+  }, 300);
 });
 
 function idexxOwner(item) {
@@ -189,13 +203,69 @@ async function confirmDismiss() {
   busy.value = true;
   try {
     await http.post(`/lab-results/${item._id}/dismiss`);
-    toast.success('這份檢驗結果不會填進任何報告', '已忽略');
+    // 忽略之後它不在任何清單上，按錯只有這裡救得回來。
+    toast.addToast({
+      type: 'success', title: '已忽略', message: '這份檢驗結果不會填進任何報告',
+      action: { label: '復原', handler: () => restoreDismissed(() => http.post(`/lab-results/${item._id}/undismiss`)) },
+    });
     dismissing.value = false;
     panel.back();
   } catch (err) {
     toast.error(apiErrorMessage(err, '忽略失敗，請稍後再試'));
   } finally {
     busy.value = false;
+    afterChange();
+  }
+}
+
+async function restoreDismissed(request) {
+  try {
+    await request();
+    toast.success('已經回到待確認清單', '已復原');
+  } catch (err) {
+    toast.error(apiErrorMessage(err, '復原失敗，請稍後再試'));
+  } finally {
+    afterChange();
+  }
+}
+
+// 忽略舊的：一次忽略某一天以前驗的（IDEXX 主機補傳歷史紀錄會進來幾百筆，一筆一筆按不完）。
+// 先算有幾筆再讓人確認；忽略後的提示可以整批復原。
+const bulk = ref(null); // { before, count, loading }
+const bulkBusy = ref(false);
+let bulkRequest = 0;
+
+function openBulk() {
+  bulk.value = { before: clinicDateInput(new Date(Date.now() - 6 * 86_400_000)), count: null };
+}
+
+watch(() => bulk.value?.before, async (before) => {
+  const id = ++bulkRequest;
+  if (!bulk.value) return;
+  bulk.value.count = null;
+  if (!before) return;
+  try {
+    const { data } = await http.get('/lab-results', { params: { before, limit: 1 } });
+    if (id === bulkRequest && bulk.value) bulk.value.count = data.total ?? 0;
+  } catch {
+    // 算不出來就不給按。
+  }
+});
+
+async function confirmBulk() {
+  if (!bulk.value?.count || bulkBusy.value) return;
+  bulkBusy.value = true;
+  try {
+    const { data } = await http.post('/lab-results/dismiss-before', { before: bulk.value.before });
+    toast.addToast({
+      type: 'success', title: `已忽略 ${data.dismissed} 筆`, message: '這些檢驗結果不會填進任何報告',
+      action: { label: '復原', handler: () => restoreDismissed(() => http.post('/lab-results/undismiss-batch', { dismissedAt: data.dismissedAt })) },
+    });
+    bulk.value = null;
+  } catch (err) {
+    toast.error(apiErrorMessage(err, '忽略失敗，請稍後再試'));
+  } finally {
+    bulkBusy.value = false;
     afterChange();
   }
 }
@@ -232,9 +302,16 @@ function refreshAll() {
   counts.loadBridges();
 }
 
-// 工具欄上的數字變了（新結果進來、別台處理掉）就重讀清單。
-watch(() => counts.labResults, refresh);
-onMounted(refreshAll);
+// 新結果進來、別台處理掉就重讀清單。直接聽事件，不看工具欄的數字——那個數字只算近七天，更早的變動不會讓它變。
+const socket = getSocket();
+onMounted(() => {
+  refreshAll();
+  socket.on('lab-results:updated', refresh);
+});
+onBeforeUnmount(() => {
+  socket.off('lab-results:updated', refresh);
+  clearTimeout(searchTimer);
+});
 onActivated(refreshAll);
 </script>
 
@@ -355,14 +432,20 @@ onActivated(refreshAll);
           </li>
         </ul>
       </section>
+      <div v-if="!loading && !error && (items.length || keyword)" class="relative mx-5 mt-3">
+        <Search class="pointer-events-none absolute top-1/2 left-3 size-4.5 -translate-y-1/2 text-subtle-foreground" stroke-width="1.75" aria-hidden="true" />
+        <Input v-model="keyword" type="search" class="pl-10" aria-label="搜尋 IDEXX 上的貓咪名字或飼主" placeholder="搜尋 IDEXX 上的貓咪名字或飼主" />
+      </div>
       <ListSkeleton v-if="loading" :rows="3" inset />
       <Alert v-else-if="error" variant="destructive" class="mx-5 mt-4 w-auto"><AlertDescription>{{ error }}</AlertDescription></Alert>
+      <EmptyState v-else-if="!items.length && keyword.trim()" :icon="FlaskConical" title="找不到符合的檢驗結果" inset />
       <EmptyState v-else-if="!items.length && !conflicts.length" :icon="FlaskConical" title="沒有待確認的檢驗結果" inset />
       <section v-else-if="items.length" aria-labelledby="lab-pending-title">
-        <h3 id="lab-pending-title" class="flex items-baseline gap-2 px-5 pt-3 pb-1 text-sm font-semibold">
+        <h3 id="lab-pending-title" class="flex items-center gap-2 px-5 pt-3 pb-1 text-sm font-semibold">
           還沒選貓
           <span class="num font-normal text-muted-foreground">共 {{ total.toLocaleString('zh-TW') }} 筆</span>
-          <span v-if="totalPages > 1" class="num ml-auto text-xs font-normal text-subtle-foreground">第 {{ page }}／{{ totalPages }} 頁</span>
+          <span v-if="totalPages > 1" class="num text-xs font-normal text-subtle-foreground">第 {{ page }}／{{ totalPages }} 頁</span>
+          <Button variant="secondary" size="xs" class="ml-auto" @click="openBulk">忽略舊的</Button>
         </h3>
         <ul class="divide-y divide-border">
           <li v-for="item in items" :key="item._id">
@@ -392,6 +475,18 @@ onActivated(refreshAll);
       @update:open="(value) => !value && (removingBridge = '')"
       @confirm="confirmRemoveBridge"
     />
+    <ModalDialog v-if="bulk" size="sm" title="忽略舊的檢驗結果" description="這一天以前驗的、還沒選貓的結果一次忽略；當天的不算。" @close="bulk = null">
+      <div class="space-y-3 px-6 py-4">
+        <DatePicker v-model="bulk.before" :clearable="false" aria-label="忽略這一天以前驗的" class="w-44" />
+        <p class="min-h-lh text-base">
+          <template v-if="bulk.count !== null">共 <span class="num font-semibold">{{ bulk.count.toLocaleString('zh-TW') }}</span> 筆</template>
+        </p>
+      </div>
+      <div class="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
+        <Button variant="secondary" :disabled="bulkBusy" @click="bulk = null">取消</Button>
+        <Button variant="destructive-solid" :disabled="bulkBusy || !bulk.count" @click="confirmBulk">忽略</Button>
+      </div>
+    </ModalDialog>
     <LabConflictDialog
       v-if="conflictGroup"
       :group="conflictGroup"

@@ -81,6 +81,11 @@ const labResultSchema = new mongoose.Schema(
     // conflicts 還沒有人處理（「檢驗」面板與健檢報告會跳出比對視窗，選覆蓋或保留後關掉）。
     conflictsOpen: { type: Boolean, default: false },
     conflictsResolvedAt: { type: Date, default: null },
+    // 比對視窗按下去時換掉了哪幾格、原本是什麼值：按「復原」（POST /:id/conflicts/reopen）時填回去、差異重新打開。
+    conflictsOverwritten: {
+      type: [new mongoose.Schema({ key: String, previous: String }, { _id: false })],
+      default: [],
+    },
     // 表單裡沒有對應 IDEXX 代號的項目（「檢驗別・代號」，見 lib/labResultFill.js 的 unmappedLabel）；
     // 一直出現在這裡代表表單設計頁的代號或檢驗別還沒設對。
     unmappedCodes: { type: [String], default: [] },

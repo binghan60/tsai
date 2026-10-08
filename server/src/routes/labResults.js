@@ -6,7 +6,8 @@ import { hasIdexxBridgeAccess, idexxBridgeConfigured, idexxCensusSettings } from
 import { IdexxParseError, decodeIdexxXml, parseIdexxResult } from '../lib/idexxResult.js';
 import { labResultContent, planLabResultImport } from '../lib/labResultImport.js';
 import {
-  applyLabResult, dismissLabResult, editLabResultValues, matchByPatientId, matchManually, openConflicts, resolveConflicts, unmatchLabResult,
+  applyLabResult, dismissLabResult, dismissLabResultsBefore, editLabResultValues, matchByPatientId, matchManually, openConflicts,
+  reopenConflicts, resolveConflicts, undismissLabResult, undismissLabResultBatch, unmatchLabResult,
 } from '../lib/labResultApply.js';
 import { rankCandidates } from '../lib/labResultFill.js';
 import { markIdexxRequestDelivered, pendingIdexxRequests } from '../lib/idexxRequests.js';
@@ -276,6 +277,14 @@ labResultsRouter.get('/', async (req, res, next) => {
       const pattern = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       filter.$and = [{ $or: [{ 'patient.name': pattern }, { 'client.lastName': pattern }, { 'client.firstName': pattern }] }];
     }
+    // 待確認清單的日期範圍：since＝這一天（含）之後驗的（工具欄的數字只算近幾天）、before＝這一天以前驗的（「忽略舊的」先算有幾筆）。
+    if (!petId && (req.query.since !== undefined || req.query.before !== undefined)) {
+      const range = {};
+      if (req.query.since !== undefined) range.$gte = clinicDayStart(req.query.since);
+      if (req.query.before !== undefined) range.$lt = clinicDayStart(req.query.before);
+      if (Object.values(range).some((value) => !value)) return res.status(422).json({ message: '日期參數不正確' });
+      filter.runAt = range;
+    }
     const pagination = paginationOptions(req.query);
     const [items, total] = await Promise.all([
       LabResult.find(filter).sort({ runAt: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit).lean(),
@@ -353,6 +362,51 @@ labResultsRouter.post('/:id/conflicts/resolve', async (req, res, next) => {
     const result = await resolveConflicts(req.params.id, req.body?.overwrite);
     emitLabResultsUpdate();
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 比對視窗的「復原」：換掉的格子填回去，差異重新打開。
+labResultsRouter.post('/:id/conflicts/reopen', async (req, res, next) => {
+  try {
+    if (!validId(req, res)) return;
+    const result = await reopenConflicts(req.params.id);
+    emitLabResultsUpdate();
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 一次忽略某一天以前的待確認結果，body { before: 'YYYY-MM-DD' }；回 { dismissed, dismissedAt }。
+labResultsRouter.post('/dismiss-before', async (req, res, next) => {
+  try {
+    const result = await dismissLabResultsBefore(req.body?.before);
+    if (result.dismissed) emitLabResultsUpdate();
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 整批忽略的復原，body { dismissedAt }（dismiss-before 回傳的那個時間）。
+labResultsRouter.post('/undismiss-batch', async (req, res, next) => {
+  try {
+    const result = await undismissLabResultBatch(req.body?.dismissedAt);
+    if (result.restored) emitLabResultsUpdate();
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+labResultsRouter.post('/:id/undismiss', async (req, res, next) => {
+  try {
+    if (!validId(req, res)) return;
+    await undismissLabResult(req.params.id);
+    emitLabResultsUpdate();
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }

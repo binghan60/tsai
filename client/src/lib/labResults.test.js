@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { bridgeStatusLine, fillMessage, instrumentLabel, visitStatusLabel } from './labResults.js';
+import { bridgeStatusLine, fillMessage, instrumentLabel, labProgress, visitStatusLabel } from './labResults.js';
 
 describe('bridgeStatusLine：抓檔程式狀態', () => {
   const now = new Date('2026-10-04T03:00:00Z');
@@ -45,6 +45,24 @@ describe('visitStatusLabel', () => {
     assert.equal(visitStatusLabel('arrived'), '在院');
     assert.equal(visitStatusLabel('pending_checkout'), '待櫃台處理');
     assert.equal(visitStatusLabel('completed'), '已完成');
+  });
+});
+
+describe('labProgress：診療台左欄的檢驗進度', () => {
+  const visit = { petId: 'p1', status: 'arrived', labRequestedAt: null };
+
+  it('已送 IDEXX、還沒有結果：檢驗中；有結果：檢驗已出（不管有沒有按過送 IDEXX）', () => {
+    assert.equal(labProgress(visit, 0), '');
+    assert.equal(labProgress({ ...visit, labRequestedAt: '2026-10-09T06:00:00Z' }, 0), 'pending');
+    assert.equal(labProgress({ ...visit, labRequestedAt: '2026-10-09T06:00:00Z' }, 2), 'ready');
+    assert.equal(labProgress(visit, 1), 'ready');
+    assert.equal(labProgress({ ...visit, status: 'pending_checkout' }, 1), 'ready');
+  });
+
+  it('不在院內的不標', () => {
+    assert.equal(labProgress({ ...visit, status: 'completed' }, 1), '');
+    assert.equal(labProgress({ ...visit, status: 'scheduled' }, 1), '');
+    assert.equal(labProgress({ ...visit, petId: null }, 1), '');
   });
 });
 

@@ -226,7 +226,7 @@ export async function unmatchLabResult(labResultId) {
     }
     Object.assign(result, {
       petId: null, matchedAt: null, matchSource: null, appointmentId: null,
-      appliedAt: null, fillClosed: null, filled: [], conflicts: [], conflictsOpen: false, conflictsResolvedAt: null, unmappedCodes: [], overrides: [],
+      appliedAt: null, fillClosed: null, filled: [], conflicts: [], conflictsOpen: false, conflictsResolvedAt: null, conflictsOverwritten: [], unmappedCodes: [], overrides: [],
       autoMatchBlocked: true,
     });
     await result.save({ session });
@@ -340,6 +340,9 @@ export async function resolveConflicts(labResultId, keys) {
       const allowed = new Set(labItems.map((item) => item.key));
       const values = Object.fromEntries(Object.entries(overwriteValues(result.conflicts, keys)).filter(([key]) => allowed.has(key)));
       overwritten = Object.keys(values);
+      // 換掉之前的值記下來，「復原」才填得回去。
+      const before = new Map((appointment.labValues ?? []).map((lab) => [lab.key, String(lab.value ?? '')]));
+      result.conflictsOverwritten = overwritten.map((key) => ({ key, previous: before.get(key) ?? '' }));
       if (overwritten.length) {
         appointment.labValues = mergeLabValues(appointment.labValues, values, labItems);
         appointment.increment();
@@ -354,6 +357,74 @@ export async function resolveConflicts(labResultId, keys) {
   });
   if (changed) emitAppointmentUpdate(changed);
   return { overwritten };
+}
+
+// 比對視窗的「復原」：剛才換掉的格子填回原本的值（只動現在還是 IDEXX 那個值的——之後又被人改過的不碰），差異重新打開。
+export async function reopenConflicts(labResultId) {
+  let restored = [];
+  let changed = null;
+  await withTransaction(async (session) => {
+    restored = [];
+    changed = null;
+    const result = await LabResult.findById(labResultId).session(session);
+    if (!result) throw Object.assign(new Error('找不到檢驗結果'), { status: 404 });
+    if (result.conflictsOpen || !result.conflictsResolvedAt || !result.petId) {
+      throw Object.assign(new Error('這份檢驗結果沒有可以復原的比對'), { status: 409 });
+    }
+    const appointment = result.appointmentId ? await Appointment.findById(result.appointmentId).session(session) : null;
+    if (appointment && result.conflictsOverwritten?.length) {
+      const template = appointment.templateId ? await FormTemplate.findById(appointment.templateId).session(session) : null;
+      const labItems = templateLabItems(template);
+      const allowed = new Set(labItems.map((item) => item.key));
+      const idexx = new Map((result.conflicts ?? []).map((conflict) => [conflict.key, String(conflict.idexx ?? '')]));
+      const current = new Map((appointment.labValues ?? []).map((lab) => [lab.key, String(lab.value ?? '')]));
+      const values = {};
+      for (const { key, previous } of result.conflictsOverwritten) {
+        if (allowed.has(key) && current.get(key) === idexx.get(key)) values[key] = previous ?? '';
+      }
+      restored = Object.keys(values);
+      if (restored.length) {
+        appointment.labValues = mergeLabValues(appointment.labValues, values, labItems);
+        appointment.increment();
+        await appointment.save({ session });
+        await syncAppointmentJournal(appointment, { session });
+        changed = appointment;
+      }
+    }
+    result.conflictsOpen = true;
+    result.conflictsResolvedAt = null;
+    result.conflictsOverwritten = [];
+    await result.save({ session });
+  });
+  if (changed) emitAppointmentUpdate(changed);
+  return { restored };
+}
+
+// 忽略的復原：回到待確認清單。
+export async function undismissLabResult(labResultId) {
+  const updated = await LabResult.findOneAndUpdate(
+    { _id: labResultId, petId: null, dismissedAt: { $ne: null } },
+    { $set: { dismissedAt: null } },
+    { new: true }
+  );
+  if (!updated) throw Object.assign(new Error('這份檢驗結果沒有被忽略'), { status: 409 });
+}
+
+// 一次忽略某一天以前的待確認結果（IDEXX 主機補傳的歷史紀錄會一口氣進來幾百筆）。before 是 YYYY-MM-DD，那一天當天的不算。
+// 回傳這一批共用的 dismissedAt，「復原」用它整批還原。
+export async function dismissLabResultsBefore(before) {
+  const start = clinicDayStart(before);
+  if (!start) throw Object.assign(new Error('日期參數不正確'), { status: 422 });
+  const dismissedAt = new Date();
+  const result = await LabResult.updateMany({ petId: null, dismissedAt: null, runAt: { $lt: start } }, { $set: { dismissedAt } });
+  return { dismissed: result.modifiedCount ?? 0, dismissedAt };
+}
+
+export async function undismissLabResultBatch(dismissedAt) {
+  const at = dismissedAt ? new Date(dismissedAt) : null;
+  if (!at || Number.isNaN(at.getTime())) throw Object.assign(new Error('復原參數不正確'), { status: 422 });
+  const result = await LabResult.updateMany({ petId: null, dismissedAt: at }, { $set: { dismissedAt: null } });
+  return { restored: result.modifiedCount ?? 0 };
 }
 
 // 忽略：品管測試、練習用的檢驗。只有還在待確認清單上的能忽略。

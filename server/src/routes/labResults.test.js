@@ -247,7 +247,7 @@ describe('lab results routes', () => {
       const { items } = await (await fetch(`${origin}/api/lab-results/conflicts?appointmentId=${appointmentId}`)).json();
       assert.deepEqual(queried, { conflictsOpen: true, appointmentId });
       assert.equal(items.length, 1);
-      assert.deepEqual(items[0].items, [{ key: 'cre', label: 'CRE', current: '1.5', idexx: '1.7' }]);
+      assert.deepEqual(items[0].items, [{ key: 'cre', label: 'CRE', current: '1.5', idexx: '1.7', unit: '', referenceMin: null, referenceMax: null }]);
       assert.equal(items[0].petName, '牛奶');
       assert.deepEqual(closed._id, { $in: ['r2'] });
       assert.equal((await fetch(`${origin}/api/lab-results/conflicts?appointmentId=abc`)).status, 422);
@@ -395,6 +395,59 @@ describe('lab results routes', () => {
     assert.deepEqual(filter, { _id: id, petId: null, dismissedAt: null });
     LabResult.findOneAndUpdate = async () => null;
     assert.equal((await fetch(`${origin}/api/lab-results/${id}/dismiss`, { method: 'POST' })).status, 409);
+  });
+
+  it('忽略的復原：只有被忽略、還沒配對的能還原', async () => {
+    const id = '64b000000000000000000009';
+    let filter;
+    LabResult.findOneAndUpdate = async (value, update) => { filter = { value, update }; return { _id: id }; };
+    assert.equal((await fetch(`${origin}/api/lab-results/${id}/undismiss`, { method: 'POST' })).status, 200);
+    assert.deepEqual(filter.value, { _id: id, petId: null, dismissedAt: { $ne: null } });
+    assert.deepEqual(filter.update, { $set: { dismissedAt: null } });
+    LabResult.findOneAndUpdate = async () => null;
+    assert.equal((await fetch(`${origin}/api/lab-results/${id}/undismiss`, { method: 'POST' })).status, 409);
+  });
+
+  it('整批忽略某一天以前的待確認結果，回傳的時間可以整批復原', async () => {
+    const originalUpdateMany = LabResult.updateMany;
+    const calls = [];
+    LabResult.updateMany = async (filter, update) => { calls.push({ filter, update }); return { modifiedCount: 3 }; };
+    const post = (path, body) => fetch(`${origin}/api/lab-results/${path}`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+    try {
+      assert.equal((await post('dismiss-before', { before: 'abc' })).status, 422);
+      const dismissed = await (await post('dismiss-before', { before: '2026-10-01' })).json();
+      assert.equal(dismissed.dismissed, 3);
+      // 台北 10/1 零點＝9/30 16:00Z；當天的不算。
+      assert.equal(calls[0].filter.runAt.$lt.toISOString(), '2026-09-30T16:00:00.000Z');
+      assert.equal(calls[0].filter.petId, null);
+      assert.equal(calls[0].filter.dismissedAt, null);
+
+      const restored = await (await post('undismiss-batch', { dismissedAt: dismissed.dismissedAt })).json();
+      assert.equal(restored.restored, 3);
+      assert.equal(calls[1].filter.dismissedAt.toISOString(), dismissed.dismissedAt);
+      assert.deepEqual(calls[1].update, { $set: { dismissedAt: null } });
+      assert.equal((await post('undismiss-batch', { dismissedAt: 'abc' })).status, 422);
+    } finally {
+      LabResult.updateMany = originalUpdateMany;
+    }
+  });
+
+  it('待確認清單可以限日期範圍：since 給工具欄的數字、before 給「忽略舊的」', async () => {
+    const filters = [];
+    LabResult.find = (filter) => {
+      filters.push(filter);
+      const chain = { sort: () => chain, skip: () => chain, limit: () => chain, lean: async () => [] };
+      return chain;
+    };
+    LabResult.countDocuments = async () => 0;
+    assert.equal((await fetch(`${origin}/api/lab-results?since=2026-10-03`)).status, 200);
+    assert.equal((await fetch(`${origin}/api/lab-results?before=2026-10-03`)).status, 200);
+    assert.deepEqual(Object.keys(filters[0].runAt), ['$gte']);
+    assert.equal(filters[0].runAt.$gte.toISOString(), '2026-10-02T16:00:00.000Z');
+    assert.deepEqual(Object.keys(filters[1].runAt), ['$lt']);
+    assert.equal((await fetch(`${origin}/api/lab-results?since=abc`)).status, 422);
   });
 
   it('報到通知：抓檔程式用密鑰拿待送的檔案（base64），寫好後回報', async () => {

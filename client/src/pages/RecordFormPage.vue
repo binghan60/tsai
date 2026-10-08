@@ -198,7 +198,9 @@ watch(() => workCounts.labResults, async () => {
   await loadLabConflicts();
   if (labConflictGroup.value && !labConflicts.value.some((group) => group.id === labConflictGroup.value.id)) labConflictGroup.value = null;
   // 在別處按了覆蓋，看診上的值已經換掉：醫師在這裡沒動過的格子跟著換成新值（跟存檔回來的規則一樣）。
-  if (before.some((id) => !labConflicts.value.some((group) => group.id === id))) await refreshVisitValues();
+  // 反過來，比對被「復原」（差異重新出現）時看診上的值也換回去了，一樣要重讀。
+  const after = labConflicts.value.map((group) => group.id);
+  if (before.some((id) => !after.includes(id)) || after.some((id) => !before.includes(id))) await refreshVisitValues();
 });
 
 async function refreshVisitValues() {

@@ -12,10 +12,10 @@ describe('數值差異：比對視窗', () => {
   ];
 
   it('用報告上現在的值重新比：已經改成跟 IDEXX 一樣的不列，被清空的列成空白', () => {
-    const current = [{ key: 'cre', value: '1.6' }, { key: 'glucose', value: '117' }];
+    const current = [{ key: 'cre', value: '1.6', unit: 'mg/dL', referenceMin: 0.8, referenceMax: 2.4 }, { key: 'glucose', value: '117' }];
     assert.deepEqual(liveConflicts(conflicts, current), [
-      { key: 'cre', label: 'CRE', current: '1.6', idexx: '1.7' },
-      { key: 'alt', label: 'ALT', current: '', idexx: '54' },
+      { key: 'cre', label: 'CRE', current: '1.6', idexx: '1.7', unit: 'mg/dL', referenceMin: 0.8, referenceMax: 2.4 },
+      { key: 'alt', label: 'ALT', current: '', idexx: '54', unit: '', referenceMin: null, referenceMax: null },
     ]);
   });
 

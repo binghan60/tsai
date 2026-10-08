@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { http } from '../api/http';
+import { clinicDateInput } from '../lib/datetime';
 
 // 工具欄上的兩個待辦數字：藥單各階段筆數、待審初診表筆數。
 // 原本各頁自己抓一次（面板關掉後數字就凍住），現在全站一份，由 useGlobalChat 那條連線
@@ -41,12 +42,13 @@ export const useWorkCountsStore = defineStore('workCounts', {
         // 同上。
       }
     },
-    // 「檢驗」的數字＝待確認（選貓）＋數值跟報告不同還沒處理的。
+    // 「檢驗」的數字＝近七天驗的待確認（選貓）＋數值跟報告不同還沒處理的。
+    // 只算近七天：IDEXX 主機補傳歷史紀錄時會進來幾百筆，全部算進去徽章永遠是紅的、等於沒有提醒；更早的在面板裡照樣看得到。
     async loadLabResults() {
       const id = ++labResultsRequest;
       try {
         const [unmatched, conflicts] = await Promise.all([
-          http.get('/lab-results', { params: { limit: 1 } }),
+          http.get('/lab-results', { params: { limit: 1, since: clinicDateInput(new Date(Date.now() - 6 * 86_400_000)) } }),
           http.get('/lab-results/conflicts'),
         ]);
         if (id === labResultsRequest) this.labResults = (unmatched.data.total ?? 0) + (conflicts.data.items?.length ?? 0);

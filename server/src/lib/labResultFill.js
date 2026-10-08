@@ -73,9 +73,16 @@ export function planUndo(currentLabValues, filled) {
 
 // 比對視窗打開時，用報告上「現在」的值重新比：醫師後來自己改成跟 IDEXX 一樣的就不再列。
 export function liveConflicts(conflicts, currentLabValues) {
-  const current = new Map((currentLabValues ?? []).map((lab) => [lab.key, String(lab.value ?? '').trim()]));
+  const current = new Map((currentLabValues ?? []).map((lab) => [lab.key, lab]));
+  // 單位與參考範圍取看診上那一格的快照（表單設定的），比對視窗才看得出哪一個值偏高偏低；那一格被清空就沒有。
   return (conflicts ?? [])
-    .map((conflict) => ({ key: conflict.key, label: conflict.label, current: current.get(conflict.key) ?? '', idexx: String(conflict.idexx ?? '') }))
+    .map((conflict) => {
+      const lab = current.get(conflict.key);
+      return {
+        key: conflict.key, label: conflict.label, current: String(lab?.value ?? '').trim(), idexx: String(conflict.idexx ?? ''),
+        unit: lab?.unit ?? '', referenceMin: lab?.referenceMin ?? null, referenceMax: lab?.referenceMax ?? null,
+      };
+    })
     .filter((conflict) => conflict.current !== conflict.idexx);
 }
 

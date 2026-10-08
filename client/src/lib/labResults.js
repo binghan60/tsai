@@ -33,6 +33,21 @@ export function visitStatusLabel(status) {
   return VISIT_STATUS[status] ?? '';
 }
 
+// 診療台左欄的檢驗進度：驗血要等十幾分鐘，醫師通常已經切去看別隻，結果出來要在清單上看得到。
+//   pending 已送 IDEXX、還沒有結果；ready 這次看診已經有 IDEXX 結果（自動認貓、面板確認、診療台匯入都算）。
+// 只標還在院內的（已報到、櫃台還沒完成）；看完的不必再提醒。
+export const LAB_PROGRESS = {
+  pending: { label: '檢驗中', badge: 'bg-info-surface text-info', icon: 'text-info' },
+  ready: { label: '檢驗已出', badge: 'bg-success-surface text-success', icon: 'text-success' },
+};
+
+export function labProgress(appointment, resultCount = 0) {
+  const inClinic = Boolean(appointment?.petId) && (appointment?.status === 'arrived' || appointment?.status === 'pending_checkout');
+  if (!inClinic) return '';
+  if (resultCount > 0) return 'ready';
+  return appointment.labRequestedAt ? 'pending' : '';
+}
+
 // 診所電腦上抓檔程式的狀態列（「檢驗」面板最上面）。開發者人不在診所，它停了要讓人一眼看得出來。
 //   success 正常；warning 還連著但上傳卡住；danger 超過三分鐘沒回報（online 由伺服器判斷）。
 export function bridgeStatusLine(bridge, now = new Date()) {

@@ -19,6 +19,7 @@ import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { queueIdexxCensus } from '../lib/idexxRequests.js';
 import { applyPendingLabResults } from '../lib/labResultApply.js';
+import LabResult from '../models/LabResult.js';
 import { canRequestLab } from '../lib/idexxCensus.js';
 import { idexxCensusSettings } from '../config/idexxBridge.js';
 import appointmentWorkflowRouter from './appointmentWorkflow.js';
@@ -193,11 +194,21 @@ async function patientNotesFor(appointments) {
   return { pets: toMap(pets), owners: toMap(owners) };
 }
 
+// 每筆掛號連到幾份 IDEXX 檢驗結果：診療台左欄標「檢驗已出」用。跟備註一樣另外回一份對照表，不塞進掛號。
+async function labResultCountsFor(appointments) {
+  if (!appointments.length) return {};
+  const results = await LabResult.find({ appointmentId: { $in: appointments.map((item) => item._id) } }).select('appointmentId').lean();
+  const counts = {};
+  for (const result of results) counts[String(result.appointmentId)] = (counts[String(result.appointmentId)] ?? 0) + 1;
+  return counts;
+}
+
 router.get('/', async (req, res, next) => {
   try {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || '')) ? req.query.date : clinicToday();
     const items = await Appointment.find({ date }).sort({ scheduledAt: 1, createdAt: 1 });
-    res.json({ items, date, patientNotes: await patientNotesFor(items) });
+    const [patientNotes, labResultCounts] = await Promise.all([patientNotesFor(items), labResultCountsFor(items)]);
+    res.json({ items, date, patientNotes, labResultCounts });
   } catch (err) {
     next(err);
   }

@@ -808,8 +808,8 @@ describe('appointments summary', () => {
       if (server) await new Promise((resolve) => server.close(resolve));
     });
 
-  it('附帶貓咪與飼主備註對照表', async () => {
-    const original = { find: Appointment.find, pet: Pet.find, owner: Owner.find };
+  it('附帶貓咪與飼主備註對照表，以及每筆掛號連到幾份 IDEXX 檢驗結果', async () => {
+    const original = { find: Appointment.find, pet: Pet.find, owner: Owner.find, lab: LabResult.find };
     const petA = '507f1f77bcf86cd799439031';
     const petB = '507f1f77bcf86cd799439032';
     const ownerA = '507f1f77bcf86cd799439041';
@@ -822,16 +822,21 @@ describe('appointments summary', () => {
     ] });
     Pet.find = (filter) => { petQuery = filter; return leanRows([{ _id: petA, notes: ' 會咬人 ' }, { _id: petB, notes: '' }]); };
     Owner.find = () => leanRows([{ _id: ownerA, notes: '常質疑用藥' }]);
+    let labQuery;
+    LabResult.find = (filter) => { labQuery = filter; return leanRows([{ appointmentId: 'a1' }, { appointmentId: 'a1' }, { appointmentId: 'a2' }]); };
     try {
       const response = await fetch(`${origin}/api/appointments?date=2026-09-15`);
       assert.equal(response.status, 200);
       const body = await response.json();
       assert.deepEqual(petQuery._id.$in, [petA, petB]);
       assert.deepEqual(body.patientNotes, { pets: { [petA]: '會咬人' }, owners: { [ownerA]: '常質疑用藥' } });
+      assert.deepEqual(labQuery, { appointmentId: { $in: ['a1', 'a2', 'a3'] } });
+      assert.deepEqual(body.labResultCounts, { a1: 2, a2: 1 });
     } finally {
       Appointment.find = original.find;
       Pet.find = original.pet;
       Owner.find = original.owner;
+      LabResult.find = original.lab;
     }
   });
   });
