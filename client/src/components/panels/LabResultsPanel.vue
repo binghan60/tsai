@@ -163,10 +163,18 @@ async function undo(id, petName) {
   }
 }
 
-async function confirmMatch() {
-  const item = current.value;
-  const petId = selectedPetId.value;
-  const petName = selectedName.value;
+// 確認畫面的「確認並填入」。
+function confirmMatch() {
+  return matchItem(current.value, selectedPetId.value, selectedName.value);
+}
+
+// 清單列上的一鍵確認：同名而且當天只有一隻（伺服器標 suggested）就不必點進去再按一次；要先看數值的照樣點那一列。
+function confirmSuggested(item) {
+  const candidate = suggestion(item);
+  if (candidate) return matchItem(item, String(candidate.petId), candidate.petName);
+}
+
+async function matchItem(item, petId, petName) {
   if (!item || !petId || busy.value) return;
   busy.value = true;
   try {
@@ -183,7 +191,7 @@ async function confirmMatch() {
       message,
       action: { label: '復原', handler: () => undo(item._id, petName) },
     });
-    panel.back();
+    if (view.value?.type === 'confirm') panel.back();
     // 有跟報告不同的值：馬上跳出比對視窗讓人決定要不要換。
     if (data.fill?.conflicts) {
       const { data: conflictData } = await http.get('/lab-results/conflicts', { params: { appointmentId: data.fill.appointmentId } });
@@ -448,8 +456,8 @@ onActivated(refreshAll);
           <Button variant="secondary" size="xs" class="ml-auto" @click="openBulk">忽略舊的</Button>
         </h3>
         <ul class="divide-y divide-border">
-          <li v-for="item in items" :key="item._id">
-            <button type="button" class="flex w-full flex-col gap-0.5 px-5 py-3 text-left hover:bg-hover" @click="openItem(item)">
+          <li v-for="item in items" :key="item._id" class="flex items-center">
+            <button type="button" class="flex min-w-0 flex-1 flex-col gap-0.5 py-3 pl-5 text-left hover:bg-hover" :class="suggestion(item) ? 'pr-3' : 'pr-5'" @click="openItem(item)">
               <span class="flex items-baseline gap-2">
                 <span class="text-base font-semibold">{{ instrumentLabel(item.instrument).purpose }}</span>
                 <span class="truncate text-sm text-muted-foreground">{{ instrumentLabel(item.instrument).name }}</span>
@@ -458,6 +466,9 @@ onActivated(refreshAll);
               <span class="text-sm text-muted-foreground">IDEXX 上的名字：<span class="font-medium text-foreground">{{ item.patient?.name }}</span></span>
               <span v-if="suggestion(item)" class="text-sm text-primary">建議：{{ suggestion(item).petName }}（{{ suggestion(item).time }}）</span>
             </button>
+            <Button v-if="suggestion(item)" variant="soft" size="sm" class="mr-5 ml-2 max-w-40 shrink-0" :disabled="busy" @click="confirmSuggested(item)">
+              <span class="truncate">確認是{{ suggestion(item).petName }}</span>
+            </Button>
           </li>
         </ul>
       </section>

@@ -3,7 +3,7 @@ import { apiErrorMessage } from '../lib/apiError';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import PatientLink from '../components/PatientLink.vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, AlertTriangle, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, Link2, LockKeyhole, Save, Settings2, Trash2 } from '@lucide/vue';
+import { Activity, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, Link2, LockKeyhole, Save, Settings2, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, clinicTimeInput, combineClinicDateTime, formatDate } from '../lib/datetime';
@@ -152,7 +152,8 @@ function applyVisitValue(key, data) {
   }
 }
 // IDEXX 結果跟報告上已經填的檢驗值不同、還沒處理的（伺服器 GET /lab-results/conflicts）。
-// 打開報告時跳出比對視窗；按 ✕ 稍後再說就在「引用本次看診」下面留一條提示。「檢驗」面板也看得到同一批，哪邊處理完另一邊就消失。
+// 打開報告時跳出比對視窗；按 ✕ 稍後再說之後，從「引用本次看診」那一條的填入狀態燈號（黃燈「n 項跟報告不同」→ 比對）再開。
+// 原本另外留一條黃色提示，跟燈號講同一件事，已拿掉。「檢驗」面板也看得到同一批，哪邊處理完另一邊就消失。
 const labConflicts = ref([]);
 const labConflictGroup = ref(null);
 
@@ -1213,16 +1214,6 @@ function handleBeforeUnload(event) {
         <!-- IDEXX 結果有哪些數值進了這份報告；「比對」沿用這一頁的比對視窗（處理完要同步畫面上的值）。 -->
         <LabFillStatus v-if="visitLink?.appointmentId" :pet-id="String(petId ?? '')" :appointment-id="String(visitLink.appointmentId)" :base-date="visitLink.date ?? ''" @compare="labConflictGroup = $event" />
         <p class="text-sm text-foreground">體重、體溫、檢驗數值與診療台、病歷日誌是同一份，在這裡改會一起更新；回診日期由掛號台安排。結案時凍結成報告的內容。</p>
-      </div>
-
-      <!-- IDEXX 結果跟這裡已經填的檢驗值不同、比對視窗按了稍後再說。 -->
-      <div v-if="isVisitLinked && labConflicts.length && !labConflictGroup" role="alert" class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl bg-warning-surface px-5 py-3">
-        <p class="flex items-center gap-2 font-semibold text-warning">
-          <AlertTriangle class="size-5" stroke-width="2" />IDEXX 檢驗結果有
-          <span class="num">{{ labConflicts.reduce((sum, group) => sum + group.items.length, 0) }}</span>
-          項跟報告上的數值不同
-        </p>
-        <Button variant="soft" size="sm" class="ml-auto" @click="labConflictGroup = labConflicts[0]">逐項比對</Button>
       </div>
 
       <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序。
