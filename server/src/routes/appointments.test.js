@@ -117,7 +117,7 @@ describe('appointments routes', () => {
   it('預估診療時間須為 15 分鐘倍數，且不可超出診別', async () => {
     for (const payload of [
       { petName: '妞妞', time: '10:00', estimatedDurationMinutes: 20 },
-      { petName: '妞妞', time: '11:30', estimatedDurationMinutes: 30 },
+      { petName: '妞妞', time: '11:45', estimatedDurationMinutes: 30 },
       { petName: '妞妞', time: '19:30', estimatedDurationMinutes: 30 },
     ]) {
       const response = await fetch(`${origin}/api/appointments`, {
@@ -380,7 +380,7 @@ describe('appointments routes', () => {
   });
 
   it('掛號時段只接受診所時段內的十五分鐘刻度', async () => {
-    for (const time of ['09:45', '11:45', '12:00', '14:05', '14:10', '19:45']) {
+    for (const time of ['09:45', '12:00', '14:05', '14:10', '19:45']) {
       const response = await fetch(`${origin}/api/appointments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -388,14 +388,14 @@ describe('appointments routes', () => {
       });
       assert.equal(response.status, 422, time);
       assert.deepEqual(await response.json(), {
-        message: '預約時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格',
+        message: '預約時段僅限 10:00–11:45、14:00–19:30，且每 15 分鐘一格',
       });
     }
   });
 
   // 手術只是標記：沒有專屬的中午手術時段，時段規則跟一般門診完全一樣。
   it('手術掛號的時段規則跟一般門診相同，中午不開放', async () => {
-    for (const time of ['11:45', '12:00', '13:45', '12:05']) {
+    for (const time of ['12:00', '12:15', '13:45', '12:05']) {
       const response = await fetch(`${origin}/api/appointments`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -403,7 +403,7 @@ describe('appointments routes', () => {
       });
       assert.equal(response.status, 422, time);
       assert.deepEqual(await response.json(), {
-        message: '預約時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格',
+        message: '預約時段僅限 10:00–11:45、14:00–19:30，且每 15 分鐘一格',
       });
     }
   });

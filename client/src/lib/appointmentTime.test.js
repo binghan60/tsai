@@ -10,7 +10,7 @@ describe('durationOverflowError', () => {
   });
 
   it('跨出診別結束（含午休）就提示', () => {
-    assert.equal(durationOverflowError('11:30', 30), DURATION_OVERFLOW_ERROR);
+    assert.equal(durationOverflowError('11:45', 30), DURATION_OVERFLOW_ERROR);
     assert.equal(durationOverflowError('19:00', 60), DURATION_OVERFLOW_ERROR);
   });
 
@@ -36,7 +36,7 @@ describe('appointmentSlotErrors', () => {
   });
 
   it('預估診療時間要塞得進同一個診別', () => {
-    assert.match(appointmentSlotErrors({ date: '2026-10-01', time: '11:30', durationMinutes: 30 }).time, /超出/);
+    assert.match(appointmentSlotErrors({ date: '2026-10-01', time: '11:45', durationMinutes: 30 }).time, /超出/);
     assert.deepEqual(appointmentSlotErrors({ date: '2026-10-01', time: '11:15', durationMinutes: 30 }), {});
   });
 });

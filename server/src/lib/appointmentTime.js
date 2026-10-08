@@ -3,12 +3,12 @@
 // 前端 client/src/lib/appointmentTime.js 是同一組數字。
 // 手術只是掛號上的標記（isSurgery／surgeryName），時段跟一般門診一樣，沒有專屬的手術時段。
 export const APPOINTMENT_TIME_RANGES = [
-  ['10:00', '11:30'],
+  ['10:00', '11:45'],
   ['14:00', '19:30'],
 ];
 export const APPOINTMENT_TIME_STEP = 15;
 export const MAX_ESTIMATED_DURATION_MINUTES = 240;
-export const APPOINTMENT_TIME_ERROR = '預約時段僅限 10:00–11:30、14:00–19:30，且每 15 分鐘一格';
+export const APPOINTMENT_TIME_ERROR = '預約時段僅限 10:00–11:45、14:00–19:30，且每 15 分鐘一格';
 
 function minutesOfTime(value) {
   const match = /^(\d{2}):(\d{2})$/.exec(value);

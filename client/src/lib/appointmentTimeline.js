@@ -6,12 +6,12 @@
 
 // 診間時段，目前先寫死；之後如果要讓時段可設定，這裡就是要抽換的地方。
 export const SESSIONS = [
-  { id: 'morning', label: '上午診', start: '10:00', end: '11:30' },
+  { id: 'morning', label: '上午診', start: '10:00', end: '11:45' },
   { id: 'afternoon', label: '下午診', start: '14:00', end: '19:30' },
 ];
 
 // 上午診與下午診之間的空檔（午休）。手術只是掛號上的標記、不佔專屬時段，這段不開放掛號。
-export const MIDDAY_BREAK = { label: '午休', start: '11:30', end: '14:00' };
+export const MIDDAY_BREAK = { label: '午休', start: '11:45', end: '14:00' };
 
 function parseTimeToMinutes(value) {
   const [hour, minute] = String(value).split(':').map(Number);
@@ -96,9 +96,10 @@ export function visitTypeMeta(appointment) {
 
 // 這個時間點該落在哪個時段。落在時段之間（例如手術時間）或超出全部時段時，
 // 併入下一個還沒開始/最後一個時段，避免那筆掛號在畫面上直接消失。
+// 時段的 end 是「最後一個可約的開始時間」（上午診 11:45），所以 end 當下還屬於該時段。
 export function assignSessionIndex(minutes, sessions = SESSIONS) {
   for (let index = 0; index < sessions.length; index += 1) {
-    if (minutes < parseTimeToMinutes(sessions[index].end)) return index;
+    if (minutes <= parseTimeToMinutes(sessions[index].end)) return index;
   }
   return sessions.length - 1;
 }

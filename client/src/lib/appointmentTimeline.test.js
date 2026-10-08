@@ -83,6 +83,11 @@ describe('assignSessionIndex', () => {
     assert.equal(assignSessionIndex(19 * 60), 1); // 19:00 → 下午診
   });
 
+  it('時段的最後一個可約時間（11:45）仍屬於上午診', () => {
+    assert.equal(assignSessionIndex(11 * 60 + 45), 0);
+    assert.equal(assignSessionIndex(12 * 60), 1);
+  });
+
   it('落在手術時間這種時段之間的空隙，併入下一個時段，不會憑空消失', () => {
     assert.equal(assignSessionIndex(12 * 60 + 30), 1); // 12:30 落在手術時間，併入下午診
   });

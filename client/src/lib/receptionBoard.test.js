@@ -27,7 +27,7 @@ describe('minutesPastSchedule / isOverdue', () => {
 
 describe('buildSlotGrid', () => {
   const sessions = [
-    { id: 'morning', label: '上午診', start: '10:00', end: '11:30' },
+    { id: 'morning', label: '上午診', start: '10:00', end: '11:45' },
     { id: 'afternoon', label: '下午診', start: '14:00', end: '15:15' },
   ];
 
@@ -36,8 +36,7 @@ describe('buildSlotGrid', () => {
     assert.deepEqual(morning.rows.map((row) => row.hour), ['10:00', '11:00']);
     assert.equal(morning.rows[1].cells.length, 4);
     const eleven = morning.rows[1].cells;
-    assert.equal(eleven.find((cell) => cell.time === '11:30').inRange, true);
-    assert.equal(eleven.find((cell) => cell.time === '11:45').inRange, false);
+    assert.equal(eleven.find((cell) => cell.time === '11:45').inRange, true);
     assert.deepEqual(afternoon.rows.map((row) => row.hour), ['14:00', '15:00']);
     assert.equal(afternoon.rows[1].cells.find((cell) => cell.time === '15:15').inRange, true);
   });
@@ -68,8 +67,6 @@ describe('buildSlotGrid', () => {
   // 手術只是標記：時段格永遠只有門診兩段，中午不開放。
   it('只有上午診與下午診兩組，中午沒有手術時段', () => {
     assert.deepEqual(buildSlotGrid([], { sessions }).map((session) => session.id), ['morning', 'afternoon']);
-    const [morning] = buildSlotGrid([], { sessions });
-    assert.equal(morning.rows.at(-1).cells.find((cell) => cell.time === '11:45').inRange, false);
   });
 });
 
@@ -95,16 +92,16 @@ describe('duplicateBookings', () => {
 });
 
 describe('sessionAutoCollapsed', () => {
-  const group = { session: { id: 'morning', label: '上午診', start: '10:00', end: '11:30' }, items: [{ _id: 'a' }, { _id: 'b' }] };
+  const group = { session: { id: 'morning', label: '上午診', start: '10:00', end: '11:45' }, items: [{ _id: 'a' }, { _id: 'b' }] };
   const at = (hour, minute) => new Date(2026, 8, 15, hour, minute);
 
   it('時段還沒結束不收合；不是今天也不收合', () => {
-    assert.equal(sessionAutoCollapsed(group, { now: at(11, 30) }), false);
+    assert.equal(sessionAutoCollapsed(group, { now: at(11, 45) }), false);
     assert.equal(sessionAutoCollapsed(group, { now: at(15, 0), isToday: false }), false);
   });
 
   it('時段結束後，沒有待處理才收合', () => {
-    assert.equal(sessionAutoCollapsed(group, { now: at(11, 31) }), true);
-    assert.equal(sessionAutoCollapsed(group, { now: at(11, 31), isPending: (item) => item._id === 'b' }), false);
+    assert.equal(sessionAutoCollapsed(group, { now: at(11, 46) }), true);
+    assert.equal(sessionAutoCollapsed(group, { now: at(11, 46), isPending: (item) => item._id === 'b' }), false);
   });
 });

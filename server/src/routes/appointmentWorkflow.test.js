@@ -272,7 +272,7 @@ describe('independent appointment workflow HTTP routes', () => {
   it('books the follow-up with the same fields and rules as a regular appointment', async () => {
     await post('clinical', { followUpReason: '追蹤傷口' });
     // 預估診療時間、手術標記跟新增掛號同一套驗證。
-    assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '11:30', estimatedDurationMinutes: 30 })).status, 422);
+    assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '11:45', estimatedDurationMinutes: 30 })).status, 422);
     assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '10:00', estimatedDurationMinutes: 20 })).status, 422);
     assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '10:00', isSurgery: true })).status, 422);
     assert.equal(store.size, 1, '驗證失敗不建立回診掛號');
