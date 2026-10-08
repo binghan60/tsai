@@ -32,6 +32,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } f
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import LabConflictDialog from '../components/LabConflictDialog.vue';
+import LabFillStatus from '../components/LabFillStatus.vue';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import FormSection from '../components/formfields/FormSection.vue';
 import TextTemplatePickerDialog from '../components/formfields/TextTemplatePickerDialog.vue';
@@ -1207,6 +1208,8 @@ function handleBeforeUnload(event) {
       <!-- 引用本次看診：這幾欄只有一份，在看診上。 -->
       <div v-if="isVisitLinked" class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-info-surface px-5 py-3">
         <p class="flex items-center gap-2 font-semibold text-info"><Link2 class="size-5" stroke-width="2" />引用本次看診<RouterLink v-if="visitLink?.date" :to="{ path: '/appointments', query: { date: visitLink.date, open: visitLink.appointmentId } }" class="num font-normal underline underline-offset-4 hover:text-foreground" :aria-label="`在診療台打開 ${visitLink.date} 的看診`">{{ visitLink.date }}</RouterLink></p>
+        <!-- IDEXX 結果有哪些數值進了這份報告；「比對」沿用這一頁的比對視窗（處理完要同步畫面上的值）。 -->
+        <LabFillStatus v-if="visitLink?.appointmentId" :pet-id="String(petId ?? '')" :appointment-id="String(visitLink.appointmentId)" :base-date="visitLink.date ?? ''" @compare="labConflictGroup = $event" />
         <p class="text-sm text-foreground">體重、體溫、檢驗數值與診療台、病歷日誌是同一份，在這裡改會一起更新；回診日期由掛號台安排。結案時凍結成報告的內容。</p>
       </div>
 

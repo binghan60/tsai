@@ -99,6 +99,8 @@ export async function applyLabResult(labResultId, { force = false, appointmentId
         $set: {
           appointmentId: appointment._id,
           appliedAt: new Date(),
+          // 更正版重填時沒有新填的格子就算不出 closed，沿用上一次的。
+          fillClosed: closed ?? result.fillClosed ?? null,
           filled: plan.allFilled,
           conflicts: plan.conflicts,
           conflictsOpen: plan.conflicts.length > 0,
@@ -224,7 +226,7 @@ export async function unmatchLabResult(labResultId) {
     }
     Object.assign(result, {
       petId: null, matchedAt: null, matchSource: null, appointmentId: null,
-      appliedAt: null, filled: [], conflicts: [], conflictsOpen: false, conflictsResolvedAt: null, unmappedCodes: [], overrides: [],
+      appliedAt: null, fillClosed: null, filled: [], conflicts: [], conflictsOpen: false, conflictsResolvedAt: null, unmappedCodes: [], overrides: [],
       autoMatchBlocked: true,
     });
     await result.save({ session });

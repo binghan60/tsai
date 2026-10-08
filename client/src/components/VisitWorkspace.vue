@@ -24,6 +24,8 @@ import { medicalHistoryText } from '../lib/petDisplay'
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue'
 import VisitLabTable from './VisitLabTable.vue'
 import LabImportDialog from './LabImportDialog.vue'
+import LabFillStatus from './LabFillStatus.vue'
+import LabConflictDialog from './LabConflictDialog.vue'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
@@ -53,6 +55,8 @@ const emit = defineEmits(['updated', 'open-record', 'start', 'notes-updated'])
 
 const labTable = ref(null)
 const labImportOpen = ref(false)
+// 填入狀態燈號的明細按了「比對」：開 IDEXX 與報告數值的比對視窗。
+const labConflictGroup = ref(null)
 
 // 送 IDEXX 不走看診的自動存檔，也不動掛號的版本號：它只是一個時間戳記，跟正在打的紀錄互不影響。
 const labRequest = useLabRequest()
@@ -577,11 +581,14 @@ onBeforeUnmount(() => {
             <div class="flex items-center gap-2">
               <h3 :id="`lab-heading-${appointment._id}`" class="text-base font-semibold">檢驗報告</h3>
               <Badge v-if="labTable?.abnormal" variant="status" class="bg-danger-surface text-danger">異常 <span class="num">{{ labTable.abnormal }}</span> 項</Badge>
+              <!-- 這些結果有哪些數值進了健檢報告（燈號＋點開的明細）。 -->
+              <LabFillStatus :pet-id="String(appointment.petId ?? '')" :appointment-id="String(appointment._id)" :base-date="appointment.date" :version="appointment.__v ?? 0" @compare="labConflictGroup = $event" />
               <!-- 技術員在 IDEXX 主機上手打名字驗的結果不會自己歸過來：從這裡挑當天還沒認領的那一份。 -->
               <Button v-if="appointment.petId" variant="soft" size="sm" class="ml-auto" @click="labImportOpen = true"><FlaskConical stroke-width="1.75" />匯入檢驗結果</Button>
             </div>
             <VisitLabTable ref="labTable" :appointment="appointment" />
             <LabImportDialog v-if="labImportOpen" :appointment="appointment" @close="labImportOpen = false" @imported="labTable?.reload()" />
+            <LabConflictDialog v-if="labConflictGroup" :group="labConflictGroup" @close="labConflictGroup = null" @resolved="labConflictGroup = null" />
           </section>
 
           <!-- 用 div 不用 label：label 會把點擊轉給裡面第一個可點的元素，也就是編輯器工具列的粗體鈕。 -->

@@ -1,82 +1,59 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import {
-  AlertTriangle,
-  Calendar,
-  Check,
-  ChevronDown,
-  CircleDot,
-  SmilePlus,
-  ChevronUp,
-  FlaskConical,
-  Gauge,
-  Hash,
-  Info,
-  ImagePlus,
-  LayoutList,
-  List,
-  MousePointerClick,
-  Plus,
-  SquareCheck,
-  Stethoscope,
-  TextAlignStart,
-  Trash2,
-  Type,
-  X,
-} from '@lucide/vue';
-import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router';
-import { http } from '../api/http';
-import { useFormTemplate } from '../composables/useFormTemplate';
-import { useToast } from '../composables/useToast';
-import { Badge } from '../components/ui/badge';
-import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Textarea } from '../components/ui/textarea';
-import { Label } from '../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Switch } from '../components/ui/switch';
-import ConfirmDialog from '../components/ConfirmDialog.vue';
-import FormSectionPreview from '../components/formfields/FormSectionPreview.vue';
-import { DEFAULT_VALUE_TYPES } from '../../../shared/formDefaults';
-import { normalizeIdexxCodes } from '../../../shared/labValues.js';
-import { Alert, AlertDescription } from '../components/ui/alert';
-import ListSkeleton from '../components/ListSkeleton.vue';
-import SegmentedControl from '../components/SegmentedControl.vue';
-import PageHeader from '../components/PageHeader.vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { AlertTriangle, Calendar, Check, ChevronDown, CircleDot, SmilePlus, ChevronUp, FlaskConical, Gauge, Hash, Info, ImagePlus, LayoutList, List, MousePointerClick, Plus, SquareCheck, Stethoscope, TextAlignStart, Trash2, Type, X } from '@lucide/vue'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute } from 'vue-router'
+import { http } from '../api/http'
+import { useFormTemplate } from '../composables/useFormTemplate'
+import { useToast } from '../composables/useToast'
+import { Badge } from '../components/ui/badge'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Textarea } from '../components/ui/textarea'
+import { Label } from '../components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Switch } from '../components/ui/switch'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
+import FormSectionPreview from '../components/formfields/FormSectionPreview.vue'
+import { DEFAULT_VALUE_TYPES } from '../../../shared/formDefaults'
+import { normalizeIdexxCodes } from '../../../shared/labValues.js'
+import { Alert, AlertDescription } from '../components/ui/alert'
+import ListSkeleton from '../components/ListSkeleton.vue'
+import SegmentedControl from '../components/SegmentedControl.vue'
+import PageHeader from '../components/PageHeader.vue'
 
-const route = useRoute();
-const toast = useToast();
-const { clearTemplateCache } = useFormTemplate();
+const route = useRoute()
+const toast = useToast()
+const { clearTemplateCache } = useFormTemplate()
 
-const currentId = ref(route.params.id);
-const currentName = ref('');
-const currentDescription = ref('');
-const currentSpecies = ref('all');
-const sections = ref([]);
-const documentVersion = ref(0);
-const loading = ref(true);
-const saving = ref(false);
-const error = ref('');
-const activeKey = ref('');
-const activeView = ref('design');
+const currentId = ref(route.params.id)
+const currentName = ref('')
+const currentDescription = ref('')
+const currentSpecies = ref('all')
+const sections = ref([])
+const documentVersion = ref(0)
+const loading = ref(true)
+const saving = ref(false)
+const error = ref('')
+const activeKey = ref('')
+const activeView = ref('design')
 const VIEW_OPTIONS = [
   { value: 'design', label: '設計' },
   { value: 'preview', label: '預覽' },
-];
-const mobileEditorPane = ref('content');
+]
+const mobileEditorPane = ref('content')
 // 「項目設定」還是「區塊設定」看目前有沒有選到項目——跟切換鈕本身分開定義，
 // 才不用在 template 裡塞一段行內陣列常數。
 const mobileEditorPanes = computed(() => [
   { value: 'sections', label: '區塊與新增' },
   { value: 'content', label: '表單內容' },
   { value: 'settings', label: selectedItem.value ? '項目設定' : '區塊設定' },
-]);
-const desktopCanvasMode = ref('focused');
-const savedSnapshot = ref('');
+])
+const desktopCanvasMode = ref('focused')
+const savedSnapshot = ref('')
 
-const selectedItemKey = ref(null);
-const sectionToDelete = ref(null);
-const pendingRoleRemoval = ref(null);
+const selectedItemKey = ref(null)
+const sectionToDelete = ref(null)
+const pendingRoleRemoval = ref(null)
 
 const PRESENTATION_OPTIONS = [
   { value: 'keyValue', title: '欄位清單', hint: '一般欄位並排，適合基本資料。' },
@@ -84,7 +61,7 @@ const PRESENTATION_OPTIONS = [
   { value: 'findings', title: '理學檢查', hint: '正常、異常與未檢查的狀態切換。' },
   { value: 'table', title: '檢驗表格', hint: '數值、參考值與備註，可依項目分組。' },
   { value: 'prose', title: '長文段落', hint: '多行文字，適合結論與照護建議。' },
-];
+]
 
 // 工具箱的每一格。型別不再藏在「進階設定」的下拉選單裡 —— 使用者是先挑欄位種類，
 // 再把它放進區塊，這才是實際的思考順序。
@@ -101,32 +78,32 @@ const TYPE_META = {
   measurement: { title: '量測值', icon: Gauge, hint: '數值卡片，可自動判讀' },
   finding: { title: '檢查結果', icon: Stethoscope, hint: '正常／異常／未檢查' },
   lab: { title: '檢驗項目', icon: FlaskConical, hint: '數值＋參考範圍＋備註' },
-};
+}
 
 // 一般欄位到哪個版式都能用 —— 各版式的「非主型別」項目最後都是交給
 // ScalarField 渲染，沒有任何版式撐不住其中某一種的理由。
-const GENERAL_TYPES = ['text', 'textarea', 'image', 'number', 'date', 'select', 'radio', 'checkbox'];
+const GENERAL_TYPES = ['text', 'textarea', 'image', 'number', 'date', 'select', 'radio', 'checkbox']
 
 // 主型別則綁死在版式上：measurement／finding／lab 要靠各自的版式元件才畫得出
 // 狀態切換、參考範圍與分組表格，放進別種版式只會被當成普通文字框。
 // 這三種都是「從固定選項裡挑」，差別只在呈現方式，共用同一份選項設定。
-const OPTION_TYPES = new Set(['select', 'radio', 'checkbox']);
+const OPTION_TYPES = new Set(['select', 'radio', 'checkbox'])
 
 const SPAN_OPTIONS = [
   { value: 'auto', title: '自動', hint: '跟著版式的預設欄寬' },
   { value: 'wide', title: '加寬', hint: '佔兩格' },
   { value: 'full', title: '整排', hint: '獨佔一整排' },
-];
+]
 
 // 理學檢查與檢驗表格的主要列是固定欄位的表格（項目／狀態／數值／備註），
 // 單列寬度不是可調的概念；長文段落的長文字本來就一行一個。
-const ROW_PRESENTATIONS = new Set(['findings', 'table', 'prose']);
+const ROW_PRESENTATIONS = new Set(['findings', 'table', 'prose'])
 
 function spanApplies(section, item) {
-  if (!section || !item) return false;
-  if (item.type === 'image') return false;
-  if (!ROW_PRESENTATIONS.has(section.presentation)) return true;
-  return item.type !== LAYOUT_TYPE[section.presentation];
+  if (!section || !item) return false
+  if (item.type === 'image') return false
+  if (!ROW_PRESENTATIONS.has(section.presentation)) return true
+  return item.type !== LAYOUT_TYPE[section.presentation]
 }
 
 // 這個版式的主體是哪一種型別 —— 決定該項目走版式自己的排版（表格列、長文堆疊）
@@ -137,7 +114,7 @@ const LAYOUT_TYPE = {
   findings: 'finding',
   table: 'lab',
   prose: 'textarea',
-};
+}
 
 // 每個區塊的工具箱內容完全相同 —— 任何型別都能放進任何區塊，
 // 版式只決定它「原生」的排法，非原生的型別由 FieldControl 用精簡控制項渲染。
@@ -145,15 +122,15 @@ const TOOLBOX_GROUPS = [
   { title: '牙科', types: ['dentalChart'] },
   { title: '檢查專用', types: ['measurement', 'finding', 'lab'] },
   { title: '一般欄位', types: GENERAL_TYPES },
-];
-const ALL_TYPES = TOOLBOX_GROUPS.flatMap((group) => group.types);
+]
+const ALL_TYPES = TOOLBOX_GROUPS.flatMap((group) => group.types)
 
 // 只用來加一圈外框，提示「這個區塊的版式是為這種型別設計的」，不影響可選範圍。
 const FEATURED_TYPE = {
   grid: 'measurement',
   findings: 'finding',
   table: 'lab',
-};
+}
 
 // 這幾個欄位除了填寫之外還會影響別的地方。說明只講「會發生什麼事」，
 // 不解釋它在系統裡叫什麼 —— 第一次打開表單設計器的人不需要知道那些。
@@ -161,121 +138,114 @@ const ROLE_HINTS = {
   vet: '這裡填的醫師姓名會印在報告最上方。',
   visitDate: '這個日期會印在報告最上方，報告列表也依它排序。',
   weight: '結案時會把這裡的數值存回貓咪資料的最近體重。',
-};
+}
 
-const activeSection = computed(() =>
-  sections.value.find((section) => section.key === activeKey.value) ?? null
-);
-const selectedItem = computed(() =>
-  (activeSection.value?.items ?? []).find((item) => item.key === selectedItemKey.value) ?? null
-);
-const selectedIndex = computed(() =>
-  selectedItem.value ? (activeSection.value?.items ?? []).indexOf(selectedItem.value) : -1
-);
+const activeSection = computed(() => sections.value.find((section) => section.key === activeKey.value) ?? null)
+const selectedItem = computed(() => (activeSection.value?.items ?? []).find((item) => item.key === selectedItemKey.value) ?? null)
+const selectedIndex = computed(() => (selectedItem.value ? (activeSection.value?.items ?? []).indexOf(selectedItem.value) : -1))
 // IDEXX 代號用一個文字框輸入、「、」分隔。輸入中的文字另外存：直接綁整理後的陣列的話，
 // 打到一半的「CREA、」會被整理掉頓號，永遠打不出第二個代號。
-const idexxCodesText = ref('');
-watch(selectedItem, (item) => {
-  idexxCodesText.value = (item?.idexxCodes ?? []).join('、');
-}, { immediate: true });
+const idexxCodesText = ref('')
+watch(
+  selectedItem,
+  (item) => {
+    idexxCodesText.value = (item?.idexxCodes ?? []).join('、')
+  },
+  { immediate: true },
+)
 function setIdexxCodes(text) {
-  idexxCodesText.value = text;
-  if (selectedItem.value) selectedItem.value.idexxCodes = normalizeIdexxCodes(text);
+  idexxCodesText.value = text
+  if (selectedItem.value) selectedItem.value.idexxCodes = normalizeIdexxCodes(text)
 }
 // 檢驗別是儀器名稱（IDEXX 結果上的 instrument），直接存文字，留空＝任何儀器都對。
 function setIdexxInstrument(text) {
-  if (selectedItem.value) selectedItem.value.idexxInstrument = text;
+  if (selectedItem.value) selectedItem.value.idexxInstrument = text
 }
-const visibleSections = computed(() =>
-  sections.value.filter((section) => section.enabled !== false && section.items?.some((item) => item.enabled !== false))
-);
-const featuredType = computed(() => FEATURED_TYPE[activeSection.value?.presentation] ?? null);
+const visibleSections = computed(() => sections.value.filter((section) => section.enabled !== false && section.items?.some((item) => item.enabled !== false)))
+const featuredType = computed(() => FEATURED_TYPE[activeSection.value?.presentation] ?? null)
 const typesForSelected = computed(() => {
-  const item = selectedItem.value;
-  if (!item) return [];
+  const item = selectedItem.value
+  if (!item) return []
   // 舊資料若帶了不在清單裡的型別也要保留，否則會卡在一個選不回去的狀態。
-  return [...new Set([...ALL_TYPES, item.type])];
-});
+  return [...new Set([...ALL_TYPES, item.type])]
+})
 const labGroupsOf = (section) =>
-  (section?.items ?? []).filter((item) => item.type === 'lab').map((item) => item.group).filter(Boolean);
+  (section?.items ?? [])
+    .filter((item) => item.type === 'lab')
+    .map((item) => item.group)
+    .filter(Boolean)
 
 // 新增檢驗項目時沿用的分組，只能看同一個區塊 —— 跨區塊沿用會拿到不相干的分組。
-const sectionGroups = computed(() => [...new Set(labGroupsOf(activeSection.value))]);
+const sectionGroups = computed(() => [...new Set(labGroupsOf(activeSection.value))])
 
 // 但建議清單要涵蓋整份範本：分組是純文字比對，只提示同區塊等於換個區塊就得重打，
 // 打錯一個字就會多出一組。同區塊的排前面，最常沿用的仍然最好按。
-const labGroupOptions = computed(() => [
-  ...new Set([...sectionGroups.value, ...sections.value.flatMap(labGroupsOf)]),
-]);
+const labGroupOptions = computed(() => [...new Set([...sectionGroups.value, ...sections.value.flatMap(labGroupsOf)])])
 
 const editorPayload = computed(() => ({
   name: currentName.value,
   description: currentDescription.value,
   species: currentSpecies.value,
   sections: sections.value,
-}));
-const isDirty = computed(() =>
-  !loading.value && JSON.stringify(editorPayload.value) !== savedSnapshot.value
-);
+}))
+const isDirty = computed(() => !loading.value && JSON.stringify(editorPayload.value) !== savedSnapshot.value)
 
 function markSaved() {
-  savedSnapshot.value = JSON.stringify(editorPayload.value);
+  savedSnapshot.value = JSON.stringify(editorPayload.value)
 }
 
 function applyTemplate(data) {
-  currentName.value = data.name ?? '';
-  currentDescription.value = data.description ?? '';
-  currentSpecies.value = data.species ?? 'all';
-  documentVersion.value = data.documentVersion ?? 0;
-  sections.value = Array.isArray(data.sections) ? data.sections : [];
+  currentName.value = data.name ?? ''
+  currentDescription.value = data.description ?? ''
+  currentSpecies.value = data.species ?? 'all'
+  documentVersion.value = data.documentVersion ?? 0
+  sections.value = Array.isArray(data.sections) ? data.sections : []
   if (!sections.value.some((section) => section.key === activeKey.value)) {
-    activeKey.value = sections.value[0]?.key ?? '';
+    activeKey.value = sections.value[0]?.key ?? ''
   }
 }
 
 async function load() {
-  loading.value = true;
-  error.value = '';
+  loading.value = true
+  error.value = ''
   try {
     const templateResponse = await http.get('/settings/form-templates/' + currentId.value, {
       params: { includeDisabled: 1 },
-    });
-    applyTemplate(templateResponse.data);
-    markSaved();
+    })
+    applyTemplate(templateResponse.data)
+    markSaved()
   } catch (err) {
-    error.value = err.response?.status === 404
-      ? '找不到這份表單'
-      : '表單內容暫時無法載入，請稍後重試';
+    error.value = err.response?.status === 404 ? '找不到這份表單' : '表單內容暫時無法載入，請稍後重試'
   } finally {
-    loading.value = false;
+    loading.value = false
   }
 }
 
 function presentationMeta(presentation) {
-  return PRESENTATION_OPTIONS.find((option) => option.value === presentation) ?? PRESENTATION_OPTIONS[0];
+  return PRESENTATION_OPTIONS.find((option) => option.value === presentation) ?? PRESENTATION_OPTIONS[0]
 }
 
 function typeMeta(type) {
-  return TYPE_META[type] ?? { title: '一般欄位', icon: Type, hint: '' };
+  return TYPE_META[type] ?? { title: '一般欄位', icon: Type, hint: '' }
 }
 
 function move(list, index, offset) {
-  const target = index + offset;
-  if (target < 0 || target >= list.length) return;
-  [list[index], list[target]] = [list[target], list[index]];
+  const target = index + offset
+  if (target < 0 || target >= list.length) return
+  ;[list[index], list[target]] = [list[target], list[index]]
 }
 
 function focusSection(key) {
-  activeKey.value = key;
-  selectedItemKey.value = null;
-  mobileEditorPane.value = 'content';
-  desktopCanvasMode.value = 'focused';
+  activeKey.value = key
+  selectedItemKey.value = null
+  mobileEditorPane.value = 'content'
+  desktopCanvasMode.value = 'focused'
 }
 
 function selectItem(section, key) {
-  activeKey.value = section.key;
-  selectedItemKey.value = key;
-  mobileEditorPane.value = 'settings';
+  activeKey.value = section.key
+  selectedItemKey.value = key
+  mobileEditorPane.value = 'settings'
 }
 
 function addSection() {
@@ -287,32 +257,32 @@ function addSection() {
     presentation: 'keyValue',
     enabled: true,
     items: [],
-  };
-  sections.value.push(draft);
-  focusSection(draft.key);
+  }
+  sections.value.push(draft)
+  focusSection(draft.key)
 }
 
 function requestSectionDelete(section) {
-  sectionToDelete.value = section;
+  sectionToDelete.value = section
 }
 
 function confirmSectionDelete() {
-  const section = sectionToDelete.value;
-  if (!section) return;
-  const index = sections.value.indexOf(section);
-  if (index >= 0) sections.value.splice(index, 1);
-  sectionToDelete.value = null;
+  const section = sectionToDelete.value
+  if (!section) return
+  const index = sections.value.indexOf(section)
+  if (index >= 0) sections.value.splice(index, 1)
+  sectionToDelete.value = null
   if (activeKey.value === section.key) {
-    focusSection(sections.value[Math.min(index, sections.value.length - 1)]?.key ?? '');
+    focusSection(sections.value[Math.min(index, sections.value.length - 1)]?.key ?? '')
   }
 }
 
 // 工具箱點一下就放進目前區塊，並直接跳到設定面板 —— 新增與設定是同一個動作。
 function addItem(type) {
-  const section = activeSection.value;
-  if (!section) return;
-  const key = '__new_item_' + Date.now();
-  section.items = section.items ?? [];
+  const section = activeSection.value
+  if (!section) return
+  const key = '__new_item_' + Date.now()
+  section.items = section.items ?? []
   section.items.push({
     key,
     label: '新項目',
@@ -336,171 +306,168 @@ function addItem(type) {
     referenceMax: null,
     idexxCodes: [],
     idexxInstrument: '',
-  });
-  selectedItemKey.value = key;
-  mobileEditorPane.value = 'settings';
+  })
+  selectedItemKey.value = key
+  mobileEditorPane.value = 'settings'
   nextTick(() => {
-    const input = document.getElementById('item-label');
-    input?.focus();
-    input?.select?.();
-  });
+    const input = document.getElementById('item-label')
+    input?.focus()
+    input?.select?.()
+  })
 }
 
 // 下拉選單／單選／複選的選項一列一個。這裡一律換掉整個陣列而不是就地改索引，
 // isDirty 是比對 JSON 快照，就地改索引在某些情況下不會被視為變更。
 function setOption(index, value) {
-  const item = selectedItem.value;
-  if (!item) return;
-  const options = [...(item.options ?? [])];
-  options[index] = value;
-  item.options = options;
+  const item = selectedItem.value
+  if (!item) return
+  const options = [...(item.options ?? [])]
+  options[index] = value
+  item.options = options
 }
 
 function addOption() {
-  const item = selectedItem.value;
-  if (!item) return;
-  item.options = [...(item.options ?? []), ''];
-  nextTick(() => document.getElementById('item-option-' + (item.options.length - 1))?.focus());
+  const item = selectedItem.value
+  if (!item) return
+  item.options = [...(item.options ?? []), '']
+  nextTick(() => document.getElementById('item-option-' + (item.options.length - 1))?.focus())
 }
 
 function removeOption(index) {
-  const item = selectedItem.value;
-  if (!item) return;
-  item.options = (item.options ?? []).filter((_, position) => position !== index);
+  const item = selectedItem.value
+  if (!item) return
+  item.options = (item.options ?? []).filter((_, position) => position !== index)
 }
 
 // 移除項目不跳確認 —— 變更要按「儲存變更」才會寫回，誤刪就直接離開頁面不要存。
 // 區塊刪除仍然要確認：它會一次帶走裡面所有項目。
 function removeItem(section, item) {
-  if (!item) return;
-  const index = (section?.items ?? []).indexOf(item);
-  if (index >= 0) section.items.splice(index, 1);
-  if (selectedItemKey.value === item.key) selectedItemKey.value = null;
+  if (!item) return
+  const index = (section?.items ?? []).indexOf(item)
+  if (index >= 0) section.items.splice(index, 1)
+  if (selectedItemKey.value === item.key) selectedItemKey.value = null
 }
 
 function removeItemByKey(section, key) {
-  activeKey.value = section.key;
-  removeItem(section, (section.items ?? []).find((item) => item.key === key));
+  activeKey.value = section.key
+  removeItem(
+    section,
+    (section.items ?? []).find((item) => item.key === key),
+  )
 }
 
 function focusProblem(section, item) {
-  activeView.value = 'design';
-  activeKey.value = section.key;
-  selectedItemKey.value = item?.key ?? null;
+  activeView.value = 'design'
+  activeKey.value = section.key
+  selectedItemKey.value = item?.key ?? null
 }
 
 function validateBeforeSave() {
   if (!currentName.value.trim()) {
-    error.value = '請先輸入健檢類型名稱。';
-    return false;
+    error.value = '請先輸入健檢類型名稱。'
+    return false
   }
   if (!sections.value.length) {
-    error.value = '表單至少需要一個區塊。';
-    return false;
+    error.value = '表單至少需要一個區塊。'
+    return false
   }
   for (const section of sections.value) {
     if (!String(section.title ?? '').trim()) {
-      focusProblem(section, null);
-      error.value = '每個區塊都需要名稱。';
-      return false;
+      focusProblem(section, null)
+      error.value = '每個區塊都需要名稱。'
+      return false
     }
     for (const item of section.items ?? []) {
       if (!String(item.label ?? '').trim()) {
-        focusProblem(section, item);
-        error.value = '每個項目都需要名稱。';
-        return false;
+        focusProblem(section, item)
+        error.value = '每個項目都需要名稱。'
+        return false
       }
-      if (
-        item.referenceMin !== null
-        && item.referenceMin !== ''
-        && item.referenceMax !== null
-        && item.referenceMax !== ''
-        && Number(item.referenceMin) > Number(item.referenceMax)
-      ) {
-        focusProblem(section, item);
-        error.value = '參考範圍的下限不能大於上限。';
-        return false;
+      if (item.referenceMin !== null && item.referenceMin !== '' && item.referenceMax !== null && item.referenceMax !== '' && Number(item.referenceMin) > Number(item.referenceMax)) {
+        focusProblem(section, item)
+        error.value = '參考範圍的下限不能大於上限。'
+        return false
       }
     }
   }
-  return true;
+  return true
 }
 
 async function save({ confirmRoleRemoval = false } = {}) {
-  if (!currentId.value || saving.value) return;
-  error.value = '';
-  if (!validateBeforeSave()) return;
-  saving.value = true;
+  if (!currentId.value || saving.value) return
+  error.value = ''
+  if (!validateBeforeSave()) return
+  saving.value = true
   try {
-    const keepSectionKey = activeKey.value;
-    const keepItemKey = selectedItemKey.value;
+    const keepSectionKey = activeKey.value
+    const keepItemKey = selectedItemKey.value
     const { data } = await http.put('/settings/form-templates/' + currentId.value, {
       ...editorPayload.value,
       confirmRoleRemoval,
       expectedVersion: documentVersion.value,
-    });
-    applyTemplate(data);
+    })
+    applyTemplate(data)
     // 儲存後伺服器會重新編 key，選取狀態盡量留在原地，留不住就退回第一個區塊。
-    activeKey.value = sections.value.some((section) => section.key === keepSectionKey)
-      ? keepSectionKey
-      : sections.value[0]?.key ?? '';
-    selectedItemKey.value = (activeSection.value?.items ?? []).some((item) => item.key === keepItemKey)
-      ? keepItemKey
-      : null;
-    pendingRoleRemoval.value = null;
-    clearTemplateCache();
-    markSaved();
-    toast.success('之後新建的報告會套用這份表單。', '表單已儲存');
+    activeKey.value = sections.value.some((section) => section.key === keepSectionKey) ? keepSectionKey : (sections.value[0]?.key ?? '')
+    selectedItemKey.value = (activeSection.value?.items ?? []).some((item) => item.key === keepItemKey) ? keepItemKey : null
+    pendingRoleRemoval.value = null
+    clearTemplateCache()
+    markSaved()
+    toast.success('之後新建的報告會套用這份表單。', '表單已儲存')
   } catch (err) {
-    const response = err.response;
+    const response = err.response
     if (response?.status === 409 && response.data?.missingRoles) {
-      pendingRoleRemoval.value = response.data;
-      return;
+      pendingRoleRemoval.value = response.data
+      return
     }
-    error.value = response?.data?.message ?? '表單儲存失敗，請稍後再試。';
-    toast.error(error.value, '儲存失敗');
+    error.value = response?.data?.message ?? '表單儲存失敗，請稍後再試。'
+    toast.error(error.value, '儲存失敗')
   } finally {
-    saving.value = false;
+    saving.value = false
   }
 }
 
 function warnBeforeUnload(event) {
-  if (!isDirty.value) return;
-  event.preventDefault();
-  event.returnValue = '';
+  if (!isDirty.value) return
+  event.preventDefault()
+  event.returnValue = ''
 }
 
 // 選取的項目被刪掉或跟著區塊換掉時，設定面板不能停在已經不存在的項目上。
-watch([activeKey, sections], () => {
-  if (selectedItemKey.value && !selectedItem.value) selectedItemKey.value = null;
-}, { deep: true });
+watch(
+  [activeKey, sections],
+  () => {
+    if (selectedItemKey.value && !selectedItem.value) selectedItemKey.value = null
+  },
+  { deep: true },
+)
 
 onMounted(() => {
-  load();
-  window.addEventListener('beforeunload', warnBeforeUnload);
-});
-onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnload));
+  load()
+  window.addEventListener('beforeunload', warnBeforeUnload)
+})
+onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnload))
 // 換頁的攔截改用站內的 ConfirmDialog，跟頁面上其他確認一致。
 // 導航守衛可以回傳 Promise，所以把 resolve 收起來等使用者按下按鈕再放行。
 // （離開分頁／關視窗仍然是 beforeunload，那個提示由瀏覽器控制，無法換掉。）
-const leaveResolve = ref(null);
-const showLeaveConfirm = computed(() => Boolean(leaveResolve.value));
+const leaveResolve = ref(null)
+const showLeaveConfirm = computed(() => Boolean(leaveResolve.value))
 
 function confirmUnsavedNavigation() {
-  if (!isDirty.value) return true;
+  if (!isDirty.value) return true
   return new Promise((resolve) => {
-    leaveResolve.value = resolve;
-  });
+    leaveResolve.value = resolve
+  })
 }
 
-onBeforeRouteLeave(confirmUnsavedNavigation);
-onBeforeRouteUpdate(confirmUnsavedNavigation);
+onBeforeRouteLeave(confirmUnsavedNavigation)
+onBeforeRouteUpdate(confirmUnsavedNavigation)
 
 function resolveLeave(confirmed) {
-  const resolve = leaveResolve.value;
+  const resolve = leaveResolve.value
   // 取消時 ConfirmDialog 會同時送出 cancel 與 update:open，這裡先清空避免重複 resolve。
-  leaveResolve.value = null;
-  resolve?.(confirmed);
+  leaveResolve.value = null
+  resolve?.(confirmed)
 }
 </script>
 
@@ -514,9 +481,7 @@ function resolveLeave(confirmed) {
       </template>
       <template #actions>
         <SegmentedControl v-model="activeView" aria-label="編輯模式" :options="VIEW_OPTIONS" />
-        <Button type="button" :disabled="saving || loading || !isDirty" @click="save()">
-          <Check stroke-width="2" />{{ saving ? '儲存中…' : '儲存變更' }}
-        </Button>
+        <Button type="button" :disabled="saving || loading || !isDirty" @click="save()"> <Check stroke-width="2" />{{ saving ? '儲存中…' : '儲存變更' }} </Button>
       </template>
     </PageHeader>
 
@@ -565,7 +530,15 @@ function resolveLeave(confirmed) {
               {{ desktopCanvasMode === 'focused' ? '一次專注一個區塊，左右面板可各自捲動。' : '點選任一區塊即可回到聚焦編輯。' }}
             </p>
           </div>
-          <SegmentedControl v-model="desktopCanvasMode" size="sm" aria-label="桌機畫布顯示方式" :options="[{ value: 'focused', label: '聚焦區塊' }, { value: 'overview', label: '表單總覽' }]" />
+          <SegmentedControl
+            v-model="desktopCanvasMode"
+            size="sm"
+            aria-label="桌機畫布顯示方式"
+            :options="[
+              { value: 'focused', label: '聚焦區塊' },
+              { value: 'overview', label: '表單總覽' },
+            ]"
+          />
         </div>
 
         <div class="grid items-start gap-5 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
@@ -576,18 +549,8 @@ function resolveLeave(confirmed) {
                 <h2 class="text-base font-semibold text-foreground">區塊</h2>
                 <Badge variant="outline">{{ sections.length }}</Badge>
               </div>
-              <div
-                v-for="(section, index) in sections"
-                :key="section.key"
-                class="flex items-center gap-1 rounded-lg pr-1 transition-colors"
-                :class="activeKey === section.key ? 'bg-accent' : 'hover:bg-hover'"
-              >
-                <button
-                  type="button"
-                  class="min-h-12 min-w-0 flex-1 rounded-lg px-2.5 py-1.5 text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
-                  :aria-pressed="activeKey === section.key"
-                  @click="focusSection(section.key)"
-                >
+              <div v-for="(section, index) in sections" :key="section.key" class="flex items-center gap-1 rounded-lg pr-1 transition-colors" :class="activeKey === section.key ? 'bg-accent' : 'hover:bg-hover'">
+                <button type="button" class="min-h-12 min-w-0 flex-1 rounded-lg px-2.5 py-1.5 text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring" :aria-pressed="activeKey === section.key" @click="focusSection(section.key)">
                   <span class="block truncate text-sm font-medium" :class="section.enabled === false ? 'text-muted-foreground' : activeKey === section.key ? 'text-accent-foreground' : 'text-foreground'">
                     {{ section.title || '未命名區塊' }}
                   </span>
@@ -606,9 +569,7 @@ function resolveLeave(confirmed) {
                   </Button>
                 </div>
               </div>
-              <Button type="button" variant="soft" size="sm" class="mt-2 w-full" @click="addSection">
-                <Plus class="h-4 w-4" stroke-width="1.75" />新增區塊
-              </Button>
+              <Button type="button" variant="soft" size="sm" class="mt-2 w-full" @click="addSection"> <Plus class="h-4 w-4" stroke-width="1.75" />新增區塊 </Button>
             </div>
 
             <div class="rounded-xl border border-border bg-card p-3 shadow-card">
@@ -620,17 +581,7 @@ function resolveLeave(confirmed) {
               <div class="space-y-1">
                 <template v-for="group in TOOLBOX_GROUPS" :key="group.title">
                   <p class="px-1 pt-2 text-xs text-muted-foreground">{{ group.title }}</p>
-                  <button
-                    v-for="type in group.types"
-                    :key="type"
-                    type="button"
-                    class="flex min-h-11 w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                    :class="type === featuredType
-                      ? 'border-primary/35 bg-field hover:border-primary/35'
-                      : 'border-transparent bg-muted/30 hover:bg-muted'"
-                    :disabled="!activeSection"
-                    @click="addItem(type)"
-                  >
+                  <button v-for="type in group.types" :key="type" type="button" class="flex min-h-11 w-full items-center gap-2.5 rounded-xl border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-40" :class="type === featuredType ? 'border-primary/35 bg-field hover:border-primary/35' : 'border-transparent bg-muted/30 hover:bg-muted'" :disabled="!activeSection" @click="addItem(type)">
                     <component :is="typeMeta(type).icon" class="h-4 w-4 shrink-0 text-primary" stroke-width="1.75" />
                     <span class="min-w-0">
                       <span class="block text-sm font-medium text-foreground">{{ typeMeta(type).title }}</span>
@@ -644,20 +595,7 @@ function resolveLeave(confirmed) {
 
           <!-- 中：畫布，就是醫師填表單時看到的樣子 -->
           <div v-if="sections.length" class="space-y-4" :class="mobileEditorPane === 'content' ? 'block' : 'hidden xl:block'">
-            <article
-              v-for="(section, index) in sections"
-              :key="section.key"
-              class="rounded-xl border p-4 transition-all sm:p-5"
-              :class="[
-                activeKey === section.key
-                  ? 'border-primary bg-field shadow-md ring-2 ring-primary/20'
-                  : 'cursor-pointer border-border bg-card shadow-card hover:border-primary/35',
-                activeKey !== section.key
-                  ? (desktopCanvasMode === 'overview' ? 'hidden xl:block' : 'hidden')
-                  : '',
-              ]"
-              @click="focusSection(section.key)"
-            >
+            <article v-for="(section, index) in sections" :key="section.key" class="rounded-xl border p-4 transition-all sm:p-5" :class="[activeKey === section.key ? 'border-primary bg-field shadow-md ring-2 ring-primary/20' : 'cursor-pointer border-border bg-card shadow-card hover:border-primary/35', activeKey !== section.key ? (desktopCanvasMode === 'overview' ? 'hidden xl:block' : 'hidden') : '']" @click="focusSection(section.key)">
               <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
                 <div class="min-w-0">
                   <p v-if="activeKey === section.key" class="inline-flex items-center rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
@@ -672,17 +610,8 @@ function resolveLeave(confirmed) {
                   <Badge v-if="section.enabled === false" variant="secondary">已停用</Badge>
                 </div>
               </div>
-              <FormSectionPreview
-                :section="section"
-                selectable
-                show-disabled
-                :selected-key="activeKey === section.key ? selectedItemKey : null"
-                @update:selected-key="(key) => selectItem(section, key)"
-                @remove="(key) => removeItemByKey(section, key)"
-              />
-              <p v-if="!(section.items ?? []).length" class="mt-2 text-center text-xs text-muted-foreground">
-                從左邊的工具箱挑一種欄位加進來。
-              </p>
+              <FormSectionPreview :section="section" selectable show-disabled :selected-key="activeKey === section.key ? selectedItemKey : null" @update:selected-key="(key) => selectItem(section, key)" @remove="(key) => removeItemByKey(section, key)" />
+              <p v-if="!(section.items ?? []).length" class="mt-2 text-center text-xs text-muted-foreground">從左邊的工具箱挑一種欄位加進來。</p>
             </article>
 
             <div class="flex items-start gap-3 rounded-xl border border-warning/35 bg-warning-surface px-4 py-3 text-sm text-warning">
@@ -695,9 +624,7 @@ function resolveLeave(confirmed) {
             <LayoutList class="mx-auto h-8 w-8 text-muted-foreground" stroke-width="1.75" />
             <p class="mt-3 text-sm font-semibold text-foreground">尚未建立表單區塊</p>
             <p class="mt-1 text-xs text-muted-foreground">先建立一個區塊，再從工具箱加入欄位。</p>
-            <Button type="button" class="mt-4" @click="addSection">
-              <Plus class="h-4 w-4" stroke-width="1.75" />新增第一個區塊
-            </Button>
+            <Button type="button" class="mt-4" @click="addSection"> <Plus class="h-4 w-4" stroke-width="1.75" />新增第一個區塊 </Button>
           </div>
 
           <!-- 右：設定面板，選什麼就設定什麼 -->
@@ -729,16 +656,7 @@ function resolveLeave(confirmed) {
                   <div class="space-y-1.5">
                     <Label class="text-xs font-medium">欄位種類</Label>
                     <div class="grid grid-cols-2 gap-1.5">
-                      <button
-                        v-for="type in typesForSelected"
-                        :key="type"
-                        type="button"
-                        class="flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
-                        :class="selectedItem.type === type
-                          ? 'border-primary bg-accent text-accent-foreground'
-                          : 'border-border bg-field text-foreground hover:border-primary/35 hover:bg-muted'"
-                        @click="selectedItem.type = type"
-                      >
+                      <button v-for="type in typesForSelected" :key="type" type="button" class="flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50" :class="selectedItem.type === type ? 'border-primary bg-accent text-accent-foreground' : 'border-border bg-field text-foreground hover:border-primary/35 hover:bg-muted'" @click="selectedItem.type = type">
                         <component :is="typeMeta(type).icon" class="h-4 w-4 shrink-0" stroke-width="1.75" />
                         <span class="truncate">{{ typeMeta(type).title }}</span>
                       </button>
@@ -763,17 +681,7 @@ function resolveLeave(confirmed) {
                   <div v-if="spanApplies(activeSection, selectedItem)" class="space-y-1.5">
                     <Label class="text-xs font-medium">寬度</Label>
                     <div class="grid grid-cols-3 gap-1.5">
-                      <button
-                        v-for="option in SPAN_OPTIONS"
-                        :key="option.value"
-                        type="button"
-                        class="flex min-h-11 items-center justify-center rounded-lg border px-2 text-sm font-medium transition-colors"
-                        :class="(selectedItem.span ?? 'auto') === option.value
-                          ? 'border-primary bg-accent text-accent-foreground'
-                          : 'border-border bg-field text-foreground hover:border-primary/35 hover:bg-muted'"
-                        v-tip="option.hint"
-                        @click="selectedItem.span = option.value"
-                      >{{ option.title }}</button>
+                      <button v-for="option in SPAN_OPTIONS" :key="option.value" type="button" class="flex min-h-11 items-center justify-center rounded-lg border px-2 text-sm font-medium transition-colors" :class="(selectedItem.span ?? 'auto') === option.value ? 'border-primary bg-accent text-accent-foreground' : 'border-border bg-field text-foreground hover:border-primary/35 hover:bg-muted'" v-tip="option.hint" @click="selectedItem.span = option.value">{{ option.title }}</button>
                     </div>
                     <p class="text-xs text-muted-foreground">畫布較窄時欄數會自動收合，屆時「加寬」等同整排。</p>
                   </div>
@@ -800,26 +708,14 @@ function resolveLeave(confirmed) {
                       <Switch :model-value="selectedItem.numeric !== false" aria-label="數值型項目" @update:model-value="selectedItem.numeric = $event" />
                     </div>
                     <div class="space-y-1.5">
-                      <Label for="item-idexx-codes" class="text-xs font-medium">IDEXX 代號</Label>
-                      <Input
-                        id="item-idexx-codes"
-                        :model-value="idexxCodesText"
-                        class="num"
-                        placeholder="例如：CREA"
-                        @update:model-value="setIdexxCodes"
-                      />
-                      <p class="text-xs text-muted-foreground">IDEXX 儀器驗完會自動填進這一格。不同儀器代號不同時用「、」分開，例如 RBC、RBC_BLD。</p>
+                      <Label for="item-idexx-instrument" class="text-xs font-medium">IDEXX 檢驗別（選填）</Label>
+                      <Input id="item-idexx-instrument" :model-value="selectedItem.idexxInstrument ?? ''" class="num" placeholder="例如：Catalyst_One" @update:model-value="setIdexxInstrument" />
+                      <p class="text-xs text-muted-foreground">填儀器名稱（IDEXX 結果上的 instrument）。同一個代號在不同儀器上指不同項目時才需要，留空＝任何儀器都對。</p>
                     </div>
                     <div class="space-y-1.5">
-                      <Label for="item-idexx-instrument" class="text-xs font-medium">IDEXX 檢驗別（選填）</Label>
-                      <Input
-                        id="item-idexx-instrument"
-                        :model-value="selectedItem.idexxInstrument ?? ''"
-                        class="num"
-                        placeholder="例如：Catalyst_One"
-                        @update:model-value="setIdexxInstrument"
-                      />
-                      <p class="text-xs text-muted-foreground">填儀器名稱（IDEXX 結果上的 instrument）。同一個代號在不同儀器上指不同項目時才需要，留空＝任何儀器都對。</p>
+                      <Label for="item-idexx-codes" class="text-xs font-medium">IDEXX 代號</Label>
+                      <Input id="item-idexx-codes" :model-value="idexxCodesText" class="num" placeholder="例如：CREA" @update:model-value="setIdexxCodes" />
+                      <p class="text-xs text-muted-foreground">IDEXX 儀器驗完會自動填進這一格。不同儀器代號不同時用「、」分開，例如 RBC、RBC_BLD。</p>
                     </div>
                   </template>
 
@@ -837,28 +733,14 @@ function resolveLeave(confirmed) {
                     <Label class="text-xs font-medium">選項</Label>
                     <div v-if="(selectedItem.options ?? []).length" class="space-y-1.5">
                       <div v-for="(option, index) in selectedItem.options" :key="index" class="flex items-center gap-1">
-                        <Input
-                          :id="'item-option-' + index"
-                          :model-value="option"
-                          :placeholder="'選項 ' + (index + 1)"
-                          :aria-label="'選項 ' + (index + 1)"
-                          @update:model-value="setOption(index, $event)"
-                          @keydown.enter.prevent="addOption()"
-                        />
-                        <button
-                          type="button"
-                          class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive-surface text-destructive transition-colors hover:bg-destructive/20"
-                          :aria-label="'刪除選項 ' + (index + 1)"
-                          @click="removeOption(index)"
-                        >
+                        <Input :id="'item-option-' + index" :model-value="option" :placeholder="'選項 ' + (index + 1)" :aria-label="'選項 ' + (index + 1)" @update:model-value="setOption(index, $event)" @keydown.enter.prevent="addOption()" />
+                        <button type="button" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-destructive-surface text-destructive transition-colors hover:bg-destructive/20" :aria-label="'刪除選項 ' + (index + 1)" @click="removeOption(index)">
                           <X class="h-4 w-4" stroke-width="1.75" />
                         </button>
                       </div>
                     </div>
                     <p v-else class="text-xs text-muted-foreground">還沒有選項，這個欄位在表單上會是空的。</p>
-                    <Button type="button" variant="soft" size="sm" class="w-full" @click="addOption()">
-                      <Plus class="h-4 w-4" stroke-width="1.75" />新增選項
-                    </Button>
+                    <Button type="button" variant="soft" size="sm" class="w-full" @click="addOption()"> <Plus class="h-4 w-4" stroke-width="1.75" />新增選項 </Button>
                     <p class="text-xs text-muted-foreground">按 Enter 可以直接接著加下一個；留空的選項會在儲存時移除。</p>
                   </div>
 
@@ -875,15 +757,7 @@ function resolveLeave(confirmed) {
                   </div>
 
                   <div class="border-t border-border pt-3">
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      class="min-h-10 w-full"
-                      @click="removeItem(activeSection, selectedItem)"
-                    >
-                      <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除項目
-                    </Button>
+                    <Button type="button" variant="destructive" size="sm" class="min-h-10 w-full" @click="removeItem(activeSection, selectedItem)"> <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除項目 </Button>
                   </div>
                 </div>
               </template>
@@ -908,9 +782,7 @@ function resolveLeave(confirmed) {
                         <SelectItem v-for="option in PRESENTATION_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p class="text-xs leading-relaxed text-muted-foreground">
-                      {{ presentationMeta(activeSection.presentation).hint }}它決定工具箱提供哪些欄位；既有項目會保留原本的種類。
-                    </p>
+                    <p class="text-xs leading-relaxed text-muted-foreground">{{ presentationMeta(activeSection.presentation).hint }}它決定工具箱提供哪些欄位；既有項目會保留原本的種類。</p>
                   </div>
                   <div class="space-y-1.5">
                     <Label for="section-description" class="text-xs font-medium">提示說明</Label>
@@ -922,15 +794,7 @@ function resolveLeave(confirmed) {
                   </div>
 
                   <div class="border-t border-border pt-3">
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      class="min-h-10 w-full"
-                      @click="requestSectionDelete(activeSection)"
-                    >
-                      <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除這個區塊
-                    </Button>
+                    <Button type="button" variant="destructive" size="sm" class="min-h-10 w-full" @click="requestSectionDelete(activeSection)"> <Trash2 class="h-4 w-4" stroke-width="1.75" />刪除這個區塊 </Button>
                   </div>
                 </div>
               </template>
@@ -967,40 +831,12 @@ function resolveLeave(confirmed) {
             <FormSectionPreview :section="section" />
           </div>
         </div>
-        <p v-else class="rounded-xl border border-dashed border-border px-5 py-14 text-center text-sm text-muted-foreground">
-          目前沒有可預覽的啟用區塊。
-        </p>
+        <p v-else class="rounded-xl border border-dashed border-border px-5 py-14 text-center text-sm text-muted-foreground">目前沒有可預覽的啟用區塊。</p>
       </div>
     </template>
 
-    <ConfirmDialog
-      :open="Boolean(sectionToDelete)"
-      title="刪除這個區塊？"
-      :description="'「' + (sectionToDelete?.title || '未命名區塊') + '」與其中 ' + (sectionToDelete?.items?.length ?? 0) + ' 個項目會在儲存後移除。'"
-      confirm-label="刪除區塊"
-      destructive
-      @update:open="(open) => !open && (sectionToDelete = null)"
-      @confirm="confirmSectionDelete"
-    />
-    <ConfirmDialog
-      :open="Boolean(pendingRoleRemoval)"
-      title="確認停用系統連動欄位"
-      :description="pendingRoleRemoval?.message ?? ''"
-      confirm-label="仍要儲存"
-      destructive
-      :loading="saving"
-      @update:open="(open) => !open && (pendingRoleRemoval = null)"
-      @confirm="save({ confirmRoleRemoval: true })"
-    />
-    <ConfirmDialog
-      :open="showLeaveConfirm"
-      title="尚有未儲存的變更"
-      description="離開這一頁會捨棄剛才的編輯內容，這個動作無法復原。"
-      confirm-label="捨棄變更並離開"
-      cancel-label="留在此頁"
-      destructive
-      @update:open="(open) => !open && resolveLeave(false)"
-      @confirm="resolveLeave(true)"
-    />
+    <ConfirmDialog :open="Boolean(sectionToDelete)" title="刪除這個區塊？" :description="'「' + (sectionToDelete?.title || '未命名區塊') + '」與其中 ' + (sectionToDelete?.items?.length ?? 0) + ' 個項目會在儲存後移除。'" confirm-label="刪除區塊" destructive @update:open="(open) => !open && (sectionToDelete = null)" @confirm="confirmSectionDelete" />
+    <ConfirmDialog :open="Boolean(pendingRoleRemoval)" title="確認停用系統連動欄位" :description="pendingRoleRemoval?.message ?? ''" confirm-label="仍要儲存" destructive :loading="saving" @update:open="(open) => !open && (pendingRoleRemoval = null)" @confirm="save({ confirmRoleRemoval: true })" />
+    <ConfirmDialog :open="showLeaveConfirm" title="尚有未儲存的變更" description="離開這一頁會捨棄剛才的編輯內容，這個動作無法復原。" confirm-label="捨棄變更並離開" cancel-label="留在此頁" destructive @update:open="(open) => !open && resolveLeave(false)" @confirm="resolveLeave(true)" />
   </section>
 </template>

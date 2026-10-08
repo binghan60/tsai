@@ -65,6 +65,9 @@ const labResultSchema = new mongoose.Schema(
     // 自動填進哪一次看診（lib/labResultApply.js）。appliedAt 是填入的時間；找不到看診就留空、之後可以再套用。
     appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
     appliedAt: { type: Date, default: null },
+    // 填入的那一刻看診／報告已經關了：record_finalized＝健檢報告已結案（數值只進看診與日誌，報告上沒有）、
+    // desk_completed＝櫃台已完成處理。填入狀態燈號（client lib/labFillStatus.js）靠它事後還說得出「數值沒有進報告」。
+    fillClosed: { type: String, enum: ['record_finalized', 'desk_completed', null], default: null },
     // 填了哪些欄位、填了什麼值。復原（選錯貓）時只清「現在還是這個值」的欄位——被人改過的不動。
     filled: {
       type: [new mongoose.Schema({ key: String, label: String, value: String }, { _id: false })],
