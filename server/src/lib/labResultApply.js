@@ -410,23 +410,6 @@ export async function undismissLabResult(labResultId) {
   if (!updated) throw Object.assign(new Error('這份檢驗結果沒有被忽略'), { status: 409 });
 }
 
-// 一次忽略某一天以前的待確認結果（IDEXX 主機補傳的歷史紀錄會一口氣進來幾百筆）。before 是 YYYY-MM-DD，那一天當天的不算。
-// 回傳這一批共用的 dismissedAt，「復原」用它整批還原。
-export async function dismissLabResultsBefore(before) {
-  const start = clinicDayStart(before);
-  if (!start) throw Object.assign(new Error('日期參數不正確'), { status: 422 });
-  const dismissedAt = new Date();
-  const result = await LabResult.updateMany({ petId: null, dismissedAt: null, runAt: { $lt: start } }, { $set: { dismissedAt } });
-  return { dismissed: result.modifiedCount ?? 0, dismissedAt };
-}
-
-export async function undismissLabResultBatch(dismissedAt) {
-  const at = dismissedAt ? new Date(dismissedAt) : null;
-  if (!at || Number.isNaN(at.getTime())) throw Object.assign(new Error('復原參數不正確'), { status: 422 });
-  const result = await LabResult.updateMany({ petId: null, dismissedAt: at }, { $set: { dismissedAt: null } });
-  return { restored: result.modifiedCount ?? 0 };
-}
-
 // 忽略：品管測試、練習用的檢驗。只有還在待確認清單上的能忽略。
 export async function dismissLabResult(labResultId) {
   const updated = await LabResult.findOneAndUpdate(

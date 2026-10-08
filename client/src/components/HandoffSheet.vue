@@ -3,7 +3,7 @@ import { usePetClinicalNotes } from '../composables/usePetClinicalNotes';
 import { apiErrorMessage } from '../lib/apiError.js';
 import { computed, nextTick, ref, watch } from 'vue';
 import PatientLink from './PatientLink.vue';
-import { CalendarCheck, Check, Pencil, X } from '@lucide/vue';
+import { CalendarCheck, Check, Pencil, Undo2, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
 import { describeVisitChanges } from '../lib/appointmentNotifications';
@@ -140,7 +140,7 @@ watch(() => props.appointment.visitNote, () => { if (!noteDirty.value) resetNote
 async function persistNote() {
   if (!noteDirty.value) return;
   if (noteConflict.value) throw new Error('本次簡易紀錄已由其他人修改，請先核對最新內容。');
-  if (state.value.completed) throw new Error('這筆就診已結案，請先完成修改申請與核准。');
+  if (state.value.completed) throw new Error('這筆就診已結案，請先退回處理中。');
   const before = { visitNote: noteBaseline.value };
   const data = await run('clinical', { visitNote: visitNote.value });
   const changedParts = describeVisitChanges(before, { visitNote: data.visitNote });
@@ -296,6 +296,18 @@ async function approveReopen() {
     error.value = apiErrorMessage(err, '操作失敗，請稍後重試');
   } finally { busy.value = false; }
 }
+
+// 櫃台自己退回處理中：按錯完成、或完成後才發現要改。視窗留著，退回後直接在這裡改。
+async function reopen() {
+  if (busy.value) return;
+  busy.value = true;
+  error.value = '';
+  try {
+    await run('reopen');
+  } catch (err) {
+    error.value = apiErrorMessage(err, '操作失敗，請稍後重試');
+  } finally { busy.value = false; }
+}
 </script>
 
 <template>
@@ -382,7 +394,7 @@ async function approveReopen() {
                 <Button variant="secondary" size="sm" :disabled="busy" @click="resetNote">採用最新內容</Button>
               </Alert>
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-sm text-muted-foreground" role="status">{{ state.completed ? '已結案，核准修改後才能編輯' : editingNote ? '按「儲存」才會保存；取消或關閉會放棄修改' : noteSaved ? '已儲存' : '跟診療台、病歷日誌是同一份紀錄' }}</p>
+                <p class="text-sm text-muted-foreground" role="status">{{ state.completed ? '已結案，退回處理中才能編輯' : editingNote ? '按「儲存」才會保存；取消或關閉會放棄修改' : noteSaved ? '已儲存' : '跟診療台、病歷日誌是同一份紀錄' }}</p>
                 <div v-if="editingNote" class="flex gap-2">
                   <Button variant="secondary" size="sm" :disabled="busy" @click="cancelEditNote">取消</Button>
                   <Button size="sm" :disabled="busy || noteConflict || state.completed" @click="saveNote">儲存</Button>
@@ -478,7 +490,8 @@ async function approveReopen() {
           <div class="ml-auto flex gap-2">
             <Button variant="secondary" :disabled="busy" @click="close">{{ state.completed ? '關閉' : '稍後處理' }}</Button>
             <Button v-if="state.completed && appointment.reopenRequest?.requestedAt && !appointment.reopenRequest?.approvedAt" :disabled="busy" @click="approveReopen">核准修改</Button>
-            <Button v-else-if="!state.completed" :disabled="busy || editingNote || !state.handedOff" @click="complete"><Check stroke-width="2" />完成處理</Button>
+            <Button v-else-if="state.completed" variant="soft" :disabled="busy" @click="reopen"><Undo2 stroke-width="1.75" />退回處理中</Button>
+            <Button v-else :disabled="busy || editingNote || !state.handedOff" @click="complete"><Check stroke-width="2" />完成處理</Button>
           </div>
         </footer>
       </div>

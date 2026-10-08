@@ -15,11 +15,9 @@ import EmptyState from '../EmptyState.vue';
 import ListSkeleton from '../ListSkeleton.vue';
 import ConfirmDialog from '../ConfirmDialog.vue';
 import LabConflictDialog from '../LabConflictDialog.vue';
-import ModalDialog from '../ModalDialog.vue';
 import Pagination from '../Pagination.vue';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Button } from '../ui/button';
-import { DatePicker } from '../ui/date-picker';
 import { Input } from '../ui/input';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 
@@ -237,47 +235,6 @@ async function restoreDismissed(request) {
   }
 }
 
-// 忽略舊的：一次忽略某一天以前驗的（IDEXX 主機補傳歷史紀錄會進來幾百筆，一筆一筆按不完）。
-// 先算有幾筆再讓人確認；忽略後的提示可以整批復原。
-const bulk = ref(null); // { before, count, loading }
-const bulkBusy = ref(false);
-let bulkRequest = 0;
-
-function openBulk() {
-  bulk.value = { before: clinicDateInput(new Date(Date.now() - 6 * 86_400_000)), count: null };
-}
-
-watch(() => bulk.value?.before, async (before) => {
-  const id = ++bulkRequest;
-  if (!bulk.value) return;
-  bulk.value.count = null;
-  if (!before) return;
-  try {
-    const { data } = await http.get('/lab-results', { params: { before, limit: 1 } });
-    if (id === bulkRequest && bulk.value) bulk.value.count = data.total ?? 0;
-  } catch {
-    // 算不出來就不給按。
-  }
-});
-
-async function confirmBulk() {
-  if (!bulk.value?.count || bulkBusy.value) return;
-  bulkBusy.value = true;
-  try {
-    const { data } = await http.post('/lab-results/dismiss-before', { before: bulk.value.before });
-    toast.addToast({
-      type: 'success', title: `已忽略 ${data.dismissed} 筆`, message: '這些檢驗結果不會填進任何報告',
-      action: { label: '復原', handler: () => restoreDismissed(() => http.post('/lab-results/undismiss-batch', { dismissedAt: data.dismissedAt })) },
-    });
-    bulk.value = null;
-  } catch (err) {
-    toast.error(apiErrorMessage(err, '忽略失敗，請稍後再試'));
-  } finally {
-    bulkBusy.value = false;
-    afterChange();
-  }
-}
-
 // 診所電腦上抓檔程式的狀態（每分鐘由 useGlobalChat 重讀；打開面板時再讀一次，看到的才是最新的）。
 // 從來沒有回報過（診所還沒裝）就不顯示。
 // 使用者要求做成燈號（綠／黃／紅），滑過去才顯示詳細資訊，不要佔一整列。
@@ -310,7 +267,7 @@ function refreshAll() {
   counts.loadBridges();
 }
 
-// 新結果進來、別台處理掉就重讀清單。直接聽事件，不看工具欄的數字——那個數字只算近七天，更早的變動不會讓它變。
+// 新結果進來、別台處理掉就重讀清單。直接聽事件，不看工具欄的數字——有人改了數值差異之類的變動不一定會讓那個數字變。
 const socket = getSocket();
 onMounted(() => {
   refreshAll();
@@ -449,11 +406,10 @@ onActivated(refreshAll);
       <EmptyState v-else-if="!items.length && keyword.trim()" :icon="FlaskConical" title="找不到符合的檢驗結果" inset />
       <EmptyState v-else-if="!items.length && !conflicts.length" :icon="FlaskConical" title="沒有待確認的檢驗結果" inset />
       <section v-else-if="items.length" aria-labelledby="lab-pending-title">
-        <h3 id="lab-pending-title" class="flex items-center gap-2 px-5 pt-3 pb-1 text-sm font-semibold">
+        <h3 id="lab-pending-title" class="flex items-baseline gap-2 px-5 pt-3 pb-1 text-sm font-semibold">
           還沒選貓
           <span class="num font-normal text-muted-foreground">共 {{ total.toLocaleString('zh-TW') }} 筆</span>
-          <span v-if="totalPages > 1" class="num text-xs font-normal text-subtle-foreground">第 {{ page }}／{{ totalPages }} 頁</span>
-          <Button variant="secondary" size="xs" class="ml-auto" @click="openBulk">忽略舊的</Button>
+          <span v-if="totalPages > 1" class="num ml-auto text-xs font-normal text-subtle-foreground">第 {{ page }}／{{ totalPages }} 頁</span>
         </h3>
         <ul class="divide-y divide-border">
           <li v-for="item in items" :key="item._id" class="flex items-center">
@@ -486,18 +442,6 @@ onActivated(refreshAll);
       @update:open="(value) => !value && (removingBridge = '')"
       @confirm="confirmRemoveBridge"
     />
-    <ModalDialog v-if="bulk" size="sm" title="忽略舊的檢驗結果" description="這一天以前驗的、還沒選貓的結果一次忽略；當天的不算。" @close="bulk = null">
-      <div class="space-y-3 px-6 py-4">
-        <DatePicker v-model="bulk.before" :clearable="false" aria-label="忽略這一天以前驗的" class="w-44" />
-        <p class="min-h-lh text-base">
-          <template v-if="bulk.count !== null">共 <span class="num font-semibold">{{ bulk.count.toLocaleString('zh-TW') }}</span> 筆</template>
-        </p>
-      </div>
-      <div class="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
-        <Button variant="secondary" :disabled="bulkBusy" @click="bulk = null">取消</Button>
-        <Button variant="destructive-solid" :disabled="bulkBusy || !bulk.count" @click="confirmBulk">忽略</Button>
-      </div>
-    </ModalDialog>
     <LabConflictDialog
       v-if="conflictGroup"
       :group="conflictGroup"

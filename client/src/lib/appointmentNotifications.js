@@ -16,6 +16,7 @@ export function appointmentNotification(appointment, action, { changedParts = []
     handoff: `${subject}已完成看診，交給櫃台處理`,
     reclaim: `${subject}被醫師取回修改，暫時退回看診中`,
     desk_complete: `${subject}的櫃台作業已完成，這次看診結束`,
+    desk_reopen: `${subject}被櫃台退回處理中`,
     follow_up: `${subject}已預約回診（${formatDate(appointment.followUpDate)} ${appointment.followUpTime || '未指定時間'}）`,
     visit_data: `${subject}的${changedParts.join('、') || '看診資料'}已更新`,
     edit: `${subject}的掛號資料已更新`,

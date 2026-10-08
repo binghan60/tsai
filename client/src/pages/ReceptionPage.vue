@@ -374,6 +374,9 @@ function onSheetUpdate(appointment, action, options = {}) {
   if (action === 'complete') {
     notifyChat(appointment, 'desk_complete')
     toast.success('已完成處理')
+  } else if (action === 'reopen') {
+    notifyChat(appointment, 'desk_reopen')
+    toast.success('已退回處理中')
   } else if (action === 'followup') {
     notifyChat(appointment, 'follow_up')
     if (!options.silentToast) toast.success('回診已預約')

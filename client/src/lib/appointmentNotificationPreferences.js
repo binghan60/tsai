@@ -13,6 +13,7 @@ export const NOTIFICATION_OPTIONS = [
   { key: 'handoff', label: '完成看診交給櫃台' },
   { key: 'reclaim', label: '醫師取回修改' },
   { key: 'desk_complete', label: '櫃台完成處理' },
+  { key: 'desk_reopen', label: '櫃台退回處理中' },
   { key: 'follow_up', label: '預約回診' },
   { key: 'visit_note', label: '本次簡易紀錄更新' },
   { key: 'lab_values', label: '檢驗數值更新' },

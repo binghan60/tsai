@@ -2,7 +2,7 @@ import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 import { effectiveAssays, labFlag } from '../../../shared/labValues.js';
 
-export const WORKFLOW_ACTIONS = ['clinical', 'start', 'handoff', 'reclaim', 'complete', 'record', 'followup', 'request-reopen', 'approve-reopen'];
+export const WORKFLOW_ACTIONS = ['clinical', 'start', 'handoff', 'reclaim', 'complete', 'record', 'followup', 'request-reopen', 'approve-reopen', 'reopen'];
 
 export function workflowError(message, status = 422) {
   return Object.assign(new Error(message), { status });
@@ -230,6 +230,13 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
     appointment.deskCompletedAt = null;
     appointment.completedAt = null;
     appointment.reopenRequest.approvedAt = now;
+  } else if (action === 'reopen') {
+    // 櫃台自己退回：按錯「完成處理」或完成後才發現要改，不必等醫師申請。跟核准修改走到同一個狀態；
+    // 剛好有待核准的申請就一併算核准，掛號台的警示才會消失。號碼牌已歸還，不再配回去。
+    if (!state.completed) throw workflowError('這筆就診還沒完成處理', 409);
+    appointment.deskCompletedAt = null;
+    appointment.completedAt = null;
+    if (appointment.reopenRequest?.requestedAt && !appointment.reopenRequest.approvedAt) appointment.reopenRequest.approvedAt = now;
   } else if (!['followup', 'record'].includes(action)) {
     throw workflowError('不支援的診務操作');
   }

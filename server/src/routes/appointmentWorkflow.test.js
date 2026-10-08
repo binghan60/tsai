@@ -167,6 +167,23 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal((await post('reclaim')).status, 409);
     assert.equal((await post('clinical', { visitNote: '事後再改' })).status, 409);
   });
+  it('lets the desk send a completed visit back to processing', async () => {
+    await post('handoff');
+    assert.equal((await post('reopen')).status, 409);
+    await post('complete');
+    await post('request-reopen', { reason: '補藥單' });
+
+    const reopened = await post('reopen');
+    assert.equal(reopened.status, 200);
+    assert.equal(reopened.body.status, 'pending_checkout');
+    assert.equal(reopened.body.deskCompletedAt, null);
+    // 待核准的申請一併算核准；歸還的號碼牌不配回來。
+    assert.ok(reopened.body.reopenRequest.approvedAt);
+    assert.equal(reopened.body.checkinNumber, null);
+    // 退回後櫃台可以改紀錄、醫師可以取回，之後再完成一次。
+    assert.equal((await post('clinical', { visitNote: '更正' })).status, 200);
+    assert.equal((await post('complete')).body.status, 'completed');
+  });
   it('allows the vet to request reopening without a reason', async () => {
     await post('handoff');
     await post('complete');
