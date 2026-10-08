@@ -10,7 +10,7 @@ import { CAT_BREED_FALLBACKS, filterCatBreeds, findCatBreed } from '../../../sha
 // 下拉選單＋打字篩選：點開是整份清單，打字只留符合的（中文名稱、俗稱「英短」「加菲」、英文名稱都找得到）；
 // 打的字不在清單上、又沒選任何一項就離開，欄位會回到原本選的那一種。把字全部刪掉＝清空。
 // 新增貓咪、貓咪詳情、初診表審核、公開初診頁共用。
-// appearance：app＝後台（跟 ui/input、ui/select 同一套外觀）；intake＝公開初診頁（--intake-* token、16px、44px 高）。
+// appearance：app＝後台（跟 ui/input、ui/select 同一套外觀）；intake＝公開初診頁（--intake-* token、16px、44px 高；樣式在 style.css 的 intake-combobox-*，跟花色共用）。
 // id、aria-*、class 等屬性會落在輸入框上，外面的 <label for> 才接得到。
 defineOptions({ inheritAttrs: false });
 const props = defineProps({
@@ -65,7 +65,7 @@ watch(open, async (value) => {
 </script>
 
 <template>
-  <div :class="intake ? 'breed-select-intake' : 'min-w-0 space-y-1'">
+  <div :class="intake ? 'intake-combobox' : 'min-w-0 space-y-1'">
     <ComboboxRoot v-model:open="open" :model-value="selected" ignore-filter open-on-click @update:model-value="pick">
       <ComboboxAnchor class="relative block">
         <ComboboxInput
@@ -75,7 +75,7 @@ watch(open, async (value) => {
           :display-value="displayValue"
           data-slot="breed-select-input"
           :placeholder="placeholder"
-          :class="intake ? ['breed-select-intake-input', attrs.class] : cn(
+          :class="intake ? ['intake-combobox-input', attrs.class] : cn(
             // 跟 ui/input 同一套外觀，右邊多留箭頭的位置。
             'border-input bg-field text-foreground focus-visible:border-primary focus-visible:ring-focus-ring aria-invalid:ring-destructive/15 aria-invalid:border-destructive h-10 w-full min-w-0 rounded-lg border py-1 pr-9 pl-3 text-base outline-none transition-[border-color,box-shadow] placeholder:text-subtle-foreground focus-visible:ring-3 aria-invalid:ring-3',
             attrs.class,
@@ -84,7 +84,7 @@ watch(open, async (value) => {
         />
         <ComboboxTrigger
           aria-label="展開品種清單"
-          :class="intake ? 'breed-select-intake-trigger' : 'absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-lg text-muted-foreground'"
+          :class="intake ? 'intake-combobox-trigger' : 'absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-r-lg text-muted-foreground'"
         >
           <ChevronDown class="size-4" :stroke-width="1.75" aria-hidden="true" />
         </ComboboxTrigger>
@@ -96,128 +96,28 @@ watch(open, async (value) => {
           align="start"
           :side-offset="4"
           :class="intake
-            ? 'breed-select-intake-content'
+            ? 'intake-combobox-content'
             : 'bg-popover text-popover-foreground data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 cn-menu-translucent z-50 max-h-[min(22rem,var(--reka-combobox-content-available-height))] w-(--reka-combobox-trigger-width) min-w-64 origin-(--reka-combobox-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-xl border border-border p-1 shadow-menu duration-100'"
         >
-          <p v-if="!matches.length" :class="intake ? 'breed-select-intake-empty' : 'shrink-0 px-3 pt-2 pb-1 text-sm text-muted-foreground'">清單上沒有這個品種，不確定可以選：</p>
+          <p v-if="!matches.length" :class="intake ? 'intake-combobox-empty' : 'shrink-0 px-3 pt-2 pb-1 text-sm text-muted-foreground'">清單上沒有這個品種，不確定可以選：</p>
           <ComboboxItem
             v-for="breed in options"
             :key="breed.idexx"
             :value="breed.idexx"
             :class="intake
-              ? 'breed-select-intake-item'
+              ? 'intake-combobox-item'
               : 'relative flex min-h-10 w-full shrink-0 cursor-default items-baseline gap-2 rounded-md py-2 pr-9 pl-3 text-base outline-hidden select-none data-highlighted:bg-hover data-[state=checked]:font-semibold data-[state=checked]:text-accent-foreground'"
           >
             <span class="shrink-0 whitespace-nowrap">{{ breed.label }}</span>
             <!-- 英文是送到 IDEXX 主機的名稱：院內對照用，飼主不需要看。放不下時截斷英文，中文名稱不折行。 -->
             <span v-if="!intake" class="min-w-0 truncate text-sm font-normal text-subtle-foreground">{{ breed.idexx }}</span>
-            <ComboboxItemIndicator :class="intake ? 'breed-select-intake-check' : 'absolute inset-y-0 right-2 flex items-center'">
+            <ComboboxItemIndicator :class="intake ? 'intake-combobox-check' : 'absolute inset-y-0 right-2 flex items-center'">
               <Check class="size-4.5" :stroke-width="2" aria-hidden="true" />
             </ComboboxItemIndicator>
           </ComboboxItem>
         </ComboboxContent>
       </ComboboxPortal>
     </ComboboxRoot>
-    <p v-if="legacyText" :class="intake ? 'breed-select-intake-legacy' : 'text-sm text-muted-foreground'">原本填寫：{{ legacyText }}</p>
+    <p v-if="legacyText" :class="intake ? 'intake-combobox-legacy' : 'text-sm text-muted-foreground'">原本填寫：{{ legacyText }}</p>
   </div>
 </template>
-
-<!-- 公開初診頁的外觀。清單是傳送到 body 底下的，scoped 樣式跟不過去，所以用有前綴的一般 class。 -->
-<style>
-.breed-select-intake {
-  min-width: 0;
-  flex: 1 1 180px;
-}
-.breed-select-intake-input {
-  width: 100%;
-  min-height: 44px;
-  border: 1px solid var(--intake-dash);
-  border-radius: 8px;
-  padding: 8px 40px 8px 12px;
-  background: var(--intake-white);
-  color: var(--intake-text);
-  font-family: inherit;
-  /* 小於 16px 時 iOS Safari 一聚焦就放大整頁。 */
-  font-size: 16px;
-  outline: none;
-}
-.breed-select-intake-input::placeholder {
-  color: var(--intake-secondary);
-}
-.breed-select-intake-input:focus {
-  border-color: var(--intake-accent);
-  box-shadow: 0 0 0 3px var(--intake-accent-surface);
-}
-.breed-select-intake-input[aria-invalid='true'] {
-  border-color: var(--intake-red);
-}
-.breed-select-intake-trigger {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  display: flex;
-  width: 44px;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: none;
-  color: var(--intake-secondary);
-  cursor: pointer;
-}
-.breed-select-intake-content {
-  z-index: 50;
-  width: var(--reka-combobox-trigger-width);
-  max-height: min(320px, var(--reka-combobox-content-available-height));
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border: 1px solid var(--intake-dash);
-  border-radius: 8px;
-  padding: 4px;
-  background: var(--intake-white);
-  box-shadow: 0 8px 24px var(--intake-shadow);
-  color: var(--intake-text);
-  font-family: var(--font-sans);
-  font-size: 16px;
-}
-.breed-select-intake-item {
-  position: relative;
-  display: flex;
-  min-height: 44px;
-  flex-shrink: 0;
-  align-items: center;
-  border-radius: 6px;
-  padding: 8px 40px 8px 12px;
-  cursor: pointer;
-  user-select: none;
-  outline: none;
-}
-.breed-select-intake-item[data-highlighted] {
-  background: var(--intake-accent-surface);
-}
-.breed-select-intake-item[data-state='checked'] {
-  color: var(--intake-accent);
-  font-weight: bold;
-}
-.breed-select-intake-check {
-  position: absolute;
-  top: 0;
-  right: 12px;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-}
-.breed-select-intake-empty {
-  flex-shrink: 0;
-  margin: 0;
-  padding: 8px 12px 4px;
-  color: var(--intake-secondary);
-  font-size: 14px;
-}
-.breed-select-intake-legacy {
-  margin: 4px 0 0;
-  color: var(--intake-secondary);
-  font-size: 14px;
-}
-</style>

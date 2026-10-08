@@ -63,9 +63,12 @@
    深色＝「深色專業」：近黑藍底、青藍主色，卡片有一條內側高光、主要按鈕有光暈。
    兩態共用同一套形狀與字級，只換顏色。
    報告紙面（.report-sheet）也宣告一次淺色值：它固定淺色、又是產 PDF 的來源，
-   裡面共用的元件（牙齒圖）讀到的 token 不能跟著 html.dark 變深。 */
+   裡面共用的元件（牙齒圖）讀到的 token 不能跟著 html.dark 變深。
+   公開初診頁（.intake-page）同理：它不跟主題，但借用的 ui/input、勾選框、單選鈕讀的是
+   bg-field／border-input，沒有這一行在深色模式會變成黑底。 */
 :root,
-.report-sheet {
+.report-sheet,
+.intake-page {
   /* 公開初診頁的紙本配色；那一頁不跟隨後台主題。
      強調色只有一個（Logo 的暖色系），按鈕、勾選、聚焦、小標題都用它；白字在上面有 5:1。 */
   --intake-white: #fff;
@@ -601,4 +604,104 @@ html {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ── 公開初診頁的下拉輸入框（品種 BreedSelect appearance="intake"、花色 IntakeSuggestInput 共用）──────────
+   清單是傳送到 body 底下的，scoped 樣式跟不過去，所以寫成有前綴的全域 class。
+   這一頁不跟主題：一律用 --intake-* token。 */
+.intake-combobox {
+  min-width: 0;
+  flex: 1 1 180px;
+}
+.intake-combobox-input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--intake-dash);
+  border-radius: 8px;
+  padding: 8px 40px 8px 12px;
+  background: var(--intake-white);
+  color: var(--intake-text);
+  font-family: inherit;
+  /* 小於 16px 時 iOS Safari 一聚焦就放大整頁。 */
+  font-size: 16px;
+  outline: none;
+}
+.intake-combobox-input::placeholder {
+  color: var(--intake-secondary);
+}
+.intake-combobox-input:focus {
+  border-color: var(--intake-accent);
+  box-shadow: 0 0 0 3px var(--intake-accent-surface);
+}
+.intake-combobox-input[aria-invalid='true'] {
+  border-color: var(--intake-red);
+}
+.intake-combobox-trigger {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: 44px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--intake-secondary);
+  cursor: pointer;
+}
+.intake-combobox-content {
+  z-index: 50;
+  width: var(--reka-combobox-trigger-width);
+  max-height: min(320px, var(--reka-combobox-content-available-height));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--intake-dash);
+  border-radius: 8px;
+  padding: 4px;
+  background: var(--intake-white);
+  box-shadow: 0 8px 24px var(--intake-shadow);
+  color: var(--intake-text);
+  font-family: var(--font-sans);
+  font-size: 16px;
+}
+.intake-combobox-item {
+  position: relative;
+  display: flex;
+  min-height: 44px;
+  flex-shrink: 0;
+  align-items: center;
+  border-radius: 6px;
+  padding: 8px 40px 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  outline: none;
+}
+.intake-combobox-item[data-highlighted] {
+  background: var(--intake-accent-surface);
+}
+.intake-combobox-item[data-state='checked'] {
+  color: var(--intake-accent);
+  font-weight: bold;
+}
+.intake-combobox-check {
+  position: absolute;
+  top: 0;
+  right: 12px;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+}
+.intake-combobox-empty {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 8px 12px 4px;
+  color: var(--intake-secondary);
+  font-size: 14px;
+}
+.intake-combobox-legacy {
+  margin: 4px 0 0;
+  color: var(--intake-secondary);
+  font-size: 14px;
 }

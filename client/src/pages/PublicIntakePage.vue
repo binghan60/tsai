@@ -10,9 +10,10 @@ import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group'
 import { MOBILE_PHONE_ERROR, normalizeMobilePhone } from '../../../shared/phone.js'
 import { isCatBreed } from '../../../shared/catBreeds.js'
 import BreedSelect from '../components/BreedSelect.vue'
+import IntakeSuggestInput from '../components/IntakeSuggestInput.vue'
 import YearMonthSelect from '../components/YearMonthSelect.vue'
 import { INTAKE_COLOR_SUGGESTIONS, INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay'
-import { birthDateLabel } from '../lib/datetime'
+import { ageLabel, clinicDateInput } from '../lib/datetime'
 
 const submitting = ref(false)
 const submitted = ref(false)
@@ -29,9 +30,9 @@ const { validate, errors } = useForm({
   validationSchema: {
     petName: required,
     petSex: value => ['male', 'female'].includes(value) || '請選擇性別',
-    ageYears: value => optionalInteger(value, 0, 99),
+    petBirthDate: value => !value ? '請選出生日期，或用年齡推算' : value <= clinicDateInput() || '出生日期不能晚於今天',
+    ageYears: value => optionalInteger(value, 0, 30),
     ageMonths: value => optionalInteger(value, 0, 11),
-    petAge: value => value || '請填寫歲數或月數',
     petBreed: value => required(value) !== true ? '此欄位必填' : isCatBreed(value) || '請從清單選擇品種',
     householdCatCount: value => optionalInteger(value, 0, 99),
     mealsPerDay: value => pet.feedingType !== 'scheduled' || integer(value, 1, 20) || '請填寫每日 1–20 餐的整數',
@@ -47,6 +48,9 @@ const owner = reactive({ name: field('ownerName'), phone: field('ownerPhone'), l
 const pet = reactive({
   name: field('petName'),
   sex: field('petSex', 'unknown'),
+  birthDate: field('petBirthDate'),
+  birthDateEstimated: false,
+  // 年齡推算器的輸入，本身不送出：按「套用」才換算成預估生日。
   ageYears: field('ageYears'),
   ageMonths: field('ageMonths'),
   breed: field('petBreed'),
@@ -103,34 +107,35 @@ function invalidAttrs(name, ...keys) {
   if (!errorFor(...keys)) return {}
   return { 'aria-invalid': 'true', 'aria-describedby': errorId(name) }
 }
-const hasAge = computed(() => pet.ageYears !== '' || pet.ageMonths !== '')
-const agePresent = field('petAge', false)
-watch(hasAge, value => { agePresent.value = value }, { flush: 'sync' })
 watch(() => pet.feedingType, () => { if (attemptedSubmit.value) validate() })
 const fieldTargets = {
-  petName: 'pet-name', petSex: 'pet-sex', petAge: 'pet-age', ageYears: 'pet-age', ageMonths: 'pet-age',
+  petName: 'pet-name', petSex: 'pet-sex', petBirthDate: 'pet-age', ageYears: 'pet-age', ageMonths: 'pet-age',
   petBreed: 'pet-breed', householdCatCount: 'household-count', mealsPerDay: 'meals',
   petNeutered: 'pet-neutered', ownerName: 'owner-name', ownerPhone: 'owner-phone',
   ownerAddress: 'owner-address', ownerEmail: 'owner-email',
 }
-// 年齡有三條規則但只算一格；送出後才顯示，跟欄位旁的錯誤訊息同步。
+// 生日與年齡推算有三條規則但只算一格；送出後才顯示，跟欄位旁的錯誤訊息同步。
 const issueCount = computed(() => attemptedSubmit.value
   ? new Set(Object.keys(fieldTargets).filter(key => errors.value[key]).map(key => fieldTargets[key])).size
   : 0)
-const estimatedBirthLabel = computed(() => {
-  const date = estimatedBirthDate()
-  return date ? birthDateLabel(date, { estimated: true }) : ''
-})
+// 生日跟院內新增貓咪同一套：知道生日就直接選；不知道就填概略年齡、按「套用」回推成那個月 1 日的預估生日。
+const birthAgeText = computed(() => pet.birthDate ? ageLabel(pet.birthDate, new Date(), '', { estimated: pet.birthDateEstimated }) : '')
+const ageApplyError = ref('')
+const ageInputFilled = () => Number(pet.ageYears || 0) > 0 || Number(pet.ageMonths || 0) > 0
+watch(() => [pet.ageYears, pet.ageMonths], () => { ageApplyError.value = '' })
 
-function estimatedBirthDate() {
-  if (!hasAge.value || errors.value.petAge) return null
-  const years = Number(pet.ageYears || 0)
-  const months = Number(pet.ageMonths || 0)
-  if (!Number.isInteger(years) || !Number.isInteger(months) || years < 0 || months < 0 || months > 11) return null
+function applyAge() {
+  ageApplyError.value = ''
+  if (errors.value.ageYears || errors.value.ageMonths) return
+  if (!ageInputFilled()) {
+    ageApplyError.value = '請填歲數或月數'
+    return
+  }
   const date = new Date()
-  date.setHours(0, 0, 0, 0)
-  date.setMonth(date.getMonth() - years * 12 - months)
-  return date.toISOString()
+  date.setDate(1)
+  date.setMonth(date.getMonth() - Number(pet.ageYears || 0) * 12 - Number(pet.ageMonths || 0))
+  pet.birthDate = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
+  pet.birthDateEstimated = true
 }
 
 // 數字欄（年齡、貓口、餐數）打字當下就擋：非數字、或打完會超過上限（月齡 11、餐數 20…）的那一鍵直接不收。
@@ -259,6 +264,8 @@ async function submit() {
   if (submitting.value || !verified.value) return
   attemptedSubmit.value = true
   error.value = ''
+  // 填了年齡卻忘了按「套用」：送出時替飼主套用，不要為了一顆按鈕擋下整張表。
+  if (!pet.birthDate && ageInputFilled()) applyAge()
   const { valid } = await validate()
   if (!valid) {
     await jumpToIssue()
@@ -276,8 +283,8 @@ async function submit() {
         color: pet.color,
         sex: pet.sex,
         neutered: pet.neutered,
-        birthDate: estimatedBirthDate(),
-        birthDateEstimated: hasAge.value,
+        birthDate: pet.birthDate,
+        birthDateEstimated: pet.birthDateEstimated,
         householdCatCount: pet.householdCatCount === '' ? null : Number(pet.householdCatCount),
         foods: pet.foods,
         foodsOther: pet.foods.includes('其他') ? pet.foodsOther : '',
@@ -317,8 +324,8 @@ async function submit() {
         <h1 id="intake-verification-title">初診掛號單</h1>
         <div class="verification-content">
           <form class="verification-form" @submit.prevent="verifyCode">
-            <label for="intake-verification-code">請輸入驗證碼</label>
-            <p id="intake-verification-hint" class="verification-hint">驗證碼是 4 位數字，請向櫃台人員索取。</p>
+            <label for="intake-verification-code">請向櫃檯索取四碼驗證碼</label>
+            <p id="intake-verification-hint" class="verification-hint">四碼驗證碼。</p>
             <Input id="intake-verification-code" v-model="verificationCode" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code" maxlength="4" placeholder="0000" aria-describedby="intake-verification-hint" :aria-invalid="error ? 'true' : undefined" class="verification-input num" />
             <p v-if="error" class="error" role="alert">{{ error }}</p>
             <button class="primary-btn" type="submit" :disabled="verifying">{{ verifying ? '驗證中…' : '開始填寫' }}</button>
@@ -343,7 +350,7 @@ async function submit() {
           </div>
           <h1>初診掛號單</h1>
         </div>
-        <p class="hint">標示 * 的欄位必填；年齡可填歲數或月數，未滿一歲可填 0 歲。</p>
+        <p class="hint">標示 * 的欄位必填；不知道生日可以用概略年齡推算。</p>
         <div class="section">
           <div class="section-title">貓孩兒</div>
           <div class="grid">
@@ -353,10 +360,21 @@ async function submit() {
               <div id="intake-pet-sex-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-sex-field' }">
                 <span id="intake-pet-sex-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>性別：</span><RadioGroup v-model="pet.sex" aria-labelledby="intake-pet-sex-label" aria-required="true" v-bind="invalidAttrs('pet-sex', 'petSex')" class="contents"><label class="option-label"><RadioGroupItem value="male" />男生</label><label class="option-label"><RadioGroupItem value="female" />女生</label></RadioGroup><span v-if="errorFor('petSex')" :id="errorId('pet-sex')" class="field-error">{{ errorFor('petSex') }}</span>
               </div>
-              <div id="intake-pet-age-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-age-field' }"><label for="intake-pet-age-years" class="field-label"><span class="required-mark" aria-hidden="true">*</span>年齡：</label><Input id="intake-pet-age-years" v-model="pet.ageYears" aria-label="年齡（年）" aria-required="true" v-bind="invalidAttrs('pet-age', 'petAge', 'ageYears', 'ageMonths')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 99)" /> 年 <Input v-model="pet.ageMonths" aria-label="年齡（個月）" v-bind="invalidAttrs('pet-age', 'petAge', 'ageYears', 'ageMonths')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 11)" /> 個月<span class="hint">（月齡 0–11）</span><span v-if="estimatedBirthLabel" class="hint">（{{ estimatedBirthLabel }}）</span><span v-if="errorFor('petAge', 'ageYears', 'ageMonths')" :id="errorId('pet-age')" class="field-error">{{ errorFor('petAge', 'ageYears', 'ageMonths') }}</span></div>
+              <div id="intake-pet-age-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-age-field' }">
+                <label for="intake-pet-birth-date" class="field-label"><span class="required-mark" aria-hidden="true">*</span>{{ pet.birthDateEstimated ? '預估生日：' : '出生日期：' }}</label>
+                <Input id="intake-pet-birth-date" v-model="pet.birthDate" type="date" :max="clinicDateInput()" aria-required="true" v-bind="invalidAttrs('pet-age', 'petBirthDate')" class="input-medium birth-date-input" @update:model-value="pet.birthDateEstimated = false" />
+                <span v-if="birthAgeText" class="age-result">{{ birthAgeText }}</span>
+                <div class="age-calc">
+                  <span class="age-calc-title">不知道生日？用概略年齡推算</span>
+                  <Input v-model="pet.ageYears" aria-label="估算歲數" v-bind="invalidAttrs('pet-age', 'ageYears')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 30)" /> 歲
+                  <Input v-model="pet.ageMonths" aria-label="估算月數" v-bind="invalidAttrs('pet-age', 'ageMonths')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 11)" /> 個月
+                  <button type="button" class="secondary-btn" @click="applyAge">套用</button>
+                </div>
+                <span v-if="pet.birthDateEstimated" class="hint field-note">依年齡推算，只代表大概的月份。</span>
+                <span v-if="ageApplyError || errorFor('petBirthDate', 'ageYears', 'ageMonths')" :id="errorId('pet-age')" class="field-error">{{ ageApplyError || errorFor('petBirthDate', 'ageYears', 'ageMonths') }}</span>
+              </div>
               <div id="intake-pet-breed-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-breed-field' }"><label for="intake-pet-breed" class="field-label"><span class="required-mark" aria-hidden="true">*</span>品種：</label><BreedSelect id="intake-pet-breed" v-model="pet.breed" appearance="intake" placeholder="點一下選擇，或打字找" aria-required="true" v-bind="invalidAttrs('pet-breed', 'petBreed')" /><span v-if="errorFor('petBreed')" :id="errorId('pet-breed')" class="field-error">{{ errorFor('petBreed') }}</span><span class="hint field-note">不確定品種請選「米克斯」或「其他」。</span></div>
-              <div class="field"><label for="intake-pet-color" class="field-label">花色：</label><Input id="intake-pet-color" v-model="pet.color" list="intake-color-suggestions" autocomplete="off" class="input-medium" /></div>
-              <datalist id="intake-color-suggestions"><option v-for="option in colorSuggestions" :key="option" :value="option" /></datalist>
+              <div class="field"><label for="intake-pet-color" class="field-label">花色：</label><IntakeSuggestInput id="intake-pet-color" v-model="pet.color" :suggestions="colorSuggestions" placeholder="點一下選擇，或直接寫" trigger-label="展開花色清單" /></div>
             </div>
             <div>
               <div class="field-group-title section-emphasis">生活狀況</div>
@@ -655,6 +673,47 @@ async function submit() {
 .hint {
   color: var(--intake-secondary);
   font-size: 14px;
+}
+/* 出生日期＋年齡推算：跟院內新增貓咪同一套，推算器永遠顯示在生日下面、不做展開收合。 */
+.birth-date-input { max-width: 240px; }
+.age-result {
+  border: 1px solid var(--intake-accent);
+  border-radius: 8px;
+  padding: 6px 12px;
+  background: var(--intake-accent-surface);
+  color: var(--intake-accent-hover);
+  font-size: 14px;
+  font-weight: bold;
+}
+.age-calc {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.age-calc-title {
+  flex-basis: 100%;
+  color: var(--intake-secondary);
+  font-size: 14px;
+}
+.secondary-btn {
+  min-height: 44px;
+  border: 1px solid var(--intake-accent);
+  border-radius: 8px;
+  padding: 8px 20px;
+  background: var(--intake-accent-surface);
+  color: var(--intake-accent-hover);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: bold;
+}
+.secondary-btn:hover { background: var(--intake-accent); color: var(--intake-white); }
+.secondary-btn:focus-visible {
+  outline: 3px solid var(--intake-accent-surface);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--intake-accent);
 }
 /* 欄位下方的說明：獨佔一行，不跟輸入框搶寬度。 */
 .field-note { flex-basis: 100%; }
