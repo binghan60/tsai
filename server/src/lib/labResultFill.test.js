@@ -199,3 +199,26 @@ describe('unmappedLabel：未對應要帶儀器名稱', () => {
     assert.equal(unmappedLabel(undefined, 'RBC'), 'RBC');
   });
 });
+
+describe('planLabFill：IDEXX 送更正版', () => {
+  const items = [labItem('cre', '腎臟功能（CRE）', ['CREA']), labItem('bun', '腎臟功能（BUN）', ['BUN'])];
+  const assays = [{ code: 'CREA', value: '1.9', qualifier: '=' }, { code: 'BUN', value: '30', qualifier: '=' }];
+  const previous = [{ key: 'cre', label: 'CRE', value: '1.7' }, { key: 'bun', label: 'BUN', value: '25' }];
+
+  it('看診上還是上一版填的值＝沒人動過，直接換成更正後的', () => {
+    const plan = planLabFill(assays, items, [{ key: 'cre', value: '1.7' }, { key: 'bun', value: '25' }], '', previous);
+    assert.deepEqual(plan.fill, { cre: '1.9', bun: '30' });
+    assert.deepEqual(plan.conflicts, []);
+  });
+
+  it('醫師改過的格子照舊不蓋掉，列為衝突', () => {
+    const plan = planLabFill(assays, items, [{ key: 'cre', value: '2.0' }, { key: 'bun', value: '25' }], '', previous);
+    assert.deepEqual(plan.fill, { bun: '30' });
+    assert.deepEqual(plan.conflicts.map((c) => c.key), ['cre']);
+  });
+
+  it('沒有上一版紀錄時，已有不同的值仍是衝突', () => {
+    const plan = planLabFill(assays, items, [{ key: 'cre', value: '1.7' }], '', []);
+    assert.deepEqual(plan.conflicts.map((c) => c.key), ['cre']);
+  });
+});

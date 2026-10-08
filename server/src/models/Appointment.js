@@ -85,6 +85,9 @@ const appointmentSchema = new mongoose.Schema(
     // 報到不自動送——預防針、拆線這類看診不驗血，全部送過去技術員反而要自己分辨。
     // 取消送 IDEXX、取消報到、取消掛號、標記未到時清成 null。
     labRequestedAt: { type: Date, default: null },
+    // 診所電腦上的抓檔程式把通知寫進 IDEXX 主機的時間（它回報 delivered 時寫入）。比 labRequestedAt 晚才算「這一次」送到了：
+    // 抓檔程式離線時通知只是排著隊，畫面要分得出「按了」跟「主機上看得到了」。不另外清空，重送時用時間先後判斷。
+    labDeliveredAt: { type: Date, default: null },
     // 看診結束時約定的下次回診日。保留 date-only 字串，避免日期因伺服器時區偏移。
     followUpDate: { type: String, default: '', match: /^$|^\d{4}-\d{2}-\d{2}$/ },
     // 回診時間（選填，HH:MM）。沒填時併入 MedicalRecord.followUpDate 會落在當天 00:00。

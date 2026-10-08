@@ -125,26 +125,42 @@ describe('lab results routes', () => {
     assert.equal('petId' in update.$set, false);
   });
 
-  it('IDEXX 帶回我們的貓咪編號：自動認貓，再找當天的看診（這裡當天沒掛號）', async () => {
+  it('IDEXX 帶回我們的貓咪編號、當天有看診：自動認貓', async () => {
     process.env.IDEXX_BRIDGE_TOKEN = token;
     const petId = '64b000000000000000000001';
     const withPetId = catalyst.toString('utf8').replace('patient_id="000001"', `patient_id="${petId}"`);
     let matched;
-    let visitQuery;
     mockExisting(null);
     LabResult.create = async () => ({ _id: 'lab-1' });
     Pet.exists = async () => ({ _id: petId });
     LabResult.findOneAndUpdate = async (filter, update) => { matched = { filter, update }; return { petId }; };
-    LabResult.findById = () => ({ lean: async () => ({ _id: 'lab-1', petId, appliedAt: null, runAt: new Date('2011-09-09T02:36:47.880Z'), assays: [] }) });
+    // 認到之後的填入不是這裡要測的：當作已經填過。
+    LabResult.findById = () => ({ lean: async () => ({ _id: 'lab-1', petId, appliedAt: new Date() }) });
+    Appointment.find = () => ({ select: () => ({ lean: async () => [{ _id: 'v1', status: 'arrived', templateId: 't1' }] }) });
+
+    const response = await upload(withPetId);
+    assert.equal(response.status, 201);
+    assert.deepEqual(matched.filter, { _id: 'lab-1', petId: null, dismissedAt: null, autoMatchBlocked: { $ne: true } });
+    assert.equal(matched.update.$set.matchSource, 'patient_id');
+    assert.deepEqual((await response.json()).fill, { status: 'already_applied' });
+  });
+
+  it('IDEXX 帶回我們的貓咪編號、但當天沒有看診：不配對，留在待確認清單', async () => {
+    process.env.IDEXX_BRIDGE_TOKEN = token;
+    const petId = '64b000000000000000000001';
+    const withPetId = catalyst.toString('utf8').replace('patient_id="000001"', `patient_id="${petId}"`);
+    let visitQuery;
+    mockExisting(null);
+    LabResult.create = async () => ({ _id: 'lab-1' });
+    Pet.exists = async () => ({ _id: petId });
+    LabResult.findOneAndUpdate = async () => assert.fail('沒有看診不該配對');
     Appointment.find = (filter) => { visitQuery = filter; return { select: () => ({ lean: async () => [] }) }; };
 
     const response = await upload(withPetId);
     assert.equal(response.status, 201);
-    assert.deepEqual(matched.filter, { _id: 'lab-1', petId: null });
-    assert.equal(matched.update.$set.matchSource, 'patient_id');
     // 當天＝檢驗時間換算成台北的日期。
     assert.deepEqual(visitQuery, { petId, date: '2011-09-09' });
-    assert.deepEqual((await response.json()).fill, { status: 'no_visit', date: '2011-09-09' });
+    assert.deepEqual((await response.json()).fill, { status: 'unmatched' });
   });
 
   it('不是檢驗結果的訊息收下不處理，讓抓檔程式歸檔', async () => {
@@ -302,10 +318,28 @@ describe('lab results routes', () => {
     assert.equal((await post('abc/match', { petId: '64b000000000000000000001' })).status, 422);
     assert.equal((await post(`${id}/match`, { petId: 'abc' })).status, 422);
     Pet.exists = async () => ({ _id: '64b000000000000000000001' });
+    LabResult.findById = () => ({ lean: async () => ({ _id: id, runAt: new Date('2026-09-30T02:00:00Z') }) });
+    Appointment.find = () => ({ select: () => ({ lean: async () => [{ _id: 'v1', status: 'arrived' }] }) });
     LabResult.findOneAndUpdate = async () => null;
     assert.equal((await post(`${id}/match`, { petId: '64b000000000000000000001' })).status, 409);
     Pet.exists = async () => null;
     assert.equal((await post(`${id}/match`, { petId: '64b000000000000000000001' })).status, 404);
+  });
+
+  it('選貓：那隻貓檢驗當天沒有看診就不配對，結果留在清單', async () => {
+    const id = '64b000000000000000000009';
+    const petId = '64b000000000000000000001';
+    let visitQuery;
+    Pet.exists = async () => ({ _id: petId });
+    LabResult.findById = () => ({ lean: async () => ({ _id: id, runAt: new Date('2026-09-30T02:00:00Z') }) });
+    Appointment.find = (filter) => { visitQuery = filter; return { select: () => ({ lean: async () => [{ _id: 'v1', status: 'cancelled' }] }) }; };
+    LabResult.findOneAndUpdate = async () => assert.fail('沒有看診不該配對');
+    const response = await fetch(`${origin}/api/lab-results/${id}/match`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ petId }),
+    });
+    assert.equal(response.status, 200);
+    assert.deepEqual(visitQuery, { petId, date: '2026-09-30' });
+    assert.deepEqual(await response.json(), { fill: { status: 'no_visit', date: '2026-09-30' } });
   });
 
   it('匯入到指定的看診：看診不是這隻貓的回 422，不會動到檢驗結果', async () => {

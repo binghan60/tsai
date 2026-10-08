@@ -62,7 +62,7 @@ describe('independent appointment workflow HTTP routes', () => {
     });
     mock.method(Appointment, 'find', () => ({ lean: async () => [...store.values()] }));
     // 沒有連到看診的 IDEXX 結果。
-    mock.method(LabResult, 'find', () => ({ select: () => ({ sort: () => ({ session: () => ({ lean: async () => [] }) }) }) }));
+    mock.method(LabResult, 'find', () => ({ select: () => ({ lean: async () => [], sort: () => ({ session: () => ({ lean: async () => [] }) }) }) }));
     mock.method(Appointment, 'findById', key => chain(document(store.get(String(key)))));
     mock.method(Appointment, 'findOne', () => query(null));
     mock.method(Appointment, 'aggregate', () => query(attendanceGroups));

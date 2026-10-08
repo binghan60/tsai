@@ -18,6 +18,7 @@ import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsChe
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { queueIdexxCensus } from '../lib/idexxRequests.js';
+import { applyPendingLabResults } from '../lib/labResultApply.js';
 import { canRequestLab } from '../lib/idexxCensus.js';
 import { idexxCensusSettings } from '../config/idexxBridge.js';
 import appointmentWorkflowRouter from './appointmentWorkflow.js';
@@ -373,6 +374,7 @@ router.post('/', async (req, res, next) => {
     await settleCarriedDeposit(deposit.carriedFromId);
     emitAppointmentUpdate(appointment);
     res.status(201).json(appointment);
+    await applyPendingLabResults(appointment);
   } catch (err) {
     next(err);
   }
@@ -451,6 +453,7 @@ router.put('/:id', async (req, res, next) => {
     await appointment.save();
     emitAppointmentUpdate(appointment, previousDate);
     res.json(appointment);
+    await applyPendingLabResults(appointment);
   } catch (err) {
     next(err);
   }
@@ -603,6 +606,7 @@ router.post('/:id/check-in', async (req, res, next) => {
     // 報到讓這筆掛號進入候診佇列，醫師頁要立刻看到，不必等 60 秒輪詢。
     emitAppointmentUpdate(appointment);
     res.json(appointment);
+    await applyPendingLabResults(appointment);
   } catch (err) { next(err); }
 });
 

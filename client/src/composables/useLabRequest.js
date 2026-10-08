@@ -11,6 +11,12 @@ export function canRequestLab(appointment) {
   return Boolean(appointment?.petId) && (appointment?.status === 'arrived' || appointment?.status === 'pending_checkout');
 }
 
+// 通知真的寫進 IDEXX 主機了沒：抓檔程式回報後伺服器記 labDeliveredAt，比這次按下去的時間晚才算。
+export function labRequestDelivered(appointment) {
+  return Boolean(appointment?.labRequestedAt && appointment.labDeliveredAt
+    && new Date(appointment.labDeliveredAt) >= new Date(appointment.labRequestedAt));
+}
+
 export function useLabRequest() {
   const counts = useWorkCountsStore();
   const toast = useToast();
@@ -24,9 +30,13 @@ export function useLabRequest() {
     try {
       const { data } = await http.post(`/appointments/${appointment._id}/lab-request`, { requested });
       if (requested) {
-        toast.success('約 10 秒後出現在 IDEXX 主機的清單上', `${data.petName} 已送 IDEXX`, {
-          action: { label: '復原', handler: () => setLabRequest(data, false) },
-        });
+        const action = { label: '復原', handler: () => setLabRequest(data, false) };
+        // 診所電腦上的抓檔程式沒在回報：通知只是排著隊，主機上看不到這隻貓。
+        if (counts.bridges.some((bridge) => bridge.online)) {
+          toast.success('約 10 秒後出現在 IDEXX 主機的清單上', `${data.petName} 已送 IDEXX`, { action });
+        } else {
+          toast.addToast({ type: 'error', title: `${data.petName} 還沒送到 IDEXX`, message: '診所電腦沒有回報，連上之後才會出現在 IDEXX 主機的清單上', action });
+        }
       } else {
         toast.success('已從 IDEXX 主機的清單收回', `${data.petName} 已取消送 IDEXX`);
       }

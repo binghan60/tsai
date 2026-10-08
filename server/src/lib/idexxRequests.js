@@ -1,5 +1,6 @@
 // 送 IDEXX／離院通知排隊（XML 怎麼組在 lib/idexxCensus.js）。按下送 IDEXX、取消送 IDEXX，以及掛號離開診所的每個地方
 // 都呼叫 queueIdexxCensus，它看這張掛號上一次送了什麼，需要時才排一份新的；抓檔程式之後來拿。
+import Appointment from '../models/Appointment.js';
 import IdexxRequest from '../models/IdexxRequest.js';
 import LabResult from '../models/LabResult.js';
 import Owner from '../models/Owner.js';
@@ -7,6 +8,16 @@ import Pet from '../models/Pet.js';
 import { idexxCensusSettings } from '../config/idexxBridge.js';
 import { encodeBig5 } from './big5.js';
 import { buildIdexxRequestXml, idexxMessageId, inClinic, nextCensusKind } from './idexxCensus.js';
+import { emitAppointmentUpdate } from './realtime.js';
+
+// 開單之後這隻貓已經有檢驗結果：連到這次看診的，或開單之後才驗、已認出是這隻貓的（還沒連上看診，例如當天沒有掛號）。
+// 結果還在待確認清單、沒有 petId 的認不出來，那種情況主機上的單照舊會被取消。
+async function labResultDone(appointment, petId, lastRequest) {
+  const since = lastRequest?.createdAt ?? new Date(0);
+  return Boolean(await LabResult.exists({
+    $or: [{ appointmentId: appointment._id }, { petId, runAt: { $gte: since } }],
+  }));
+}
 
 export async function syncIdexxCensus(appointment, { settings = idexxCensusSettings(), now = new Date() } = {}) {
   if (settings.mode === 'off' || !appointment?._id) return null;
@@ -19,7 +30,7 @@ export async function syncIdexxCensus(appointment, { settings = idexxCensusSetti
   const encoding = kind === 'out' ? last.encoding : settings.encoding;
   // 開單的檢驗已經做完（有結果填進這次看診）：主機上那張單已經自己完成，再送取消只會讓主機收到一張對不上的單。
   // 記一筆 skipped 當作「已經收掉」，之後再按「送 IDEXX」才會重新開單。報到通知（census）沒有這個問題，離院照送。
-  if (kind === 'out' && mode === 'work_request' && await LabResult.exists({ appointmentId: appointment._id })) {
+  if (kind === 'out' && mode === 'work_request' && await labResultDone(appointment, petId, last)) {
     const skippedId = idexxMessageId(now);
     return IdexxRequest.create({
       appointmentId: appointment._id, petId, kind, mode, encoding,
@@ -65,5 +76,12 @@ export async function markIdexxRequestDelivered(id, bridgeId, now = new Date()) 
     { _id: id, status: 'pending' },
     { $set: { status: 'delivered', deliveredAt: now, deliveredBy: String(bridgeId ?? '').slice(0, 100) } }
   );
-  return result.modifiedCount > 0;
+  if (!result.modifiedCount) return false;
+  // 到院（開單）那一份寫進主機了：記在掛號上，診療台與掛號台的徽章才分得出「已排入」跟「已送到」。
+  const request = await IdexxRequest.findById(id).select('appointmentId kind').lean();
+  if (request?.kind === 'in' && request.appointmentId) {
+    const appointment = await Appointment.findByIdAndUpdate(request.appointmentId, { $set: { labDeliveredAt: now } }, { new: true });
+    if (appointment) emitAppointmentUpdate(appointment);
+  }
+  return true;
 }

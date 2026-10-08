@@ -16,7 +16,7 @@ import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { useTextTemplates } from '../composables/useTextTemplates'
-import { canRequestLab, useLabRequest } from '../composables/useLabRequest'
+import { canRequestLab, labRequestDelivered, useLabRequest } from '../composables/useLabRequest'
 import { workflowState } from '../../../shared/appointmentWorkflow.js'
 import { clinicalDraft, draftPatch, mergeClinicalUpdate, takeBaseline } from '../lib/visitDraft'
 import { ageLabel, clinicTimeInput } from '../lib/datetime'
@@ -633,7 +633,8 @@ onBeforeUnmount(() => {
              跟其他動作放同一排，不用捲動就按得到；伺服器沒開這個功能就不出現。 -->
         <template v-if="labRequest.enabled.value && canRequestLab(appointment)">
           <template v-if="appointment.labRequestedAt">
-            <Badge variant="status" class="bg-info-surface text-info"><FlaskConical class="size-4" stroke-width="1.75" aria-hidden="true" />已送 IDEXX <span class="num">{{ clinicTimeInput(appointment.labRequestedAt) }}</span></Badge>
+            <Badge v-if="labRequestDelivered(appointment)" variant="status" class="bg-info-surface text-info"><FlaskConical class="size-4" stroke-width="1.75" aria-hidden="true" />已送 IDEXX <span class="num">{{ clinicTimeInput(appointment.labRequestedAt) }}</span></Badge>
+            <Badge v-else variant="status" class="bg-warning-surface text-warning"><FlaskConical class="size-4" stroke-width="1.75" aria-hidden="true" />尚未送到 IDEXX</Badge>
             <Button variant="secondary" :disabled="labRequest.busy.value" @click="toggleLabRequest(false)">取消送 IDEXX</Button>
           </template>
           <Button v-else variant="soft" :disabled="labRequest.busy.value" @click="toggleLabRequest(true)"><FlaskConical stroke-width="1.75" />送 IDEXX</Button>

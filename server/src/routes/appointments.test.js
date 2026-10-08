@@ -10,6 +10,7 @@ import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import ClinicSettings from '../models/ClinicSettings.js';
+import LabResult from '../models/LabResult.js';
 import { clinicToday } from '../lib/clinicTime.js';
 import { appointmentSearchFilter, enumerateDates, fillDailyCounts } from './appointments.js';
 
@@ -68,8 +69,12 @@ describe('appointments routes', () => {
   let originalSettingsFindOne;
   let originalRecordCreate;
   let originalNoteCreate;
+  let originalLabResultFind;
 
   before(async () => {
+    // 掛號建立／報到之後會補套用等著的 IDEXX 結果；這裡沒有等著的。
+    originalLabResultFind = LabResult.find;
+    LabResult.find = () => ({ select: () => ({ lean: async () => [] }) });
     originalTemplateFindOne = FormTemplate.findOne;
     originalSettingsFindOne = ClinicSettings.findOne;
     originalRecordCreate = MedicalRecord.create;
@@ -88,6 +93,7 @@ describe('appointments routes', () => {
     ClinicSettings.findOne = originalSettingsFindOne;
     MedicalRecord.create = originalRecordCreate;
     ClinicalNote.create = originalNoteCreate;
+    LabResult.find = originalLabResultFind;
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 

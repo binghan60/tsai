@@ -53,8 +53,14 @@ export function fillMessage(fill, petName) {
     case 'applied': {
       if (fill.filled?.length) {
         const conflicts = fill.conflicts ? `；${fill.conflicts} 項跟報告上已填的值不同，沒有蓋掉` : '';
-        return { type: 'success', message: `已填進${name}的健檢報告：${fill.filled.join('、')}${conflicts}` };
+        if (fill.closed === 'record_finalized') {
+          return { type: 'info', message: `已填進${name}的看診與病歷日誌：${fill.filled.join('、')}。但健檢報告已經結案，報告上不會有這些數值，需要的話請建立修訂版${conflicts}` };
+        }
+        const done = fill.closed === 'desk_completed' ? '（這次看診櫃台已完成處理）' : '';
+        return { type: 'success', message: `已填進${name}的健檢報告：${fill.filled.join('、')}${done}${conflicts}` };
       }
+      // 一格都沒填、但有不同的值：不能說「沒有變動」，那是還沒決定。
+      if (fill.conflicts) return { type: 'info', message: `${name}的報告上有 ${fill.conflicts} 項跟 IDEXX 的數值不同，沒有蓋掉` };
       if (fill.unmapped) {
         const list = fill.unmappedCodes?.length ? `（${fill.unmappedCodes.join('、')}）` : '';
         return { type: 'info', message: `${name}的健檢表單沒有對應這些 IDEXX 檢驗別與代號${list}，沒有填入。請到表單設計頁檢查代號與檢驗別。` };
@@ -62,7 +68,8 @@ export function fillMessage(fill, petName) {
       return { type: 'info', message: `${name}的報告上已經有這些數值，沒有變動` };
     }
     case 'no_visit':
-      return { type: 'info', message: `${name}在檢驗那天沒有掛號，數值沒有填進報告` };
+      // 伺服器沒有配對：沒有看診就沒有病歷日誌與健檢報告可以填，結果留在清單上。
+      return { type: 'info', message: `${name}在檢驗那天沒有掛號，這份結果留在待確認清單` };
     case 'no_template':
       return { type: 'info', message: `${name}這次看診沒有選健檢表單，數值沒有填進報告` };
     case 'error':

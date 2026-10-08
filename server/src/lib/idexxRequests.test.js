@@ -5,7 +5,8 @@ import LabResult from '../models/LabResult.js';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import { decodeIdexxXml } from './idexxResult.js';
-import { syncIdexxCensus } from './idexxRequests.js';
+import Appointment from '../models/Appointment.js';
+import { markIdexxRequestDelivered, syncIdexxCensus } from './idexxRequests.js';
 
 const original = {
   findOne: IdexxRequest.findOne, create: IdexxRequest.create, petFindById: Pet.findById, ownerFindById: Owner.findById, labExists: LabResult.exists,
@@ -102,5 +103,37 @@ describe('idexxRequests.syncIdexxCensus', () => {
     const created = mockModels();
     assert.equal(await syncIdexxCensus({ _id: 'a1', petId: pet._id, status: 'cancelled' }, { settings: census }), null);
     assert.equal(created.length, 0);
+  });
+});
+
+describe('idexxRequests.markIdexxRequestDelivered', () => {
+  const saved = { updateOne: IdexxRequest.updateOne, findById: IdexxRequest.findById, update: Appointment.findByIdAndUpdate };
+  afterEach(() => {
+    Object.assign(IdexxRequest, { updateOne: saved.updateOne, findById: saved.findById });
+    Appointment.findByIdAndUpdate = saved.update;
+  });
+  const now = new Date('2026-10-06T06:00:10Z');
+
+  function mockDelivery({ modifiedCount = 1, kind = 'in' } = {}) {
+    const updates = [];
+    IdexxRequest.updateOne = async () => ({ modifiedCount });
+    IdexxRequest.findById = () => ({ select: () => ({ lean: async () => ({ appointmentId: 'a1', kind }) }) });
+    Appointment.findByIdAndUpdate = async (id, update) => { updates.push({ id, update }); return null; };
+    return updates;
+  }
+
+  it('到院那一份寫進主機：把送到的時間記在掛號上', async () => {
+    const updates = mockDelivery();
+    assert.equal(await markIdexxRequestDelivered('r1', 'CLINIC-PC', now), true);
+    assert.deepEqual(updates, [{ id: 'a1', update: { $set: { labDeliveredAt: now } } }]);
+  });
+
+  it('離院那一份、或已經回報過的：不動掛號', async () => {
+    const out = mockDelivery({ kind: 'out' });
+    assert.equal(await markIdexxRequestDelivered('r1', 'CLINIC-PC', now), true);
+    assert.equal(out.length, 0);
+    const repeated = mockDelivery({ modifiedCount: 0 });
+    assert.equal(await markIdexxRequestDelivered('r1', 'CLINIC-PC', now), false);
+    assert.equal(repeated.length, 0);
   });
 });

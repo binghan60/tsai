@@ -9,7 +9,7 @@ import { useCopy } from '../composables/useCopy'
 import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
-import { canRequestLab, useLabRequest } from '../composables/useLabRequest'
+import { canRequestLab, labRequestDelivered, useLabRequest } from '../composables/useLabRequest'
 import { clinicDateInput, clinicTimeInput, shiftDateInput, weekdayLabel } from '../lib/datetime'
 import { appointmentsForTimeline, groupBySession, isIdentityConfirmed, MIDDAY_BREAK, nowIndexInSession } from '../lib/appointmentTimeline'
 import { isOverdue, minutesPastSchedule, sessionAutoCollapsed } from '../lib/receptionBoard'
@@ -650,7 +650,10 @@ onBeforeUnmount(() => {
                             <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
                             <LatenessBadge :minutes="item.ui.lateMinutes" />
                             <DepositBadge :status="item.depositStatus" />
-                            <Badge v-if="item.labRequestedAt && canRequestLab(item)" variant="status" class="bg-info-surface text-info">已送 IDEXX</Badge>
+                            <template v-if="item.labRequestedAt && canRequestLab(item)">
+                              <Badge v-if="labRequestDelivered(item)" variant="status" class="bg-info-surface text-info">已送 IDEXX</Badge>
+                              <Badge v-else variant="status" class="bg-warning-surface text-warning">尚未送到 IDEXX</Badge>
+                            </template>
                           </div>
                           <p class="min-h-lh truncate text-foreground" v-tip.overflow="item.reason">{{ item.reason }}</p>
                           <p v-if="item.ui.kind === 'handoff' && item.specialCareNote" class="truncate rounded-md bg-warning-surface px-2.5 py-1 text-sm font-medium text-warning" v-tip.overflow="item.specialCareNote"><span class="font-semibold">請轉告飼主</span>　{{ item.specialCareNote }}</p>

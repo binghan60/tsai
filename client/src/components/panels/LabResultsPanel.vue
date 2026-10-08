@@ -1,7 +1,7 @@
 <script setup>
 import { apiErrorMessage } from '../../lib/apiError.js';
 import { computed, onActivated, onMounted, ref, watch } from 'vue';
-import { FlaskConical, Search } from '@lucide/vue';
+import { FlaskConical } from '@lucide/vue';
 import { http } from '../../api/http';
 import { useToast } from '../../composables/useToast';
 import { clinicDateInput, formatDateTime, weekdayLabel } from '../../lib/datetime';
@@ -13,7 +13,6 @@ import SidePanel from './SidePanel.vue';
 import EmptyState from '../EmptyState.vue';
 import ListSkeleton from '../ListSkeleton.vue';
 import ConfirmDialog from '../ConfirmDialog.vue';
-import PetPickerDialog from '../PetPickerDialog.vue';
 import LabConflictDialog from '../LabConflictDialog.vue';
 import Pagination from '../Pagination.vue';
 import { Alert, AlertDescription } from '../ui/alert';
@@ -23,6 +22,8 @@ import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 // IDEXX 檢驗結果的待確認清單：認不出是哪隻貓的結果（IDEXX 主機上手打名字、沒帶系統的貓咪編號）放在這裡，
 // 人選一下是哪隻貓，就照自動填入的規則填進那隻貓當天的健檢報告（見 docs/IDEXX_INTERLINK.md）。
 // 點一筆推入確認畫面；候選是檢驗當天的掛號，同名而且只有一隻就預先選好。
+// 只能選當天有看診的貓：沒有看診就沒有病歷日誌與健檢報告可以填，伺服器不會配對、結果留在清單上
+// （所以這裡沒有「搜尋其他貓咪」；別天的看診要用診療台的「匯入檢驗結果」指定）。
 const panel = useUtilityPanelStore();
 const counts = useWorkCountsStore();
 const toast = useToast();
@@ -31,9 +32,6 @@ const loading = ref(true);
 const error = ref('');
 const busy = ref(false);
 const selectedPetId = ref('');
-// 從「搜尋其他貓咪」選來的貓，不在當天的掛號候選裡。
-const pickedPet = ref(null);
-const pickerOpen = ref(false);
 const dismissing = ref(false);
 
 // 待確認的結果可能堆到上百筆，清單分頁、標題列出總筆數。
@@ -53,19 +51,13 @@ const current = computed(() => {
   if (!id) return null;
   return items.value.find((item) => String(item._id) === id) ?? (String(openedItem.value?._id) === id ? openedItem.value : null);
 });
-const options = computed(() => {
-  const candidates = (current.value?.candidates ?? []).map((candidate) => ({
-    petId: String(candidate.petId),
-    petName: candidate.petName,
-    ownerName: candidate.ownerName,
-    detail: [candidate.time, visitStatusLabel(candidate.status)].filter(Boolean).join('　'),
-    sameName: candidate.sameName,
-  }));
-  if (pickedPet.value && !candidates.some((option) => option.petId === String(pickedPet.value._id))) {
-    candidates.push({ petId: String(pickedPet.value._id), petName: pickedPet.value.name, ownerName: pickedPet.value.ownerId?.name ?? '', detail: '搜尋選的', sameName: false });
-  }
-  return candidates;
-});
+const options = computed(() => (current.value?.candidates ?? []).map((candidate) => ({
+  petId: String(candidate.petId),
+  petName: candidate.petName,
+  ownerName: candidate.ownerName,
+  detail: [candidate.time, visitStatusLabel(candidate.status)].filter(Boolean).join('　'),
+  sameName: candidate.sameName,
+})));
 const selectedName = computed(() => options.value.find((option) => option.petId === selectedPetId.value)?.petName ?? '');
 
 // 數值跟報告不同、還沒處理的（自動認出貓的結果當時沒人在場，放在這裡；打開健檢報告時也會跳出來）。
@@ -135,17 +127,10 @@ function openItem(item) {
 // 換一筆就重選；同一筆因為即時更新重讀時不要把使用者選到一半的蓋掉。
 watch(() => view.value?.id, () => {
   selectedPetId.value = '';
-  pickedPet.value = null;
 });
 watch(current, (item) => {
   if (item && !selectedPetId.value) selectedPetId.value = String(suggestion(item)?.petId ?? '');
 }, { immediate: true });
-
-function onPick(pet) {
-  pickedPet.value = pet;
-  selectedPetId.value = String(pet._id);
-  pickerOpen.value = false;
-}
 
 function afterChange() {
   refresh();
@@ -173,6 +158,11 @@ async function confirmMatch() {
   try {
     const { data } = await http.post(`/lab-results/${item._id}/match`, { petId });
     const { type, message } = fillMessage(data.fill, petName);
+    // 那天沒有看診（候選是同一天好幾筆、都還沒報到）：伺服器沒有配對，留在這個畫面。
+    if (data.fill?.status === 'no_visit') {
+      toast.addToast({ type, title: '沒有確認', message, duration: 5000 });
+      return;
+    }
     toast.addToast({
       type,
       title: type === 'error' ? '填入失敗' : '已確認',
@@ -297,8 +287,7 @@ onActivated(refreshAll);
               </span>
             </label>
           </RadioGroup>
-          <p v-else class="text-sm text-muted-foreground">{{ runDayLabel(current) }}沒有掛號，請用搜尋找貓咪。</p>
-          <Button variant="secondary" size="sm" @click="pickerOpen = true"><Search stroke-width="1.75" />搜尋其他貓咪</Button>
+          <p v-else class="text-sm text-muted-foreground">{{ runDayLabel(current) }}沒有掛號。</p>
         </section>
 
         <section class="px-5 py-4" aria-labelledby="lab-values-title">
@@ -409,7 +398,6 @@ onActivated(refreshAll);
       @close="conflictGroup = null"
       @resolved="conflictGroup = null; afterChange()"
     />
-    <PetPickerDialog :open="pickerOpen" @close="pickerOpen = false" @select="onPick" />
     <ConfirmDialog
       :open="dismissing"
       title="忽略這份檢驗結果？"

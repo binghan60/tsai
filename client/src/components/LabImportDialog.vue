@@ -10,6 +10,7 @@ import { fillMessage, instrumentLabel } from '../lib/labResults'
 import { labFlag } from '../../../shared/labValues.js'
 import ModalDialog from './ModalDialog.vue'
 import EmptyState from './EmptyState.vue'
+import LabConflictDialog from './LabConflictDialog.vue'
 import ListSkeleton from './ListSkeleton.vue'
 import { Badge } from './ui/badge'
 import { Button } from './ui/button'
@@ -32,6 +33,8 @@ const total = ref(0)
 const keyword = ref('')
 const loading = ref(true)
 const busy = ref('')
+// 匯入的結果跟報告上已填的值不同：當場跳比對視窗（醫師正在看這隻貓），關掉或處理完回到清單。
+const conflictGroup = ref(null)
 let request = 0
 let timer
 
@@ -109,6 +112,10 @@ async function importResult(row) {
     total.value = Math.max(0, total.value - 1)
     counts.loadLabResults()
     emit('imported')
+    if (data.fill?.conflicts) {
+      const { data: conflictData } = await http.get('/lab-results/conflicts', { params: { appointmentId: props.appointment._id } })
+      conflictGroup.value = (conflictData.items || []).find((group) => String(group.id) === String(row.id)) ?? null
+    }
   } catch (err) {
     toast.error(apiErrorMessage(err, '匯入失敗，請稍後再試'))
     // 別台已經處理掉了：重讀清單。
@@ -123,7 +130,8 @@ onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <template>
-  <ModalDialog size="md" :icon="FlaskConical" title="匯入檢驗結果" :description="`還沒確認是哪隻貓的 IDEXX 結果，選一份歸給${appointment.petName}這次看診`" @close="emit('close')">
+  <LabConflictDialog v-if="conflictGroup" :group="conflictGroup" @close="conflictGroup = null" @resolved="conflictGroup = null; counts.loadLabResults()" />
+  <ModalDialog v-else size="md" :icon="FlaskConical" title="匯入檢驗結果" :description="`還沒確認是哪隻貓的 IDEXX 結果，選一份歸給${appointment.petName}這次看診`" @close="emit('close')">
     <div class="flex min-h-0 flex-col gap-3 px-6 py-4">
       <div class="relative">
         <Search class="pointer-events-none absolute top-1/2 left-3 size-4.5 -translate-y-1/2 text-subtle-foreground" stroke-width="1.75" aria-hidden="true" />

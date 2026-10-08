@@ -1,23 +1,35 @@
 import Appointment from '../models/Appointment.js';
 import FormTemplate from '../models/FormTemplate.js';
 import LabResult from '../models/LabResult.js';
+import MedicalRecord from '../models/MedicalRecord.js';
 import Pet from '../models/Pet.js';
 import { templateLabItems } from '../../../shared/labValues.js';
 import { mergeLabValues } from './appointmentWorkflow.js';
 import { syncAppointmentJournal } from './appointmentJournal.js';
-import { clinicToday } from './clinicTime.js';
+import { clinicDayStart, clinicToday } from './clinicTime.js';
 import { liveConflicts, matchLabItem, overwriteValues, petIdFromPatientId, pickVisit, planLabFill, planUndo } from './labResultFill.js';
-import { emitAppointmentUpdate } from './realtime.js';
+import { emitAppointmentUpdate, emitLabResultsUpdate } from './realtime.js';
 import { withTransaction } from './transaction.js';
 
 // IDEXX 檢驗結果自動填進看診（規則見 lib/labResultFill.js，這裡負責讀寫資料庫）。
 
+// 這隻貓在檢驗當天（檢驗時間，沒有就用收到的時間，照診所時區取日期）要填進哪一次看診。
+async function visitOnRunDay(petId, result) {
+  const date = clinicToday(result.runAt ?? result.createdAt);
+  const visits = await Appointment.find({ petId, date }).select('_id status checkedInAt templateId').lean();
+  return { date, visit: pickVisit(visits, result.runAt) };
+}
+
 // 上傳後自動認貓：IDEXX 帶回報到時送出的貓咪編號、而且這隻貓真的存在。已經配對過的不動。
-export async function matchByPatientId(labResultId, patientId) {
+// 人按過「復原」的（autoMatchBlocked）與已忽略的不再自動配回去——IDEXX 重送同一份結果時，不能把人的決定悄悄還原。
+// 檢驗當天沒有看診就不配對、留在待確認清單：沒有看診就沒有病歷日誌與健檢報告可以填，歸了貓反而哪裡都看不到。
+// 之後掛號建立或報到時由 applyPendingLabResults 再認一次。
+export async function matchByPatientId(labResultId, patientId, runAt = null) {
   const petId = petIdFromPatientId(patientId);
   if (!petId || !(await Pet.exists({ _id: petId }))) return null;
+  if (!(await visitOnRunDay(petId, { runAt, createdAt: new Date() })).visit) return null;
   const updated = await LabResult.findOneAndUpdate(
-    { _id: labResultId, petId: null },
+    { _id: labResultId, petId: null, dismissedAt: null, autoMatchBlocked: { $ne: true } },
     { $set: { petId, matchedAt: new Date(), matchSource: 'patient_id' } },
     { new: true }
   );
@@ -29,6 +41,14 @@ export async function matchByPatientId(labResultId, patientId) {
 // force：IDEXX 送了更正版，要重新比一次；平常已經填過的就不重填。
 // appointmentId：醫師在診療台「匯入檢驗結果」指定要填進哪一次看診——不限檢驗當天（昨天驗、今天回來看報告）。
 // 指定了就不再自己找看診；就算那次看診沒選健檢表單、填不進去，也記下關聯，診療台的檢驗報告才顯示得出這一份。
+// 看診沒選健檢表單：數值填不進去，但這份結果要連到這次看診，病歷日誌與診療台才顯示得出來。
+// 不記 appliedAt——之後選了表單（applyPendingLabResults）還能再填。
+async function linkWithoutTemplate(result, visit) {
+  await LabResult.updateOne({ _id: result._id }, { $set: { appointmentId: visit._id } });
+  await syncAppointmentJournal(await Appointment.findById(visit._id));
+  return { status: 'no_template', appointmentId: visit._id };
+}
+
 export async function applyLabResult(labResultId, { force = false, appointmentId = null } = {}) {
   const result = await LabResult.findById(labResultId).lean();
   if (!result?.petId) return { status: 'unmatched' };
@@ -38,35 +58,40 @@ export async function applyLabResult(labResultId, { force = false, appointmentId
   if (appointmentId) {
     visit = await Appointment.findOne({ _id: appointmentId, petId: result.petId }).select('_id status checkedInAt templateId').lean();
     if (!visit) throw Object.assign(new Error('這次看診不是這隻貓咪的'), { status: 422 });
-    if (!visit.templateId) {
-      await LabResult.updateOne({ _id: result._id }, { $set: { appointmentId: visit._id } });
-      // 數值填不進看診，但這份結果要出現在這次看診的病歷日誌上。
-      await syncAppointmentJournal(await Appointment.findById(visit._id));
-      return { status: 'no_template', appointmentId: visit._id };
-    }
+    if (!visit.templateId) return linkWithoutTemplate(result, visit);
   } else {
-    const date = clinicToday(result.runAt ?? result.createdAt);
-    const visits = await Appointment.find({ petId: result.petId, date }).select('_id status checkedInAt templateId').lean();
-    visit = pickVisit(visits, result.runAt);
-    if (!visit) return { status: 'no_visit', date };
-    if (!visit.templateId) return { status: 'no_template', appointmentId: visit._id };
+    const found = await visitOnRunDay(result.petId, result);
+    visit = found.visit;
+    if (!visit) return { status: 'no_visit', date: found.date };
+    if (!visit.templateId) return linkWithoutTemplate(result, visit);
   }
 
   let plan = null;
   let changed = null;
+  let closed = null;
   await withTransaction(async (session) => {
     changed = null;
+    closed = null;
     const appointment = await Appointment.findById(visit._id).session(session);
     const template = await FormTemplate.findById(appointment.templateId).session(session);
     const labItems = templateLabItems(template);
-    plan = planLabFill(result.assays, labItems, appointment.labValues, result.instrument);
+    plan = planLabFill(result.assays, labItems, appointment.labValues, result.instrument, result.filled);
     const labels = new Map(labItems.map((item) => [item.key, item.label]));
-    plan.filled = Object.entries(plan.fill).map(([key, value]) => ({ key, label: labels.get(key) ?? key, value }));
+    // 更正版：上一版填進去的紀錄要留著（復原時才清得掉），同一格以新的值為準。
+    const filledByKey = new Map((result.filled ?? []).map((entry) => [entry.key, { key: entry.key, label: entry.label, value: entry.value }]));
+    const newlyFilled = Object.entries(plan.fill).map(([key, value]) => ({ key, label: labels.get(key) ?? key, value }));
+    for (const entry of newlyFilled) filledByKey.set(entry.key, entry);
+    plan.filled = newlyFilled;
+    plan.allFilled = [...filledByKey.values()];
     if (plan.filled.length) {
       appointment.labValues = mergeLabValues(appointment.labValues, plan.fill, labItems);
       appointment.increment();
       await appointment.save({ session });
       changed = appointment;
+      // 日誌是事後更正的地方，所以不擋；但已結案的報告早就凍結、看診也已完成，使用者要知道數值沒有進報告。
+      const record = appointment.recordId ? await MedicalRecord.findById(appointment.recordId).select('status').session(session).lean() : null;
+      if (record?.status === 'finalized') closed = 'record_finalized';
+      else if (appointment.deskCompletedAt) closed = 'desk_completed';
     }
     await LabResult.updateOne(
       { _id: result._id },
@@ -74,7 +99,7 @@ export async function applyLabResult(labResultId, { force = false, appointmentId
         $set: {
           appointmentId: appointment._id,
           appliedAt: new Date(),
-          filled: plan.filled,
+          filled: plan.allFilled,
           conflicts: plan.conflicts,
           conflictsOpen: plan.conflicts.length > 0,
           conflictsResolvedAt: null,
@@ -96,7 +121,57 @@ export async function applyLabResult(labResultId, { force = false, appointmentId
     conflicts: plan.conflicts.length,
     unmapped: plan.unmapped.length,
     unmappedCodes: plan.unmapped,
+    closed,
   };
+}
+
+// 掛號建立、報到、選了表單之後：把「已經知道是哪隻貓、卻當時填不進看診」的結果補套用。
+// 抓檔程式上傳成功就歸檔，IDEXX 不會固定重送，不補的話先驗血、後掛號（或後選表單）的數值永遠進不了看診。
+// 呼叫端在回應之後才呼叫；失敗只記錯誤，不影響掛號本身。
+export async function applyPendingLabResults(appointment) {
+  try {
+    if (!appointment?.petId) return 0;
+    const start = clinicDayStart(appointment.date);
+    // 帶著這隻貓的編號、卻因為當天還沒有看診而留在待確認清單的：現在有看診了，認回來並填入。
+    let linked = 0;
+    if (start) {
+      const waiting = await LabResult.find({
+        petId: null,
+        dismissedAt: null,
+        autoMatchBlocked: { $ne: true },
+        'patient.id': String(appointment.petId),
+        runAt: { $gte: start, $lt: clinicDayStart(appointment.date, 1) },
+      }).select('_id patient runAt').lean();
+      for (const result of waiting) {
+        if (!(await matchByPatientId(result._id, result.patient?.id, result.runAt))) continue;
+        await applyLabResult(result._id);
+        linked += 1;
+      }
+    }
+    if (!appointment.templateId) {
+      if (linked) emitLabResultsUpdate();
+      return linked;
+    }
+    const results = await LabResult.find({
+      petId: appointment.petId,
+      appliedAt: null,
+      dismissedAt: null,
+      $or: [
+        { appointmentId: appointment._id },
+        ...(start ? [{ appointmentId: null, runAt: { $gte: start, $lt: clinicDayStart(appointment.date, 1) } }] : []),
+      ],
+    }).select('_id appointmentId').lean();
+    let applied = 0;
+    for (const result of results) {
+      const fill = await applyLabResult(result._id, { appointmentId: result.appointmentId ?? null });
+      if (fill.status === 'applied') applied += 1;
+    }
+    if (applied || linked) emitLabResultsUpdate();
+    return applied + linked;
+  } catch (err) {
+    console.error('[lab-results] 補套用檢驗結果失敗', err);
+    return 0;
+  }
 }
 
 // 待確認清單裡人選了是哪隻貓。已經配對或忽略的不能再選（別台剛處理掉）。
@@ -105,6 +180,14 @@ export async function matchManually(labResultId, petId, { appointmentId = null }
   if (!(await Pet.exists({ _id: petId }))) throw Object.assign(new Error('找不到這隻貓咪'), { status: 404 });
   if (appointmentId && !(await Appointment.exists({ _id: appointmentId, petId }))) {
     throw Object.assign(new Error('這次看診不是這隻貓咪的'), { status: 422 });
+  }
+  // 沒指定看診、這隻貓檢驗當天也沒有看診：不配對，結果留在待確認清單（沒有看診就沒有日誌與報告可以填）。
+  if (!appointmentId) {
+    const result = await LabResult.findById(labResultId).lean();
+    if (result) {
+      const { date, visit } = await visitOnRunDay(petId, result);
+      if (!visit) return { status: 'no_visit', date };
+    }
   }
   const updated = await LabResult.findOneAndUpdate(
     { _id: labResultId, petId: null, dismissedAt: null },
@@ -142,6 +225,7 @@ export async function unmatchLabResult(labResultId) {
     Object.assign(result, {
       petId: null, matchedAt: null, matchSource: null, appointmentId: null,
       appliedAt: null, filled: [], conflicts: [], conflictsOpen: false, conflictsResolvedAt: null, unmappedCodes: [], overrides: [],
+      autoMatchBlocked: true,
     });
     await result.save({ session });
     // 解除連結之後才同步：這份結果不再出現在那次看診的日誌上，日誌因此沒內容就一併拿掉。

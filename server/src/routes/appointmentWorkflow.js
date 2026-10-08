@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { applyPendingLabResults } from '../lib/labResultApply.js';
 import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import MedicalRecord from '../models/MedicalRecord.js';
@@ -124,6 +125,8 @@ router.post('/:action', async (req, res, next) => {
     emitAppointmentUpdate(appointment);
     if (followUp) emitAppointmentUpdate(followUp, followUpPreviousDate);
     res.json({ ...appointment.toObject(), ...(record ? { record } : {}) });
+    // 這次才選了表單（建立報告草稿）：先前驗好、填不進來的檢驗結果現在補上。
+    if (action === 'record') await applyPendingLabResults(appointment);
   } catch (err) {
     if (err.name === 'VersionError' || err.code === 112) return res.status(409).json({ message: '資料已更新，請載入最新內容後再確認' });
     next(err);

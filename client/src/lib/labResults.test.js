@@ -56,10 +56,23 @@ describe('fillMessage：確認之後告訴使用者發生了什麼', () => {
     assert.match(fillMessage({ status: 'applied', filled: ['血糖'], conflicts: 2 }, '牛奶').message, /2 項跟報告上已填的值不同，沒有蓋掉/);
   });
 
+  it('報告已結案：數值只進看診與日誌，要明講', () => {
+    const result = fillMessage({ status: 'applied', filled: ['血糖'], closed: 'record_finalized' }, '牛奶');
+    assert.equal(result.type, 'info');
+    assert.match(result.message, /健檢報告已經結案/);
+    assert.match(fillMessage({ status: 'applied', filled: ['血糖'], closed: 'desk_completed' }, '牛奶').message, /櫃台已完成處理/);
+  });
+
+  it('一格都沒填、只有不同的值：講有幾項不同，不說沒有變動', () => {
+    const result = fillMessage({ status: 'applied', filled: [], conflicts: 3, unmapped: 2 }, '牛奶');
+    assert.equal(result.message, '牛奶的報告上有 3 項跟 IDEXX 的數值不同，沒有蓋掉');
+    assert.match(fillMessage({ status: 'applied', filled: [], conflicts: 0, unmapped: 0 }, '牛奶').message, /沒有變動/);
+  });
+
   it('沒填進去一定要講原因', () => {
     assert.match(fillMessage({ status: 'applied', filled: [], unmapped: 3 }, '牛奶').message, /沒有對應這些 IDEXX 檢驗別與代號，沒有填入/);
     assert.match(fillMessage({ status: 'applied', filled: [], unmapped: 1, unmappedCodes: ['Catalyst_One・RBC'] }, '牛奶').message, /（Catalyst_One・RBC）/);
-    assert.match(fillMessage({ status: 'no_visit' }, '牛奶').message, /沒有掛號/);
+    assert.match(fillMessage({ status: 'no_visit' }, '牛奶').message, /沒有掛號，這份結果留在待確認清單/);
     assert.match(fillMessage({ status: 'no_template' }, '牛奶').message, /沒有選健檢表單/);
     assert.equal(fillMessage({ status: 'error', message: 'x' }, '牛奶').type, 'error');
   });

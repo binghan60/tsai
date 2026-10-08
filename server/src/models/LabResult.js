@@ -60,6 +60,8 @@ const labResultSchema = new mongoose.Schema(
     matchedAt: { type: Date, default: null },
     // patient_id：IDEXX 帶回報到時送出的貓咪編號，自動認出；manual：人在待確認清單（工具欄「檢驗」）選的。
     matchSource: { type: String, enum: ['patient_id', 'manual', null], default: null },
+    // 人按過「復原」：IDEXX 之後重送同一份結果，也不再用貓咪編號自動配回去。
+    autoMatchBlocked: { type: Boolean, default: false },
     // 自動填進哪一次看診（lib/labResultApply.js）。appliedAt 是填入的時間；找不到看診就留空、之後可以再套用。
     appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
     appliedAt: { type: Date, default: null },

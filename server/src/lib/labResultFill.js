@@ -117,8 +117,11 @@ export function unmappedLabel(instrument, code) {
 //   conflicts 已經有人填了不同的值——不蓋掉，記下來讓醫師自己決定
 //   unmapped  表單裡沒有對應代號的項目（全血檢常有二十幾項，表單只列幾項，這很正常）
 // 同一個項目有兩個代號都出現在這份結果裡時，以先出現的為準。
-export function planLabFill(assays, labItems, currentLabValues, instrument = '') {
+// previousFilled：這份結果上一版填進去的值（IDEXX 送更正版時）。看診上的值還是那個值＝沒有人動過，
+// 直接換成更正後的；不然更正版會把自己上一版填的值當成醫師手填的，全部變成「衝突」。
+export function planLabFill(assays, labItems, currentLabValues, instrument = '', previousFilled = []) {
   const current = new Map((currentLabValues ?? []).map((lab) => [lab.key, String(lab.value ?? '').trim()]));
+  const previous = new Map((previousFilled ?? []).map((entry) => [entry.key, String(entry.value ?? '').trim()]));
   const fill = {};
   const conflicts = [];
   const unmapped = [];
@@ -135,8 +138,9 @@ export function planLabFill(assays, labItems, currentLabValues, instrument = '')
     if (!value || UNUSABLE_QUALIFIERS.has(assay.qualifier) || value.length > LAB_VALUE_MAX) continue;
     handled.add(item.key);
     const existing = current.get(item.key) ?? '';
-    if (!existing) fill[item.key] = value;
-    else if (existing !== value) conflicts.push({ key: item.key, label: item.label, current: existing, idexx: value });
+    if (!existing || (previous.has(item.key) && existing === previous.get(item.key))) {
+      if (existing !== value) fill[item.key] = value;
+    } else if (existing !== value) conflicts.push({ key: item.key, label: item.label, current: existing, idexx: value });
   }
   return { fill, conflicts, unmapped };
 }

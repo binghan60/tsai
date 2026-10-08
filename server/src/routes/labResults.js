@@ -67,7 +67,7 @@ async function importLabResult(parsed, { rawXml, fileName }) {
 async function autoFill(imported, parsed) {
   if (imported.status === 'stale') return null;
   try {
-    const petId = imported.petId ?? (await matchByPatientId(imported.id, parsed.patient.id));
+    const petId = imported.petId ?? (await matchByPatientId(imported.id, parsed.patient.id, parsed.runAt));
     if (!petId) return { status: 'unmatched' };
     return await applyLabResult(imported.id, { force: imported.status === 'updated' });
   } catch (err) {
@@ -303,7 +303,8 @@ labResultsRouter.post('/:id/match', async (req, res, next) => {
     const appointmentId = req.body?.appointmentId ? String(req.body.appointmentId) : null;
     if (appointmentId && !mongoose.isValidObjectId(appointmentId)) return res.status(422).json({ message: '看診參數不正確' });
     const fill = await matchManually(req.params.id, petId, { appointmentId });
-    emitLabResultsUpdate();
+    // 當天沒有看診：沒有配對，清單沒變。
+    if (fill.status !== 'no_visit') emitLabResultsUpdate();
     res.json({ fill });
   } catch (err) {
     next(err);
