@@ -13,6 +13,7 @@ import BreedSelect from '../components/BreedSelect.vue'
 import IntakeSuggestInput from '../components/IntakeSuggestInput.vue'
 import YearMonthSelect from '../components/YearMonthSelect.vue'
 import { INTAKE_COLOR_SUGGESTIONS, INTAKE_FOOD_OPTIONS, INTAKE_HISTORY_OPTIONS } from '../lib/intakeDisplay'
+import { INTAKE_HISTORY_NONE, intakePetIssues, toggleMedicalHistory } from '../../../shared/intakeRequired.js'
 import { ageLabel, clinicDateInput } from '../lib/datetime'
 
 const submitting = ref(false)
@@ -34,9 +35,22 @@ const { validate, errors } = useForm({
     ageYears: value => optionalInteger(value, 0, 30),
     ageMonths: value => optionalInteger(value, 0, 11),
     petBreed: value => required(value) !== true ? '此欄位必填' : isCatBreed(value) || '請從清單選擇品種',
-    householdCatCount: value => optionalInteger(value, 0, 99),
-    mealsPerDay: value => pet.feedingType !== 'scheduled' || integer(value, 1, 20) || '請填寫每日 1–20 餐的整數',
+    // 以下貓咪欄位的規則在 shared/intakeRequired.js（後端用同一份擋）；這裡只是逐欄接上。
+    petColor: () => petIssue('color'),
+    householdCatCount: () => petIssue('householdCatCount'),
+    petFoods: () => petIssue('foods'),
+    foodsOther: () => petIssue('foodsOther'),
+    feedingType: () => petIssue('feedingType'),
+    mealsPerDay: () => petIssue('mealsPerDay'),
     petNeutered: value => ['yes', 'no'].includes(value) || '請選擇結紮狀態',
+    vaccineStatus: () => petIssue('vaccineStatus'),
+    vaccineDate: () => petIssue('vaccineDate'),
+    medicalHistory: () => petIssue('medicalHistory'),
+    medicalHistoryOther: () => petIssue('medicalHistoryOther'),
+    allergyStatus: () => petIssue('allergyStatus'),
+    allergyType: () => petIssue('allergyType'),
+    checkupStatus: () => petIssue('checkupStatus'),
+    checkupDate: () => petIssue('checkupDate'),
     ownerName: required,
     ownerPhone: value => required(value) !== true ? '此欄位必填' : !!normalizeMobilePhone(value) || MOBILE_PHONE_ERROR,
     ownerAddress: required,
@@ -54,22 +68,26 @@ const pet = reactive({
   ageYears: field('ageYears'),
   ageMonths: field('ageMonths'),
   breed: field('petBreed'),
-  color: '',
+  color: field('petColor'),
   householdCatCount: field('householdCatCount'),
-  foods: [],
-  foodsOther: '',
-  feedingType: 'unknown',
+  foods: field('petFoods', []),
+  foodsOther: field('foodsOther'),
+  feedingType: field('feedingType', 'unknown'),
   mealsPerDay: field('mealsPerDay'),
   neutered: field('petNeutered', 'unknown'),
-  vaccineStatus: 'unknown',
-  vaccineDate: '',
-  medicalHistory: [],
-  medicalHistoryOther: '',
-  allergyStatus: 'unknown',
-  allergyType: '',
-  checkupStatus: 'unknown',
-  checkupDate: '',
+  vaccineStatus: field('vaccineStatus', 'unknown'),
+  vaccineDate: field('vaccineDate'),
+  medicalHistory: field('medicalHistory', []),
+  medicalHistoryOther: field('medicalHistoryOther'),
+  allergyStatus: field('allergyStatus', 'unknown'),
+  allergyType: field('allergyType'),
+  checkupStatus: field('checkupStatus', 'unknown'),
+  checkupDate: field('checkupDate'),
 })
+// 除了市話每一欄都必填（使用者要求）。規則讀整份 pet：「有」的補充欄是否必填要看旁邊選了什麼。
+function petIssue(key) {
+  return intakePetIssues({ ...pet, historyOther: historyOther.value })[key] || true
+}
 const historyOptions = INTAKE_HISTORY_OPTIONS
 const foodOptions = INTAKE_FOOD_OPTIONS
 const colorSuggestions = INTAKE_COLOR_SUGGESTIONS
@@ -95,8 +113,15 @@ linkDetail(() => pet.vaccineStatus === 'done', () => { pet.vaccineStatus = 'done
 linkDetail(() => pet.allergyStatus === 'yes', () => { pet.allergyStatus = 'yes' }, () => pet.allergyType, () => { pet.allergyType = '' })
 linkDetail(() => pet.checkupStatus === 'done', () => { pet.checkupStatus = 'done' }, () => pet.checkupDate, () => { pet.checkupDate = '' })
 linkDetail(() => historyOther.value, () => { historyOther.value = true }, () => pet.medicalHistoryOther, () => { pet.medicalHistoryOther = '' })
+// 病史「無」跟其他項目（含「其他」）互斥。
+function pickHistory(option, checked) {
+  pet.medicalHistory = toggleMedicalHistory(pet.medicalHistory, option, checked)
+  if (checked && option === INTAKE_HISTORY_NONE) historyOther.value = false
+}
+watch(historyOther, on => { if (on) pet.medicalHistory = pet.medicalHistory.filter(item => item !== INTAKE_HISTORY_NONE) })
 
 const errorId = name => `intake-${name}-error`
+const highlight = name => ({ 'field-highlight': highlightedField.value === `intake-${name}-field` })
 // 「沒填」等送出時才提醒；數字欄一打錯（例如月齡打 15）就立刻提示，不必等到送出才發現。
 // Email、手機不即時提示——打到一半就跳「格式不正確」只會干擾。
 const liveNumberKeys = { ageYears: () => pet.ageYears, ageMonths: () => pet.ageMonths, householdCatCount: () => pet.householdCatCount, mealsPerDay: () => pet.mealsPerDay }
@@ -107,14 +132,18 @@ function invalidAttrs(name, ...keys) {
   if (!errorFor(...keys)) return {}
   return { 'aria-invalid': 'true', 'aria-describedby': errorId(name) }
 }
-watch(() => pet.feedingType, () => { if (attemptedSubmit.value) validate() })
+// 補充欄要不要填看旁邊選了什麼（改選「未注射」，年份就不必填了），所以送出過一次之後，任何一欄變動都整張重驗。
+watch(() => JSON.stringify(formData()), () => { if (attemptedSubmit.value) validate() })
+// 欄位 → 畫面上那一格（intake-<值>-field）。順序＝畫面順序，「前往填寫」跳到第一個還沒填好的。
 const fieldTargets = {
   petName: 'pet-name', petSex: 'pet-sex', petBirthDate: 'pet-age', ageYears: 'pet-age', ageMonths: 'pet-age',
-  petBreed: 'pet-breed', householdCatCount: 'household-count', mealsPerDay: 'meals',
-  petNeutered: 'pet-neutered', ownerName: 'owner-name', ownerPhone: 'owner-phone',
-  ownerAddress: 'owner-address', ownerEmail: 'owner-email',
+  petBreed: 'pet-breed', petColor: 'pet-color',
+  householdCatCount: 'household-count', petFoods: 'foods', foodsOther: 'foods', feedingType: 'meals', mealsPerDay: 'meals',
+  petNeutered: 'pet-neutered', vaccineStatus: 'vaccine', vaccineDate: 'vaccine', medicalHistory: 'history', medicalHistoryOther: 'history',
+  allergyStatus: 'allergy', allergyType: 'allergy', checkupStatus: 'checkup', checkupDate: 'checkup',
+  ownerName: 'owner-name', ownerPhone: 'owner-phone', ownerAddress: 'owner-address', ownerEmail: 'owner-email',
 }
-// 生日與年齡推算有三條規則但只算一格；送出後才顯示，跟欄位旁的錯誤訊息同步。
+// 一格裡有好幾條規則（生日與年齡推算、選項與補充欄）也只算一格；送出後才顯示，跟欄位旁的錯誤訊息同步。
 const issueCount = computed(() => attemptedSubmit.value
   ? new Set(Object.keys(fieldTargets).filter(key => errors.value[key]).map(key => fieldTargets[key])).size
   : 0)
@@ -174,7 +203,7 @@ async function jumpToIssue() {
   // 等平滑捲動結束再聚焦，避免手機鍵盤或焦點行為打斷滑動。
   const finish = () => {
     cancelScrollFocus()
-    if (field.isConnected) field.querySelector('input:not([type=hidden]):not(:disabled), [role=radio]')?.focus({ preventScroll: true })
+    if (field.isConnected) field.querySelector('input:not([type=hidden]):not(:disabled), [role=radio], [role=checkbox], select')?.focus({ preventScroll: true })
   }
   const fallback = window.setTimeout(finish, 1200)
   document.addEventListener('scrollend', finish, { once: true })
@@ -350,7 +379,7 @@ async function submit() {
           </div>
           <h1>初診掛號單</h1>
         </div>
-        <p class="hint">標示 * 的欄位必填；不知道生日可以用概略年齡推算。</p>
+        <p class="hint">除了市話，每一欄都要填；不知道生日可以用概略年齡推算。</p>
         <div class="section">
           <div class="section-title">貓孩兒</div>
           <div class="grid">
@@ -374,37 +403,37 @@ async function submit() {
                 <span v-if="ageApplyError || errorFor('petBirthDate', 'ageYears', 'ageMonths')" :id="errorId('pet-age')" class="field-error">{{ ageApplyError || errorFor('petBirthDate', 'ageYears', 'ageMonths') }}</span>
               </div>
               <div id="intake-pet-breed-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-breed-field' }"><label for="intake-pet-breed" class="field-label"><span class="required-mark" aria-hidden="true">*</span>品種：</label><BreedSelect id="intake-pet-breed" v-model="pet.breed" appearance="intake" placeholder="點一下選擇，或打字找" aria-required="true" v-bind="invalidAttrs('pet-breed', 'petBreed')" /><span v-if="errorFor('petBreed')" :id="errorId('pet-breed')" class="field-error">{{ errorFor('petBreed') }}</span><span class="hint field-note">不確定品種請選「米克斯」或「其他」。</span></div>
-              <div class="field"><label for="intake-pet-color" class="field-label">花色：</label><IntakeSuggestInput id="intake-pet-color" v-model="pet.color" :suggestions="colorSuggestions" placeholder="點一下選擇，或直接寫" trigger-label="展開花色清單" /></div>
+              <div id="intake-pet-color-field" class="field" :class="highlight('pet-color')"><label for="intake-pet-color" class="field-label"><span class="required-mark" aria-hidden="true">*</span>花色：</label><IntakeSuggestInput id="intake-pet-color" v-model="pet.color" :suggestions="colorSuggestions" placeholder="點一下選擇，或直接寫" trigger-label="展開花色清單" aria-required="true" v-bind="invalidAttrs('pet-color', 'petColor')" /><span v-if="errorFor('petColor')" :id="errorId('pet-color')" class="field-error">{{ errorFor('petColor') }}</span></div>
             </div>
             <div>
               <div class="field-group-title section-emphasis">生活狀況</div>
-              <div id="intake-household-count-field" class="field"><label for="intake-household-count" class="field-label">家中貓口：</label><Input id="intake-household-count" v-model="pet.householdCatCount" v-bind="invalidAttrs('household-count', 'householdCatCount')" class="input-medium" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 99)" /> 隻<span v-if="errorFor('householdCatCount')" :id="errorId('household-count')" class="field-error">{{ errorFor('householdCatCount') }}</span></div>
-              <div class="field" role="group" aria-labelledby="intake-foods-label">
-                <span id="intake-foods-label" class="field-label">主餐配菜：</span><label v-for="option in foodOptions" :key="option" class="option-label"><Checkbox :model-value="pet.foods.includes(option)" @update:model-value="pet.foods = toggleList(pet.foods, option, $event === true)" />{{ option }}<template v-if="option === '其他'">：</template></label
-                ><Input v-if="pet.foods.includes('其他')" v-model="pet.foodsOther" aria-label="其他主餐配菜" class="input-medium" placeholder="請填寫" /><span class="hint">(以上可複選)</span>
+              <div id="intake-household-count-field" class="field" :class="highlight('household-count')"><label for="intake-household-count" class="field-label"><span class="required-mark" aria-hidden="true">*</span>家中貓口：</label><Input id="intake-household-count" v-model="pet.householdCatCount" aria-required="true" v-bind="invalidAttrs('household-count', 'householdCatCount')" class="input-medium" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 99)" /> 隻<span v-if="errorFor('householdCatCount')" :id="errorId('household-count')" class="field-error">{{ errorFor('householdCatCount') }}</span></div>
+              <div id="intake-foods-field" class="field" :class="highlight('foods')" role="group" aria-labelledby="intake-foods-label" aria-required="true" v-bind="invalidAttrs('foods', 'petFoods', 'foodsOther')">
+                <span id="intake-foods-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>主餐配菜：</span><label v-for="option in foodOptions" :key="option" class="option-label"><Checkbox :model-value="pet.foods.includes(option)" @update:model-value="pet.foods = toggleList(pet.foods, option, $event === true)" />{{ option }}<template v-if="option === '其他'">：</template></label
+                ><Input v-if="pet.foods.includes('其他')" v-model="pet.foodsOther" aria-label="其他主餐配菜" class="input-medium" placeholder="請填寫" /><span class="hint">(以上可複選)</span><span v-if="errorFor('petFoods', 'foodsOther')" :id="errorId('foods')" class="field-error">{{ errorFor('petFoods', 'foodsOther') }}</span>
               </div>
-              <div id="intake-meals-field" class="field">
-                <span id="intake-feeding-label" class="field-label">放飯頻率：</span><RadioGroup v-model="pet.feedingType" aria-labelledby="intake-feeding-label" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" aria-label="一日幾餐" v-bind="invalidAttrs('meals', 'mealsPerDay')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 20)" /> 餐</label></RadioGroup><span v-if="errorFor('mealsPerDay')" :id="errorId('meals')" class="field-error">{{ errorFor('mealsPerDay') }}</span>
+              <div id="intake-meals-field" class="field" :class="highlight('meals')">
+                <span id="intake-feeding-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>放飯頻率：</span><RadioGroup v-model="pet.feedingType" aria-labelledby="intake-feeding-label" aria-required="true" v-bind="invalidAttrs('meals', 'feedingType')" class="contents"><label class="option-label"><RadioGroupItem value="free" />任食</label><label class="option-label"><RadioGroupItem value="scheduled" />定食定量：一日 <Input v-model="pet.mealsPerDay" aria-label="一日幾餐" v-bind="invalidAttrs('meals', 'mealsPerDay')" class="input-short" inputmode="numeric" pattern="[0-9]*" maxlength="2" @beforeinput="blockOutOfRange($event, 20)" /> 餐</label></RadioGroup><span v-if="errorFor('feedingType', 'mealsPerDay')" :id="errorId('meals')" class="field-error">{{ errorFor('feedingType', 'mealsPerDay') }}</span>
               </div>
             </div>
           </div>
           <div class="medical">
             <div class="field-group-title section-emphasis">醫療紀錄</div>
-            <div id="intake-pet-neutered-field" class="field" :class="{ 'field-highlight': highlightedField === 'intake-pet-neutered-field' }">
+            <div id="intake-pet-neutered-field" class="field" :class="highlight('pet-neutered')">
               <span id="intake-neutered-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>結紮：</span><RadioGroup v-model="pet.neutered" aria-labelledby="intake-neutered-label" aria-required="true" v-bind="invalidAttrs('pet-neutered', 'petNeutered')" class="contents"><label class="option-label"><RadioGroupItem value="no" />未結紮</label><label class="option-label"><RadioGroupItem value="yes" />已結紮</label></RadioGroup><span v-if="errorFor('petNeutered')" :id="errorId('pet-neutered')" class="field-error">{{ errorFor('petNeutered') }}</span>
             </div>
-            <div class="field">
-              <span id="intake-vaccine-label" class="field-label">疫苗：</span><RadioGroup v-model="pet.vaccineStatus" aria-labelledby="intake-vaccine-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />未注射</label><label class="option-label"><RadioGroupItem value="done" />已注射：最後注射時間</label></RadioGroup><YearMonthSelect v-model="pet.vaccineDate" label="最後注射時間" appearance="intake" />
+            <div id="intake-vaccine-field" class="field" :class="highlight('vaccine')">
+              <span id="intake-vaccine-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>疫苗：</span><RadioGroup v-model="pet.vaccineStatus" aria-labelledby="intake-vaccine-label" aria-required="true" v-bind="invalidAttrs('vaccine', 'vaccineStatus', 'vaccineDate')" class="contents"><label class="option-label"><RadioGroupItem value="none" />未注射</label><label class="option-label"><RadioGroupItem value="done" />已注射：最後注射時間</label></RadioGroup><YearMonthSelect v-model="pet.vaccineDate" label="最後注射時間" appearance="intake" /><span v-if="errorFor('vaccineStatus', 'vaccineDate')" :id="errorId('vaccine')" class="field-error">{{ errorFor('vaccineStatus', 'vaccineDate') }}</span>
             </div>
-            <div class="field" role="group" aria-labelledby="intake-history-label">
-              <span id="intake-history-label" class="field-label">病史：</span><label v-for="option in historyOptions" :key="option" class="option-label"><Checkbox :model-value="pet.medicalHistory.includes(option)" @update:model-value="pet.medicalHistory = toggleList(pet.medicalHistory, option, $event === true)" />{{ option }}</label
-              ><label class="option-label"><Checkbox v-model="historyOther" />其他：</label><Input v-model="pet.medicalHistoryOther" aria-label="其他病史" class="input-medium" />
+            <div id="intake-history-field" class="field" :class="highlight('history')" role="group" aria-labelledby="intake-history-label" aria-required="true" v-bind="invalidAttrs('history', 'medicalHistory', 'medicalHistoryOther')">
+              <span id="intake-history-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>病史：</span><label v-for="option in historyOptions" :key="option" class="option-label"><Checkbox :model-value="pet.medicalHistory.includes(option)" @update:model-value="pickHistory(option, $event === true)" />{{ option }}</label
+              ><label class="option-label"><Checkbox v-model="historyOther" />其他：</label><Input v-model="pet.medicalHistoryOther" aria-label="其他病史" class="input-medium" /><span v-if="errorFor('medicalHistory', 'medicalHistoryOther')" :id="errorId('history')" class="field-error">{{ errorFor('medicalHistory', 'medicalHistoryOther') }}</span>
             </div>
-            <div class="field">
-              <span id="intake-allergy-label" class="field-label">藥物過敏：</span><RadioGroup v-model="pet.allergyStatus" aria-labelledby="intake-allergy-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />無過敏</label><label class="option-label"><RadioGroupItem value="yes" />有：過敏類別</label></RadioGroup><Input v-model="pet.allergyType" aria-label="過敏類別" class="input-medium" />
+            <div id="intake-allergy-field" class="field" :class="highlight('allergy')">
+              <span id="intake-allergy-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>藥物過敏：</span><RadioGroup v-model="pet.allergyStatus" aria-labelledby="intake-allergy-label" aria-required="true" v-bind="invalidAttrs('allergy', 'allergyStatus')" class="contents"><label class="option-label"><RadioGroupItem value="none" />無過敏</label><label class="option-label"><RadioGroupItem value="yes" />有：過敏類別</label></RadioGroup><Input v-model="pet.allergyType" aria-label="過敏類別" v-bind="invalidAttrs('allergy', 'allergyType')" class="input-medium" /><span v-if="errorFor('allergyStatus', 'allergyType')" :id="errorId('allergy')" class="field-error">{{ errorFor('allergyStatus', 'allergyType') }}</span>
             </div>
-            <div class="field">
-              <span id="intake-checkup-label" class="field-label">健檢：</span><RadioGroup v-model="pet.checkupStatus" aria-labelledby="intake-checkup-label" class="contents"><label class="option-label"><RadioGroupItem value="none" />未健檢</label><label class="option-label"><RadioGroupItem value="done" />有：上次健檢時間</label></RadioGroup><YearMonthSelect v-model="pet.checkupDate" label="上次健檢時間" appearance="intake" />
+            <div id="intake-checkup-field" class="field" :class="highlight('checkup')">
+              <span id="intake-checkup-label" class="field-label"><span class="required-mark" aria-hidden="true">*</span>健檢：</span><RadioGroup v-model="pet.checkupStatus" aria-labelledby="intake-checkup-label" aria-required="true" v-bind="invalidAttrs('checkup', 'checkupStatus', 'checkupDate')" class="contents"><label class="option-label"><RadioGroupItem value="none" />未健檢</label><label class="option-label"><RadioGroupItem value="done" />有：上次健檢時間</label></RadioGroup><YearMonthSelect v-model="pet.checkupDate" label="上次健檢時間" appearance="intake" /><span v-if="errorFor('checkupStatus', 'checkupDate')" :id="errorId('checkup')" class="field-error">{{ errorFor('checkupStatus', 'checkupDate') }}</span>
             </div>
           </div>
         </div>

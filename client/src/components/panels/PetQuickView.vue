@@ -11,6 +11,7 @@ import { useStaffIdentity } from '../../composables/useStaffIdentity';
 import { useToast } from '../../composables/useToast';
 import { ageLabel, formatDate } from '../../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../../lib/recordStatus';
+import { medicalHistoryText } from '../../lib/petDisplay';
 import SidePanel from './SidePanel.vue';
 import SpecGrid from '../SpecGrid.vue';
 import SpecCell from '../SpecCell.vue';
@@ -56,7 +57,7 @@ const tabItems = [
 const age = computed(() => ageLabel(pet.value?.birthDate, new Date(), '', { estimated: pet.value?.birthDateEstimated }));
 // 醫師回答用藥問題前最需要先看到的兩件事：藥物過敏用危險色，病史用警示色。
 const allergy = computed(() => (pet.value?.allergyStatus === 'yes' ? `有${pet.value.allergyType ? `：${pet.value.allergyType}` : ''}` : ''));
-const history = computed(() => [pet.value?.medicalHistory?.join('、'), pet.value?.medicalHistoryOther].filter(Boolean).join('；'));
+const history = computed(() => medicalHistoryText(pet.value));
 
 async function loadPet(id) {
   const token = ++request;

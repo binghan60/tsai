@@ -3,12 +3,14 @@
 
 // 公開初診頁的勾選項目；櫃台審核時修改也用同一份，兩邊的選項才不會各說各話。
 export const INTAKE_FOOD_OPTIONS = ['主食罐', '副食罐', '鮮食', '生肉', '乾糧', '其他'];
-export const INTAKE_HISTORY_OPTIONS = ['心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題'];
-// 花色是自由文字，這份只是輸入時的建議（datalist）。品種不是：只能從 shared/catBreeds.js 的清單選（BreedSelect）。
+// 「無」排第一、跟其他病史互斥（shared/intakeRequired.js 的 toggleMedicalHistory）；醫療警示要濾掉它（petDisplay 的 medicalHistoryText），不然「無」會變成紅字病史。
+export const INTAKE_HISTORY_OPTIONS = [INTAKE_HISTORY_NONE, '心臟病', '腎臟病', '糖尿病', '愛滋病', '白血病', '貓瘟', '冠狀病毒', '泌尿系統問題'];
+// 花色是自由文字，這份只是輸入時的建議（IntakeSuggestInput）。品種不是：只能從 shared/catBreeds.js 的清單選（BreedSelect）。
 export const INTAKE_COLOR_SUGGESTIONS = ['橘', '橘白', '虎斑', '白底虎斑', '三花', '玳瑁', '賓士（黑白）', '黑', '白', '灰', '重點色'];
 
 import { birthDateLabel } from './datetime.js';
 import { catBreedLabel } from '../../../shared/catBreeds.js';
+import { INTAKE_HISTORY_NONE } from '../../../shared/intakeRequired.js';
 
 const blank = (value) => value === null || value === undefined || value === '';
 

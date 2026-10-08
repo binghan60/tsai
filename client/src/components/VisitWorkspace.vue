@@ -20,6 +20,7 @@ import { canRequestLab, useLabRequest } from '../composables/useLabRequest'
 import { workflowState } from '../../../shared/appointmentWorkflow.js'
 import { clinicalDraft, draftPatch, mergeClinicalUpdate, takeBaseline } from '../lib/visitDraft'
 import { ageLabel, clinicTimeInput } from '../lib/datetime'
+import { medicalHistoryText } from '../lib/petDisplay'
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue'
 import VisitLabTable from './VisitLabTable.vue'
 import LabImportDialog from './LabImportDialog.vue'
@@ -109,7 +110,7 @@ const medicalTags = computed(() => {
   if (!pet.value) return []
   const tags = []
   if (pet.value.allergyStatus === 'yes') tags.push({ key: 'allergy', label: pet.value.allergyType ? `藥物過敏：${pet.value.allergyType}` : '藥物過敏', class: 'bg-danger-surface font-semibold text-danger' })
-  const history = [pet.value.medicalHistory?.join('、'), pet.value.medicalHistoryOther].filter(Boolean).join('；')
+  const history = medicalHistoryText(pet.value)
   if (history) tags.push({ key: 'history', label: `病史：${history}`, class: 'bg-card text-danger shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--danger)_55%,transparent)]' })
   if (pet.value.allergyStatus === 'none') tags.push({ key: 'no-allergy', label: '無藥物過敏', class: 'bg-success-surface text-success' })
   // 狀態預設是 'unknown'：不知道就不出標籤，不能當成「未注射／未健檢」。

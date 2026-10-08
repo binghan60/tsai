@@ -12,6 +12,7 @@ import { INTAKE_PET_FIELDS, mergeIntakeEdit } from '../lib/intakeEdit.js';
 import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 import { MOBILE_PHONE_ERROR, normalizeMobilePhone } from '../../../shared/phone.js';
 import { checkCatBreed } from '../../../shared/catBreeds.js';
+import { intakePetIssues } from '../../../shared/intakeRequired.js';
 
 const pickPetFields = body => Object.fromEntries(INTAKE_PET_FIELDS.filter(field => body[field] !== undefined).map(field => [field, body[field]]));
 const publicSubmissionLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 5 });
@@ -74,6 +75,9 @@ publicIntakeRouter.post('/', publicSubmissionLimiter, async (req, res, next) => 
     if (!['male', 'female'].includes(pet.sex)) return res.status(422).json({ message: '請選擇性別' });
     if (!['yes', 'no'].includes(pet.neutered)) return res.status(422).json({ message: '請選擇結紮狀態' });
     if (!pet.birthDate || Number.isNaN(new Date(pet.birthDate).getTime())) return res.status(422).json({ message: '請填寫有效年齡' });
+    // 除了市話每一欄都必填；規則跟公開初診頁共用，這裡擋改版前就開著的分頁送來的不完整資料。
+    const missing = Object.values(intakePetIssues(pet))[0];
+    if (missing) return res.status(422).json({ message: missing });
     const message = validationError(owner, pet);
     if (message) return res.status(422).json({ message });
     const code = intakeVerificationCode(req.body?.verificationCode);

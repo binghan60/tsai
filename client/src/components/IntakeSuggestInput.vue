@@ -1,5 +1,5 @@
 <script setup>
-import { computed, useAttrs } from 'vue';
+import { computed, ref, useAttrs } from 'vue';
 import { ChevronDown } from '@lucide/vue';
 import { AutocompleteAnchor, AutocompleteContent, AutocompleteInput, AutocompleteItem, AutocompletePortal, AutocompleteRoot, AutocompleteTrigger } from 'reka-ui';
 
@@ -31,11 +31,30 @@ const options = computed(() => {
   if (!keyword || props.suggestions.includes(keyword)) return props.suggestions;
   return props.suggestions.filter((option) => option.includes(keyword));
 });
+
+// 清單一出來就會自動反白第一項，直接按 Enter 等於選了它：打「虎」按 Enter 會變成「虎斑」，
+// 手機鍵盤的「完成」也是 Enter。建議只是建議——只有用方向鍵移過去（或直接點）才算選，否則 Enter 只是收起清單。
+const open = ref(false);
+const navigated = ref(false);
+function onKeydown(event) {
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    // 第一次按 ↓：反白（原本藏著）的就是第一項，只把它亮出來，不要再往下跳到第二項。
+    if (event.key === 'ArrowDown' && open.value && !navigated.value) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    navigated.value = true;
+  } else if (event.key === 'Enter' && open.value && !navigated.value && !event.isComposing) {
+    event.preventDefault();
+    event.stopPropagation();
+    open.value = false;
+  } else if (event.key.length === 1 || event.key === 'Backspace' || event.key === 'Delete') navigated.value = false;
+}
 </script>
 
 <template>
-  <div class="intake-combobox">
-    <AutocompleteRoot v-model="value" ignore-filter open-on-click>
+  <div class="intake-combobox" @keydown.capture="onKeydown">
+    <AutocompleteRoot v-model="value" v-model:open="open" ignore-filter open-on-click @update:open="navigated = false">
       <AutocompleteAnchor class="relative block">
         <AutocompleteInput
           v-bind="inputAttrs"
@@ -49,7 +68,7 @@ const options = computed(() => {
       </AutocompleteAnchor>
       <AutocompletePortal>
         <!-- 打的字清單上沒有就不出清單：寫什麼都收，不必提示「找不到」。 -->
-        <AutocompleteContent v-if="options.length" position="popper" side="bottom" align="start" :side-offset="4" class="intake-combobox-content">
+        <AutocompleteContent v-if="options.length" position="popper" side="bottom" align="start" :side-offset="4" class="intake-combobox-content" :data-suggest-idle="navigated ? undefined : ''">
           <AutocompleteItem v-for="option in options" :key="option" :value="option" class="intake-combobox-item">
             {{ option }}
           </AutocompleteItem>

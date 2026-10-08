@@ -681,6 +681,11 @@ html {
 .intake-combobox-item[data-highlighted] {
   background: var(--intake-accent-surface);
 }
+/* 花色（只是建議）：清單剛出來時自動反白的第一項不畫出來——看起來像已經選好，飼主會以為不能自己寫。
+   用方向鍵或滑過去才亮。 */
+.intake-combobox-content[data-suggest-idle] .intake-combobox-item[data-highlighted]:not(:hover) {
+  background: none;
+}
 .intake-combobox-item[data-state='checked'] {
   color: var(--intake-accent);
   font-weight: bold;

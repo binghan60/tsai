@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { breedText, isNeutered, sexLabel } from './petDisplay.js';
+import { breedText, isNeutered, medicalHistoryText, petReminders, sexLabel } from './petDisplay.js';
 
 test('性別只認 male／female，其餘不顯示', () => {
   assert.equal(sexLabel('male'), '公');
@@ -31,4 +31,10 @@ test('清單提醒：過敏、病史第一項、備註（咬人叫注意）', as
   assert.deepEqual(tags.map((tag) => [tag.key, tag.label]), [['allergy', '過敏'], ['history', '慢性腎病'], ['notes', '注意']]);
   assert.equal(tags[1].title, '病史：慢性腎病、甲亢');
   assert.deepEqual(petReminders({ allergyStatus: 'none', medicalHistory: ['無'], notes: '' }), []);
+});
+
+test('medicalHistoryText：勾「無」不是病史', () => {
+  assert.equal(medicalHistoryText({ medicalHistory: ['無'] }), '');
+  assert.equal(medicalHistoryText({ medicalHistory: ['心臟病', '腎臟病'], medicalHistoryOther: '甲狀腺' }), '心臟病、腎臟病；甲狀腺');
+  assert.deepEqual(petReminders({ medicalHistory: ['無'] }), []);
 });

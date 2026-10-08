@@ -14,6 +14,7 @@ import { Checkbox } from './ui/checkbox';
 import { DatePicker } from './ui/date-picker';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { INTAKE_HISTORY_NONE, toggleMedicalHistory } from '../../../shared/intakeRequired.js';
 
 // 初診表審核時就地修改一段（貓咪／醫療紀錄／飼主），存檔寫回這份初診表（PUT /intake-submissions/:id），
 // 掛號時才用改過的內容建立正式資料。選項與公開初診頁同一份（lib/intakeDisplay.js）。
@@ -57,6 +58,12 @@ function toggle(list, option, checked) {
   if (checked) next.add(option);
   else next.delete(option);
   return [...next];
+}
+
+// 「無」跟其他病史互斥；勾「無」連其他病史的文字一起清掉。
+function pickHistory(option, checked) {
+  pet.value.medicalHistory = toggleMedicalHistory(pet.value.medicalHistory, option, checked);
+  if (checked && option === INTAKE_HISTORY_NONE) pet.value.medicalHistoryOther = '';
 }
 
 function payload() {
@@ -126,7 +133,7 @@ async function save() {
         <div class="space-y-1.5 @lg:col-span-2">
           <Label>病史</Label>
           <div class="flex flex-wrap gap-x-4 gap-y-2">
-            <label v-for="option in INTAKE_HISTORY_OPTIONS" :key="option" class="flex items-center gap-2 text-sm"><Checkbox :model-value="pet.medicalHistory.includes(option)" @update:model-value="pet.medicalHistory = toggle(pet.medicalHistory, option, $event === true)" />{{ option }}</label>
+            <label v-for="option in INTAKE_HISTORY_OPTIONS" :key="option" class="flex items-center gap-2 text-sm"><Checkbox :model-value="pet.medicalHistory.includes(option)" @update:model-value="pickHistory(option, $event === true)" />{{ option }}</label>
           </div>
           <Input v-model="pet.medicalHistoryOther" aria-label="其他病史" placeholder="其他病史" />
         </div>
