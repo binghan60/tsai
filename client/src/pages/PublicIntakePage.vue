@@ -379,7 +379,6 @@ async function submit() {
           </div>
           <h1>初診掛號單</h1>
         </div>
-        <p class="hint">除了市話，每一欄都要填；不知道生日可以用概略年齡推算。</p>
         <div class="section">
           <div class="section-title">貓孩兒</div>
           <div class="grid">
