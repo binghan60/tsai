@@ -55,7 +55,10 @@ export function fillMessage(fill, petName) {
         const conflicts = fill.conflicts ? `；${fill.conflicts} 項跟報告上已填的值不同，沒有蓋掉` : '';
         return { type: 'success', message: `已填進${name}的健檢報告：${fill.filled.join('、')}${conflicts}` };
       }
-      if (fill.unmapped) return { type: 'info', message: `${name}的健檢表單沒有對應這些項目的 IDEXX 代號，沒有填入。可以到表單設計頁設定。` };
+      if (fill.unmapped) {
+        const list = fill.unmappedCodes?.length ? `（${fill.unmappedCodes.join('、')}）` : '';
+        return { type: 'info', message: `${name}的健檢表單沒有對應這些 IDEXX 檢驗別與代號${list}，沒有填入。請到表單設計頁檢查代號與檢驗別。` };
+      }
       return { type: 'info', message: `${name}的報告上已經有這些數值，沒有變動` };
     }
     case 'no_visit':

@@ -182,6 +182,10 @@ function setIdexxCodes(text) {
   idexxCodesText.value = text;
   if (selectedItem.value) selectedItem.value.idexxCodes = normalizeIdexxCodes(text);
 }
+// 檢驗別是儀器名稱（IDEXX 結果上的 instrument），直接存文字，留空＝任何儀器都對。
+function setIdexxInstrument(text) {
+  if (selectedItem.value) selectedItem.value.idexxInstrument = text;
+}
 const visibleSections = computed(() =>
   sections.value.filter((section) => section.enabled !== false && section.items?.some((item) => item.enabled !== false))
 );
@@ -331,6 +335,7 @@ function addItem(type) {
     referenceMin: null,
     referenceMax: null,
     idexxCodes: [],
+    idexxInstrument: '',
   });
   selectedItemKey.value = key;
   mobileEditorPane.value = 'settings';
@@ -804,6 +809,17 @@ function resolveLeave(confirmed) {
                         @update:model-value="setIdexxCodes"
                       />
                       <p class="text-xs text-muted-foreground">IDEXX 儀器驗完會自動填進這一格。不同儀器代號不同時用「、」分開，例如 RBC、RBC_BLD。</p>
+                    </div>
+                    <div class="space-y-1.5">
+                      <Label for="item-idexx-instrument" class="text-xs font-medium">IDEXX 檢驗別（選填）</Label>
+                      <Input
+                        id="item-idexx-instrument"
+                        :model-value="selectedItem.idexxInstrument ?? ''"
+                        class="num"
+                        placeholder="例如：Catalyst_One"
+                        @update:model-value="setIdexxInstrument"
+                      />
+                      <p class="text-xs text-muted-foreground">填儀器名稱（IDEXX 結果上的 instrument）。同一個代號在不同儀器上指不同項目時才需要，留空＝任何儀器都對。</p>
                     </div>
                   </template>
 

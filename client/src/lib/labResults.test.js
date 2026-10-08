@@ -57,7 +57,8 @@ describe('fillMessage：確認之後告訴使用者發生了什麼', () => {
   });
 
   it('沒填進去一定要講原因', () => {
-    assert.match(fillMessage({ status: 'applied', filled: [], unmapped: 3 }, '牛奶').message, /沒有對應這些項目的 IDEXX 代號/);
+    assert.match(fillMessage({ status: 'applied', filled: [], unmapped: 3 }, '牛奶').message, /沒有對應這些 IDEXX 檢驗別與代號，沒有填入/);
+    assert.match(fillMessage({ status: 'applied', filled: [], unmapped: 1, unmappedCodes: ['Catalyst_One・RBC'] }, '牛奶').message, /（Catalyst_One・RBC）/);
     assert.match(fillMessage({ status: 'no_visit' }, '牛奶').message, /沒有掛號/);
     assert.match(fillMessage({ status: 'no_template' }, '牛奶').message, /沒有選健檢表單/);
     assert.equal(fillMessage({ status: 'error', message: 'x' }, '牛奶').type, 'error');

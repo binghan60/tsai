@@ -39,8 +39,10 @@ const formItemSchema = new mongoose.Schema(
     referenceMin: { type: Number, default: null },
     referenceMax: { type: Number, default: null },
     // 只有檢驗項目用：IDEXX 儀器回傳的項目代號（例如 CREA），驗完會自動填進這一格（見 lib/labResultFill.js）。
-    // 同一份表單裡同一個代號只能對到一個項目。
     idexxCodes: { type: [String], default: [] },
+    // IDEXX 檢驗別：代號是哪一台儀器的（結果上的 instrument，例如 Catalyst_One）。不同儀器的代號可能撞名，
+    // 所以比對是「檢驗別＋代號」；留空＝任何儀器都對（舊資料）。同一個代號只能對到一個項目（檢驗別相同或留空都算撞名）。
+    idexxInstrument: { type: String, default: '' },
   },
   { _id: false }
 );

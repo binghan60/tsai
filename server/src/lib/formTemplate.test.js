@@ -129,6 +129,43 @@ describe('sanitizeSections：IDEXX 代號', () => {
     );
     assert.match(result.error, /IDEXX 代號重複：crea（「腎臟功能（CRE）」與「肌酸酐」）/);
   });
+
+  it('同一個代號在不同檢驗別可以對到不同項目（RBC 血球機一格、inVue 一格）', () => {
+    const { sections, error } = sanitizeSections(
+      [section('', '檢驗', [
+        item('', '紅血球（血球機）', 'lab', { idexxCodes: 'RBC', idexxInstrument: 'Catalyst_One' }),
+        item('', '紅血球（inVue）', 'lab', { idexxCodes: 'RBC', idexxInstrument: 'IDEXX_inVue_Dx' }),
+      ])],
+      existing()
+    );
+    assert.equal(error, undefined);
+    assert.equal(sections[0].items[0].idexxInstrument, 'Catalyst_One');
+    assert.equal(sections[0].items[1].idexxInstrument, 'IDEXX_inVue_Dx');
+  });
+
+  it('同一個檢驗別的同一個代號仍然拒收；檢驗別留空跟任何指定的檢驗別都撞名', () => {
+    const same = sanitizeSections(
+      [section('', '檢驗', [
+        item('', 'A', 'lab', { idexxCodes: 'RBC', idexxInstrument: 'Catalyst One' }),
+        item('', 'B', 'lab', { idexxCodes: 'RBC', idexxInstrument: 'catalyst_one' }),
+      ])],
+      existing()
+    );
+    assert.match(same.error, /IDEXX 代號重複：RBC/);
+    const blank = sanitizeSections(
+      [section('', '檢驗', [
+        item('', 'A', 'lab', { idexxCodes: 'RBC' }),
+        item('', 'B', 'lab', { idexxCodes: 'RBC', idexxInstrument: 'SNAP' }),
+      ])],
+      existing()
+    );
+    assert.match(blank.error, /IDEXX 代號重複：RBC/);
+  });
+
+  it('檢驗別只保存在檢驗項目上，非檢驗項目一律清空', () => {
+    const { sections } = sanitizeSections([section('', '量測', [item('', '體重', 'measurement', { idexxInstrument: 'SNAP' })])], existing());
+    assert.equal(sections[0].items[0].idexxInstrument, '');
+  });
 });
 
 describe('sanitizeSections：欄位正規化', () => {

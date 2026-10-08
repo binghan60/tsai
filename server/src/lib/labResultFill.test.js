@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseIdexxResult } from './idexxResult.js';
-import { liveConflicts, overwriteValues, petIdFromPatientId, pickVisit, planLabFill, planUndo, rankCandidates, sameName } from './labResultFill.js';
+import { liveConflicts, overwriteValues, petIdFromPatientId, pickVisit, planLabFill, planUndo, rankCandidates, sameName, unmappedLabel } from './labResultFill.js';
 
 describe('數值差異：比對視窗', () => {
   const conflicts = [
@@ -158,5 +158,44 @@ describe('planLabFill：填哪些格子', () => {
     const plan = planLabFill(catalyst.assays, [labItem('glucose', '血糖', [])], []);
     assert.deepEqual(plan.fill, {});
     assert.equal(plan.unmapped.length, 4);
+  });
+});
+
+describe('planLabFill：同一個代號在不同檢驗別', () => {
+  const assays = [{ code: 'RBC', value: '5.1', qualifier: '=' }];
+  const byInstrument = [
+    { ...labItem('rbc_blood', '紅血球（血球機）', ['RBC']), idexxInstrument: 'Catalyst_One' },
+    { ...labItem('rbc_invue', '紅血球（inVue）', ['RBC']), idexxInstrument: 'IDEXX_inVue_Dx' },
+  ];
+
+  it('依儀器填進對應的項目，不會填到另一台的格子', () => {
+    assert.deepEqual(planLabFill(assays, byInstrument, [], 'Catalyst_One').fill, { rbc_blood: '5.1' });
+    assert.deepEqual(planLabFill(assays, byInstrument, [], 'IDEXX_inVue_Dx').fill, { rbc_invue: '5.1' });
+  });
+
+  it('檢驗別比對不分大小寫，底線與空白視為相同', () => {
+    assert.deepEqual(planLabFill(assays, byInstrument, [], 'catalyst one').fill, { rbc_blood: '5.1' });
+    assert.deepEqual(planLabFill(assays, byInstrument, [], 'idexx inVue dx').fill, { rbc_invue: '5.1' });
+  });
+
+  it('沒有任何項目的檢驗別對得上，就列為未對應', () => {
+    const plan = planLabFill(assays, byInstrument, [], 'SNAP');
+    assert.deepEqual(plan.fill, {});
+    assert.deepEqual(plan.unmapped, ['SNAP・RBC']);
+  });
+
+  it('檢驗別留空的項目任何儀器都對；有指定檢驗別的優先', () => {
+    const anyInstrument = labItem('rbc_any', '紅血球', ['RBC']);
+    assert.deepEqual(planLabFill(assays, [anyInstrument], [], 'SNAP').fill, { rbc_any: '5.1' });
+    const plan = planLabFill(assays, [anyInstrument, ...byInstrument], [], 'Catalyst_One');
+    assert.deepEqual(plan.fill, { rbc_blood: '5.1' });
+  });
+});
+
+describe('unmappedLabel：未對應要帶儀器名稱', () => {
+  it('有檢驗別就寫「檢驗別・代號」，沒有就只寫代號', () => {
+    assert.equal(unmappedLabel('Catalyst_One', 'RBC'), 'Catalyst_One・RBC');
+    assert.equal(unmappedLabel('', 'RBC'), 'RBC');
+    assert.equal(unmappedLabel(undefined, 'RBC'), 'RBC');
   });
 });

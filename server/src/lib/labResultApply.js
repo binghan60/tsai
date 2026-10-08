@@ -2,11 +2,11 @@ import Appointment from '../models/Appointment.js';
 import FormTemplate from '../models/FormTemplate.js';
 import LabResult from '../models/LabResult.js';
 import Pet from '../models/Pet.js';
-import { idexxCodeKey, templateLabItems } from '../../../shared/labValues.js';
+import { templateLabItems } from '../../../shared/labValues.js';
 import { mergeLabValues } from './appointmentWorkflow.js';
 import { syncAppointmentJournal } from './appointmentJournal.js';
 import { clinicToday } from './clinicTime.js';
-import { liveConflicts, overwriteValues, petIdFromPatientId, pickVisit, planLabFill, planUndo } from './labResultFill.js';
+import { liveConflicts, matchLabItem, overwriteValues, petIdFromPatientId, pickVisit, planLabFill, planUndo } from './labResultFill.js';
 import { emitAppointmentUpdate } from './realtime.js';
 import { withTransaction } from './transaction.js';
 
@@ -59,7 +59,7 @@ export async function applyLabResult(labResultId, { force = false, appointmentId
     const appointment = await Appointment.findById(visit._id).session(session);
     const template = await FormTemplate.findById(appointment.templateId).session(session);
     const labItems = templateLabItems(template);
-    plan = planLabFill(result.assays, labItems, appointment.labValues);
+    plan = planLabFill(result.assays, labItems, appointment.labValues, result.instrument);
     const labels = new Map(labItems.map((item) => [item.key, item.label]));
     plan.filled = Object.entries(plan.fill).map(([key, value]) => ({ key, label: labels.get(key) ?? key, value }));
     if (plan.filled.length) {
@@ -95,6 +95,7 @@ export async function applyLabResult(labResultId, { force = false, appointmentId
     filled: plan.filled.map((entry) => entry.label),
     conflicts: plan.conflicts.length,
     unmapped: plan.unmapped.length,
+    unmappedCodes: plan.unmapped,
   };
 }
 
@@ -187,11 +188,10 @@ export async function editLabResultValues(labResultId, values) {
     if (appointment?.templateId) {
       const template = await FormTemplate.findById(appointment.templateId).session(session);
       const labItems = templateLabItems(template);
-      const keyByCode = new Map(labItems.flatMap((item) => (item.idexxCodes ?? []).map((code) => [idexxCodeKey(code), item.key])));
       const current = new Map((appointment.labValues ?? []).map((lab) => [lab.key, String(lab.value ?? '')]));
       const follow = {};
       for (const { code, before, after } of moved) {
-        const key = keyByCode.get(idexxCodeKey(code));
+        const key = matchLabItem(labItems, result.instrument, code)?.key;
         if (key && current.get(key) === before) follow[key] = after;
       }
       if (Object.keys(follow).length) {

@@ -66,7 +66,7 @@
 ### formTemplates 健檢表單範本
 `name`、`description`、`species`、`enabled`、`order`、`version`，底下是 `sections[]`，每個 section 有 `items[]`。使用者可自由增刪區塊與項目。詳見 [docs/FORM_BUILDER.md](docs/FORM_BUILDER.md)。
 
-檢驗項目另有 `idexxCodes[]`：IDEXX 儀器回傳的項目代號（例如 `CREA`；不同儀器代號不同就填好幾個，如 `RBC`、`RBC_BLD`），在表單設計頁的檢驗項目設定，用「、」或逗號分隔（代號本身可能有空格，不能用空白分隔），比對不分大小寫。IDEXX 結果進來時依它自動填進看診（見 labResults）。同一份表單裡同一個代號只能對到一個項目，`sanitizeSections` 會擋。
+檢驗項目另有 `idexxCodes[]`：IDEXX 儀器回傳的項目代號（例如 `CREA`；不同儀器代號不同就填好幾個，如 `RBC`、`RBC_BLD`），在表單設計頁的檢驗項目設定，用「、」或逗號分隔（代號本身可能有空格，不能用空白分隔），比對不分大小寫。另有 `idexxInstrument`（IDEXX 檢驗別，＝結果上的儀器名稱如 `Catalyst_One`、`IDEXX_inVue_Dx`，比對不分大小寫、底線與空白視為相同，留空＝任何儀器都對）：不同儀器的代號可能撞名，所以比對是「檢驗別＋代號」（`lib/labResultFill.js` 的 `matchLabItem`）。IDEXX 結果進來時依它自動填進看診（見 labResults）。同一個代號只能對到一個項目：檢驗別相同、或其中一個留空，就算撞名，`sanitizeSections` 會擋。
 
 `presets[]` 是**預填模板**（`{ key, name, order, values }`，`values` 以項目 key 為鍵，複選存陣列）：同一份表單的另外幾組預填值，例如「預防針」「牙齒」，在獨立的設定頁 `/settings/presets` 逐欄設定（`PresetTemplatesPage` 清單 → `PresetEditPage` ＋ `PresetValuesEditor.vue`，**刻意不放在表單設計頁裡**——新增一組模板不該先走進整份表單的結構編輯；表單設計頁的存檔也因此不送 `presets`，兩邊不會互相覆蓋），填報告時從頁首「套用預填模板」手動一鍵帶入，同一個選單底部有捷徑：這份表單還沒有模板就直接開新增頁，有的話回清單並選中那份表單（`?form=`）。只收文字／選項類欄位（`shared/formDefaults.js` 的 `presetEligible`）：比 `defaultValue` 那批再少掉**日期**（回診日期、健檢日期是每次看診才決定的；除了 `date` 型別，**名稱含「日期」的欄位也排除**——自訂的「回診日期」常被建成文字欄位）與**獸醫師**（`role: 'vet'`），理學檢查、檢驗、量測、牙齒圖、圖片也不收。**它疊在項目 `defaultValue` 之上、兩者不互斥**：新建報告先照舊帶預設值，套模板只覆寫模板有設定的欄位；切換模板時，上一組帶入而醫師沒改過的欄位退回預設值，改過的留著（`client/src/lib/formPresets.js` 的 `planPresetApplication`），套用後的 toast 可「復原」。預填模板不影響表單結構，存檔**不動 `version`**、不進報告快照、報告也不記套過哪一組；掛號自動建草稿只套預設值不套模板。後端每次存檔都用 `sanitizePresets` 對著新的 sections 清洗，刪掉的項目與不合法的選項值一起消失；複製表單時連同預填模板一起複製。
 

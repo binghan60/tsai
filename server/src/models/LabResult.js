@@ -76,7 +76,8 @@ const labResultSchema = new mongoose.Schema(
     // conflicts 還沒有人處理（「檢驗」面板與健檢報告會跳出比對視窗，選覆蓋或保留後關掉）。
     conflictsOpen: { type: Boolean, default: false },
     conflictsResolvedAt: { type: Date, default: null },
-    // 表單裡沒有對應 IDEXX 代號的項目；一直出現在這裡代表表單設計頁的代號還沒設。
+    // 表單裡沒有對應 IDEXX 代號的項目（「檢驗別・代號」，見 lib/labResultFill.js 的 unmappedLabel）；
+    // 一直出現在這裡代表表單設計頁的代號或檢驗別還沒設對。
     unmappedCodes: { type: [String], default: [] },
     // 忽略：IDEXX 的品管測試（QC）、練習用的檢驗，不是任何一隻貓的，從待確認清單拿掉。
     dismissedAt: { type: Date, default: null },

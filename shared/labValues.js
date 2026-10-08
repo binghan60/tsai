@@ -24,6 +24,19 @@ export function idexxCodeKey(code) {
   return String(code ?? '').trim().toUpperCase();
 }
 
+// IDEXX 檢驗別＝結果上的儀器名稱（Catalyst_One、IDEXX_inVue_Dx、SNAP）。不同儀器可能用同一個代號指不同的東西，
+// 所以比對是「檢驗別＋代號」。儀器名稱是機器寫的，比對時不分大小寫，底線與空白視為相同（Catalyst One＝Catalyst_One）。
+// 留空＝任何儀器的結果都對得上（舊的表單都是這樣）。
+const IDEXX_INSTRUMENT_MAX = 60;
+
+export function normalizeIdexxInstrument(value) {
+  return String(value ?? '').trim().slice(0, IDEXX_INSTRUMENT_MAX);
+}
+
+export function idexxInstrumentKey(instrument) {
+  return String(instrument ?? '').trim().replace(/[\s_]+/g, ' ').toLowerCase();
+}
+
 export function normalizeIdexxCodes(value) {
   const list = Array.isArray(value) ? value : String(value ?? '').split(/[,，、\n]/);
   const seen = new Set();

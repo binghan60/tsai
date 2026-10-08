@@ -1,4 +1,4 @@
-import { idexxCodeKey } from '../../../shared/labValues.js';
+import { idexxCodeKey, idexxInstrumentKey } from '../../../shared/labValues.js';
 
 // IDEXX 檢驗結果 → 看診的檢驗數值（appointment.labValues）。看診是檢驗數值的唯一存放處，
 // 健檢報告草稿讀的就是它（lib/recordVisitLink.js），所以填進看診＝報告打開就看得到。
@@ -90,16 +90,34 @@ const UNUSABLE_QUALIFIERS = new Set(['!', '-']);
 // 跟看診 labValues 的欄位長度上限一致（models/Appointment.js）。
 const LAB_VALUE_MAX = 40;
 
+// 一份結果（某台儀器的某個代號）對應表單的哪一個項目。
+// 先找檢驗別一致的項目；找不到才退回檢驗別留空（任何儀器都對）的項目。
+// 檢驗別不同的項目不會對到，所以同一個代號在不同儀器上可以分別對到不同格子。
+export function matchLabItem(labItems, instrument, code) {
+  const codeKey = idexxCodeKey(code);
+  const instrumentKey = idexxInstrumentKey(instrument);
+  let anyInstrument = null;
+  for (const item of labItems ?? []) {
+    if (!(item.idexxCodes ?? []).some((itemCode) => idexxCodeKey(itemCode) === codeKey)) continue;
+    const itemInstrument = idexxInstrumentKey(item.idexxInstrument);
+    if (itemInstrument && itemInstrument === instrumentKey) return item;
+    if (!itemInstrument && !anyInstrument) anyInstrument = item;
+  }
+  return anyInstrument;
+}
+
+// 未對應的紀錄要帶儀器名稱：同一個代號在別台儀器可能對得上，只寫代號會看不出是檢驗別填錯還是表單沒設。
+export function unmappedLabel(instrument, code) {
+  const name = String(instrument ?? '').trim();
+  return name ? `${name}・${code}` : String(code ?? '');
+}
+
 // 決定要填哪些格子：
 //   fill      這些 key 目前是空的，填 IDEXX 的值
 //   conflicts 已經有人填了不同的值——不蓋掉，記下來讓醫師自己決定
 //   unmapped  表單裡沒有對應代號的項目（全血檢常有二十幾項，表單只列幾項，這很正常）
 // 同一個項目有兩個代號都出現在這份結果裡時，以先出現的為準。
-export function planLabFill(assays, labItems, currentLabValues) {
-  const itemsByCode = new Map();
-  for (const item of labItems ?? []) {
-    for (const code of item.idexxCodes ?? []) itemsByCode.set(idexxCodeKey(code), item);
-  }
+export function planLabFill(assays, labItems, currentLabValues, instrument = '') {
   const current = new Map((currentLabValues ?? []).map((lab) => [lab.key, String(lab.value ?? '').trim()]));
   const fill = {};
   const conflicts = [];
@@ -107,9 +125,9 @@ export function planLabFill(assays, labItems, currentLabValues) {
   const handled = new Set();
 
   for (const assay of assays ?? []) {
-    const item = itemsByCode.get(idexxCodeKey(assay.code));
+    const item = matchLabItem(labItems, instrument, assay.code);
     if (!item) {
-      unmapped.push(assay.code);
+      unmapped.push(unmappedLabel(instrument, assay.code));
       continue;
     }
     if (handled.has(item.key)) continue;
