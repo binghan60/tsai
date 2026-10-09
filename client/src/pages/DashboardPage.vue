@@ -9,6 +9,7 @@ import { useTodosStore } from '../stores/todos'
 import { useUtilityPanelStore } from '../stores/utilityPanel'
 import { useStaffIdentity } from '../composables/useStaffIdentity'
 import { useToast } from '../composables/useToast'
+import { useClinicDateStore } from '../stores/clinicDate'
 import { richTextToPlain } from '../../../shared/richText.js'
 import { Button } from '../components/ui/button'
 import { Checkbox } from '../components/ui/checkbox'
@@ -27,6 +28,8 @@ const todos = useTodosStore()
 const panel = useUtilityPanelStore()
 const { identity } = useStaffIdentity()
 const toast = useToast()
+// 這頁的數字都是今天的：從這裡點進掛號台、診療台要落在今天。
+useClinicDateStore().reset()
 
 async function fetchDashboard() {
   loading.value = true

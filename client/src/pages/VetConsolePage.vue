@@ -8,6 +8,7 @@ import { getSocket } from '../api/socket'
 import { useToast } from '../composables/useToast'
 import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
+import { useClinicDate } from '../composables/useClinicDate'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { clinicDateInput, clinicTimeInput, shiftDateInput } from '../lib/datetime'
 import { workflowFilter, workflowState } from '../../../shared/appointmentWorkflow.js'
@@ -50,7 +51,7 @@ const toast = useToast()
 const { loadTemplates: loadTextTemplates } = useTextTemplates()
 const notifyChat = useAppointmentNotifier()
 const today = clinicDateInput()
-const date = useSearchQueryParam('date', today)
+const date = useClinicDate(today)
 // ?open=<掛號 id>：從別頁（健檢報告的「引用本次看診」）直接打開那一筆的工作區；打開後就從網址拿掉。
 const openParam = useSearchQueryParam('open', '')
 

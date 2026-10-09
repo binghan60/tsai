@@ -8,6 +8,7 @@ import { useToast } from '../composables/useToast'
 import { useCopy } from '../composables/useCopy'
 import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
+import { useClinicDate } from '../composables/useClinicDate'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { canRequestLab, labRequestDelivered, useLabRequest } from '../composables/useLabRequest'
 import { clinicDateInput, clinicTimeInput, shiftDateInput, weekdayLabel } from '../lib/datetime'
@@ -51,7 +52,7 @@ const notifyChat = useAppointmentNotifier()
 const panel = useUtilityPanelStore()
 const counts = useWorkCountsStore()
 const today = clinicDateInput()
-const date = useSearchQueryParam('date', today)
+const date = useClinicDate(today)
 const search = useSearchQueryParam('q', '')
 const selected = useSearchQueryParam('selected', '')
 const stageFilter = useSearchQueryParam('stage', '')
@@ -524,7 +525,6 @@ onBeforeUnmount(() => {
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
         <Button variant="secondary" size="icon" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
         <span class="mx-1.5 h-6 w-px bg-border" aria-hidden="true"></span>
-        <Button variant="soft" @click="newMedication"><Pill stroke-width="1.75" />新增藥單</Button>
         <Button @click="openDrawer('new')"><Plus stroke-width="1.75" />掛號</Button>
       </template>
     </PageHeader>
