@@ -32,7 +32,7 @@ const VIEWS = [
   { key: 'failed', label: '失敗／待確認', tone: 'danger' },
   { key: 'pending', label: DELIVERY_STATUS_META.not_sent.label, tone: 'warning' },
   { key: 'drafts', label: RECORD_STATUS_META.draft.label, tone: 'warning' },
-  // 總覽「本月已寄送」點進來的就是這一格；沒有這個頁籤時清單篩了卻沒有任何一格亮著。
+  // 總覽「本月已寄出」點進來的就是這一格；沒有這個頁籤時清單篩了卻沒有任何一格亮著。
   { key: 'sent', label: DELIVERY_STATUS_META.sent.label, tone: 'success' },
 ];
 const VIEW_PREFERENCE_KEY = 'health-check:records-view';

@@ -78,7 +78,7 @@ const reportCards = computed(() => [
   { label: '草稿', value: reports.value.drafts ?? 0, details: [`超過一天 ${reports.value.overdueDrafts ?? 0}`], to: '/records?view=drafts' },
   { label: '待寄送', value: reports.value.pending ?? 0, details: ['結案了還沒寄'], to: '/records?view=pending' },
   { label: '寄送失敗', value: reports.value.failed ?? 0, details: ['需要重寄'], to: '/records?view=failed', tone: 'danger' },
-  { label: '本月已寄送', value: reports.value.sentThisMonth ?? 0, details: [sentDelta.value], to: '/records?view=sent' },
+  { label: '本月已寄出', value: reports.value.sentThisMonth ?? 0, details: [sentDelta.value], to: '/records?view=sent' },
 ])
 // 有數字才亮框：待櫃台處理＝琥珀、寄送失敗＝紅。
 const TONE = {

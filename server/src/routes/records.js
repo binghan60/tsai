@@ -10,6 +10,8 @@ import { enqueueReportPdf, readStoredPdf } from '../lib/reportPdfJobs.js';
 import { encryptPdf } from '../lib/pdfEncrypt.js';
 import { createFailureLimiter, reportPasscode, reportPasscodeMatches } from '../lib/reportPasscode.js';
 import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from '../lib/mailer.js';
+import { emailProblem } from '../lib/emailCheck.js';
+import { checkBouncesSoon } from '../lib/mailBounces.js';
 import { hasPdfRenderAccess } from '../config/pdfAccess.js';
 import { publicAppOrigin } from '../config/publicUrl.js';
 import { defaultRecordFields, storageFor, templateForRecord } from '../lib/formTemplate.js';
@@ -1052,9 +1054,10 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
     const owner = pet?.ownerId;
     recipient = owner?.email?.trim();
     if (!recipient) return res.status(422).json({ message: '這位飼主尚未填寫 Email，請先補齊飼主資料' });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
-      return res.status(422).json({ message: '飼主 Email 格式不正確，請先修正飼主資料' });
-    }
+    // 寄出前擋得住的打錯：格式、常見的網域錯字、不存在的網域。郵件伺服器只看格式就收下，
+    // 之後才退信（lib/mailBounces.js 會讀回來），能當場擋的先擋。
+    const recipientProblem = await emailProblem(recipient);
+    if (recipientProblem) return res.status(422).json({ message: recipientProblem });
 
     if (record.pdfStatus !== 'ready') {
       return res.status(409).json({ message: record.pdfStatus === 'failed' ? 'PDF 產生失敗，請先重試。' : 'PDF 正在產生中，完成後才能寄送。' });
@@ -1153,6 +1156,8 @@ recordsRouter.post('/:id/send-email', async (req, res, next) => {
       throw error;
     }
     await logDelivery(record, 'sent', { recipient, messageId: smtpInfo.messageId, attemptId: deliveryAttemptId });
+    // 「已寄出」只代表郵件伺服器收下了；投不到的會退信，過一會兒去寄件信箱看。
+    checkBouncesSoon();
 
     res.json({
       status: 'finalized',

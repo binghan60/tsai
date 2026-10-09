@@ -97,7 +97,7 @@ function reportIdentity() {
 // 這頁固定淺色、不套 dark: variant（見 CLAUDE.md），所以不共用 DELIVERY_EVENT_META。
 const EVENT_STYLE = {
   queued: { label: '寄送中', class: 'bg-report-info-surface text-report-info' },
-  sent: { label: '寄送成功', class: 'bg-report-success-surface text-report-success' },
+  sent: { label: '已寄出', class: 'bg-report-success-surface text-report-success' },
   failed: { label: '寄送失敗', class: 'bg-report-danger-surface text-report-danger' },
   uncertain: { label: '結果待確認', class: 'bg-report-warning-surface text-report-warning' },
 };
@@ -480,7 +480,7 @@ watch(
         class="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm print:hidden"
         :class="deliveryFailed ? 'border-report-danger-border bg-report-danger-surface text-report-danger-strong' : isSent ? 'border-report-success-border bg-report-success-surface text-report-success-strong' : deliverySending ? 'border-report-info-border bg-report-info-surface text-report-info' : 'border-report-warning-border bg-report-warning-surface text-report-warning'"
       >
-        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案（第 {{ record.reportVersion || 1 }} 版）</strong><span class="block">{{ isSent ? `已寄送至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
+        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案（第 {{ record.reportVersion || 1 }} 版）</strong><span class="block">{{ isSent ? `已寄出至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
           <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="emailing || deliverySending || !pdfReady" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
           <Button v-else-if="record.pet?._id" as-child variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm"><router-link :to="`/pets/${record.pet._id}?editOwner=1`">補填 Email</router-link></Button>

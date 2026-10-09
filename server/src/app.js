@@ -26,6 +26,7 @@ import uploadsRouter from './routes/uploads.js';
 import { intakeSubmissionsRouter, publicIntakeRouter } from './routes/intakeSubmissions.js';
 import { labResultBridgeRouter, labResultsRouter } from './routes/labResults.js';
 import { closeBrowser } from './lib/pdf.js';
+import { startBounceChecks, stopBounceChecks } from './lib/mailBounces.js';
 import { resumePdfJobs } from './lib/reportPdfJobs.js';
 import { initRealtime } from './lib/realtime.js';
 
@@ -146,6 +147,7 @@ export async function startServer() {
   await resumePdfJobs();
   httpServer = app.listen(port, () => console.log(`[server] listening on http://localhost:${port}`));
   initRealtime(httpServer);
+  startBounceChecks();
   return httpServer;
 }
 
@@ -158,6 +160,7 @@ export async function stopServer({ forceExit = false } = {}) {
   if (server) {
     await new Promise((resolve) => server.close(() => resolve()));
   }
+  stopBounceChecks();
   await closeBrowser();
   if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
   if (forceExit) process.exit(0);

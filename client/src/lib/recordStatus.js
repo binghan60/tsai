@@ -20,7 +20,7 @@ export const DELIVERY_STATUS_META = {
   // 現在草稿是 info（還在寫），待寄送是 warning（寫完了、在等你寄）。
   not_sent: { label: '待寄送', class: 'bg-warning-surface text-warning', dotClass: 'bg-warning' },
   sending: { label: '寄送中', class: 'bg-info-surface text-info', dotClass: 'bg-info' },
-  sent: { label: '已寄送', class: 'bg-success-surface text-success', dotClass: 'bg-success' },
+  sent: { label: '已寄出', class: 'bg-success-surface text-success', dotClass: 'bg-success' },
   failed: { label: '寄送失敗', class: 'bg-danger-surface text-danger', dotClass: 'bg-danger' },
   // 「結果待確認」跟「寄送失敗」同一個色相家族——兩者都要人去看一眼——但這個是
   // 不確定、不是已知失敗，所以用外框而不是實心淡底，掃過列表時分得出輕重。
@@ -31,7 +31,7 @@ export const DELIVERY_STATUS_META = {
 // 那個是「這份報告現在的寄送狀態」，這個是「當時那一次嘗試發生了什麼」。
 export const DELIVERY_EVENT_META = {
   queued: { label: '寄送中', class: 'bg-info-surface text-info', dotClass: 'bg-info' },
-  sent: { label: '寄送成功', class: 'bg-success-surface text-success', dotClass: 'bg-success' },
+  sent: { label: '已寄出', class: 'bg-success-surface text-success', dotClass: 'bg-success' },
   failed: { label: '寄送失敗', class: 'bg-danger-surface text-danger', dotClass: 'bg-danger' },
   uncertain: { label: '結果待確認', class: 'border-danger/45 text-danger', dotClass: 'bg-danger/60' },
 };

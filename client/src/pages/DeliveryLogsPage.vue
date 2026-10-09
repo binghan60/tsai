@@ -22,7 +22,7 @@ import EmptyState from '../components/EmptyState.vue';
 // 包含後來被刪掉的報告。報告清單那頁回答「還有什麼沒寄」，這頁回答「當初寄了什麼給誰」。
 const EVENTS = [
   { key: '', label: '全部', tone: 'neutral' },
-  { key: 'sent', label: '寄送成功', tone: 'success' },
+  { key: 'sent', label: '已寄出', tone: 'success' },
   { key: 'failed', label: '寄送失敗', tone: 'danger' },
   { key: 'uncertain', label: '結果待確認', tone: 'warning' },
   { key: 'queued', label: '寄送中', tone: 'info' },

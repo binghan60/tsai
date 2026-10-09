@@ -109,6 +109,10 @@
 ### deliveryLogs 寄送流水帳
 append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩筆，同一個 `attemptId`；API 回傳時合併成一次寄送一筆）：`recordId`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`）、`recipient`、`messageId`、`error`、`createdAt`。
 
+**`sent`（畫面上叫「已寄出」，不叫寄送成功）只代表郵件伺服器收下了這封信，不代表送達**——Gmail 只看格式就收下，地址不存在時是之後才退一封通知到寄件信箱。兩道處理：
+- **寄出前先擋**（`lib/emailCheck.js` 的 `emailProblem`，`send-email` 回 422）：格式、常見的網域錯字（`gmial.com`→「是不是 @gmail.com？」，清單 `DOMAIN_TYPOS`）、DNS 查無此網域（有 MX 或網域本身解析得到就算收得了信；DNS 逾時一律放行，不能因為網路不穩就寄不出報告）。帳號那一段打錯擋不到。
+- **退信讀回來**（`lib/mailBounces.js`＋`lib/bounceMessage.js`）：用寄信的同一組 Gmail 帳號與應用程式密碼走 IMAP（`imap.gmail.com`，信箱唯讀開啟、不標已讀不搬不刪），每 5 分鐘、以及每次寄出後 45 秒與 3 分鐘各看一次，找近 3 天 mailer-daemon 寄來的通知；通知的 `In-Reply-To`／`References` 就是原信的 Message-ID，對回 `event: 'sent'` 那筆（`messageId`），**同一個 `attemptId` 補一筆 `failed`**（`error` 是「退信：收件地址不存在」這類；`Action: delayed` 的不算），那次寄送在流水帳上的結果就變成寄送失敗。報告的 `deliveryStatus` 只在這封信還是它最後一次寄送（`emailMessageId` 相同且仍是 `sent`）時才改成 `failed`、進「寄送失敗」佇列——之後已重寄成功的不被舊退信拉回去。冪等：同一封通知讀幾次只記一次。這幾天沒寄過信就不登入信箱；連不上只記 log。`MAIL_BOUNCE_CHECK=off` 關掉，`IMAP_HOST`／`IMAP_PORT` 可改主機。結果會晚幾十秒到幾分鐘，畫面沒有即時推播、重新整理才看到。
+
 **刻意不設 `ref`、改冗餘存貓咪與飼主姓名**——報告可以被刪除，而這筆紀錄的價值正是在報告消失後還查得到寄給了誰。同理它是獨立 collection 而不是內嵌陣列。medicalRecords 上的 `sentTo`/`sentAt` 只留得住最後一次，重寄就覆蓋。
 
 ### users 帳號
@@ -185,6 +189,7 @@ append-only，每個寄送事件寫一筆（一次寄送＝`queued`＋結果兩�
 | PDF | Puppeteer | 見下節 |
 | PDF 加密 | `@cantoo/pdf-lib` | 只用來替交出去的 PDF 加開啟密碼（飼主手機後 6 碼），見第二節 medicalRecords；純 JS，部署不必另外裝 qpdf |
 | Email | Nodemailer | SMTP（Gmail 應用程式密碼） |
+| 退信讀取 | imapflow | 用同一組 Gmail 帳密走 IMAP 讀寄件信箱裡的退信通知（`lib/mailBounces.js`），見第二節 deliveryLogs |
 | XML 解析 | fast-xml-parser | 讀 IDEXX InterLink 存下的檢驗結果檔（`server/src/lib/idexxResult.js`）；寬鬆解析、不驗證 DTD——IDEXX 的實際輸出不完全符合它自己的 DTD |
 | 測試 | Node 內建 `node --test` | 不裝額外框架 |
 
