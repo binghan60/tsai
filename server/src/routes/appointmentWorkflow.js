@@ -126,6 +126,7 @@ router.post('/:action', async (req, res, next) => {
             ownerName: appointment.ownerName, ownerPhone: appointment.ownerPhone,
             petName: appointment.petName, species: appointment.species,
             visitType: 'return',
+            followUpOfId: appointment._id,
             templateId: appointment.templateId,
           }], { session });
           appointment.followUpAppointmentId = followUp._id;

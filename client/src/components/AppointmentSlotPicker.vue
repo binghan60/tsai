@@ -30,6 +30,8 @@ const props = defineProps({
   showErrors: { type: Boolean, default: false },
   // 回診可以先不排（飼主還沒決定），日期要能清空
   clearable: { type: Boolean, default: false },
+  // 已報到的掛號只能改時段、不能改日期（人就在診所裡）
+  dateLocked: { type: Boolean, default: false },
   label: { type: String, default: '日期與時段' },
   required: { type: Boolean, default: true },
   // 並排：日期、診療時間（與 #aside 放進來的欄位）一窄欄在左，時段格在右。櫃台處理視窗用——
@@ -76,8 +78,8 @@ function changeDuration(delta) {
     <div class="space-y-2">
       <Label class="text-xs font-medium">{{ label }}<template v-if="required"><span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></template></Label>
       <div class="flex items-center gap-2">
-        <DatePicker v-model="date" :clearable="clearable" aria-label="預約日期" class="min-w-0 flex-1" />
-        <Button type="button" class="h-10 shrink-0 px-5 font-semibold shadow-sm" @click="date = today">今天</Button>
+        <DatePicker v-model="date" :clearable="clearable && !dateLocked" :disabled="dateLocked" aria-label="預約日期" class="min-w-0 flex-1" />
+        <Button v-if="!dateLocked" type="button" class="h-10 shrink-0 px-5 font-semibold shadow-sm" @click="date = today">今天</Button>
       </div>
       <p v-if="showErrors && !date" class="text-xs font-medium text-destructive">請選擇日期</p>
     </div>

@@ -49,6 +49,8 @@ const appointmentSchema = new mongoose.Schema(
       default: 'scheduled',
     },
     cancelReason: { type: String, default: '', trim: true, maxlength: 300 },
+    // 取消掛號的時刻（恢復掛號時清掉）。貓咪詳情頁「出席紀錄」列已取消的掛號時顯示。
+    cancelledAt: { type: Date, default: null },
     // 報到後交給病患的實體號碼牌。它只用於現場辨識與叫號，不代表陣列位置。
     // 離開候診後 checkinNumber 清空，但當天已發過的號碼保留在 history，避免再次叫到同號。
     checkinNumber: { type: Number, default: null },
@@ -100,6 +102,8 @@ const appointmentSchema = new mongoose.Schema(
     // 之後改回診時段會就地改期這筆，只有它還是 scheduled 狀態才動；已經報到/完成/取消
     // 就是現場另外處理過了，不回頭改。
     followUpAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
+    // 反方向：這筆是哪一次看診約出來的回診。它被取消或刪除時，那次看診才知道要回到「待安排回診」（routes/appointments.js 的 syncFollowUpParent）。
+    followUpOfId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
     // 本次簡易紀錄的唯一來源；病歷日誌透過 appointmentId 讀取。飼主看不到，也不進健檢報告。
     visitNote: { type: String, default: '', trim: true },
     // 醫師在診療台寫的藥單（可上色、加粗，字數算純文字）。會進病歷日誌的「藥單」一列；

@@ -364,6 +364,8 @@ function onWorkspaceUpdate(appointment, action) {
   } else if (action === 'reclaim') {
     notifyChat(appointment, 'reclaim')
     toast.success('已取回，可以繼續修改')
+  } else if (action === 'unstart') {
+    toast.success('已取消看診，退回候診')
   }
 }
 

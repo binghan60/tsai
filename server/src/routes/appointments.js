@@ -16,7 +16,9 @@ import { depositFieldsForBooking, settleCarriedDeposit } from '../lib/deposit.js
 import { DEPOSIT_CANCEL_OUTCOMES, checkDepositEdit } from '../../../shared/deposit.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsCheckinNumber } from '../lib/appointmentStatus.js';
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
-import { emitAppointmentUpdate, emitMedicationUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitMedicationUpdate } from '../lib/realtime.js';
+import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
+import ClinicalNote from '../models/ClinicalNote.js';
 import { cancelVisitMedicationOrder } from '../lib/visitMedicationOrder.js';
 import { queueIdexxCensus } from '../lib/idexxRequests.js';
 import { applyPendingLabResults } from '../lib/labResultApply.js';
@@ -143,7 +145,28 @@ async function saveLeavingQueue(appointment, wasQueued, session = null) {
   // 診療台開的藥單也一併取消：這次看診沒有成立，櫃台不該照著包藥（已領藥的不動）。
   const cancelledOrder = await cancelVisitMedicationOrder(appointment, LEAVE_REASONS[appointment.status] ?? '', { session });
   await appointment.save(session ? { session } : undefined);
+  // 看診沒有成立就不留在病歷：日誌只是連結，內容還在掛號上，重新報到後會回來（lib/appointmentJournal.js）。
+  await syncAppointmentJournal(appointment, { session });
+  if (appointment.petId) emitClinicalNoteUpdate({ petId: appointment.petId, appointmentId: appointment._id });
   if (cancelledOrder) emitMedicationUpdate(cancelledOrder);
+}
+
+// 回診掛號（followUpOfId 指向約它的那次看診）被取消或刪除：那次看診回到「待安排回診」，櫃台處理視窗才能重新約；
+// 取消的回診被恢復時接回去（那次看診這段期間沒有另外約新的才接）。不是誰在編輯那次看診，但 __v 要往前——
+// 開著它的處理視窗手上的版本已經過時。
+async function syncFollowUpParent(followUp, { linked }) {
+  if (!followUp.followUpOfId) return;
+  const parent = await Appointment.findOneAndUpdate(
+    { _id: followUp.followUpOfId, followUpAppointmentId: linked ? null : followUp._id },
+    {
+      $set: linked
+        ? { followUpAppointmentId: followUp._id, followUpDate: followUp.date, followUpTime: followUp.time }
+        : { followUpAppointmentId: null, followUpDate: '', followUpTime: '' },
+      $inc: { __v: 1 },
+    },
+    { new: true },
+  );
+  if (parent) emitAppointmentUpdate(parent);
 }
 
 // 兩個人同時報到可能各自算出同一張今日未發牌號，被唯一索引擋下。那不是使用者做錯什麼，
@@ -423,6 +446,10 @@ router.put('/:id', async (req, res, next) => {
       for (const field of EDITABLE_APPOINTMENT_FIELDS) {
         if (req.body[field] !== undefined) updates[field] = req.body[field];
       }
+      // 已報到的人就在診所裡：改日期會讓這筆帶著今天的報到與號碼牌搬到別天。
+      if (appointment.status === 'arrived' && updates.date !== undefined && updates.date !== appointment.date) {
+        return res.status(422).json({ message: '已報到的掛號不能改日期，請先取消報到' });
+      }
       if (updates.time !== undefined) {
         const time = String(updates.time || '').trim();
         updates.time = time;
@@ -466,6 +493,9 @@ router.put('/:id', async (req, res, next) => {
             ? new Date()
             : combineClinicDateTime(appointment.date, '');
       }
+    } else {
+      // 改不動的就明講，不要什麼都沒改卻回成功。
+      return res.status(409).json({ message: '只有待報到與在院的掛號可以修改' });
     }
 
     await appointment.save();
@@ -514,6 +544,10 @@ router.post('/:id/check-in', async (req, res, next) => {
     checkWorkflowCompatibility(appointment, req.path, req.body?.version);
     if (!canTransitionAppointmentStatus(appointment.status, 'arrived')) {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'arrived') });
+    }
+    // 報到＝人現在到了：只能替今天的掛號報到，別天的要先把掛號改到今天。
+    if (appointment.date !== clinicToday()) {
+      return res.status(422).json({ message: '只能替今天的掛號報到；要今天看診請先把掛號改到今天' });
     }
 
     const needsNewPatient = !appointment.petId;
@@ -619,6 +653,8 @@ router.post('/:id/check-in', async (req, res, next) => {
       appointment.checkinNumber = hasSuppliedNumber ? requestedCheckinNumber : nextAvailableCheckinNumber(issuedAppointments);
       rememberCheckinNumber(appointment, appointment.checkinNumber);
       await appointment.save({ session });
+      // 取消報到時拿掉的日誌，重新報到後接回來（先前寫的內容還在掛號上）。
+      await syncAppointmentJournal(appointment, { session });
     }));
 
     // 報到讓這筆掛號進入候診佇列，醫師頁要立刻看到，不必等 60 秒輪詢。
@@ -695,9 +731,11 @@ router.post('/:id/cancel', async (req, res, next) => {
       if (outcome === 'refunded') appointment.depositStatus = 'refunded';
     }
     appointment.status = 'cancelled';
+    appointment.cancelledAt = new Date();
     appointment.cancelReason = String(req.body?.cancelReason || '').trim();
     appointment.checkedInAt = null;
     await saveLeavingQueue(appointment, wasQueued);
+    await syncFollowUpParent(appointment, { linked: false });
     await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
     res.json(appointment);
@@ -737,8 +775,10 @@ router.post('/:id/restore', async (req, res, next) => {
     const wasQueued = appointment.status === 'arrived';
     appointment.status = 'scheduled';
     appointment.cancelReason = '';
+    appointment.cancelledAt = null;
     appointment.checkedInAt = null;
     await saveLeavingQueue(appointment, wasQueued);
+    await syncFollowUpParent(appointment, { linked: true });
     await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
     res.json(appointment);
@@ -770,6 +810,9 @@ router.delete('/:id', async (req, res, next) => {
     } else {
       await appointment.deleteOne();
     }
+    // 取消時日誌就已經拿掉；這裡再清一次，處理這條規則之前留下的殘留（會顯示「找不到對應的就診資料」）。
+    await ClinicalNote.deleteOne({ appointmentId: appointment._id });
+    await syncFollowUpParent(appointment, { linked: false });
     res.status(204).end();
   } catch (err) {
     next(err);

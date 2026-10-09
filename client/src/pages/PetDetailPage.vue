@@ -40,7 +40,6 @@ import AttendanceBadges from '../components/AttendanceBadges.vue';
 import DepositBadge from '../components/DepositBadge.vue';
 import AttendancePanel from '../components/AttendancePanel.vue';
 import { usePetAttendance } from '../composables/usePetAttendance';
-import { attendanceTotal } from '../lib/attendance';
 
 const route = useRoute();
 const router = useRouter();
@@ -855,7 +854,7 @@ watch(pet, async (value) => {
         <FilterTabs
           v-model="activeSection"
           :items="SECTION_TABS"
-          :counts="{ notes: notePagination.total, records: recordPagination.total, attendance: attendanceTotal(attendanceCounts.pet) }"
+          :counts="{ notes: notePagination.total, records: recordPagination.total, attendance: attendanceListTotal }"
           aria-label="切換病歷日誌、歷次健檢與出席紀錄"
         />
         <span class="text-sm text-subtle-foreground">新到舊</span>

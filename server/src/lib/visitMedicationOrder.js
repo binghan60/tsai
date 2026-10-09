@@ -68,8 +68,9 @@ export async function syncVisitMedicationOrder(appointment, actor, { session, no
   return order;
 }
 
-// 看診離開流程（取消掛號、未到、取消報到）：這次看診沒有成立，診療台開的那張藥單還沒領走就一併取消，
-// 櫃台才不會照著包藥。已領藥的不動（藥已經交出去了）。醫師寫的內容留在看診上，之後恢復、重新送交時會再開一張。
+// 看診離開流程（取消掛號、取消報到）：這次看診沒有成立，診療台開的那張藥單還沒領走就一併取消，
+// 櫃台才不會照著包藥。走得到這裡的路只有一條：送交櫃台 → 醫師取回 → 取消看診 → 取消報到／取消掛號。
+// 已領藥的不動（藥已經交出去了）。醫師寫的內容留在看診上，之後重新報到、送交時會再開一張。
 // 回傳被取消的藥單（沒有回 null），呼叫端存好掛號後才廣播。
 export async function cancelVisitMedicationOrder(appointment, reason, { session, now = new Date() } = {}) {
   if (!appointment.medicationOrderId) return null;

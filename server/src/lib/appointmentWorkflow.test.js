@@ -220,6 +220,21 @@ test('the desk can tick 上傳影像 after handoff, and it shows up in the journ
   assert.throws(() => applyWorkflowAction(p, 'clinical', { imageUpload: true }), /已完成/);
 });
 
+test('unstart puts a started visit back to waiting, only before handoff', () => {
+  const p = appointment();
+  assert.throws(() => applyWorkflowAction(p, 'unstart', {}), /還沒開始看診/);
+  applyWorkflowAction(p, 'start', {});
+  applyWorkflowAction(p, 'clinical', { visitNote: '先寫的紀錄' });
+  applyWorkflowAction(p, 'unstart', {});
+  assert.equal(p.visitStartedAt, null);
+  assert.equal(p.status, 'arrived');
+  assert.equal(p.visitNote, '先寫的紀錄');
+  assert.equal(workflowState(p).started, false);
+
+  applyWorkflowAction(p, 'handoff', {});
+  assert.throws(() => applyWorkflowAction(p, 'unstart', {}), /請先取回/);
+});
+
 test('the doctor\'s 藥單 is saved with formatting and goes into the journal', () => {
   const p = appointment();
   applyWorkflowAction(p, 'clinical', { prescription: ' **Amoxicillin** 5 天 ' });

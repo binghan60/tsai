@@ -441,6 +441,7 @@ const onSubmit = handleSubmit((values) => {
             :pet-id="duplicatePetId ? String(duplicatePetId) : ''"
             :pet-name="duplicatePetName || ''"
             :show-errors="submitCount > 0"
+            :date-locked="appointment?.status === 'arrived'"
           />
         </div>
 

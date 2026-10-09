@@ -14,8 +14,21 @@ test('attendanceFilter 只收未到，以及真的到院而且遲到的掛號', 
 
 test('attendanceListFilter 另外收決定過保證金的掛號，算次數的那一支不收', () => {
   const filter = attendanceListFilter({ petId: 'p1' });
-  assert.equal(filter.$or.length, 3);
+  assert.equal(filter.$or.length, 4);
   assert.deepEqual(filter.$or[2], { depositStatus: { $in: ['collected', 'waived', 'refunded', 'carried'] } });
+  // 已取消的掛號也列在清單上，但不算次數。
+  assert.deepEqual(filter.$or[3], { status: 'cancelled' });
+  assert.equal(attendanceFilter({ petId: 'p1' }).$or.length, 2);
+});
+
+test('已取消的掛號：帶取消時間與原因，沒有到院時間', () => {
+  const cancelledAt = new Date('2026-10-09T06:32:00Z');
+  const row = attendanceRow({ _id: 'a9', status: 'cancelled', date: '2026-10-12', time: '14:30', checkedInAt: null, latenessMinutes: 8, cancelledAt, cancelReason: '飼主臨時有事' });
+  assert.equal(row.kind, 'cancelled');
+  assert.equal(row.cancelled, true);
+  assert.equal(row.cancelledAt, cancelledAt);
+  assert.equal(row.cancelReason, '飼主臨時有事');
+  assert.equal(row.latenessMinutes, 0);
 });
 
 test('attendanceKind：未到優先，到院且遲到是遲到，其餘只是保證金紀錄', () => {
@@ -30,7 +43,7 @@ test('attendanceRow：未到沒有到院時間與遲到分鐘', () => {
   const checkedInAt = new Date('2026-09-28T06:42:00Z');
   const late = attendanceRow({ _id: 'a1', status: 'completed', date: '2026-09-28', time: '14:15', checkedInAt, latenessMinutes: 27, petId: 'p1', petName: '豆豆', reason: '回診' });
   assert.deepEqual(late, {
-    _id: 'a1', kind: 'late', date: '2026-09-28', time: '14:15', checkedInAt, latenessMinutes: 27, petId: 'p1', petName: '豆豆', reason: '回診', cancelled: false,
+    _id: 'a1', kind: 'late', date: '2026-09-28', time: '14:15', checkedInAt, latenessMinutes: 27, petId: 'p1', petName: '豆豆', reason: '回診', cancelled: false, cancelledAt: null, cancelReason: '',
     depositStatus: '', depositWaiveReason: '', depositDecidedAt: null,
   });
 

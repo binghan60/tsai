@@ -70,11 +70,19 @@ describe('appointments routes', () => {
   let originalRecordCreate;
   let originalNoteCreate;
   let originalLabResultFind;
+  let originalNoteWrites;
 
   before(async () => {
     // 掛號建立／報到之後會補套用等著的 IDEXX 結果；這裡沒有等著的。
     originalLabResultFind = LabResult.find;
-    LabResult.find = () => ({ select: () => ({ lean: async () => [] }) });
+    // 取消／恢復／報到會同步病歷日誌（lib/appointmentJournal.js）：查連著的檢驗結果、建立或拿掉日誌。
+    LabResult.find = () => {
+      const chain = { select: () => chain, sort: () => chain, session: () => chain, lean: async () => [], then: (resolve, reject) => Promise.resolve([]).then(resolve, reject) };
+      return chain;
+    };
+    originalNoteWrites = { deleteOne: ClinicalNote.deleteOne, findOneAndUpdate: ClinicalNote.findOneAndUpdate };
+    ClinicalNote.deleteOne = () => stubQueue({ deletedCount: 0 });
+    ClinicalNote.findOneAndUpdate = async () => null;
     originalTemplateFindOne = FormTemplate.findOne;
     originalSettingsFindOne = ClinicSettings.findOne;
     originalRecordCreate = MedicalRecord.create;
@@ -94,6 +102,7 @@ describe('appointments routes', () => {
     MedicalRecord.create = originalRecordCreate;
     ClinicalNote.create = originalNoteCreate;
     LabResult.find = originalLabResultFind;
+    Object.assign(ClinicalNote, originalNoteWrites);
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 
@@ -371,7 +380,7 @@ describe('appointments routes', () => {
 
   it('初診報到沒填貓咪姓名要回 422', async () => {
     const originalFindById = Appointment.findById;
-    Appointment.findById = async () => ({ _id: 'apt-2', status: 'scheduled', petId: null });
+    Appointment.findById = async () => ({ _id: 'apt-2', status: 'scheduled', petId: null, date: clinicToday() });
     try {
       const response = await fetch(`${origin}/api/appointments/apt-2/check-in`, {
         method: 'POST',
@@ -380,6 +389,41 @@ describe('appointments routes', () => {
       });
       assert.equal(response.status, 422);
       assert.deepEqual(await response.json(), { message: '請填寫貓咪姓名' });
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('不是今天的掛號不能報到', async () => {
+    const originalFindById = Appointment.findById;
+    Appointment.findById = async () => ({ _id: 'apt-3', status: 'scheduled', petId: 'pet-1', date: '2020-01-01' });
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-3/check-in`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+      assert.equal(response.status, 422);
+      assert.match((await response.json()).message, /只能替今天的掛號報到/);
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('已取消的掛號不能修改，不會假裝成功', async () => {
+    const originalFindById = Appointment.findById;
+    Appointment.findById = async () => ({ _id: 'apt-4', status: 'cancelled', date: '2020-01-01', save: async () => { throw new Error('不該存檔'); } });
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-4`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reason: '改' }) });
+      assert.equal(response.status, 409);
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('已報到的掛號不能改日期', async () => {
+    const originalFindById = Appointment.findById;
+    Appointment.findById = async () => ({ _id: 'apt-5', status: 'arrived', date: '2020-01-01', time: '10:00', save: async () => { throw new Error('不該存檔'); } });
+    try {
+      const response = await fetch(`${origin}/api/appointments/apt-5`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ date: '2020-01-02' }) });
+      assert.equal(response.status, 422);
+      assert.match((await response.json()).message, /不能改日期/);
     } finally {
       Appointment.findById = originalFindById;
     }
@@ -462,7 +506,7 @@ describe('appointments routes', () => {
       _id: 'apt-checkin-time',
       status: 'scheduled',
       petId: 'pet-1',
-      date: '2026-08-26',
+      date: clinicToday(),
       scheduledAt: new Date(Date.now() - 12 * 60 * 1000),
       checkinNumber: null,
       checkedInAt: null,

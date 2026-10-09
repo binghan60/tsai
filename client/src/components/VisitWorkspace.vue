@@ -662,7 +662,11 @@ onBeforeUnmount(() => {
         </Button>
         <Button v-else-if="state.handedOff" :disabled="busy" @click="run('reclaim')"><Undo2 stroke-width="1.75" />取回修改</Button>
         <Button v-else-if="appointment.status === 'arrived' && !state.started" :disabled="busy" @click="emit('start', appointment)"><Stethoscope stroke-width="1.75" />開始看診</Button>
-        <Button v-else-if="editable" :disabled="busy || !!conflicts.length" @click="run('handoff')">完成看診，送交櫃台<ArrowRight stroke-width="1.75" /></Button>
+        <template v-else-if="editable">
+          <!-- 按錯貓、或看到一半飼主離開：退回候診，櫃台才能取消報到。已經寫的內容留著。 -->
+          <Button variant="secondary" :disabled="busy" @click="run('unstart')"><Undo2 stroke-width="1.75" />取消看診</Button>
+          <Button :disabled="busy || !!conflicts.length" @click="run('handoff')">完成看診，送交櫃台<ArrowRight stroke-width="1.75" /></Button>
+        </template>
       </div>
     </footer>
 

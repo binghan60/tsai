@@ -2,7 +2,7 @@ import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 import { effectiveAssays, labFlag } from '../../../shared/labValues.js';
 
-export const WORKFLOW_ACTIONS = ['clinical', 'start', 'handoff', 'reclaim', 'complete', 'record', 'followup', 'request-reopen', 'approve-reopen', 'reopen'];
+export const WORKFLOW_ACTIONS = ['clinical', 'start', 'unstart', 'handoff', 'reclaim', 'complete', 'record', 'followup', 'request-reopen', 'approve-reopen', 'reopen'];
 
 export function workflowError(message, status = 422) {
   return Object.assign(new Error(message), { status });
@@ -224,6 +224,12 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
     }
   } else if (action === 'start') {
     if (!state.handedOff) appointment.visitStartedAt ||= now;
+  } else if (action === 'unstart') {
+    // 取消看診：按錯貓、或看到一半飼主離開——退回候診，之後才能取消報到／取消掛號。
+    // 只在送交櫃台之前；已經寫的內容留著。
+    if (state.handedOff) throw workflowError('這筆就診已交給櫃台，請先取回', 409);
+    if (!state.started) throw workflowError('這筆就診還沒開始看診', 409);
+    appointment.visitStartedAt = null;
   } else if (action === 'handoff') {
     if (state.handedOff) throw workflowError('這筆就診已交給櫃台', 409);
     appointment.visitStartedAt ||= now;

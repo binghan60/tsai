@@ -20,14 +20,16 @@ export function attendanceFilter(scope) {
 
 // 「出席紀錄」清單用：遲到、未到，再加上約診時決定過保證金（已收／這次不收）的掛號——
 // 保證金跟遲到是同一條時間線上的事：收了之後次數歸零，列在一起才看得出是哪幾次換來這筆保證金。
+// 已取消的掛號也列：取消不算遲到或未到（不進次數、不影響保證金門檻），但從貓咪這邊要查得到曾經取消過。
 export function attendanceListFilter(scope) {
-  return { ...scope, $or: [...incidentConditions(), { depositStatus: { $in: DEPOSIT_DECISIONS } }] };
+  return { ...scope, $or: [...incidentConditions(), { depositStatus: { $in: DEPOSIT_DECISIONS } }, { status: 'cancelled' }] };
 }
 
-// late／no_show 是出席事件；deposit＝這筆掛號本身沒有遲到或未到，只是約診時決定過保證金。
+// late／no_show 是出席事件；cancelled＝已取消的掛號；deposit＝這筆掛號本身沒有遲到或未到，只是約診時決定過保證金。
 export function attendanceKind(appointment) {
   if (appointment.status === 'no_show') return 'no_show';
   if (ATTENDED_STATUSES.includes(appointment.status) && appointment.latenessMinutes > 0) return 'late';
+  if (appointment.status === 'cancelled') return 'cancelled';
   return 'deposit';
 }
 
@@ -39,13 +41,15 @@ export function attendanceRow(appointment) {
     kind,
     date: appointment.date,
     time: appointment.time,
-    checkedInAt: kind === 'no_show' ? null : appointment.checkedInAt ?? null,
+    checkedInAt: kind === 'no_show' || kind === 'cancelled' ? null : appointment.checkedInAt ?? null,
     latenessMinutes: kind === 'late' ? appointment.latenessMinutes : 0,
     petId: appointment.petId ?? null,
     petName: appointment.petName ?? '',
     reason: appointment.reason ?? '',
     // 只有保證金紀錄的列常常是取消的掛號（收了又取消），清單上要看得出來。
     cancelled: appointment.status === 'cancelled',
+    cancelledAt: kind === 'cancelled' ? appointment.cancelledAt ?? null : null,
+    cancelReason: kind === 'cancelled' ? appointment.cancelReason ?? '' : '',
     depositStatus,
     depositWaiveReason: depositStatus === 'waived' ? appointment.depositWaiveReason ?? '' : '',
     depositDecidedAt: depositStatus ? appointment.depositDecidedAt ?? null : null,

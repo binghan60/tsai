@@ -186,7 +186,9 @@ function arrivedActions(item) {
   const lab = labRequest.enabled.value && canRequestLab(item)
     ? [item.labRequestedAt ? { key: 'lab-cancel', label: '取消送 IDEXX' } : { key: 'lab-request', label: '送 IDEXX' }]
     : []
-  return [...lab, { key: 'restore', label: '取消報到' }, { key: 'edit', label: '修改掛號' }]
+  // 開始看診之後不能取消報到（伺服器會擋）：醫師要先在診療台「取消看診」。
+  const restore = workflowState(item).started ? [] : [{ key: 'restore', label: '取消報到' }]
+  return [...lab, ...restore, { key: 'edit', label: '修改掛號' }]
 }
 function decorate(item) {
   const kind = cardTone(item)
@@ -294,13 +296,15 @@ function isInitialDataPending(appointment) {
 function scheduledPrimary(item) {
   if (item.visitType === 'new' && item.intakeSubmissionId && !item.petId) return { label: '審核', run: () => openIntakeReview(item) }
   if (isInitialDataPending(item)) return null
+  // 報到＝人現在到了，只有今天的掛號能報到（伺服器也擋）；翻到別天只是看與改掛號。
+  if (!isToday.value) return null
   const late = itemIsOverdue(item)
   if (!item.petId) return { label: '報到…', run: () => openDrawer('check-in', item) }
   return { label: late ? '遲到' : '報到', run: () => quickCheckIn(item) }
 }
 function scheduledActions(item) {
   const actions = []
-  if (item.petId) actions.push({ key: 'check-in-detail', label: '報到（改到院時間／號碼牌）' })
+  if (item.petId && isToday.value) actions.push({ key: 'check-in-detail', label: '報到（改到院時間／號碼牌）' })
   if (!isInitialDataPending(item)) actions.push({ key: 'no-show', label: '標記未到' })
   actions.push({ key: 'edit', label: '修改掛號' })
   actions.push({ key: 'cancel', label: '取消掛號', danger: true })
@@ -752,7 +756,7 @@ onBeforeUnmount(() => {
                     <p class="truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></p>
                     <p class="truncate text-sm text-muted-foreground"><span class="num">{{ item.time }}</span>　{{ item.cancelReason || item.ownerName }}</p>
                   </div>
-                  <RowActions :actions="[{ key: 'restore', label: '恢復待報到' }, { key: 'edit', label: '修改預約' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
+                  <RowActions :actions="[{ key: 'restore', label: '恢復待報到' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
                 </article>
               </div>
             </section>

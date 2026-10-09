@@ -18,17 +18,21 @@ export async function linkedLabResults(appointmentIds, { session } = {}) {
   return byAppointment;
 }
 
-// 掛號日誌不存內容、讀取時由看診即時組出；這裡只確保「有內容就有一筆日誌、沒內容就沒有」。
+// 掛號日誌不存內容、讀取時由看診即時組出；這裡只確保「有內容、而且貓在院內或已完成，就有一筆日誌，否則沒有」。
+// 取消掛號、取消報到的看診沒有成立，不留在病歷上；日誌只是連結，拿掉不會遺失內容——重新報到後同步一次就回來。
+// 曾經取消過這件事記在出席紀錄（lib/attendance.js），不是病歷。
+const VISIT_STATUSES = ['arrived', 'pending_checkout', 'completed'];
+
 // 看診的欄位從哪裡被改（診療台、健檢報告填寫頁），以及 IDEXX 結果連上／解除這次看診，都走這裡。
 export async function syncAppointmentJournal(appointment, { session } = {}) {
   const labResults = (await linkedLabResults([appointment._id], { session })).get(String(appointment._id)) ?? [];
-  if (appointment.petId && appointmentJournalContent(appointment, labResults)) {
+  if (appointment.petId && VISIT_STATUSES.includes(appointment.status) && appointmentJournalContent(appointment, labResults)) {
     await ClinicalNote.findOneAndUpdate({ appointmentId: appointment._id }, { $set: {
       petId: appointment.petId,
       entryDate: combineClinicDateTime(appointment.date, '10:00'),
       source: 'appointment',
     }, $unset: { content: '' } }, { upsert: true, runValidators: true, session });
   } else {
-    await ClinicalNote.deleteOne({ appointmentId: appointment._id }).session(session);
+    await ClinicalNote.deleteOne({ appointmentId: appointment._id }).session(session ?? null);
   }
 }

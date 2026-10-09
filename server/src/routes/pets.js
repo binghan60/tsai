@@ -203,7 +203,7 @@ petsRouter.get('/:id/attendance', async (req, res, next) => {
         .sort({ date: -1, time: -1, _id: -1 })
         .skip(pagination.skip)
         .limit(pagination.limit)
-        .select('date time status checkedInAt latenessMinutes petId petName reason depositStatus depositWaiveReason depositDecidedAt')
+        .select('date time status checkedInAt latenessMinutes petId petName reason depositStatus depositWaiveReason depositDecidedAt cancelledAt cancelReason')
         .lean(),
       Appointment.countDocuments(filter),
       Appointment.aggregate(attendanceCountPipeline(petScope)),
