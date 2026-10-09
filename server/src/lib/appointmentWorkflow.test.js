@@ -195,3 +195,27 @@ test('本次簡易紀錄的格式標記：存檔時標準化、日誌段落保�
   assert.equal(edited.visitNote.length, 10000 + '[red][/red]'.length);
   assert.throws(() => applyJournalFields(appointment(), { visitNote: '字'.repeat(10001) }), /最多 10000 字/);
 });
+
+test('the desk can tick 上傳影像 after handoff, and it shows up in the journal', () => {
+  const p = appointment();
+  applyWorkflowAction(p, 'handoff', {});
+  applyWorkflowAction(p, 'clinical', { imageUpload: true });
+  assert.equal(p.imageUpload, true);
+  assert.deepEqual(appointmentJournalSections(p).find(section => section.key === 'imageUpload'), { key: 'imageUpload', label: '上傳影像', text: '是' });
+  assert.match(appointmentJournalContent(p), /上傳影像：是/);
+
+  // 待辦完成後：已完成＋完成時間（診所時區）。
+  p.imageUploadDoneAt = new Date('2026-10-09T06:32:00.000Z');
+  assert.equal(appointmentJournalSections(p).find(section => section.key === 'imageUpload').text, '已完成　10/9 14:32');
+  p.imageUploadDoneAt = null;
+
+  applyWorkflowAction(p, 'clinical', { imageUpload: false });
+
+  // 取消勾選不消失，改成「否」；從來沒勾過的才不列。
+  assert.equal(appointmentJournalSections(p).find(section => section.key === 'imageUpload').text, '否');
+  assert.equal(appointmentJournalSections(appointment()).some(section => section.key === 'imageUpload'), false);
+
+  assert.throws(() => applyWorkflowAction(p, 'clinical', { imageUpload: 'yes' }), /格式不正確/);
+  applyWorkflowAction(p, 'complete', {});
+  assert.throws(() => applyWorkflowAction(p, 'clinical', { imageUpload: true }), /已完成/);
+});

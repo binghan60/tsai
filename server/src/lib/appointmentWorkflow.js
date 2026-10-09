@@ -10,7 +10,9 @@ export function workflowError(message, status = 422) {
 
 // 診療台的文字欄位。系統不計價、不保存金額；早期的「給櫃台的交辦」已經移除。
 const CLINICAL_TEXT_FIELDS = ['visitNote', 'internalNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
-const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC', 'labValues'];
+const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC', 'labValues', 'imageUpload'];
+// 交給櫃台之後櫃台自己還能改的欄位（櫃台處理視窗上有）；其餘要醫師先取回。
+const DESK_EDITABLE_FIELDS = ['visitNote', 'internalNote', 'imageUpload'];
 const LAB_VALUE_MAX = 40;
 
 // 檢驗數值偏高／偏低的箭頭，判斷方式跟健檢報告的自動判讀一致（參考範圍外＝異常）。
@@ -77,6 +79,12 @@ export function mergeLabValues(current, incoming, labItems) {
     }));
 }
 
+function imageUploadText(appointment) {
+  if (appointment.imageUpload === false) return '否';
+  if (appointment.imageUpload !== true) return '';
+  return appointment.imageUploadDoneAt ? `已完成　${labTimeLabel(appointment.imageUploadDoneAt)}` : '是';
+}
+
 // 可以上色、加粗的欄位（格式標記見 shared/richText.js）。存之前一律標準化，
 // 前端編輯器送出的字串跟這裡整理後的一致，才不會一存檔就被判成跟本機不同。
 const RICH_TEXT_FIELDS = new Set(['visitNote']);
@@ -110,6 +118,9 @@ export function appointmentJournalSections(appointment, labResults = []) {
       results: (labResults ?? []).map((result) => ({ _id: result._id, instrument: result.instrument, runAt: result.runAt, assays: result.assays ?? [], overrides: result.overrides ?? [], notes: result.notes ?? [] })),
     },
     { key: 'visitNote', label: '本次簡易紀錄', text: text(appointment.visitNote) },
+    // 櫃台處理視窗的「上傳影像」：勾了是「是」，勾過又取消是「否」（使用者要求留著、不要消失）；從來沒勾過（null）不列。
+    // 那筆待辦完成後改成「已完成」加完成時間（診所時區）。
+    { key: 'imageUpload', label: '上傳影像', text: imageUploadText(appointment) },
     { key: 'specialCareNote', label: '請轉告飼主', text: text(appointment.specialCareNote) },
     { key: 'followUpRecommendation', label: '回診建議', text: text(appointment.followUpRecommendation) },
   ].filter(section => section.text);
@@ -126,6 +137,7 @@ export function appointmentJournalContent(appointment, labResults = []) {
     labelled('labValues'),
     labelled('idexx'),
     richTextToPlain(byKey.get('visitNote')?.text || ''),
+    labelled('imageUpload'),
     labelled('specialCareNote'),
     labelled('followUpRecommendation'),
   ].filter(Boolean).join('\n\n');
@@ -191,7 +203,7 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
   if (action === 'clinical') {
     if (state.completed) throw workflowError('櫃台已完成這筆就診，不能再修改內容', 409);
     const requestedFields = CLINICAL_FIELDS.filter((field) => body[field] !== undefined);
-    const onlyJournalFields = requestedFields.length > 0 && requestedFields.every((field) => ['visitNote', 'internalNote'].includes(field));
+    const onlyJournalFields = requestedFields.length > 0 && requestedFields.every((field) => DESK_EDITABLE_FIELDS.includes(field));
     if (state.handedOff && !onlyJournalFields) throw workflowError('這筆就診已交給櫃台，請先取回再修改內容', 409);
     for (const field of CLINICAL_TEXT_FIELDS) {
       if (body[field] !== undefined) appointment[field] = cleanText(field, body[field]);
@@ -203,6 +215,10 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
       appointment[field] = value;
     }
     if (body.labValues !== undefined) appointment.labValues = mergeLabValues(appointment.labValues, body.labValues, labItems);
+    if (body.imageUpload !== undefined) {
+      if (typeof body.imageUpload !== 'boolean') throw workflowError('上傳影像的格式不正確');
+      appointment.imageUpload = body.imageUpload;
+    }
   } else if (action === 'start') {
     if (!state.handedOff) appointment.visitStartedAt ||= now;
   } else if (action === 'handoff') {

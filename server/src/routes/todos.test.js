@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { app } from '../app.js';
 import Pet from '../models/Pet.js';
 import Todo from '../models/Todo.js';
+import Appointment from '../models/Appointment.js';
 import { isValidDateInput, sortOpenTodos } from '../lib/todos.js';
 
 const todoId = '64b000000000000000000010';
@@ -20,6 +21,10 @@ function mockList(open = [], done = []) {
 function mockPets(pets) {
   Pet.find = () => ({ select: () => ({ populate: () => ({ lean: async () => pets }) }) });
 }
+
+// 完成／改回未完成會反查「上傳影像」帶出這筆待辦的掛號；記下寫回了什麼，預設查不到掛號。
+const imageUploadWrites = [];
+Appointment.findOneAndUpdate = async (filter, update) => { imageUploadWrites.push(update.$set.imageUploadDoneAt); return null; };
 
 // 模擬 Mongoose document：save 只記錄被呼叫，欄位直接寫在物件上。
 function mockTodoDoc(fields) {
@@ -171,6 +176,7 @@ describe('todos routes', () => {
   it('完成是冪等的：已完成的不會被覆寫完成時間', async () => {
     const doc = mockTodoDoc({ status: 'open', doneAt: null, doneBy: null });
     mockList();
+    imageUploadWrites.length = 0;
     assert.equal((await post(`/${todoId}/complete`, { doneBy: 'front_desk' })).status, 200);
     assert.equal(doc.status, 'done');
     assert.equal(doc.doneBy, 'front_desk');
@@ -181,6 +187,8 @@ describe('todos routes', () => {
     assert.equal(doc.doneBy, 'front_desk');
     assert.equal(doc.doneAt, firstDoneAt);
     assert.equal(doc.saved, 1);
+    // 完成時間寫回「上傳影像」的掛號，只在真的完成的那一次。
+    assert.deepEqual(imageUploadWrites, [firstDoneAt]);
   });
 
   it('完成要帶合法身分；重開會清掉完成資訊，已是未完成則不動', async () => {
@@ -189,7 +197,9 @@ describe('todos routes', () => {
 
     const done = mockTodoDoc({ status: 'done', doneAt: new Date(), doneBy: 'vet' });
     mockList();
+    imageUploadWrites.length = 0;
     assert.equal((await post(`/${todoId}/reopen`, {})).status, 200);
+    assert.deepEqual(imageUploadWrites, [null]);
     assert.equal(done.status, 'open');
     assert.equal(done.doneAt, null);
     assert.equal(done.doneBy, null);

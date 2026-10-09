@@ -6,6 +6,7 @@ import PatientLink from './PatientLink.vue';
 import { CalendarCheck, Check, Pencil, Undo2, X } from '@lucide/vue';
 import { http } from '../api/http';
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
+import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { describeVisitChanges } from '../lib/appointmentNotifications';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { DEFAULT_ESTIMATED_DURATION_MINUTES, appointmentSlotErrors } from '../lib/appointmentTime';
@@ -25,6 +26,7 @@ import SurgeryBadge from './SurgeryBadge.vue';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
+import { Checkbox } from './ui/checkbox';
 import { Alert, AlertDescription } from './ui/alert';
 import RichText from './RichText.vue';
 import RichTextEditor from './RichTextEditor.vue';
@@ -43,6 +45,7 @@ const props = defineProps({
 });
 const emit = defineEmits(['updated', 'close']);
 const notifyChat = useAppointmentNotifier();
+const { identity } = useStaffIdentity();
 
 const busy = ref(false);
 const error = ref('');
@@ -172,6 +175,17 @@ async function saveNote() {
     editingNote.value = false;
   } catch (err) {
     error.value = err.response?.data?.message || err.message || '儲存失敗，請重試';
+  } finally { busy.value = false; }
+}
+// 「上傳影像」一勾就存：後端同一次把它寫進病歷日誌，並新增（取消勾選則收掉）一筆院內待辦。
+async function toggleImageUpload(checked) {
+  if (busy.value || state.value.completed) return;
+  busy.value = true;
+  error.value = '';
+  try {
+    await run('clinical', { imageUpload: checked === true, staff: identity.value }, { silentToast: true });
+  } catch (err) {
+    error.value = apiErrorMessage(err, '儲存失敗，請重試');
   } finally { busy.value = false; }
 }
 function close() { if (!busy.value) emit('close'); }
@@ -393,6 +407,11 @@ async function reopen() {
                 <p v-else class="my-2">（空白）</p>
                 <Button variant="secondary" size="sm" :disabled="busy" @click="resetNote">採用最新內容</Button>
               </Alert>
+              <!-- 勾了會出現在病歷日誌，並新增一筆院內待辦；一勾就存，不必按儲存。 -->
+              <label for="desk-image-upload" class="flex min-h-10 w-fit cursor-pointer items-center gap-2 px-4 text-sm font-medium">
+                <Checkbox id="desk-image-upload" :model-value="Boolean(appointment.imageUpload)" :disabled="busy || state.completed" @update:model-value="toggleImageUpload" />
+                上傳影像
+              </label>
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <p class="text-sm text-muted-foreground" role="status">{{ state.completed ? '已結案，退回處理中才能編輯' : editingNote ? '按「儲存」才會保存；取消或關閉會放棄修改' : noteSaved ? '已儲存' : '跟診療台、病歷日誌是同一份紀錄' }}</p>
                 <div v-if="editingNote" class="flex gap-2">

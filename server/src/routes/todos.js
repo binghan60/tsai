@@ -4,6 +4,7 @@ import Todo from '../models/Todo.js';
 import { MAX_MENTIONS, STAFF_SENDERS } from '../lib/pinnedPets.js';
 import { mentionSnapshots, parseMentionIds } from '../lib/petMentions.js';
 import { isValidDateInput, listTodos, publishTodos } from '../lib/todos.js';
+import { recordImageUploadTodoDone } from '../lib/imageUploadTodo.js';
 import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 
 const router = Router();
@@ -106,6 +107,7 @@ router.post('/:id/complete', async (req, res, next) => {
       todo.doneAt = new Date();
       todo.doneBy = doneBy;
       await todo.save();
+      await recordImageUploadTodoDone(todo._id, todo.doneAt);
     }
     res.json({ items: await publishTodos() });
   } catch (err) {
@@ -123,6 +125,7 @@ router.post('/:id/reopen', async (req, res, next) => {
       todo.doneAt = null;
       todo.doneBy = null;
       await todo.save();
+      await recordImageUploadTodoDone(todo._id, null);
     }
     res.json({ items: await publishTodos() });
   } catch (err) {

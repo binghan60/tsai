@@ -102,6 +102,14 @@ const appointmentSchema = new mongoose.Schema(
     // 本次簡易紀錄的唯一來源；病歷日誌透過 appointmentId 讀取。飼主看不到，也不進健檢報告。
     visitNote: { type: String, default: '', trim: true },
     internalNote: { type: String, default: '', trim: true, maxlength: 2000 },
+    // 櫃台處理視窗「本次簡易紀錄」區的勾選框：這次看診有影像要上傳。勾了會出現在病歷日誌，
+    // 並新增一筆院內待辦（lib/imageUploadTodo.js），那筆待辦的 id 記在 imageUploadTodoId——
+    // 取消勾選時才知道要收掉哪一筆。三種值：null＝從來沒勾過（日誌不列）、true＝是、false＝勾過又取消（日誌列「否」）。
+    imageUpload: { type: Boolean, default: null },
+    imageUploadTodoId: { type: mongoose.Schema.Types.ObjectId, ref: 'Todo', default: null },
+    // 那筆待辦被完成的時間（routes/todos.js 完成／改回未完成時寫回來），日誌上顯示「已完成」與時間。
+    // 存在掛號上而不是讀取時去查待辦：待辦之後被刪掉，日誌上的完成紀錄還在。
+    imageUploadDoneAt: { type: Date, default: null },
     // 面向飼主的照護提醒（例如「傷口勿舔舐」），由醫師填、櫃台當面轉告飼主。
     // 在櫃台處理視窗用警示樣式獨立呈現——這是最容易漏講的一件事。
     specialCareNote: { type: String, default: '', trim: true, maxlength: 500 },
@@ -139,6 +147,8 @@ appointmentSchema.index({ intakeVerificationExpiresAt: 1 });
 appointmentSchema.index({ petId: 1, date: 1 });
 // 出席紀錄的「飼主名下全部」：這位飼主所有貓的遲到與未到（lib/attendance.js）；只看一隻貓時用上面那個。
 appointmentSchema.index({ ownerId: 1, date: 1 });
+// 「上傳影像」帶出來的待辦完成時，反查是哪一筆掛號（lib/imageUploadTodo.js）。絕大多數掛號沒有這個欄位。
+appointmentSchema.index({ imageUploadTodoId: 1 }, { partialFilterExpression: { imageUploadTodoId: { $type: 'objectId' } } });
 // 號碼牌可由櫃台自行決定，允許同日重複與再次使用；history 僅保留異動紀錄。
 
 export default mongoose.model('Appointment', appointmentSchema);

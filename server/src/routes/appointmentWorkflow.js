@@ -12,6 +12,9 @@ import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { queueIdexxCensus } from '../lib/idexxRequests.js';
 import { applyWorkflowAction, assertWorkflowVersion, workflowError } from '../lib/appointmentWorkflow.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
+import { syncImageUploadTodo } from '../lib/imageUploadTodo.js';
+import { publishTodos } from '../lib/todos.js';
+import { STAFF_SENDERS } from '../lib/pinnedPets.js';
 import { templateLabItems } from '../lib/recordVisitLink.js';
 import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 
@@ -45,11 +48,13 @@ router.post('/:action', async (req, res, next) => {
     let followUp;
     let followUpPreviousDate;
     let record;
+    let todosChanged;
     const action = req.params.action;
     await withTransaction(async (session) => {
       followUp = null;
       followUpPreviousDate = null;
       record = null;
+      todosChanged = false;
       appointment = await Appointment.findById(req.params.id).session(session);
       if (!appointment) throw workflowError('找不到掛號', 404);
       assertWorkflowVersion(appointment, req.body.version);
@@ -59,7 +64,13 @@ router.post('/:action', async (req, res, next) => {
         const template = appointment.templateId ? await FormTemplate.findById(appointment.templateId).session(session) : null;
         labItems = templateLabItems(template);
       }
+      const imageUploadBefore = Boolean(appointment.imageUpload);
       applyWorkflowAction(appointment, action, req.body, new Date(), { labItems });
+      // 「上傳影像」勾起來或取消：同一個 transaction 裡新增／收掉那筆院內待辦。staff＝操作的那台裝置的身分。
+      if (Boolean(appointment.imageUpload) !== imageUploadBefore) {
+        const createdBy = STAFF_SENDERS.includes(req.body.staff) ? req.body.staff : 'front_desk';
+        todosChanged = await syncImageUploadTodo(appointment, createdBy, { session });
+      }
 
       // 直接完成看診沒填任何東西時，來院原因也算內容。
       if (action === 'clinical' || action === 'handoff') await syncAppointmentJournal(appointment, { session });
@@ -123,6 +134,7 @@ router.post('/:action', async (req, res, next) => {
     // 櫃台完成處理＝離開診所：從 IDEXX 主機的在院清單收掉（伺服器有開才會排隊）。
     if (action === 'complete') await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
+    if (todosChanged) await publishTodos();
     if (followUp) emitAppointmentUpdate(followUp, followUpPreviousDate);
     res.json({ ...appointment.toObject(), ...(record ? { record } : {}) });
     // 這次才選了表單（建立報告草稿）：先前驗好、填不進來的檢驗結果現在補上。
