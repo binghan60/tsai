@@ -18,6 +18,8 @@ import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsChe
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
 import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitMedicationUpdate } from '../lib/realtime.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
+import { restoreImageUploadTodo, withdrawImageUploadTodo } from '../lib/imageUploadTodo.js';
+import { publishTodos } from '../lib/todos.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import { cancelVisitMedicationOrder } from '../lib/visitMedicationOrder.js';
 import { queueIdexxCensus } from '../lib/idexxRequests.js';
@@ -144,7 +146,10 @@ async function saveLeavingQueue(appointment, wasQueued, session = null) {
   appointment.labRequestedAt = null;
   // 診療台開的藥單也一併取消：這次看診沒有成立，櫃台不該照著包藥（已領藥的不動）。
   const cancelledOrder = await cancelVisitMedicationOrder(appointment, LEAVE_REASONS[appointment.status] ?? '', { session });
+  // 還沒做的「上傳影像」待辦也收掉（已完成的留著）。
+  const todosChanged = await withdrawImageUploadTodo(appointment, { session });
   await appointment.save(session ? { session } : undefined);
+  if (todosChanged) await publishTodos();
   // 看診沒有成立就不留在病歷：日誌只是連結，內容還在掛號上，重新報到後會回來（lib/appointmentJournal.js）。
   await syncAppointmentJournal(appointment, { session });
   if (appointment.petId) emitClinicalNoteUpdate({ petId: appointment.petId, appointmentId: appointment._id });
@@ -583,10 +588,13 @@ router.post('/:id/check-in', async (req, res, next) => {
     if (isLate && latenessMinutes < 1) return res.status(422).json({ message: '尚未超過預約時間，請使用一般報到' });
     const originalNumberHistory = Array.from(appointment.checkinNumberHistory ?? []);
     const originalRecordId = appointment.recordId;
+    const originalImageTodoId = appointment.imageUploadTodoId;
+    let todosRestored = false;
     await withQueueRetry(() => withTransaction(async (session) => {
       // transaction 因併發牌號衝突重試時，不能把失敗那次尚未發出的候選號留進 history。
       appointment.checkinNumberHistory = [...originalNumberHistory];
       appointment.recordId = originalRecordId;
+      appointment.imageUploadTodoId = originalImageTodoId;
       if (needsNewPatient) {
         const species = String(req.body.species || '').trim();
         const intake = req.body?.intakeSubmissionId
@@ -652,10 +660,13 @@ router.post('/:id/check-in', async (req, res, next) => {
       appointment.latenessMinutes = latenessMinutes;
       appointment.checkinNumber = hasSuppliedNumber ? requestedCheckinNumber : nextAvailableCheckinNumber(issuedAppointments);
       rememberCheckinNumber(appointment, appointment.checkinNumber);
+      // 取消報到時收掉的「上傳影像」待辦，勾選還在就補回來。
+      todosRestored = await restoreImageUploadTodo(appointment, { session });
       await appointment.save({ session });
       // 取消報到時拿掉的日誌，重新報到後接回來（先前寫的內容還在掛號上）。
       await syncAppointmentJournal(appointment, { session });
     }));
+    if (todosRestored) await publishTodos();
 
     // 報到讓這筆掛號進入候診佇列，醫師頁要立刻看到，不必等 60 秒輪詢。
     emitAppointmentUpdate(appointment);
