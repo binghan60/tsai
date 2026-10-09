@@ -9,7 +9,7 @@ import { richTextToPlain } from '../../../../shared/richText.js';
 
 // 健檢報告的多行文字欄位（診斷、結論、照護建議…）：可以加粗、上四種顏色，報告與 PDF 上照樣呈現。
 // 值是 shared/richText.js 的格式標記字串，報告端用 RichText 顯示。文字模板鈕收在工具列右邊；
-// 模板本身是純文字，「存成模板」也只存純文字。
+// 模板也帶格式，插入與「存成模板」都保留粗體與顏色。
 const props = defineProps({
   id: { type: String, required: true },
   modelValue: { type: [String, Number, Array, null], default: '' },
@@ -28,7 +28,8 @@ function openTemplates() {
     itemKey: props.itemKey,
     label: props.label,
     currentText: richTextToPlain(props.modelValue),
-    onInsert: (template, mode) => editor.value?.insertText(template.content, mode),
+    currentRichText: String(props.modelValue ?? ''),
+    onInsert: (template, mode) => editor.value?.insertRichText(template.content, mode),
   });
 }
 </script>

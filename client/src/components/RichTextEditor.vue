@@ -179,18 +179,16 @@ function clearFormatting() {
   }));
 }
 
-// 把純文字插進游標處（文字模板用）；mode 為 'replace' 或目前是空的就整段取代。
-function insertText(text, mode = 'cursor') {
+// 把帶格式標記的文字插進游標處（文字模板用，粗體與顏色照樣帶進來）；mode 為 'replace' 或目前是空的就整段取代。
+function insertRichText(markup, mode = 'cursor') {
   if (!editor.value) return;
-  const plain = String(text ?? '');
+  const doc = richTextToDoc(flatten(String(markup ?? '')));
   if (mode === 'replace' || editor.value.isEmpty) {
-    editor.value.chain().focus().setContent(richTextToDoc(flatten(plain.replace(/[\\*[]/g, (char) => `\\${char}`)))).run();
+    editor.value.chain().focus().setContent(doc).run();
     return;
   }
-  const lines = flatten(plain).split('\n');
-  const content = lines.length === 1
-    ? (lines[0] ? [{ type: 'text', text: lines[0] }] : [])
-    : lines.map((line) => (line ? { type: 'paragraph', content: [{ type: 'text', text: line }] } : { type: 'paragraph' }));
+  // 只有一行就插在行內，多行才一行一段。
+  const content = doc.content.length === 1 ? (doc.content[0].content ?? []) : doc.content;
   if (content.length) editor.value.chain().focus().insertContent(content).run();
 }
 
@@ -210,7 +208,7 @@ function replaceBeforeCursor(startOffset, text) {
 
 defineExpose({
   focus: () => editor.value?.commands.focus(),
-  insertText,
+  insertRichText,
   textBeforeCursor,
   replaceBeforeCursor,
 });

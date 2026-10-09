@@ -26,7 +26,9 @@ describe('cross-document workflow schemas', () => {
 
   it('supports named long-form text templates with field scopes', () => {
     assert.equal(TextTemplate.schema.path('name').options.maxlength, 80);
-    assert.equal(TextTemplate.schema.path('content').options.maxlength, 2000);
+    // 內容帶格式標記，上限算純文字：標記不佔額度。
+    assert.equal(new TextTemplate({ name: 'a', content: `**${'字'.repeat(2000)}**`, availableForAllFields: true }).validateSync(), undefined);
+    assert.ok(new TextTemplate({ name: 'a', content: '字'.repeat(2001), availableForAllFields: true }).validateSync()?.errors.content);
     assert.equal(TextTemplate.schema.path('category'), undefined);
     assert.equal(TextTemplate.schema.path('availableForAllFields').instance, 'Boolean');
     assert.equal(TextTemplate.schema.path('applicableItemKeys').instance, 'Array');

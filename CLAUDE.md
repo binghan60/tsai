@@ -28,7 +28,7 @@
 - **存之前一律 `normalizeRichText`**（前端編輯器送出的字串跟伺服器整理後的一致，自動存檔才不會一存就被判成「跟本機不同」）；**字數上限與「不可空白」都看純文字**（schema 用 `lib/richTextSchema.js` 的 `richTextMaxLength`，不是 `maxlength`），只剩標記算空白。
 - **顯示一律走 `RichText.vue` 拆成片段、文字插值輸出，永遠不用 `v-html`**，所以不需要 sanitizer。編輯用 `RichTextEditor.vue`（Tiptap）。
 - **健檢報告的多行文字**：填寫用 `formfields/RichTextField.vue`（`RichTextEditor`＋工具列右邊的文字模板鈕，`ScalarField` 與 `FormProse` 共用；預填模板編輯頁也是同一個控制項），值存在報告欄位與 `sections` 快照裡、就是標記字串，後端不必另外處理（這些欄位沒有字數上限，也沒有被拿去當純文字用的地方）；報告頁與 PDF 由 `report/ReportField.vue` 用 `RichText palette="report"` 顯示——紙面固定淺色，顏色走 `report-danger`／`report-warning`／`report-success`／`report-info`，不跟後台主題。單行文字、理學檢查與檢驗的備註、圖片說明不支援格式，照原文印。
-- 會被拿去當純文字用的地方一律 `richTextToPlain`：病歷日誌的 `content`、聊天快照、`aria-label`、`#寵物` 標記比對、文字模板（「存成模板」只存純文字）。病歷日誌的 `sections[].text` 則保留標記，日誌卡片才畫得出格式。
+- 會被拿去當純文字用的地方一律 `richTextToPlain`：病歷日誌的 `content`、聊天快照、`aria-label`、`#寵物` 標記比對、清單上的一行摘要。**文字模板的 `content` 也是標記字串**（使用者要求模板也能加粗、上色）：插進可上色的欄位（健檢報告的多行文字、本次簡易紀錄）時格式一起帶入（`RichTextEditor` 的 `insertRichText`），插進純文字欄位（單行文字、理學檢查與檢驗的備註、請轉告飼主）時 `richTextToPlain` 只取文字；「存成模板」從可上色的欄位連格式一起存，從純文字欄位存時先 `escapeRichText`。病歷日誌的 `sections[].text` 則保留標記，日誌卡片才畫得出格式。
 
 ### owners 飼主
 `name`、`phone`、`landline`、`email`、`address`、`notes`（皆選填，僅 `name`／`phone` 必填）。一位飼主可養多隻寵物。**`phone` 是手機**：09 開頭 10 碼，存之前整理成純數字（`shared/phone.js` 的 `checkMobilePhone`，前後端、公開初診頁、掛號的 `ownerPhone` 共用），市話放 `landline`；修改時沒動到的舊值照收——舊系統匯入的「電話」常是市話，不能因為改了姓名就存不進去。
@@ -71,7 +71,7 @@
 `presets[]` 是**預填模板**（`{ key, name, order, values }`，`values` 以項目 key 為鍵，複選存陣列）：同一份表單的另外幾組預填值，例如「預防針」「牙齒」，在獨立的設定頁 `/settings/presets` 逐欄設定（`PresetTemplatesPage` 清單 → `PresetEditPage` ＋ `PresetValuesEditor.vue`，**刻意不放在表單設計頁裡**——新增一組模板不該先走進整份表單的結構編輯；表單設計頁的存檔也因此不送 `presets`，兩邊不會互相覆蓋），填報告時從頁首「套用預填模板」手動一鍵帶入，同一個選單底部有捷徑：這份表單還沒有模板就直接開新增頁，有的話回清單並選中那份表單（`?form=`）。只收文字／選項類欄位（`shared/formDefaults.js` 的 `presetEligible`）：比 `defaultValue` 那批再少掉**日期**（回診日期、健檢日期是每次看診才決定的；除了 `date` 型別，**名稱含「日期」的欄位也排除**——自訂的「回診日期」常被建成文字欄位）與**獸醫師**（`role: 'vet'`），理學檢查、檢驗、量測、牙齒圖、圖片也不收。**它疊在項目 `defaultValue` 之上、兩者不互斥**：新建報告先照舊帶預設值，套模板只覆寫模板有設定的欄位；切換模板時，上一組帶入而醫師沒改過的欄位退回預設值，改過的留著（`client/src/lib/formPresets.js` 的 `planPresetApplication`），套用後的 toast 可「復原」。預填模板不影響表單結構，存檔**不動 `version`**、不進報告快照、報告也不記套過哪一組；掛號自動建草稿只套預設值不套模板。後端每次存檔都用 `sanitizePresets` 對著新的 sections 清洗，刪掉的項目與不合法的選項值一起消失；複製表單時連同預填模板一起複製。
 
 ### textTemplates 文字模板
-`name`、`content`、`availableForAllFields`、`applicableItemKeys`、`enabled`、`usageCount`。填表時可插入文字欄位的長篇內容，取代了早期的 quickPhrases 常用語（該 collection 與其路由已移除）。
+`name`、`content`（格式標記字串，可加粗與四色，上限 2,000 字算純文字；見上面「格式標記」）、`availableForAllFields`、`applicableItemKeys`、`enabled`、`usageCount`。填表時可插入文字欄位的長篇內容，取代了早期的 quickPhrases 常用語（該 collection 與其路由已移除）。
 
 ### clinicalNotes 病歷日誌
 `petId`、`entryDate`、`content`、`source`（`manual` / `legacy_import` / `appointment` / `medication`）。醫師看診或拿藥時隨手記的自由文字記事，不用填表、不用結案，跟 `medicalRecords`（結案才鎖定的正式健檢報告）是兩條平行的軌道——日誌給日常記事用，健檢報告給需要 PDF／分享的正式場合用。`source: 'legacy_import'` 的記事來自舊系統資料遷移（見 `server/scripts/legacy-migration/`），內容是舊系統逐年累加的病歷全文，整段當一筆記事匯入，不逐筆拆分（舊資料格式不一致，拆分風險高於價值）。

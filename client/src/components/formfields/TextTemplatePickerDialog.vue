@@ -9,6 +9,8 @@ import ConfirmDialog from '../ConfirmDialog.vue';
 import { useTextTemplates } from '../../composables/useTextTemplates';
 import { useToast } from '../../composables/useToast';
 import SegmentedControl from '../SegmentedControl.vue';
+import RichText from '../RichText.vue';
+import { escapeRichText, richTextToPlain } from '../../../../shared/richText.js';
 
 const { picker, closePicker, createTemplate, templates, templatesFor, markUsed, deleteTemplate } = useTextTemplates();
 const toast = useToast();
@@ -34,8 +36,10 @@ const candidates = computed(() => {
   if (!picker.value) return [];
   const keyword = query.value.trim().toLowerCase();
   return templatesFor(picker.value.itemKey, { all: scope.value === 'all' })
-    .filter((template) => !keyword || `${template.name} ${template.content}`.toLowerCase().includes(keyword));
+    .filter((template) => !keyword || `${template.name} ${richTextToPlain(template.content)}`.toLowerCase().includes(keyword));
 });
+// 「存成模板」存的內容：可上色的欄位連格式一起存；純文字欄位的字面 * [ 要跳脫，才不會被當成標記。
+const currentMarkup = computed(() => picker.value?.currentRichText ?? escapeRichText(picker.value?.currentText));
 
 watch(picker, (value) => {
   if (!value) return;
@@ -102,7 +106,7 @@ async function saveTemplate() {
   try {
     const template = await createTemplate({
       name: nextTemplateName(),
-      content: picker.value.currentText,
+      content: currentMarkup.value,
       availableForAllFields: form.value.scope === 'all',
       applicableItemKeys: form.value.scope === 'all' ? [] : [picker.value.itemKey],
       enabled: true,
@@ -130,7 +134,7 @@ async function saveTemplate() {
 
       <form v-if="creating" class="min-h-0 flex-1 space-y-5 border-y border-border p-6" @submit.prevent="saveTemplate">
         <p v-if="createError" class="rounded-lg border border-destructive/30 bg-destructive-surface px-3 py-2 text-sm text-destructive">{{ createError }}</p>
-        <div class="rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground"><p class="font-medium text-foreground">{{ picker?.label || '目前欄位' }}</p><p class="mt-2 line-clamp-4 whitespace-pre-wrap">{{ picker?.currentText }}</p></div>
+        <div class="rounded-xl border border-border bg-muted/20 p-4 text-sm text-muted-foreground"><p class="font-medium text-foreground">{{ picker?.label || '目前欄位' }}</p><RichText tag="p" class="mt-2 line-clamp-4" :text="currentMarkup" /></div>
         <div class="space-y-1.5">
           <p class="text-sm font-medium text-foreground">適用範圍</p>
           <SegmentedControl v-model="form.scope" :options="CREATE_SCOPE_OPTIONS" aria-label="模板適用範圍" full-width />
@@ -169,7 +173,7 @@ async function saveTemplate() {
                   />
                   <span class="min-w-0 truncate font-medium text-foreground">{{ template.name }}</span>
                 </span>
-                <span v-if="expandedId !== template._id" class="mt-0.5 line-clamp-1 block pl-5 text-xs text-muted-foreground">{{ template.content }}</span>
+                <span v-if="expandedId !== template._id" class="mt-0.5 line-clamp-1 block pl-5 text-xs text-muted-foreground">{{ richTextToPlain(template.content) }}</span>
               </button>
               <div class="flex shrink-0 items-center gap-1">
                 <Button
@@ -193,7 +197,7 @@ async function saveTemplate() {
               </div>
             </div>
             <div v-if="expandedId === template._id" class="space-y-3 border-t border-border/70 px-3 pb-3 pt-3">
-              <p class="whitespace-pre-wrap rounded-lg bg-field p-3 text-sm leading-7 text-foreground">{{ template.content }}</p>
+              <RichText tag="p" class="rounded-lg bg-field p-3 text-sm leading-7 text-foreground" :text="template.content" />
               <div class="flex flex-wrap justify-end gap-2">
                 <Button v-if="picker?.currentText" type="button" variant="destructive" size="sm" @click="overwriteTemplate(template)">覆蓋內容</Button>
                 <Button type="button" size="sm" @click="quickInsert(template)">{{ picker?.currentText ? '插入游標處' : '插入' }}</Button>

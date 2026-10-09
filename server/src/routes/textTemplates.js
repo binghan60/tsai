@@ -2,6 +2,7 @@ import { Router } from 'express';
 import TextTemplate from '../models/TextTemplate.js';
 import FormTemplate from '../models/FormTemplate.js';
 import { escapeRegExp } from '../lib/regex.js';
+import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 
 const router = Router();
 const TEXT_TEMPLATE_ITEM_TYPES = new Set(['text', 'textarea', 'finding', 'lab']);
@@ -13,7 +14,8 @@ function cleanItemKeys(value) {
 
 function readPayload(body) {
   const name = String(body?.name ?? '').trim();
-  const content = String(body?.content ?? '').trim();
+  // 內容可以加粗、上色（格式標記見 shared/richText.js）；存之前標準化，字數與空白都看純文字。
+  const content = normalizeRichText(String(body?.content ?? '')).trim();
   const availableForAllFields = body?.availableForAllFields === true;
   const applicableItemKeys = availableForAllFields ? [] : cleanItemKeys(body?.applicableItemKeys);
   return {
@@ -28,8 +30,8 @@ function readPayload(body) {
 function validationMessage(payload) {
   if (!payload.name) return '請填寫模板名稱';
   if (payload.name.length > 80) return '模板名稱請控制在 80 字以內';
-  if (!payload.content) return '請填寫模板內容';
-  if (payload.content.length > 2000) return '模板內容請控制在 2,000 字以內';
+  if (!richTextToPlain(payload.content).trim()) return '請填寫模板內容';
+  if (richTextLength(payload.content) > 2000) return '模板內容請控制在 2,000 字以內';
   if (!payload.availableForAllFields && !payload.applicableItemKeys.length) return '請選擇至少一個適用欄位，或設為所有文字欄位皆可使用';
   return '';
 }

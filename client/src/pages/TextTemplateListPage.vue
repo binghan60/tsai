@@ -1,8 +1,8 @@
 <script setup>
 import { useClientPagination } from '../composables/useClientPagination';
 import { apiErrorMessage } from '../lib/apiError';
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
-import { CornerDownLeft, FileText, Plus, Search, SearchX } from '@lucide/vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { FileText, Plus, Search, SearchX } from '@lucide/vue';
 import FilterBar from '../components/FilterBar.vue';
 import ListFooter from '../components/ListFooter.vue';
 import RowActions from '../components/RowActions.vue';
@@ -25,7 +25,8 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
-import { Textarea } from '../components/ui/textarea';
+import RichTextEditor from '../components/RichTextEditor.vue';
+import { richTextLength, richTextToPlain } from '../../../shared/richText.js';
 
 const route = useRoute();
 const router = useRouter();
@@ -98,7 +99,7 @@ const visibleTemplates = computed(() => {
   return templates.value.filter((template) => {
     if (status.value === 'enabled' && template.enabled === false) return false;
     if (status.value === 'disabled' && template.enabled !== false) return false;
-    return !keyword || `${template.name} ${template.content}`.toLowerCase().includes(keyword);
+    return !keyword || `${template.name} ${richTextToPlain(template.content)}`.toLowerCase().includes(keyword);
   });
 });
 
@@ -139,20 +140,6 @@ function duplicate(template) {
   editingId.value = '';
   resetForm({ ...template, name: `${template.name} 複本`, __v: 0 });
   editorOpen.value = true;
-}
-
-// 純文字框按 Enter 本來就能換行，但這裡另外放一顆明確的按鈕——
-// 診所同仁不一定確定 Enter 有沒有作用，尤其是觸控裝置。
-function insertNewline() {
-  const textarea = document.getElementById('text-template-content');
-  const start = Number.isInteger(textarea?.selectionStart) ? textarea.selectionStart : form.content.length;
-  const end = Number.isInteger(textarea?.selectionEnd) ? textarea.selectionEnd : start;
-  form.content = `${form.content.slice(0, start)}\n${form.content.slice(end)}`;
-  nextTick(() => {
-    if (!textarea) return;
-    textarea.focus();
-    textarea.setSelectionRange(start + 1, start + 1);
-  });
 }
 
 function toggleFieldGroup(keys, checked) {
@@ -264,9 +251,9 @@ onMounted(load);
         <div class="hidden xl:block">
           <div class="desktop-data-header"><span>模板</span><span>適用欄位</span><span>啟用</span><span></span></div>
           <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row hover:bg-hover">
-            <button type="button" class="desktop-data-cell min-w-0 text-left" v-tip="template.content" @click="openEdit(template)">
+            <button type="button" class="desktop-data-cell min-w-0 text-left" v-tip="richTextToPlain(template.content)" @click="openEdit(template)">
               <span class="block truncate font-semibold text-primary">{{ template.name }}</span>
-              <span class="block truncate text-xs text-subtle-foreground">{{ template.content }}</span>
+              <span class="block truncate text-xs text-subtle-foreground">{{ richTextToPlain(template.content) }}</span>
             </button>
             <span class="desktop-data-cell truncate text-sm text-muted-foreground" v-tip.overflow="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
             <span class="desktop-data-cell"><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></span>
@@ -282,7 +269,7 @@ onMounted(load);
             <div class="flex items-start gap-3">
               <button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)">
                 <span class="block truncate font-semibold text-primary">{{ template.name }}</span>
-                <span class="mt-0.5 line-clamp-2 text-sm whitespace-pre-wrap text-muted-foreground">{{ template.content }}</span>
+                <span class="mt-0.5 line-clamp-2 text-sm whitespace-pre-wrap text-muted-foreground">{{ richTextToPlain(template.content) }}</span>
               </button>
               <Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" />
               <RowActions :actions="[{ key: 'duplicate', label: '複製一份' }, { key: 'delete', label: '刪除模板', danger: true }]" :label="`${template.name}的更多操作`" @select="(key) => (key === 'duplicate' ? duplicate(template) : (deleteTarget = template))" />
@@ -297,21 +284,16 @@ onMounted(load);
     </DataCard>
 
     <ModalDialog v-if="editorOpen" size="lg" @close="editorOpen = false">
-      <div class="space-y-1 p-6 pb-4 pr-16"><DialogTitle>{{ editingId ? '編輯文字模板' : '新增文字模板' }}</DialogTitle><DialogDescription>模板會原樣保留換行；插入時再決定放在游標、接在後面或覆蓋內容。</DialogDescription></div>
+      <div class="space-y-1 p-6 pb-4 pr-16"><DialogTitle>{{ editingId ? '編輯文字模板' : '新增文字模板' }}</DialogTitle><DialogDescription>模板會原樣保留換行、粗體與顏色；插入時再決定放在游標處或覆蓋內容。</DialogDescription></div>
       <form @submit.prevent="save">
         <div class="space-y-5 px-6 pb-6">
           <Alert v-if="editorError" variant="destructive"><AlertDescription>{{ editorError }}</AlertDescription></Alert>
           <div class="space-y-1.5"><Label for="text-template-name">模板名稱</Label><Input id="text-template-name" v-model="form.name" maxlength="80" placeholder="例如：老貓年度健檢建議" /></div>
           <div class="space-y-1.5">
-            <div class="flex items-center justify-between gap-2">
-              <Label for="text-template-content">模板內容</Label>
-              <Button type="button" variant="secondary" size="xs" @click="insertNewline">
-                <CornerDownLeft class="h-3.5 w-3.5" stroke-width="1.75" />
-                插入換行
-              </Button>
-            </div>
-            <Textarea id="text-template-content" v-model="form.content" class="min-h-64 whitespace-pre-wrap" maxlength="2000" placeholder="輸入要插入報告的完整文字內容…" />
-            <p class="text-right text-xs tabular-nums text-muted-foreground">{{ form.content.length }} / 2,000</p>
+            <Label for="text-template-content">模板內容</Label>
+            <!-- 粗體與顏色只在可上色的欄位（健檢報告的多行文字、本次簡易紀錄）帶進去；插進單行文字或備註時只取文字。 -->
+            <RichTextEditor id="text-template-content" v-model="form.content" aria-label="模板內容" :min-rows="9" maxlength="2000" placeholder="輸入要插入報告的完整文字內容…" />
+            <p class="text-right text-xs tabular-nums text-muted-foreground">{{ richTextLength(form.content) }} / 2,000</p>
           </div>
           <div class="rounded-xl border border-border p-4"><div class="flex items-start justify-between gap-4"><div><p class="text-sm font-medium text-foreground">所有文字欄位皆可使用</p><p class="mt-1 text-xs text-muted-foreground">關閉後可指定一個或多個適用欄位。</p></div><Switch :model-value="form.availableForAllFields" aria-label="所有文字欄位皆可使用" @update:model-value="form.availableForAllFields = $event" /></div>
             <div v-if="!form.availableForAllFields" class="mt-4 border-t border-border pt-3">

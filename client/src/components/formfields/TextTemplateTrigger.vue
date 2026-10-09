@@ -2,6 +2,7 @@
 import { FileText } from '@lucide/vue';
 import { useRecordForm } from './context';
 import { useTextTemplates } from '../../composables/useTextTemplates';
+import { richTextToPlain } from '../../../../shared/richText.js';
 
 const props = defineProps({
   itemKey: { type: String, required: true },
@@ -22,12 +23,14 @@ function captureSelection() {
     ? { start: input.selectionStart, end: input.selectionEnd }
     : null;
 }
+// 這些是純文字欄位（單行文字、理學檢查與檢驗的備註）：模板的粗體與顏色不帶進來，只取文字。
 function applyTemplate(template, mode) {
   const base = String(props.modelValue ?? '');
-  if (mode === 'replace' || !base) return emit('update:modelValue', template.content);
+  const text = richTextToPlain(template.content);
+  if (mode === 'replace' || !base) return emit('update:modelValue', text);
   const start = Math.min(selection?.start ?? base.length, base.length);
   const end = Math.min(selection?.end ?? start, base.length);
-  emit('update:modelValue', `${base.slice(0, start)}${template.content}${base.slice(end)}`);
+  emit('update:modelValue', `${base.slice(0, start)}${text}${base.slice(end)}`);
 }
 function open() {
   openPicker({ itemKey: props.itemKey, label: props.label, currentText: String(props.modelValue ?? ''), onInsert: applyTemplate });

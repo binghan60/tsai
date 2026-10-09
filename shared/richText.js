@@ -84,6 +84,9 @@ export function parseRichText(value) {
 
 const escapeText = (text) => text.replace(/[\\*[]/g, (char) => `\\${char}`);
 
+// 純文字 → 標記字串（字面上的 \ * [ 跳脫掉）：純文字欄位的內容要存成帶格式的文字模板時用。
+export const escapeRichText = (value) => escapeText(String(value ?? ''));
+
 // 標準形式：顏色在外、粗體在內，每行各自開關，相鄰同樣式的片段合併。
 function serializeLine(segments) {
   let out = '';

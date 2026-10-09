@@ -131,7 +131,8 @@ const TEMPLATE_FIELDS = {
 function textareaId(field) {
   return `visit-${field}-${props.appointment._id}`
 }
-// 本次簡易紀錄是可上色的編輯器，插入直接交給它；文字模板本身是純文字。
+// 本次簡易紀錄是可上色的編輯器，插入直接交給它（模板的粗體與顏色一起帶入）；
+// 請轉告飼主是純文字欄位，只取模板的文字。
 const visitNoteEditor = ref(null)
 function openTemplates(field) {
   const meta = TEMPLATE_FIELDS[field]
@@ -140,7 +141,8 @@ function openTemplates(field) {
       itemKey: meta.key,
       label: meta.label,
       currentText: richTextToPlain(draft.visitNote),
-      onInsert: (template, mode) => visitNoteEditor.value?.insertText(template.content, mode),
+      currentRichText: String(draft.visitNote ?? ''),
+      onInsert: (template, mode) => visitNoteEditor.value?.insertRichText(template.content, mode),
     })
     return
   }
@@ -152,13 +154,14 @@ function openTemplates(field) {
     currentText: String(draft[field] ?? ''),
     onInsert(template, mode) {
       const base = String(draft[field] ?? '')
+      const text = richTextToPlain(template.content)
       if (mode === 'replace' || !base) {
-        draft[field] = template.content
+        draft[field] = text
         return
       }
       const start = Math.min(selection?.start ?? base.length, base.length)
       const end = Math.min(selection?.end ?? start, base.length)
-      draft[field] = `${base.slice(0, start)}${template.content}${base.slice(end)}`
+      draft[field] = `${base.slice(0, start)}${text}${base.slice(end)}`
     },
   })
 }
