@@ -25,6 +25,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
+import RichText from '../components/RichText.vue';
 import RichTextEditor from '../components/RichTextEditor.vue';
 import { richTextLength, richTextToPlain } from '../../../shared/richText.js';
 
@@ -253,7 +254,7 @@ onMounted(load);
           <div v-for="template in pagedTemplates" :key="template._id" class="desktop-data-row hover:bg-hover">
             <button type="button" class="desktop-data-cell min-w-0 text-left" v-tip="richTextToPlain(template.content)" @click="openEdit(template)">
               <span class="block truncate font-semibold text-primary">{{ template.name }}</span>
-              <span class="block truncate text-xs text-subtle-foreground">{{ richTextToPlain(template.content) }}</span>
+              <RichText tag="span" one-line class="block text-xs text-subtle-foreground" :text="template.content" />
             </button>
             <span class="desktop-data-cell truncate text-sm text-muted-foreground" v-tip.overflow="applicabilityLabel(template)">{{ applicabilityLabel(template) }}</span>
             <span class="desktop-data-cell"><Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" /></span>
@@ -269,7 +270,7 @@ onMounted(load);
             <div class="flex items-start gap-3">
               <button type="button" class="min-w-0 flex-1 text-left" @click="openEdit(template)">
                 <span class="block truncate font-semibold text-primary">{{ template.name }}</span>
-                <span class="mt-0.5 line-clamp-2 text-sm whitespace-pre-wrap text-muted-foreground">{{ richTextToPlain(template.content) }}</span>
+                <RichText tag="span" class="mt-0.5 line-clamp-2 text-sm text-muted-foreground" :text="template.content" />
               </button>
               <Switch :model-value="template.enabled !== false" :aria-label="`啟用${template.name}`" @update:model-value="toggleEnabled(template, $event)" />
               <RowActions :actions="[{ key: 'duplicate', label: '複製一份' }, { key: 'delete', label: '刪除模板', danger: true }]" :label="`${template.name}的更多操作`" @select="(key) => (key === 'duplicate' ? duplicate(template) : (deleteTarget = template))" />

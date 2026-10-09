@@ -173,7 +173,7 @@ async function saveTemplate() {
                   />
                   <span class="min-w-0 truncate font-medium text-foreground">{{ template.name }}</span>
                 </span>
-                <span v-if="expandedId !== template._id" class="mt-0.5 line-clamp-1 block pl-5 text-xs text-muted-foreground">{{ richTextToPlain(template.content) }}</span>
+                <RichText v-if="expandedId !== template._id" tag="span" one-line class="mt-0.5 block pl-5 text-xs text-muted-foreground" :text="template.content" />
               </button>
               <div class="flex shrink-0 items-center gap-1">
                 <Button

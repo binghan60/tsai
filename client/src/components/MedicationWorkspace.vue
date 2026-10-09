@@ -416,7 +416,7 @@ onBeforeUnmount(() => {
             </span>
           </span>
           <!-- 貓咪名、飼主名連到貓咪詳情；點藥單內容才是開這張藥單。 -->
-          <button type="button" class="desktop-data-cell truncate text-left text-sm hover:text-primary" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" v-tip.overflow="richTextToPlain(item.prescription)" @click="openOrder(item)">{{ richTextToPlain(item.prescription).replace(/\n+/g, '；') }}</button>
+          <button type="button" class="desktop-data-cell min-w-0 text-left text-sm hover:text-primary" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" @click="openOrder(item)"><RichText tag="span" one-line joiner="；" class="block" :text="item.prescription" v-tip.overflow="richTextToPlain(item.prescription)" /></button>
           <span class="desktop-data-cell">
             <span class="num block text-sm">{{ formatDateTime(item.createdAt, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) }}</span>
             <span class="block text-xs text-subtle-foreground">{{ relativeTimeLabel(item.createdAt) }}</span>
@@ -444,7 +444,7 @@ onBeforeUnmount(() => {
             </div>
             <RowActions v-if="rowActions(item).length" :actions="rowActions(item)" :label="`${item.petName} 藥單的更多操作`" @select="(key) => runRowAction(key, item)" />
           </div>
-          <p class="line-clamp-2 text-sm">{{ richTextToPlain(item.prescription) }}</p>
+          <RichText tag="p" class="line-clamp-2 text-sm" :text="item.prescription" />
           <div class="flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
             <Badge v-if="item.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>

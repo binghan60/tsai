@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import EmptyState from '../components/EmptyState.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
 import PageHeader from '../components/PageHeader.vue'
+import RichText from '../components/RichText.vue'
 
 // 總覽（設計稿 R2-Dashboard）：由粗到細——寄送失敗橫幅（有才出現）→ 今天的門診四格 → 健檢報告四格
 // → 近 8 週健檢量＋院內待辦。每一格都點得進對應的清單，數字口徑跟那份清單一致（後端 routes/dashboard.js）。
@@ -217,7 +218,7 @@ async function completeTodo(item) {
                 @update:model-value="completeTodo(item)"
               />
               <Star v-if="item.starred" class="size-4 shrink-0 fill-warning text-warning" stroke-width="1.75" role="img" aria-label="已置頂" />
-              <button type="button" class="min-w-0 flex-1 truncate text-left hover:text-primary" v-tip.overflow="richTextToPlain(item.content)" @click="panel.open('todos')">{{ richTextToPlain(item.content) }}</button>
+              <button type="button" class="min-w-0 flex-1 text-left hover:text-primary" @click="panel.open('todos')"><RichText tag="span" one-line class="block" :text="item.content" v-tip.overflow="richTextToPlain(item.content)" /></button>
               <span v-if="dueStatus(item.dueDate, todayInput)" class="inline-flex h-6 shrink-0 items-center rounded-full px-2 text-2xs leading-none font-semibold" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, todayInput).tone]">{{ dueStatus(item.dueDate, todayInput).label }}</span>
             </li>
           </ul>

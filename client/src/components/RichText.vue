@@ -11,6 +11,9 @@ const props = defineProps({
   tag: { type: String, default: 'div' },
   // report＝報告紙面的固定淺色配色。
   palette: { type: String, default: 'app' },
+  // 清單上的一行摘要：不換行、放不下就截斷（⋯），原本的換行用 joiner 接起來。顏色與粗體照樣畫。
+  oneLine: { type: Boolean, default: false },
+  joiner: { type: String, default: ' ' },
 });
 
 const lines = computed(() => parseRichText(props.text));
@@ -18,5 +21,5 @@ const segmentClass = (segment) => [segment.bold ? BOLD_CLASS : '', tintClass(seg
 </script>
 
 <template>
-  <component :is="tag" class="whitespace-pre-wrap wrap-break-word"><template v-for="(line, lineIndex) in lines" :key="lineIndex"><template v-if="lineIndex">{{ '\n' }}</template><span v-for="(segment, index) in line" :key="index" :class="segmentClass(segment)"><slot :text="segment.text">{{ segment.text }}</slot></span></template></component>
+  <component :is="tag" :class="oneLine ? 'truncate' : 'whitespace-pre-wrap wrap-break-word'"><template v-for="(line, lineIndex) in lines" :key="lineIndex"><template v-if="lineIndex">{{ oneLine ? joiner : '\n' }}</template><span v-for="(segment, index) in line" :key="index" :class="segmentClass(segment)"><slot :text="segment.text">{{ segment.text }}</slot></span></template></component>
 </template>
