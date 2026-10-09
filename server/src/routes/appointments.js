@@ -16,7 +16,8 @@ import { depositFieldsForBooking, settleCarriedDeposit } from '../lib/deposit.js
 import { DEPOSIT_CANCEL_OUTCOMES, checkDepositEdit } from '../../../shared/deposit.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsCheckinNumber } from '../lib/appointmentStatus.js';
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
-import { emitAppointmentUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitMedicationUpdate } from '../lib/realtime.js';
+import { cancelVisitMedicationOrder } from '../lib/visitMedicationOrder.js';
 import { queueIdexxCensus } from '../lib/idexxRequests.js';
 import { applyPendingLabResults } from '../lib/labResultApply.js';
 import LabResult from '../models/LabResult.js';
@@ -129,6 +130,9 @@ function rememberCheckinNumber(appointment, number) {
   appointment.checkinNumberHistory = history;
 }
 
+// 藥單異動軌跡上的取消原因：看診是怎麼離開流程的（離開後的狀態）。
+const LEAVE_REASONS = { cancelled: '掛號已取消', no_show: '掛號標記未到', scheduled: '已取消報到' };
+
 // 實體號碼牌只屬於持牌者；離開候診時歸還這張牌，不改動任何其他人的牌號。
 // 歸還前先寫入 history，確保同一天不會再次配發這個已叫過的號碼。
 async function saveLeavingQueue(appointment, wasQueued, session = null) {
@@ -136,7 +140,10 @@ async function saveLeavingQueue(appointment, wasQueued, session = null) {
   if (wasQueued || appointment.checkinNumber != null) appointment.checkinNumber = null;
   // 離開候診＝這次的送 IDEXX也作廢，再次報到時不會自己又送一次。
   appointment.labRequestedAt = null;
+  // 診療台開的藥單也一併取消：這次看診沒有成立，櫃台不該照著包藥（已領藥的不動）。
+  const cancelledOrder = await cancelVisitMedicationOrder(appointment, LEAVE_REASONS[appointment.status] ?? '', { session });
   await appointment.save(session ? { session } : undefined);
+  if (cancelledOrder) emitMedicationUpdate(cancelledOrder);
 }
 
 // 兩個人同時報到可能各自算出同一張今日未發牌號，被唯一索引擋下。那不是使用者做錯什麼，

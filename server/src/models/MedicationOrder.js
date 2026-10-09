@@ -6,6 +6,9 @@ const schema = new mongoose.Schema({
   petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', required: true },
   ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Owner', required: true },
   appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
+  // 醫師在診療台開的（看診送交櫃台時建立，lib/visitMedicationOrder.js）：內容已經在那次看診的病歷日誌上，
+  // 不另外產生領藥日誌；之後在藥單這邊修改或取消會寫回那次看診。
+  fromVisit: { type: Boolean, default: false },
   petName: { type: String, required: true },
   ownerName: { type: String, default: '' },
   ownerPhone: { type: String, default: '' },

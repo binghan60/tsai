@@ -5,7 +5,8 @@ import Pet from '../models/Pet.js';
 import Appointment from '../models/Appointment.js';
 import { MEDICATION_ACTIVE, MEDICATION_STAGES } from '../../../shared/medicationWorkflow.js';
 import { applyMedicationAction, medicationFields, recordMedicationEvent } from '../lib/medicationWorkflow.js';
-import { emitMedicationUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitMedicationUpdate } from '../lib/realtime.js';
+import { writeBackVisitPrescription } from '../lib/visitMedicationOrder.js';
 import { announceMedicationJournal, syncMedicationJournal } from '../lib/medicationJournal.js';
 import { withTransaction } from '../lib/transaction.js';
 import { escapeRegExp } from '../lib/regex.js';
@@ -14,10 +15,15 @@ import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 const router = Router();
 
 // 藥單與它的病歷日誌要嘛一起成功、要嘛一起回滾：藥單存了、日誌卻沒建起來，病歷上就查不到這次領藥。
-const saveWithJournal = (order) => withTransaction(async (session) => {
-  await order.save({ session });
-  await syncMedicationJournal(order, { session });
-});
+// 診療台開的藥單沒有自己的日誌，內容在那次看診上：修改或取消時同一個 transaction 寫回看診。
+const saveWithJournal = async (order) => {
+  const appointment = await withTransaction(async (session) => {
+    await order.save({ session });
+    await syncMedicationJournal(order, { session });
+    return writeBackVisitPrescription(order, { session });
+  });
+  if (appointment) emitAppointmentUpdate(appointment);
+};
 router.get('/', async (req, res, next) => {
   try {
     const status = req.query.status || 'active';

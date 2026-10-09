@@ -171,6 +171,7 @@ const clock = setInterval(() => { now.value = Date.now() }, 30000)
 const visitMinutes = computed(() => (props.appointment.visitStartedAt && !state.value.handedOff ? Math.max(0, Math.floor((now.value - new Date(props.appointment.visitStartedAt).getTime()) / 60000)) : null))
 const CONFLICT_LABELS = {
   visitNote: '本次簡易紀錄',
+  prescription: '藥單',
   internalNote: '內部備註',
   specialCareNote: '請轉告飼主',
   followUpRecommendation: '回診建議',
@@ -548,7 +549,7 @@ onBeforeUnmount(() => {
           <p>這筆看診資料與其他更新衝突：{{ conflicts.map(conflictLabel).join('、') }}。請選擇要保留的內容。</p>
           <div v-for="key in conflicts" :key="key" class="rounded-lg bg-card p-3 text-foreground">
             <p class="text-sm font-medium text-muted-foreground">{{ conflictLabel(key) }}（目前內容）</p>
-            <RichText v-if="key === 'visitNote' && conflictValue(key)" class="mt-1" :text="conflictValue(key)" />
+            <RichText v-if="['visitNote', 'prescription'].includes(key) && conflictValue(key)" class="mt-1" :text="conflictValue(key)" />
             <p v-else class="mt-1 whitespace-pre-wrap">{{ conflictValue(key) || '（空白）' }}</p>
           </div>
           <div class="flex flex-wrap gap-2">
@@ -558,7 +559,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
-      <!-- 左欄由上而下：量測 → 本次簡易紀錄 → 內部備註 → 交給櫃台；右欄是歷次病歷日誌。
+      <!-- 左欄由上而下：量測 → 本次簡易紀錄 → 藥單 → 內部備註 → 交給櫃台；右欄是歷次病歷日誌。
            兩欄按 65:35 分配，日誌欄保底 20rem，窄螢幕上報告卡才不會被擠爛。 -->
       <div class="grid @4xl/visit:grid-cols-[minmax(0,65fr)_minmax(20rem,35fr)]">
         <div class="flex flex-col gap-6 px-6 py-5">
@@ -602,6 +603,12 @@ onBeforeUnmount(() => {
                 <Button type="button" variant="secondary" size="icon-xs" aria-label="插入本次簡易紀錄的文字模板" v-tip="'文字模板'" :disabled="committing" @mousedown.prevent @click="openTemplates('visitNote')"><FileText stroke-width="1.75" /></Button>
               </template>
             </RichTextEditor>
+          </section>
+
+          <!-- 藥單：跟本次簡易紀錄一樣寫進這次看診的病歷日誌；送交櫃台時在藥單新增一筆（待包藥）。 -->
+          <section class="space-y-2" :aria-labelledby="`prescription-heading-${appointment._id}`">
+            <div class="flex items-center gap-2"><h3 :id="`prescription-heading-${appointment._id}`" class="text-base font-semibold">藥單</h3><DestTag :to="['journal', 'medication']" /></div>
+            <RichTextEditor :id="textareaId('prescription')" v-model="draft.prescription" aria-label="藥單" :min-rows="4" :disabled="!editable || committing" />
           </section>
 
           <section class="space-y-2">

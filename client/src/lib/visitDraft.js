@@ -1,7 +1,7 @@
-// 醫師工作區一次編輯的欄位：量測、檢驗數值、三個文字欄位與內部備註，送同一支 clinical 端點。
+// 醫師工作區一次編輯的欄位：量測、檢驗數值、文字欄位（含藥單）與內部備註，送同一支 clinical 端點。
 // 檢驗數值在草稿裡是 { 項目 key: 字串 }，比對與衝突都逐項算——醫師在打 WBC 時，
 // 別台存了 ALT 不該被當成衝突。衝突的檢驗項目用 `lab:<key>` 表示。
-export const CLINICAL_FIELDS = ['weightKg', 'temperatureC', 'visitNote', 'internalNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
+export const CLINICAL_FIELDS = ['weightKg', 'temperatureC', 'visitNote', 'prescription', 'internalNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
 export const labConflictKey = (key) => `lab:${key}`;
 
 function labMap(appointment) {

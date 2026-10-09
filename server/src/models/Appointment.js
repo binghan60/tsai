@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { richTextMaxLength } from '../lib/richTextSchema.js';
 
 const appointmentSchema = new mongoose.Schema(
   {
@@ -101,6 +102,10 @@ const appointmentSchema = new mongoose.Schema(
     followUpAppointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
     // 本次簡易紀錄的唯一來源；病歷日誌透過 appointmentId 讀取。飼主看不到，也不進健檢報告。
     visitNote: { type: String, default: '', trim: true },
+    // 醫師在診療台寫的藥單（可上色、加粗，字數算純文字）。會進病歷日誌的「藥單」一列；
+    // 送交櫃台時依它建立／更新一張藥單（lib/visitMedicationOrder.js），那張藥單的 id 記在 medicationOrderId。
+    prescription: { type: String, default: '', trim: true, validate: richTextMaxLength(10000) },
+    medicationOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicationOrder', default: null },
     internalNote: { type: String, default: '', trim: true, maxlength: 2000 },
     // 櫃台處理視窗「本次簡易紀錄」區的勾選框：這次看診有影像要上傳。勾了會出現在病歷日誌，
     // 並新增一筆院內待辦（lib/imageUploadTodo.js），那筆待辦的 id 記在 imageUploadTodoId——
@@ -149,6 +154,8 @@ appointmentSchema.index({ petId: 1, date: 1 });
 appointmentSchema.index({ ownerId: 1, date: 1 });
 // 「上傳影像」帶出來的待辦完成時，反查是哪一筆掛號（lib/imageUploadTodo.js）。絕大多數掛號沒有這個欄位。
 appointmentSchema.index({ imageUploadTodoId: 1 }, { partialFilterExpression: { imageUploadTodoId: { $type: 'objectId' } } });
+// 診療台開出的藥單之後在藥單那邊被修改或取消時，反查是哪一筆掛號（lib/visitMedicationOrder.js）。
+appointmentSchema.index({ medicationOrderId: 1 }, { partialFilterExpression: { medicationOrderId: { $type: 'objectId' } } });
 // 號碼牌可由櫃台自行決定，允許同日重複與再次使用；history 僅保留異動紀錄。
 
 export default mongoose.model('Appointment', appointmentSchema);

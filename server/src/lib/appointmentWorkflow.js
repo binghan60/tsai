@@ -9,7 +9,7 @@ export function workflowError(message, status = 422) {
 }
 
 // 診療台的文字欄位。系統不計價、不保存金額；早期的「給櫃台的交辦」已經移除。
-const CLINICAL_TEXT_FIELDS = ['visitNote', 'internalNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
+const CLINICAL_TEXT_FIELDS = ['visitNote', 'prescription', 'internalNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
 const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC', 'labValues', 'imageUpload'];
 // 交給櫃台之後櫃台自己還能改的欄位（櫃台處理視窗上有）；其餘要醫師先取回。
 const DESK_EDITABLE_FIELDS = ['visitNote', 'internalNote', 'imageUpload'];
@@ -87,7 +87,7 @@ function imageUploadText(appointment) {
 
 // 可以上色、加粗的欄位（格式標記見 shared/richText.js）。存之前一律標準化，
 // 前端編輯器送出的字串跟這裡整理後的一致，才不會一存檔就被判成跟本機不同。
-const RICH_TEXT_FIELDS = new Set(['visitNote']);
+const RICH_TEXT_FIELDS = new Set(['visitNote', 'prescription']);
 const cleanText = (field, value) => {
   const text = String(value ?? '');
   return (RICH_TEXT_FIELDS.has(field) ? normalizeRichText(text) : text).trim();
@@ -118,6 +118,8 @@ export function appointmentJournalSections(appointment, labResults = []) {
       results: (labResults ?? []).map((result) => ({ _id: result._id, instrument: result.instrument, runAt: result.runAt, assays: result.assays ?? [], overrides: result.overrides ?? [], notes: result.notes ?? [] })),
     },
     { key: 'visitNote', label: '本次簡易紀錄', text: text(appointment.visitNote) },
+    // 醫師在診療台寫的藥單（保留格式標記）；送交櫃台時另外在藥單建立一筆（lib/visitMedicationOrder.js）。
+    { key: 'prescription', label: '藥單', text: richTextToPlain(appointment.prescription).trim() ? text(appointment.prescription) : '' },
     // 櫃台處理視窗的「上傳影像」：勾了是「是」，勾過又取消是「否」（使用者要求留著、不要消失）；從來沒勾過（null）不列。
     // 那筆待辦完成後改成「已完成」加完成時間（診所時區）。
     { key: 'imageUpload', label: '上傳影像', text: imageUploadText(appointment) },
@@ -137,6 +139,7 @@ export function appointmentJournalContent(appointment, labResults = []) {
     labelled('labValues'),
     labelled('idexx'),
     richTextToPlain(byKey.get('visitNote')?.text || ''),
+    byKey.has('prescription') ? `藥單：${richTextToPlain(byKey.get('prescription').text)}` : '',
     labelled('imageUpload'),
     labelled('specialCareNote'),
     labelled('followUpRecommendation'),

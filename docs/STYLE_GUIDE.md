@@ -138,7 +138,7 @@ DataCard title="貓咪清單" :count
 | 規格欄 | `SpecGrid`＋`SpecCell label` | 身分資訊一律用它 |
 | 貓咪一行 | `PetLine`（品種＋♂♀）、`PetSex` | |
 | 提醒標籤 | `ReminderTags`（過敏／病史／注意，`lib/petDisplay.js` 的 `petReminders`） | 完整內容放 title，列高不變 |
-| 去處標記 | `DestTag to="journal|report|internal"` | 診療台欄位旁：寫完會去哪裡 |
+| 去處標記 | `DestTag to="journal|report|internal|medication"` | 診療台欄位旁：寫完會去哪裡 |
 | 號碼牌 | `CheckinNumber size` | 候診灰、看診中主色實心、待櫃台淡面、已完成淡灰；掛號台時間軸卡片最左邊那顆圓，報到後就是它（取代貓圖示——使用者要求號碼放在貓圖示的位置；卡片右邊進度那一欄因此不再印「N 號」，「進度」兩個字的小標題也應使用者要求拿掉，只留狀態與時間） |
 | 手術／遲到 | `SurgeryBadge`、`LatenessBadge` | 紫與紅，並排時順序「手術 → 遲到」 |
 | 保證金 | `DepositBadge`（`:status` 掛號上的「已收保證金 200」／`:required` 貓咪上的「約診需收保證金 200」）、`DepositField`（約診時的二選一） | `warning` 琥珀：是要櫃台處理的錢，不是警示；跟紅色的遲到徽章並排時靠色相分開。「這次不收」的掛號不畫徽章。`DepositField` 只在這隻貓達到門檻時出現，掛號視窗與約回診共用 |

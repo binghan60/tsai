@@ -1,13 +1,14 @@
 <script setup>
 import { computed } from 'vue';
-import { FileText, History, Lock } from '@lucide/vue';
+import { FileText, History, Lock, Pill } from '@lucide/vue';
 
 // 看診欄位旁的小標記：這一欄寫完會去哪裡。
-// journal＝寫進病歷日誌、report＝帶入健檢報告、internal＝只給院內看。
+// journal＝寫進病歷日誌、report＝帶入健檢報告、internal＝只給院內看、medication＝送交櫃台時新增一張藥單。
 const DESTINATIONS = {
   journal: { icon: History, label: '日誌', title: '寫進病歷日誌' },
   report: { icon: FileText, label: '報告', title: '帶入健檢報告' },
   internal: { icon: Lock, label: '院內', title: '只給院內看' },
+  medication: { icon: Pill, label: '藥單', title: '送交櫃台時新增一張藥單' },
 };
 
 const props = defineProps({

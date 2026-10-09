@@ -219,3 +219,19 @@ test('the desk can tick 上傳影像 after handoff, and it shows up in the journ
   applyWorkflowAction(p, 'complete', {});
   assert.throws(() => applyWorkflowAction(p, 'clinical', { imageUpload: true }), /已完成/);
 });
+
+test('the doctor\'s 藥單 is saved with formatting and goes into the journal', () => {
+  const p = appointment();
+  applyWorkflowAction(p, 'clinical', { prescription: ' **Amoxicillin** 5 天 ' });
+  assert.equal(p.prescription, '**Amoxicillin** 5 天');
+  assert.deepEqual(appointmentJournalSections(p).find(section => section.key === 'prescription'), { key: 'prescription', label: '藥單', text: '**Amoxicillin** 5 天' });
+  assert.match(appointmentJournalContent(p), /藥單：Amoxicillin 5 天/);
+
+  // 只剩格式標記算空白，不列。
+  applyWorkflowAction(p, 'clinical', { prescription: '[red] [/red]' });
+  assert.equal(appointmentJournalSections(p).some(section => section.key === 'prescription'), false);
+
+  // 藥單是醫師的欄位：交給櫃台之後要先取回才能改。
+  applyWorkflowAction(p, 'handoff', {});
+  assert.throws(() => applyWorkflowAction(p, 'clinical', { prescription: '改' }), /請先取回/);
+});

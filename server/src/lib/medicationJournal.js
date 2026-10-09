@@ -14,7 +14,8 @@ import { emitClinicalNoteUpdate } from './realtime.js';
 export const hasBeenApproved = (order) => (order.history ?? []).some((event) => event.action === 'approve');
 
 export async function syncMedicationJournal(order, { session } = {}) {
-  if (order.status === 'cancelled' || !hasBeenApproved(order)) {
+  // 診療台開的藥單（fromVisit）內容已經在那次看診的日誌上，不另外產生一筆，否則同一張藥單在病歷上出現兩次。
+  if (order.status === 'cancelled' || order.fromVisit || !hasBeenApproved(order)) {
     // 該不存在的一律刪：取消是正常路徑；未審核時通常本來就沒有，刪除是無害的空操作。
     await ClinicalNote.deleteOne({ medicationOrderId: order._id }, { session });
     return;

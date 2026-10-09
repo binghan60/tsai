@@ -8,7 +8,8 @@ import { withTransaction } from '../lib/transaction.js';
 import { combineClinicDateTime } from '../lib/clinicTime.js';
 import { depositFieldsForBooking, settleCarriedDeposit } from '../lib/deposit.js';
 import { defaultRecordFields } from '../lib/formTemplate.js';
-import { emitAppointmentUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitMedicationUpdate } from '../lib/realtime.js';
+import { syncVisitMedicationOrder } from '../lib/visitMedicationOrder.js';
 import { queueIdexxCensus } from '../lib/idexxRequests.js';
 import { applyWorkflowAction, assertWorkflowVersion, workflowError } from '../lib/appointmentWorkflow.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
@@ -49,12 +50,14 @@ router.post('/:action', async (req, res, next) => {
     let followUpPreviousDate;
     let record;
     let todosChanged;
+    let medicationOrder;
     const action = req.params.action;
     await withTransaction(async (session) => {
       followUp = null;
       followUpPreviousDate = null;
       record = null;
       todosChanged = false;
+      medicationOrder = null;
       appointment = await Appointment.findById(req.params.id).session(session);
       if (!appointment) throw workflowError('找不到掛號', 404);
       assertWorkflowVersion(appointment, req.body.version);
@@ -71,6 +74,9 @@ router.post('/:action', async (req, res, next) => {
         const createdBy = STAFF_SENDERS.includes(req.body.staff) ? req.body.staff : 'front_desk';
         todosChanged = await syncImageUploadTodo(appointment, createdBy, { session });
       }
+
+      // 送交櫃台：醫師寫的藥單這一刻才在藥單建立（或更新）一筆，直接是待包藥。
+      if (action === 'handoff') medicationOrder = await syncVisitMedicationOrder(appointment, req.user?.username || '', { session });
 
       // 直接完成看診沒填任何東西時，來院原因也算內容。
       if (action === 'clinical' || action === 'handoff') await syncAppointmentJournal(appointment, { session });
@@ -135,6 +141,7 @@ router.post('/:action', async (req, res, next) => {
     if (action === 'complete') await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
     if (todosChanged) await publishTodos();
+    if (medicationOrder) emitMedicationUpdate(medicationOrder);
     if (followUp) emitAppointmentUpdate(followUp, followUpPreviousDate);
     res.json({ ...appointment.toObject(), ...(record ? { record } : {}) });
     // 這次才選了表單（建立報告草稿）：先前驗好、填不進來的檢驗結果現在補上。
