@@ -20,6 +20,7 @@ import { useWorkCountsStore } from '../stores/workCounts'
 import PatientNotes from '../components/PatientNotes.vue'
 import HandoffSheet from '../components/HandoffSheet.vue'
 import RowActions from '../components/RowActions.vue'
+import CheckinNumber from '../components/CheckinNumber.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
 import DepositBadge from '../components/DepositBadge.vue'
@@ -266,14 +267,13 @@ const TONE = {
   surgery: { card: 'border-surgery/30 bg-surgery-surface/70', dot: 'bg-surgery ring-4 ring-surgery/20', status: 'text-muted-foreground' },
   scheduled: { card: 'border-border bg-card hover:bg-hover', dot: 'bg-subtle-foreground/50', status: 'text-muted-foreground' },
 }
-// 卡片右側「進度」欄：一行狀態＋一行時間，跟飼主、電話兩欄上下對齊。
+// 卡片右側的進度欄（沒有小標題）：一行狀態＋一行時間，跟飼主、電話兩欄並排。號碼牌在卡片最左邊，這裡不重複。
 function progress(item, kind) {
-  const number = item.checkinNumber ? `${item.checkinNumber} 號` : ''
-  if (kind === 'handoff') return { label: '待櫃台處理', detail: `交出 ${minutesSince(item.handoffAt)} 分`, number }
-  if (kind === 'visiting') return { label: '看診中', detail: `${minutesSince(item.visitStartedAt)} 分`, number }
-  if (kind === 'waiting') return { label: '候診中', detail: item.checkedInAt ? `${clinicTimeInput(item.checkedInAt)} 報到` : '', number }
-  if (kind === 'late') return { label: '遲到未報到', detail: `已遲 ${overdueMinutes(item)} 分`, number: '' }
-  return { label: '未報到', detail: '', number: '' }
+  if (kind === 'handoff') return { label: '待櫃台處理', detail: `交出 ${minutesSince(item.handoffAt)} 分` }
+  if (kind === 'visiting') return { label: '看診中', detail: `${minutesSince(item.visitStartedAt)} 分` }
+  if (kind === 'waiting') return { label: '候診中', detail: item.checkedInAt ? `${clinicTimeInput(item.checkedInAt)} 報到` : '' }
+  if (kind === 'late') return { label: '遲到未報到', detail: `已遲 ${overdueMinutes(item)} 分` }
+  return { label: '未報到', detail: '' }
 }
 // 整張卡片可點：已交櫃台／已完成開處理視窗，待審初診表開初診面板，其餘開修改掛號。右側按鈕留給主要動作。
 function cardClick(item) {
@@ -645,7 +645,9 @@ onBeforeUnmount(() => {
                          前面的飼主、電話、進度就會一張卡片一個位置。按鈕欄的寬度以最寬的「報到…＋⋯」為準。 -->
                     <div class="grid items-center gap-x-5 gap-y-2 xl:grid-cols-[minmax(0,1fr)_8rem_10rem_9rem_8.5rem]">
                       <div class="flex min-w-0 items-start gap-3">
-                        <span class="flex size-10 shrink-0 items-center justify-center rounded-full" :class="item.ui.confirmed ? 'bg-accent text-accent-foreground' : 'bg-sunken text-subtle-foreground'"><Cat class="size-5" stroke-width="1.75" /></span>
+                        <!-- 報到後這個位置換成號碼牌（顏色依階段，跟診療台同一套）；還沒有號碼的才是貓圖示。 -->
+                        <CheckinNumber v-if="item.checkinNumber != null" :appointment="item" />
+                        <span v-else class="flex size-10 shrink-0 items-center justify-center rounded-full" :class="item.ui.confirmed ? 'bg-accent text-accent-foreground' : 'bg-sunken text-subtle-foreground'"><Cat class="size-5" stroke-width="1.75" /></span>
                         <div class="min-w-0 flex-1 space-y-1">
                           <div class="flex min-w-0 flex-wrap items-center gap-2">
                             <span class="truncate text-base font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
@@ -668,7 +670,7 @@ onBeforeUnmount(() => {
                         </div>
                       </div>
 
-                      <!-- 右側三欄：飼主、電話、進度，每張卡片上下對齊，掃一眼就能對上是誰、打給誰、到哪一步。 -->
+                      <!-- 右側三欄：飼主、電話、進度，每張卡片上下對齊，掃一眼就能對上是誰、打給誰、到哪一步。進度那一欄不放小標題（使用者要求拿掉「進度」兩個字）。 -->
                       <div class="min-w-0 xl:pl-2">
                         <span class="spec-label block">飼主</span>
                         <span class="block min-h-lh truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink></span>
@@ -682,7 +684,6 @@ onBeforeUnmount(() => {
                         
                       </div>
                       <div class="min-w-0">
-                        <span class="spec-label block">進度<template v-if="item.ui.progress.number">　<span class="num">{{ item.ui.progress.number }}</span></template></span>
                         <span class="block truncate font-semibold" :class="item.ui.tone.status">{{ item.ui.progress.label }}</span>
                         <span v-if="item.ui.progress.detail" class="num block truncate text-sm text-subtle-foreground">{{ item.ui.progress.detail }}</span>
                       </div>
