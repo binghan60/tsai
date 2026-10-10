@@ -2,24 +2,23 @@ import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 import { effectiveAssays, labFlag } from '../../../shared/labValues.js';
 
-export const WORKFLOW_ACTIONS = ['clinical', 'start', 'unstart', 'handoff', 'reclaim', 'complete', 'record', 'followup', 'request-reopen', 'approve-reopen', 'reopen'];
-
+// 看診流水線的規則（純邏輯，不碰資料庫）。動作有：
+//   clinical 存看診內容／start 開始看診／unstart 取消看診／handoff 送交櫃台／reclaim 取回／complete 櫃台完成／
+//   request-reopen 醫師申請修改／approve-reopen 櫃台核准／reopen 櫃台自己退回／followup、record 由路由處理（這裡只確認階段）。
 export function workflowError(message, status = 422) {
   return Object.assign(new Error(message), { status });
 }
 
-// 診療台的文字欄位。系統不計價、不保存金額；早期的「給櫃台的交辦」已經移除。
-const CLINICAL_TEXT_FIELDS = ['visitNote', 'prescription', 'internalNote', 'specialCareNote', 'followUpRecommendation', 'followUpReason'];
+// 診療台的文字欄位。系統不計價、不保存金額；收費與領藥由櫃台直接處理。
+const CLINICAL_TEXT_FIELDS = ['visitNote', 'prescription', 'internalNote', 'specialCareNote', 'followUpRecommendation'];
 const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC', 'labValues', 'imageUpload'];
 // 交給櫃台之後櫃台自己還能改的欄位（櫃台處理視窗上有）；其餘要醫師先取回。
 const DESK_EDITABLE_FIELDS = ['visitNote', 'internalNote', 'imageUpload'];
 const LAB_VALUE_MAX = 40;
 
-// 檢驗數值偏高／偏低的箭頭，判斷方式跟健檢報告的自動判讀一致（參考範圍外＝異常）。
-export { labFlag };
-
 // 病歷日誌裡的一行檢驗摘要：「WBC 22.4 ×10³/µL ↑　ALT 168 U/L ↑」。
-export function labSummary(labValues) {
+// 偏高／偏低的箭頭跟健檢報告的自動判讀一致（參考範圍外＝異常，shared/labValues.js 的 labFlag）。
+function labSummary(labValues) {
   return (labValues ?? [])
     .filter((lab) => String(lab.value ?? '').trim())
     .map((lab) => [lab.label, lab.value, lab.unit, labFlag(lab)].filter(Boolean).join(' '))
@@ -36,7 +35,7 @@ function labTimeLabel(value) {
 // 病歷日誌裡的 IDEXX 原始結果：連到這次看診的每一份（當天自動歸過來的、診療台「匯入檢驗結果」指定的）各一行，
 // 「Catalyst One（10/7 14:32）：CREA 1.8 mg/dL ↑　BUN 25 mg/dL」。儀器給的每一項都列，不管表單有沒有對應欄位——
 // 看診沒選表單、表單沒設代號時數值填不進 labValues，日誌上只能靠這一段看到檢驗結果。
-export function idexxJournalText(labResults) {
+function idexxJournalText(labResults) {
   return (labResults ?? [])
     .map((result) => {
       const assays = effectiveAssays(result)
@@ -182,25 +181,11 @@ export function assertWorkflowVersion(appointment, version) {
   }
 }
 
-// 舊版（批價／收款）的掛號第一次被新流程碰到時，把里程碑對應過來。
-// 不做資料庫層級的遷移：沒有人會再去操作已結案的舊掛號，這裡只保證它們一旦被開啟
-// 就落在正確的階段，而不是倒退回候診。
-export function adoptWorkflow(appointment) {
-  if (appointment.workflowVersion === 2) return;
-  const state = workflowState(appointment);
-  const seenAt = appointment.completedAt || appointment.updatedAt || new Date();
-  appointment.visitStartedAt ||= state.started ? (appointment.checkedInAt || seenAt) : null;
-  appointment.handoffAt ||= state.handedOff ? seenAt : null;
-  appointment.deskCompletedAt ||= state.completed ? (appointment.completedAt || seenAt) : null;
-  appointment.workflowVersion = 2;
-}
-
 // labItems：這次掛號範本裡的檢驗項目（route 讀範本後傳進來），用來驗證 labValues。
 export function applyWorkflowAction(appointment, action, body, now = new Date(), { labItems = [] } = {}) {
   if (!['arrived', 'pending_checkout', 'completed'].includes(appointment.status) || !appointment.petId) {
     throw workflowError('請先完成報到，才能處理看診與交辦');
   }
-  adoptWorkflow(appointment);
   const state = workflowState(appointment);
 
   if (action === 'clinical') {
@@ -253,14 +238,12 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
   } else if (action === 'approve-reopen') {
     if (!state.completed || !appointment.reopenRequest?.requestedAt) throw workflowError('目前沒有待核准的修改申請', 409);
     appointment.deskCompletedAt = null;
-    appointment.completedAt = null;
     appointment.reopenRequest.approvedAt = now;
   } else if (action === 'reopen') {
     // 櫃台自己退回：按錯「完成處理」或完成後才發現要改，不必等醫師申請。跟核准修改走到同一個狀態；
     // 剛好有待核准的申請就一併算核准，掛號台的警示才會消失。號碼牌已歸還，不再配回去。
     if (!state.completed) throw workflowError('這筆就診還沒完成處理', 409);
     appointment.deskCompletedAt = null;
-    appointment.completedAt = null;
     if (appointment.reopenRequest?.requestedAt && !appointment.reopenRequest.approvedAt) appointment.reopenRequest.approvedAt = now;
   } else if (!['followup', 'record'].includes(action)) {
     throw workflowError('不支援的診務操作');
@@ -269,7 +252,7 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
   const next = workflowState(appointment);
   appointment.status = next.completed ? 'completed' : next.handedOff ? 'pending_checkout' : 'arrived';
   if (appointment.status === 'completed') {
-    appointment.completedAt ||= now;
+    // 完成＝離開診所：歸還號碼牌（記進 history，當天不再配發同一張）。
     const history = Array.from(appointment.checkinNumberHistory || []);
     if (appointment.checkinNumber && !history.includes(appointment.checkinNumber)) history.push(appointment.checkinNumber);
     appointment.checkinNumberHistory = history;

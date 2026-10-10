@@ -8,9 +8,8 @@
 //
 // 從 RecordFormPage.vue 抽出來時刻意不碰 Vue 與 DOM：sections 與作答都由呼叫端傳進來，
 // 錨點只是照命名規則組字串。這樣測試不需要掛載元件。
+import { richTextToPlain } from '../../../shared/richText.js';
 
-// 「有預設值或屬於行政欄位」的角色，不能當作「這份報告有臨床內容」的訊號。
-// 與後端 PREFILLED_ROLES 對應。
 // 錨點要用實際渲染出來的 DOM id，不同型別的版式元件命名規則不同。
 export function anchorFor(item, fallbackId = '') {
   if (!item) return fallbackId;
@@ -30,7 +29,9 @@ export function createIsFilled({ getValue, findings = [], labFindings = [] }) {
     if (item.type === 'lab') {
       return labFindings.some((entry) => entry.key === item.key && (entry.status !== 'not_checked' || String(entry.value ?? '').trim()));
     }
-    return Boolean(String(getValue(item) ?? '').trim());
+    // 多行文字是格式標記字串，只剩標記（例如一段空白的粗體）也算沒填。
+    const value = item.type === 'textarea' ? richTextToPlain(getValue(item)) : getValue(item);
+    return Boolean(String(value ?? '').trim());
   };
 }
 

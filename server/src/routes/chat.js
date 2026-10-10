@@ -6,6 +6,8 @@ import { withTransaction } from '../lib/transaction.js';
 import { MAX_MENTIONS, STAFF_SENDERS, publishPinnedPets, upsertPinnedPets } from '../lib/pinnedPets.js';
 
 const router = Router();
+// 跟 models/ChatMessage.js 的 maxlength 一致；在這裡先擋，使用者才看得到講人話的訊息。
+const MAX_CONTENT_LENGTH = 1000;
 
 // 全站只有一個對話，沒有分頁需求——回傳最近 N 則、依時間正序排列，
 // 給聊天視窗開啟時一次載入歷史用。
@@ -26,6 +28,7 @@ router.post('/messages', async (req, res, next) => {
     if (!STAFF_SENDERS.includes(sender)) return res.status(422).json({ message: '身分參數不正確' });
     const content = String(req.body?.content ?? '').trim();
     if (!content) return res.status(422).json({ message: '訊息內容不可為空' });
+    if (content.length > MAX_CONTENT_LENGTH) return res.status(422).json({ message: `訊息最多 ${MAX_CONTENT_LENGTH} 字` });
 
     const auto = Boolean(req.body?.auto);
     let snapshot;

@@ -22,7 +22,8 @@ function uploadPdf(recordId, pdfBuffer) {
   });
 }
 
-async function removePdf(fileId) {
+// 也給刪除報告用：報告沒了，存著的 PDF 原檔要一起清掉，不然病歷內容會一直留在資料庫裡。
+export async function removePdf(fileId) {
   if (!fileId) return;
   await bucket().delete(fileId).catch(() => {});
 }
@@ -47,9 +48,6 @@ async function claimNextJob() {
       $or: [
         { pdfStatus: 'pending' },
         { pdfStatus: 'generating', pdfAttemptedAt: { $lte: staleBefore } },
-        // Reports created before background PDF jobs are backfilled lazily by
-        // the same worker, so old downloads continue to work after deployment.
-        { pdfStatus: { $exists: false } },
       ],
     },
     { $set: { pdfStatus: 'generating', pdfError: '', pdfAttemptedAt: new Date() } },

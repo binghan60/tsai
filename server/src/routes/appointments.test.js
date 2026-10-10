@@ -12,7 +12,7 @@ import ClinicalNote from '../models/ClinicalNote.js';
 import ClinicSettings from '../models/ClinicSettings.js';
 import LabResult from '../models/LabResult.js';
 import { clinicToday } from '../lib/clinicTime.js';
-import { appointmentSearchFilter, enumerateDates, fillDailyCounts } from './appointments.js';
+import { appointmentSearchFilter } from './appointments.js';
 
 // 號碼牌相關路由會走 Appointment.find(...).session(...)（報到那條再接 .where(...)）。
 // 這裡把查詢鏈與 transaction 假掉，並監看是否誤用 bulkWrite 改到其他人的牌號。
@@ -71,6 +71,7 @@ describe('appointments routes', () => {
   let originalNoteCreate;
   let originalLabResultFind;
   let originalNoteWrites;
+  let originalLabResultUpdateMany;
 
   before(async () => {
     // 掛號建立／報到之後會補套用等著的 IDEXX 結果；這裡沒有等著的。
@@ -81,6 +82,9 @@ describe('appointments routes', () => {
       return chain;
     };
     originalNoteWrites = { deleteOne: ClinicalNote.deleteOne, findOneAndUpdate: ClinicalNote.findOneAndUpdate };
+    // 取消、未到、刪除掛號時，連到它的檢驗結果放回待確認清單（lib/labResultApply.js 的 releaseLabResults）。
+    originalLabResultUpdateMany = LabResult.updateMany;
+    LabResult.updateMany = async () => ({ modifiedCount: 0 });
     ClinicalNote.deleteOne = () => stubQueue({ deletedCount: 0 });
     ClinicalNote.findOneAndUpdate = async () => null;
     originalTemplateFindOne = FormTemplate.findOne;
@@ -102,6 +106,7 @@ describe('appointments routes', () => {
     MedicalRecord.create = originalRecordCreate;
     ClinicalNote.create = originalNoteCreate;
     LabResult.find = originalLabResultFind;
+    LabResult.updateMany = originalLabResultUpdateMany;
     Object.assign(ClinicalNote, originalNoteWrites);
     if (server) await new Promise((resolve) => server.close(resolve));
   });
@@ -142,19 +147,11 @@ describe('appointments routes', () => {
     }
   });
 
-  it('既有飼主的新貓咪掛號與報到沿用飼主，不重複建檔', async () => {
-    const original = { create: Appointment.create, find: Appointment.findById, owner: Owner.findById, update: Owner.findOneAndUpdate, createOwner: Owner.create, pet: Pet.create };
+  it('既有飼主的新貓咪掛號沿用飼主資料，算初診', async () => {
+    const original = { create: Appointment.create, owner: Owner.findById };
     const owner = { _id: '507f1f77bcf86cd799439022', name: '王小姐', phone: '0912345678' };
-    let appointment;
-    let createdPet;
-    const queue = captureQueueWrites();
-    Appointment.create = async (doc) => (appointment = { ...doc, _id: 'apt-new-pet', status: 'scheduled', save: async () => {} });
+    Appointment.create = async (doc) => ({ ...doc, _id: 'apt-new-pet', status: 'scheduled' });
     Owner.findById = async () => owner;
-    Owner.findOneAndUpdate = async (filter) => { assert.equal(filter._id, owner._id); return owner; };
-    Owner.create = async () => { assert.fail('不應建立新飼主'); };
-    Pet.create = async ([doc]) => { createdPet = doc; return [{ ...doc, _id: 'pet-new' }]; };
-    Appointment.findById = async () => appointment;
-    Appointment.find = () => stubQueue([]);
     try {
       const created = await fetch(`${origin}/api/appointments`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -167,23 +164,11 @@ describe('appointments routes', () => {
       assert.equal(body.ownerPhone, owner.phone);
       assert.equal(body.petId, null);
       assert.equal(body.visitType, 'new');
-      const checkedIn = await fetch(`${origin}/api/appointments/apt-new-pet/check-in`, {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ petName: '小花' }),
-      });
-      assert.equal(checkedIn.status, 200);
-      assert.equal(createdPet.ownerId, owner._id);
-      assert.equal(createdPet.name, '小花');
-      assert.equal(appointment.petId, 'pet-new');
-      assert.equal(appointment.visitType, 'new');
+      // 初診一律發驗證碼，讓飼主填初診表。
+      assert.match(body.intakeVerificationCode, /^[0-9]{4}$/);
     } finally {
       Appointment.create = original.create;
-      Appointment.findById = original.find;
       Owner.findById = original.owner;
-      Owner.findOneAndUpdate = original.update;
-      Owner.create = original.createOwner;
-      Pet.create = original.pet;
-      queue.restore();
     }
   });
 
@@ -378,17 +363,17 @@ describe('appointments routes', () => {
     }
   });
 
-  it('初診報到沒填貓咪姓名要回 422', async () => {
+  it('還沒建檔的初診不能報到：要先完成初診表審核', async () => {
     const originalFindById = Appointment.findById;
-    Appointment.findById = async () => ({ _id: 'apt-2', status: 'scheduled', petId: null, date: clinicToday() });
+    Appointment.findById = async () => ({ _id: 'apt-2', status: 'scheduled', petId: null, date: clinicToday(), save: async () => { throw new Error('不該存檔'); } });
     try {
       const response = await fetch(`${origin}/api/appointments/apt-2/check-in`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ ownerName: '林小姐', ownerPhone: '0955-888-777' }),
+        body: JSON.stringify({ ownerName: '林小姐', ownerPhone: '0955-888-777', petName: '小花' }),
       });
-      assert.equal(response.status, 422);
-      assert.deepEqual(await response.json(), { message: '請填寫貓咪姓名' });
+      assert.equal(response.status, 409);
+      assert.match((await response.json()).message, /初診表/);
     } finally {
       Appointment.findById = originalFindById;
     }
@@ -500,7 +485,7 @@ describe('appointments routes', () => {
     }
   });
 
-  it('報到時自動配發目前可用的實體號碼牌', async () => {
+  it('報到時記下號碼牌、到院時間與遲到分鐘', async () => {
     const originalFindById = Appointment.findById;
     const appointment = {
       _id: 'apt-checkin-time',
@@ -524,12 +509,11 @@ describe('appointments routes', () => {
       const response = await fetch(`${origin}/api/appointments/apt-checkin-time/check-in`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        // 初次牌號由後端配發，body 偷帶號碼不影響。
+        // 櫃台指定了手上實際發出去的號碼就照用（同一天允許重複）；沒指定才由後端配。
         body: JSON.stringify({ checkinNumber: 1, isLate: true }),
       });
       assert.equal(response.status, 200);
       assert.equal(appointment.status, 'arrived');
-      assert.equal(appointment.visitType, 'return');
       assert.equal(appointment.checkinNumber, 1);
       assert.equal(appointment.latenessMinutes, 12);
       assert.deepEqual(appointment.checkinNumberHistory, [1]);
@@ -543,58 +527,22 @@ describe('appointments routes', () => {
     }
   });
 
-  it('可修改已報到掛號的實體號碼牌，不改動其他人的牌號', async () => {
+  it('報到沒指定號碼時，配今天從未發出過的最小號碼', async () => {
     const originalFindById = Appointment.findById;
-    const appointment = {
-      _id: 'b',
-      status: 'arrived',
-      date: '2026-08-26',
-      checkinNumber: 2,
-      save: async () => {},
-    };
+    const appointment = { _id: 'apt-auto-number', status: 'scheduled', petId: 'pet-1', date: clinicToday(), scheduledAt: new Date(), checkinNumber: null, save: async () => {} };
     Appointment.findById = async () => appointment;
     const queue = captureQueueWrites();
+    // 1 號已歸還、2 號仍在使用；1 號今天不能重發，所以新報到要拿 3 號。
     Appointment.find = () => stubQueue([
-      { _id: 'a', checkinNumber: 1 },
-      appointment,
-      { _id: 'c', checkinNumber: null, checkinNumberHistory: [3] },
+      { _id: 'a', checkinNumber: null, checkinNumberHistory: [1] },
+      { _id: 'b', checkinNumber: 2, checkinNumberHistory: [2] },
     ]);
     try {
-      const response = await fetch(`${origin}/api/appointments/b/check-in-number`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ checkinNumber: 7 }),
-      });
-      assert.equal(response.status, 200);
-      assert.equal(appointment.checkinNumber, 7);
-      assert.deepEqual(appointment.checkinNumberHistory, [2, 7]);
-      assert.equal(queue.phases, 0);
-    } finally {
-      Appointment.findById = originalFindById;
-      queue.restore();
-    }
-  });
-
-  it('可把現有或曾使用的實體號碼牌發給另一位候診者', async () => {
-    const originalFindById = Appointment.findById;
-    const appointment = { _id: 'b', status: 'arrived', date: '2026-08-26', checkinNumber: 2, save: async () => {} };
-    Appointment.findById = async () => appointment;
-    const queue = captureQueueWrites();
-    Appointment.find = () => stubQueue([
-      { _id: 'a', checkinNumber: 1 },
-      appointment,
-      { _id: 'c', checkinNumber: 3 },
-    ]);
-    try {
-      const response = await fetch(`${origin}/api/appointments/b/check-in-number`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ checkinNumber: 3 }),
-      });
+      const response = await fetch(`${origin}/api/appointments/apt-auto-number/check-in`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
       assert.equal(response.status, 200);
       assert.equal(appointment.checkinNumber, 3);
-      assert.deepEqual(appointment.checkinNumberHistory, [2, 3]);
-      assert.equal(queue.phases, 0);
+      assert.deepEqual(appointment.checkinNumberHistory, [3]);
+      assert.equal(appointment.latenessMinutes, 0);
     } finally {
       Appointment.findById = originalFindById;
       queue.restore();
@@ -693,27 +641,39 @@ describe('appointments routes', () => {
     }
   });
 
-  it('待結帳中被取消一樣要歸還號碼牌', async () => {
+  it('已經開始看診或已交櫃台的掛號不能取消', async () => {
     const originalFindById = Appointment.findById;
-    const appointment = {
-      _id: 'apt-cancel-checkout',
-      status: 'pending_checkout',
-      checkinNumber: 4,
-      checkinNumberHistory: [],
-      cancelReason: '',
-      save: async () => {},
-    };
+    const visit = (extra) => ({ _id: 'apt-in-visit', checkinNumber: 4, save: async () => { throw new Error('不該存檔'); }, ...extra });
+    try {
+      for (const appointment of [
+        visit({ status: 'arrived', visitStartedAt: new Date() }),
+        visit({ status: 'pending_checkout', visitStartedAt: new Date(), handoffAt: new Date() }),
+      ]) {
+        Appointment.findById = async () => appointment;
+        const response = await fetch(`${origin}/api/appointments/apt-in-visit/cancel`, {
+          method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cancelReason: '臨時離開' }),
+        });
+        assert.equal(response.status, 422);
+        assert.equal(appointment.checkinNumber, 4);
+      }
+    } finally {
+      Appointment.findById = originalFindById;
+    }
+  });
+
+  it('還在候診的掛號取消時歸還號碼牌，並記下取消時間', async () => {
+    const originalFindById = Appointment.findById;
+    const appointment = { _id: 'apt-cancel-waiting', status: 'arrived', checkinNumber: 4, checkinNumberHistory: [], cancelReason: '', save: async () => {} };
     Appointment.findById = async () => appointment;
     try {
-      const response = await fetch(`${origin}/api/appointments/apt-cancel-checkout/cancel`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ cancelReason: '結帳前反悔' }),
+      const response = await fetch(`${origin}/api/appointments/apt-cancel-waiting/cancel`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ cancelReason: '飼主有事先離開' }),
       });
       assert.equal(response.status, 200);
       assert.equal(appointment.status, 'cancelled');
       assert.equal(appointment.checkinNumber, null);
       assert.deepEqual(appointment.checkinNumberHistory, [4]);
+      assert.ok(appointment.cancelledAt instanceof Date);
     } finally {
       Appointment.findById = originalFindById;
     }
@@ -822,23 +782,7 @@ describe('appointments routes', () => {
   });
 });
 
-describe('appointments summary', () => {
-  it('enumerateDates 產生日期陣列', () => {
-    const dates = enumerateDates('2026-08-26', '2026-08-28');
-    assert.deepEqual(dates, ['2026-08-26', '2026-08-27', '2026-08-28']);
-  });
-
-  it('fillDailyCounts 補零並排序', () => {
-    const dates = ['2026-08-26', '2026-08-27', '2026-08-28'];
-    const buckets = [{ _id: '2026-08-27', count: 3 }];
-    const result = fillDailyCounts(dates, buckets);
-    assert.deepEqual(result, [
-      { date: '2026-08-26', count: 0 },
-      { date: '2026-08-27', count: 3 },
-      { date: '2026-08-28', count: 0 },
-    ]);
-  });
-
+describe('appointments list', () => {
   // 診療台佇列靠這份對照表顯示「會咬人」之類的備註；空白備註不回傳，初診還沒建檔的掛號不查。
   describe('GET /appointments', () => {
     let server;
@@ -885,61 +829,6 @@ describe('appointments summary', () => {
   });
   });
 
-  describe('GET /appointments/summary', () => {
-    let server;
-    let origin;
-
-    before(async () => {
-      server = app.listen(0, '127.0.0.1');
-      if (!server.listening) await once(server, 'listening');
-      origin = `http://127.0.0.1:${server.address().port}`;
-    });
-
-    after(async () => {
-      if (server) await new Promise((resolve) => server.close(resolve));
-    });
-
-    it('需要 start 與 end 參數', async () => {
-      const response = await fetch(`${origin}/api/appointments/summary`);
-      assert.equal(response.status, 422);
-      assert.match((await response.json()).message, /日期/);
-    });
-
-    it('格式不正確回 422', async () => {
-      const response = await fetch(`${origin}/api/appointments/summary?start=2026/08/26&end=2026/08/28`);
-      assert.equal(response.status, 422);
-      assert.match((await response.json()).message, /日期/);
-    });
-
-    it('start > end 回 422', async () => {
-      const response = await fetch(`${origin}/api/appointments/summary?start=2026-08-28&end=2026-08-26`);
-      assert.equal(response.status, 422);
-      assert.match((await response.json()).message, /不可晚於/);
-    });
-
-    it('超過 31 天回 422', async () => {
-      const response = await fetch(`${origin}/api/appointments/summary?start=2026-08-01&end=2026-09-02`);
-      assert.equal(response.status, 422);
-      assert.match((await response.json()).message, /最多 31 天/);
-    });
-
-    it('正常查詢回傳每日計數', async () => {
-      const originalAggregate = Appointment.aggregate;
-      Appointment.aggregate = async () => [{ _id: '2026-08-27', count: 3 }];
-      try {
-        const response = await fetch(`${origin}/api/appointments/summary?start=2026-08-26&end=2026-08-28`);
-        assert.equal(response.status, 200);
-        const body = await response.json();
-        assert.deepEqual(body.items, [
-          { date: '2026-08-26', count: 0 },
-          { date: '2026-08-27', count: 3 },
-          { date: '2026-08-28', count: 0 },
-        ]);
-      } finally {
-        Appointment.aggregate = originalAggregate;
-      }
-    });
-  });
 });
 
 describe('appointments search', () => {

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkinTone, latenessLabel, patientNotesFor, visitTypeLabel } from './appointmentDisplay.js';
+import { checkinTone, latenessLabel, patientNotesFor } from './appointmentDisplay.js';
 
 describe('patientNotesFor', () => {
   const notes = { pets: { p1: '會咬人' }, owners: { o1: '處置前先說明費用' } };
@@ -17,15 +17,6 @@ describe('patientNotesFor', () => {
   });
 });
 
-describe('visitTypeLabel', () => {
-  it('初診、回診各自對應，未知類型不顯示', () => {
-    assert.equal(visitTypeLabel({ visitType: 'new' }), '初診');
-    assert.equal(visitTypeLabel({ visitType: 'return' }), '回診');
-    assert.equal(visitTypeLabel({ visitType: null }), '');
-    assert.equal(visitTypeLabel(), '');
-  });
-});
-
 describe('latenessLabel', () => {
   it('不足一分鐘不算遲到', () => {
     assert.equal(latenessLabel(0), '');
@@ -39,15 +30,11 @@ describe('latenessLabel', () => {
 });
 
 describe('checkinTone', () => {
-  const base = { workflowVersion: 2, status: 'arrived' };
+  const base = { status: 'arrived' };
   it('依三個里程碑決定階段', () => {
     assert.equal(checkinTone(base), 'waiting');
     assert.equal(checkinTone({ ...base, visitStartedAt: '2026-09-17T02:00:00Z' }), 'visiting');
     assert.equal(checkinTone({ ...base, visitStartedAt: '2026-09-17T02:00:00Z', handoffAt: '2026-09-17T02:10:00Z' }), 'handoff');
     assert.equal(checkinTone({ ...base, handoffAt: '2026-09-17T02:10:00Z', deskCompletedAt: '2026-09-17T02:20:00Z' }), 'done');
-  });
-  it('舊版掛號由 status 回推', () => {
-    assert.equal(checkinTone({ workflowVersion: 1, status: 'pending_checkout' }), 'handoff');
-    assert.equal(checkinTone({ workflowVersion: 1, status: 'completed' }), 'done');
   });
 });

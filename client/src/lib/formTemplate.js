@@ -1,5 +1,4 @@
-// 從表單範本衍生出各區塊需要的項目定義。
-// 這裡產出的物件形狀刻意與原本硬編碼的常數一致，讓既有版面不必改寫。
+// 從表單範本衍生出填寫頁各區塊需要的項目定義。
 
 export function allItems(template) {
   return (template?.sections ?? []).flatMap((section) =>
@@ -9,10 +8,6 @@ export function allItems(template) {
 
 export function itemsOfType(template, type) {
   return allItems(template).filter((item) => item.type === type);
-}
-
-export function itemByRole(template, role) {
-  return allItems(template).find((item) => item.role === role) ?? null;
 }
 
 export function measurementDefs(template) {
@@ -52,10 +47,6 @@ export function referenceRanges(template) {
         && (item.referenceMin != null || item.referenceMax != null))
       .map((item) => [item.key, { min: item.referenceMin ?? null, max: item.referenceMax ?? null, unit: item.unit ?? '' }])
   );
-}
-
-export function labGroups(template) {
-  return [...new Set(labDefs(template).map((item) => item.group).filter(Boolean))];
 }
 
 // 表單頁的 DOM id 沿用 `record-section-<key>`，既有的錨點與捲動行為不受影響。

@@ -306,6 +306,16 @@ describe('missingRoles', () => {
     assert.deepEqual(missingRoles(withRole(false), { sections: withRole(true) }), ['weight']);
   });
 
+  it('舊範本裡已經沒有作用的 role 被刪掉時不提醒', () => {
+    const before = { sections: [{ key: 's', enabled: true, items: [{ key: 'conclusion', role: 'conclusion', enabled: true }] }] };
+    assert.deepEqual(missingRoles([{ key: 's', enabled: true, items: [] }], before), []);
+  });
+
+  it('存檔時把沒有作用的 role 清掉', () => {
+    const { sections } = sanitizeSections([{ key: 's', title: '結論', items: [{ key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion' }] }], null);
+    assert.equal(sections[0].items[0].role, null);
+  });
+
   // before／after 的條件必須對稱。不對稱的話，區塊一停用就會每次儲存都重跳同一則確認，
   // 使用者只能一路按「確認」，這個提醒也就失去意義了。
   it('區塊停用之後再次儲存，不會重複跳出同一則提醒', () => {

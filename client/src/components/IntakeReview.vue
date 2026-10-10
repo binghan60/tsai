@@ -175,7 +175,7 @@ async function decide() {
       v-if="confirmation && submission"
       :open="true"
       :title="confirmation === 'approve' ? '掛號？' : '退回這份初診表？'"
-      :description="confirmation === 'approve' ? `會建立飼主「${submission.owner.name}」與貓咪「${submission.pet.name}」，並以選定時間建立掛號。` : `「${submission.pet.name}」不會建立正式資料。`"
+      :description="confirmation === 'approve' ? `會建立飼主「${submission.owner.name}」與貓咪「${submission.pet.name}」，並以選定時間建立掛號。` : `不會建立「${submission.pet.name}」的正式資料；驗證碼還沒過期的話，飼主可以用同一組重填。`"
       :loading="busy"
       :confirm-label="confirmation === 'approve' ? '掛號' : '退回'"
       :destructive="confirmation === 'reject'"

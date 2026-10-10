@@ -99,9 +99,9 @@ export function buildDefaultSections() {
         description: '統整檢查發現並記錄診斷與後續方向',
         presentation: 'prose',
         items: withOrder([
-          { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', rows: 4 },
+          { key: 'conclusion', label: '結論', type: 'textarea', rows: 4 },
           { key: 'diagnosis', label: '診斷', type: 'textarea', rows: 4 },
-          { key: 'treatmentPlan', label: '照護與追蹤建議', type: 'textarea', role: 'treatmentPlan', rows: 4 },
+          { key: 'treatmentPlan', label: '照護與追蹤建議', type: 'textarea', rows: 4 },
           { key: 'other', label: '其他備註', type: 'textarea', rows: 3 },
         ]),
       },

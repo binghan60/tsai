@@ -67,7 +67,7 @@ function followUpDefaults() {
     date: props.appointment.followUpDate || '',
     time: props.appointment.followUpTime || '',
     duration: DEFAULT_ESTIMATED_DURATION_MINUTES,
-    reason: props.appointment.followUpReason || props.appointment.followUpRecommendation || '',
+    reason: props.appointment.followUpRecommendation || '',
     isSurgery: false,
     surgeryName: '',
   };
@@ -93,7 +93,7 @@ const followUpSummary = computed(() => {
   const { date, time, duration } = followUp.value;
   if (date && time) return { lead: '完成後會約', when: whenLabel(date, time), tail: `回診（${duration} 分）` };
   // 「待安排回診」只算醫師寫了回診建議的（server/src/routes/dashboard.js），沒寫就不這樣講。
-  const recommended = Boolean(props.appointment.followUpRecommendation || props.appointment.followUpReason);
+  const recommended = Boolean(props.appointment.followUpRecommendation);
   if (!followUpStarted.value) return { lead: recommended ? '這次不約回診，會留在「待安排回診」' : '這次不約回診', when: '', tail: '' };
   return null;
 });
@@ -443,7 +443,7 @@ async function reopen() {
             <!-- 標籤跟內容同一行，標籤不另佔一行。醫師沒寫也照樣留這一格、內容空白，不補說明文字。 -->
             <p class="flex min-h-lh items-baseline gap-3 rounded-xl bg-accent px-4 py-3 text-accent-foreground">
               <span class="spec-label shrink-0 text-accent-foreground">醫師建議</span>
-              <span class="min-w-0 font-medium wrap-anywhere">{{ appointment.followUpRecommendation || appointment.followUpReason }}</span>
+              <span class="min-w-0 font-medium wrap-anywhere">{{ appointment.followUpRecommendation }}</span>
             </p>
 
             <div v-if="booked" class="flex items-center gap-3 rounded-xl bg-success-surface px-4 py-3 text-success">

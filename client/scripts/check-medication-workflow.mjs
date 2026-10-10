@@ -142,8 +142,10 @@ try {
   }
   await doctor.goto(`${origin}/appointments?tab=medications`);
   await desk.goto(`${origin}/reception?tab=medications`);
-  // 掛號台頁首的「新增藥單」直接開藥單面板並推入新增表單（createOnly）。
-  await click(desk, '新增藥單');
+  // 新增藥單從右側工具欄的藥單面板進去：清單工具列上的「新增藥單」推入新增表單。
+  await openMedicationPanel(desk);
+  await desk.waitForFunction(() => [...document.querySelectorAll('[aria-label="藥單工作區"] button')].some(el => el.textContent.trim() === '新增藥單'));
+  await (await desk.evaluateHandle(() => [...document.querySelectorAll('[aria-label="藥單工作區"] button')].find(el => el.textContent.trim() === '新增藥單'))).asElement().asLocator().click();
   // 欄位一開始就全部展開，不必等選好貓咪。
   for (const id of ['#med-condition', '#med-note', '#med-prescription']) {
     assert.notEqual(await desk.$(id), null, `${id} is visible before a pet is picked`);
@@ -212,7 +214,7 @@ try {
   await stage(desk, '已領藥');
   await desk.waitForFunction(() => document.querySelectorAll('[aria-label="藥單工作區"] [data-medication-row]').length === 2);
   assert.equal(await desk.evaluate(() => [...document.querySelectorAll('[aria-label="藥單工作區"] button')].some(el => el.getAttribute('aria-label')?.startsWith('完成 '))), false, 'collected orders have no complete button');
-  // 面板清單工具列上的「新增藥單」推入新增表單；頁首另有一顆同名的鈕，所以限定範圍。
+  // 面板清單工具列上的「新增藥單」推入新增表單（限定在面板裡找）。
   await desk.waitForFunction(() => [...document.querySelectorAll('[aria-label="藥單工作區"] button')].some(el => el.textContent.trim() === '新增藥單'));
   await (await desk.evaluateHandle(() => [...document.querySelectorAll('[aria-label="藥單工作區"] button')].find(el => el.textContent.trim() === '新增藥單'))).asElement().asLocator().click();
   await desk.type('#med-pet-search', '安安');
@@ -237,6 +239,13 @@ try {
   assert.deepEqual(errors, []);
   console.log('PASS: 櫃台登記、跨日、醫師修改與確認、即時同步、包藥、過期版本阻擋、重包、已領藥與歷史搜尋。');
   console.log(`Screenshots: ${join(tmpdir(), 'tsai-medications-reception.png')}, ${join(tmpdir(), 'tsai-medications-mobile.png')}`);
+} catch (error) {
+  console.error(error);
+  for (const [index, page] of (await browser?.pages() ?? []).entries()) {
+    console.error('Page:', page.url(), (await page.evaluate(() => document.body.innerText).catch(() => '')).slice(-1500));
+    await page.screenshot({ path: join(tmpdir(), `tsai-medications-failure-${index}.png`) }).catch(() => {});
+  }
+  process.exitCode = 1;
 } finally {
   await browser?.close();
   await new Promise(resolve => io.close(resolve));

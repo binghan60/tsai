@@ -27,7 +27,3 @@ export function dueStatus(dueDate, today) {
   return { tone: 'info', label: `${Number(month)}/${Number(day)}`, overdue: false };
 }
 
-// 面板標題旁的說明：有幾筆逾期比總數更該被看見。
-export function overdueCount(items, today) {
-  return items.filter((item) => item.status === 'open' && dueStatus(item.dueDate, today)?.overdue).length;
-}

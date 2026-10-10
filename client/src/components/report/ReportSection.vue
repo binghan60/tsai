@@ -17,7 +17,7 @@ const PRESENTATIONS = {
 
 const props = defineProps({
   section: { type: Object, required: true },
-  // 已經呈現在報告頁首的欄位（獸醫師／健檢日期／健檢類型）不在內文重複一次。
+  // 已經呈現在報告頁首的欄位（獸醫師／健檢日期）不在內文重複一次。
   skipRoles: { type: Array, default: () => [] },
 });
 

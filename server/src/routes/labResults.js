@@ -14,9 +14,11 @@ import { markIdexxRequestDelivered, pendingIdexxRequests } from '../lib/idexxReq
 import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
 import { emitLabResultsUpdate } from '../lib/realtime.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
+import { escapeRegExp } from '../lib/regex.js';
 import Appointment from '../models/Appointment.js';
 
-// 給診所電腦上的抓檔程式用：只有 POST /import 與 POST /heartbeat，改用 IDEXX_BRIDGE_TOKEN 驗證
+// 給診所電腦上的抓檔程式用：POST /import（上傳結果）、POST /heartbeat（心跳）、GET /requests 與
+// POST /requests/:id/delivered（拿要送給 IDEXX 主機的通知、回報已寫好），改用 IDEXX_BRIDGE_TOKEN 驗證
 // （見 config/idexxBridge.js）。掛在 /api/lab-results、登入檢查之前；其他路徑不在這裡，照常往下走登入檢查。
 export const labResultBridgeRouter = Router();
 
@@ -238,14 +240,13 @@ labResultsRouter.delete('/bridge-status/:bridgeId', async (req, res, next) => {
   }
 });
 
-// 待確認清單的每一筆附上「檢驗當天」的掛號當候選。一次查完所有日期，走 scheduledAt 的索引。
+// 待確認清單的每一筆附上「檢驗當天」的掛號當候選。一次查完所有日期，走 {date, scheduledAt} 索引。
 async function withCandidates(items) {
   const dateOf = (item) => clinicToday(item.runAt ?? item.createdAt);
   const dates = [...new Set(items.map(dateOf))];
   if (!dates.length) return items;
-  const visits = await Appointment.find({
-    $or: dates.map((date) => ({ scheduledAt: { $gte: clinicDayStart(date), $lt: clinicDayStart(date, 1) } })),
-  }).select('_id date time petId petName ownerName status').lean();
+  const visits = await Appointment.find({ date: { $in: dates } })
+    .select('_id date time petId petName ownerName status').lean();
   return items.map((item) => ({
     ...item,
     candidates: rankCandidates(visits.filter((visit) => visit.date === dateOf(item)), item.patient?.name),
@@ -274,7 +275,7 @@ labResultsRouter.get('/', async (req, res, next) => {
     // 「匯入檢驗結果」的搜尋：比對技術員在 IDEXX 主機上打的貓名、飼主名（待確認清單頂多幾百筆，不必索引）。
     const keyword = String(req.query.q ?? '').trim().slice(0, 50);
     if (!petId && keyword) {
-      const pattern = new RegExp(keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      const pattern = new RegExp(escapeRegExp(keyword), 'i');
       filter.$and = [{ $or: [{ 'patient.name': pattern }, { 'client.lastName': pattern }, { 'client.firstName': pattern }] }];
     }
     const pagination = paginationOptions(req.query);

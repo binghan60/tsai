@@ -116,11 +116,21 @@ describe('independent appointment workflow HTTP routes', () => {
     store.get(id).reason = '咳嗽三天';
     assert.equal((await post('clinical', { visitNote: '安排檢查', internalNote: '院內追蹤', weightKg: 4.2 })).status, 200);
     assert.equal(await diaryContent(), '來院原因：咳嗽三天\n\n體重：4.2 kg\n\n安排檢查');
+    // 內容清空後只剩來院原因，而醫師還沒開始看診：不留一筆只有來院原因的日誌。
     assert.equal((await post('clinical', { visitNote: '', internalNote: '', weightKg: null })).status, 200);
-    assert.equal(await diaryContent(), '來院原因：咳嗽三天');
+    assert.equal(diary.size, 0);
     assert.equal((await post('handoff')).status, 200);
     assert.equal(diary.size, 1);
     assert.equal(await diaryContent(), '來院原因：咳嗽三天');
+  });
+  it('drops a reason-only diary entry when the vet cancels the visit start', async () => {
+    store.get(id).reason = '預防針';
+    assert.equal((await post('start')).status, 200);
+    assert.equal((await post('clinical', { internalNote: '院內' })).status, 200);
+    assert.equal(await diaryContent(), '來院原因：預防針', '開始看診之後，來院原因就算內容');
+    assert.equal((await post('unstart')).status, 200);
+    assert.equal(diary.size, 0);
+    assert.equal(store.get(id).visitStartedAt, null);
   });
   it('records the reason when handing off without a clinical note', async () => {
     store.get(id).reason = '定期回診';
@@ -260,7 +270,7 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal(visitOverlay(record, store.get(id), labTemplate).followUpDate.toISOString(), '2026-09-14T02:00:00.000Z');
   });
   it('books one linked follow-up before the desk finishes and validates the clinic schedule', async () => {
-    await post('clinical', { followUpRecommendation: '一週後', followUpReason: '追蹤傷口' });
+    await post('clinical', { followUpRecommendation: '一週後追蹤傷口' });
     assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '12:00' })).status, 422);
     assert.equal((await post('followup', { followUpDate: '2026-02-30', followUpTime: '10:00' })).status, 422);
     const first = await post('followup', { followUpDate: '2026-09-14', followUpTime: '10:00' });
@@ -271,7 +281,7 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal(second.status, 200);
     assert.equal(first.body.followUpAppointmentId, second.body.followUpAppointmentId);
     assert.equal(store.size, 2);
-    assert.equal(store.get(String(first.body.followUpAppointmentId)).reason, '追蹤傷口', '沒帶來院原因就用醫師的回診原因');
+    assert.equal(store.get(String(first.body.followUpAppointmentId)).reason, '一週後追蹤傷口', '沒帶來院原因就用醫師的回診建議');
   });
   it('asks for a deposit decision before booking a follow-up for a cat past the limit', async () => {
     attendanceGroups = [{ _id: 'late', count: 2, lastDate: '2026-09-07' }];
@@ -287,7 +297,7 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.ok(followUp.depositDecidedAt);
   });
   it('books the follow-up with the same fields and rules as a regular appointment', async () => {
-    await post('clinical', { followUpReason: '追蹤傷口' });
+    await post('clinical', { followUpRecommendation: '追蹤傷口' });
     // 預估診療時間、手術標記跟新增掛號同一套驗證。
     assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '11:45', estimatedDurationMinutes: 30 })).status, 422);
     assert.equal((await post('followup', { followUpDate: '2026-09-14', followUpTime: '10:00', estimatedDurationMinutes: 20 })).status, 422);

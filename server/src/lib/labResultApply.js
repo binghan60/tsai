@@ -237,6 +237,24 @@ export async function unmatchLabResult(labResultId) {
   return { cleared: undo.clear.length, kept: undo.kept };
 }
 
+// 看診取消、標記未到或被永久刪除（filter: { appointmentId }），或貓咪被刪除（filter: { petId }）：
+// 連到它的檢驗結果回到待確認清單。待確認清單的定義是「還沒進到任何一次看診的結果」——留著連結的話，
+// 這些結果既不在清單上、也沒有看診與病歷日誌可以顯示，等於從畫面上消失。掛號上的數值不動（那筆掛號已經不在流程裡）。
+// 之後恢復掛號並報到，帶著貓咪編號的會由 applyPendingLabResults 自動認回來。回傳放回幾份。
+export async function releaseLabResults(filter, { session } = {}) {
+  const released = await LabResult.updateMany(
+    filter,
+    {
+      $set: {
+        petId: null, matchedAt: null, matchSource: null, appointmentId: null, appliedAt: null, fillClosed: null,
+        filled: [], conflicts: [], conflictsOpen: false, conflictsResolvedAt: null, conflictsOverwritten: [], unmappedCodes: [], overrides: [],
+      },
+    },
+    session ? { session } : undefined,
+  );
+  return released.modifiedCount ?? 0;
+}
+
 // 病歷日誌上修改 IDEXX 數值：values 是 { 代號: 新值 }，空白或改回原始值＝還原。
 // 儀器原文（assays）不動，改的記在 overrides；顯示與日誌用改後的值、標「已修改」。
 // 這個代號當初填進看診的檢驗數值、而且那一格還是原本填的值，就一起換成新的——不然日誌上改了、健檢報告還是舊的。

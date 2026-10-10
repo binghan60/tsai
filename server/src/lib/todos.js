@@ -17,9 +17,10 @@ export function sortOpenTodos(rows) {
 
 // 未完成 + 最近完成的一段，單一清單回給前端，前端依 status 分兩個頁籤。
 // 待辦筆數很少，任何異動後一律整份重讀並廣播、前端直接取代，不處理差異合併。
+// 未完成的超過上限時留最新的那一批：剛新增的待辦一定看得到（留最舊的話，新增之後清單上會找不到它）。
 export async function listTodos() {
   const [open, done] = await Promise.all([
-    Todo.find({ status: 'open' }).sort({ createdAt: 1 }).limit(MAX_OPEN_TODOS).lean(),
+    Todo.find({ status: 'open' }).sort({ createdAt: -1 }).limit(MAX_OPEN_TODOS).lean(),
     Todo.find({ status: 'done' }).sort({ doneAt: -1, _id: -1 }).limit(MAX_DONE_TODOS).lean(),
   ]);
   return [...sortOpenTodos(open), ...done];

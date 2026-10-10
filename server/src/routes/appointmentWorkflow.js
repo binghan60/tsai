@@ -35,8 +35,8 @@ function followUpBooking(body, appointment, existing = null) {
   const estimatedDurationMinutes = normalizeEstimatedDuration(body.estimatedDurationMinutes ?? existing?.estimatedDurationMinutes);
   validateAppointmentDuration(time, estimatedDurationMinutes);
   const { isSurgery, surgeryName } = normalizeSurgeryFields(body.isSurgery !== undefined || !existing ? body : existing);
-  // 來院原因沒帶時用醫師寫的回診原因；櫃台送空白就是空白，不替使用者補字。
-  const reason = String(body.reason ?? existing?.reason ?? (appointment.followUpReason || appointment.followUpRecommendation || '')).trim();
+  // 來院原因沒帶時用醫師寫的回診建議；櫃台送空白就是空白，不替使用者補字。
+  const reason = String(body.reason ?? existing?.reason ?? appointment.followUpRecommendation ?? '').trim();
   return { date, time, estimatedDurationMinutes, isSurgery, surgeryName, reason };
 }
 
@@ -78,8 +78,9 @@ router.post('/:action', async (req, res, next) => {
       // 送交櫃台：醫師寫的藥單這一刻才在藥單建立（或更新）一筆，直接是待包藥。
       if (action === 'handoff') medicationOrder = await syncVisitMedicationOrder(appointment, req.user?.username || '', { session });
 
-      // 直接完成看診沒填任何東西時，來院原因也算內容。
-      if (action === 'clinical' || action === 'handoff') await syncAppointmentJournal(appointment, { session });
+      // 病歷日誌跟著看診走（lib/appointmentJournal.js）：存了內容、送交櫃台（沒填任何東西時來院原因也算內容），
+      // 以及取消看診（只有來院原因的那筆退回候診後不留日誌）都要重新同步。
+      if (['clinical', 'handoff', 'unstart'].includes(action)) await syncAppointmentJournal(appointment, { session });
 
       if (action === 'record') {
         if (appointment.recordId) {

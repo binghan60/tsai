@@ -3,10 +3,11 @@ import mongoose from 'mongoose';
 // 表單項目的欄位型別，決定表單控制項與報告呈現方式。
 export const ITEM_TYPES = ['text', 'textarea', 'date', 'number', 'select', 'radio', 'checkbox', 'image', 'measurement', 'finding', 'lab', 'dentalChart'];
 
-// 語意角色：讓後端不必寫死欄位名稱也能找到特定資料（例如結案時要同步的體重）。
-// 帶 role 的項目可以停用或搬到別的區塊，但刪除前要提醒使用者會失去對應功能。
-// examType 不再是表單裡的欄位 —— 健檢類型就是「用哪一份範本」，見下方 name。
-export const ITEM_ROLES = ['vet', 'visitDate', 'weight', 'conclusion', 'treatmentPlan'];
+// 語意角色：讓系統不必寫死欄位名稱也能找到特定資料。每一個都有實際作用——
+// vet、visitDate 印在報告頁首（報告清單依 visitDate 排序），weight 結案時寫回貓咪的最近體重。
+// 帶 role 的項目可以停用或搬到別的區塊，但移除前要提醒使用者會失去對應功能。
+// 健檢類型不是表單裡的欄位，就是「用哪一份範本」，見下方 name。
+export const ITEM_ROLES = ['vet', 'visitDate', 'weight'];
 
 // 區塊在報告檢視頁的版式。版式是有限集合，由我們維護列印效果，
 // 使用者新增區塊時只從這裡挑一種，報告才不會退化成流水帳。
@@ -17,7 +18,9 @@ const formItemSchema = new mongoose.Schema(
     key: { type: String, required: true, trim: true },
     label: { type: String, required: true, trim: true },
     type: { type: String, enum: ITEM_TYPES, required: true },
-    role: { type: String, enum: ITEM_ROLES, default: null },
+    // 只收 ITEM_ROLES，由 lib/formTemplate.js 的 sanitizeItem 把關（範本只經由它寫入）。
+    // 這裡不設 enum：Mongoose 每次存檔都驗證整份文件，舊範本裡拿掉的 role 會讓改名、存預填模板也存不進去。
+    role: { type: String, default: null },
     group: { type: String, default: '', trim: true },
     unit: { type: String, default: '', trim: true },
     placeholder: { type: String, default: '', trim: true },

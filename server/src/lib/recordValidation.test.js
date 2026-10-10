@@ -16,7 +16,7 @@ const validSections = () =>
     { key: 'visitDate', label: '看診日期', type: 'date', role: 'visitDate', value: '2026-08-20' },
     { key: 'vet', label: '獸醫師', type: 'text', role: 'vet', value: '王醫師' },
     { key: 'weight', label: '體重', type: 'measurement', value: '4.2' },
-    { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', value: '整體健康狀況良好' }
+    { key: 'conclusion', label: '結論', type: 'textarea',value: '整體健康狀況良好' }
   );
 
 describe('validateFinalRecord', () => {
@@ -28,8 +28,8 @@ describe('validateFinalRecord', () => {
     assert.deepEqual(validateFinalRecord(section(
       { key: 'visitDate', label: '看診日期', type: 'date', role: 'visitDate', required: false, value: '' },
       { key: 'weight', label: '體重', type: 'measurement', required: false, value: '' },
-      { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', required: false, value: '' },
-      { key: 'plan', label: '照護建議', type: 'textarea', role: 'treatmentPlan', required: false, value: '' }
+      { key: 'conclusion', label: '結論', type: 'textarea',required: false, value: '' },
+      { key: 'plan', label: '照護建議', type: 'textarea',required: false, value: '' }
     )), []);
   });
 
@@ -48,15 +48,15 @@ describe('validateFinalRecord', () => {
   describe('結論與照護建議', () => {
     it('不再有寫死的擇一必填規則', () => {
       assert.deepEqual(validateFinalRecord(section(
-        { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', required: false, value: '' },
-        { key: 'plan', label: '照護建議', type: 'textarea', role: 'treatmentPlan', required: false, value: '' }
+        { key: 'conclusion', label: '結論', type: 'textarea',required: false, value: '' },
+        { key: 'plan', label: '照護建議', type: 'textarea',required: false, value: '' }
       )), []);
     });
 
     it('各欄位可分別設定為必填', () => {
       const missing = validateFinalRecord(section(
-        { key: 'conclusion', label: '結論', type: 'textarea', role: 'conclusion', required: true, value: '   ' },
-        { key: 'plan', label: '照護建議', type: 'textarea', role: 'treatmentPlan', required: false, value: '' }
+        { key: 'conclusion', label: '結論', type: 'textarea',required: true, value: '   ' },
+        { key: 'plan', label: '照護建議', type: 'textarea',required: false, value: '' }
       ));
       assert.deepEqual(missing, ['結論']);
     });
@@ -112,6 +112,12 @@ describe('itemHasAnswer', () => {
     assert.equal(itemHasAnswer({ type: 'text', value: null }), false);
     assert.equal(itemHasAnswer({ type: 'text', value: undefined }), false);
     assert.equal(itemHasAnswer({ type: 'text', value: '正常' }), true);
+  });
+
+  it('多行文字只剩格式標記不算有作答', () => {
+    assert.equal(itemHasAnswer({ type: 'textarea', value: '**   **' }), false);
+    assert.equal(itemHasAnswer({ type: 'textarea', value: '[red] [/red]' }), false);
+    assert.equal(itemHasAnswer({ type: 'textarea', value: '[red]腎指數偏高[/red]' }), true);
   });
 
   it('數值 0 是有效作答', () => {

@@ -15,5 +15,6 @@
 
 ## 日期輸入
 
-- 禁止使用原生 `<input type="date">`。日期選擇一律使用專案的 `DatePicker` 元件。
-- 完成前以 `rg` 檢查 `client/src` 沒有 `type="date"` 或 `type='date'`；若既有程式有發現，應一併改為 `DatePicker`。
+- 後台畫面禁止使用原生 `<input type="date">`，日期選擇一律使用專案的 `DatePicker` 元件（`components/ui/date-picker`）。
+- 唯一例外是公開初診頁 `PublicIntakePage.vue` 的出生日期：飼主用手機填，原生日期欄是系統的日期滾輪；`DatePicker` 的日曆會跟著後台深色主題（見 `docs/STYLE_GUIDE.md` 第 10 節）。
+- 完成前以 `rg` 檢查 `client/src` 除了上述例外沒有 `type="date"` 或 `type='date'`；若有，應一併改為 `DatePicker`。

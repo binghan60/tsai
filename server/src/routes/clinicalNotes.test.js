@@ -61,7 +61,7 @@ describe('clinical notes routes', () => {
     }
   });
 
-  it('編輯關聯日誌會回寫掛號的本次簡易紀錄', async () => {
+  it('編輯掛號日誌的欄位會寫回那次看診', async () => {
     const originalFindByIdAndUpdate = ClinicalNote.findByIdAndUpdate;
     const originalAppointmentFindById = Appointment.findById;
     const appointment = {
@@ -79,7 +79,7 @@ describe('clinical notes routes', () => {
       const response = await fetch(`${origin}/api/clinical-notes/note-linked`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ content: '改好的內容' }),
+        body: JSON.stringify({ fields: { visitNote: '改好的內容' } }),
       });
       assert.equal(response.status, 200);
       assert.equal(appointment.visitNote, '改好的內容');

@@ -49,12 +49,6 @@ export function getDeliveryStatus(record) {
   return record?.deliveryStatus || 'not_sent';
 }
 
-export function getRecordWorkflowStatusMeta(record) {
-  return record?.status === 'draft'
-    ? RECORD_STATUS_META.draft
-    : DELIVERY_STATUS_META[getDeliveryStatus(record)];
-}
-
 export function getAvailabilityStatusMeta(enabled) {
   return enabled === false ? AVAILABILITY_STATUS_META.disabled : AVAILABILITY_STATUS_META.enabled;
 }

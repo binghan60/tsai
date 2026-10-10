@@ -13,10 +13,14 @@ const router = Router();
 const VALID_SPECIES = new Set(['cat', 'dog', 'all']);
 const START_MODES = new Set(['standard', 'blank', 'copy']);
 
-const ROLE_LABELS = {
-  vet: '看診醫師', visitDate: '健檢日期', weight: '體重',
-  conclusion: '結論', treatmentPlan: '照護與追蹤建議',
-};
+const ROLE_LABELS = { vet: '看診醫師', visitDate: '健檢日期', weight: '體重' };
+
+// 掛號沒指定表單時就用預設表單；它被停用或刪掉的話，新增掛號與報到都會被擋下（找不到可用的表單），
+// 所以這兩個動作之前要先把預設改成別份。
+async function isDefaultAppointmentTemplate(templateId, session = null) {
+  const settings = await ClinicSettings.findOne().session(session).lean();
+  return String(settings?.defaultAppointmentTemplateId ?? '') === String(templateId);
+}
 
 router.get('/appointment-settings', async (req, res, next) => {
   try {
@@ -150,13 +154,19 @@ router.put('/form-templates/:id', async (req, res, next) => {
     }
     if (req.body?.description !== undefined) template.description = String(req.body.description).trim();
     if (req.body?.species !== undefined && VALID_SPECIES.has(req.body.species)) template.species = req.body.species;
-    if (req.body?.enabled !== undefined) template.enabled = req.body.enabled !== false;
+    if (req.body?.enabled !== undefined) {
+      const enabled = req.body.enabled !== false;
+      if (!enabled && await isDefaultAppointmentTemplate(template._id)) {
+        return res.status(409).json({ message: `「${template.name}」是掛號預設帶入的表單，請先把預設改成別份再停用` });
+      }
+      template.enabled = enabled;
+    }
 
     if (Array.isArray(req.body?.sections)) {
       const { sections, retiredKeys, error } = sanitizeSections(req.body.sections, template);
       if (error) return res.status(422).json({ message: error });
 
-      // 帶 role 的項目被刪掉會讓體重同步、結案驗證等功能失效，需要明確確認。
+      // 帶 role 的項目被移除會讓報告頁首、體重寫回貓咪資料這些功能失效，需要明確確認。
       const lost = missingRoles(sections, template);
       if (lost.length && req.body.confirmRoleRemoval !== true) {
         return res.status(409).json({
@@ -204,6 +214,12 @@ router.delete('/form-templates/:id', async (req, res, next) => {
         { $inc: { relationVersion: 1 } },
         { sort: { _id: 1 }, session }
       ).select('+relationVersion');
+
+      if (await isDefaultAppointmentTemplate(template._id, session)) {
+        const error = new Error(`「${template.name}」是掛號預設帶入的表單，請先把預設改成別份再刪除`);
+        error.status = 409;
+        throw error;
+      }
 
       // 已結案報告雖然有自己的 sections 快照，但對它建修訂草稿時會沿用 templateId，
       // 範本被刪掉那份草稿就再也結不了案。只要有報告引用就不能刪，改用停用。

@@ -27,7 +27,6 @@ import LatenessBadge from '../components/LatenessBadge.vue'
 import DepositBadge from '../components/DepositBadge.vue'
 import AppointmentDialog from '../components/AppointmentDialog.vue'
 import AppointmentSearchResults from '../components/AppointmentSearchResults.vue'
-import CheckInDrawer from '../components/CheckInDrawer.vue'
 import CheckInDialog from '../components/CheckInDialog.vue'
 import CancelAppointmentDialog from '../components/CancelAppointmentDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -150,7 +149,6 @@ const overdue = computed(() => (isToday.value ? scheduled.value.filter((item) =>
 const activePatient = computed(() => items.value.find((item) => String(item._id) === selected.value) || null)
 const currentTime = computed(() => clinicTimeInput(new Date(now.value)))
 const hasAlerts = computed(() => reopenRequests.value.length || overdue.value.length || counts.intake)
-const drawerVisible = computed(() => drawer.value === 'check-in')
 
 // ── 流程列與時間軸 ──────────────────────────────────────────────────────────
 // 流程列的四格就是四個篩選：點了只看那一段，再點一次清除。
@@ -291,7 +289,7 @@ function isInitialDataPending(appointment) {
   return appointment.visitType === 'new' && !appointment.petId && Boolean(appointment.intakeVerificationCode) && !appointment.intakeSubmissionId
 }
 
-// 待報到卡片上唯一的主要按鈕。資料齊全的回診一鍵報到；初診要建檔，開抽屜。
+// 待報到卡片上唯一的主要按鈕：已建檔的貓一鍵報到；初診要等飼主填好初診表、審核通過（那一步建檔）才報得了到。
 // 已超過寬限還沒報到的，按鈕文字換成「遲到」，顏色不變——報到是正常的推進動作，遲到靠卡片的紅底與徽章表示；
 // 實心紅只留給確認視窗裡的最終動作。
 function scheduledPrimary(item) {
@@ -299,9 +297,8 @@ function scheduledPrimary(item) {
   if (isInitialDataPending(item)) return null
   // 報到＝人現在到了，只有今天的掛號能報到（伺服器也擋）；翻到別天只是看與改掛號。
   if (!isToday.value) return null
-  const late = itemIsOverdue(item)
-  if (!item.petId) return { label: '報到…', run: () => openDrawer('check-in', item) }
-  return { label: late ? '遲到' : '報到', run: () => quickCheckIn(item) }
+  if (!item.petId) return null
+  return { label: itemIsOverdue(item) ? '遲到' : '報到', run: () => quickCheckIn(item) }
 }
 function scheduledActions(item) {
   const actions = []
@@ -366,7 +363,7 @@ watch(date, () => {
   items.value = []
   selected.value = ''
   for (const key of Object.keys(manualCollapse)) delete manualCollapse[key]
-  if (drawer.value === 'edit' || drawer.value === 'check-in') drawer.value = ''
+  if (drawer.value === 'edit') drawer.value = ''
   refresh()
 })
 
@@ -454,7 +451,7 @@ async function undoCheckIn(id) {
   }
 }
 
-const NOTIFICATIONS = { 'check-in': 'check_in', 'check-in-detail': 'check_in', cancel: 'cancel', 'no-show': 'no_show', edit: 'edit' }
+const NOTIFICATIONS = { 'check-in-detail': 'check_in', cancel: 'cancel', 'no-show': 'no_show', edit: 'edit' }
 const ENDPOINTS = { 'check-in-detail': 'check-in' }
 async function submit(values, kind) {
   if (busy.value) return
@@ -471,7 +468,7 @@ async function submit(values, kind) {
     // 從已取消／未到回來叫「恢復掛號」，聊天室要講得出差別。
     const action = kind === 'new' ? 'create' : kind === 'restore' ? (previousStatus === 'arrived' ? 'undo_check_in' : 'restore') : NOTIFICATIONS[kind]
     if (action) notifyChat(data, action)
-    if (['new', 'edit', 'check-in'].includes(kind) && drawer.value === kind) drawer.value = ''
+    if (['new', 'edit'].includes(kind) && drawer.value === kind) drawer.value = ''
     dialog.value = ''
     confirmation.value = null
     if (kind === 'new' && data.visitType === 'new') toast.success(`初診掛號已建立，驗證碼：${data.intakeVerificationCode}`)
@@ -581,7 +578,7 @@ onBeforeUnmount(() => {
 
     <ListSkeleton v-if="loading" :rows="5" />
 
-    <div v-else class="flex min-h-0 flex-1 flex-col gap-4 xl:flex-row">
+    <div v-else class="flex min-h-0 flex-1 flex-col">
       <!-- 時間軸：整頁的主體。依預約時段排、報到後仍保留原位置。 -->
       <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-card" aria-labelledby="timeline-title">
         <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-3">
@@ -729,7 +726,7 @@ onBeforeUnmount(() => {
                   <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><CalendarPlus class="size-4" stroke-width="1.75" /></span>
                   <div class="min-w-0 flex-1">
                     <p class="truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></p>
-                    <p class="truncate text-sm text-muted-foreground">待安排回診　{{ item.followUpRecommendation || item.followUpReason }}</p>
+                    <p class="truncate text-sm text-muted-foreground">待安排回診　{{ item.followUpRecommendation }}</p>
                   </div>
                   <Button variant="soft" size="sm" @click="openSheet(item)">安排回診</Button>
                 </article>
@@ -764,21 +761,6 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <!-- 右側抽屜（初診報到）：頁面版面裡的一欄，不蓋住時間軸——櫃台要一邊建檔一邊看得到時間軸。 -->
-      <div v-if="drawerVisible" class="order-first flex min-h-0 shrink-0 flex-col xl:order-0 xl:w-176">
-        <CheckInDrawer
-          v-if="drawer === 'check-in' && target"
-          :key="target._id"
-          class="min-h-0 flex-1"
-          :appointment="target"
-          :late="itemIsOverdue(target)"
-          :suggested-checkin-number="suggestedCheckinNumber()"
-          :submitting="busy"
-          :error-message="dialogError"
-          @submit="(values) => submit(values, 'check-in')"
-          @close="closeDrawer"
-        />
-      </div>
     </div>
 
     <!-- 掛號 Modal：關閉即捨棄尚未送出的內容。 -->

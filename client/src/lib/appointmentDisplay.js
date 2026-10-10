@@ -1,13 +1,6 @@
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 
-// 櫃台工作台與醫師診療台共用的顯示文字與階段判斷。
-// 之前兩頁（加上看診工作區）各寫一份，初診／回診、遲到的文案與號碼牌顏色因此各走各的。
-
-export function visitTypeLabel(appointment = {}) {
-  if (appointment.visitType === 'new') return '初診';
-  if (appointment.visitType === 'return') return '回診';
-  return '';
-}
+// 掛號台與診療台共用的顯示文字與階段判斷（遲到文案、備註、號碼牌顏色），兩頁才不會各走各的。
 
 export function latenessLabel(minutes) {
   const value = Math.floor(Number(minutes) || 0);

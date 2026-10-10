@@ -114,7 +114,7 @@ describe('collectPreviewIssues 非必填欄位', () => {
   it('空白的非必填欄位、結論與異常說明都不阻擋預覽', () => {
     const issues = collectPreviewIssues({
       sections: section([
-        { key: 'conclusion', role: 'conclusion', label: '結論', type: 'prose', value: '' },
+        { key: 'conclusion', label: '結論', type: 'prose', value: '' },
         { key: 'skin', label: '皮膚', type: 'finding' },
       ]),
       getValue,

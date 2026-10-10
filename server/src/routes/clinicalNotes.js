@@ -11,7 +11,7 @@ import { linkedLabResults } from '../lib/appointmentJournal.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { withTransaction } from '../lib/transaction.js';
 import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitMedicationUpdate } from '../lib/realtime.js';
-import { normalizeRichText } from '../../../shared/richText.js';
+import Pet from '../models/Pet.js';
 
 const NOTE_FIELDS = ['content', 'entryDate'];
 
@@ -40,9 +40,15 @@ petClinicalNotesRouter.get('/', async (req, res, next) => {
   }
 });
 
+// 手動新增一則記事（自由文字）。掛號與藥單的日誌由系統跟著來源自動維護，不從這裡建立。
 petClinicalNotesRouter.post('/', async (req, res, next) => {
   try {
-    const note = await ClinicalNote.create({ ...pickNoteFields(req.body), petId: req.params.petId });
+    if (!mongoose.isValidObjectId(req.params.petId) || !(await Pet.exists({ _id: req.params.petId }))) {
+      return res.status(404).json({ message: '找不到貓咪' });
+    }
+    const fields = pickNoteFields(req.body);
+    if (typeof fields.content !== 'string' || !fields.content.trim()) return res.status(422).json({ message: '請填寫日誌內容' });
+    const note = await ClinicalNote.create({ ...fields, petId: req.params.petId });
     res.status(201).json(note);
   } catch (err) {
     next(err);
@@ -53,10 +59,11 @@ petClinicalNotesRouter.post('/', async (req, res, next) => {
 export const clinicalNotesRouter = Router();
 
 // 掛號日誌與藥單日誌只存關聯，編輯是寫回來源文件：
-//   - 掛號：body.fields 可帶來院原因、體重、體溫、本次簡易紀錄、請轉告飼主、回診建議（見 applyJournalFields）；
-//     只帶 content 的舊呼叫方式仍等同改 visitNote。
+//   - 掛號：body.fields 可帶來院原因、體重、體溫、本次簡易紀錄、請轉告飼主、回診建議（見 applyJournalFields），
+//     另可帶 entryDate 改日誌日期。
 //   - 藥單：body.fields 可帶病況、藥單、備註，寫回藥單並在 history 記 journal_edit（見 applyMedicationJournalEdit）。
 //     藥單日誌的日期跟著藥單建立時間走，不接受 entryDate。
+//   - 手動與舊系統匯入的記事是自由文字：改 content／entryDate。
 clinicalNotesRouter.put('/:id', async (req, res, next) => {
   try {
     const fields = pickNoteFields(req.body);
@@ -83,16 +90,21 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
         if (req.body.fields !== undefined) {
           const labResults = (await linkedLabResults([appointment._id], { session })).get(String(appointment._id)) ?? [];
           applyJournalFields(appointment, req.body.fields, { labResults });
+          appointment.increment();
+          await appointment.save({ session });
+        } else {
+          // 沒有要改看診內容（只改日期）就不動掛號，免得白白讓開著的工作區版本過期。
+          appointment = null;
         }
-        else if (fields.content !== undefined) appointment.visitNote = normalizeRichText(String(fields.content ?? '')).trim();
-        appointment.increment();
-        await appointment.save({ session });
         const noteFields = {};
         if (fields.entryDate !== undefined) noteFields.entryDate = fields.entryDate;
         note = Object.keys(noteFields).length
           ? await ClinicalNote.findByIdAndUpdate(req.params.id, { $set: noteFields }, { new: true, runValidators: true, session })
           : existing;
       } else {
+        if (fields.content !== undefined && (typeof fields.content !== 'string' || !fields.content.trim())) {
+          throw Object.assign(new Error('日誌內容不能空白'), { status: 422 });
+        }
         note = await ClinicalNote.findByIdAndUpdate(req.params.id, { $set: fields }, { new: true, runValidators: true, session });
       }
     });

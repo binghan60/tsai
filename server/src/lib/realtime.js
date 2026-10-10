@@ -45,16 +45,14 @@ export function emitChatMessage(message) {
   io?.emit('chat:new', message);
 }
 
-// 掛號本身的狀態／欄位有變動時廣播完整文件（完成看診、候診中或已完成修正看診資料
-// 都會呼叫）；前端收到後直接用 _id 找到本地那一筆更新欄位，不用整頁重新 fetch——
-// 這是醫師頁按下「更新」送出量測／回診資料後，櫃台頁能立刻看到最新內容的機制。
+// 掛號本身的狀態／欄位有變動時，向「那一天」的房間廣播完整文件；前端收到後直接用 _id 找到本地那一筆取代，
+// 不用整頁重新 fetch——診療台存了看診內容，掛號台立刻看得到。改了日期的掛號兩天的房間都要通知（previousDate）。
 export function emitAppointmentUpdate(appointment, previousDate) {
   const payload = typeof appointment.toObject === 'function' ? appointment.toObject() : appointment;
   io?.to(dayRoom(appointment.date)).emit('appointment:updated', payload);
   if (previousDate && previousDate !== appointment.date) io?.to(dayRoom(previousDate)).emit('appointment:updated', payload);
 }
 
-// 貓咪暫存區跟聊天一樣是全站一份，不分房間；payload 是完整清單。
 // IDEXX 檢驗結果的待確認清單有變動（收到新結果、有人確認／復原／忽略）；前端重讀工具欄的數字。
 //
 // 這只是「請重讀」的通知，沒有內容，所以短時間內的多次合併成一次：第一次馬上送，接下來 LAB_RESULTS_EMIT_GAP_MS 內的
@@ -80,6 +78,7 @@ export function emitLabResultsUpdate() {
   labResultsEmitTimer.unref?.();
 }
 
+// 貓咪暫存區跟聊天一樣是全站一份，不分房間；payload 是完整清單。
 export function emitPinnedPetsUpdate(items) {
   io?.emit('pinned-pets:updated', { items });
 }

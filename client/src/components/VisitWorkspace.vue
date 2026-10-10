@@ -175,17 +175,14 @@ const CONFLICT_LABELS = {
   internalNote: '內部備註',
   specialCareNote: '請轉告飼主',
   followUpRecommendation: '回診建議',
-  followUpReason: '回診原因',
   weightKg: '體重',
   temperatureC: '體溫',
 }
 function conflictLabel(key) {
-  // 檢驗數值不在診療台編輯，本機不會改到它，照理不會衝突；留著後備標籤免得畫面出現空白。
-  if (key.startsWith('lab:')) return '檢驗數值'
   return CONFLICT_LABELS[key]
 }
 function conflictValue(key) {
-  return key.startsWith('lab:') ? baseline.value.labs?.[key.slice(4)] : baseline.value[key]
+  return baseline.value[key]
 }
 const savedLabel = computed(() => {
   if (busy.value) return '儲存中…'
@@ -314,8 +311,8 @@ async function save() {
   }
   if (!dirty.value) return true
   if (!editable.value || conflicts.value.length || busy.value) return false
-  // labs 是巢狀物件，要另外複製一份；否則存檔期間繼續打的字會同時改到這份快照，合併時就認不出來。
-  const snapshot = { ...draft, labs: { ...draft.labs } }
+  // 存檔期間繼續打的字不能改到這份快照，合併時才認得出哪些是送出之後才打的。
+  const snapshot = { ...draft }
   const patch = draftPatch(snapshot, baseline.value)
   busy.value = true
   error.value = ''

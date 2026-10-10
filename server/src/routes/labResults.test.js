@@ -305,8 +305,8 @@ describe('lab results routes', () => {
       ] }) };
     };
     const { items } = await (await fetch(`${origin}/api/lab-results`)).json();
-    // 台北 9/30 整天＝9/29 16:00Z～9/30 16:00Z。
-    assert.equal(visitFilter.$or[0].scheduledAt.$gte.toISOString(), '2026-09-29T16:00:00.000Z');
+    // 檢驗時間 9/30 10:00（台北）→ 候選是 9/30 的掛號。
+    assert.deepEqual(visitFilter, { date: { $in: ['2026-09-30'] } });
     assert.deepEqual(items[0].candidates.map((candidate) => [candidate.petName, candidate.suggested]), [['牛奶', true], ['咖啡', false]]);
   });
 

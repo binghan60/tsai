@@ -9,15 +9,3 @@ export function familyOf(item) {
   return 'scalar';
 }
 
-// 各版式原生負責渲染的族群。落在這個族群的項目走版式自己的簽名排版
-// （理學檢查的三態清單、檢驗表格的分組表格、量測格狀的數值卡片），
-// 其餘族群一律交給 FieldControl 用精簡版控制項渲染。
-const NATIVE_FAMILY = {
-  findings: 'finding',
-  table: 'lab',
-  grid: 'measurement',
-};
-
-export function isNative(section, item) {
-  return NATIVE_FAMILY[section?.presentation] === familyOf(item);
-}

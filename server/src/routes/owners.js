@@ -8,38 +8,9 @@ import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagi
 import { escapeRegExp } from '../lib/regex.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
 import { checkCatBreed } from '../../../shared/catBreeds.js';
+import { pickPetFields } from '../lib/petFields.js';
 
 const router = Router();
-const PET_FIELDS = [
-  'name',
-  'species',
-  'breed',
-  'color',
-  'sex',
-  'neutered',
-  'birthDate',
-  'birthDateEstimated',
-  'weightKg',
-  'householdCatCount',
-  'diet',
-  'foods',
-  'foodsOther',
-  'feedingType',
-  'mealsPerDay',
-  'vaccineStatus',
-  'vaccineDate',
-  'medicalHistory',
-  'medicalHistoryOther',
-  'allergyStatus',
-  'allergyType',
-  'checkupStatus',
-  'checkupDate',
-  'notes',
-];
-
-function pickPetFields(body) {
-  return Object.fromEntries(PET_FIELDS.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
-}
 
 // previousPhone：修改既有飼主時傳原本的電話，沒改動的舊資料（常是市話）照收，見 shared/phone.js。
 function validateOwnerInput({ name, phone, email }, previousPhone) {

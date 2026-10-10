@@ -3,7 +3,6 @@ import { randomInt } from 'node:crypto';
 import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import Pet from '../models/Pet.js';
-import IntakeSubmission from '../models/IntakeSubmission.js';
 import Owner from '../models/Owner.js';
 import FormTemplate from '../models/FormTemplate.js';
 import ClinicSettings from '../models/ClinicSettings.js';
@@ -16,21 +15,20 @@ import { depositFieldsForBooking, settleCarriedDeposit } from '../lib/deposit.js
 import { DEPOSIT_CANCEL_OUTCOMES, checkDepositEdit } from '../../../shared/deposit.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsCheckinNumber } from '../lib/appointmentStatus.js';
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
-import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitMedicationUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitLabResultsUpdate, emitMedicationUpdate } from '../lib/realtime.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
 import { restoreImageUploadTodo, withdrawImageUploadTodo } from '../lib/imageUploadTodo.js';
 import { publishTodos } from '../lib/todos.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import { cancelVisitMedicationOrder } from '../lib/visitMedicationOrder.js';
 import { queueIdexxCensus } from '../lib/idexxRequests.js';
-import { applyPendingLabResults } from '../lib/labResultApply.js';
+import { applyPendingLabResults, releaseLabResults } from '../lib/labResultApply.js';
 import LabResult from '../models/LabResult.js';
 import { canRequestLab } from '../lib/idexxCensus.js';
 import { idexxCensusSettings } from '../config/idexxBridge.js';
 import appointmentWorkflowRouter from './appointmentWorkflow.js';
 import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
-import { checkCatBreed } from '../../../shared/catBreeds.js';
 import { escapeRegExp } from '../lib/regex.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 
@@ -39,7 +37,8 @@ router.use('/:id/workflow', appointmentWorkflowRouter);
 
 // 開著舊分頁的裝置不能覆寫別人剛做的事：版本不符一律擋下。
 // 另外，已經開始看診（或已交櫃台、已完成）的掛號不接受取消報到／取消／未到——
-// 那些是排班動作，人都已經在診間裡了就不該再走那條路。
+// 那些是排班動作，人都已經在診間裡了就不該再走那條路；要取消得先由醫師「取消看診」退回候診
+// （workflow 的 unstart），已交櫃台的要先取回。
 function checkWorkflowCompatibility(appointment, path, version) {
   if (version !== undefined && version !== (appointment.__v ?? 0)) {
     throw Object.assign(new Error('掛號資料已更新，請重新載入後再確認'), { status: 409 });
@@ -54,12 +53,13 @@ function checkWorkflowCompatibility(appointment, path, version) {
 const EDITABLE_APPOINTMENT_FIELDS = ['date', 'time', 'estimatedDurationMinutes', 'reason', 'petName', 'ownerName', 'ownerPhone', 'species', 'templateId', 'isSurgery', 'surgeryName'];
 const EDITABLE_APPOINTMENT_STATUSES = new Set(['scheduled', 'arrived']);
 
+// 初診掛號發給飼主的 4 位驗證碼：飼主用它在公開初診頁（/intake）填資料。
 function newIntakeVerificationCode() {
   return String(randomInt(1000, 10000));
 }
 
-
-
+// 掛號要用哪一份健檢表單：有指定就用指定的，沒有就用設定的預設表單。
+// optional：沒指定、也還沒設預設表單時回 null（新增掛號時可以先不決定，報到時才需要）。
 
 async function resolveAppointmentTemplate(templateId, { optional = false } = {}) {
   const selectedId = templateId || (await ClinicSettings.findOne().lean())?.defaultAppointmentTemplateId;
@@ -83,6 +83,8 @@ async function resolveAppointmentTemplate(templateId, { optional = false } = {})
   return template;
 }
 
+// 報到時替這次看診建立健檢報告草稿。沒有可用的表單就擋下報到並說明要去哪裡改——
+// 少了草稿，檢驗數值與量測沒有報告可以帶入。
 async function createCheckinRecord(appointment, session) {
   if (appointment.recordId) return;
 
@@ -174,44 +176,6 @@ async function syncFollowUpParent(followUp, { linked }) {
   if (parent) emitAppointmentUpdate(parent);
 }
 
-// 兩個人同時報到可能各自算出同一張今日未發牌號，被唯一索引擋下。那不是使用者做錯什麼，
-// 重算一次就會拿到另一張未發牌號，所以在這裡自行重試，不要把錯誤丟到前台。
-async function withQueueRetry(operation, attempts = 3) {
-  for (let attempt = 1; ; attempt += 1) {
-    try {
-      return await operation();
-    } catch (err) {
-      if (err?.code !== 11000 || attempt >= attempts) throw err;
-    }
-  }
-}
-
-// 週檢視用的日期範圍內每日掛號計數。純邏輯函式讓 test 不用真的連資料庫。
-export function enumerateDates(start, end) {
-  const dates = [];
-  let current = new Date(Date.UTC(
-    Number(start.slice(0, 4)),
-    Number(start.slice(5, 7)) - 1,
-    Number(start.slice(8, 10))
-  ));
-  const endDate = new Date(Date.UTC(
-    Number(end.slice(0, 4)),
-    Number(end.slice(5, 7)) - 1,
-    Number(end.slice(8, 10))
-  ));
-  while (current <= endDate) {
-    const iso = current.toISOString().slice(0, 10);
-    dates.push(iso);
-    current = new Date(current.getTime() + 24 * 60 * 60 * 1000);
-  }
-  return dates;
-}
-
-export function fillDailyCounts(dates, buckets) {
-  const counts = new Map(buckets.map((bucket) => [bucket._id, bucket.count]));
-  return dates.map((date) => ({ date, count: counts.get(date) ?? 0 }));
-}
-
 // GET /api/appointments?date=YYYY-MM-DD（預設今天）
 // 目前畫面只做單日時間軸，量不大，直接回傳當天全部，不分頁。
 // 診療台的佇列要一眼看到「這隻會咬人」「這位飼主要小心應對」，而那兩段備註存在
@@ -244,44 +208,6 @@ router.get('/', async (req, res, next) => {
     const items = await Appointment.find({ date }).sort({ scheduledAt: 1, createdAt: 1 });
     const [patientNotes, labResultCounts] = await Promise.all([patientNotesFor(items), labResultCountsFor(items)]);
     res.json({ items, date, patientNotes, labResultCounts });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// GET /api/appointments/summary?start=YYYY-MM-DD&end=YYYY-MM-DD
-// 週檢視用的日期範圍內每日掛號計數。
-router.get('/summary', async (req, res, next) => {
-  try {
-    const start = String(req.query.start || '').trim();
-    const end = String(req.query.end || '').trim();
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-
-    if (!dateRegex.test(start) || !dateRegex.test(end)) {
-      return res.status(422).json({ message: '請提供有效的開始日期與結束日期（YYYY-MM-DD 格式）' });
-    }
-
-    if (start > end) {
-      return res.status(422).json({ message: '開始日期不可晚於結束日期' });
-    }
-
-    // 防呆：限制最多 31 天
-    const startDate = new Date(start);
-    const endDate = new Date(end);
-    const daysDiff = Math.floor((endDate - startDate) / (24 * 60 * 60 * 1000));
-    if (daysDiff > 30) {
-      return res.status(422).json({ message: '查詢範圍最多 31 天' });
-    }
-
-    const buckets = await Appointment.aggregate([
-      { $match: { date: { $gte: start, $lte: end } } },
-      { $group: { _id: '$date', count: { $sum: 1 } } },
-      { $sort: { _id: 1 } },
-    ]);
-
-    const dates = enumerateDates(start, end);
-    const items = fillDailyCounts(dates, buckets);
-    res.json({ items });
   } catch (err) {
     next(err);
   }
@@ -430,15 +356,13 @@ router.get('/:id', async (req, res, next) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
     if (!appointment) return res.status(404).json({ message: '找不到掛號' });
-    checkWorkflowCompatibility(appointment, req.path, req.body?.version);
     res.json(appointment);
   } catch (err) {
     next(err);
   }
 });
 
-// 編輯：scheduled、arrived 可改時段／來院原因／身分快照。
-// 看診順序由下方專用路由調整，避免一般資料編輯意外改動整條候診佇列。
+// 修改掛號：只有待報到與在院的改得動（時段、來院原因、身分快照、表單、手術標記）；已報到的不能改日期。
 router.put('/:id', async (req, res, next) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
@@ -479,6 +403,10 @@ router.put('/:id', async (req, res, next) => {
       }
       if (updates.templateId !== undefined) {
         const template = await resolveAppointmentTemplate(updates.templateId);
+        // 報到時已經用原本的表單建好健檢報告草稿：換表單的話，看診的檢驗數值與草稿的表單結構會對不上。
+        if (appointment.recordId && String(template._id) !== String(appointment.templateId)) {
+          return res.status(422).json({ message: '這次看診已經建立健檢報告草稿，表單不能再換' });
+        }
         updates.templateId = template._id;
       }
       if (updates.isSurgery !== undefined || updates.surgeryName !== undefined) {
@@ -497,6 +425,10 @@ router.put('/:id', async (req, res, next) => {
           : appointment.date === clinicToday()
             ? new Date()
             : combineClinicDateTime(appointment.date, '');
+        // 初診的驗證碼在預約時間後 24 小時失效：掛號改到別天，期限要跟著移，不然到了那天驗證碼早就不能用。
+        if (!appointment.petId && appointment.intakeVerificationCode && !appointment.intakeVerificationUsedAt) {
+          appointment.intakeVerificationExpiresAt = new Date(appointment.scheduledAt.getTime() + 24 * 60 * 60 * 1000);
+        }
       }
     } else {
       // 改不動的就明講，不要什麼都沒改卻回成功。
@@ -512,36 +444,8 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-// 手動修改現場發出的實體號碼牌。牌號不是候診順位，可由櫃台自行決定並重複使用。
-router.patch('/:id/check-in-number', async (req, res, next) => {
-  try {
-    const requestedNumber = Number(req.body?.checkinNumber);
-    if (!Number.isSafeInteger(requestedNumber) || requestedNumber < 1) {
-      return res.status(422).json({ message: '號碼牌必須是從 1 開始的整數' });
-    }
-
-    const appointment = await Appointment.findById(req.params.id);
-    if (!appointment) return res.status(404).json({ message: '找不到掛號' });
-    checkWorkflowCompatibility(appointment, req.path, req.body?.version);
-    if (appointment.status !== 'arrived') {
-      return res.status(422).json({ message: '只有已報到的掛號可以修改號碼牌' });
-    }
-    if (requestedNumber === appointment.checkinNumber) return res.json(appointment);
-
-    await withTransaction(async (session) => {
-      rememberCheckinNumber(appointment, appointment.checkinNumber);
-      rememberCheckinNumber(appointment, requestedNumber);
-      appointment.checkinNumber = requestedNumber;
-      await appointment.save({ session });
-    });
-
-    emitAppointmentUpdate(appointment);
-    res.json(appointment);
-  } catch (err) { next(err); }
-});
-
-// scheduled → arrived。初診（petId 尚未確定）body 需帶 ownerName/ownerPhone/petName/species
-// 才能建立正式 Owner/Pet；回診（petId 已確定）body 可為空。
+// scheduled → arrived。只有已經建檔的貓能報到：初診要先由飼主填初診表、櫃台審核通過（那一步建立飼主與貓咪，
+// 見 routes/intakeSubmissions.js 的 approve），掛號上才有 petId。
 router.post('/:id/check-in', async (req, res, next) => {
   try {
     const appointment = await Appointment.findById(req.params.id);
@@ -554,21 +458,8 @@ router.post('/:id/check-in', async (req, res, next) => {
     if (appointment.date !== clinicToday()) {
       return res.status(422).json({ message: '只能替今天的掛號報到；要今天看診請先把掛號改到今天' });
     }
-
-    const needsNewPatient = !appointment.petId;
-    const existingOwnerId = appointment.ownerId;
-    if (appointment.intakeSubmissionId && needsNewPatient) {
-      return res.status(409).json({ message: '初診資料尚未審核，請先完成核准並掛號' });
-    }
-    // 舊掛號沒有 visitType；趁 petId 還沒因初診建檔而改變前補記，之後取消報到或
-    // 再次報到都仍保有掛號當下的類型。新掛號本來就有值，不會被這裡覆寫。
-    if (!appointment.visitType) appointment.visitType = needsNewPatient ? 'new' : 'return';
-    if (needsNewPatient) {
-      if (!existingOwnerId && !String(req.body.ownerName || '').trim()) return res.status(422).json({ message: '請填寫飼主姓名' });
-      if (!existingOwnerId && !String(req.body.ownerPhone || '').trim()) return res.status(422).json({ message: '請填寫聯絡電話' });
-      const phoneError = existingOwnerId ? '' : checkMobilePhone(req.body.ownerPhone).error;
-      if (phoneError) return res.status(422).json({ message: phoneError });
-      if (!String(req.body.petName || '').trim()) return res.status(422).json({ message: '請填寫貓咪姓名' });
+    if (!appointment.petId) {
+      return res.status(409).json({ message: '這筆初診還沒有建檔：請先讓飼主填初診表並完成審核，再報到' });
     }
 
     const isLate = Boolean(req.body?.isLate);
@@ -590,64 +481,11 @@ router.post('/:id/check-in', async (req, res, next) => {
     const originalRecordId = appointment.recordId;
     const originalImageTodoId = appointment.imageUploadTodoId;
     let todosRestored = false;
-    await withQueueRetry(() => withTransaction(async (session) => {
-      // transaction 因併發牌號衝突重試時，不能把失敗那次尚未發出的候選號留進 history。
+    await withTransaction(async (session) => {
+      // transaction 可能被資料庫驅動程式整段重試：上一輪寫在記憶體裡的候選號、草稿與待辦 id 要先還原。
       appointment.checkinNumberHistory = [...originalNumberHistory];
       appointment.recordId = originalRecordId;
       appointment.imageUploadTodoId = originalImageTodoId;
-      if (needsNewPatient) {
-        const species = String(req.body.species || '').trim();
-        const intake = req.body?.intakeSubmissionId
-          ? await IntakeSubmission.findById(req.body.intakeSubmissionId).session(session)
-          : null;
-        if (req.body?.intakeSubmissionId && (!intake || intake.status !== 'pending' || (intake.linkedAppointmentId && String(intake.linkedAppointmentId) !== String(appointment._id)))) {
-          throw Object.assign(new Error('這份初診表已被處理或連結到其他掛號'), { status: 409 });
-        }
-        const ownerDetails = req.body?.owner ?? {};
-        const petDetails = req.body?.pet ?? {};
-        // 品種只收清單上的，存成 IDEXX 的英文名稱；帶入初診表時，飼主當初填的原文（改版前送出的）照收。
-        const checkedBreed = checkCatBreed(petDetails.breed, intake?.pet?.breed);
-        if (checkedBreed.error) throw Object.assign(new Error(checkedBreed.error), { status: 422 });
-        let owner;
-        if (existingOwnerId) {
-          owner = await Owner.findOneAndUpdate(
-            { _id: existingOwnerId },
-            { $inc: { relationVersion: 1 } },
-            { new: true, session }
-          );
-          if (!owner) throw Object.assign(new Error('找不到指定的飼主，請重新確認掛號資料'), { status: 422 });
-        } else {
-          [owner] = await Owner.create(
-            [{
-              name: String(req.body.ownerName).trim(), phone: checkMobilePhone(req.body.ownerPhone).phone,
-              landline: String(ownerDetails.landline || '').trim(), email: String(ownerDetails.email || '').trim(), address: String(ownerDetails.address || '').trim(),
-            }],
-            { session }
-          );
-        }
-        const [pet] = await Pet.create(
-          [{
-            name: String(req.body.petName).trim(), ownerId: owner._id, ...(species ? { species } : {}),
-            ...Object.fromEntries(['breed', 'color', 'sex', 'neutered', 'birthDate', 'birthDateEstimated', 'householdCatCount', 'diet', 'foods', 'foodsOther', 'feedingType', 'mealsPerDay', 'vaccineStatus', 'vaccineDate', 'medicalHistory', 'medicalHistoryOther', 'allergyStatus', 'allergyType', 'checkupStatus', 'checkupDate'].filter(key => petDetails[key] !== undefined).map(key => [key, key === 'breed' ? checkedBreed.breed : petDetails[key]])),
-          }],
-          { session }
-        );
-        appointment.ownerId = owner._id;
-        appointment.petId = pet._id;
-        appointment.ownerName = owner.name;
-        appointment.ownerPhone = owner.phone;
-        appointment.petName = pet.name;
-        appointment.species = pet.species;
-        if (intake) {
-          intake.status = 'approved';
-          intake.reviewedAt = new Date();
-          intake.approvedOwnerId = owner._id;
-          intake.approvedPetId = pet._id;
-          intake.linkedAppointmentId = appointment._id;
-          await intake.save({ session });
-          appointment.intakeSubmissionId = intake._id;
-        }
-      }
 
       // 表單草稿在報到時建立，醫師進入診療台時已可直接編輯。
       await createCheckinRecord(appointment, session);
@@ -665,10 +503,10 @@ router.post('/:id/check-in', async (req, res, next) => {
       await appointment.save({ session });
       // 取消報到時拿掉的日誌，重新報到後接回來（先前寫的內容還在掛號上）。
       await syncAppointmentJournal(appointment, { session });
-    }));
+    });
     if (todosRestored) await publishTodos();
 
-    // 報到讓這筆掛號進入候診佇列，醫師頁要立刻看到，不必等 60 秒輪詢。
+    // 報到讓這筆掛號進入候診佇列，診療台要立刻看到，不必等下一次輪詢。
     emitAppointmentUpdate(appointment);
     res.json(appointment);
     await applyPendingLabResults(appointment);
@@ -730,7 +568,7 @@ router.post('/:id/cancel', async (req, res, next) => {
     if (!canTransitionAppointmentStatus(appointment.status, 'cancelled')) {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'cancelled') });
     }
-    // 待結帳也可能被取消（結帳前臨時反悔/離開），一樣要歸還號碼牌。
+    // 取消的可能是已報到、還在候診的那一筆：歸還號碼牌。
     const wasQueued = holdsCheckinNumber(appointment.status);
     // 這筆掛號收過保證金：取消時要說這筆錢的去向。先留著＝維持已收，下次約診沿用；
     // 已退還＝改記 refunded，次數不再從這筆歸零，下次約診照樣要求收（見 lib/deposit.js）。
@@ -746,6 +584,7 @@ router.post('/:id/cancel', async (req, res, next) => {
     appointment.cancelReason = String(req.body?.cancelReason || '').trim();
     appointment.checkedInAt = null;
     await saveLeavingQueue(appointment, wasQueued);
+    if (await releaseLabResults({ appointmentId: appointment._id })) emitLabResultsUpdate();
     await syncFollowUpParent(appointment, { linked: false });
     await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
@@ -763,10 +602,10 @@ router.post('/:id/no-show', async (req, res, next) => {
     if (!canTransitionAppointmentStatus(appointment.status, 'no_show')) {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'no_show') });
     }
-    const wasQueued = appointment.status === 'arrived';
     appointment.status = 'no_show';
     appointment.checkedInAt = null;
-    await saveLeavingQueue(appointment, wasQueued);
+    await saveLeavingQueue(appointment, false);
+    if (await releaseLabResults({ appointmentId: appointment._id })) emitLabResultsUpdate();
     await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
     res.json(appointment);
@@ -821,8 +660,9 @@ router.delete('/:id', async (req, res, next) => {
     } else {
       await appointment.deleteOne();
     }
-    // 取消時日誌就已經拿掉；這裡再清一次，處理這條規則之前留下的殘留（會顯示「找不到對應的就診資料」）。
+    // 日誌與檢驗結果在取消那一刻就處理過了；這裡再確認一次，不留下指向已刪除掛號的資料。
     await ClinicalNote.deleteOne({ appointmentId: appointment._id });
+    if (await releaseLabResults({ appointmentId: appointment._id })) emitLabResultsUpdate();
     await syncFollowUpParent(appointment, { linked: false });
     res.status(204).end();
   } catch (err) {

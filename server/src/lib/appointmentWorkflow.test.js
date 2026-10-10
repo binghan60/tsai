@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyJournalFields, applyWorkflowAction, appointmentJournalContent, appointmentJournalSections, assertWorkflowVersion } from './appointmentWorkflow.js';
-import { workflowState, workflowFilter, visitLabel } from '../../../shared/appointmentWorkflow.js';
+import { workflowState, workflowFilter } from '../../../shared/appointmentWorkflow.js';
 
 const appointment = () => ({ __v: 0, status: 'arrived', petId: 'pet-1', checkinNumber: 3, checkinNumberHistory: [3] });
 
@@ -59,7 +59,7 @@ test('the four steps run in order and only the desk releases the queue number', 
 
   applyWorkflowAction(p, 'handoff', {});
   assert.equal(p.status, 'pending_checkout');
-  assert.equal(visitLabel(p), '已交櫃台');
+  assert.deepEqual(workflowState(p), { started: true, handedOff: true, completed: false });
   // 人還在診所等櫃台，號碼牌不歸還。
   assert.equal(p.checkinNumber, 3);
 
@@ -82,7 +82,6 @@ test('the vet can reclaim a visit until the desk completes it', () => {
   applyWorkflowAction(p, 'reclaim', {});
   assert.deepEqual(workflowState(p), { started: true, handedOff: false, completed: false });
   assert.equal(p.status, 'arrived');
-  assert.equal(visitLabel(p), '看診中');
 
   applyWorkflowAction(p, 'clinical', { followUpRecommendation: '一週後複診' });
   applyWorkflowAction(p, 'handoff', {});
@@ -145,27 +144,19 @@ test('reject stale versions', () => {
   assert.doesNotThrow(() => assertWorkflowVersion(p, 0));
 });
 
-test('legacy visits keep their stage when the new workflow first touches them', () => {
-  // 舊版（批價／收款）沒有 handoffAt/deskCompletedAt，靠 status 回推。
-  const handedOff = { ...appointment(), status: 'pending_checkout' };
-  assert.deepEqual(workflowState(handedOff), { started: true, handedOff: true, completed: false });
-  applyWorkflowAction(handedOff, 'clinical', { visitNote: '櫃台補充' });
-  assert.equal(handedOff.visitNote, '櫃台補充');
-  assert.equal(handedOff.workflowVersion, 2);
-  assert.equal(handedOff.status, 'pending_checkout');
-  assert.ok(handedOff.handoffAt);
-
-  const done = { ...appointment(), status: 'completed' };
-  assert.deepEqual(workflowState(done), { started: true, handedOff: true, completed: true });
+test('the stage comes only from the three milestones, never from status alone', () => {
+  // status 是摘要：沒有里程碑的掛號不會因為 status 寫著 completed 就被當成已完成。
+  assert.deepEqual(workflowState({ status: 'completed' }), { started: false, handedOff: false, completed: false });
+  assert.deepEqual(workflowState({ status: 'arrived', visitStartedAt: new Date() }), { started: true, handedOff: false, completed: false });
 });
 
 test('every filter key owns one segment of the line, so the counts partition the day', () => {
   const day = [
     { status: 'scheduled' },
-    { workflowVersion: 2, status: 'arrived', petId: 'p' },
-    { workflowVersion: 2, status: 'arrived', petId: 'p', visitStartedAt: new Date() },
-    { workflowVersion: 2, status: 'pending_checkout', petId: 'p', visitStartedAt: new Date(), handoffAt: new Date() },
-    { workflowVersion: 2, status: 'completed', petId: 'p', visitStartedAt: new Date(), handoffAt: new Date(), deskCompletedAt: new Date() },
+    { status: 'arrived', petId: 'p' },
+    { status: 'arrived', petId: 'p', visitStartedAt: new Date() },
+    { status: 'pending_checkout', petId: 'p', visitStartedAt: new Date(), handoffAt: new Date() },
+    { status: 'completed', petId: 'p', visitStartedAt: new Date(), handoffAt: new Date(), deskCompletedAt: new Date() },
     { status: 'cancelled' },
   ];
   const buckets = ['scheduled', 'waiting', 'visiting', 'handoff', 'completed', 'cancelled'];
@@ -177,7 +168,7 @@ test('every filter key owns one segment of the line, so the counts partition the
 });
 
 test('follow-up bucket only holds visits the vet asked to return that have no booking yet', () => {
-  const base = { workflowVersion: 2, status: 'pending_checkout', petId: 'p', handoffAt: new Date() };
+  const base = { status: 'pending_checkout', petId: 'p', handoffAt: new Date() };
   assert.equal(workflowFilter({ ...base, followUpRecommendation: '兩週後複查' }, 'followup'), true);
   assert.equal(workflowFilter({ ...base, followUpRecommendation: '兩週後複查', followUpAppointmentId: 'a1' }, 'followup'), false);
   assert.equal(workflowFilter(base, 'followup'), false);

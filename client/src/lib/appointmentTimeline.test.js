@@ -7,53 +7,11 @@ import {
   groupBySession,
   isIdentityConfirmed,
   nowIndexInSession,
-  splitAppointmentsByQueueState,
 } from './appointmentTimeline.js';
 
 function apt(overrides) {
   return { _id: 'x', status: 'scheduled', petId: null, scheduledAt: '2026-08-26T10:00:00.000Z', ...overrides };
 }
-
-describe('splitAppointmentsByQueueState', () => {
-  it('依流程狀態拆出候診、待結帳、待報到與關閉項目', () => {
-    const scheduled = apt({ _id: 'a', status: 'scheduled' });
-    const arrived = apt({ _id: 'b', status: 'arrived', checkinNumber: 1 });
-    const pendingCheckout = apt({ _id: 'p', status: 'pending_checkout', checkinNumber: 2 });
-    const cancelled = apt({ _id: 'c', status: 'cancelled' });
-    const noShow = apt({ _id: 'd', status: 'no_show' });
-    const completed = apt({ _id: 'e', status: 'completed' });
-    const result = splitAppointmentsByQueueState([scheduled, arrived, pendingCheckout, cancelled, noShow, completed]);
-    assert.deepEqual(result.waiting.map((item) => item._id), ['b']);
-    assert.deepEqual(result.pendingCheckout.map((item) => item._id), ['p']);
-    assert.deepEqual(result.scheduled.map((item) => item._id), ['a']);
-    assert.deepEqual(result.cancelled.map((item) => item._id), ['c']);
-    assert.deepEqual(result.noShow.map((item) => item._id), ['d']);
-  });
-
-  // 紙本牌號只是現場識別碼，改牌不能改變候診先後；真正順序依報到時間。
-  it('候診中依報到時間排序，不受實體號碼牌影響', () => {
-    const late = apt({ _id: 'late', status: 'arrived', checkinNumber: 1, checkedInAt: '2026-08-26T02:10:00.000Z' });
-    const early = apt({ _id: 'early', status: 'arrived', checkinNumber: 8, checkedInAt: '2026-08-26T02:00:00.000Z' });
-    const unreported = apt({ _id: 'none', status: 'arrived', checkinNumber: null, checkedInAt: null });
-    const result = splitAppointmentsByQueueState([late, unreported, early]);
-    assert.deepEqual(result.waiting.map((item) => item._id), ['early', 'late', 'none']);
-  });
-
-  // 待結帳佇列回答「下一位該結帳的是誰」，依轉入待結帳的時間排序，不是問診完成的先後喊價。
-  it('待結帳依轉入待結帳的時間排序', () => {
-    const later = apt({ _id: 'later', status: 'pending_checkout', handoffAt: '2026-08-26T03:10:00.000Z' });
-    const earlier = apt({ _id: 'earlier', status: 'pending_checkout', handoffAt: '2026-08-26T03:00:00.000Z' });
-    const missingTimestamp = apt({ _id: 'none', status: 'pending_checkout', handoffAt: null });
-    const result = splitAppointmentsByQueueState([later, missingTimestamp, earlier]);
-    assert.deepEqual(result.pendingCheckout.map((item) => item._id), ['earlier', 'later', 'none']);
-  });
-
-  it('空陣列或缺少 status 不會炸掉', () => {
-    const emptyResult = { waiting: [], pendingCheckout: [], scheduled: [], cancelled: [], noShow: [] };
-    assert.deepEqual(splitAppointmentsByQueueState([]), emptyResult);
-    assert.deepEqual(splitAppointmentsByQueueState(undefined), emptyResult);
-  });
-});
 
 describe('appointmentsForTimeline', () => {
   it('已報到、待結帳仍保留在時間軸，並和待報到項目一起依預約時間排列', () => {

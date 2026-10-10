@@ -368,11 +368,15 @@ function runMoreAction(key) {
 function runConfirmation() { const run = confirmation.value?.run; confirmation.value = null; run?.(); }
 function cancelConfirmation() { confirmation.value?.cancel?.(); confirmation.value = null; }
 if (props.createOnly) create();
-onBeforeRouteLeave(() => {
-  if (busy.value) return false;
-  if (!dirty.value) return true;
-  return new Promise(resolve => { confirmation.value = { title: '離開並捨棄未儲存的藥單？', destructive: true, description: '本次尚未儲存的輸入會清除。', run: () => resolve(true), cancel: () => resolve(false) }; });
-});
+// 只有全頁版（/medications）會隨換頁消失，才需要攔離開。側滑面板在 router-view 外面、換頁也留著（KeepAlive），
+// 草稿不會因為換頁不見，在那裡註冊 onBeforeRouteLeave 也找不到路由。
+if (!props.compact) {
+  onBeforeRouteLeave(() => {
+    if (busy.value) return false;
+    if (!dirty.value) return true;
+    return new Promise(resolve => { confirmation.value = { title: '離開並捨棄未儲存的藥單？', destructive: true, description: '本次尚未儲存的輸入會清除。', run: () => resolve(true), cancel: () => resolve(false) }; });
+  });
+}
 onMounted(() => {
   refresh();
   socket.on('medication:updated', sync);

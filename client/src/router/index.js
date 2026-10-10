@@ -40,8 +40,6 @@ const router = createRouter({
     { path: '/reception', component: ReceptionPage, meta: { title: '掛號台' } },
     { path: '/medications', component: MedicationPickupPage, meta: { title: '藥單' } },
     { path: '/reception/intakes', component: IntakeReviewPage, meta: { title: '初診表審核', nav: '/reception' } },
-    // 舊書籤：看診不再是獨立頁面，改成診療台右欄的工作區。
-    { path: '/appointments/:id/visit', redirect: '/appointments' },
     { path: '/pets', component: PetsListPage, meta: { title: '貓咪' } },
     // 靜態路由要排在 /pets/:id 前面，不然 "new" 會被吃成動態參數 id。
     { path: '/pets/new', component: PetCreatePage, meta: { title: '新增貓咪' } },
@@ -50,8 +48,6 @@ const router = createRouter({
     // 寄送流水帳。掛在 /records 底下是因為它講的是報告的事，但它不依附任何一份報告——
     // 報告被刪除後，這裡仍然查得到當初寄給了誰。
     { path: '/records/deliveries', component: DeliveryLogsPage, meta: { title: '寄送歷程', nav: '/records/deliveries' } },
-    // 舊書籤不再開啟已移除的稽核快照功能，直接回到健檢清單。
-    { path: '/records/deleted', redirect: '/records' },
     // 表單管理：清單決定「有哪幾份表單」，設計頁決定「每份表單有哪些項目」。
     { path: '/settings', redirect: '/settings/forms' },
     { path: '/settings/forms', component: FormTemplateListPage, meta: { title: '表單管理' } },
@@ -67,6 +63,8 @@ const router = createRouter({
     { path: '/records/:id/preview', name: 'record-preview', component: ReportViewPage, meta: { bare: true, title: '報告預覽' } },
     // 公開頁面：無後台導覽列，飼主查看用 + Puppeteer PDF 截圖來源
     { path: '/report/:token', component: ReportViewPage, meta: { bare: true, public: true, title: '健檢報告' } },
+    // 不存在的網址（打錯、舊書籤）回到總覽，不留一頁空白。
+    { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 });
 

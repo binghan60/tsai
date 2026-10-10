@@ -35,7 +35,7 @@ export function storageFor(item) {
   return TYPE_VALUE_KIND[item.type] === schemaKind ? 'field' : 'custom';
 }
 
-// 預設值是範本的一部分，建立草稿的入口不只表單頁：掛號完成也會在後端直接建草稿。
+// 預設值是範本的一部分，建立草稿的入口不只表單頁：報到時也會在後端直接建草稿。
 // 因此必須在後端同樣套用，否則從掛號進入的新健檢會漏掉預設值。
 export function defaultRecordFields(template) {
   const fields = {};
@@ -71,9 +71,7 @@ export async function listTemplates({ includeDisabled = false, species } = {}) {
   const filter = includeDisabled ? {} : { enabled: { $ne: false } };
   if (species) {
     const normalized = normalizeSpecies(species);
-    // null 同時涵蓋「值為 null」與「欄位不存在」—— 在 species 欄位加入前建立的表單
-    // 沒有這個欄位，它們等同於「不限物種」，不能被濾掉。
-    if (normalized !== 'all') filter.species = { $in: [normalized, 'all', null] };
+    if (normalized !== 'all') filter.species = { $in: [normalized, 'all'] };
   }
   return FormTemplate.find(filter).sort({ order: 1, createdAt: 1 });
 }
@@ -182,10 +180,9 @@ function sanitizeItem(raw, key, index) {
     enabled: raw.enabled !== false,
     required: raw.required === true,
     numeric: raw.numeric !== false,
-    rows: Number.isFinite(Number(raw.rows)) ? Number(raw.rows) : null,
-    // 跟 referenceMin／referenceMax 走同一個 numberOrNull。原本這三個只擋 ''，
-    // 於是打幾個空白會被 Number('  ') 判成 0——max 變成 0 的話每個數值都會超出上限，
-    // 那份報告就再也結不了案；打上非數字則是 NaN，存檔時直接 cast 失敗。
+    // 數字欄位一律走 numberOrNull：Number(null) 與 Number('  ') 都是 0，直接轉的話沒填的列數會存成 0、
+    // 沒填的上限會變成 0（每個數值都超出上限，那份報告就再也結不了案）；打上非數字則是 NaN，存檔時 cast 失敗。
+    rows: numberOrNull(raw.rows),
     min: numberOrNull(raw.min),
     max: numberOrNull(raw.max),
     step: numberOrNull(raw.step),
@@ -328,28 +325,13 @@ export function sanitizePresets(rawPresets, sections, existing) {
 // 帶 role 的項目消失會讓對應的系統功能失效，儲存前先擋下來。
 export function missingRoles(sections, existing) {
   // before／after 的條件必須對稱，否則區塊一旦停用，之後每次儲存都會
-  // 重複跳出同一則「移除連動欄位」的確認。
-  const before = new Set(
-    (existing?.sections ?? []).flatMap((section) => (section.items ?? [])
-      .filter((item) => item.role && item.enabled !== false && section.enabled !== false)
+  // 重複跳出同一則「移除連動欄位」的確認。只算 ITEM_ROLES：舊範本裡已經沒有作用的 role 不必提醒。
+  const activeRoles = (list) => new Set(
+    (list ?? []).flatMap((section) => (section.items ?? [])
+      .filter((item) => ITEM_ROLES.includes(item.role) && item.enabled !== false && section.enabled !== false)
       .map((item) => item.role))
   );
-  const after = new Set(
-    sections.flatMap((section) => (section.items ?? [])
-      .filter((item) => item.role && item.enabled !== false && section.enabled !== false)
-      .map((item) => item.role))
-  );
+  const before = activeRoles(existing?.sections);
+  const after = activeRoles(sections);
   return [...before].filter((role) => !after.has(role));
-}
-
-export function flattenItems(template) {
-  const doc = template.toObject ? template.toObject() : template;
-  return (doc.sections ?? []).flatMap((section) =>
-    (section.items ?? []).map((item) => ({ ...item, sectionKey: section.key }))
-  );
-}
-
-// 後端靠 role 找欄位，不寫死欄位名稱，使用者才能自由改標籤與搬動位置。
-export function findItemByRole(template, role) {
-  return flattenItems(template).find((item) => item.role === role && item.enabled !== false) ?? null;
 }

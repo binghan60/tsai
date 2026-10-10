@@ -6,7 +6,7 @@ import DeliveryLog from '../models/DeliveryLog.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import Appointment from '../models/Appointment.js';
-import { enqueueReportPdf, readStoredPdf } from '../lib/reportPdfJobs.js';
+import { enqueueReportPdf, readStoredPdf, removePdf } from '../lib/reportPdfJobs.js';
 import { encryptPdf } from '../lib/pdfEncrypt.js';
 import { createFailureLimiter, reportPasscode, reportPasscodeMatches } from '../lib/reportPasscode.js';
 import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from '../lib/mailer.js';
@@ -74,8 +74,11 @@ function sanitizeRecordImages(data, template, existingRecord = null) {
       .map((item) => item.key))
   );
   const customValues = { ...data.customValues };
+  // 已經存著、這次沒動的圖片不必重驗（讀出來的 customValues 是 Map，要用 get）。
+  const stored = existingRecord?.customValues;
+  const previous = (key) => (stored instanceof Map ? stored.get(key) : stored?.[key]);
   for (const key of imageKeys) {
-    if (customValues[key] !== undefined && !sameImages(customValues[key], existingRecord?.customValues?.[key])) {
+    if (customValues[key] !== undefined && !sameImages(customValues[key], previous(key))) {
       customValues[key] = sanitizeImageValue(customValues[key]);
     }
   }
@@ -215,12 +218,7 @@ petRecordsRouter.get('/', async (req, res, next) => {
   }
 });
 
-// ── 填表時的「上次數值」──
-// 這隻貓咪過去每個項目最近一次的紀錄，不限健檢類型：只要以前量過血小板，
-// 這次的表單有血小板就能顯示上次的值，即使兩次用的是不同的健檢表單。
-// 只收得出數值的型別 —— 理學檢查只有正常／異常，沒有可以拿來對照的數字。
-// 逐份走訪已結案報告找「每個項目最近一次」的值。太久以前的紀錄拿來對照的意義有限，
-// 也不該讓填表頁為了翻完全部病歷而多等，只看最近這幾份。
+// 結案與寄送各有一把租約鎖：程序中途消失時，超過這段時間別的請求才接手。
 const FINALIZE_LEASE_MS = 5 * 60 * 1000;
 const DELIVERY_LEASE_MS = 10 * 60 * 1000;
 const configuredShareDays = Number.parseInt(process.env.SHARE_LINK_DAYS, 10);
@@ -233,6 +231,11 @@ function shareExpiryFromNow(days = DEFAULT_SHARE_DAYS) {
   return new Date(Date.now() + safeDays * 24 * 60 * 60 * 1000);
 }
 
+// ── 填表時的「上次數值」──
+// 這隻貓咪過去每個項目最近一次的紀錄，不限健檢類型：只要以前量過血小板，
+// 這次的表單有血小板就能顯示上次的值，即使兩次用的是不同的健檢表單。
+// 只收得出數值的型別——理學檢查只有正常／異常，沒有可以拿來對照的數字；只看最近 20 份已結案報告（lib/historyValues.js）。
+//
 // 正在填的這份報告與它的其他版本都不算「上次」——
 // 修訂草稿要對照的是更早的那次健檢，不是自己的前一版。
 //
@@ -684,7 +687,8 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       documentVersion: record.__v,
     });
   } catch (err) {
-    if (record?._id && finalizeAttemptId && !didFinalize && !err.isFinalizePdfError) {
+    // 鎖定之後、真正結案之前出錯：把結案鎖放掉、退回草稿，使用者才能再試一次。
+    if (record?._id && finalizeAttemptId && !didFinalize) {
       try {
         await MedicalRecord.updateOne(
           { _id: record._id, finalizeAttemptId },
@@ -696,11 +700,6 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       } catch (cleanupError) {
         console.error('結案失敗後釋放鎖定時發生錯誤', cleanupError);
       }
-    }
-    if (err.isFinalizePdfError) {
-      // 這條路徑不會走到全域錯誤處理，不自己記一筆就完全查不到失敗原因。
-      console.error('結案時產生 PDF 失敗', err);
-      return res.status(502).json({ message: 'PDF 產生失敗，報告仍維持草稿，請稍後再試' });
     }
     next(err);
   }
@@ -839,6 +838,7 @@ recordsRouter.post('/:id/revisions', async (req, res, next) => {
 
 recordsRouter.delete('/:id', async (req, res, next) => {
   let deletedImageIds = [];
+  let deletedPdfFileId = null;
   let unlinkedAppointmentIds = [];
   try {
     const record = await MedicalRecord.findById(req.params.id);
@@ -862,7 +862,6 @@ recordsRouter.delete('/:id', async (req, res, next) => {
     // 比對的是貓咪名而不是報告編號——編號是一串記不住的亂碼，只能照抄，
     // 抄的過程不會讓人意識到自己在刪什麼；打出貓咪名則會。
     if (isFinalizedRecord(record)) {
-      // 另外查一次而不是 populate：record 後面要整份存進稽核快照，不希望它被塞進 pet 文件。
       const pet = await Pet.findById(record.petId).select('name');
       const expected = String(pet?.name ?? '').trim();
       const confirmText = String(req.body?.confirmText ?? '').trim();
@@ -872,7 +871,7 @@ recordsRouter.delete('/:id', async (req, res, next) => {
     }
     // 修訂鏈回復與刪除必須一起成功；任何一步失敗就全部回滾。
     await withTransaction(async (session) => {
-      const current = await MedicalRecord.findById(record._id).session(session);
+      const current = await MedicalRecord.findById(record._id).select('+pdfFileId').session(session);
       if (!current) {
         const error = new Error('找不到報告，可能已由其他操作刪除');
         error.status = 404;
@@ -889,6 +888,7 @@ recordsRouter.delete('/:id', async (req, res, next) => {
         throw error;
       }
       deletedImageIds = imagePublicIds(current);
+      deletedPdfFileId = current.pdfFileId ?? null;
       // 報告可能在最初讀取與 transaction 開始之間剛好完成結案，
       // 因此確認文字必須用 transaction 內的最新狀態再驗一次。
       if (isFinalizedRecord(current)) {
@@ -944,6 +944,8 @@ recordsRouter.delete('/:id', async (req, res, next) => {
       appointments.forEach((appointment) => emitAppointmentUpdate(appointment));
     }
     await cleanUpImages(deletedImageIds, `record ${req.params.id} deleted`);
+    // 已結案報告存著的 PDF 原檔一起清掉：報告刪了，它的內容不該還留在資料庫裡。
+    await removePdf(deletedPdfFileId);
     res.status(204).end();
   } catch (err) {
     next(err);

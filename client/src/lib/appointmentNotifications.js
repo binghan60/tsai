@@ -52,6 +52,6 @@ export function describeVisitChanges(before, after) {
     ['飼主提醒', ['specialCareNote']],
     ['量測資料', ['weightKg', 'temperatureC']],
     ['檢驗數值', ['labValues']],
-    ['回診資料', ['followUpRecommendation', 'followUpReason', 'followUpDate', 'followUpTime']],
+    ['回診資料', ['followUpRecommendation', 'followUpDate', 'followUpTime']],
   ].filter(([, fields]) => changedAppointmentFields(before, after, fields).length).map(([label]) => label);
 }

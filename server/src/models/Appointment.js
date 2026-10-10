@@ -15,8 +15,8 @@ const appointmentSchema = new mongoose.Schema(
     // 有值＝連結到既有病患（回診）；null＝初診、尚未建檔。
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'Owner', default: null },
     petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', default: null },
-    // 掛號當下的身分類型，之後報到替初診建立 petId 時也不能改寫。
-    // 舊資料無法可靠回推，所以允許 null，前台遇到 null 就不顯示標籤。
+    // 掛號當下的身分類型（後端依有沒有連結既有貓咪決定）。初診表核准後補上 petId 也不改寫——
+    // 那一筆整天都還是「初診」。
     visitType: { type: String, enum: ['new', 'return'], default: null },
 
     // 一律存快照——不管是不是既有病患。查詢列表不用 populate 就能顯示，
@@ -32,7 +32,7 @@ const appointmentSchema = new mongoose.Schema(
     // 手術標記——獨立於 reason，勾選後 UI 會在候診佇列與工作台標註「手術」徽章。
     isSurgery: { type: Boolean, default: false },
     surgeryName: { type: String, default: '', trim: true, maxlength: 200 },
-    // 掛號時指定、看診完成時用來直接建立草稿的表單。保留在掛號上，
+    // 掛號時指定、報到時用來建立健檢報告草稿的表單。保留在掛號上，
     // 才不會因日後變更預設表單而讓已掛號病患用錯表單。
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: 'FormTemplate', default: null },
     recordId: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicalRecord', default: null },
@@ -95,9 +95,6 @@ const appointmentSchema = new mongoose.Schema(
     followUpDate: { type: String, default: '', match: /^$|^\d{4}-\d{2}-\d{2}$/ },
     // 回診時間（選填，HH:MM）。沒填時併入 MedicalRecord.followUpDate 會落在當天 00:00。
     followUpTime: { type: String, default: '', match: /^$|^\d{2}:\d{2}$/ },
-    // 回診原因——就是下一筆自動掛號的「來院原因」（Appointment.reason），
-    // 不是這次看診本身的來院原因。沒填就用「回診」墊底。
-    followUpReason: { type: String, default: '', trim: true },
     // 櫃台敲定回診時段時掛出的下一筆掛號（routes/appointmentWorkflow.js 的 followup）。
     // 之後改回診時段會就地改期這筆，只有它還是 scheduled 狀態才動；已經報到/完成/取消
     // 就是現場另外處理過了，不回頭改。
@@ -124,28 +121,26 @@ const appointmentSchema = new mongoose.Schema(
     specialCareNote: { type: String, default: '', trim: true, maxlength: 500 },
     followUpRecommendation: { type: String, default: '', trim: true, maxlength: 500 },
 
-    // 流水線的三個里程碑，見 shared/appointmentWorkflow.js。status 由它們推導出來，
-    // 不是另一個獨立的真相。workflowVersion 2 ＝這條四步流水線；1 是舊的批價／收款版本，
-    // 那些欄位已從 schema 移除、讀不回來，改由 status 回推階段。
-    workflowVersion: { type: Number, default: 0 },
-    // 醫師開啟工作區＝開始看診。
+    // 流水線的三個里程碑，見 shared/appointmentWorkflow.js。status 由它們推導出來，不是另一個獨立的真相。
+    // 醫師按「看診」／「開始看診」。點開工作區只是先看資料，不算；「取消看診」會清成 null、退回候診。
     visitStartedAt: { type: Date, default: null },
     // 醫師「完成看診，送交櫃台」。取回（reclaim）會清成 null，讓這筆退回看診中。
     handoffAt: { type: Date, default: null },
-    // 櫃台「完成處理」。寫入後就是終態，不能再取回。
+    // 櫃台「完成處理」。寫入後醫師不能再取回；要改得由櫃台退回處理中（或核准醫師的修改申請），那時清成 null。
     deskCompletedAt: { type: Date, default: null },
-    // 醫師對已結案就診提出的重新開啟申請；保留原因與時間，櫃台核准後才可再修改。
+    // 醫師對已完成的就診提出的修改申請；保留原因與時間，櫃台核准後才可再修改。
     reopenRequest: {
       reason: { type: String, default: '', trim: true, maxlength: 500 },
       requestedAt: { type: Date, default: null },
       approvedAt: { type: Date, default: null },
     },
-    completedAt: { type: Date, default: null },
   },
   { timestamps: true, optimisticConcurrency: true }
 );
 
-// 時間軸排序。
+// 某一天的時間軸：診療台、掛號台、總覽與配號碼牌都是「這一天的全部掛號」，每台裝置每 30 秒輪詢一次。
+appointmentSchema.index({ date: 1, scheduledAt: 1 });
+// 跨日搜尋與待確認檢驗的候選掛號依時間排序。
 appointmentSchema.index({ scheduledAt: 1 });
 // 依狀態篩選（例如把已取消/未到跟其餘分開），以及讀取當日候診佇列。
 appointmentSchema.index({ status: 1, scheduledAt: 1 });
@@ -160,6 +155,8 @@ appointmentSchema.index({ ownerId: 1, date: 1 });
 appointmentSchema.index({ imageUploadTodoId: 1 }, { partialFilterExpression: { imageUploadTodoId: { $type: 'objectId' } } });
 // 診療台開出的藥單之後在藥單那邊被修改或取消時，反查是哪一筆掛號（lib/visitMedicationOrder.js）。
 appointmentSchema.index({ medicationOrderId: 1 }, { partialFilterExpression: { medicationOrderId: { $type: 'objectId' } } });
-// 號碼牌可由櫃台自行決定，允許同日重複與再次使用；history 僅保留異動紀錄。
+// 健檢報告草稿反查連著的看診：填寫頁每次讀取與自動存檔都會查（lib/recordVisitLink.js）。
+appointmentSchema.index({ recordId: 1 }, { partialFilterExpression: { recordId: { $type: 'objectId' } } });
+// 號碼牌刻意沒有唯一索引：櫃台可以改成手上實際發出去的號碼，同一天允許重複。
 
 export default mongoose.model('Appointment', appointmentSchema);

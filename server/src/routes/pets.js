@@ -10,47 +10,18 @@ import { petDepositState } from '../lib/deposit.js';
 import Todo from '../models/Todo.js';
 import { publishPinnedPets } from '../lib/pinnedPets.js';
 import { publishTodos } from '../lib/todos.js';
+import { emitLabResultsUpdate } from '../lib/realtime.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
 import { checkCatBreed } from '../../../shared/catBreeds.js';
+import { pickPetFields } from '../lib/petFields.js';
+import { escapeRegExp } from '../lib/regex.js';
+import MedicationOrder from '../models/MedicationOrder.js';
+import { releaseLabResults } from '../lib/labResultApply.js';
 
-const PET_FIELDS = [
-  'name',
-  'species',
-  'breed',
-  'color',
-  'sex',
-  'neutered',
-  'birthDate',
-  'birthDateEstimated',
-  'weightKg',
-  'householdCatCount',
-  'diet',
-  'foods',
-  'foodsOther',
-  'feedingType',
-  'mealsPerDay',
-  'vaccineStatus',
-  'vaccineDate',
-  'medicalHistory',
-  'medicalHistoryOther',
-  'allergyStatus',
-  'allergyType',
-  'checkupStatus',
-  'checkupDate',
-  'notes',
-];
 const MEDICAL_RECORD_SUMMARY_FIELDS =
   'petId vet visitDate examType status deliveryStatus deliveryError reportVersion revisionOf revisionRootId supersededBy shareToken shareEnabled sharedAt shareExpiresAt sentAt sentTo finalizedAt updatedAt createdAt';
-
-function pickPetFields(body) {
-  return Object.fromEntries(PET_FIELDS.filter((field) => body[field] !== undefined).map((field) => [field, body[field]]));
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 // 掛載於 /api/owners/:ownerId/pets
 export const ownerPetsRouter = Router({ mergeParams: true });
@@ -186,8 +157,9 @@ petsRouter.get('/:id', async (req, res, next) => {
   }
 });
 
-// GET /api/pets/:id/attendance?scope=pet|owner — 出席紀錄（遲到與未到），新到舊、分頁。
-// counts 兩組都回（這隻貓、飼主名下全部），頁首徽章與頁籤數字用的就是這份，跟清單筆數同一個口徑。
+// GET /api/pets/:id/attendance?scope=pet|owner — 出席紀錄清單，新到舊、分頁：遲到、未到，
+// 加上已取消的掛號與約診時決定過保證金的掛號（lib/attendance.js 的 attendanceListFilter）。
+// counts 只算遲到與未到（這隻貓、飼主名下全部各一組），頁首徽章與清單上方那排次數用它；頁籤上的數字是清單總筆數。
 petsRouter.get('/:id/attendance', async (req, res, next) => {
   try {
     const pet = await Pet.findById(req.params.id).select('ownerId').lean();
@@ -195,7 +167,6 @@ petsRouter.get('/:id/attendance', async (req, res, next) => {
     const petScope = { petId: pet._id };
     const ownerScope = pet.ownerId ? { ownerId: pet.ownerId } : petScope;
     const scope = req.query.scope === 'owner' ? 'owner' : 'pet';
-    // 清單除了遲到與未到，也列出約診時決定過保證金的掛號；counts 仍只算遲到與未到。
     const filter = attendanceListFilter(scope === 'owner' ? ownerScope : petScope);
     const pagination = paginationOptions(req.query, { defaultLimit: 10, maxLimit: 50 });
     const [appointments, total, petGroups, ownerGroups, deposit] = await Promise.all([
@@ -263,6 +234,7 @@ petsRouter.delete('/:id', async (req, res, next) => {
   try {
     let removedPin = false;
     let unlinkedTodos = false;
+    let releasedLabResults = false;
     await withTransaction(async (session) => {
       const pet = await Pet.findById(req.params.id).session(session);
       if (!pet) {
@@ -280,12 +252,27 @@ petsRouter.delete('/:id', async (req, res, next) => {
         error.status = 409;
         throw error;
       }
+      // 還在流程裡的掛號與藥單指著這隻貓：刪掉之後時間軸與藥單清單上會留下一筆打不開、報到後也沒有貓可以連的資料。
+      if (await Appointment.exists({ petId: pet._id, status: { $nin: ['cancelled', 'no_show'] } }).session(session)) {
+        const error = new Error('此貓咪仍有掛號紀錄（待報到、看診中或已完成），無法刪除');
+        error.status = 409;
+        throw error;
+      }
+      if (await MedicationOrder.exists({ petId: pet._id, status: { $ne: 'cancelled' } }).session(session)) {
+        const error = new Error('此貓咪仍有藥單，無法刪除');
+        error.status = 409;
+        throw error;
+      }
       const deleted = await Pet.deleteOne({ _id: pet._id }, { session });
       if (deleted.deletedCount !== 1) {
         const error = new Error('貓咪資料正在被其他操作更新，請重新整理後再試');
         error.status = 409;
         throw error;
       }
+      // 已取消／未到的掛號、已取消的藥單沒有成立過，跟著貓咪一起刪掉；認到這隻貓、卻沒有看診的檢驗結果放回待確認清單。
+      await Appointment.deleteMany({ petId: pet._id }, { session });
+      await MedicationOrder.deleteMany({ petId: pet._id }, { session });
+      releasedLabResults = (await releaseLabResults({ petId: pet._id }, { session })) > 0;
       // 暫存紀錄不是病歷，不擋刪除，跟著貓咪一起消失。
       removedPin = (await PinnedPet.deleteOne({ petId: pet._id }, { session })).deletedCount > 0;
       // 待辦同理不擋刪除：只把標記裡的 petId 清成 null，petName／ownerName 快照留著，那筆待辦仍讀得懂。
@@ -297,6 +284,7 @@ petsRouter.delete('/:id', async (req, res, next) => {
     });
     if (removedPin) await publishPinnedPets();
     if (unlinkedTodos) await publishTodos();
+    if (releasedLabResults) emitLabResultsUpdate();
     res.status(204).end();
   } catch (err) {
     next(err);

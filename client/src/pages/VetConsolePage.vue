@@ -470,7 +470,7 @@ onBeforeUnmount(() => {
               :aria-current="String(item._id) === activeId ? 'true' : undefined"
               role="button"
               tabindex="0"
-              :aria-label="`開啟 ${item.petName}，${status?.label || ''}`"
+              :aria-label="status?.label ? `開啟 ${item.petName}，${status.label}` : `開啟 ${item.petName}`"
               @click="openPatient(item)"
               @keydown.enter.self.prevent="openPatient(item)"
               @keydown.space.self.prevent="openPatient(item)"

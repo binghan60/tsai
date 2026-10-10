@@ -23,9 +23,9 @@ const template = {
   sections: [{ key: 'labs', label: '檢驗', items: [{ key: 'wbc', label: 'WBC 白血球', type: 'lab', unit: '×10³/µL', referenceMin: 5.5, referenceMax: 19.5 }] }],
 };
 const fixture = {
-  _id: id, petId, templateId, __v: 0, workflowVersion: 2, date, time: '10:00', scheduledAt: `${date}T02:00:00Z`, checkedInAt: new Date().toISOString(),
+  _id: id, petId, templateId, __v: 0, date, time: '10:00', scheduledAt: `${date}T02:00:00Z`, checkedInAt: new Date().toISOString(),
   checkinNumber: 3, petName: '豆豆', ownerName: '王小姐', ownerPhone: '0912345678', species: '貓', reason: '皮膚複診', status: 'arrived', visitType: 'return',
-  visitNote: '', specialCareNote: '', followUpReason: '', followUpRecommendation: '', labValues: [],
+  visitNote: '', specialCareNote: '', followUpRecommendation: '', labValues: [],
 };
 const appointments = [fixture, { ...fixture, _id: '507f1f77bcf86cd799439014', petName: '咪咪', time: '11:00', scheduledAt: `${date}T03:00:00Z`, status: 'scheduled', checkedInAt: null, checkinNumber: null }];
 let io;
@@ -92,7 +92,11 @@ try {
 
   // ── 診療台：開工作區、開始看診、自動存檔 ──
   await doctor.goto(`${origin}/appointments?date=${date}`);
-  await click(doctor, '開啟 豆豆');
+  // 列的 aria-label 是「開啟 豆豆，候診 3 分」：後面接目前狀態，所以用開頭比對。
+  // 先帶到前景：背景分頁不跑 requestAnimationFrame，點擊前的捲動會一直等不到。
+  await doctor.bringToFront();
+  await doctor.waitForSelector('[role="button"][aria-label^="開啟 豆豆"]');
+  await doctor.click('[role="button"][aria-label^="開啟 豆豆"]');
   await doctor.waitForSelector('[aria-label="豆豆 看診工作區"]');
   assert.equal(await doctor.evaluate(() => document.body.textContent.includes('給櫃台的交辦')), false, 'handoff note field is gone');
   await click(doctor, '開始看診');

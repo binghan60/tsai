@@ -121,10 +121,16 @@ async function seed() {
     return {
       ownerId: owner._id, petId: pet._id, visitType: 'return',
       ownerName: owner.name, ownerPhone: owner.phone, petName: pet.name, species: '貓',
-      templateId: template._id, workflowVersion: 2, ...extra,
+      templateId: template._id, ...extra,
     };
   };
-  const newPatient = extra => ({ ownerId: null, petId: null, visitType: 'new', species: '貓', templateId: template._id, workflowVersion: 2, ...extra });
+  // 初診一律有驗證碼（飼主用它填初診表），掛號台上顯示「等飼主填初診表」。
+  const newPatient = extra => ({
+    ownerId: null, petId: null, visitType: 'new', species: '貓', templateId: template._id,
+    intakeVerificationCode: String(1000 + Math.floor(Math.random() * 9000)),
+    intakeVerificationExpiresAt: new Date(extra.scheduledAt.getTime() + 24 * 60 * 60 * 1000),
+    ...extra,
+  });
   const slot = (date, time, extra) => ({ date, time, scheduledAt: at(date, time), ...extra });
 
   const appointmentDefs = [
@@ -135,16 +141,16 @@ async function seed() {
       labValues: [lab('rbc', '268'), lab('bun', '34'), lab('cre', '1.9'), lab('sdma', '15'), lab('glucose', '112')],
       visitNote: '整體狀況穩定，[orange]腎指數在臨界值[/orange]。牙齒輕度牙結石。',
       specialCareNote: '腎臟處方飼料開始換食，新舊飼料混合 7 天漸進更換',
-      followUpRecommendation: '兩週後回診複查腎指數', followUpReason: '複查腎指數',
+      followUpRecommendation: '兩週後回診複查腎指數',
       followUpDate: day(14), followUpTime: '14:30',
-      visitStartedAt: at(TODAY, '10:02'), handoffAt: at(TODAY, '10:30'), deskCompletedAt: at(TODAY, '10:41'), completedAt: at(TODAY, '10:41') }),
+      visitStartedAt: at(TODAY, '10:02'), handoffAt: at(TODAY, '10:30'), deskCompletedAt: at(TODAY, '10:41') }),
       createdAt: at(day(-8), '15:10') },
     { key: 'mochi', doc: base('mochi', { ...slot(TODAY, '10:15'), reason: '一直甩頭、抓右耳', status: 'completed',
       checkinNumberHistory: [2], checkedInAt: at(TODAY, '09:53'),
       weightKg: 5.3, temperatureC: 38.7,
       visitNote: '右耳道紅腫、褐色耳垢，抹片見**酵母菌**。已清耳。',
       specialCareNote: '耳滴每天兩次，滴完按摩耳根；一週內避免洗澡',
-      visitStartedAt: at(TODAY, '10:31'), handoffAt: at(TODAY, '10:50'), deskCompletedAt: at(TODAY, '11:02'), completedAt: at(TODAY, '11:02') }),
+      visitStartedAt: at(TODAY, '10:31'), handoffAt: at(TODAY, '10:50'), deskCompletedAt: at(TODAY, '11:02') }),
       createdAt: at(day(-2), '18:20') },
     // 上午診：已交櫃台（待櫃台處理，回診還沒安排）
     { key: 'orange', doc: base('orange', { ...slot(TODAY, '10:30'), reason: '嘔吐兩天、食慾差', status: 'pending_checkout',
@@ -154,7 +160,7 @@ async function seed() {
       visitNote: '腹部觸診無明顯異物感，輕度脫水。已皮下輸液 150 ml、止吐針。\n[red]若 24 小時內仍吐，安排腹部超音波[/red]',
       internalNote: '飼主詢問費用分期，已請櫃台說明',
       specialCareNote: '今晚先禁食，明早起少量多餐；再吐請立刻回診',
-      followUpRecommendation: '3 天後回診複查血檢', followUpReason: '複查血檢',
+      followUpRecommendation: '3 天後回診複查血檢',
       visitStartedAt: at(TODAY, '11:03'), handoffAt: at(TODAY, '11:35') }),
       createdAt: at(TODAY, '08:45') },
     // 上午診：看診中（手術）

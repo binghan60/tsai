@@ -71,8 +71,8 @@ app.get('/api/health', async (req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/public/reports', publicReportsRouter);
 app.use('/api/public/intake-submissions', publicIntakeRouter);
-// 診所電腦上的抓檔程式不會登入，POST /import、/heartbeat 改用 IDEXX_BRIDGE_TOKEN 驗證，所以掛在登入檢查之前；
-// 這個 router 只認這兩條，其他 /api/lab-results/* 會繼續往下走登入檢查。
+// 診所電腦上的抓檔程式不會登入，它用的那幾條（/import、/heartbeat、/requests…）改用 IDEXX_BRIDGE_TOKEN 驗證，
+// 所以掛在登入檢查之前；這個 router 只認那幾條，其他 /api/lab-results/* 會繼續往下走登入檢查。
 app.use('/api/lab-results', labResultBridgeRouter);
 app.use('/api', requireAuthentication);
 app.use('/api/intake-submissions', intakeSubmissionsRouter);

@@ -252,24 +252,8 @@ export function heartbeatPayload(config, state, { hostname = os.hostname(), vers
   };
 }
 
-export async function sendHeartbeat(config, payload) {
-  try {
-    const response = await fetch(`${config.serverUrl}/api/lab-results/heartbeat`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${config.token}`, 'content-type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(15_000),
-    });
-    let body = null;
-    try {
-      body = await response.json();
-    } catch {
-      body = null;
-    }
-    return { status: response.status, body };
-  } catch (err) {
-    return { status: 0, body: null, error: err.message };
-  }
+export function sendHeartbeat(config, payload) {
+  return bridgeRequest(config, '/api/lab-results/heartbeat', { method: 'POST', body: payload });
 }
 
 // log 同時印在視窗上與寫進 bridge 資料夾的 idexx-bridge.log；超過 5MB 就換成 .old 重新開始。

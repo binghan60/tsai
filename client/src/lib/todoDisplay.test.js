@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { dueStatus, overdueCount } from './todoDisplay.js';
+import { dueStatus } from './todoDisplay.js';
 
 describe('todo due status', () => {
   const today = '2026-09-22';
@@ -24,13 +24,4 @@ describe('todo due status', () => {
     assert.equal(dueStatus('明天', today), null);
   });
 
-  it('逾期筆數只算未完成的', () => {
-    const items = [
-      { status: 'open', dueDate: '2026-09-01' },
-      { status: 'open', dueDate: '2026-09-30' },
-      { status: 'open', dueDate: null },
-      { status: 'done', dueDate: '2026-09-01' },
-    ];
-    assert.equal(overdueCount(items, today), 1);
-  });
 });

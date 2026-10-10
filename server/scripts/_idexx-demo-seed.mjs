@@ -75,7 +75,7 @@ async function seed() {
       ownerId: owner._id, petId: pet._id, visitType: 'return', ownerName: owner.name, ownerPhone: owner.phone, petName: pet.name, species: '貓',
       date: TODAY, time: cat.time, scheduledAt: at(cat.time), reason: cat.reason, status: 'arrived',
       checkinNumber: number, checkinNumberHistory: [number], checkedInAt: new Date(),
-      templateId: cat.templateId, workflowVersion: 2, labValues: cat.labValues,
+      templateId: cat.templateId, labValues: cat.labValues,
     });
     const [instrument, assays] = cat.result;
     const result = await LabResult.create({

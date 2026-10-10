@@ -179,7 +179,7 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
         address: submission.owner.address,
         relationVersion: 1,
       }], { session });
-      // 改版前送出的初診表，品種可能是中文名稱或自由文字：清單上的整理成英文，其餘照原文帶過去。
+      // 品種在送出與審核修改時都驗過了；這裡再整理一次成清單上的英文寫法。
       const petFields = pickPetFields(submission.pet.toObject());
       petFields.breed = checkCatBreed(petFields.breed, petFields.breed).breed;
       [pet] = await Pet.create([{
@@ -222,6 +222,12 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
           appointment.date = date;
           appointment.time = time;
           appointment.scheduledAt = combineClinicDateTime(date, time);
+          // 這筆掛號中途被取消或標成未到：審核通過、排了新時段就是重新成立，不然貓建好了、時間軸上卻沒有這筆掛號。
+          if (['cancelled', 'no_show'].includes(appointment.status)) {
+            appointment.status = 'scheduled';
+            appointment.cancelReason = '';
+            appointment.cancelledAt = null;
+          }
           if (req.body?.reason !== undefined) appointment.reason = String(req.body.reason || '').trim();
           if (req.body?.internalNote !== undefined) appointment.internalNote = String(req.body.internalNote || '').trim();
           await appointment.save({ session });
@@ -235,14 +241,30 @@ intakeSubmissionsRouter.post('/:id/approve', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// 退回：這份初診表不採用。連著的那筆初診掛號回到「等飼主填初診表」——解除連結、驗證碼恢復可用（還沒過期的話），
+// 飼主可以重填一次；不這樣做，那筆掛號會卡在「待審核」：沒有東西可以審、也報不了到。
 intakeSubmissionsRouter.post('/:id/reject', async (req, res, next) => {
   try {
-    const submission = await IntakeSubmission.findOneAndUpdate(
-      { _id: req.params.id, status: 'pending' },
-      { $set: { status: 'rejected', reviewNote: String(req.body?.reviewNote || '').trim(), reviewedAt: new Date() }, $inc: { __v: 1 } },
-      { new: true, runValidators: true }
-    );
-    if (!submission) return res.status(409).json({ message: '找不到待審核的初診表，可能已被其他人處理' });
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(422).json({ message: '初診表編號格式不正確' });
+    let submission;
+    let appointment = null;
+    await withTransaction(async (session) => {
+      appointment = null;
+      submission = await IntakeSubmission.findOneAndUpdate(
+        { _id: req.params.id, status: 'pending' },
+        { $set: { status: 'rejected', reviewNote: String(req.body?.reviewNote || '').trim(), reviewedAt: new Date() }, $inc: { __v: 1 } },
+        { new: true, runValidators: true, session }
+      );
+      if (!submission) throw Object.assign(new Error('找不到待審核的初診表，可能已被其他人處理'), { status: 409 });
+      if (submission.linkedAppointmentId) {
+        appointment = await Appointment.findOneAndUpdate(
+          { _id: submission.linkedAppointmentId, intakeSubmissionId: submission._id, petId: null },
+          { $set: { intakeSubmissionId: null, intakeVerificationUsedAt: null }, $inc: { __v: 1 } },
+          { new: true, session }
+        );
+      }
+    });
+    if (appointment) emitAppointmentUpdate(appointment);
     emitIntakeUpdate();
     res.json(submission);
   } catch (err) { next(err); }

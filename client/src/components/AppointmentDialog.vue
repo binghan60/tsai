@@ -416,13 +416,14 @@ const onSubmit = handleSubmit((values) => {
 
             <div class="space-y-1.5">
               <Label for="dialog-template" class="text-xs font-medium">健檢表單</Label>
-              <Select v-model="templateId">
+              <!-- 報到時已經用這份建好草稿：換表單的話看診的檢驗數值會對不上草稿，伺服器也擋。 -->
+              <Select v-model="templateId" :disabled="Boolean(appointment?.recordId)">
                 <SelectTrigger id="dialog-template" class="w-full"><SelectValue placeholder="需要時可由醫師選擇" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="template in templates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
                 </SelectContent>
               </Select>
-              <p class="text-sm text-muted-foreground">報到時用這份建立健檢報告草稿。</p>
+              <p class="text-sm text-muted-foreground">{{ appointment?.recordId ? '已經用這份建立健檢報告草稿，不能再換。' : '報到時用這份建立健檢報告草稿。' }}</p>
             </div>
             <div v-if="!isEdit" class="space-y-1.5">
               <Label for="dialog-internal-note" class="text-xs font-medium">內部備註</Label>
