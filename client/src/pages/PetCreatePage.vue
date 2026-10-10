@@ -148,7 +148,7 @@ watch(ownerMode, (mode) => {
 // ----------------------------------------------------
 const petForm = ref({ ...emptyPetDraft(), species: '貓' });
 
-// 性別與絕育
+// 性別與結紮
 const SEX_OPTIONS = [
   { value: 'unknown', label: '未記錄' },
   { value: 'male', label: '♂ 公' },
@@ -157,8 +157,8 @@ const SEX_OPTIONS = [
 
 const NEUTERED_OPTIONS = [
   { value: 'unknown', label: '未記錄' },
-  { value: 'yes', label: '已絕育' },
-  { value: 'no', label: '未絕育' },
+  { value: 'yes', label: '已結紮' },
+  { value: 'no', label: '未結紮' },
 ];
 
 const FEEDING_OPTIONS = [

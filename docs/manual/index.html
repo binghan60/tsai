@@ -1,0 +1,751 @@
+<title>診所系統使用手冊</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* 版面：左邊固定目錄、右邊一欄內文；色彩沿用診所系統本身（冷灰底、白卡片、深青主色），同仁一看就知道是同一套。 */
+:root {
+  --bg: #f4f6f8; --card: #ffffff; --sunken: #eef2f4; --border: #e2e8ec; --border-strong: #cbd4da;
+  --fg: #0e1a21; --muted: #4b5a64; --subtle: #5f6c76;
+  --primary: #007a7e; --primary-fg: #ffffff; --accent: #e2f2f2; --accent-fg: #00595c;
+  --danger: #880d0d; --danger-bg: #ffede9; --warning: #874c00; --warning-bg: #fff0e0;
+  --success: #2d7f3f; --success-bg: #e8f9e9; --info: #4260c4; --info-bg: #ebf3ff;
+  --mark: #e8590c;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --shadow: 0 1px 2px rgb(14 26 33 / 0.06), 0 0 0 1px var(--border);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #07090c; --card: #0e1217; --sunken: #0a0d11; --border: #1c232c; --border-strong: #2a3440;
+    --fg: #e8edf3; --muted: #8f9bab; --subtle: #7d8999;
+    --primary: #37d2f2; --primary-fg: #06232b; --accent: #0a2630; --accent-fg: #7fe3f7;
+    --danger: #ffbeb3; --danger-bg: #41211d; --warning: #f8b05d; --warning-bg: #3c260d;
+    --success: #4eab60; --success-bg: #19321d; --info: #82a1f6; --info-bg: #212a44;
+    --mark: #ff8a3d; --shadow: 0 0 0 1px var(--border);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #07090c; --card: #0e1217; --sunken: #0a0d11; --border: #1c232c; --border-strong: #2a3440;
+  --fg: #e8edf3; --muted: #8f9bab; --subtle: #7d8999;
+  --primary: #37d2f2; --primary-fg: #06232b; --accent: #0a2630; --accent-fg: #7fe3f7;
+  --danger: #ffbeb3; --danger-bg: #41211d; --warning: #f8b05d; --warning-bg: #3c260d;
+  --success: #4eab60; --success-bg: #19321d; --info: #82a1f6; --info-bg: #212a44;
+  --mark: #ff8a3d; --shadow: 0 0 0 1px var(--border);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 17px; line-height: 1.8; }
+.num { font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+a { color: var(--primary); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+
+.shell { max-width: 78rem; margin: 0 auto; padding-inline: 16px; padding-block: 28px 80px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; }
+.shell > *, main > * { min-width: 0; }
+@media (min-width: 1100px) { .shell { grid-template-columns: 15rem minmax(0, 1fr); padding-inline: 32px; } }
+
+/* 目錄 */
+.toc { align-self: start; }
+@media (min-width: 1100px) { .toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); max-height: calc(100vh - 48px); overflow-y: auto; } }
+.toc .brand { font-size: 14px; color: var(--subtle); letter-spacing: 0.04em; }
+.toc .name { margin: 2px 0 14px; font-size: 20px; font-weight: 700; line-height: 1.35; }
+.toc ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.toc a { display: flex; gap: 10px; padding: 5px 10px; border-radius: 8px; color: var(--muted); text-decoration: none; font-size: 15px; line-height: 1.5; }
+.toc a:hover { background: var(--sunken); color: var(--fg); }
+.toc a .n { flex: none; width: 1.6em; color: var(--subtle); font-family: var(--font-num); font-size: 13px; padding-top: 2px; }
+@media (max-width: 1099px) {
+  .toc { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 16px; }
+  .toc ol { grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); }
+}
+
+/* 內文 */
+main { min-width: 0; display: grid; gap: 28px; }
+header.cover { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: clamp(20px, 4vw, 36px); }
+header.cover h1 { margin: 0; font-size: clamp(28px, 4vw, 36px); line-height: 1.3; text-wrap: balance; }
+header.cover .lead { margin: 10px 0 0; color: var(--muted); max-width: 44em; }
+.legend { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; font-size: 15px; color: var(--muted); }
+section.chapter { background: var(--card); border-radius: 16px; box-shadow: var(--shadow); padding: clamp(18px, 3.5vw, 34px); scroll-margin-top: 16px; }
+.chapter > h2 { margin: 0 0 4px; font-size: 24px; line-height: 1.4; display: flex; gap: 12px; align-items: baseline; text-wrap: balance; }
+.chapter > h2 .n { font-family: var(--font-num); font-size: 16px; color: var(--primary); }
+.chapter > .sub { margin: 0 0 18px; color: var(--muted); }
+.chapter h3 { margin: 28px 0 8px; font-size: 19px; line-height: 1.45; }
+.chapter p, .chapter li { max-width: 46em; }
+.chapter p { margin: 8px 0; }
+.chapter ul, .chapter ol.steps { margin: 8px 0; padding-left: 1.3em; }
+.chapter li { margin: 4px 0; }
+.chapter li::marker { color: var(--subtle); }
+strong { font-weight: 700; }
+.ui { display: inline-block; padding: 0 7px; border-radius: 6px; background: var(--sunken); box-shadow: inset 0 0 0 1px var(--border); font-size: 0.92em; line-height: 1.6; white-space: nowrap; }
+
+/* 誰做的標記 */
+.who { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; vertical-align: 2px; }
+.who::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.who.vet { background: var(--accent); color: var(--accent-fg); }
+.who.desk { background: var(--info-bg); color: var(--info); }
+.who.auto { background: var(--warning-bg); color: var(--warning); }
+
+/* 你做什麼 → 系統做什麼 */
+.flow { display: grid; gap: 10px; margin: 14px 0; }
+.flow .row { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 4px 14px; align-items: start; padding: 12px 14px; border-radius: 12px; background: var(--sunken); }
+.flow .row .who { justify-self: start; margin-top: 3px; }
+.flow .row > div > :first-child { margin-top: 0; }
+.flow .row > div > :last-child { margin-bottom: 0; }
+.flow .row.auto { background: var(--warning-bg); }
+.flow .row.auto, .flow .row.auto li, .flow .row.auto p { color: var(--fg); }
+@media (max-width: 560px) { .flow .row { grid-template-columns: 1fr; } }
+
+.note { margin: 14px 0; padding: 12px 16px; border-radius: 12px; background: var(--info-bg); color: var(--fg); }
+.note.warn { background: var(--danger-bg); }
+.note b { color: var(--info); }
+.note.warn b { color: var(--danger); }
+
+/* 截圖 */
+figure.shot { margin: 18px 0; }
+figure.shot .frame { border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px var(--border-strong); background: #f4f6f8; }
+figure.shot img { display: block; width: 100%; height: auto; }
+figure.shot.narrow { max-width: 30rem; }
+figure.shot.medium { max-width: 46rem; }
+figure.shot figcaption { margin-top: 10px; font-size: 15px; color: var(--muted); }
+figure.shot figcaption ol { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+figure.shot figcaption li { position: relative; padding-left: 32px; max-width: none; }
+figure.shot figcaption li > .badge { position: absolute; left: 0; top: 2px; margin-top: 0; }
+.badge { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-top: 2px; border-radius: 50%; background: var(--mark); color: #fff; font: 700 13px/1 var(--font-body); }
+.pair { display: grid; gap: 16px; }
+@media (min-width: 820px) { .pair { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; } }
+.pair figure.shot { margin: 0; }
+
+/* 流程圖 */
+.diagram { margin: 18px 0; overflow-x: auto; }
+.lanes { min-width: 760px; display: grid; grid-template-columns: 6.5rem repeat(5, minmax(0, 1fr)); gap: 8px; font-size: 14px; line-height: 1.55; }
+.lanes .step { position: relative; padding: 8px 10px; border-radius: 10px; background: var(--primary); color: var(--primary-fg); font-weight: 700; text-align: center; }
+.lanes .step:not(:last-child)::after { content: ""; position: absolute; right: -9px; top: 50%; width: 10px; height: 10px; border-top: 2px solid var(--primary); border-right: 2px solid var(--primary); transform: translateY(-50%) rotate(45deg); background: transparent; z-index: 1; }
+.lanes .lane { display: flex; align-items: center; }
+.lanes .cell { padding: 8px 10px; border-radius: 10px; background: var(--sunken); color: var(--fg); min-height: 3rem; }
+.lanes .cell.empty { background: transparent; border: 1px dashed var(--border); }
+.lanes .cell.auto { background: var(--warning-bg); }
+
+.hub { display: grid; gap: 12px; align-items: center; margin: 18px 0; }
+@media (min-width: 760px) { .hub { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.1fr) auto minmax(0, 1fr); } }
+.hub .box { padding: 14px 16px; border-radius: 12px; background: var(--sunken); }
+.hub .box h4 { margin: 0 0 4px; font-size: 16px; }
+.hub .box p { margin: 0; font-size: 15px; color: var(--muted); }
+.hub .core { background: var(--accent); box-shadow: inset 0 0 0 2px var(--primary); }
+.hub .core h4 { color: var(--accent-fg); }
+.hub .core p { color: var(--fg); }
+.hub .link { text-align: center; color: var(--subtle); font-size: 14px; line-height: 1.4; }
+.hub .link b { display: block; font-size: 22px; color: var(--primary); line-height: 1; }
+.hub .stack { display: grid; gap: 12px; }
+
+.stages { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 16px 0; }
+.stage { flex: 1 1 9rem; padding: 10px 12px; border-radius: 12px; background: var(--sunken); }
+.stage h4 { margin: 0; font-size: 16px; }
+.stage p { margin: 4px 0 0; font-size: 14px; color: var(--muted); line-height: 1.6; }
+.stage.s1 { box-shadow: inset 4px 0 0 var(--warning); }
+.stage.s2 { box-shadow: inset 4px 0 0 var(--info); }
+.stage.s3 { box-shadow: inset 4px 0 0 var(--primary); }
+.stage.s4 { box-shadow: inset 4px 0 0 var(--success); }
+.arrow { align-self: center; color: var(--subtle); font-size: 20px; }
+@media (max-width: 640px) { .arrow { display: none; } }
+
+.chain { display: grid; gap: 8px; margin: 16px 0; }
+.chain .node { display: grid; grid-template-columns: 2.2rem minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 14px; border-radius: 12px; background: var(--sunken); }
+.chain .node .i { font-family: var(--font-num); font-weight: 600; color: var(--primary); }
+.chain .node.branch { background: var(--warning-bg); }
+.chain .node.fail { background: var(--danger-bg); }
+.chain .node p { margin: 0; }
+
+/* 表格 */
+.table-wrap { overflow-x: auto; margin: 14px 0; border-radius: 12px; box-shadow: 0 0 0 1px var(--border); }
+table { border-collapse: collapse; width: 100%; min-width: 620px; font-size: 15px; line-height: 1.6; }
+th, td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+thead th { background: var(--sunken); font-weight: 700; color: var(--muted); font-size: 14px; }
+tbody tr:last-child td { border-bottom: 0; }
+td.yes { color: var(--fg); }
+td .dim { color: var(--subtle); }
+
+/* 燈號 */
+.lights { display: grid; gap: 8px; margin: 12px 0; }
+.lights div { display: flex; gap: 10px; align-items: baseline; }
+.dot { flex: none; width: 11px; height: 11px; border-radius: 50%; display: inline-block; transform: translateY(1px); }
+.dot.g { background: var(--success); } .dot.y { background: var(--warning); } .dot.b { background: var(--info); } .dot.r { background: var(--danger); }
+
+/* 常見問題 */
+details { border-radius: 12px; background: var(--sunken); padding: 0 16px; margin: 8px 0; }
+details summary { cursor: pointer; padding: 12px 0; font-weight: 700; list-style-position: outside; }
+details[open] summary { border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+details > :last-child { margin-bottom: 14px; }
+
+footer.end { color: var(--subtle); font-size: 14px; text-align: center; }
+</style>
+
+<div class="shell">
+  <nav class="toc" aria-label="目錄">
+    <div class="brand">謙華動物醫院</div>
+    <div class="name">診所系統使用手冊</div>
+    <ol>
+      <li><a href="#guide"><span class="n">00</span>怎麼看這份手冊</a></li>
+      <li><a href="#day"><span class="n">01</span>一天的流程</a></li>
+      <li><a href="#booking"><span class="n">02</span>掛號</a></li>
+      <li><a href="#intake"><span class="n">03</span>初診</a></li>
+      <li><a href="#checkin"><span class="n">04</span>報到</a></li>
+      <li><a href="#visit"><span class="n">05</span>看診</a></li>
+      <li><a href="#handoff"><span class="n">06</span>送交櫃台</a></li>
+      <li><a href="#desk"><span class="n">07</span>櫃台處理</a></li>
+      <li><a href="#cancel"><span class="n">08</span>取消報到、取消掛號、未到</a></li>
+      <li><a href="#journal"><span class="n">09</span>病歷日誌</a></li>
+      <li><a href="#report"><span class="n">10</span>健檢報告與寄送</a></li>
+      <li><a href="#idexx"><span class="n">11</span>IDEXX 檢驗</a></li>
+      <li><a href="#meds"><span class="n">12</span>藥單</a></li>
+      <li><a href="#team"><span class="n">13</span>聊天、暫存區、待辦</a></li>
+      <li><a href="#faq"><span class="n">14</span>常見問題</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="cover">
+      <h1>診所系統使用手冊</h1>
+      <p class="lead">給醫師與櫃台：按下每一顆按鈕之後，系統在背後會自動做哪些事。很多事情是連鎖發生的，例如送交櫃台時藥單就進了待包藥、勾「上傳影像」就多一筆待辦、取消報到時病歷日誌會暫時拿掉。知道這些，就不會在畫面上找不到東西。</p>
+      <div class="legend">
+        <span><span class="who vet">醫師</span> 醫師做的事</span>
+        <span><span class="who desk">櫃台</span> 櫃台做的事</span>
+        <span><span class="who auto">系統自動</span> 不用按，系統自己做</span>
+      </div>
+    </header>
+
+    <section class="chapter" id="guide">
+      <h2><span class="n">00</span>怎麼看這份手冊</h2>
+      <ul>
+        <li>每一節照「你做什麼 → 系統自動做什麼 → 要注意」排。系統自動做的事用橘色底標出來。</li>
+        <li>截圖上的<span class="badge" style="display:inline-flex;vertical-align:-4px;margin:0 4px">1</span>橘色數字，對應圖片下方同一個號碼的說明。</li>
+        <li>截圖用的是<strong>虛構的示範資料</strong>（貓咪、飼主、電話都是編的），時間是某一天下午 3:10。</li>
+        <li>按鈕名稱寫成 <span class="ui">這樣</span>，跟畫面上的字一樣。</li>
+      </ul>
+      <div class="note"><b>身分是跟著電腦走的。</b>每台電腦在左下角「設定」選一次自己是醫師還是櫃台。聊天、待辦用這個身分署名，右側工具欄的藥單數字也依身分顯示（醫師看「待醫師確認」，櫃台看「待包藥」加「待領藥」）。任何一台電腦都可以開任何一頁、按任何按鈕。</div>
+    </section>
+
+    <section class="chapter" id="day">
+      <h2><span class="n">01</span>一天的流程</h2>
+      <p class="sub">一隻貓從掛號到離開，經過五個步驟。上面兩列是人要做的，最下面一列是系統同時自動做的。</p>
+      <div class="diagram" role="img" aria-label="一次看診的五個步驟，以及每一步櫃台、醫師與系統各做什麼">
+        <div class="lanes">
+          <div></div>
+          <div class="step">掛號</div><div class="step">報到</div><div class="step">看診</div><div class="step">送交櫃台</div><div class="step">完成處理</div>
+
+          <div class="lane"><span class="who desk">櫃台</span></div>
+          <div class="cell">接電話、選日期與時段；初診給飼主驗證碼</div>
+          <div class="cell">貓到了按 <span class="ui">報到</span></div>
+          <div class="cell empty"></div>
+          <div class="cell empty"></div>
+          <div class="cell">轉告飼主、約回診、交藥，按 <span class="ui">完成處理</span></div>
+
+          <div class="lane"><span class="who vet">醫師</span></div>
+          <div class="cell empty"></div>
+          <div class="cell empty"></div>
+          <div class="cell">按 <span class="ui">看診</span>，寫紀錄、藥單、請轉告飼主、回診建議</div>
+          <div class="cell">按 <span class="ui">完成看診，送交櫃台</span></div>
+          <div class="cell empty"></div>
+
+          <div class="lane"><span class="who auto">系統自動</span></div>
+          <div class="cell auto">該收保證金時提醒</div>
+          <div class="cell auto">配號碼牌、記遲到、建立健檢報告草稿</div>
+          <div class="cell auto">隨打隨存，內容即時成為病歷日誌；IDEXX 結果自動填入</div>
+          <div class="cell auto">藥單進「待包藥」，聊天室通知櫃台</div>
+          <div class="cell auto">建立回診掛號、歸還號碼牌</div>
+        </div>
+      </div>
+
+      <h3>最重要的一個觀念：看診資料只有一份</h3>
+      <p>體重、體溫、檢驗數值、本次簡易紀錄、請轉告飼主、回診建議，全部只存在「這次看診」上。病歷日誌、健檢報告草稿都不是另外複製一份，而是<strong>打開時直接讀這次看診</strong>。所以在任何一個地方改，其他地方都會跟著變。</p>
+      <div class="hub" role="img" aria-label="診療台、櫃台處理視窗、病歷日誌、健檢報告草稿都讀寫同一次看診">
+        <div class="stack">
+          <div class="box"><h4>診療台</h4><p>醫師寫紀錄、藥單、量測</p></div>
+          <div class="box"><h4>櫃台處理視窗</h4><p>櫃台看、補紀錄、勾上傳影像</p></div>
+        </div>
+        <div class="link"><b>⇄</b>寫進去</div>
+        <div class="box core"><h4>這次看診</h4><p>唯一的一份：量測、檢驗數值、紀錄、藥單、轉告、回診建議</p></div>
+        <div class="link"><b>⇄</b>即時讀取</div>
+        <div class="stack">
+          <div class="box"><h4>病歷日誌</h4><p>從日誌「修改」＝改這次看診</p></div>
+          <div class="box"><h4>健檢報告草稿</h4><p>體重、體溫、檢驗數值在報告上改＝改這次看診。結案那一刻才凍結成報告自己的內容</p></div>
+        </div>
+      </div>
+
+      <figure class="shot">
+        <div class="frame"><img src="images/01-reception.webp" alt="掛號台：上方流程列、警示列，下方依時段排的看診時間軸" loading="lazy"></div>
+        <figcaption>掛號台（櫃台的主畫面）
+          <ol>
+            <li><span class="badge">1</span>流程列：待報到、在院、待櫃台處理、已完成各幾筆。點一格只看那一段，再點一次取消。</li>
+            <li><span class="badge">2</span>警示列：有例外才出現，例如醫師申請修改、遲到還沒報到、飼主填好初診表等審核。</li>
+            <li><span class="badge">3</span>過了預約時間 5 分鐘還沒報到：卡片變紅、按鈕變成 <span class="ui">遲到</span>。</li>
+            <li><span class="badge">4</span>醫師已送交櫃台：按 <span class="ui">處理</span> 打開櫃台處理視窗。</li>
+            <li><span class="badge">5</span>初診：飼主已經用驗證碼填好初診表，按 <span class="ui">審核</span>。</li>
+          </ol>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section class="chapter" id="booking">
+      <h2><span class="n">02</span>掛號</h2>
+      <p class="sub">掛號台右上角 <span class="ui">掛號</span>。電話裡說「明天帶來」也可以先掛，選別天就好。</p>
+      <div class="flow">
+        <div class="row"><span class="who desk">櫃台</span><div><ul>
+          <li><strong>回診</strong>：打貓咪名、飼主姓名或電話找貓。<strong>初診</strong>：填貓咪名字與電話就好，飼主姓名可以先空著。</li>
+          <li>選日期、預估診療時間、時段。時段 15 分鐘一格，格子裡寫著已經約的貓；跟別人重疊只會提醒，不會擋。已經過去的時段也能選（現場補登用）。</li>
+          <li>手術只是一個標記（勾「手術」並寫名稱），沒有專屬時段。</li>
+        </ul></div></div>
+        <div class="row auto"><span class="who auto">系統自動</span><div><ul>
+          <li>選了貓，下面出現<strong>出席紀錄</strong>：這隻貓、以及飼主名下所有貓的遲到與未到次數。</li>
+          <li>這隻貓需要收保證金時，出現<strong>保證金</strong>欄位，沒選不能掛號。</li>
+          <li>初診會產生一組 4 位數的<strong>初診驗證碼</strong>（見下一節）。</li>
+        </ul></div></div>
+      </div>
+
+      <figure class="shot medium">
+        <div class="frame"><img src="images/02-booking-deposit.webp" alt="新增掛號視窗，選了小橘之後出現出席紀錄與保證金" loading="lazy"></div>
+        <figcaption>選了一隻遲到兩次的貓
+          <ol>
+            <li><span class="badge">1</span>出席紀錄：上面一列只算這隻貓，下面一列是飼主名下所有貓。</li>
+            <li><span class="badge">2</span>保證金：選 <span class="ui">已收 200 元</span> 或 <span class="ui">這次不收</span>（不收要寫原因）。</li>
+          </ol>
+        </figcaption>
+      </figure>
+
+      <h3>保證金的規則</h3>
+      <ul>
+        <li>一隻貓從<strong>上次收保證金之後</strong>，遲到滿 2 次或未到滿 1 次，下次約診就要先收 200 元。只看這隻貓自己，同一位飼主的另一隻貓分開算。</li>
+        <li>選「已收」：次數歸零重新算。選「這次不收」：次數不歸零，下次約診還會再問。</li>
+        <li>取消一筆<strong>已收保證金</strong>的掛號時，要選這筆錢的去向：<span class="ui">先留著，下次沿用</span> 下次約診自動沿用、不用再收；<span class="ui">已退還</span> 下次約診照樣要收。</li>
+        <li>已收的掛號在卡片與櫃台處理視窗上標著「已收保證金 200」，提醒結帳時處理。看完診之後的退還或抵扣，系統不記錄。</li>
+        <li>收錯或漏記：到貓咪頁的「出席紀錄」，每一列右邊的鉛筆可以改那筆的保證金紀錄。</li>
+      </ul>
+
+      <h3>遲到與未到怎麼算</h3>
+      <ul>
+        <li>報到時超過預約時間 5 分鐘，系統自動記一次遲到（櫃台手動記的遲到不論幾分鐘都算）。</li>
+        <li><span class="ui">標記未到</span> 記一次未到。</li>
+        <li>取消掛號會列在出席紀錄上（看得到取消時間與原因），但<strong>不算次數</strong>。取消報到不留紀錄。</li>
+      </ul>
+      <figure class="shot">
+        <div class="frame"><img src="images/14-attendance.webp" alt="貓咪頁的出席紀錄頁籤，列出取消與兩次遲到" loading="lazy"></div>
+        <figcaption>貓咪頁的「出席紀錄」
+          <ol>
+            <li><span class="badge">1</span>頁首的遲到、未到次數，點一下切到這個頁籤。</li>
+            <li><span class="badge">2</span>這隻貓現在約診要先收保證金。</li>
+          </ol>
+        </figcaption>
+      </figure>
+    </section>
+
+    <section class="chapter" id="intake">
+      <h2><span class="n">03</span>初診</h2>
+      <p class="sub">第一次來的貓，飼主在診所用自己的手機填初診表，櫃台審核後才建立正式的飼主與貓咪資料。</p>
+      <div class="flow">
+        <div class="row"><span class="who desk">櫃台</span><div><p>掛初診 → 把卡片上的 4 位數驗證碼給飼主。驗證碼在預約時間 24 小時後失效；右側工具欄 <span class="ui">初診</span> 的「已發出」頁籤可以查、複製、作廢。</p></div></div>
+        <div class="row auto"><span class="who auto">系統自動</span><div><p>飼主送出後：掛號台出現「待審初診表」、那張卡片的按鈕變成 <span class="ui">審核</span>、工具欄「初診」出現紅色數字。</p></div></div>
+        <div class="row"><span class="who desk">櫃台</span><div><ul>
+          <li>逐欄看過，填錯的地方每一段都能 <span class="ui">修改</span>。</li>
+          <li>確認掛號日期與時段 → <span class="ui">掛號</span>：建立飼主與貓咪的正式資料。</li>
+          <li><span class="ui">退回</span>：不建立資料，掛號回到「等飼主填初診表」；驗證碼還沒過期的話，飼主可以用同一組重填。</li>
+        </ul></div></div>
+      </div>
+      <div class="note warn"><b>沒審核通過的初診不能報到。</b>報到時要有正式的貓咪資料，健檢報告與病歷日誌才有地方掛。</div>
+      <figure class="shot narrow">
+        <div class="frame"><img src="images/03-intake-review.webp" alt="審核初診表面板，逐欄列出飼主填的資料" loading="lazy"></div>
+        <figcaption>工具欄「初診」→ 點一份初診表，逐欄審核</figcaption>
+      </figure>
+    </section>
+
+    <section class="chapter" id="checkin">
+      <h2><span class="n">04</span>報到</h2>
+      <div class="flow">
+        <div class="row"><span class="who desk">櫃台</span><div><ul>
+          <li>貓到了，按卡片上的 <span class="ui">報到</span>（遲到的會顯示 <span class="ui">遲到</span>）。只能替<strong>今天</strong>的掛號報到。</li>
+          <li>要改到院時間或號碼牌：卡片的 <span class="ui">⋯</span> → <span class="ui">報到（改到院時間／號碼牌）</span>。</li>
+          <li>按錯了：提示上的 <span class="ui">復原</span>，或卡片 <span class="ui">⋯</span> → <span class="ui">取消報到</span>（醫師還沒開始看診才行）。</li>
+        </ul></div></div>
+        <div class="row auto"><span class="who auto">系統自動</span><div><ul>
+          <li>配一張號碼牌、記下到院時間；超過預約 5 分鐘記一次遲到。</li>
+          <li>用掛號時選的健檢表單<strong>建立健檢報告草稿</strong>。</li>
+          <li>如果這隻貓今天已經驗好 IDEXX、結果還在等配對，會自動認回來填進這次看診。</li>
+          <li>診療台馬上出現在候診，聊天室發一則「已報到」。</li>
+        </ul></div></div>
+      </div>
+      <figure class="shot">
+        <div class="frame"><img src="images/04-check-in.webp" alt="招財報到後卡片換成號碼牌 6、下方提示可以復原" loading="lazy"></div>
+        <figcaption>按 <span class="ui">報到</span> 之後
+          <ol>
+            <li><span class="badge">1</span>卡片左邊換成號碼牌，狀態變「候診中」。</li>
+            <li><span class="badge">2</span>提示上的 <span class="ui">復原</span>：按錯可以立刻撤回。</li>
+          </ol>
+        </figcaption>
+      </figure>
+      <div class="note"><b>號碼牌不是看診順序。</b>它是發給飼主的實體牌，當天發過的號碼不會再發第二次，所以會跳號。看診先後看的是報到時間。送交櫃台時號碼牌不收回（飼主還在診所），櫃台完成處理、取消或取消報到時才收回。</div>
+    </section>
+
+    <section class="chapter" id="visit">
+      <h2><span class="n">05</span>看診</h2>
+      <p class="sub">醫師在「診療台」。左邊是今天的病患，右邊是正在看的那一隻。</p>
+      <figure class="shot">
+        <div class="frame"><img src="images/05-vet-console.webp" alt="診療台：左欄今日病患，右欄豆豆的看診工作區" loading="lazy"></div>
+        <figcaption>診療台
+          <ol>
+            <li><span class="badge">1</span>看診中：聽診器圖示＋看了幾分鐘。燒瓶＝IDEXX 檢驗已出；三角形＝有貓咪或飼主備註。</li>
+            <li><span class="badge">2</span>候診中：沙漏＋等了幾分鐘（等超過 20 分鐘變紅），右邊 <span class="ui">看診</span> 鈕。</li>
+            <li><span class="badge">3</span>還沒報到；過了預約時間顯示遲到幾分鐘。</li>
+            <li><span class="badge">4</span>看診工作區：貓咪與飼主資料、醫療警示、備註，下面是要填的內容。</li>
+          </ol>
+        </figcaption>
+      </figure>
+      <div class="flow">
+        <div class="row"><span class="who vet">醫師</span><div><ul>
+          <li><strong>點一列只是打開來看資料</strong>，不算開始看診。要按 <span class="ui">看診</span> 才會記下開始看診的時間，這一列才會變成「看診中」。</li>
+          <li>點左欄別隻貓就換過去。換之前系統會先把還沒存的內容存好。</li>
+        </ul></div></div>
+        <div class="row auto"><span class="who auto">系統自動</span><div><ul>
+          <li><strong>隨打隨存</strong>：停手一秒多就自動存檔，不用按儲存。</li>
+          <li>寫的內容<strong>即時成為這次的病歷日誌</strong>，櫃台那邊也立刻看得到。</li>
+          <li>如果另一台電腦同時改了同一個欄位，會跳出提示讓你選要留哪一份。</li>
+        </ul></div></div>
+      </div>
+
+      <h3>每個欄位寫完會去哪裡</h3>
+      <p>欄位標題旁的小標記告訴你這一欄寫完會出現在哪裡：</p>
+      <figure class="shot medium">
+        <div class="frame"><img src="images/06-visit-fields.webp" alt="看診工作區的本次簡易紀錄、藥單、內部備註、請轉告飼主，旁邊有去處標記" loading="lazy"></div>
+        <figcaption>
+          <ol>
+            <li><span class="badge">1</span>本次簡易紀錄 → <strong>日誌</strong>：寫進病歷日誌。飼主看不到，也不會印在健檢報告上。</li>
+            <li><span class="badge">2</span>藥單 → <strong>日誌＋藥單</strong>：寫進病歷日誌；送交櫃台那一刻在藥單清單新增一筆「待包藥」。</li>
+            <li><span class="badge">3</span>內部備註 → <strong>院內</strong>：只給院內同仁看，不進病歷日誌，也不進健檢報告。</li>
+            <li><span class="badge">4</span>請轉告飼主 → <strong>日誌</strong>：櫃台處理視窗最上面會用橘底提醒櫃台轉告。回診建議也一樣進日誌，櫃台約回診時會帶進來院原因。</li>
+          </ol>
+        </figcaption>
+      </figure>
+      <p>量測（體重、體溫）標著<strong>日誌＋報告</strong>：同時出現在病歷日誌與健檢報告。紀錄可以加粗、上紅橙綠藍四色，病歷日誌與清單上都會照樣顯示。</p>
+
+      <h3>底部的按鈕</h3>
+      <figure class="shot">
+        <div class="frame"><img src="images/07-visit-actions.webp" alt="看診工作區底部的按鈕列" loading="lazy"></div>
+        <figcaption>
+          <ol>
+            <li><span class="badge">1</span>送 IDEXX：把這隻貓送到 IDEXX 主機的待驗清單（見第 11 節）。</li>
+            <li><span class="badge">2</span><span class="ui">開啟健檢報告</span>：開報到時建立的那份草稿。</li>
+            <li><span class="badge">3</span><span class="ui">取消看診</span>：按錯貓、或看到一半飼主離開。退回候診，已經寫的內容都留著。</li>
+            <li><span class="badge">4</span><span class="ui">完成看診，送交櫃台</span>（見下一節）。</li>
+          </ol>
+        </figcaption>
+      </figure>
+      <div class="note warn"><b>開始看診之後，櫃台就不能取消報到、取消掛號或標記未到。</b>真的要取消時，請醫師先按 <span class="ui">取消看診</span>。</div>
+    </section>
+
+    <section class="chapter" id="handoff">
+      <h2><span class="n">06</span>送交櫃台</h2>
+      <div class="flow">
+        <div class="row"><span class="who vet">醫師</span><div><p>按 <span class="ui">完成看診，送交櫃台</span>。工作區關閉，這隻貓移到左欄「已交櫃台」頁籤。</p></div></div>
+        <div class="row auto"><span class="who auto">系統自動</span><div><ul>
+          <li>醫師寫了藥單 → 藥單清單<strong>新增一筆「待包藥」</strong>。醫師自己開的不必再審。</li>
+          <li>掛號台的卡片變成「待櫃台處理」，流程列點名這隻貓，聊天室通知櫃台。</li>
+          <li>號碼牌不收回。</li>
+        </ul></div></div>
+      </div>
+      <h3>送出去之後還要改</h3>
+      <ul>
+        <li>櫃台按完成處理之前：醫師在「已交櫃台」頁籤按 <span class="ui">取回</span>，就能繼續改。改完再送交一次，藥單會更新同一張（已經包好的會標「需重新包藥」）；把藥單清空＝那張藥單取消。</li>
+        <li>交出去之後，櫃台還能改本次簡易紀錄、內部備註、上傳影像；其他欄位要醫師取回才能改。</li>
+        <li>櫃台已經完成處理：見下一節「完成之後要改」。</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="desk">
+      <h2><span class="n">07</span>櫃台處理</h2>
+      <p class="sub">掛號台按 <span class="ui">處理</span>。視窗照跟飼主講話的順序排：① 請轉告飼主、② 本次簡易紀錄、③ 約回診。</p>
+      <figure class="shot">
+        <div class="frame"><img src="images/11-handoff-sheet.webp" alt="櫃台處理視窗：請轉告飼主、本次簡易紀錄與上傳影像、約回診時段" loading="lazy"></div>
+        <figcaption>櫃台處理視窗。框起來的是「上傳影像」勾選框與 <span class="ui">完成處理</span>。</figcaption>
+      </figure>
+      <div class="flow">
+        <div class="row"><span class="who desk">櫃台</span><div><ul>
+          <li>① 請轉告飼主：有內容時是橘底，一定要講。</li>
+          <li>② 本次簡易紀錄：看體重、體溫與醫師的紀錄；下面直接展開這隻貓的歷次病歷日誌。</li>
+          <li>③ 約回診：上面是醫師建議。選日期、時段，按 <span class="ui">完成處理</span> 時一起約好。</li>
+          <li><span class="ui">稍後處理</span> 只是關掉視窗，什麼都不改。</li>
+        </ul></div></div>
+        <div class="row auto"><span class="who auto">系統自動</span><div><ul>
+          <li><strong>勾「上傳影像」</strong>：馬上新增一筆待辦「上傳影像 #貓咪名」，病歷日誌多一列「上傳影像：是」。那筆待辦被完成時，日誌改成「已完成」加完成時間。取消勾選會把還沒完成的待辦收掉，日誌改成「否」。</li>
+          <li><strong>約回診</strong>：同時建立下一筆掛號（回診）。之後要改時段，在已約好的回診上按 <span class="ui">修改</span>。這筆回診被取消或刪掉時，這次看診會回到「待安排回診」，可以重新約。保證金規則跟一般掛號一樣。</li>
+          <li><strong>完成處理</strong>：收回號碼牌，這次看診結束並鎖定，聊天室通知。</li>
+        </ul></div></div>
+      </div>
+      <h3>完成之後要改</h3>
+      <ul>
+        <li><span class="who desk">櫃台</span> 自己發現按錯：在視窗底部按 <span class="ui">退回處理中</span>，就能繼續改。</li>
+        <li><span class="who vet">醫師</span> 要改：在已完成的工作區按 <span class="ui">申請修改</span> 並寫原因 → 掛號台警示列出現「醫師申請修改」→ <span class="who desk">櫃台</span> 在處理視窗按 <span class="ui">核准修改</span> → 醫師在「已交櫃台」按 <span class="ui">取回</span>。</li>
+        <li>只是事後更正紀錄內容（例如體重打錯），直接到病歷日誌按 <span class="ui">修改</span> 就好，不必退回（見第 9 節）。</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="cancel">
+      <h2><span class="n">08</span>取消報到、取消掛號、未到</h2>
+      <p class="sub">都在掛號台卡片的 <span class="ui">⋯</span> 選單。已報到的卡片有 <span class="ui">取消報到</span>；還沒報到的卡片有 <span class="ui">取消掛號</span> 與 <span class="ui">標記未到</span>。已報到的要取消掛號，先取消報到。</p>
+      <div class="note warn"><b>醫師已經開始看診，就不能取消報到。</b>請醫師先在看診工作區按 <span class="ui">取消看診</span>，退回候診之後才能取消。</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th></th><th>取消報到</th><th>取消掛號</th><th>標記未到</th></tr></thead>
+          <tbody>
+            <tr><td>用在</td><td>報到按錯，或報到後飼主說要改天</td><td>飼主說不來了</td><td>飼主沒出現</td></tr>
+            <tr><td>報到時產生的東西</td><td><span class="who auto">系統自動</span> 一起收掉：號碼牌收回、這次的病歷日誌拿掉、送 IDEXX 撤掉、醫師開的藥單還沒領走就取消、「上傳影像」待辦還沒完成就收掉。<br><span class="dim">寫過的內容都留在掛號上：重新報到後日誌自動回來、待辦自動補回、號碼牌發一張新的。</span></td><td colspan="2">還沒報到，沒有這些東西</td></tr>
+            <tr><td>連到這次看診的 IDEXX 結果</td><td>留著，重新報到後照樣在</td><td colspan="2"><span class="who auto">系統自動</span> 回到工具欄「檢驗」的待確認清單</td></tr>
+            <tr><td>回診</td><td>不影響</td><td>如果這筆是某次看診約的回診，那次看診回到「待安排回診」，可以重新約</td><td>不影響</td></tr>
+            <tr><td>出席紀錄</td><td>不留紀錄</td><td>列出來（取消時間、原因），<strong>不算次數</strong></td><td><strong>算一次未到</strong>（會影響保證金）</td></tr>
+            <tr><td>已收保證金</td><td>不影響</td><td>要選 <span class="ui">先留著，下次沿用</span> 或 <span class="ui">已退還</span></td><td>不問</td></tr>
+            <tr><td>之後</td><td>回到待報到，可以再報到</td><td colspan="2">可以 <span class="ui">恢復</span> 成待報到，也可以永久刪除</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>初診還在等飼主填初診表的卡片沒有「標記未到」，要不來就取消掛號。</p>
+    </section>
+
+    <section class="chapter" id="journal">
+      <h2><span class="n">09</span>病歷日誌</h2>
+      <p class="sub">貓咪頁的第一個頁籤，也出現在診療台右邊、櫃台處理視窗下方、暫存區的病歷速覽。日誌有四種：</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>種類</th><th>怎麼來的</th><th>什麼時候出現、消失</th><th>能不能改、刪</th></tr></thead>
+          <tbody>
+            <tr><td><strong>看診紀錄</strong></td><td><span class="who auto">系統自動</span> 由這次看診組成</td><td>報到後、有寫內容就出現（只有來院原因時，要醫師按「看診」才算）。取消報到、取消掛號就拿掉</td><td>可以改（＝改看診本身），不能刪</td></tr>
+            <tr><td><strong>領藥紀錄</strong></td><td><span class="who auto">系統自動</span> 由櫃台登記的藥單組成</td><td>醫師確認過才出現；藥單取消就拿掉</td><td>可以改（＝改藥單），不能刪</td></tr>
+            <tr><td><strong>記事</strong></td><td>在日誌頁籤最上面隨手記一筆</td><td>—</td><td>可以改、可以刪</td></tr>
+            <tr><td><strong>舊系統匯入</strong></td><td>舊系統的病歷全文，整段一筆</td><td>—</td><td>可以改、可以刪</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <figure class="shot">
+        <div class="frame"><img src="images/13-journal.webp" alt="病歷日誌：看診紀錄卡片含 IDEXX 檢驗表格，下面是記事與領藥紀錄" loading="lazy"></div>
+        <figcaption>
+          <ol>
+            <li><span class="badge">1</span>看診紀錄：來院原因、量測、檢驗、IDEXX 原始結果（一台儀器一段）、本次簡易紀錄、藥單、請轉告飼主、回診建議。</li>
+            <li><span class="badge">2</span>領藥紀錄：病況、藥單、備註，以及現在進行到哪一步。</li>
+          </ol>
+        </figcaption>
+      </figure>
+      <h3>看診紀錄是「讀出來」的，不是存一份副本</h3>
+      <ul>
+        <li>每次打開都是這次看診<strong>最新的內容</strong>。醫師在診療台改、櫃台在處理視窗改，日誌都立刻跟著變。</li>
+        <li>在日誌按 <span class="ui">修改</span> 改來院原因、體重、體溫、本次簡易紀錄、請轉告飼主、回診建議，就是改回這次看診。<strong>櫃台完成處理之後也能改</strong>，日誌就是事後更正紀錄的地方。</li>
+        <li>修改模式裡，IDEXX 的數值可以逐項改（原始值會保留，旁邊有還原鈕），或把整份結果移除（回到「檢驗」待確認清單）。</li>
+        <li>內部備註不會出現在日誌裡。</li>
+        <li>醫師在診療台開的藥單，內容就在那次的看診紀錄裡，不會另外再出現一筆領藥紀錄。</li>
+      </ul>
+      <h3>領藥紀錄</h3>
+      <ul>
+        <li>櫃台登記的藥單，醫師確認之前不會出現在病歷上（病歷只記醫師確認過的內容）。確認之後就一直在，之後被退回或修改也不會消失。</li>
+        <li>從日誌改藥單內容會寫回藥單；如果那張藥單還在流程中，會退回「待醫師確認」（避免櫃台交出舊的藥）。</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="report">
+      <h2><span class="n">10</span>健檢報告與寄送</h2>
+      <h3>草稿：報到時就建好了</h3>
+      <div class="flow">
+        <div class="row auto"><span class="who auto">系統自動</span><div><p>報到時用掛號選的表單建立草稿，並帶入表單的預設值。醫師從診療台 <span class="ui">開啟健檢報告</span>。</p></div></div>
+        <div class="row"><span class="who vet">醫師</span><div><ul>
+          <li>草稿自動存檔，離開前有未存的內容會提醒。</li>
+          <li><span class="ui">套用預填模板</span>：一鍵帶入一組常用內容（例如「預防針」）；換一組時，上一組帶入而你沒改過的欄位會退回原本的預設值，按錯可以復原。</li>
+        </ul></div></div>
+      </div>
+      <figure class="shot">
+        <div class="frame"><img src="images/10-record-visit-link.webp" alt="編輯健檢報告：上方「引用本次看診」說明條與填入狀態燈號" loading="lazy"></div>
+        <figcaption>連著看診的報告草稿
+          <ol>
+            <li><span class="badge">1</span>「引用本次看診」：體重、體溫、檢驗數值跟診療台、病歷日誌是同一份，在這裡改，看診與日誌一起變。</li>
+            <li><span class="badge">2</span>IDEXX 填入狀態燈號（見第 11 節）。</li>
+            <li><span class="badge">3</span>回診日期只能看、不能改：它是櫃台約回診時決定的。</li>
+            <li><span class="badge">4</span>套用預填模板。</li>
+          </ol>
+        </figcaption>
+      </figure>
+      <h3>結案</h3>
+      <ul>
+        <li><span class="ui">預覽並準備結案</span> → 預覽頁 <span class="ui">確認結案</span>。系統先檢查必填欄位，然後產生 PDF、<strong>鎖定這份報告</strong>。</li>
+        <li>結案那一刻，系統把看診上的體重、體溫、檢驗數值與當下的表單結構一起凍結進報告。之後改看診、改表單，都不會動到已結案的報告。</li>
+        <li>結案後要更正：<span class="ui">建立修訂版</span>。舊版保留，新的一份從草稿開始。</li>
+      </ul>
+      <h3>給飼主：分享連結與 Email</h3>
+      <ul>
+        <li><strong>分享連結</strong>預設 30 天有效，可以隨時撤銷。</li>
+        <li>飼主開連結或 PDF 要輸入<strong>飼主手機後 6 碼</strong>。密碼每次依當下的電話算，改了電話密碼就跟著變；沒有手機號碼的飼主不用密碼。Email 只提示「手機後 6 碼」，不會寫出密碼。</li>
+        <li><strong>寄出前</strong>系統會先檢查信箱：格式不對、常見的打錯（例如 gmial.com，會問「是不是 gmail.com？」）、網域不存在，都會擋下來。帳號那一段打錯擋不到。</li>
+      </ul>
+      <div class="chain" role="img" aria-label="Email 從寄出到退信的過程">
+        <div class="node"><span class="i">1</span><p>按寄送 → 郵件伺服器收下了這封信 → 寄送歷程顯示「<strong>已寄出</strong>」。這只代表伺服器收下，<strong>不代表飼主收到</strong>。</p></div>
+        <div class="node branch"><span class="i">2</span><p><span class="who auto">系統自動</span> 寄出後 45 秒、3 分鐘，以及之後每 5 分鐘，系統會去寄件信箱看有沒有退信。</p></div>
+        <div class="node fail"><span class="i">3</span><p>收件地址不存在時會有退信 → 這次寄送自動改成「<strong>寄送失敗</strong>」，說明欄寫著原因，報告進「寄送失敗」清單。確認信箱後重寄。</p></div>
+      </div>
+      <figure class="shot">
+        <div class="frame"><img src="images/15-deliveries.webp" alt="寄送歷程：一筆退信造成的寄送失敗、一筆結果待確認" loading="lazy"></div>
+        <figcaption>左側導覽「寄送」：每一次寄送一列，報告刪掉了也查得到寄給誰
+          <ol>
+            <li><span class="badge">1</span>寄送失敗：退信，收件地址不存在。</li>
+            <li><span class="badge">2</span>結果待確認：寄送過程中斷，信<strong>可能已經寄出</strong>。先問飼主有沒有收到，再決定要不要重寄。</li>
+          </ol>
+        </figcaption>
+      </figure>
+      <p>退信要幾十秒到幾分鐘才會回來，畫面不會自己跳，重新整理才看得到。</p>
+    </section>
+
+    <section class="chapter" id="idexx">
+      <h2><span class="n">11</span>IDEXX 檢驗</h2>
+      <p class="sub">院內檢驗儀驗完，結果會自動進到系統、自動填進那次看診的檢驗數值（健檢報告草稿讀的就是它）。</p>
+      <div class="chain" role="img" aria-label="IDEXX 檢驗結果從儀器到系統的過程">
+        <div class="node"><span class="i">1</span><p>檢驗儀驗完 → IDEXX 主機 → 診所那台電腦（IDEXX InterLink 存成檔案）→ 系統。中間由一支小程式每 10 秒上傳一次。</p></div>
+        <div class="node branch"><span class="i">2</span><p><span class="who auto">系統自動</span> 認貓：這份結果帶著系統的貓咪編號（從「送 IDEXX」清單點選跑的檢驗才會帶），而且那隻貓<strong>檢驗當天有看診</strong>，就認得出來。</p></div>
+        <div class="node"><span class="i">3</span><p>認得出來 → 依健檢表單上設定的 IDEXX 代號，填進那次看診：<strong>空格才填</strong>；已經有<strong>不同的值</strong>不會蓋掉，留給醫師在比對視窗決定；表單沒有的項目不填（全血檢通常比表單項目多，這是正常的）。</p></div>
+        <div class="node fail"><span class="i">4</span><p>認不出來（技術員在主機上手打名字，或那隻貓當天沒看診）→ 進右側工具欄「<strong>檢驗</strong>」的待確認清單，等人選是哪隻貓。</p></div>
+      </div>
+
+      <h3>填入狀態燈號</h3>
+      <p>診療台「檢驗報告」標題旁、健檢報告「引用本次看診」那一條上都有一顆燈，點開看每台儀器的明細。</p>
+      <div class="lights">
+        <div><span class="dot g"></span><span><strong>綠</strong>：已填入幾項，沒有問題。</span></div>
+        <div><span class="dot y"></span><span><strong>黃</strong>：有數值跟報告不同、看診沒選健檢表單，或報告已經結案（數值沒進報告）。</span></div>
+        <div><span class="dot b"></span><span><strong>藍</strong>：沒有填入新的數值（報告上本來就是同樣的值，或表單沒有對應欄位）。</span></div>
+      </div>
+      <div class="pair">
+        <figure class="shot">
+          <div class="frame"><img src="images/08-lab-status.webp" alt="填入狀態明細：跟報告不同一項、已填入六項、報告上沒有的欄位" loading="lazy"></div>
+          <figcaption>點燈號：跟報告不同（附 <span class="ui">比對</span>）、已填入、報告上沒有這個欄位</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="frame"><img src="images/09-lab-conflict.webp" alt="比對視窗：SDMA 報告上 15、IDEXX 16" loading="lazy"></div>
+          <figcaption>比對視窗：預設都不勾。<span class="ui">都不要</span>＝全部保留報告上的值；<span class="ui">覆蓋勾選的</span>；<span class="ui">全部覆蓋</span>。按 ✕＝稍後再說。按下去之後提示上可以復原</figcaption>
+        </figure>
+      </div>
+      <p>有數值不同時，打開健檢報告草稿會自動跳出比對視窗；工具欄「檢驗」也列在「數值跟報告不同」。哪一邊處理完，另一邊就消失。</p>
+
+      <h3>認不出貓的結果</h3>
+      <figure class="shot narrow">
+        <div class="frame"><img src="images/16-lab-panel.webp" alt="檢驗面板：抓檔程式燈號、數值跟報告不同、還沒選貓的快篩結果" loading="lazy"></div>
+        <figcaption>工具欄「檢驗」
+          <ol>
+            <li><span class="badge">1</span>診所那台電腦的燈號：綠＝正常、黃＝連著但上傳卡住、紅＝超過 3 分鐘沒回報（電腦關機或斷線，新的結果進不來）。滑過去看最後回報時間。</li>
+            <li><span class="badge">2</span>數值跟報告不同，點進去比對。</li>
+            <li><span class="badge">3</span>IDEXX 上的名字跟當天某隻貓同名、而且只有一隻：直接按 <span class="ui">確認是○○</span>。</li>
+          </ol>
+        </figcaption>
+      </figure>
+      <ul>
+        <li>點一筆可以看數值、從<strong>檢驗當天的掛號</strong>裡選是哪隻貓。那隻貓當天沒看診就不能選。</li>
+        <li>昨天驗、今天回來看報告這種：在診療台那次看診的「檢驗報告」按 <span class="ui">匯入檢驗結果</span>，把結果指定給這次看診。</li>
+        <li>選錯了：提示上的 <span class="ui">復原</span>。只清掉還是剛才填進去的值，被人改過的留著。</li>
+        <li>品管測試、練習用的檢驗：<span class="ui">忽略</span>。</li>
+      </ul>
+
+      <h3>送 IDEXX</h3>
+      <p>這個功能要診所跟 IDEXX 一起確認後才會打開，沒打開時看不到按鈕。</p>
+      <ul>
+        <li><span class="who vet">醫師</span> 在看診工作區底部按 <span class="ui">送 IDEXX</span>，或 <span class="who desk">櫃台</span> 在卡片 <span class="ui">⋯</span> 按（例如術前檢查，一到就知道要驗）。報到不會自動送，因為不是每次看診都驗血。</li>
+        <li>約 10 秒後貓咪出現在 IDEXX 主機的清單。技術員從清單點那隻貓跑檢驗，結果回來就認得出是誰，直接填進看診，不會進待確認清單。</li>
+        <li>徽章「尚未送到 IDEXX」（琥珀色）＝已經按了、但診所電腦還沒寫進主機；變成「已送 IDEXX」才是主機上看得到了。</li>
+        <li>完成處理、取消、取消報到時，系統自動把這隻貓從主機清單撤掉。</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="meds">
+      <h2><span class="n">12</span>藥單</h2>
+      <p class="sub">「藥單」是那張單子；「領藥」只指交給飼主那一步。全頁版在左側導覽 <span class="ui">藥單</span>，右側工具欄也有同一套。</p>
+      <div class="stages" role="img" aria-label="藥單的四個階段">
+        <div class="stage s1"><h4>待醫師確認</h4><p>櫃台登記的從這裡開始。醫師 <span class="ui">審核</span> → <span class="ui">確認藥單並送交包藥</span></p></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="stage s2"><h4>待包藥</h4><p>醫師在診療台開的，送交櫃台時直接到這裡。櫃台 <span class="ui">完成包藥</span></p></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="stage s3"><h4>待領藥</h4><p>飼主來拿時，櫃台 <span class="ui">確認領藥</span></p></div>
+        <span class="arrow" aria-hidden="true">→</span>
+        <div class="stage s4"><h4>已領藥</h4><p>結束。之後修改只是更正紀錄</p></div>
+      </div>
+      <figure class="shot">
+        <div class="frame"><img src="images/12-medications.webp" alt="藥單清單：待包藥、待領藥、待醫師確認各一筆" loading="lazy"></div>
+        <figcaption>
+          <ol>
+            <li><span class="badge">1</span>醫師在診療台開的藥單，送交櫃台後直接是「待包藥」。</li>
+            <li><span class="badge">2</span>列上直接 <span class="ui">完成包藥</span>，不用點進去。</li>
+            <li><span class="badge">3</span>櫃台登記的（飼主來電續藥），要等醫師確認。</li>
+          </ol>
+        </figcaption>
+      </figure>
+      <ul>
+        <li><span class="who desk">櫃台</span> 對藥單有疑問：<span class="ui">提出意見</span> → 送回醫師重審。</li>
+        <li>已經確認過的藥單被修改，會<strong>退回「待醫師確認」</strong>；如果已經包好（待領藥），會標「需重新包藥」，包藥時要確認舊的藥包已經停用。</li>
+        <li><span class="who auto">系統自動</span> 每一次異動都留下當時的內容，事後查得到誰改了什麼。</li>
+        <li>醫師在診療台開的藥單，在藥單這邊修改或取消，會寫回那次看診（取消＝看診上的藥單清空）。</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="team">
+      <h2><span class="n">13</span>聊天、暫存區、待辦</h2>
+      <div class="pair">
+        <figure class="shot">
+          <div class="frame"><img src="images/17-chat.webp" alt="內部聊天：自動通知與手打的訊息" loading="lazy"></div>
+          <figcaption>內部聊天：標「自動通知」的是系統發的</figcaption>
+        </figure>
+        <figure class="shot">
+          <div class="frame"><img src="images/18-todos.webp" alt="院內待辦：星號置頂、期限、上傳影像待辦" loading="lazy"></div>
+          <figcaption>院內待辦：「上傳影像 #阿虎」是勾選框自動新增的</figcaption>
+        </figure>
+      </div>
+      <h3>聊天</h3>
+      <ul>
+        <li>醫師與櫃台的全站聊天，跟哪一隻貓無關也可以聊（例如「今天下午提早關診」）。</li>
+        <li><span class="who auto">系統自動</span> 報到、送交櫃台、取回、完成處理、約回診、取消、未到……都會自動發一則通知。每台電腦可以在聊天室的 <span class="ui">通知</span> 關掉自己不想發出的幾種。</li>
+        <li>打 <strong>#</strong> 可以標記貓咪，<span class="who auto">系統自動</span> 把那隻貓放進暫存區，對方點名字就能看病歷。</li>
+      </ul>
+      <h3>暫存區</h3>
+      <ul>
+        <li>「把這隻貓丟給對方看病歷」的地方。櫃台接電話要問醫生時特別好用。</li>
+        <li>全院共用一份，不會隔天自動清空，看完要手動移除。貓咪頁右上角也可以 <span class="ui">加入暫存區</span>。</li>
+      </ul>
+      <h3>待辦</h3>
+      <ul>
+        <li>「明天叫貨」「回電給某某」這類院內雜事，全院共用。打 # 可以標記貓咪（不會放進暫存區）。</li>
+        <li>星號＝置頂；可以設期限。勾起來＝完成，取消勾選＝改回未完成。</li>
+        <li><span class="who auto">系統自動</span> 櫃台勾「上傳影像」會新增一筆；完成它，那次看診的病歷日誌會記下完成時間。</li>
+      </ul>
+    </section>
+
+    <section class="chapter" id="faq">
+      <h2><span class="n">14</span>常見問題</h2>
+      <details><summary>病歷日誌裡那次看診不見了？</summary>
+        <p>那次看診被<strong>取消報到</strong>或<strong>取消掛號</strong>了。看診沒有成立，日誌會暫時拿掉；寫過的內容還留在掛號上，重新報到後會回來。</p></details>
+      <details><summary>為什麼不能取消掛號（或取消報到、標記未到）？</summary>
+        <p>醫師已經開始看診了。請醫師在看診工作區底部按 <span class="ui">取消看診</span>，退回候診之後就能取消。</p></details>
+      <details><summary>寄出了，飼主卻說沒收到？</summary>
+        <p>先看左側導覽「寄送」：</p>
+        <ul>
+          <li>「寄送失敗」＋退信原因：信箱寫錯，跟飼主確認後重寄。</li>
+          <li>「已寄出」：郵件伺服器已經收下，請飼主看看垃圾信件匣。剛寄出的幾分鐘內，重新整理一下，確認有沒有變成寄送失敗。</li>
+          <li>「結果待確認」：可能已經寄出，先問清楚再決定要不要重寄。</li>
+        </ul></details>
+      <details><summary>IDEXX 驗完了，數值沒有進健檢報告？</summary>
+        <ul>
+          <li>看「檢驗報告」旁邊的燈號。黃燈：可能是數值跟報告不同（點 <span class="ui">比對</span>）、看診沒選健檢表單，或報告已經結案。</li>
+          <li>沒有燈號：結果還沒連到這次看診，到工具欄「檢驗」的待確認清單找，或用 <span class="ui">匯入檢驗結果</span>。</li>
+          <li>「檢驗」面板上的電腦燈號是紅的：診所那台電腦沒有回報，結果進不來，請檢查那台電腦有沒有開機、有沒有網路。</li>
+        </ul></details>
+      <details><summary>號碼牌為什麼跳號？</summary>
+        <p>當天發過的號碼不會再發第二次，避免叫錯人。取消報到後再報到，會拿到一張新的號碼。</p></details>
+      <details><summary>藥單怎麼又回到「待醫師確認」？</summary>
+        <p>有人修改了已經確認過的藥單內容（在藥單頁、或從病歷日誌改），需要醫師重新確認。</p></details>
+      <details><summary>掛號台和診療台的日期不一樣？</summary>
+        <p>兩頁共用同一個日期：在其中一頁翻到別天，切到另一頁也會停在那一天。從總覽點進去會回到今天。</p></details>
+      <details><summary>為什麼某隻貓約診要收保證金？</summary>
+        <p>這隻貓從上次收保證金之後，遲到滿 2 次或未到滿 1 次。在貓咪頁的「出席紀錄」看得到是哪幾次。可以選「這次不收」並寫原因，但下次約診還會再問。</p></details>
+      <details><summary>在健檢報告上改了體重，診療台的也變了？</summary>
+        <p>對，它們本來就是同一份資料（見第 1 節）。結案之後，報告上的數值才會固定下來，不再跟著看診變。</p></details>
+    </section>
+
+    <footer class="end">截圖使用虛構的示範資料。畫面若有調整，以系統實際畫面為準。</footer>
+  </main>
+</div>

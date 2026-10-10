@@ -117,8 +117,8 @@ const SEX_OPTIONS = [
 ];
 const NEUTERED_OPTIONS = [
   { title: '未記錄', value: 'unknown' },
-  { title: '已絕育', value: 'yes' },
-  { title: '未絕育', value: 'no' },
+  { title: '已結紮', value: 'yes' },
+  { title: '未結紮', value: 'no' },
 ];
 const FEEDING_OPTIONS = [
   { title: '未記錄', value: 'unknown' },
@@ -184,7 +184,7 @@ function scrollNoteTo(noteId, position) {
 }
 
 const sexLabel = computed(() => ({ male: '公', female: '母' })[pet.value?.sex] ?? '');
-const neuteredLabel = computed(() => ({ yes: '已絕育', no: '未絕育' })[pet.value?.neutered] ?? '');
+const neuteredLabel = computed(() => ({ yes: '已結紮', no: '未結紮' })[pet.value?.neutered] ?? '');
 const ageLabel = computed(() => calcAgeLabel(pet.value?.birthDate, new Date(), '', { estimated: pet.value?.birthDateEstimated }));
 const feedingLabel = computed(() => ({ free: '任食', scheduled: `定食定量${pet.value?.mealsPerDay ? `，一日 ${pet.value.mealsPerDay} 餐` : ''}` })[pet.value?.feedingType] ?? '');
 const vaccineLabel = computed(() => ({ none: '未注射', done: `已注射${pet.value?.vaccineDate ? `，最後注射時間 ${pet.value.vaccineDate}` : ''}` })[pet.value?.vaccineStatus] ?? '');
@@ -217,7 +217,7 @@ function togglePetMedicalHistory(value) {
   petForm.medicalHistory = Array.from(values);
 }
 
-// 身分類欄位（品種／性別／絕育／年齡）一句話就能唸完，用一行 chip 呈現比逐格 dt/dd 更好掃視。
+// 身分類欄位（品種／性別／結紮／年齡）一句話就能唸完，用一行 chip 呈現比逐格 dt/dd 更好掃視。
 const identityFields = computed(() => filledFields([
   { label: '品種', value: catBreedLabel(pet.value?.breed) },
   { label: '花色', value: pet.value?.color ?? '' },

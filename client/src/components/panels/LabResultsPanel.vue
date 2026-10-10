@@ -5,7 +5,7 @@ import { FlaskConical, Search } from '@lucide/vue';
 import { http } from '../../api/http';
 import { getSocket } from '../../api/socket';
 import { useToast } from '../../composables/useToast';
-import { clinicDateInput, formatDateTime, weekdayLabel } from '../../lib/datetime';
+import { clinicDateInput, clinicTimeInput, formatDateTime, weekdayLabel } from '../../lib/datetime';
 import { bridgeStatusLine, fillMessage, instrumentLabel, visitStatusLabel } from '../../lib/labResults';
 import { labFlag } from '../../../../shared/labValues.js';
 import { useUtilityPanelStore } from '../../stores/utilityPanel';
@@ -35,6 +35,14 @@ const error = ref('');
 const busy = ref(false);
 const selectedPetId = ref('');
 const dismissing = ref(false);
+
+// 清單列上的檢驗時間：面板只有 460px，完整的「2026年10月10日 下午3:04」會把儀器名稱擠掉。
+// 跟診療台的匯入清單同一個寫法：今天驗的只寫時間，別天的連日期一起寫。
+function runTimeLabel(runAt) {
+  if (!runAt) return '';
+  const day = clinicDateInput(runAt);
+  return day === clinicDateInput() ? clinicTimeInput(runAt) : `${day} ${clinicTimeInput(runAt)}`;
+}
 
 // 待確認的結果可能堆到上百筆，清單分頁、標題列出總筆數。
 const PAGE_SIZE = 20;
@@ -415,9 +423,9 @@ onActivated(refreshAll);
           <li v-for="item in items" :key="item._id" class="flex items-center">
             <button type="button" class="flex min-w-0 flex-1 flex-col gap-0.5 py-3 pl-5 text-left hover:bg-hover" :class="suggestion(item) ? 'pr-3' : 'pr-5'" @click="openItem(item)">
               <span class="flex items-baseline gap-2">
-                <span class="text-base font-semibold">{{ instrumentLabel(item.instrument).purpose }}</span>
-                <span class="truncate text-sm text-muted-foreground">{{ instrumentLabel(item.instrument).name }}</span>
-                <span class="num ml-auto shrink-0 text-xs text-subtle-foreground">{{ formatDateTime(item.runAt) }}</span>
+                <span class="shrink-0 text-base font-semibold">{{ instrumentLabel(item.instrument).purpose }}</span>
+                <span class="min-w-0 truncate text-sm text-muted-foreground">{{ instrumentLabel(item.instrument).name }}</span>
+                <span class="num ml-auto shrink-0 text-xs text-subtle-foreground">{{ runTimeLabel(item.runAt) }}</span>
               </span>
               <span class="text-sm text-muted-foreground">IDEXX 上的名字：<span class="font-medium text-foreground">{{ item.patient?.name }}</span></span>
               <span v-if="suggestion(item)" class="text-sm text-primary">建議：{{ suggestion(item).petName }}（{{ suggestion(item).time }}）</span>

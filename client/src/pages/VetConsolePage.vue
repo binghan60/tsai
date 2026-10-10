@@ -429,7 +429,7 @@ onBeforeUnmount(() => {
         <!-- 這一排的控制項都是 40 高：日期前後鈕跟日期欄同高（掛號台頁首同一組）。 -->
         <Button v-if="date !== today" variant="soft" @click="date = today">回到今天</Button>
         <Button variant="secondary" size="icon" aria-label="前一天" @click="date = shiftDateInput(date, -1)"><ChevronLeft stroke-width="1.75" /></Button>
-        <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-40" />
+        <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-44" />
         <Button variant="secondary" size="icon" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
       </template>
     </PageHeader>

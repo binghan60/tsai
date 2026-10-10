@@ -356,7 +356,7 @@ const onSubmit = handleSubmit((values) => {
                   </div>
                   <div class="space-y-1.5">
                     <Label for="dialog-species" class="text-xs font-medium">物種</Label>
-                    <Input id="dialog-species" v-model="species" placeholder="例：犬" />
+                    <Input id="dialog-species" v-model="species" placeholder="例：貓" />
                   </div>
                 </div>
                 <div v-if="ownerMode === 'new'" class="grid gap-4 sm:grid-cols-2">

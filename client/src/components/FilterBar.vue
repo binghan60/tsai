@@ -119,11 +119,11 @@ function applyDates() {
           <div class="flex items-end gap-3">
             <label class="space-y-1 text-xs font-medium text-muted-foreground">
               <span>{{ dateFromLabel }}</span>
-              <DatePicker :model-value="dateFrom" :aria-label="dateFromLabel" class="w-40" @update:model-value="emit('update:dateFrom', $event)" />
+              <DatePicker :model-value="dateFrom" :aria-label="dateFromLabel" class="w-44" @update:model-value="emit('update:dateFrom', $event)" />
             </label>
             <label class="space-y-1 text-xs font-medium text-muted-foreground">
               <span>{{ dateToLabel }}</span>
-              <DatePicker :model-value="dateTo" :aria-label="dateToLabel" class="w-40" @update:model-value="emit('update:dateTo', $event)" />
+              <DatePicker :model-value="dateTo" :aria-label="dateToLabel" class="w-44" @update:model-value="emit('update:dateTo', $event)" />
             </label>
           </div>
           <div class="mt-3 flex justify-end gap-2">
