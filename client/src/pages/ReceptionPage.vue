@@ -2,7 +2,7 @@
 import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from '../components/PatientLink.vue'
-import { AlertTriangle, CalendarPlus, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, Pill, Plus, RefreshCw, X } from '@lucide/vue'
+import { AlertTriangle, CalendarPlus, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, PackageCheck, Pill, Plus, RefreshCw, X } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useCopy } from '../composables/useCopy'
@@ -522,6 +522,7 @@ onBeforeUnmount(() => {
         <DatePicker v-model="date" :clearable="false" aria-label="診務日期" class="w-44" />
         <Button variant="secondary" size="icon" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
         <span class="mx-1.5 h-6 w-px bg-border" aria-hidden="true"></span>
+        <Button variant="secondary" @click="panel.push({ type: 'create' }, 'medications')"><PackageCheck stroke-width="1.75" />領藥</Button>
         <Button @click="openDrawer('new')"><Plus stroke-width="1.75" />掛號</Button>
       </template>
     </PageHeader>

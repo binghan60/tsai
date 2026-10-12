@@ -105,6 +105,8 @@ const clinicalEditable = computed(() => !terminal.value && (!selected.value || d
 // 右欄顯示編輯框的時機：新增藥單、按了「修改藥單」，或醫師打開還沒結束的藥單（醫師隨時可以改藥單內容，跟面板一樣）。
 const showEditor = computed(() => !fullPage.value || !selected.value || editing.value || (doctor.value && clinicalEditable.value));
 const changedClinical = computed(() => selected.value && ['condition', 'prescription', 'note'].some(key => form[key].trim() !== selected.value[key]));
+// 來源：診療台送交櫃台時開的是門診（fromVisit），櫃台登記的是拿藥（電話續藥等沒有看診的領藥）。
+function sourceLabel(order) { return order.fromVisit ? '門診' : '拿藥'; }
 function tone(status) {
   return { review: 'bg-warning-surface text-warning', approved: 'bg-info-surface text-info', ready: 'bg-accent text-accent-foreground', collected: 'bg-success-surface text-success' }[status] || 'bg-sunken text-muted-foreground';
 }
@@ -428,6 +430,7 @@ onBeforeUnmount(() => {
           <span class="desktop-data-cell flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
             <Badge v-if="item.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>
+            <Badge variant="outline">{{ sourceLabel(item) }}</Badge>
           </span>
           <span class="desktop-data-cell flex items-center justify-end gap-1">
             <Button v-if="nextAction(item)" variant="soft" size="sm" :disabled="busy" :aria-label="completeLabel(item)" @click="completeFromList(item)">{{ nextAction(item) === 'ready' ? '完成包藥' : '確認領藥' }}</Button>
@@ -452,6 +455,7 @@ onBeforeUnmount(() => {
           <div class="flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
             <Badge v-if="item.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>
+            <Badge variant="outline">{{ sourceLabel(item) }}</Badge>
             <Button v-if="nextAction(item)" variant="soft" size="sm" class="ml-auto" :disabled="busy" @click="completeFromList(item)">{{ nextAction(item) === 'ready' ? '完成包藥' : '確認領藥' }}</Button>
             <Button v-else variant="soft" size="sm" class="ml-auto" :disabled="busy" @click="openOrder(item)">{{ openLabel(item) }}</Button>
           </div>
@@ -480,7 +484,10 @@ onBeforeUnmount(() => {
             <span class="block truncate text-base font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
             <span class="flex items-baseline gap-3 text-sm"><span class="truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink></span><span class="num shrink-0 text-muted-foreground">{{ item.ownerPhone }}</span></span>
           </div>
-          <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
+          <span class="flex shrink-0 flex-col items-end gap-1">
+            <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
+            <Badge variant="outline">{{ sourceLabel(item) }}</Badge>
+          </span>
         </div>
         <RichText v-if="item.prescription" tag="p" :text="item.prescription" class="line-clamp-3 rounded-lg bg-sunken px-3 py-2 text-sm" />
         <p v-if="item.needsRepack" class="text-sm font-semibold text-danger">暫停處理，需重新包藥</p>
@@ -505,6 +512,7 @@ onBeforeUnmount(() => {
           <Button variant="secondary" size="icon-sm" :disabled="busy" aria-label="返回清單" @click="close"><ArrowLeft stroke-width="1.75" /></Button>
           <h2 class="text-xl font-semibold"><PatientLink :pet-id="selected.petId">{{ selected.petName }}</PatientLink></h2>
           <Badge variant="status" :class="tone(selected.status)">{{ medicationLabel(selected.status) }}</Badge>
+          <Badge variant="outline">{{ sourceLabel(selected) }}</Badge>
           <Badge v-if="dirty" variant="status" class="ml-auto bg-warning-surface text-warning">有未儲存內容</Badge>
         </div>
         <SpecGrid>
@@ -532,6 +540,7 @@ onBeforeUnmount(() => {
             <ClipboardPlus v-if="!selected" class="h-5 w-5 text-primary" stroke-width="1.75" aria-hidden="true" />
             <template v-if="selected"><PatientLink :pet-id="selected.petId">{{ selected.petName }}</PatientLink> 的藥單</template><template v-else>新增藥單</template>
             <Badge v-if="selected" variant="status" :class="tone(selected.status)">{{ medicationLabel(selected.status) }}</Badge>
+            <Badge v-if="selected" variant="outline">{{ sourceLabel(selected) }}</Badge>
           </p>
           <p v-if="selected" class="flex gap-3 text-sm"><PatientLink v-if="selected.ownerName" :pet-id="selected.petId" quiet>{{ selected.ownerName }}</PatientLink><span class="num text-muted-foreground">{{ selected.ownerPhone }}</span></p>
           <p v-else class="text-sm text-muted-foreground">記錄飼主需求並建立藥單，送交醫師確認後再包藥。</p>
