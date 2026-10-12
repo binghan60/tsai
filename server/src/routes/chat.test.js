@@ -21,7 +21,7 @@ describe('chat routes', () => {
     if (server) await new Promise((resolve) => server.close(resolve));
   });
 
-  it('GET /messages 回傳依時間正序排列的最近訊息', async () => {
+  it('GET /messages 回傳依時間正序排列的最近一頁，並告知更早還有沒有', async () => {
     const originalFind = ChatMessage.find;
     const rows = [
       { _id: 'm3', sender: 'front_desk', content: '第三則', createdAt: new Date('2026-08-26T03:00:00.000Z') },
@@ -29,17 +29,35 @@ describe('chat routes', () => {
       { _id: 'm1', sender: 'vet', content: '第一則', createdAt: new Date('2026-08-26T01:00:00.000Z') },
     ];
     let capturedLimit;
-    ChatMessage.find = () => ({
-      sort: () => ({
-        limit: (limit) => { capturedLimit = limit; return Promise.resolve(rows); },
-      }),
-    });
+    let capturedFilter;
+    let capturedSort;
+    ChatMessage.find = (filter) => {
+      capturedFilter = filter;
+      return {
+        sort: (sort) => {
+          capturedSort = sort;
+          return { limit: (limit) => { capturedLimit = limit; return Promise.resolve(rows.slice(0, limit)); } };
+        },
+      };
+    };
     try {
-      const response = await fetch(`${origin}/api/chat/messages`);
+      const response = await fetch(`${origin}/api/chat/messages?limit=2`);
       assert.equal(response.status, 200);
       const body = await response.json();
-      assert.equal(capturedLimit, 100);
-      assert.deepEqual(body.items.map((item) => item._id), ['m1', 'm2', 'm3']);
+      assert.equal(capturedLimit, 3, '多拿一則來判斷 hasMore');
+      assert.deepEqual(capturedSort, { _id: -1 });
+      assert.deepEqual(capturedFilter, {});
+      assert.deepEqual(body.items.map((item) => item._id), ['m2', 'm3']);
+      assert.equal(body.hasMore, true);
+
+      const older = await fetch(`${origin}/api/chat/messages?before=66cc00000000000000000002`);
+      const olderBody = await older.json();
+      assert.equal(capturedLimit, 31, '預設一頁 30 則');
+      assert.equal(String(capturedFilter._id.$lt), '66cc00000000000000000002');
+      assert.equal(olderBody.hasMore, false);
+
+      const invalid = await fetch(`${origin}/api/chat/messages?before=not-an-id`);
+      assert.equal(invalid.status, 422);
     } finally {
       ChatMessage.find = originalFind;
     }

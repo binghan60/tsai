@@ -14,12 +14,28 @@ function autoKey(sender, content) {
 // 全站即時聊天的訊息與未讀狀態，只在記憶體裡、不持久化。跟舊版
 // appointmentNotifications 不同的是這裡只有「一個」對話（不分方向），
 // isOpen 放在這裡是為了讓 addMessage 自己判斷要不要計未讀，不用元件另外傳狀態進來。
+// 記憶體裡最多留幾則：頁面開一整天，自動通知會一直進來，全留著清單只會越來越長、越畫越慢。
+// 超過時丟最舊的（hasMore 改成 true，要看還能用「載入更早的訊息」拿回來）。面板開著時不丟，免得正在往上翻的那段消失。
+const MAX_KEPT_MESSAGES = 200;
+
 export const useChatStore = defineStore('chat', {
-  state: () => ({ messages: [], unreadCount: 0, isOpen: false, historyLoaded: false }),
+  state: () => ({ messages: [], unreadCount: 0, isOpen: false, historyLoaded: false, hasMore: false }),
   actions: {
-    setHistory(list) {
+    setHistory(list, hasMore = false) {
       this.messages = list ?? [];
+      this.hasMore = hasMore;
       this.historyLoaded = true;
+    },
+    // 「載入更早的訊息」拿回來的一頁，接在最前面。
+    prependOlder(list, hasMore) {
+      const known = new Set(this.messages.map((item) => item._id));
+      this.messages = [...(list ?? []).filter((item) => !known.has(item._id)), ...this.messages];
+      this.hasMore = hasMore;
+    },
+    trimOld() {
+      if (this.isOpen || this.messages.length <= MAX_KEPT_MESSAGES) return;
+      this.messages = this.messages.slice(-MAX_KEPT_MESSAGES);
+      this.hasMore = true;
     },
     // 送出自動訊息「之前」呼叫，讓稍後收到的同一則廣播能認出是自己這台裝置發的。
     markPendingAuto(sender, content) {
@@ -37,6 +53,7 @@ export const useChatStore = defineStore('chat', {
       }
       this.messages.push(message);
       if (!this.isOpen && !isOwnAuto) this.unreadCount += 1;
+      this.trimOld();
     },
     open() {
       this.isOpen = true;
@@ -44,12 +61,14 @@ export const useChatStore = defineStore('chat', {
     },
     close() {
       this.isOpen = false;
+      this.trimOld();
     },
     reset() {
       this.messages = [];
       this.unreadCount = 0;
       this.isOpen = false;
       this.historyLoaded = false;
+      this.hasMore = false;
     },
   },
 });

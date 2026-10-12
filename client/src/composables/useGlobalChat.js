@@ -30,7 +30,7 @@ export function useGlobalChat() {
   async function loadHistory() {
     try {
       const { data } = await http.get('/chat/messages');
-      store.setHistory(data.items ?? []);
+      store.setHistory(data.items ?? [], Boolean(data.hasMore));
     } catch {
       // 歷史載入失敗不影響之後即時收到的新訊息，安靜失敗即可。
     }

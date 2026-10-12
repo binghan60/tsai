@@ -48,8 +48,30 @@ async function scrollToBottom() {
   await nextTick();
   if (listEl.value) listEl.value.scrollTop = listEl.value.scrollHeight;
 }
-watch(() => store.messages.length, scrollToBottom);
+// 看的是最後一則：新訊息進來才捲到底。往前載入（接在最前面）不能把人拉回最底下。
+watch(() => store.messages.at(-1)?._id, scrollToBottom);
 onActivated(scrollToBottom);
+
+// 往前翻：一次一頁（伺服器預設 30 則），游標是目前最舊那則的 _id。
+// 接上去之後把捲動位置補回原本看的那一則，畫面不跳。
+const loadingOlder = ref(false);
+async function loadOlder() {
+  const oldest = store.messages[0];
+  if (!oldest || loadingOlder.value) return;
+  loadingOlder.value = true;
+  try {
+    const { data } = await http.get('/chat/messages', { params: { before: oldest._id } });
+    const el = listEl.value;
+    const fromBottom = el ? el.scrollHeight - el.scrollTop : 0;
+    store.prependOlder(data.items ?? [], Boolean(data.hasMore));
+    await nextTick();
+    if (el) el.scrollTop = el.scrollHeight - fromBottom;
+  } catch (err) {
+    toast.error(apiErrorMessage(err, '更早的訊息載入失敗，請稍後再試'), '載入失敗');
+  } finally {
+    loadingOlder.value = false;
+  }
+}
 
 // # 標記貓咪：被標記的會由伺服器放進暫存區。候選清單邏輯跟待辦共用。
 const composerEl = ref(null);
@@ -102,6 +124,9 @@ async function submit() {
       </template>
       <div class="flex h-full min-h-0 flex-col">
         <div ref="listEl" class="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+          <div v-if="store.hasMore" class="flex justify-center">
+            <Button type="button" variant="secondary" size="sm" :disabled="loadingOlder" @click="loadOlder">{{ loadingOlder ? '載入中…' : '載入更早的訊息' }}</Button>
+          </div>
           <p v-if="!store.messages.length" class="py-10 text-center text-muted-foreground">還沒有訊息</p>
           <template v-for="row in rows" :key="row.key">
             <div v-if="row.type === 'day'" class="flex items-center gap-3 py-1" role="separator" :aria-label="row.label">

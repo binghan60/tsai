@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import ChatMessage from '../models/ChatMessage.js';
 import { emitChatMessage } from '../lib/realtime.js';
 import { mentionSnapshots, parseMentionIds } from '../lib/petMentions.js';
@@ -9,14 +10,23 @@ const router = Router();
 // 跟 models/ChatMessage.js 的 maxlength 一致；在這裡先擋，使用者才看得到講人話的訊息。
 const MAX_CONTENT_LENGTH = 1000;
 
-// 全站只有一個對話，沒有分頁需求——回傳最近 N 則、依時間正序排列，
-// 給聊天視窗開啟時一次載入歷史用。
+// 全站只有一個對話：每次回傳一頁（預設 30 則）、依時間正序排列，hasMore＝更早還有。
+// 自動通知一天就有上百則，以前一登入就整包載入 100 則（很多帶修改前後的快照），每台裝置、每次重新整理都一樣。
+// 往前翻用游標：before＝目前最舊那則的 _id。ObjectId 由伺服器建立、跟著時間遞增，直接走 _id 索引，不必 skip。
+const DEFAULT_PAGE_SIZE = 30;
+const MAX_PAGE_SIZE = 100;
 router.get('/messages', async (req, res, next) => {
   try {
     const requestedLimit = Number.parseInt(req.query.limit, 10);
-    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 200) : 100;
-    const items = await ChatMessage.find().sort({ createdAt: -1 }).limit(limit);
-    res.json({ items: items.reverse() });
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
+    const filter = {};
+    if (req.query.before !== undefined) {
+      if (!mongoose.isValidObjectId(req.query.before)) return res.status(422).json({ message: '游標格式不正確' });
+      filter._id = { $lt: new mongoose.Types.ObjectId(String(req.query.before)) };
+    }
+    // 多拿一則，判斷更早還有沒有。
+    const items = await ChatMessage.find(filter).sort({ _id: -1 }).limit(limit + 1);
+    res.json({ items: items.slice(0, limit).reverse(), hasMore: items.length > limit });
   } catch (err) {
     next(err);
   }

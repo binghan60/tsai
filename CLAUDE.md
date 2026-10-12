@@ -330,7 +330,7 @@ PUT    /api/intake-submissions/:id       審核前修改（帶 version）
 POST   /api/intake-submissions/:id/approve（date、time 必填）／ reject
 
 協作
-GET/POST /api/chat/messages
+GET/POST /api/chat/messages（GET 一頁 30 則、正序；?before=<最舊那則 _id> 往前翻，回 hasMore）
 GET/POST /api/pinned-pets ／ DELETE /api/pinned-pets/:petId
 GET/POST /api/todos ／ PUT /api/todos/:id ／ POST /api/todos/:id/complete|reopen ／ DELETE /api/todos/:id
 
