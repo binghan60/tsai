@@ -44,6 +44,7 @@ export function journalRows(note) {
       tone: WARNING_KEYS.has(section.key) ? 'warning' : 'default',
       emphasis: EMPHASIS_KEYS.has(section.key),
       rich: RICH_TEXT_KEYS.has(section.key),
+      ...(section.stage ? { stage: section.stage, medicationStatus: section.medicationStatus, needsRepack: section.needsRepack } : {}),
       ...(Array.isArray(section.items) && section.items.length ? { labs: section.items } : {}),
       ...(Array.isArray(section.results) && section.results.length ? { results: section.results } : {}),
     })
@@ -59,6 +60,7 @@ const APPOINTMENT_EDIT_FIELDS = [
   { key: 'weightKg', label: '體重', unit: 'kg', numeric: true, step: '0.01' },
   { key: 'temperatureC', label: '體溫', unit: '°C', numeric: true, step: '0.1' },
   { key: 'visitNote', label: '本次簡易紀錄', multiline: true, rich: true, rows: 5, maxlength: 10000 },
+  { key: 'prescription', label: '藥單', multiline: true, rich: true, rows: 4, maxlength: 10000 },
   { key: 'specialCareNote', label: '請轉告飼主', multiline: true, rows: 2, maxlength: 500, tone: 'warning' },
   { key: 'followUpRecommendation', label: '回診建議', multiline: true, rows: 2, maxlength: 500 },
 ]
@@ -74,6 +76,33 @@ export function journalEditFields(note) {
   if (kind === 'appointment' && note.fields) return APPOINTMENT_EDIT_FIELDS
   if (kind === 'medication' && note.fields) return MEDICATION_EDIT_FIELDS
   return FREE_TEXT_FIELDS
+}
+
+// 藥單階段徽章的顏色，跟藥單頁的狀態徽章同一套。
+export function medicationStageTone(status) {
+  return { review: 'bg-warning-surface text-warning', approved: 'bg-info-surface text-info', ready: 'bg-accent text-accent-foreground', collected: 'bg-success-surface text-success' }[status] || 'bg-sunken text-muted-foreground'
+}
+
+// 看診日誌每一列的畫面順序（後端 appointmentJournalSections 的順序，量測併成 vitals）。
+const APPOINTMENT_ROW_ORDER = ['reason', 'vitals', 'labValues', 'idexx', 'visitNote', 'prescription', 'imageUpload', 'specialCareNote', 'followUpRecommendation']
+
+// 編輯模式的版面：跟檢視同一個順序、同一種分列。能改的列變成輸入框（體重體溫併成一列），
+// 改不到的列（檢驗、藥單、上傳影像）原樣留在原位，IDEXX 檢驗在原位換成可逐項修改的表格；
+// 這樣按下「修改」畫面只有輸入框變了，其他列不會消失或跳位置。
+// 回傳 [{ type: 'field'|'vitals'|'static'|'idexx', key, label?, field?, fields?, row? }]。
+export function journalEditLayout(note) {
+  const fields = journalEditFields(note)
+  if (fields !== APPOINTMENT_EDIT_FIELDS) return fields.map((field) => ({ type: 'field', key: field.key, field }))
+  const byKey = Object.fromEntries(fields.map((field) => [field.key, field]))
+  const rows = new Map((journalRows(note) ?? []).map((row) => [row.key, row]))
+  const layout = []
+  for (const key of APPOINTMENT_ROW_ORDER) {
+    if (key === 'vitals') layout.push({ type: 'vitals', key, label: '生命徵象', fields: [byKey.weightKg, byKey.temperatureC] })
+    else if (byKey[key]) layout.push({ type: 'field', key, field: byKey[key], row: rows.get(key) })
+    else if (key === 'idexx') { if (rows.get(key)?.results) layout.push({ type: 'idexx', key, label: rows.get(key).label }) }
+    else if (rows.has(key)) layout.push({ type: 'static', key, row: rows.get(key) })
+  }
+  return layout
 }
 
 // 藥單日誌的日期跟著藥單建立時間走，改了也會在下一次藥單動作被覆寫回去，所以不給改。

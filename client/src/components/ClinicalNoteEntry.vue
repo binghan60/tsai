@@ -9,13 +9,14 @@ import {
   journalDateEditable,
   journalEditable,
   journalEditError,
-  journalEditFields,
+  journalEditLayout,
   journalEditForm,
   journalEditNotice,
   journalEditPayload,
   journalKind,
   journalKindLabel,
   journalRows,
+  medicationStageTone,
 } from '../lib/clinicalNoteDisplay'
 import { Alert, AlertDescription } from './ui/alert'
 import { Badge } from './ui/badge'
@@ -23,8 +24,8 @@ import { Button } from './ui/button'
 import { DatePicker } from './ui/date-picker'
 import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
-import RichText from './RichText.vue'
 import LabResultGroups from './LabResultGroups.vue'
+import ClinicalNoteRowValue from './ClinicalNoteRowValue.vue'
 import RichTextEditor from './RichTextEditor.vue'
 
 // 一則病歷日誌，排成一張小報告：標頭（日期、類型、進度）＋「標籤｜內容」列。
@@ -50,10 +51,12 @@ const serverError = ref('')
 const form = reactive({})
 const entryDate = ref('')
 
-const fields = computed(() => journalEditFields(props.note))
+const layout = computed(() => journalEditLayout(props.note))
 // 連到這次看診的 IDEXX 結果：修改模式下可以改個別數值、或把整份移除（回到待確認清單）。
 const labResults = computed(() => rows.value?.find((row) => row.results)?.results ?? [])
-const labEditor = ref(null)
+// IDEXX 表格在編輯版面的迴圈裡，ref 要用函式接，不然會變成陣列。
+let labEditor = null
+const setLabEditor = (el) => { labEditor = el }
 const validation = computed(() => (editing.value ? journalEditError(props.note, form) : ''))
 const notice = computed(() => journalEditNotice(props.note))
 
@@ -78,7 +81,7 @@ async function save() {
     const body = { ...journalEditPayload(props.note, form) }
     if (journalDateEditable(props.note) && entryDate.value) body.entryDate = entryDate.value
     // 檢驗先送：最後那支日誌的 PUT 回來的內容才包含改過的檢驗。
-    const lab = labEditor.value?.changes() ?? { removed: [], edits: [] }
+    const lab = labEditor?.changes() ?? { removed: [], edits: [] }
     for (const { id, values } of lab.edits) await http.put(`/lab-results/${id}/values`, { values })
     for (const id of lab.removed) await http.post(`/lab-results/${id}/unmatch`)
     let data = null
@@ -126,50 +129,57 @@ const kindBadgeClass = computed(() =>
         <label :class="[LABEL, 'text-muted-foreground']" :for="`journal-date-${note._id}`">日期</label>
         <DatePicker :id="`journal-date-${note._id}`" v-model="entryDate" aria-label="日誌日期" class="w-44" :clearable="false" />
       </div>
-      <div
-        v-for="field in fields"
-        :key="field.key"
-        :class="[ROW, field.tone === 'warning' ? 'bg-warning-surface' : '']"
-      >
-        <label :class="[LABEL, field.tone === 'warning' ? 'text-warning' : 'text-muted-foreground']" :for="`journal-${field.key}-${note._id}`">
-          {{ field.label }}<span v-if="field.required" class="text-danger"> *</span>
-        </label>
-        <RichTextEditor
-          v-if="field.rich"
-          :id="`journal-${field.key}-${note._id}`"
-          v-model="form[field.key]"
-          :aria-label="field.label"
-          :min-rows="field.rows"
-          :maxlength="field.maxlength"
-          :disabled="saving"
-          class="bg-card"
-        />
-        <Textarea
-          v-else-if="field.multiline"
-          :id="`journal-${field.key}-${note._id}`"
-          v-model="form[field.key]"
-          :rows="field.rows"
-          :maxlength="field.maxlength"
-          :disabled="saving"
-          class="bg-card"
-        />
-        <div v-else-if="field.numeric" class="flex items-center gap-2">
-          <Input
-            :id="`journal-${field.key}-${note._id}`"
-            v-model="form[field.key]"
-            type="text"
-            inputmode="decimal"
-            :disabled="saving"
-            class="w-32 bg-card tabular-nums"
-          />
-          <span class="text-sm text-muted-foreground">{{ field.unit }}</span>
+      <template v-for="entry in layout" :key="entry.key">
+        <div v-if="entry.type === 'field'" :class="[ROW, entry.field.tone === 'warning' ? 'bg-warning-surface' : '']">
+          <label :class="[LABEL, entry.field.tone === 'warning' ? 'text-warning' : 'text-muted-foreground']" :for="`journal-${entry.key}-${note._id}`">
+            {{ entry.field.label }}<span v-if="entry.field.required" class="text-danger"> *</span>
+          </label>
+          <div class="min-w-0 space-y-2">
+            <!-- 藥單階段：放在內容區最上面，標籤欄只留標籤。 -->
+            <span v-if="entry.row?.stage" class="flex flex-wrap gap-1.5"><Badge variant="status" :class="medicationStageTone(entry.row.medicationStatus)">{{ entry.row.stage }}</Badge><Badge v-if="entry.row.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge></span>
+            <RichTextEditor
+              v-if="entry.field.rich"
+              :id="`journal-${entry.key}-${note._id}`"
+              v-model="form[entry.key]"
+              :aria-label="entry.field.label"
+              :min-rows="entry.field.rows"
+              :maxlength="entry.field.maxlength"
+              :disabled="saving"
+              class="bg-card"
+            />
+            <Textarea
+              v-else-if="entry.field.multiline"
+              :id="`journal-${entry.key}-${note._id}`"
+              v-model="form[entry.key]"
+              :rows="entry.field.rows"
+              :maxlength="entry.field.maxlength"
+              :disabled="saving"
+              class="bg-card"
+            />
+            <Input v-else :id="`journal-${entry.key}-${note._id}`" v-model="form[entry.key]" :maxlength="entry.field.maxlength" :disabled="saving" class="bg-card" />
+          </div>
         </div>
-        <Input v-else :id="`journal-${field.key}-${note._id}`" v-model="form[field.key]" :maxlength="field.maxlength" :disabled="saving" class="bg-card" />
-      </div>
-      <div v-if="labResults.length" :class="ROW">
-        <span :class="[LABEL, 'text-muted-foreground']">IDEXX 檢驗</span>
-        <LabResultGroups ref="labEditor" :results="labResults" :base-date="clinicDateInput(note.entryDate)" editable :disabled="saving" />
-      </div>
+        <!-- 體重、體溫：檢視併成「生命徵象」一列，編輯也一列、兩格並排。 -->
+        <div v-else-if="entry.type === 'vitals'" :class="ROW">
+          <span :class="[LABEL, 'text-muted-foreground']">{{ entry.label }}</span>
+          <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <div v-for="field in entry.fields" :key="field.key" class="flex items-center gap-2">
+              <label class="text-xs text-muted-foreground" :for="`journal-${field.key}-${note._id}`">{{ field.label }}</label>
+              <Input :id="`journal-${field.key}-${note._id}`" v-model="form[field.key]" type="text" inputmode="decimal" :disabled="saving" class="w-28 bg-card tabular-nums" />
+              <span class="text-sm text-muted-foreground">{{ field.unit }}</span>
+            </div>
+          </div>
+        </div>
+        <div v-else-if="entry.type === 'idexx'" :class="ROW">
+          <span :class="[LABEL, 'text-muted-foreground']">{{ entry.label }}</span>
+          <LabResultGroups :ref="setLabEditor" :results="labResults" :base-date="clinicDateInput(note.entryDate)" editable :disabled="saving" />
+        </div>
+        <!-- 改不到的列（檢驗、藥單、上傳影像）：原樣留在原位。 -->
+        <div v-else :class="[ROW, entry.row.tone === 'warning' ? 'bg-warning-surface' : '']">
+          <span :class="[LABEL, 'text-muted-foreground']">{{ entry.row.label }}</span>
+          <ClinicalNoteRowValue :row="entry.row" :base-date="clinicDateInput(note.entryDate)" />
+        </div>
+      </template>
       <div class="space-y-3 px-4 py-3">
         <p v-if="notice" class="text-xs text-muted-foreground">{{ notice }}</p>
         <Alert v-if="serverError || validation" variant="destructive">
@@ -185,33 +195,10 @@ const kindBadgeClass = computed(() =>
     <dl v-else-if="rows" class="divide-y divide-border" :class="bodyClass">
       <div v-for="row in rows" :key="row.key" :class="[ROW, row.tone === 'warning' ? 'bg-warning-surface' : '']">
         <dt :class="[LABEL, row.tone === 'warning' ? 'text-warning' : 'text-muted-foreground']">{{ row.label }}</dt>
-        <dd v-if="row.items" class="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-          <span v-for="item in row.items" :key="item.key">
-            <span class="mr-1.5 text-xs text-muted-foreground">{{ item.label }}</span>
-            <span class="font-medium tabular-nums">{{ item.text }}</span>
-          </span>
-        </dd>
-        <!-- 檢驗不是一段文字：IDEXX 原始結果排成表格（跟診療台的檢驗報告同一張），報告上的數值一項一格。 -->
-        <dd v-else-if="row.results"><LabResultGroups :results="row.results" :base-date="clinicDateInput(note.entryDate)" dense /></dd>
-        <dd v-else-if="row.labs" class="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-          <span v-for="lab in row.labs" :key="lab.key">
-            <span class="mr-1.5 text-xs text-muted-foreground">{{ lab.label }}</span>
-            <span class="num font-medium" :class="lab.flag ? 'text-danger' : ''">{{ lab.value }}<span v-if="lab.flag" class="ml-0.5" :aria-label="lab.flag === '↑' ? '偏高' : '偏低'">{{ lab.flag }}</span></span>
-            <span v-if="lab.unit" class="num ml-1 text-xs text-subtle-foreground">{{ lab.unit }}</span>
-          </span>
-        </dd>
-        <RichText
-          v-else-if="row.rich"
-          tag="dd"
-          class="text-sm leading-relaxed wrap-anywhere"
-          :class="[row.emphasis ? 'font-semibold' : '', row.tone === 'warning' ? 'text-warning' : '']"
-          :text="row.text"
-        />
-        <dd
-          v-else
-          class="text-sm leading-relaxed whitespace-pre-wrap wrap-anywhere"
-          :class="[row.emphasis ? 'font-semibold' : '', row.tone === 'warning' ? 'text-warning' : '']"
-        >{{ row.text }}</dd>
+        <div class="min-w-0 space-y-1.5">
+          <span v-if="row.stage" class="flex flex-wrap gap-1.5"><Badge variant="status" :class="medicationStageTone(row.medicationStatus)">{{ row.stage }}</Badge><Badge v-if="row.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge></span>
+          <ClinicalNoteRowValue :row="row" :base-date="clinicDateInput(note.entryDate)" />
+        </div>
       </div>
       <div v-if="!rows.length" class="px-4 py-2.5 text-sm text-muted-foreground">（沒有內容）</div>
     </dl>

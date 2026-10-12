@@ -64,7 +64,7 @@ test('appointment edits send every journal field, numbers as numbers and blanks 
   form.temperatureC = ''
   form.reason = ' 咳嗽加劇 '
   assert.deepEqual(journalEditPayload(appointmentNote, form).fields, {
-    reason: '咳嗽加劇', weightKg: 4.5, temperatureC: null, visitNote: '安排檢查', specialCareNote: '傷口勿舔舐', followUpRecommendation: '兩週後',
+    reason: '咳嗽加劇', weightKg: 4.5, temperatureC: null, visitNote: '安排檢查', prescription: '', specialCareNote: '傷口勿舔舐', followUpRecommendation: '兩週後',
   })
   assert.equal(journalEditError(appointmentNote, { ...form, weightKg: '-1' }), '體重必須是有效的非負數')
   const empty = Object.fromEntries(journalEditFields(appointmentNote).map((field) => [field.key, '']))

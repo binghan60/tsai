@@ -6,6 +6,7 @@ import MedicationOrder from '../models/MedicationOrder.js';
 import { applyJournalFields } from '../lib/appointmentWorkflow.js';
 import { applyMedicationJournalEdit } from '../lib/medicationWorkflow.js';
 import { syncMedicationJournal } from '../lib/medicationJournal.js';
+import { syncOrderFromJournal } from '../lib/visitMedicationOrder.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { linkedLabResults } from '../lib/appointmentJournal.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
@@ -70,6 +71,7 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
     let note;
     let appointment;
     let order;
+    let visitOrder;
     await withTransaction(async session => {
       const existing = await ClinicalNote.findById(req.params.id).session(session);
       if (existing?.medicationOrderId) {
@@ -89,7 +91,10 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
         if (!appointment) throw Object.assign(new Error('找不到對應的就診資料'), { status: 404 });
         if (req.body.fields !== undefined) {
           const labResults = (await linkedLabResults([appointment._id], { session })).get(String(appointment._id)) ?? [];
+          const previousPrescription = appointment.prescription;
           applyJournalFields(appointment, req.body.fields, { labResults });
+          // 日誌上改了藥單：連著的藥單同一個 transaction 跟著改，兩邊不會各說各話。
+          visitOrder = await syncOrderFromJournal(appointment, previousPrescription, req.user?.username || '', { session });
           appointment.increment();
           await appointment.save({ session });
         } else {
@@ -111,6 +116,7 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
     if (!note) return res.status(404).json({ message: '找不到病歷日誌' });
     if (appointment) emitAppointmentUpdate(appointment);
     if (order) emitMedicationUpdate(order);
+    if (visitOrder) emitMedicationUpdate(visitOrder);
     const [view] = await clinicalNoteViews([note]);
     emitClinicalNoteUpdate(view ?? note);
     res.json(view ?? note);

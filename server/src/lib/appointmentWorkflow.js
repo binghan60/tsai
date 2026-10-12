@@ -146,8 +146,8 @@ export function appointmentJournalContent(appointment, labResults = []) {
 }
 
 // 日誌編輯表單要的原始值（量測是數字，不是「4.2 kg」這種顯示字串）。
-export const APPOINTMENT_JOURNAL_FIELDS = ['reason', 'weightKg', 'temperatureC', 'visitNote', 'specialCareNote', 'followUpRecommendation'];
-const JOURNAL_TEXT_LIMITS = { reason: 500, visitNote: 10000, specialCareNote: 500, followUpRecommendation: 500 };
+export const APPOINTMENT_JOURNAL_FIELDS = ['reason', 'weightKg', 'temperatureC', 'visitNote', 'prescription', 'specialCareNote', 'followUpRecommendation'];
+const JOURNAL_TEXT_LIMITS = { reason: 500, visitNote: 10000, prescription: 10000, specialCareNote: 500, followUpRecommendation: 500 };
 
 export function appointmentJournalFields(appointment) {
   return Object.fromEntries(APPOINTMENT_JOURNAL_FIELDS.map(key => [key, appointment[key] ?? (key === 'weightKg' || key === 'temperatureC' ? null : '')]));

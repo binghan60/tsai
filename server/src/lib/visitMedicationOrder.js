@@ -2,7 +2,7 @@ import MedicationOrder from '../models/MedicationOrder.js';
 import Appointment from '../models/Appointment.js';
 import { MEDICATION_ACTIVE } from '../../../shared/medicationWorkflow.js';
 import { richTextToPlain } from '../../../shared/richText.js';
-import { recordMedicationEvent } from './medicationWorkflow.js';
+import { applyMedicationJournalEdit, recordMedicationEvent } from './medicationWorkflow.js';
 
 // 診療台的「藥單」欄位 ↔ 藥單（medicationOrders）。
 // 醫師寫的藥單存在看診上（appointment.prescription），送交櫃台的那一刻才在藥單建立一筆——
@@ -95,4 +95,25 @@ export async function writeBackVisitPrescription(order, { session } = {}) {
     { $set: { prescription: text, ...(cancelled ? { medicationOrderId: null } : {}) } },
     { new: true, session },
   );
+}
+
+// 正向：病歷日誌上改了看診的「藥單」，連著的那張藥單要跟著變（跟藥單那邊的修改互為鏡像）。
+// 還在流程中的藥單照「修改藥單」的規則退回待醫師確認（已包好的標需重新包藥）；清空＝取消那張。
+// 已領藥、已取消、還沒開出藥單（沒送交櫃台）的只改看診上的字——已領藥的不回頭改，送交時才會建立。
+// 呼叫端已經把新內容寫在 appointment.prescription；回傳有變動的藥單（沒有回 null），提交後才廣播。
+export async function syncOrderFromJournal(appointment, previousPrescription, actor, { session, now = new Date() } = {}) {
+  const text = String(appointment.prescription ?? '').trim();
+  if (text === String(previousPrescription ?? '').trim() || !appointment.medicationOrderId) return null;
+  const order = await MedicationOrder.findById(appointment.medicationOrderId).session(session ?? null);
+  if (!order || !MEDICATION_ACTIVE.includes(order.status)) return null;
+  if (!hasText(text)) {
+    const from = order.status;
+    order.status = 'cancelled';
+    recordMedicationEvent(order, 'cancel', actor, from, '從病歷日誌清空了藥單', now);
+    appointment.medicationOrderId = null;
+  } else if (!applyMedicationJournalEdit(order, { prescription: text }, actor, now)) {
+    return null;
+  }
+  await order.save({ session });
+  return order;
 }

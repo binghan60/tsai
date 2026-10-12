@@ -4,6 +4,14 @@ import { appointmentJournalContent, appointmentJournalFields, appointmentJournal
 import { linkedLabResults } from './appointmentJournal.js';
 import { medicationJournalContent, medicationJournalFields, medicationJournalSections, medicationJournalStage, medicationJournalTitle } from './medicationWorkflow.js';
 
+// 看診日誌的「藥單」列帶上連著那張藥單的階段（stage 文字、medicationStatus、needsRepack）；沒有藥單（還沒送交、已取消）就不帶。
+function withMedicationStage(sections, order) {
+  if (!order || order.status === 'cancelled') return sections;
+  return sections.map(section => (section.key === 'prescription'
+    ? { ...section, stage: medicationJournalStage(order), medicationStatus: order.status, needsRepack: Boolean(order.needsRepack) }
+    : section));
+}
+
 // 日誌只保存掛號／藥單關聯；每次讀取都以來源文件的最新欄位組成內容。
 // content 是串好的純文字（差異比對、長度判斷、找不到來源時的後備）；
 // title／sections 是同一份內容的分欄版本，前端靠它分段顯示，不必再把字串拆回欄位。
@@ -21,7 +29,10 @@ export async function clinicalNoteViews(notes) {
     orderIds.length ? MedicationOrder.find({ _id: { $in: orderIds } }).select('-history').lean() : [],
   ]);
   const appointmentById = new Map(appointments.map(item => [String(item._id), item]));
-  const orderById = new Map(orders.map(item => [String(item._id), item]));
+  // 看診日誌的「藥單」列要標出連著那張藥單走到哪（待包藥、待領藥、已領藥…），所以把診療台開的藥單也撈回來。
+  const visitOrderIds = appointments.map(item => item.medicationOrderId).filter(Boolean);
+  const visitOrders = visitOrderIds.length ? await MedicationOrder.find({ _id: { $in: visitOrderIds } }).select('-history').lean() : [];
+  const orderById = new Map([...orders, ...visitOrders].map(item => [String(item._id), item]));
 
   return items.map(note => {
     if (note.appointmentId) {
@@ -31,7 +42,7 @@ export async function clinicalNoteViews(notes) {
       return {
         ...note,
         content: appointment ? appointmentJournalContent(appointment, labs) : (note.content || '找不到對應的就診資料'),
-        ...(appointment && { sections: appointmentJournalSections(appointment, labs), fields: appointmentJournalFields(appointment) }),
+        ...(appointment && { sections: withMedicationStage(appointmentJournalSections(appointment, labs), orderById.get(String(appointment.medicationOrderId))), fields: appointmentJournalFields(appointment) }),
         editableContent: appointment?.visitNote ?? note.content ?? '',
         readOnly: !appointment,
       };
