@@ -81,8 +81,10 @@ let browser;
 try {
   browser = await puppeteer.launch({ headless: true, args: ['--disable-background-timer-throttling', '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'] });
   const errors = [];
-  const doctor = await browser.newPage();
-  const desk = await browser.newPage();
+  // 醫師與櫃台是兩台不同的電腦：各開一個獨立的瀏覽器環境，localStorage 才不會互相蓋掉。
+  // 共用同一個的話，櫃台頁寫入 front_desk，醫師頁延後載入的身分模組會讀到它，藥單面板就變成櫃台版。
+  const doctor = await (await browser.createBrowserContext()).newPage();
+  const desk = await (await browser.createBrowserContext()).newPage();
   for (const page of [doctor, desk]) {
     page.on('pageerror', err => errors.push(err.message));
     page.on('response', async response => { if (response.status() >= 400) console.error('HTTP', response.status(), response.url(), await response.text()); });
@@ -119,8 +121,8 @@ try {
     await page.bringToFront();
     // 切換階段後清單是非同步重抓的，不等就會在列還沒畫出來時拿到 null。
     await page.waitForFunction(() => [...document.querySelectorAll('button')].some(el => ['開啟', '修改'].some(prefix => el.getAttribute('aria-label')?.startsWith(`${prefix} 安安`))));
-    const handle = await page.evaluateHandle(() => [...document.querySelectorAll('button')].find(el => ['開啟', '修改'].some(prefix => el.getAttribute('aria-label')?.startsWith(`${prefix} 安安`))));
-    await handle.asElement().asLocator().click(); await handle.dispose();
+    // 用選擇器、不握著元素：建立藥單後清單會因即時同步重畫，握著的按鈕可能已經被換掉，點下去就一直等。
+    await page.locator('button[aria-label^="開啟 安安"], button[aria-label^="修改 安安"]').click();
     await page.waitForSelector('#med-prescription');
   }
   async function closed(page) {

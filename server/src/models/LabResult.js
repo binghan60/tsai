@@ -99,8 +99,14 @@ labResultSchema.index({ diagnosticSetId: 1, instrument: 1 }, { unique: true });
 // 待配對清單（petId: null）與貓咪詳情頁都依檢驗時間新到舊；_id 是同一時間的排序依據，
 // 放進索引才不會變成記憶體排序（32MB 上限）。
 labResultSchema.index({ petId: 1, runAt: -1, _id: -1 });
+// 「檢驗」待確認（petId 空、沒被忽略）：工具欄的數字每台裝置、每次檢驗事件都會算，清單也走這條。
+// 只有 petId 的索引要把每份都讀出來才看得到有沒有 dismissedAt；兩個條件都放進索引，數字只看索引鍵就算得出來。
+labResultSchema.index({ petId: 1, dismissedAt: 1, runAt: -1, _id: -1 });
 // 還沒處理的數值差異（「檢驗」面板、健檢報告打開時查）；只收有開著的那幾筆。
 labResultSchema.index({ appointmentId: 1 }, { partialFilterExpression: { conflictsOpen: true } });
+// 全部還沒處理的差異（工具欄的數字、比對視窗的清單，不指定看診）：依檢驗時間排序。上面那條是以看診查的，
+// 這條沒有條件就會掃完整個 collection 再排序（檢驗結果每做一次就多一份，只增不減）。
+labResultSchema.index({ runAt: -1, _id: -1 }, { partialFilterExpression: { conflictsOpen: true } });
 // 病歷日誌讀「連到這次看診的結果」（lib/appointmentJournal.js 的 linkedLabResults）；沒連到看診的不收。
 labResultSchema.index({ appointmentId: 1, runAt: 1, _id: 1 }, { partialFilterExpression: { appointmentId: { $type: 'objectId' } } });
 

@@ -6,6 +6,7 @@ import { PDFDocument } from '@cantoo/pdf-lib';
 // 改電話不必重產 PDF。沒有密碼（空字串）就原檔交出。
 export async function encryptPdf(pdfBuffer, password) {
   if (!password) return pdfBuffer;
+  const startedAt = Date.now();
   const document = await PDFDocument.load(pdfBuffer);
   document.encrypt({
     userPassword: password,
@@ -13,5 +14,9 @@ export async function encryptPdf(pdfBuffer, password) {
     ownerPassword: crypto.randomUUID(),
     permissions: { printing: 'highResolution', copying: true },
   });
-  return Buffer.from(await document.save());
+  const encrypted = Buffer.from(await document.save());
+  // 跟 [pdf]、[mail] 兩行對照：下載與寄信各花在加密上多久。純 JS 的 pdf-lib 在 1 CPU 上會比本機慢，
+  // 它邊做邊讓出事件迴圈，不會卡住別的請求，只是這一次下載／寄信要多等；真的慢到不能接受再考慮預先加密或改用 qpdf。
+  console.info(`[pdf] 加密 ${Date.now() - startedAt} ms（${Math.round(pdfBuffer.length / 1024)} KB）`);
+  return encrypted;
 }

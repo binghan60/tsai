@@ -43,7 +43,9 @@ router.get('/', async (req, res, next) => {
     const [items, total, grouped] = await Promise.all([
       MedicationOrder.find(filter).select('-history').sort({ createdAt: status === 'active' || MEDICATION_ACTIVE.includes(status) ? 1 : -1, _id: 1 }).skip(pagination.skip).limit(pagination.limit),
       MedicationOrder.countDocuments(filter),
-      MedicationOrder.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+      // 工具欄的數字，每台裝置、每次藥單異動都會查。不加 hint 會讀完整個藥單 collection（每張藥單永遠留著，越來越多）；
+      // 指到 {status, createdAt} 索引，只看到索引鍵就算得出筆數，一份文件都不用讀。
+      MedicationOrder.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }], { hint: { status: 1, createdAt: -1 } }),
     ]);
     res.json({ ...paginatedPayload(items, total, pagination), counts: Object.fromEntries(grouped.map(item => [item._id, item.count])) });
   } catch (err) { next(err); }
