@@ -1,18 +1,22 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { Menu, Search } from '@lucide/vue';
-import AppSettingsMenu from './components/AppSettingsMenu.vue';
-import NavRail from './components/shell/NavRail.vue';
-import UtilityRail from './components/shell/UtilityRail.vue';
-import UtilityPanelHost from './components/shell/UtilityPanelHost.vue';
 import { NAV_GROUPS, NAV_ITEMS } from './lib/navigation';
 import { useAuthStore } from './stores/auth';
 import { useGlobalChat } from './composables/useGlobalChat';
 import { Button } from './components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from './components/ui/sheet';
 import ToastContainer from './components/ToastContainer.vue';
-import GlobalSearchDialog from './components/GlobalSearchDialog.vue';
+
+// 員工外殼（左側導覽、右側工具欄與它的面板、設定選單、全站搜尋）要用時才載入：只在非 bare 路由畫出來。
+// 直接 import 的話，飼主用手機開的初診頁（/intake）、報告頁（/report/:token，也是產 PDF 的來源）和登入頁
+// 都得先下載整套員工系統——面板連帶 Tiptap 編輯器、藥單、初診審核、檢驗，壓縮前一百多 KB 起跳。
+const AppSettingsMenu = defineAsyncComponent(() => import('./components/AppSettingsMenu.vue'));
+const NavRail = defineAsyncComponent(() => import('./components/shell/NavRail.vue'));
+const UtilityRail = defineAsyncComponent(() => import('./components/shell/UtilityRail.vue'));
+const UtilityPanelHost = defineAsyncComponent(() => import('./components/shell/UtilityPanelHost.vue'));
+const GlobalSearchDialog = defineAsyncComponent(() => import('./components/GlobalSearchDialog.vue'));
 
 const route = useRoute();
 const router = useRouter();

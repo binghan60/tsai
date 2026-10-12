@@ -26,6 +26,7 @@ import uploadsRouter from './routes/uploads.js';
 import { intakeSubmissionsRouter, publicIntakeRouter } from './routes/intakeSubmissions.js';
 import { labResultBridgeRouter, labResultsRouter } from './routes/labResults.js';
 import { closeBrowser } from './lib/pdf.js';
+import { precompressedAssets } from './lib/precompressedAssets.js';
 import { startBounceChecks, stopBounceChecks } from './lib/mailBounces.js';
 import { onPdfReady, resumePdfJobs } from './lib/reportPdfJobs.js';
 import { runAutoSends, waitForAutoSends } from './lib/reportDelivery.js';
@@ -103,6 +104,8 @@ app.use('/api', (req, res) => {
 
 if (process.env.NODE_ENV === 'production') {
   const hashedAssetsPath = path.join(clientDistPath, 'assets') + path.sep;
+  // 前端 build 時壓好的 .br／.gz 優先（lib/precompressedAssets.js）；沒有壓好的或瀏覽器不收，才由下面送原檔。
+  app.use('/assets', precompressedAssets(hashedAssetsPath));
   app.use(express.static(clientDistPath, {
     // Vite 產出的 /assets/* 檔名帶內容 hash，內容一變檔名就變，可以放心長期快取：
     // 員工的瀏覽器和產 PDF 的 Chromium 都不必每次載入都回來問一百多個檔。

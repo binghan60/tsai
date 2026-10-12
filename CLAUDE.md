@@ -354,6 +354,8 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 
 `左側導覽 72px ｜ 工作區 ｜（工具欄面板 460px）｜ 右側工具欄 64px`。頁面由視窗捲動，兩條欄與並排的面板用 sticky 釘住。
 
+- **外殼元件一律 `defineAsyncComponent` 載入**（左側導覽、右側工具欄與面板、設定選單、全站搜尋）：它們只在非 bare 路由畫出來；直接 import 會讓公開頁（`/intake`、`/report/:token`、`/login`）也得下載整套員工系統。頁面本身已在 router 用 `() => import()`。
+
 - **左側導覽**（`components/shell/NavRail.vue`，項目 `lib/navigation.js`）：看診（總覽、診療台、掛號台、藥單）、資料（貓咪、報告、寄送）、設定（表單、模板、預填）。上方 Logo 與搜尋（`Ctrl/Cmd+K` 命令面板），下方設定選單（裝置身分、明暗主題、自動通知、登出）。手機寬度改成頁首漢堡選單。active 判斷用網址前綴，路由可用 `meta.nav` 指定歸屬。
 - **右側工具欄**（`components/shell/UtilityRail.vue`）開側滑面板：暫存、藥單、待辦、檢驗（含 IDEXX 抓檔程式燈號）、初診（只在掛號台）、聊天。數字是紅色徽章＝要人動手（0 不畫）。藥單、初診、檢驗的數字在 `stores/workCounts.js`，隨對應的 socket 事件重讀；抓檔程式心跳每分鐘讀一次，有一台離線就亮「!」。
 - **側滑面板**（`UtilityPanelHost.vue`＋`stores/utilityPanel.js`）：一次開一個，不加遮罩、不鎖背景；1600px 以上推開工作區，更窄時浮在上面。面板內可以「推入」一層（暫存區的貓 → 病歷速覽 `PetQuickView`；藥單 → 新增；初診 → 逐欄審核）。`KeepAlive` 保留草稿。外框統一 `panels/SidePanel.vue`。
@@ -408,7 +410,7 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 
 ```bash
 # 前端（client/）
-npm run build                  # 含色碼／title 檢查；驗證改動用這個
+npm run build                  # 含色碼／title 檢查，最後把 /assets 的 JS／CSS 預先壓成 .br／.gz（scripts/precompress.mjs，伺服器 lib/precompressedAssets.js 直接送壓好的）；驗證改動用這個
 npm test                       # node --test，src/lib/*.test.js（純邏輯）
 npm run test:workflow-browser  # 瀏覽器實測診療台與掛號台（記憶體資料，不連資料庫）
 npm run test:medication-browser

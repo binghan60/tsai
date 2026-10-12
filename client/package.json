@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run audit:colors && vite build",
+    "build": "npm run audit:colors && vite build && node scripts/precompress.mjs",
     "audit:colors": "node scripts/audit-colors.mjs",
     "test": "node --test",
     "test:workflow-browser": "node scripts/check-appointment-workflow.mjs",
