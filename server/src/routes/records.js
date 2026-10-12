@@ -2,16 +2,20 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import FormTemplate from '../models/FormTemplate.js';
 import MedicalRecord from '../models/MedicalRecord.js';
-import DeliveryLog from '../models/DeliveryLog.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import Appointment from '../models/Appointment.js';
 import { enqueueReportPdf, readStoredPdf, removePdf } from '../lib/reportPdfJobs.js';
 import { encryptPdf } from '../lib/pdfEncrypt.js';
 import { createFailureLimiter, reportPasscode, reportPasscodeMatches } from '../lib/reportPasscode.js';
-import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from '../lib/mailer.js';
-import { emailProblem } from '../lib/emailCheck.js';
-import { checkBouncesSoon } from '../lib/mailBounces.js';
+import {
+  autoSendRecipientProblem,
+  claimDelivery,
+  effectiveDeliveryStatus,
+  isFinalizedRecord,
+  performDelivery,
+  shareExpiryFromNow,
+} from '../lib/reportDelivery.js';
 import { hasPdfRenderAccess } from '../config/pdfAccess.js';
 import { publicAppOrigin } from '../config/publicUrl.js';
 import { defaultRecordFields, storageFor, templateForRecord } from '../lib/formTemplate.js';
@@ -93,14 +97,6 @@ async function cleanUpImages(publicIds, context) {
     // 資料庫操作已完成；清理失敗只能記錄，不能讓使用者誤以為儲存或刪除失敗。
     console.error(`[image-cleanup] ${context}`, err);
   }
-}
-
-function isFinalizedRecord(record) {
-  return Boolean(record && record.status !== 'draft');
-}
-
-function effectiveDeliveryStatus(record) {
-  return record?.deliveryStatus ?? 'not_sent';
 }
 
 // 報告檢視要看的那份區塊結構。
@@ -218,18 +214,8 @@ petRecordsRouter.get('/', async (req, res, next) => {
   }
 });
 
-// 結案與寄送各有一把租約鎖：程序中途消失時，超過這段時間別的請求才接手。
+// 結案的租約鎖：程序中途消失時，超過這段時間別的請求才接手（寄送的在 lib/reportDelivery.js）。
 const FINALIZE_LEASE_MS = 5 * 60 * 1000;
-const DELIVERY_LEASE_MS = 10 * 60 * 1000;
-const configuredShareDays = Number.parseInt(process.env.SHARE_LINK_DAYS, 10);
-const DEFAULT_SHARE_DAYS = Number.isInteger(configuredShareDays) && configuredShareDays > 0
-  ? Math.min(configuredShareDays, 365)
-  : 30;
-
-function shareExpiryFromNow(days = DEFAULT_SHARE_DAYS) {
-  const safeDays = Number.isInteger(days) ? Math.min(Math.max(days, 1), 365) : DEFAULT_SHARE_DAYS;
-  return new Date(Date.now() + safeDays * 24 * 60 * 60 * 1000);
-}
 
 // ── 填表時的「上次數值」──
 // 這隻貓咪過去每個項目最近一次的紀錄，不限健檢類型：只要以前量過血小板，
@@ -582,6 +568,16 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       return res.status(422).json({ message: `請先補齊：${missing.join('、')}` });
     }
 
+    // 結案時勾了「PDF 產生後自動寄給飼主」：意圖記在報告上，PDF 背景工作產好就寄（lib/reportDelivery.js）。
+    // 信箱有問題趁醫師還在畫面上就講；報告照樣結案，只是不排自動寄送。
+    let autoSend = false;
+    let autoSendError = '';
+    if (req.body?.autoSend === true) {
+      const problem = await autoSendRecipientProblem(record.petId);
+      if (problem) autoSendError = `沒有自動寄出：${problem}`;
+      else autoSend = true;
+    }
+
     previousTemplateVersion = record.templateVersion;
     finalizeAttemptId = uuidv4();
     const lockedRecord = await MedicalRecord.findOneAndUpdate(
@@ -635,6 +631,7 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
             pdfFileId: null,
             deliveryStatus: 'not_sent',
             deliveryError: '',
+            autoSendRequestedAt: autoSend ? finalizedAt : null,
           },
           $inc: { __v: 1 },
           $unset: { finalizeAttemptId: 1, finalizingAt: 1 },
@@ -684,7 +681,9 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
       pdfStatus: 'pending',
       reportVersion: record.reportVersion || 1,
       deliveryStatus: effectiveDeliveryStatus(record),
+      autoSendRequestedAt: record.autoSendRequestedAt ?? null,
       documentVersion: record.__v,
+      ...(autoSendError ? { autoSendError } : {}),
     });
   } catch (err) {
     // 鎖定之後、真正結案之前出錯：把結案鎖放掉、退回草稿，使用者才能再試一次。
@@ -972,248 +971,13 @@ recordsRouter.post('/:id/share', async (req, res, next) => {
   }
 });
 
-// 每次寄送嘗試都往流水帳補一筆。貓咪與飼主姓名在這裡就抄進去，不留 ref——
-// 這筆紀錄的價值正是在報告被刪除之後還查得到，那時 populate 只會拿到 null。
-async function logDelivery(record, event, extra = {}) {
-  if (!record?._id) return;
-  try {
-    const pet = record.petId;
-    const owner = pet?.ownerId;
-    await DeliveryLog.create({
-      recordId: record._id,
-      petName: pet?.name || '',
-      ownerName: owner?.name || '',
-      event,
-      ...extra,
-    });
-  } catch (err) {
-    // 流水帳寫不進去不該讓寄送本身失敗——信有沒有送到飼主手上才是主線。
-    console.error('寫入寄送紀錄失敗', err);
-  }
-}
-
-function mailErrorResponse(err) {
-  if (err.code === 'MAIL_NOT_CONFIGURED') return { status: 503, message: err.message };
-  if (err.code === 'MAIL_RECIPIENT_REJECTED') return { status: 422, message: err.message };
-  if (err.code === 'EAUTH') return { status: 502, message: 'Gmail 驗證失敗，請確認寄信設定後再試；報告已結案，不受影響' };
-  if (err.code === 'ETIMEDOUT') return { status: 504, message: '連線 Gmail 逾時，請確認網路後再試；報告已結案，不受影響' };
-  if (err.code === 'ECONNECTION') return { status: 502, message: '無法連線 Gmail SMTP，請確認網路或防火牆設定；報告已結案，不受影響' };
-  if (['EENVELOPE', 'EMESSAGE', 'EPROTOCOL'].includes(err.code)) {
-    return { status: 502, message: 'Gmail 未接受這封郵件，請稍後再試；報告已結案，不受影響' };
-  }
-  return null;
-}
-
 recordsRouter.post('/:id/send-email', async (req, res, next) => {
-  let record;
-  let recipient = '';
-  let deliveryAttemptId = '';
-  let smtpInfo = null;
-  let smtpStarted = false;
-  let activeShareExpiresAt = null;
   try {
-    record = await MedicalRecord.findById(req.params.id).select('+pdfFileId').populate({
-      path: 'petId',
-      populate: { path: 'ownerId', select: 'name email phone' },
-    }).select('+deliveryAttemptId +deliveryLeaseExpiresAt');
-    if (!record) return res.status(404).json({ message: '找不到報告' });
-    if (!isFinalizedRecord(record)) {
-      return res.status(409).json({ message: '請先完成結案，再寄送正式報告' });
-    }
-    if (effectiveDeliveryStatus(record) === 'sending') {
-      const leaseIsActive = record.deliveryLeaseExpiresAt && record.deliveryLeaseExpiresAt > new Date();
-      if (leaseIsActive) {
-        return res.status(409).json({ message: '報告正在寄送中，請勿重複操作' });
-      }
-
-      // 程序在寄送中途消失時，不能假設郵件「一定沒寄出」後自動重送。
-      // SMTP 可能已經接受，只是本機還沒寫回 sent；先標為待確認，由使用者決定是否重寄。
-      await MedicalRecord.updateOne(
-        {
-          _id: record._id,
-          deliveryStatus: 'sending',
-          $or: [
-            { deliveryLeaseExpiresAt: null },
-            { deliveryLeaseExpiresAt: { $exists: false } },
-            { deliveryLeaseExpiresAt: { $lte: new Date() } },
-          ],
-        },
-        {
-          $set: {
-            deliveryStatus: 'uncertain',
-            deliveryError: '上一次寄送程序中斷，郵件可能已送出；請先確認收件匣，再決定是否重新寄送',
-          },
-          $unset: { deliveryAttemptId: 1, deliveryLeaseExpiresAt: 1 },
-        }
-      );
-      return res.status(409).json({
-        message: '上一次寄送結果無法確認。請先確認飼主信箱；若確定未收到，再次按下寄送即可重試。',
-        deliveryStatus: 'uncertain',
-      });
-    }
-
-    const pet = record.petId;
-    const owner = pet?.ownerId;
-    recipient = owner?.email?.trim();
-    if (!recipient) return res.status(422).json({ message: '這位飼主尚未填寫 Email，請先補齊飼主資料' });
-    // 寄出前擋得住的打錯：格式、常見的網域錯字、不存在的網域。郵件伺服器只看格式就收下，
-    // 之後才退信（lib/mailBounces.js 會讀回來），能當場擋的先擋。
-    const recipientProblem = await emailProblem(recipient);
-    if (recipientProblem) return res.status(422).json({ message: recipientProblem });
-
-    if (record.pdfStatus !== 'ready') {
-      return res.status(409).json({ message: record.pdfStatus === 'failed' ? 'PDF 產生失敗，請先重試。' : 'PDF 正在產生中，完成後才能寄送。' });
-    }
-
-    deliveryAttemptId = uuidv4();
-    const claimedAt = new Date();
-    const claimedDelivery = await MedicalRecord.findOneAndUpdate(
-      {
-        _id: record._id,
-        status: 'finalized',
-        deliveryStatus: { $ne: 'sending' },
-      },
-      {
-        $set: {
-          deliveryStatus: 'sending',
-          deliveryError: '',
-          lastDeliveryAttemptAt: claimedAt,
-          deliveryAttemptId,
-          deliveryLeaseExpiresAt: new Date(claimedAt.getTime() + DELIVERY_LEASE_MS),
-        },
-      },
-      { new: true }
-    ).select('+deliveryAttemptId +deliveryLeaseExpiresAt');
-    if (!claimedDelivery) {
-      return res.status(409).json({ message: '寄送工作已由另一個請求取得，請稍後再查看狀態' });
-    }
-    // 先記 queued：後面產 PDF 或 SMTP 卡住而程序被中斷時，至少留得下「曾經嘗試寄送」。
-    await logDelivery(record, 'queued', { recipient, attemptId: deliveryAttemptId });
-
-    assertMailConfigured();
-    const storedPdf = await readStoredPdf(record);
-    if (!storedPdf) {
-      const pdfError = new Error('PDF 檔案暫時無法讀取，請重新產生。');
-      pdfError.status = 409;
-      throw pdfError;
-    }
-    const passcode = reportPasscode(owner.phone);
-    const pdfBuffer = await encryptPdf(storedPdf, passcode);
-    const reportUrl = `${publicAppOrigin(req)}/report/${record.shareToken}`;
-
-    // 郵件寄出前先確保信內的分享連結已經可用，並把 lease 往後延長涵蓋 SMTP 階段。
-    activeShareExpiresAt = record.shareExpiresAt && record.shareExpiresAt > new Date()
-      ? record.shareExpiresAt
-      : shareExpiryFromNow();
-    const readyForSmtp = await MedicalRecord.updateOne(
-      { _id: record._id, deliveryAttemptId },
-      {
-        $set: {
-          shareEnabled: true,
-          sharedAt: record.sharedAt || new Date(),
-          shareExpiresAt: activeShareExpiresAt,
-          deliveryLeaseExpiresAt: new Date(Date.now() + DELIVERY_LEASE_MS),
-        },
-      }
-    );
-    if (readyForSmtp.matchedCount !== 1) {
-      const error = new Error('寄送工作已失去擁有權，已停止寄信');
-      error.code = 'DELIVERY_ATTEMPT_LOST';
-      throw error;
-    }
-
-    smtpStarted = true;
-    smtpInfo = await sendHealthReportEmail({
-      to: recipient,
-      ownerName: owner.name,
-      petName: pet.name,
-      visitDate: record.visitDate,
-      reportUrl,
-      reportExpiresAt: activeShareExpiresAt,
-      passcodeProtected: Boolean(passcode),
-      pdfBuffer,
-    });
-
-    // 只允許取得這次 attempt 的請求寫入結果，避免舊請求覆蓋較新的寄送狀態。
-    const sentAt = new Date();
-    const sentRecord = await MedicalRecord.findOneAndUpdate(
-      { _id: record._id, deliveryAttemptId },
-      {
-        $set: {
-          status: 'finalized',
-          deliveryStatus: 'sent',
-          deliveryError: '',
-          pdfGeneratedAt: sentAt,
-          sentAt,
-          sentTo: recipient,
-          emailMessageId: smtpInfo.messageId,
-        },
-        $unset: { deliveryAttemptId: 1, deliveryLeaseExpiresAt: 1 },
-      },
-      { new: true }
-    );
-    if (!sentRecord) {
-      const error = new Error('郵件已被伺服器接受，但寄送結果無法寫回');
-      error.code = 'DELIVERY_RESULT_NOT_SAVED';
-      throw error;
-    }
-    await logDelivery(record, 'sent', { recipient, messageId: smtpInfo.messageId, attemptId: deliveryAttemptId });
-    // 「已寄出」只代表郵件伺服器收下了；投不到的會退信，過一會兒去寄件信箱看。
-    checkBouncesSoon();
-
-    res.json({
-      status: 'finalized',
-      deliveryStatus: sentRecord.deliveryStatus,
-      sentAt: sentRecord.sentAt,
-      sentTo: sentRecord.sentTo,
-      messageId: sentRecord.emailMessageId,
-      shareUrl: reportUrl,
-      shareExpiresAt: activeShareExpiresAt,
-    });
+    const claim = await claimDelivery(req.params.id);
+    if (claim.response) return res.status(claim.response.status).json(claim.response.body);
+    const result = await performDelivery(claim.delivery, () => publicAppOrigin(req));
+    res.status(result.status).json(result.body);
   } catch (err) {
-    const response = mailErrorResponse(err);
-
-    if (record?._id && deliveryAttemptId) {
-      const outcomeUncertain = Boolean(smtpInfo) || isAmbiguousMailFailure(err, { smtpStarted });
-      const nextStatus = outcomeUncertain ? 'uncertain' : 'failed';
-      const deliveryError = outcomeUncertain
-        ? smtpInfo
-          ? '郵件伺服器可能已接受，但系統無法確認最後寫入結果；請先確認收件匣，避免重複寄送'
-          : '寄送連線在郵件伺服器確認結果前中斷，郵件可能已送出；請先確認收件匣，避免重複寄送'
-        : response?.message || '寄送失敗，請稍後重試';
-      try {
-        await MedicalRecord.updateOne(
-          { _id: record._id, deliveryAttemptId },
-          {
-            $set: {
-              deliveryStatus: nextStatus,
-              deliveryError,
-              ...(outcomeUncertain ? { sentTo: recipient } : {}),
-              ...(smtpInfo?.messageId ? { emailMessageId: smtpInfo.messageId } : {}),
-            },
-            $unset: { deliveryAttemptId: 1, deliveryLeaseExpiresAt: 1 },
-          }
-        );
-      } catch (saveError) {
-        console.error('記錄寄送失敗狀態時發生錯誤', saveError);
-      }
-      await logDelivery(record, nextStatus === 'uncertain' ? 'uncertain' : 'failed', {
-        recipient,
-        messageId: smtpInfo?.messageId || '',
-        error: deliveryError,
-        attemptId: deliveryAttemptId,
-      });
-      if (outcomeUncertain) {
-        return res.status(202).json({
-          message: deliveryError,
-          deliveryStatus: 'uncertain',
-          sentTo: recipient,
-          shareUrl: `${publicAppOrigin(req)}/report/${record.shareToken}`,
-          shareExpiresAt: activeShareExpiresAt,
-        });
-      }
-    }
-    if (response) return res.status(response.status).json({ message: response.message });
     next(err);
   }
 });

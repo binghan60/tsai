@@ -6,6 +6,13 @@ const PDF_BUCKET = 'reportPdfs';
 const STALE_GENERATING_MS = 10 * 60 * 1000;
 let workerPromise = null;
 
+// PDF 產好之後要接著做的事：結案時勾了自動寄送的，就是 lib/reportDelivery.js 的 runAutoSends（app.js 接上）。
+// 用註冊的、不直接 import：reportDelivery 要讀這裡存的 PDF，反過來 import 會繞成一圈。
+let pdfReadyHandler = null;
+export function onPdfReady(handler) {
+  pdfReadyHandler = handler;
+}
+
 function bucket() {
   return new mongoose.mongo.GridFSBucket(mongoose.connection.db, { bucketName: PDF_BUCKET });
 }
@@ -79,6 +86,8 @@ async function processNextJob() {
       return true;
     }
     if (record.pdfFileId && String(record.pdfFileId) !== String(uploadedFileId)) await removePdf(record.pdfFileId);
+    // 不等它：寄信慢不該拖住下一份 PDF。
+    if (saved.autoSendRequestedAt) pdfReadyHandler?.();
   } catch (error) {
     await removePdf(uploadedFileId);
     await MedicalRecord.updateOne(

@@ -13,6 +13,7 @@ import RevisionDialog from '../components/RevisionDialog.vue';
 import ReportSection from '../components/report/ReportSection.vue';
 import RowActions from '../components/RowActions.vue';
 import { Button } from '../components/ui/button';
+import { Checkbox } from '../components/ui/checkbox';
 import { reportPdfFilename } from '../../../shared/reportFilename.js';
 import { catBreedLabel } from '../../../shared/catBreeds.js';
 
@@ -28,6 +29,11 @@ const revising = ref(false);
 const revisionError = ref('');
 const shareNotice = ref(null);
 const showFinalizeConfirm = ref(false);
+// 結案時順便排自動寄送：PDF 在伺服器背景產好就寄出，醫師不必等。每次打開結案視窗都重設成勾選。
+const autoSendOnFinalize = ref(true);
+// 結案成功、但自動寄送沒排進去的原因（例如飼主 Email 打錯）。不放在 error：結案後輪詢的 fetchReport 每次都會清掉 error，
+// 這句話卻要留到醫師看見為止——換一份報告或寄出之後才消失。
+const autoSendNotice = ref('');
 const showEmailConfirm = ref(false);
 const showRevisionDialog = ref(false);
 const showBackToTop = ref(false);
@@ -53,6 +59,13 @@ const shareActionLabel = computed(() => {
   return '建立飼主分享連結';
 });
 const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
+const autoSendPending = computed(() => Boolean(record.value?.autoSendRequestedAt));
+const finalizeDescription = computed(() => (ownerEmail.value
+  ? '系統會驗證內容、產生正式 PDF 並鎖定此版本。結案後若需修改，請建立修訂版。'
+  : '系統會驗證內容、產生正式 PDF 並鎖定此版本。結案後若需修改，請建立修訂版；Email 可稍後另外寄送。'));
+watch(showFinalizeConfirm, (open) => {
+  if (open) autoSendOnFinalize.value = true;
+});
 // 跟伺服器同一條規則（server/src/lib/reportPasscode.js）：電話湊得出 6 碼數字才有密碼。
 const passcodeProtected = computed(() => String(record.value?.owner?.phone ?? '').replace(/\D/g, '').length >= 6);
 const petReminderFields = computed(() => {
@@ -241,7 +254,7 @@ async function finalizeReport() {
   try {
     const { data } = await http.post(
       `/records/${route.params.id}/finalize`,
-      { expectedVersion: record.value.__v }
+      { expectedVersion: record.value.__v, autoSend: Boolean(ownerEmail.value) && autoSendOnFinalize.value }
     );
     if (identity !== reportIdentity()) return;
     record.value.status = 'finalized';
@@ -250,6 +263,8 @@ async function finalizeReport() {
     record.value.pdfStatus = data.pdfStatus || 'pending';
     record.value.reportVersion = data.reportVersion;
     record.value.deliveryStatus = data.deliveryStatus || 'not_sent';
+    record.value.autoSendRequestedAt = data.autoSendRequestedAt ?? null;
+    autoSendNotice.value = data.autoSendError || '';
     record.value.__v = data.documentVersion ?? record.value.__v;
     showFinalizeConfirm.value = false;
   } catch (err) {
@@ -421,15 +436,24 @@ onBeforeUnmount(() => {
   window.clearInterval(pdfPollTimer);
 });
 
+// 結案後 PDF 在伺服器背景產，勾了自動寄送的產好接著寄：這段期間每 3 秒重讀一次，都好了就停，並補讀寄送歷程。
+// PDF 產生失敗時自動寄送也只能等重試，不必一直問；手動寄送（emailing）會自己等到結果。
+const backgroundWorkPending = computed(() => Boolean(
+  isPreview.value && record.value && !isDraft.value && (
+    ['pending', 'generating'].includes(pdfStatus.value)
+    || (autoSendPending.value && !pdfFailed.value)
+    || (deliverySending.value && !emailing.value)
+  )
+));
 let pdfPollTimer = null;
-function syncPdfPolling() {
+function syncPdfPolling(polling, wasPolling) {
   window.clearInterval(pdfPollTimer);
   pdfPollTimer = null;
-  if (!isPreview.value || !record.value || isDraft.value || !['pending', 'generating'].includes(pdfStatus.value)) return;
-  pdfPollTimer = window.setInterval(() => fetchReport(), 3000);
+  if (polling) pdfPollTimer = window.setInterval(() => fetchReport(), 3000);
+  else if (wasPolling && record.value) fetchDeliveryLogs();
 }
 
-watch([isPreview, pdfStatus], syncPdfPolling, { immediate: true });
+watch(backgroundWorkPending, syncPdfPolling, { immediate: true });
 
 watch(
   reportIdentity,
@@ -437,6 +461,7 @@ watch(
     record.value = null;
     deliveryLogs.value = [];
     error.value = '';
+    autoSendNotice.value = '';
     passcodeRequired.value = false;
     passcodeInput.value = '';
     passcodeError.value = '';
@@ -480,7 +505,7 @@ watch(
         class="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm print:hidden"
         :class="deliveryFailed ? 'border-report-danger-border bg-report-danger-surface text-report-danger-strong' : isSent ? 'border-report-success-border bg-report-success-surface text-report-success-strong' : deliverySending ? 'border-report-info-border bg-report-info-surface text-report-info' : 'border-report-warning-border bg-report-warning-surface text-report-warning'"
       >
-        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案（第 {{ record.reportVersion || 1 }} 版）</strong><span class="block">{{ isSent ? `已寄出至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
+        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案（第 {{ record.reportVersion || 1 }} 版）</strong><span class="block">{{ isSent ? `已寄出至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : autoSendPending ? `PDF 產生後自動寄給 ${ownerEmail}` : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
           <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="emailing || deliverySending || !pdfReady" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
           <Button v-else-if="record.pet?._id" as-child variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm"><router-link :to="`/pets/${record.pet._id}?editOwner=1`">補填 Email</router-link></Button>
@@ -531,6 +556,7 @@ watch(
         </div>
         <p v-if="!ownerEmail" class="mt-3 text-xs text-report-warning">這位飼主尚未填寫 Email，請先複製連結，再透過其他方式傳送。</p>
       </div>
+      <p v-if="autoSendNotice && !isSent" class="rounded-xl border border-report-danger-border bg-report-danger-surface px-4 py-3 text-sm text-report-danger print:hidden">{{ autoSendNotice }}</p>
       <p v-if="error" class="rounded-xl border border-report-danger-border bg-report-danger-surface px-4 py-3 text-sm text-report-danger print:hidden">{{ error }}</p>
 
       <article class="report-sheet rounded-2xl border border-report-border bg-report-surface p-6 text-report-foreground shadow-sm print:rounded-none print:border-0 print:p-0 print:shadow-none sm:p-[12mm]">
@@ -630,14 +656,19 @@ watch(
     <ConfirmDialog
       :open="showFinalizeConfirm"
       title="確認結案"
-      description="系統會驗證內容、產生正式 PDF 並鎖定此版本。結案後若需修改，請建立修訂版；Email 可稍後另外寄送。"
+      :description="finalizeDescription"
       confirm-label="確認結案並產生 PDF"
       cancel-label="取消結案"
       :loading="finalizing"
       :destructive="false"
       @update:open="showFinalizeConfirm = $event"
       @confirm="finalizeReport"
-    />
+    >
+      <label v-if="ownerEmail" class="flex items-start gap-2 pt-2 text-sm text-foreground">
+        <Checkbox v-model="autoSendOnFinalize" :disabled="finalizing" class="mt-px" />
+        <span class="min-w-0 break-all">PDF 產生後自動寄給飼主（{{ ownerEmail }}）</span>
+      </label>
+    </ConfirmDialog>
     <ConfirmDialog
       :open="showEmailConfirm"
       :title="isSent || deliveryUncertain ? '重新寄送健檢報告' : '寄送健檢報告'"

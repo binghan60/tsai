@@ -164,6 +164,9 @@ const medicalRecordSchema = new mongoose.Schema(
     // Stops a stale mail attempt from overwriting the result of a newer attempt.
     deliveryAttemptId: { type: String, default: null, select: false },
     deliveryLeaseExpiresAt: { type: Date, default: null, select: false },
+    // 結案時勾了「PDF 產生後自動寄給飼主」：PDF 產好就寄，寄的那一刻清成 null（lib/reportDelivery.js）。
+    // 記在報告上而不是記憶體裡，PDF 還在排隊時伺服器重啟也不會掉。
+    autoSendRequestedAt: { type: Date, default: null },
     sentAt: { type: Date },
     sentTo: { type: String, trim: true, default: undefined },
     emailMessageId: { type: String, trim: true, default: undefined },
@@ -186,6 +189,11 @@ medicalRecordSchema.index({ supersededBy: 1, updatedAt: -1 });
 medicalRecordSchema.index({ supersededBy: 1, visitDate: -1 });
 // 佇列篩選（草稿／待寄送／寄送失敗）。
 medicalRecordSchema.index({ status: 1, deliveryStatus: 1 });
+// 等著自動寄送的報告（runAutoSends 每產好一份 PDF 就查一次）。只收有排的，平常幾乎是空的。
+medicalRecordSchema.index(
+  { autoSendRequestedAt: 1 },
+  { partialFilterExpression: { autoSendRequestedAt: { $type: 'date' } } }
+);
 medicalRecordSchema.index(
   { revisionOf: 1, status: 1 },
   { unique: true, partialFilterExpression: { status: 'draft', revisionOf: { $type: 'objectId' } } }

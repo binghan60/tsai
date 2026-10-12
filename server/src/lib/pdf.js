@@ -6,10 +6,10 @@ import { pdfAccessSecret } from '../config/pdfAccess.js';
 // 而結案／下載／寄送三支端點都是同步等它跑完才回應。實例留著重用，
 // 第二次之後只要開一個新分頁，省掉整個瀏覽器的啟動成本。
 //
-// 代價是記憶體會被一個閒置的 Chromium 佔著，所以閒置夠久就關掉——
-// 這種系統的使用節奏是「一陣子沒動，然後連續處理幾份報告」，
-// 剛好是重用能拿到最多好處、又不必整天佔著記憶體的形狀。
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+// 代價是記憶體會被一個閒置的 Chromium 佔著，所以閒置夠久就關掉。
+// 診所的節奏是「結案、看一下、過一陣子才寄信」，五分鐘就關會讓幾乎每次都重新啟動，
+// 在 1 CPU 的機器上光啟動就要好幾秒；閒置的 Chromium 只佔一兩百 MB，留久一點划算。
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 let browserPromise = null;
 let idleTimer = null;
@@ -18,9 +18,13 @@ let idleTimer = null;
 let activeRenders = 0;
 
 function launchOptions() {
+  // Docker 預設的 /dev/shm 只有 64MB，Chromium 拿它當共享記憶體會不夠用而崩潰，改用 /tmp；
+  // 伺服器沒有 GPU，關掉省下 GPU 程序。
+  const args = ['--disable-dev-shm-usage', '--disable-gpu'];
+  if (process.env.PUPPETEER_NO_SANDBOX === 'true') args.push('--no-sandbox', '--disable-setuid-sandbox');
   return {
     executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-    args: process.env.PUPPETEER_NO_SANDBOX === 'true' ? ['--no-sandbox', '--disable-setuid-sandbox'] : undefined,
+    args,
   };
 }
 
@@ -56,22 +60,41 @@ export async function closeBrowser() {
   await browser?.close().catch(() => {});
 }
 
-// 同時只允許一個渲染。並行跑的話幾個分頁會一起搶著載入報告頁、一起打 API，
-// 把 networkidle0 拖到永遠不滿足（實測並行三個會有兩個逾時失敗——這在共用實例之前
-// 就是壞的，每次獨立開瀏覽器時三個全滅）。排隊讓每個都慢一點，但都會成功，
-// 而且同時只有一個分頁在渲染，記憶體尖峰也跟著壓下來。
+// 同時只允許一個渲染。並行跑的話幾個分頁會一起搶著載入報告頁、一起打 API
+// （以前等 networkidle0 時，實測並行三個會有兩個逾時失敗），在 1 CPU 上也只是互相搶時間。
+// 排隊讓每個都慢一點，但都會成功，而且同時只有一個分頁在渲染，記憶體尖峰也跟著壓下來。
 let renderQueue = Promise.resolve();
 
 // 見 CLAUDE.md「PDF 產生方式」：不維護獨立版型，直接截圖公開的報告檢視頁
 export function renderReportPdf(shareToken) {
-  const result = renderQueue.then(() => renderNow(shareToken));
+  const queuedAt = Date.now();
+  const result = renderQueue.then(() => renderNow(shareToken, queuedAt));
   // 佇列不能因為某一次渲染失敗就斷掉，所以接上去的是吞掉錯誤的版本；
   // 錯誤本身仍然由 result 回傳給呼叫端。
   renderQueue = result.catch(() => {});
   return result;
 }
 
-async function renderNow(shareToken) {
+// 每次渲染記一行分段耗時：正式機（1 CPU）上慢在哪一段，只有實際數字說得準。
+// 不記 shareToken——它就是報告的分享憑證，不該留在 log 裡。
+// 用累加的：第一次失敗重試時，兩次花的時間都要算進去。
+function addTiming(timings, key, startedAt) {
+  timings[key] = (timings[key] ?? 0) + (Date.now() - startedAt);
+}
+
+function logTimings(timings, retried) {
+  const total = Object.values(timings).reduce((sum, ms) => sum + ms, 0);
+  const parts = [
+    ['排隊', timings.queue],
+    ['啟動瀏覽器', timings.launch],
+    ['載入報告頁', timings.load],
+    ['字型與圖片', timings.assets],
+    ['輸出 PDF', timings.pdf],
+  ].map(([label, ms]) => `${label} ${ms ?? 0}`);
+  console.info(`[pdf] 產生 PDF ${total} ms（${parts.join('、')}）${retried ? '，第一次失敗後重試' : ''}`);
+}
+
+async function renderNow(shareToken, queuedAt) {
   const port = process.env.PORT || 3000;
   // 正式環境是單一容器：Express 同時提供 API 與前端靜態檔，從容器內部連自己最快。
   // 開發時 Express 不掛前端（見 app.js 的 NODE_ENV 判斷），/report 只有 Vite dev server 有，
@@ -85,37 +108,70 @@ async function renderNow(shareToken) {
 
   clearTimeout(idleTimer);
   activeRenders += 1;
+  const timings = { queue: Date.now() - queuedAt };
+  const attempt = async () => {
+    const launchStartedAt = Date.now();
+    const browser = await getBrowser();
+    addTiming(timings, 'launch', launchStartedAt);
+    return renderWith(browser, url, timings);
+  };
   try {
     // 重用實例的代價：拿到的瀏覽器可能在上一次渲染之後才死掉，而 connected 檢查
     // 跟實際開分頁之間也有空隙。失敗一次就丟掉實例重來，第二次仍失敗才是真的有問題。
+    let pdf;
+    let retried = false;
     try {
-      return await renderWith(await getBrowser(), url);
+      pdf = await attempt();
     } catch {
+      retried = true;
       await closeBrowser();
-      return await renderWith(await getBrowser(), url);
+      pdf = await attempt();
     }
+    logTimings(timings, retried);
+    return pdf;
   } finally {
     activeRenders -= 1;
     if (activeRenders === 0) scheduleIdleClose();
   }
 }
 
-async function renderWith(browser, url) {
+async function renderWith(browser, url, timings) {
   const page = await browser.newPage();
   try {
     await page.setExtraHTTPHeaders({ 'x-pdf-render-secret': pdfAccessSecret });
-    // 瀏覽器實例重用之後連 HTTP 快取也一起重用，第二次載入同一份報告會拿到 304，
-    // 而 response.ok() 只認 200–299，整個渲染就這樣失敗了。
-    // 報告內容隨時可能剛被改過，這裡本來也不該吃快取。
-    await page.setCacheEnabled(false);
+    // HTTP 快取保持開啟：前端 JS／CSS／字型檔名帶 hash、內容不會變，重用的瀏覽器
+    // 第二次之後不必再從 Express 拉一百多個檔、重新編譯 JS。報告資料不會因此過期——
+    // 報告 API 回 no-store、每次都重抓；index.html 帶 ETag、每次回伺服器確認，
+    // 沒變會回 304，那也是成功（response.ok() 只認 200–299，要另外放行）。
     await page.emulateTimezone('Asia/Taipei');
-    const response = await page.goto(url, { waitUntil: 'networkidle0' });
-    if (!response?.ok()) {
+    // 載入時就用列印樣式排版，下面等字型時等到的才是 PDF 上真正用到的字。
+    await page.emulateMediaType('print');
+    const loadStartedAt = Date.now();
+    const response = await page.goto(url, { waitUntil: 'domcontentloaded' });
+    if (!response || !(response.ok() || response.status() === 304)) {
       throw new Error(`報告頁面載入失敗（HTTP ${response?.status() ?? 'unknown'}）`);
     }
+    // 報告頁只打一支 API，資料回來那一刻 <article> 連同全部內容一起畫出來，
+    // 等它出現就夠了；不用 networkidle0——它固定多等 0.5 秒，還會被任何晚到的請求拖住。
     await page.waitForSelector('article');
-    await page.evaluate(() => document.fonts.ready);
+    addTiming(timings, 'load', loadStartedAt);
+
+    const assetsStartedAt = Date.now();
+    await page.evaluate(async () => {
+      // 先強制排版：網頁字型是排版時用到哪一段字才去下載，排版之前 fonts.ready 會直接放行。
+      document.body.getBoundingClientRect();
+      await document.fonts.ready;
+      await Promise.all(Array.from(document.images, (image) => (image.complete ? null : new Promise((resolve) => {
+        image.addEventListener('load', resolve, { once: true });
+        image.addEventListener('error', resolve, { once: true });
+      }))));
+      await document.fonts.ready;
+    });
+    addTiming(timings, 'assets', assetsStartedAt);
+
+    const pdfStartedAt = Date.now();
     const pdfBytes = await page.pdf({ format: 'A4', preferCSSPageSize: true, printBackground: true });
+    addTiming(timings, 'pdf', pdfStartedAt);
     // Puppeteer 近期版本回傳 Uint8Array；Express 直接送出會被序列化成 JSON，
     // 必須先轉成 Node.js Buffer，下載檔才會是有效的 %PDF 文件。
     return Buffer.from(pdfBytes);

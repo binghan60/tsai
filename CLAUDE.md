@@ -136,9 +136,10 @@
 | 生命週期 | `status`：`draft`／`finalized`、`finalizedAt`；`pdfStatus`：`pending`／`generating`／`ready`／`failed`、`pdfFileId`（GridFS） |
 | 修訂 | `reportVersion`、`revisionOf`、`revisionRootId`、`revisionReason`、`supersededBy` |
 | 分享 | `shareToken`（uuid，unique）、`shareEnabled`、`sharedAt`、`shareExpiresAt`（預設 30 天，`SHARE_LINK_DAYS`） |
-| 寄送 | `deliveryStatus`：`not_sent`／`sending`／`sent`／`failed`／`uncertain`、`deliveryError`、`lastDeliveryAttemptAt`、`sentAt`、`sentTo`、`emailMessageId` |
+| 寄送 | `deliveryStatus`：`not_sent`／`sending`／`sent`／`failed`／`uncertain`、`deliveryError`、`lastDeliveryAttemptAt`、`sentAt`、`sentTo`、`emailMessageId`、`autoSendRequestedAt` |
 
 - **`status` 與 `deliveryStatus` 是兩個獨立的維度**：結案是臨床流程，寄不寄得出去是通訊結果，寄送失敗不讓報告退回草稿。`uncertain`＝SMTP 可能已收下、結果沒能可靠寫回，不能自動重送，清單上叫「結果待確認」，同時算進「待寄送」與「寄送失敗」兩個佇列。
+- **結案時可以順便排自動寄送**（結案視窗的勾選，飼主有 Email 時預設勾）：結案當下先檢查信箱（`emailProblem`），沒問題就記 `autoSendRequestedAt`；PDF 背景工作產好一份就叫 `runAutoSends`（`lib/reportDelivery.js`，`app.js` 用 `onPdfReady` 接上，啟動時也補跑一次）。每份只自動寄一次：先清掉 `autoSendRequestedAt`、清得到的才寄，而且只寄還是 `not_sent` 的（有人先手動寄了就不寄）；信箱到那時才出問題就記成寄送失敗。手動寄送與自動寄送共用 `claimDelivery`／`performDelivery`。
 - **已結案報告的內容一律讀 `sections` 快照**。草稿每次讀取時用目前範本即時組合，並補上「上次數值」對照（最近 20 份已結案報告裡同一項目的值，`lib/historyValues.js`）。
 - **連著看診的草稿引用看診、不複製**（`lib/recordVisitLink.js`）：體重、體溫、回診日期、檢驗數值不存在草稿上。讀取（`GET /records/:id`）時把看診的值疊上去（`visitOverlay`，另帶 `visitLink`）；寫入（`PUT`）時這幾欄一律清掉，醫師在報告上改過的放在 `visitEdits`，同一個 transaction 寫回看診與病歷日誌（報告寫不進去，看診也回滾）。回診日期只能讀（只在掛號台約回診）。結案時把看診的值凍結進報告。看診被永久刪除前，先把值寫進還連著的草稿。
 - **飼主開啟報告連結與 PDF 要密碼＝飼主手機後 6 碼**（`lib/reportPasscode.js`，不另存欄位，每次用當下的電話算；湊不滿 6 碼就沒有密碼）。公開頁 `GET /api/public/reports/:token` 要帶 `X-Report-Passcode` 標頭，同一個連結 15 分鐘內打錯 10 次就鎖。GridFS 裡存的是沒有密碼的原檔，**交出去（下載、Email 附件）那一刻才加密**（`lib/pdfEncrypt.js`）。
@@ -237,7 +238,7 @@ append-only：`recordId`、`petName`、`ownerName`（冗餘快照，不設 ref�
 
 **不另外維護 PDF 版型。** 前端的報告檢視頁 `/report/:token` 同時是飼主看的公開頁與 PDF 來源：結案後背景工作（`lib/reportPdfJobs.js`）用 Puppeteer 開這一頁截成 PDF、存進 GridFS（`reportPdfs`），`pdfStatus` 記進度、伺服器重啟後會接續。內部渲染帶 `x-pdf-render-secret` 標頭（不必輸入飼主密碼）。`@media print` 隱藏操作型 UI。
 
-`lib/pdf.js`：Chromium 實例重用（快取 launch 的 promise，閒置五分鐘才關）；渲染排隊一次一個（並行會讓 `networkidle0` 永遠不滿足）；分頁關閉快取（共用實例拿到 304 會被當成失敗）。
+`lib/pdf.js`：Chromium 實例重用（快取 launch 的 promise，閒置三十分鐘才關）；渲染排隊一次一個；HTTP 快取保持開啟（`/assets/*` 由 `app.js` 設成長期快取，報告 API 回 `no-store`；`index.html` 回 304 要當成功）；不等 `networkidle0`，等 `<article>` 出現、再等字型與圖片（以列印樣式排版）就輸出。每次渲染 log 一行 `[pdf]` 分段耗時，寄信 log 一行 `[mail]` SMTP 耗時。
 
 ## 六、API
 
@@ -277,7 +278,7 @@ GET    /api/pets/:petId/records/previous-values   上次數值對照
 GET    /api/pets/:petId/records/finalized-sources 「從既有報告帶入」的來源清單
 GET    /api/records                      跨貓咪清單：?view= todo|drafts|pending|failed|sent|all、?q=、分頁；回 counts（佇列數字不套用搜尋）
 GET    /api/records/:id ／ PUT /api/records/:id（帶 expectedVersion，連著看診的另收 visitEdits）
-POST   /api/records/:id/finalize         驗證必填 → 凍結 sections → 排 PDF
+POST   /api/records/:id/finalize         驗證必填 → 凍結 sections → 排 PDF；帶 autoSend: true 時記下 autoSendRequestedAt、PDF 產好自動寄出（信箱有問題回 autoSendError，照樣結案）
 POST   /api/records/:id/pdf/retry ／ GET /api/records/:id/pdf（加密後下載）
 POST   /api/records/:id/revisions        建立修訂草稿
 POST   /api/records/:id/share ／ POST /api/records/:id/revoke-share

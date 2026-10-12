@@ -95,6 +95,7 @@ export async function sendHealthReportEmail({
     <p style="color:#666;font-size:13px">若需提早停止分享，請聯絡謙華動物醫院撤銷連結。</p>
   `;
 
+  const smtpStartedAt = Date.now();
   const info = await mailTransporter().sendMail({
     from: { name: fromName, address: fromAddress },
     replyTo: process.env.MAIL_REPLY_TO?.trim() || undefined,
@@ -110,6 +111,8 @@ export async function sendHealthReportEmail({
       },
     ],
   });
+  // 跟 [pdf] 那行對照，就知道寄一封信慢在產 PDF 還是 Gmail。附件大小一起記，大附件上傳本身就慢。
+  console.info(`[mail] SMTP 寄送 ${Date.now() - smtpStartedAt} ms（附件 ${Math.round((pdfBuffer?.length ?? 0) / 1024)} KB）`);
 
   if (Array.isArray(info.accepted) && info.accepted.length === 0) {
     const error = new Error('郵件伺服器未接受收件地址');

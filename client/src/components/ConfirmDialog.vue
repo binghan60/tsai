@@ -47,6 +47,8 @@ function close() {
           <div class="min-w-0 flex-1 space-y-1.5 pr-4">
             <DialogTitle>{{ title }}</DialogTitle>
             <DialogDescription v-if="description" class="text-sm leading-relaxed text-muted-foreground">{{ description }}</DialogDescription>
+            <!-- 確認前要多問一件事時（例如結案時要不要順便寄出），放在說明下面。 -->
+            <slot />
           </div>
         </div>
       </div>
