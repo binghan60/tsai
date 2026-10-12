@@ -208,7 +208,7 @@ footer.end { color: var(--subtle); font-size: 14px; text-align: center; }
   <main>
     <header class="cover">
       <h1>診所系統使用手冊</h1>
-      <p class="lead">給醫師與櫃台：按下每一顆按鈕之後，系統在背後會自動做哪些事。很多事情是連鎖發生的，例如送交櫃台時藥單就進了待包藥、勾「上傳影像」就多一筆待辦、取消報到時病歷日誌會暫時拿掉。知道這些，就不會在畫面上找不到東西。</p>
+      <p class="lead">給醫師與櫃台：按下每一顆按鈕之後，系統在背後會自動做哪些事。很多事情是連鎖發生的，例如送交櫃台時藥單就進了待包藥、勾「上傳影像」再完成處理就多一筆待辦、取消報到時病歷日誌會暫時拿掉。知道這些，就不會在畫面上找不到東西。</p>
       <div class="legend">
         <span><span class="who vet">醫師</span> 醫師做的事</span>
         <span><span class="who desk">櫃台</span> 櫃台做的事</span>
@@ -462,20 +462,21 @@ footer.end { color: var(--subtle); font-size: 14px; text-align: center; }
 
     <section class="chapter" id="desk">
       <h2><span class="n">07</span>櫃台處理</h2>
-      <p class="sub">掛號台按 <span class="ui">處理</span>。視窗照跟飼主講話的順序排：① 請轉告飼主、② 本次簡易紀錄、③ 約回診。</p>
+      <p class="sub">掛號台按 <span class="ui">處理</span>。視窗照跟飼主講話的順序排：① 請轉告飼主、② 本次簡易紀錄、③ 藥單、④ 約回診。</p>
       <figure class="shot">
-        <div class="frame"><img src="images/11-handoff-sheet.webp" alt="櫃台處理視窗：請轉告飼主、本次簡易紀錄與上傳影像、約回診時段" loading="lazy"></div>
+        <div class="frame"><img src="images/11-handoff-sheet.webp" alt="櫃台處理視窗：請轉告飼主、本次簡易紀錄與上傳影像、藥單、約回診時段" loading="lazy"></div>
         <figcaption>櫃台處理視窗。框起來的是「上傳影像」勾選框與 <span class="ui">完成處理</span>。</figcaption>
       </figure>
       <div class="flow">
         <div class="row"><span class="who desk">櫃台</span><div><ul>
           <li>① 請轉告飼主：有內容時是橘底，一定要講。</li>
           <li>② 本次簡易紀錄：看體重、體溫與醫師的紀錄；下面直接展開這隻貓的歷次病歷日誌。</li>
-          <li>③ 約回診：上面是醫師建議。選日期、時段，按 <span class="ui">完成處理</span> 時一起約好。</li>
+          <li>③ 藥單：醫師開的藥，旁邊是藥單現在的階段（待包藥、待領藥…）。這裡只能看，內容要改請醫師取回。到了<strong>待領藥</strong>，交藥給飼主時直接按 <span class="ui">確認領藥</span>，跟藥單面板的確認領藥是同一件事。</li>
+          <li>④ 約回診：上面是醫師建議。選日期、時段，按 <span class="ui">完成處理</span> 時一起約好。</li>
           <li><span class="ui">稍後處理</span> 只是關掉視窗，什麼都不改。</li>
         </ul></div></div>
         <div class="row auto"><span class="who auto">系統自動</span><div><ul>
-          <li><strong>勾「上傳影像」</strong>：馬上新增一筆待辦「上傳影像 #貓咪名」，病歷日誌多一列「上傳影像：是」。那筆待辦被完成時，日誌改成「已完成」加完成時間。取消勾選會把還沒完成的待辦收掉，日誌改成「否」。</li>
+          <li><strong>勾「上傳影像」</strong>：先記在視窗裡，按 <span class="ui">完成處理</span> 時才一起送出（按 <span class="ui">稍後處理</span> 關掉就不算）。送出後新增一筆待辦「上傳影像 #貓咪名」，病歷日誌多一列「上傳影像：是」。那筆待辦被完成時，日誌改成「已完成」加完成時間。取消勾選會把還沒完成的待辦收掉，日誌改成「否」。</li>
           <li><strong>約回診</strong>：同時建立下一筆掛號（回診）。之後要改時段，在已約好的回診上按 <span class="ui">修改</span>。這筆回診被取消或刪掉時，這次看診會回到「待安排回診」，可以重新約。保證金規則跟一般掛號一樣。</li>
           <li><strong>完成處理</strong>：收回號碼牌，這次看診結束並鎖定，聊天室通知。</li>
         </ul></div></div>
@@ -713,7 +714,7 @@ footer.end { color: var(--subtle); font-size: 14px; text-align: center; }
       <ul>
         <li>「明天叫貨」「回電給某某」這類院內雜事，全院共用。打 # 可以標記貓咪（不會放進暫存區）。</li>
         <li>星號＝置頂；可以設期限。勾起來＝完成，取消勾選＝改回未完成。</li>
-        <li><span class="who auto">系統自動</span> 櫃台勾「上傳影像」會新增一筆；完成它，那次看診的病歷日誌會記下完成時間。</li>
+        <li><span class="who auto">系統自動</span> 櫃台勾「上傳影像」並完成處理會新增一筆；完成它，那次看診的病歷日誌會記下完成時間。</li>
       </ul>
     </section>
 

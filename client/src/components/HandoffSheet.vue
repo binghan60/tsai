@@ -1,14 +1,18 @@
 ﻿<script setup>
 import { usePetClinicalNotes } from '../composables/usePetClinicalNotes';
 import { apiErrorMessage } from '../lib/apiError.js';
-import { computed, nextTick, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import PatientLink from './PatientLink.vue';
 import { CalendarCheck, Check, Pencil, Undo2, X } from '@lucide/vue';
 import { http } from '../api/http';
+import { getSocket } from '../api/socket';
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { describeVisitChanges } from '../lib/appointmentNotifications';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
+import { medicationLabel } from '../../../shared/medicationWorkflow.js';
+import { medicationStageTone } from '../lib/clinicalNoteDisplay.js';
+import ConfirmDialog from './ConfirmDialog.vue';
 import { DEFAULT_ESTIMATED_DURATION_MINUTES, appointmentSlotErrors } from '../lib/appointmentTime';
 import AppointmentSlotPicker from './AppointmentSlotPicker.vue';
 import SurgeryField from './SurgeryField.vue';
@@ -33,11 +37,11 @@ import RichTextEditor from './RichTextEditor.vue';
 import { richTextToPlain } from '../../../shared/richText.js';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 
-// 櫃台處理視窗。左欄「跟飼主說」照當面講話的順序編號：請轉告飼主 → 本次簡易紀錄，下面接著歷次病歷日誌
+// 櫃台處理視窗。左欄「跟飼主說」照當面講話的順序編號：請轉告飼主 → 本次簡易紀錄 → 藥單（交藥），下面接著歷次病歷日誌
 // （飼主常會問「上次開的藥還能吃嗎」）；轉告事項最容易漏掉，所以放最上面並用警示底色。
 // 右欄是約回診：大部分就診都會當場約，所以打開就看得到時段格，醫師建議就貼在時段旁邊。
 // 舊版是左欄一路往下疊、時段格在最底下要捲，右欄常駐日誌，使用者覺得資訊太散、找不到重點。
-// 收費與領藥櫃台直接處理，系統不計價，所以沒有「醫師交辦」這一段。
+// 收費櫃台直接處理，系統不計價，所以沒有「醫師交辦」這一段；領藥走藥單的「確認領藥」，在 ③ 就能按。
 const props = defineProps({
   appointment: { type: Object, required: true },
   // 貓咪／飼主備註（patientNotesFor 的回傳）。飼主就站在櫃台前，「處置前先說明費用」這類事要先看到。
@@ -177,16 +181,15 @@ async function saveNote() {
     error.value = err.response?.data?.message || err.message || '儲存失敗，請重試';
   } finally { busy.value = false; }
 }
-// 「上傳影像」一勾就存：後端同一次把它寫進病歷日誌，並新增（取消勾選則收掉）一筆院內待辦。
-async function toggleImageUpload(checked) {
-  if (busy.value || state.value.completed) return;
-  busy.value = true;
-  error.value = '';
-  try {
-    await run('clinical', { imageUpload: checked === true, staff: identity.value }, { silentToast: true });
-  } catch (err) {
-    error.value = apiErrorMessage(err, '儲存失敗，請重試');
-  } finally { busy.value = false; }
+// 「上傳影像」先記在這個視窗，按完成處理才跟著送出：後端同一個 transaction 寫進病歷日誌，並新增（取消勾選則收掉）
+// 一筆院內待辦。勾錯、改主意、按稍後處理都不會先建待辦又收掉。別台裝置改了（例如退回處理中後重新完成）就跟著更新。
+const imageUploadDraft = ref(Boolean(props.appointment.imageUpload));
+watch(() => props.appointment.imageUpload, (value) => { imageUploadDraft.value = Boolean(value); });
+// 只有勾選跟目前存的不同才送：從沒勾過（null）的就診不能在完成時被寫成「否」，病歷日誌會多出一行「上傳影像：否」。
+function imageUploadChange() {
+  return imageUploadDraft.value === Boolean(props.appointment.imageUpload)
+    ? {}
+    : { imageUpload: imageUploadDraft.value, staff: identity.value };
 }
 function close() { if (!busy.value) emit('close'); }
 
@@ -199,6 +202,54 @@ async function run(action, values = {}, options = {}) {
 
 loadNotes();
 loadDepositState();
+
+// ③ 藥單：內容就是這次看診的藥單（診療台開的，這裡只看不改，要改得請醫師取回）；
+// 階段讀送交櫃台時建立的那張藥單（medicationOrderId）。交藥是這一步要做的事，所以待領藥時直接在這裡確認領藥——
+// 跟藥單面板的「確認領藥」同一支 API、同一句確認，不另立規則。
+const medicationOrder = ref(null);
+const medicationError = ref('');
+const collecting = ref(false);
+const confirmingCollect = ref(false);
+let medicationRequest = 0;
+async function loadMedicationOrder() {
+  const id = props.appointment.medicationOrderId;
+  const request = ++medicationRequest;
+  if (!id) {
+    medicationOrder.value = null;
+    return;
+  }
+  try {
+    const { data } = await http.get(`/medications/${id}`);
+    if (request === medicationRequest) medicationOrder.value = data;
+  } catch (err) {
+    if (request === medicationRequest) medicationError.value = apiErrorMessage(err, '藥單讀取失敗，請重新開啟');
+  }
+}
+watch(() => props.appointment.medicationOrderId, () => {
+  medicationError.value = '';
+  loadMedicationOrder();
+}, { immediate: true });
+// 藥單面板或醫師那邊動了藥單（包好、退回、改內容），伺服器只廣播「請重讀」。
+const socket = getSocket();
+onMounted(() => socket.on('medication:updated', loadMedicationOrder));
+onBeforeUnmount(() => socket.off('medication:updated', loadMedicationOrder));
+
+async function collectMedication() {
+  const order = medicationOrder.value;
+  if (!order || collecting.value) return;
+  collecting.value = true;
+  medicationError.value = '';
+  try {
+    const { data } = await http.post(`/medications/${order._id}/actions/collect`, { version: order.__v });
+    medicationOrder.value = data;
+  } catch (err) {
+    medicationError.value = apiErrorMessage(err, '確認領藥失敗，請重試');
+    loadMedicationOrder();
+  } finally {
+    collecting.value = false;
+    confirmingCollect.value = false;
+  }
+}
 
 function handleHistoricalNoteSaved({ note, content }) {
   notifyChat(props.appointment, 'visit_data', {
@@ -293,7 +344,7 @@ async function complete() {
   busy.value = true;
   try {
     if (followUpStarted.value) await run('followup', followUpPayload(), { silentToast: true });
-    await run('complete');
+    await run('complete', imageUploadChange());
     emit('close');
   } catch (err) {
     error.value = err.response?.data?.message || err.message || '操作失敗，請稍後重試';
@@ -385,10 +436,16 @@ async function reopen() {
             </section>
 
             <section class="space-y-2" aria-labelledby="desk-note-heading">
-              <div class="flex items-center gap-2.5">
+              <div class="flex flex-wrap items-center gap-2.5">
                 <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-card" aria-hidden="true">2</span>
                 <h3 id="desk-note-heading" class="text-base font-semibold">本次簡易紀錄</h3>
-                <Button v-if="!editingNote && !state.completed" variant="secondary" size="sm" class="ml-auto" :disabled="busy" @click="startEditNote"><Pencil stroke-width="1.75" />編輯</Button>
+                <!-- 上傳影像是這一段的選項，放標題列：夾在紀錄框和它的說明、儲存鈕中間時，說明看起來像在講上傳影像。
+                     按完成處理才送出，送出後出現在病歷日誌，並新增一筆院內待辦。 -->
+                <label for="desk-image-upload" class="ml-auto flex min-h-9 cursor-pointer items-center gap-2 text-sm font-medium">
+                  <Checkbox id="desk-image-upload" :model-value="imageUploadDraft" :disabled="busy || state.completed" @update:model-value="imageUploadDraft = $event === true" />
+                  上傳影像
+                </label>
+                <Button v-if="!editingNote && !state.completed" variant="secondary" size="sm" :disabled="busy" @click="startEditNote"><Pencil stroke-width="1.75" />編輯</Button>
               </div>
               <!-- 體重、體溫是這次看診的資料，跟紀錄放同一段、排在紀錄上面（講紀錄時常順便說「今天幾公斤」）。
                    這裡只看不改：量測是診療台的欄位。沒量就留白，格子照畫。 -->
@@ -407,11 +464,6 @@ async function reopen() {
                 <p v-else class="my-2">（空白）</p>
                 <Button variant="secondary" size="sm" :disabled="busy" @click="resetNote">採用最新內容</Button>
               </Alert>
-              <!-- 勾了會出現在病歷日誌，並新增一筆院內待辦；一勾就存，不必按儲存。 -->
-              <label for="desk-image-upload" class="flex min-h-10 w-fit cursor-pointer items-center gap-2 px-4 text-sm font-medium">
-                <Checkbox id="desk-image-upload" :model-value="Boolean(appointment.imageUpload)" :disabled="busy || state.completed" @update:model-value="toggleImageUpload" />
-                上傳影像
-              </label>
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <p class="text-sm text-muted-foreground" role="status">{{ state.completed ? '已結案，退回處理中才能編輯' : editingNote ? '按「儲存」才會保存；取消或關閉會放棄修改' : noteSaved ? '已儲存' : '跟診療台、病歷日誌是同一份紀錄' }}</p>
                 <div v-if="editingNote" class="flex gap-2">
@@ -419,6 +471,19 @@ async function reopen() {
                   <Button size="sm" :disabled="busy || noteConflict || state.completed" @click="saveNote">儲存</Button>
                 </div>
               </div>
+            </section>
+
+            <section class="space-y-2" aria-labelledby="desk-medication-heading">
+              <div class="flex flex-wrap items-center gap-2.5">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-card" aria-hidden="true">3</span>
+                <h3 id="desk-medication-heading" class="text-base font-semibold">藥單</h3>
+                <Badge v-if="medicationOrder" variant="status" :class="medicationStageTone(medicationOrder.status)">{{ medicationLabel(medicationOrder.status) }}</Badge>
+                <Badge v-if="medicationOrder?.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>
+                <Button v-if="medicationOrder?.status === 'ready'" variant="soft" size="sm" class="ml-auto" :disabled="collecting" @click="confirmingCollect = true">確認領藥</Button>
+              </div>
+              <!-- 內容只看不改（醫師在診療台開的）。跟紀錄一樣：沒開就留白，格子照畫。 -->
+              <RichText class="min-h-[calc(1lh+2rem)] wrap-anywhere rounded-xl bg-sunken p-4 leading-relaxed" :text="appointment.prescription || ''" />
+              <p v-if="medicationError" class="text-sm text-danger" role="alert">{{ medicationError }}</p>
             </section>
 
             <!-- 歷次病歷日誌直接展開在下面（使用者要求，不收進頁籤）：飼主常會問「上次開的藥還能吃嗎」。 -->
@@ -435,9 +500,10 @@ async function reopen() {
             />
           </div>
 
-          <section class="space-y-4 px-6 py-5 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain" aria-labelledby="desk-followup-heading">
+          <!-- 一律預留捲軸的位置：約回診的時段選擇器依自己的寬度決定並排或上下疊，捲軸出現與否（例如多了保證金那塊）不能讓同一個視窗大小換排法。 -->
+          <section class="space-y-4 px-6 py-5 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-gutter:stable]" aria-labelledby="desk-followup-heading">
             <div class="flex items-center gap-2.5">
-              <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground" aria-hidden="true">3</span>
+              <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground" aria-hidden="true">4</span>
               <h3 id="desk-followup-heading" class="text-base font-semibold">約回診</h3>
             </div>
             <!-- 標籤跟內容同一行，標籤不另佔一行。醫師沒寫也照樣留這一格、內容空白，不補說明文字。 -->
@@ -514,6 +580,15 @@ async function reopen() {
           </div>
         </footer>
       </div>
+      <ConfirmDialog
+        :open="confirmingCollect"
+        :title="`確認 ${appointment.petName} 已領藥？`"
+        :description="`請核對飼主 ${medicationOrder?.ownerName || appointment.ownerName || ''}（${medicationOrder?.ownerPhone || appointment.ownerPhone || ''}）與藥包，確認已交付。`"
+        confirm-label="確認領藥"
+        :loading="collecting"
+        @update:open="confirmingCollect = $event"
+        @confirm="collectMedication"
+      />
     </DialogContent>
   </Dialog>
 </template>

@@ -73,7 +73,8 @@ function changeDuration(delta) {
 
 <template>
   <div :class="split ? '@container' : ''">
-  <div :class="split ? 'grid gap-3 @3xl:grid-cols-[18.75rem_minmax(0,1fr)] @3xl:gap-6' : 'space-y-3'">
+  <!-- 並排的門檻 42rem：扣掉左欄 18.75rem，時段格還有約 22rem（四欄每格約 85px，放得下「14:30」）。 -->
+  <div :class="split ? 'grid gap-3 @2xl:grid-cols-[18.75rem_minmax(0,1fr)] @2xl:gap-6' : 'space-y-3'">
   <div class="space-y-3">
     <div class="space-y-2">
       <Label class="text-xs font-medium">{{ label }}<template v-if="required"><span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></template></Label>
@@ -92,8 +93,9 @@ function changeDuration(delta) {
           <Button type="button" variant="secondary" size="sm" class="h-9 min-w-12 px-2 text-xs font-bold shadow-sm" :disabled="duration >= MAX_ESTIMATED_DURATION_MINUTES" aria-label="增加 15 分鐘" @click="changeDuration(15)">＋</Button>
         </div>
       </div>
-      <div :class="split ? 'grid grid-cols-3 gap-1.5' : 'flex flex-wrap gap-1.5'">
-        <Button v-for="minutes in [15, 30, 45, 60, 90, 120]" :key="minutes" type="button" size="sm" class="h-9 min-w-12 px-2 text-xs font-semibold shadow-sm" :variant="duration === minutes ? 'default' : 'secondary'" @click="duration = minutes">{{ minutes }}</Button>
+      <!-- 並排（約回診）時六個一排、平分寬度：左欄只有 18.75rem，按鈕不留最小寬度與左右內距才排得下。 -->
+      <div :class="split ? 'grid grid-cols-6 gap-1' : 'flex flex-wrap gap-1.5'">
+        <Button v-for="minutes in [15, 30, 45, 60, 90, 120]" :key="minutes" type="button" size="sm" class="h-9 text-xs font-semibold shadow-sm" :class="split ? 'min-w-0 px-0' : 'min-w-12 px-2'" :variant="duration === minutes ? 'default' : 'secondary'" @click="duration = minutes">{{ minutes }}</Button>
       </div>
     </div>
     <slot name="aside" />

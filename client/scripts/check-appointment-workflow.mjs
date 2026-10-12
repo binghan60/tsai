@@ -48,7 +48,10 @@ api.get('/appointments', (req, res) => res.json({ items: appointments.filter((p)
 api.get('/appointments/:id', (req, res) => res.json(appointments.find((p) => p._id === req.params.id)));
 api.get('/pets/:id/clinical-notes', (_req, res) => res.json({ items: [], totalPages: 1 }));
 api.get('/pets/:id', (_req, res) => res.json({ _id: petId, name: '豆豆', breed: '米克斯', sex: 'male', neutered: 'yes', ownerId: { _id: 'o1', name: '王小姐', phone: '0912345678' } }));
+// 每一次看診流程請求（動作＋內容），用來檢查哪些操作會、哪些不會打 API。
+const workflowCalls = [];
 api.post('/appointments/:id/workflow/:action', (req, res) => {
+  workflowCalls.push({ action: req.params.action, body: req.body });
   try {
     const p = appointments.find((item) => item._id === req.params.id);
     assertWorkflowVersion(p, req.body.version);
@@ -136,9 +139,17 @@ try {
   await bodyHas(desk, '請轉告飼主');
   await bodyHas(desk, '傷口勿舔舐');
   await desk.screenshot({ path: join(tmpdir(), 'clinic-handoff-sheet.png') });  assert.equal(await desk.evaluate(() => document.body.textContent.includes('醫師交辦')), false, 'handoff sheet has no handoff-note section');
+  // 「上傳影像」勾了只記在視窗裡，按完成處理才跟著送出。
+  const callsBeforeTick = workflowCalls.length;
+  await desk.click('#desk-image-upload');
+  await find(desk, () => document.querySelector('#desk-image-upload')?.getAttribute('data-state') === 'checked');
+  assert.equal(workflowCalls.length, callsBeforeTick, 'ticking 上傳影像 does not save by itself');
   await click(desk, '完成處理');
   await find(desk, () => !document.querySelector('[aria-label="關閉處理視窗"]'));
   assert.equal(fixture.status, 'completed');
+  assert.equal(workflowCalls.at(-1).action, 'complete');
+  assert.equal(workflowCalls.at(-1).body.imageUpload, true, '完成處理 carries 上傳影像');
+  assert.equal(fixture.imageUpload, true);
   console.log('Desk completed the handoff');
 
   // ── 右側工具欄：面板不遮擋背景、再按一次收起 ──

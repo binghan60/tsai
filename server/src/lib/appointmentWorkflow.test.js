@@ -94,6 +94,24 @@ test('reclaiming a visit that was never handed off is refused', () => {
   assert.throws(() => applyWorkflowAction(p, 'reclaim', {}), { status: 409 });
 });
 
+test('完成處理時一起送出「上傳影像」；沒帶就不動，格式不對就擋', () => {
+  const ticked = appointment();
+  applyWorkflowAction(ticked, 'handoff', {});
+  applyWorkflowAction(ticked, 'complete', { imageUpload: true });
+  assert.equal(ticked.imageUpload, true);
+  assert.equal(ticked.status, 'completed');
+
+  const untouched = appointment();
+  applyWorkflowAction(untouched, 'handoff', {});
+  applyWorkflowAction(untouched, 'complete', {});
+  assert.equal(untouched.imageUpload, undefined);
+
+  const invalid = appointment();
+  applyWorkflowAction(invalid, 'handoff', {});
+  assert.throws(() => applyWorkflowAction(invalid, 'complete', { imageUpload: 'yes' }), /上傳影像的格式不正確/);
+  assert.equal(invalid.deskCompletedAt, undefined);
+});
+
 test('the desk cannot complete before the vet hands off, and cannot complete twice', () => {
   const p = appointment();
   assert.throws(() => applyWorkflowAction(p, 'complete', {}), { status: 409 });

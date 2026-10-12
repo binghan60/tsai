@@ -44,7 +44,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="rounded-xl border border-border bg-field/60 p-4" :class="fill ? 'flex h-full min-h-0 flex-col' : ''">
+  <!-- 外層不畫框：每一則日誌（ClinicalNoteEntry）本身就是卡片，用的地方（處理視窗、診療台右欄、藥單、病歷速覽）
+       外面也已經有自己的區塊，再包一層框就是框中框。標題列直接接卡片清單。 -->
+  <section :class="fill ? 'flex h-full min-h-0 flex-col' : ''">
     <div class="flex items-center justify-between gap-2">
       <h3 class="text-sm font-semibold sm:text-base">{{ title }}</h3>
       <Button v-if="petId" as-child variant="secondary" size="xs">

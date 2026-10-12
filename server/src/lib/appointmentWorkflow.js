@@ -182,6 +182,13 @@ export function assertWorkflowVersion(appointment, version) {
 }
 
 // labItems：這次掛號範本裡的檢驗項目（route 讀範本後傳進來），用來驗證 labValues。
+// 「上傳影像」：沒帶就不動；帶了要是 true／false。勾或取消造成的院內待辦增減在路由（同一個 transaction）。
+function applyImageUpload(appointment, value) {
+  if (value === undefined) return;
+  if (typeof value !== 'boolean') throw workflowError('上傳影像的格式不正確');
+  appointment.imageUpload = value;
+}
+
 export function applyWorkflowAction(appointment, action, body, now = new Date(), { labItems = [] } = {}) {
   if (!['arrived', 'pending_checkout', 'completed'].includes(appointment.status) || !appointment.petId) {
     throw workflowError('請先完成報到，才能處理看診與交辦');
@@ -203,10 +210,7 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
       appointment[field] = value;
     }
     if (body.labValues !== undefined) appointment.labValues = mergeLabValues(appointment.labValues, body.labValues, labItems);
-    if (body.imageUpload !== undefined) {
-      if (typeof body.imageUpload !== 'boolean') throw workflowError('上傳影像的格式不正確');
-      appointment.imageUpload = body.imageUpload;
-    }
+    applyImageUpload(appointment, body.imageUpload);
   } else if (action === 'start') {
     if (!state.handedOff) appointment.visitStartedAt ||= now;
   } else if (action === 'unstart') {
@@ -227,6 +231,8 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
   } else if (action === 'complete') {
     if (!state.handedOff) throw workflowError('請等醫師完成看診並送交櫃台', 409);
     if (state.completed) throw workflowError('這筆就診已完成處理', 409);
+    // 櫃台處理視窗的「上傳影像」在按完成處理時才一起送出：勾錯、改主意、按稍後處理，都不會先建待辦又收掉。
+    applyImageUpload(appointment, body.imageUpload);
     appointment.deskCompletedAt = now;
   } else if (action === 'request-reopen') {
     if (!state.completed) throw workflowError('只有已完成的就診可以申請修改', 409);
