@@ -284,7 +284,7 @@ onMounted(fetchDashboard)
             </div>
             <div v-else class="px-5 py-8 text-center">
               <PawPrint class="mx-auto h-6 w-6 text-muted-foreground" />
-              <p class="mt-2 text-sm text-muted-foreground">目前沒有已寄送紀錄</p>
+              <p class="mt-2 text-sm text-muted-foreground">目前沒有已寄出紀錄</p>
             </div>
           </CardContent>
         </Card>

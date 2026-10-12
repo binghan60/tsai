@@ -10,13 +10,14 @@ import { assertAdminAuthConfigured, requireAuth } from './config/adminAuth.js';
 import authRouter from './routes/auth.js';
 import ownersRouter from './routes/owners.js';
 import { ownerPetsRouter, petsRouter } from './routes/pets.js';
-import { petRecordsRouter, recordsRouter, publicReportsRouter } from './routes/records.js';
+import { petRecordsRouter, recordsRouter, publicReportsRouter, waitForBackgroundDeliveries } from './routes/records.js';
 import deliveryLogsRouter from './routes/deliveryLogs.js';
 import dashboardRouter from './routes/dashboard.js';
 import searchRouter from './routes/search.js';
 import settingsRouter from './routes/settings.js';
 import textTemplatesRouter from './routes/textTemplates.js';
 import { closeBrowser } from './lib/pdf.js';
+import { startBounceChecks, stopBounceChecks } from './lib/mailBounces.js';
 
 const app = express();
 const clientDistPath = fileURLToPath(new URL('../../client/dist/', import.meta.url));
@@ -83,7 +84,15 @@ app.use('/api', (req, res) => {
 });
 
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(clientDistPath));
+  const hashedAssetsPath = path.join(clientDistPath, 'assets') + path.sep;
+  app.use(express.static(clientDistPath, {
+    // Vite 產出的 /assets/* 檔名帶內容 hash，內容一變檔名就變，可以放心長期快取：
+    // 員工的瀏覽器和產 PDF 的 Chromium 都不必每次載入都回來問一百多個檔。
+    // index.html 維持預設（每次確認），新版部署後才拿得到新的檔名。
+    setHeaders(res, filePath) {
+      if (filePath.startsWith(hashedAssetsPath)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    },
+  }));
   app.get('*', (req, res) => {
     res.sendFile(path.join(clientDistPath, 'index.html'));
   });
@@ -124,6 +133,7 @@ export async function startServer() {
   assertAdminAuthConfigured();
   await connectDB();
   httpServer = app.listen(port, () => console.log(`[server] listening on http://localhost:${port}`));
+  startBounceChecks();
   return httpServer;
 }
 
@@ -136,6 +146,9 @@ export async function stopServer({ forceExit = false } = {}) {
   if (server) {
     await new Promise((resolve) => server.close(() => resolve()));
   }
+  stopBounceChecks();
+  // 結案後在背景寄的信不屬於任何 HTTP 請求，server.close() 不會等它；要寄完才能關 Chromium 與資料庫。
+  await waitForBackgroundDeliveries();
   await closeBrowser();
   if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
   if (forceExit) process.exit(0);

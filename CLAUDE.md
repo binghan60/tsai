@@ -9,7 +9,7 @@
 單人使用的健檢報告產生 + 分發系統（不是看診紀錄／排班系統）。核心流程：
 
 ```
-選健檢表單 → 填寫報告 → 結案（產生 PDF 快照並鎖定）→ 寄送 Email／分享連結給飼主
+選健檢表單 → 填寫報告 → 結案（產生 PDF 快照並鎖定；可勾選結案後自動寄出）→ 寄送 Email／分享連結給飼主
                               ↓
                         需要更正時建立修訂版
 ```
@@ -57,6 +57,10 @@
 ### deliveryLogs 寄送流水帳
 append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petName`、`ownerName`、`event`（`queued`/`sent`/`failed`/`uncertain`）、`attemptId`（把同一次寄送的 `queued` 與最終結果串起來）、`recipient`、`messageId`、`error`、`createdAt`。
 
+**`sent`（畫面上叫「已寄出」，不叫寄送成功）只代表郵件伺服器收下了這封信，不代表送達**——Gmail 只看格式就收下，地址不存在時是之後才退一封通知到寄件信箱。兩道處理：
+- **寄出前先擋**（`lib/emailCheck.js` 的 `emailProblem`，寄送與結案自動寄送都會先過；`send-email` 回 422）：格式、常見的網域錯字（`gmial.com`→「是不是 @gmail.com？」，清單 `DOMAIN_TYPOS`）、DNS 查無此網域（有 MX 或網域本身解析得到就算收得了信；DNS 逾時一律放行，不能因為網路不穩就寄不出報告）。帳號那一段打錯擋不到。
+- **退信讀回來**（`lib/mailBounces.js`＋`lib/bounceMessage.js`）：用寄信的同一組 Gmail 帳號與應用程式密碼走 IMAP（`imap.gmail.com`，信箱唯讀開啟、不標已讀不搬不刪），每 5 分鐘、以及每次寄出後 45 秒與 3 分鐘各看一次，找近 3 天 mailer-daemon 寄來的通知；通知的 `In-Reply-To`／`References` 就是原信的 Message-ID，對回 `event: 'sent'` 那筆（`messageId`），**同一個 `attemptId` 補一筆 `failed`**（`error` 是「退信：收件地址不存在」這類；`Action: delayed` 的不算）。報告的 `deliveryStatus` 只在這封信還是它最後一次寄送（`emailMessageId` 相同且仍是 `sent`）時才改成 `failed`、進「寄送失敗」佇列——之後已重寄成功的不被舊退信拉回去。冪等：同一封通知讀幾次只記一次。這幾天沒寄過信就不登入信箱；連不上只記 log。`MAIL_BOUNCE_CHECK=off` 關掉，`IMAP_HOST`／`IMAP_PORT` 可改主機。結果會晚幾十秒到幾分鐘，重新整理才看到。
+
 **刻意不設 `ref`、改冗餘存報告編號與姓名**——報告可以被刪除，而這筆紀錄的價值正是在報告消失後還查得到寄給了誰。同理它是獨立 collection 而不是內嵌陣列。medicalRecords 上的 `sentTo`/`sentAt` 只留得住最後一次，重寄就覆蓋。
 
 ### deletedMedicalRecords 刪除稽核快照
@@ -76,6 +80,7 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 | 資料庫 | MongoDB + Mongoose | |
 | PDF | Puppeteer | 見下節 |
 | Email | Nodemailer | SMTP（Gmail 應用程式密碼） |
+| 退信讀取 | imapflow | 用同一組 Gmail 帳密走 IMAP 讀寄件信箱裡的退信通知（`lib/mailBounces.js`），見第二節 deliveryLogs |
 | 認證 | 環境變數密碼 + HMAC 簽章 cookie | 單人使用，不裝 session／JWT 套件，用 `node:crypto` 自己做；見第五節 |
 | 測試 | Node 內建 `node --test` | 不裝額外框架 |
 
@@ -89,10 +94,13 @@ append-only，每次寄送嘗試寫一筆：`recordId`、`reportNumber`、`petNa
 
 好處：排版只寫一次，前端改樣式 PDF 自動跟著變。
 
-`server/src/lib/pdf.js` 的兩個要點：
+`server/src/lib/pdf.js` 的要點：
 
-- **Chromium 實例重用。** 每次重開瀏覽器光啟動就要一到三秒，而結案／下載／寄送三支端點都是同步等它跑完。實例留著重用、閒置五分鐘才關；快取的是 launch 的 promise 而不是實例，同時進來的請求才會共用同一次啟動。
-- **渲染排隊，一次只跑一個。** 並行渲染會讓多個分頁搶著載入報告頁，`networkidle0` 永遠不滿足而全部逾時。另外 page 要 `setCacheEnabled(false)`——共用實例也共用 HTTP 快取，第二次載入同一份報告會拿到 304，而 `response.ok()` 只認 200–299。
+- **Chromium 實例重用。** 每次重開瀏覽器光啟動就要一到三秒，而結案／下載／手動寄送三支端點都是同步等它跑完（結案時勾了自動寄送的那封信在背景寄）。實例留著重用、閒置三十分鐘才關；快取的是 launch 的 promise 而不是實例，同時進來的請求才會共用同一次啟動。
+- **渲染排隊，一次只跑一個。** 並行渲染會讓多個分頁搶著載入報告頁、互相搶 CPU。
+- **HTTP 快取保持開啟。** 前端 `/assets/*` 帶 hash、由 `app.js` 設成長期快取，重用的瀏覽器第二次之後不必再載一百多個檔；報告 API 回 `no-store`，資料不會過期。`index.html` 確認沒變會回 304，載入檢查要把 304 當成功（`response.ok()` 只認 200–299）。
+- **不等 `networkidle0`。** 報告頁資料回來時 `<article>` 連同全部內容一起畫出，等它出現、再等字型與圖片載完就輸出（以列印樣式排版，等到的字型才是 PDF 上用到的）。
+- 每次渲染在 log 記一行 `[pdf]` 分段耗時，寄信記一行 `[mail]` SMTP 耗時。
 
 ## 五、API 設計
 
@@ -125,7 +133,7 @@ POST   /api/pets/:petId/records         新增
 GET    /api/records                     跨寵物清單（?view= 工作佇列 / ?q= / 分頁）
 GET    /api/records/:id
 PUT    /api/records/:id
-POST   /api/records/:id/finalize        結案：驗證 → 凍結 sections → 產 PDF → 鎖定
+POST   /api/records/:id/finalize        結案：驗證 → 凍結 sections → 產 PDF → 鎖定；帶 autoSend: true 時接著搶下寄送、回應後在背景寄給飼主（排不進去回 autoSendError，不影響結案）
 GET    /api/records/:id/pdf             下載 PDF
 POST   /api/records/:id/revisions       建立修訂版
 DELETE /api/records/:id                 刪除（已結案報告需帶 confirmText＝寵物名稱；草稿不需要）

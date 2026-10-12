@@ -52,6 +52,7 @@ MAIL_REPLY_TO=
 - `PUBLIC_APP_URL` 用於分享連結與 Email；分享連結預設 30 天到期，可用 `SHARE_LINK_DAYS` 設為 1–365 天，院方也能提前撤銷。
 - 舊版建立、沒有到期日的分享連結會在部署後失效；院方重新按下分享即可產生帶期限的新連結。
 - PDF 預設從容器內部的 `127.0.0.1` 讀取報告，不必公開 `PDF_RENDER_BASE_URL`。
+- **Email**：寄信用 Gmail SMTP（應用程式密碼）。同一組帳密也用 IMAP 讀寄件信箱裡的退信通知，把投不到的寄送改成失敗（`MAIL_BOUNCE_CHECK=off` 關掉；`IMAP_HOST`／`IMAP_PORT` 可改主機）。啟用時 log 會印一行 `[mail] 已啟用退信檢查`；讀信失敗印 `[mail] 讀取退信失敗`，不影響寄信。
 
 若剛建立服務時還沒有公開網址，可先部署、產生 Domain，再確認 `PUBLIC_APP_URL` 與 `CLIENT_ORIGIN` 已解析為完整的 `https://...` 網址並重新部署。
 

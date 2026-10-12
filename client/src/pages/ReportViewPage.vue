@@ -23,6 +23,8 @@ const revising = ref(false);
 const revisionError = ref('');
 const shareNotice = ref(null);
 const showFinalizeConfirm = ref(false);
+// 結案時順便寄給飼主：伺服器結案後在背景產 PDF、寄出，醫師不必等。每次打開結案視窗都重設成勾選。
+const autoSendOnFinalize = ref(true);
 const showEmailConfirm = ref(false);
 const showRevisionDialog = ref(false);
 const showBackToTop = ref(false);
@@ -45,6 +47,12 @@ const shareActionLabel = computed(() => {
   return '建立飼主分享連結';
 });
 const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
+const finalizeDescription = computed(() => (ownerEmail.value
+  ? '系統會驗證內容、產生正式 PDF 並鎖定此版本。結案後若需修改，請建立修訂版。'
+  : '系統會驗證內容、產生正式 PDF 並鎖定此版本。結案後若需修改，請建立修訂版；Email 可稍後另外寄送。'));
+watch(showFinalizeConfirm, (open) => {
+  if (open) autoSendOnFinalize.value = true;
+});
 
 // ── 寄送歷程 ──
 // record.sentTo／sentAt 只留得住最後一次，重寄一次就覆蓋。飼主改過 Email 之後重寄，
@@ -65,7 +73,7 @@ function reportIdentity() {
 // 這頁固定淺色、不套 dark: variant（見 CLAUDE.md），所以不共用 DELIVERY_EVENT_META。
 const EVENT_STYLE = {
   queued: { label: '開始寄送', class: 'bg-sky-50 text-sky-700' },
-  sent: { label: '寄送成功', class: 'bg-emerald-50 text-emerald-700' },
+  sent: { label: '已寄出', class: 'bg-emerald-50 text-emerald-700' },
   failed: { label: '寄送失敗', class: 'bg-red-50 text-red-700' },
   uncertain: { label: '結果待確認', class: 'bg-amber-50 text-amber-800' },
 };
@@ -156,7 +164,7 @@ async function finalizeReport() {
   try {
     const { data } = await http.post(
       `/records/${route.params.id}/finalize`,
-      { expectedVersion: record.value.__v },
+      { expectedVersion: record.value.__v, autoSend: Boolean(ownerEmail.value) && autoSendOnFinalize.value },
       { timeout: PDF_TIMEOUT_MS }
     );
     if (identity !== reportIdentity()) return;
@@ -166,6 +174,8 @@ async function finalizeReport() {
     record.value.reportVersion = data.reportVersion;
     record.value.deliveryStatus = data.deliveryStatus || 'not_sent';
     record.value.__v = data.documentVersion ?? record.value.__v;
+    // 結案成功、但自動寄送沒排進去（例如飼主 Email 格式不對）：報告照樣結案，原因留在頁面上。
+    if (data.autoSendError) error.value = data.autoSendError;
     showFinalizeConfirm.value = false;
   } catch (err) {
     if (identity !== reportIdentity()) return;
@@ -324,8 +334,22 @@ onMounted(() => {
   window.addEventListener('scroll', updateBackToTopVisibility, { passive: true });
 });
 
+// 結案時勾了自動寄送，信是伺服器在背景寄的：寄送中就每 3 秒重讀一次，
+// 寄出或失敗就停，並補讀寄送歷程。手動寄送（emailing）會自己等到結果，不必另外問。
+let deliveryPollTimer = null;
+watch(
+  () => Boolean(isPreview.value && deliverySending.value && !emailing.value),
+  (polling, wasPolling) => {
+    window.clearInterval(deliveryPollTimer);
+    deliveryPollTimer = null;
+    if (polling) deliveryPollTimer = window.setInterval(fetchReport, 3000);
+    else if (wasPolling && record.value) fetchDeliveryLogs();
+  }
+);
+
 onBeforeUnmount(() => {
   window.removeEventListener('scroll', updateBackToTopVisibility);
+  window.clearInterval(deliveryPollTimer);
 });
 
 watch(
@@ -365,7 +389,7 @@ watch(
         class="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm print:hidden"
         :class="deliveryFailed ? 'border-red-200 bg-red-50 text-red-800' : isSent ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : deliverySending ? 'border-sky-200 bg-sky-50 text-sky-800' : 'border-brand-200 bg-brand-50 text-brand-800'"
       >
-        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案 · 第 {{ record.reportVersion || 1 }} 版</strong><span class="block">{{ isSent ? `已寄送至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
+        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案 · 第 {{ record.reportVersion || 1 }} 版</strong><span class="block">{{ isSent ? `已寄出至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="flex flex-wrap items-center gap-2">
           <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white" :disabled="emailing || deliverySending" @click="showEmailConfirm = true"><Mail class="h-4 w-4" />{{ emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</Button>
           <Button v-else-if="record.owner?._id" as-child variant="secondary" size="sm" class="border-current/25 bg-white/85 text-current hover:border-current/40 hover:bg-white"><router-link :to="`/owners/${record.owner._id}?edit=1`">補填 Email</router-link></Button>
@@ -474,14 +498,19 @@ watch(
     <ConfirmDialog
       :open="showFinalizeConfirm"
       title="確認結案"
-      description="系統會驗證內容、產生正式 PDF 並鎖定此版本。結案後若需修改，請建立修訂版；Email 可稍後另外寄送。"
+      :description="finalizeDescription"
       confirm-label="確認結案並產生 PDF"
       cancel-label="取消結案"
       :loading="finalizing"
       :destructive="false"
       @update:open="showFinalizeConfirm = $event"
       @confirm="finalizeReport"
-    />
+    >
+      <label v-if="ownerEmail" class="flex items-start gap-2 pt-2 text-sm text-foreground">
+        <input v-model="autoSendOnFinalize" type="checkbox" class="mt-0.5 h-4 w-4 shrink-0 accent-belle-600 dark:accent-brand-500" :disabled="finalizing" />
+        <span class="min-w-0 break-all">PDF 產生後自動寄給飼主（{{ ownerEmail }}）</span>
+      </label>
+    </ConfirmDialog>
     <ConfirmDialog
       :open="showEmailConfirm"
       :title="isSent || deliveryUncertain ? '重新寄送健檢報告' : '寄送健檢報告'"

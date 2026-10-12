@@ -9,7 +9,7 @@ export const DELIVERY_STATUS_META = {
   // stone 是固定淺色階，深色主題下會變成淺底淺字——這裡走中性 token。
   not_sent: { label: '待寄送', class: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300', dotClass: 'bg-amber-600' },
   sending: { label: '寄送中', class: 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300', dotClass: 'bg-sky-600' },
-  sent: { label: '已寄送', class: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400', dotClass: 'bg-emerald-600' },
+  sent: { label: '已寄出', class: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400', dotClass: 'bg-emerald-600' },
   failed: { label: '寄送失敗', class: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300', dotClass: 'bg-red-600' },
   uncertain: { label: '結果待確認', class: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300', dotClass: 'bg-amber-600' },
 };
@@ -18,7 +18,7 @@ export const DELIVERY_STATUS_META = {
 // 那個是「這份報告現在的寄送狀態」，這個是「當時那一次嘗試發生了什麼」。
 export const DELIVERY_EVENT_META = {
   queued: { label: '開始寄送', class: 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300', dotClass: 'bg-sky-600' },
-  sent: { label: '寄送成功', class: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400', dotClass: 'bg-emerald-600' },
+  sent: { label: '已寄出', class: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400', dotClass: 'bg-emerald-600' },
   failed: { label: '寄送失敗', class: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300', dotClass: 'bg-red-600' },
   uncertain: { label: '結果待確認', class: 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300', dotClass: 'bg-amber-600' },
 };

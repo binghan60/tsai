@@ -21,7 +21,7 @@ import { DatePicker } from '../components/ui/date-picker';
 // 包含後來被刪掉的報告。報告清單那頁回答「還有什麼沒寄」，這頁回答「當初寄了什麼給誰」。
 const EVENTS = [
   { key: '', label: '全部', tone: 'neutral' },
-  { key: 'sent', label: '寄送成功', tone: 'success' },
+  { key: 'sent', label: '已寄出', tone: 'success' },
   { key: 'failed', label: '寄送失敗', tone: 'danger' },
   { key: 'uncertain', label: '結果待確認', tone: 'warning' },
   { key: 'queued', label: '寄送中', tone: 'info' },
@@ -219,7 +219,7 @@ onBeforeUnmount(() => {
                     {{ detailExpanded(log) ? '收合詳情' : '展開詳情' }}
                   </button>
                 </div>
-                <span v-else-if="log.event === 'sent'" class="text-xs text-emerald-700 dark:text-emerald-300">已寄送</span>
+                <span v-else-if="log.event === 'sent'" class="text-xs text-emerald-700 dark:text-emerald-300">已寄出</span>
                 <span v-else-if="log.event === 'queued'" class="text-xs text-sky-700 dark:text-sky-300">等待寄送完成</span>
                 <span v-else-if="log.event === 'uncertain'" class="text-xs text-amber-700 dark:text-amber-300">寄送結果待確認</span>
                 <span v-else class="text-xs text-muted-foreground">—</span>
