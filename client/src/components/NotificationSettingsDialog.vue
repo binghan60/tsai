@@ -24,7 +24,7 @@ const { options, preferences, enabledCount, setPreference, enableAll, disableAll
         <li v-for="option in options" :key="option.key">
           <label class="flex min-h-12 cursor-pointer items-center justify-between gap-3 px-6 hover:bg-hover">
             <span>{{ option.label }}</span>
-            <Switch :model-value="preferences[option.key] !== false" :aria-label="`${option.label}通知`" @update:model-value="(value) => setPreference(option.key, value)" />
+            <Switch :model-value="preferences[option.key] === true" :aria-label="`${option.label}通知`" @update:model-value="(value) => setPreference(option.key, value)" />
           </label>
         </li>
       </ul>

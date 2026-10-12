@@ -175,7 +175,7 @@
 
 ### chatMessages 全站內部聊天
 
-`sender`（`vet`／`front_desk`）、`content`（≤1000 字）、`auto`、`snapshot`（自動通知附的修改前後）、`mentions[]`。醫師↔櫃台的全站即時聊天，跟任何掛號無關。診療台與掛號台的動作會自動發一則描述訊息（`auto: true`，文案 `lib/appointmentNotifications.js`，送出點 `composables/useAppointmentNotifier.js`，每台裝置可在「自動通知」逐項關掉）。`#` 標記貓咪：前端只送 `petId`，名字快照由伺服器寫入（`lib/petMentions.js`），同一個 transaction 把貓放進暫存區。
+`sender`（`vet`／`front_desk`）、`content`（≤1000 字）、`auto`、`snapshot`（自動通知附的修改前後）、`mentions[]`。醫師↔櫃台的全站即時聊天，跟任何掛號無關。診療台與掛號台的動作會自動發一則描述訊息（`auto: true`，文案 `lib/appointmentNotifications.js`，送出點 `composables/useAppointmentNotifier.js`，每台裝置預設全部關閉，要在「自動通知」逐項開啟才會發）。`#` 標記貓咪：前端只送 `petId`，名字快照由伺服器寫入（`lib/petMentions.js`），同一個 transaction 把貓放進暫存區。
 
 ### pinnedPets 寵物暫存區
 

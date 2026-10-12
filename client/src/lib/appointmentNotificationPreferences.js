@@ -32,7 +32,8 @@ const VISIT_DATA_KEYS = new Map([
   ['歷次病歷日誌', 'historical_note'],
 ]);
 
-const defaultPreferences = Object.fromEntries(NOTIFICATION_OPTIONS.map(option => [option.key, true]));
+// 預設全部關閉：沒有明確開啟過的項目一律不發。
+const defaultPreferences = Object.fromEntries(NOTIFICATION_OPTIONS.map(option => [option.key, false]));
 
 function readPreferences() {
   try {
@@ -58,19 +59,19 @@ export function notificationPreferenceKey(action, options = {}) {
 
 export function isAppointmentNotificationEnabled(action, options = {}) {
   const key = notificationPreferenceKey(action, options);
-  return preferences.value[key] !== false;
+  return preferences.value[key] === true;
 }
 
 export function useAppointmentNotificationPreferences() {
-  const enabledCount = computed(() => NOTIFICATION_OPTIONS.filter(option => preferences.value[option.key] !== false).length);
+  const enabledCount = computed(() => NOTIFICATION_OPTIONS.filter(option => preferences.value[option.key] === true).length);
   function setPreference(key, enabled) {
     preferences.value = { ...preferences.value, [key]: Boolean(enabled) };
   }
   function enableAll() {
-    preferences.value = { ...defaultPreferences };
+    preferences.value = Object.fromEntries(NOTIFICATION_OPTIONS.map(option => [option.key, true]));
   }
   function disableAll() {
-    preferences.value = Object.fromEntries(NOTIFICATION_OPTIONS.map(option => [option.key, false]));
+    preferences.value = { ...defaultPreferences };
   }
   return { options: NOTIFICATION_OPTIONS, preferences, enabledCount, setPreference, enableAll, disableAll };
 }

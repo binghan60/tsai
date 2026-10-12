@@ -52,7 +52,21 @@ const doctor = computed(() => props.mode === 'doctor');
 const fullPage = computed(() => !props.compact && !props.createOnly);
 const editing = ref(false);
 const showNotes = ref(false);
-const filter = ref(props.initialFilter || (doctor.value ? 'review' : 'active'));
+// 記住這台裝置上次選的分類頁籤：全頁版與右側面板各記一份（面板只有部分階段），醫師與櫃台身分也分開。
+// 讀回來的值不在目前有的頁籤裡（階段改過、被改壞）就退回預設。
+const FILTER_STORAGE_KEY = `clinic.medicationFilter.${props.mode}.${props.compact ? 'panel' : 'page'}`;
+function savedFilter() {
+  try {
+    const value = localStorage.getItem(FILTER_STORAGE_KEY);
+    const stageKeys = (props.stages?.length ? props.stages : MEDICATION_STAGES.map(stage => stage.key));
+    const allowed = ['all', ...(props.stages?.length ? [] : ['active']), ...stageKeys];
+    return allowed.includes(value) ? value : '';
+  } catch { return ''; }
+}
+const filter = ref(savedFilter() || props.initialFilter || (doctor.value ? 'review' : 'active'));
+watch(filter, value => {
+  try { localStorage.setItem(FILTER_STORAGE_KEY, value); } catch { /* 無痕模式等讀寫失敗時只記在記憶體。 */ }
+});
 const queryInput = ref('');
 const query = ref('');
 const page = ref(1);
@@ -107,6 +121,7 @@ const showEditor = computed(() => !fullPage.value || !selected.value || editing.
 const changedClinical = computed(() => selected.value && ['condition', 'prescription', 'note'].some(key => form[key].trim() !== selected.value[key]));
 // 來源：診療台送交櫃台時開的是門診（fromVisit），櫃台登記的是拿藥（電話續藥等沒有看診的領藥）。
 function sourceLabel(order) { return order.fromVisit ? '門診' : '拿藥'; }
+function sourceTone(order) { return order.fromVisit ? 'bg-info-surface text-info' : 'bg-accent text-accent-foreground'; }
 function tone(status) {
   return { review: 'bg-warning-surface text-warning', approved: 'bg-info-surface text-info', ready: 'bg-accent text-accent-foreground', collected: 'bg-success-surface text-success' }[status] || 'bg-sunken text-muted-foreground';
 }
@@ -397,7 +412,7 @@ onBeforeUnmount(() => {
     class="flex min-h-0 flex-1 flex-col gap-3"
   >
     <!-- 全頁版清單：跟健檢報告清單同一個模板（DataCard 分欄、列上一顆主要動作＋⋯）。點貓咪整頁切到詳情。 -->
-    <DataCard v-if="fullPage && !opened" title="藥單" :count="loading && !total ? null : total" style="--data-columns: minmax(13rem, 1.3fr) minmax(16rem, 2.4fr) 9rem 10rem 13rem">
+    <DataCard v-if="fullPage && !opened" title="藥單" :count="loading && !total ? null : total" style="--data-columns: minmax(13rem, 1.3fr) minmax(16rem, 2.4fr) 9rem 7rem 10rem 13rem">
       <template #filters>
         <FilterBar id="medication-search" v-model="queryInput" label="搜尋藥單" placeholder="貓咪、飼主或電話" class="w-full min-w-0 md:w-[26rem]" @submit="applySearch" />
       </template>
@@ -411,7 +426,7 @@ onBeforeUnmount(() => {
       <!-- 桌機：一列一張藥單。需重新包藥的列左側一條紅線。 -->
       <div class="hidden xl:block">
         <div class="desktop-data-header">
-          <span>貓咪</span><span>藥單內容</span><span>登記</span><span>狀態</span><span></span>
+          <span>貓咪</span><span>藥單內容</span><span>登記</span><span>來源</span><span>狀態</span><span></span>
         </div>
         <div v-for="item in items" :key="item._id" data-medication-row class="desktop-data-row hover:bg-hover" :class="item.needsRepack ? 'shadow-[inset_3px_0_0_var(--danger)]' : ''">
           <span class="desktop-data-cell flex min-w-0 items-center gap-3">
@@ -427,10 +442,10 @@ onBeforeUnmount(() => {
             <span class="num block text-sm">{{ formatDateTime(item.createdAt, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) }}</span>
             <span class="block text-xs text-subtle-foreground">{{ relativeTimeLabel(item.createdAt) }}</span>
           </span>
+          <span class="desktop-data-cell"><Badge variant="status" :class="sourceTone(item)">{{ sourceLabel(item) }}</Badge></span>
           <span class="desktop-data-cell flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
             <Badge v-if="item.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>
-            <Badge variant="outline">{{ sourceLabel(item) }}</Badge>
           </span>
           <span class="desktop-data-cell flex items-center justify-end gap-1">
             <Button v-if="nextAction(item)" variant="soft" size="sm" :disabled="busy" :aria-label="completeLabel(item)" @click="completeFromList(item)">{{ nextAction(item) === 'ready' ? '完成包藥' : '確認領藥' }}</Button>
@@ -455,7 +470,7 @@ onBeforeUnmount(() => {
           <div class="flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
             <Badge v-if="item.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>
-            <Badge variant="outline">{{ sourceLabel(item) }}</Badge>
+            <Badge variant="status" :class="sourceTone(item)">{{ sourceLabel(item) }}</Badge>
             <Button v-if="nextAction(item)" variant="soft" size="sm" class="ml-auto" :disabled="busy" @click="completeFromList(item)">{{ nextAction(item) === 'ready' ? '完成包藥' : '確認領藥' }}</Button>
             <Button v-else variant="soft" size="sm" class="ml-auto" :disabled="busy" @click="openOrder(item)">{{ openLabel(item) }}</Button>
           </div>
@@ -481,13 +496,10 @@ onBeforeUnmount(() => {
       <li v-for="item in items" :key="item._id" data-medication-row class="space-y-2 px-5 py-3.5">
         <div class="flex items-start gap-3">
           <div class="min-w-0 flex-1">
-            <span class="block truncate text-base font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
+            <span class="flex items-center gap-2"><span class="truncate text-base font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span><Badge variant="status" :class="sourceTone(item)" class="shrink-0">{{ sourceLabel(item) }}</Badge></span>
             <span class="flex items-baseline gap-3 text-sm"><span class="truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink></span><span class="num shrink-0 text-muted-foreground">{{ item.ownerPhone }}</span></span>
           </div>
-          <span class="flex shrink-0 flex-col items-end gap-1">
-            <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
-            <Badge variant="outline">{{ sourceLabel(item) }}</Badge>
-          </span>
+          <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
         </div>
         <RichText v-if="item.prescription" tag="p" :text="item.prescription" class="line-clamp-3 rounded-lg bg-sunken px-3 py-2 text-sm" />
         <p v-if="item.needsRepack" class="text-sm font-semibold text-danger">暫停處理，需重新包藥</p>
@@ -512,7 +524,7 @@ onBeforeUnmount(() => {
           <Button variant="secondary" size="icon-sm" :disabled="busy" aria-label="返回清單" @click="close"><ArrowLeft stroke-width="1.75" /></Button>
           <h2 class="text-xl font-semibold"><PatientLink :pet-id="selected.petId">{{ selected.petName }}</PatientLink></h2>
           <Badge variant="status" :class="tone(selected.status)">{{ medicationLabel(selected.status) }}</Badge>
-          <Badge variant="outline">{{ sourceLabel(selected) }}</Badge>
+          <Badge variant="status" :class="sourceTone(selected)">{{ sourceLabel(selected) }}</Badge>
           <Badge v-if="dirty" variant="status" class="ml-auto bg-warning-surface text-warning">有未儲存內容</Badge>
         </div>
         <SpecGrid>
@@ -540,7 +552,7 @@ onBeforeUnmount(() => {
             <ClipboardPlus v-if="!selected" class="h-5 w-5 text-primary" stroke-width="1.75" aria-hidden="true" />
             <template v-if="selected"><PatientLink :pet-id="selected.petId">{{ selected.petName }}</PatientLink> 的藥單</template><template v-else>新增藥單</template>
             <Badge v-if="selected" variant="status" :class="tone(selected.status)">{{ medicationLabel(selected.status) }}</Badge>
-            <Badge v-if="selected" variant="outline">{{ sourceLabel(selected) }}</Badge>
+            <Badge v-if="selected" variant="status" :class="sourceTone(selected)">{{ sourceLabel(selected) }}</Badge>
           </p>
           <p v-if="selected" class="flex gap-3 text-sm"><PatientLink v-if="selected.ownerName" :pet-id="selected.petId" quiet>{{ selected.ownerName }}</PatientLink><span class="num text-muted-foreground">{{ selected.ownerPhone }}</span></p>
           <p v-else class="text-sm text-muted-foreground">記錄飼主需求並建立藥單，送交醫師確認後再包藥。</p>
