@@ -11,6 +11,29 @@ export function petIdFromPatientId(patientId) {
   return /^[0-9a-f]{24}$/i.test(text) ? text : null;
 }
 
+// 結果裡可能放著貓咪 _id 的欄位，依可靠度排序：病歷號碼 client.id（現在送的）、動物患者 ID patient.id（舊版送的）。
+// 只留長得像 _id 的、去掉重複；是不是真有這隻貓由呼叫端查資料庫（飼主的 _id 長得一樣，查不到就換下一個）。
+export function petIdCandidates({ clientId, patientId } = {}) {
+  const ids = [clientId, patientId].map(petIdFromPatientId).filter(Boolean);
+  return [...new Set(ids)];
+}
+
+// 結果的 patient.id 是飼主手機（送 IDEXX 時填的，lib/idexxCensus.js 的 idexxPatientId）：純數字、至少 8 碼。
+// 舊版送的是貓咪 _id（上面的 petIdFromPatientId），兩種都認。
+export function phoneFromPatientId(patientId) {
+  const text = String(patientId ?? '').trim();
+  return /^\d{8,15}$/.test(text) ? text : null;
+}
+
+// 同一位飼主名下、檢驗當天有看診的貓裡挑一隻：只有一隻就是它；好幾隻時用 IDEXX 結果上的貓名比，
+// 剛好比到一隻才算；比不出來回 null（進待確認清單，讓人選）。
+export function pickPetForOwnerPhone(pets, patientName) {
+  const list = pets ?? [];
+  if (list.length === 1) return list[0];
+  const named = list.filter((pet) => sameName(pet.name, patientName));
+  return named.length === 1 ? named[0] : null;
+}
+
 const INACTIVE_STATUSES = new Set(['cancelled', 'no_show']);
 
 // 這份結果屬於哪一次看診：同一隻貓、檢驗當天的掛號（呼叫端已經用日期篩過），排除取消與未到。

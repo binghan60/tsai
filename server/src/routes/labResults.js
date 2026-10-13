@@ -6,7 +6,7 @@ import { hasIdexxBridgeAccess, idexxBridgeConfigured, idexxCensusSettings } from
 import { IdexxParseError, decodeIdexxXml, parseIdexxResult } from '../lib/idexxResult.js';
 import { labResultContent, planLabResultImport } from '../lib/labResultImport.js';
 import {
-  applyLabResult, dismissLabResult, editLabResultValues, matchByPatientId, matchManually, openConflicts,
+  applyLabResult, dismissLabResult, editLabResultValues, matchByPatient, matchManually, openConflicts,
   reopenConflicts, resolveConflicts, undismissLabResult, unmatchLabResult,
 } from '../lib/labResultApply.js';
 import { rankCandidates } from '../lib/labResultFill.js';
@@ -70,7 +70,7 @@ async function importLabResult(parsed, { rawXml, fileName }) {
 async function autoFill(imported, parsed) {
   if (imported.status === 'stale') return null;
   try {
-    const petId = imported.petId ?? (await matchByPatientId(imported.id, parsed.patient.id, parsed.runAt));
+    const petId = imported.petId ?? (await matchByPatient(imported.id, parsed, parsed.runAt));
     if (!petId) return { status: 'unmatched' };
     return await applyLabResult(imported.id, { force: imported.status === 'updated' });
   } catch (err) {

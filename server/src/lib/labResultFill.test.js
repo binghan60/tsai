@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parseIdexxResult } from './idexxResult.js';
-import { liveConflicts, overwriteValues, petIdFromPatientId, pickVisit, planLabFill, planUndo, rankCandidates, sameName, unmappedLabel } from './labResultFill.js';
+import { liveConflicts, overwriteValues, petIdCandidates, petIdFromPatientId, phoneFromPatientId, pickPetForOwnerPhone, pickVisit, planLabFill, planUndo, rankCandidates, sameName, unmappedLabel } from './labResultFill.js';
 
 describe('數值差異：比對視窗', () => {
   const conflicts = [
@@ -30,6 +30,44 @@ const catalyst = parseIdexxResult(readFileSync(new URL('../../test/fixtures/idex
 const earCytology = parseIdexxResult(readFileSync(new URL('../../test/fixtures/idexx/invue-ear-cytology.xml', import.meta.url)));
 
 const labItem = (key, label, idexxCodes) => ({ key, label, type: 'lab', idexxCodes });
+
+describe('petIdCandidates：病歷號碼優先，其次動物患者 ID', () => {
+  const cat = '64b000000000000000000001';
+  const owner = '64b0000000000000000000ff';
+  it('現在的結果：病歷號碼是貓咪 _id、患者 ID 是手機', () => {
+    assert.deepEqual(petIdCandidates({ clientId: cat, patientId: '0912345678' }), [cat]);
+  });
+  it('舊版結果：病歷號碼是飼主 _id、患者 ID 是貓咪 _id，兩個都列（飼主那個查不到貓，換下一個）', () => {
+    assert.deepEqual(petIdCandidates({ clientId: owner, patientId: cat }), [owner, cat]);
+  });
+  it('重複只留一個；沒有值或不像 _id 的不列', () => {
+    assert.deepEqual(petIdCandidates({ clientId: cat, patientId: cat }), [cat]);
+    assert.deepEqual(petIdCandidates({ clientId: '', patientId: '000001' }), []);
+    assert.deepEqual(petIdCandidates(), []);
+  });
+});
+
+describe('飼主手機當患者編號', () => {
+  it('phoneFromPatientId：純數字 8 碼以上才算，貓咪 _id 與空值不算', () => {
+    assert.equal(phoneFromPatientId('0912345678'), '0912345678');
+    assert.equal(phoneFromPatientId(' 0912345678 '), '0912345678');
+    assert.equal(phoneFromPatientId('000001'), null);
+    assert.equal(phoneFromPatientId('64b000000000000000000001'), null);
+    assert.equal(phoneFromPatientId(''), null);
+  });
+
+  it('pickPetForOwnerPhone：只有一隻就是它；好幾隻用貓名比，比不出來不猜', () => {
+    const one = [{ _id: 'a', name: '咪咪' }];
+    assert.equal(pickPetForOwnerPhone(one, '隨便').name, '咪咪');
+    const two = [{ _id: 'a', name: '咪咪' }, { _id: 'b', name: '小黑' }];
+    assert.equal(pickPetForOwnerPhone(two, ' 小黑 ')._id, 'b');
+    assert.equal(pickPetForOwnerPhone(two, '大花'), null);
+    assert.equal(pickPetForOwnerPhone(two, ''), null);
+    assert.equal(pickPetForOwnerPhone([], '咪咪'), null);
+    const twins = [{ _id: 'a', name: '咪咪' }, { _id: 'b', name: '咪咪' }];
+    assert.equal(pickPetForOwnerPhone(twins, '咪咪'), null);
+  });
+});
 
 describe('petIdFromPatientId：結果是哪隻貓', () => {
   it('報到時送出去的貓咪 _id 原樣帶回來', () => {

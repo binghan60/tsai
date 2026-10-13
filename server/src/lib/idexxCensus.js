@@ -2,7 +2,7 @@
 //
 // 流程：醫師或櫃台按「送 IDEXX」→ 這裡組好 XML、存進 idexxRequests 排隊 → 診所電腦上的抓檔程式每輪來拿、
 // 原封寫進 C:\IDEXX Interlink\Requests\ → InterLink 送到 IDEXX 主機 → 貓咪出現在主機清單。
-// 技術員從清單點那隻貓跑檢驗，結果帶著同一個 patient_id（貓咪的 _id）回來，就能自動認貓（labResultApply 的 matchByPatientId）。
+// 技術員從清單點那隻貓跑檢驗，結果帶著同一個 client_id（病歷號碼，貓咪的 _id）回來，就能自動認貓（labResultApply 的 matchByPatient；認不到才退回飼主手機＋貓名）。
 // 取消送 IDEXX或離開診所（櫃台完成、取消、取消報到）時送離院／取消，主機清單才不會越堆越多。
 //
 // IDEXX 規格有兩種訊息都能讓貓咪出現在主機上，台灣這邊實際用哪一種要到診所才知道，所以兩種都做、由伺服器設定切換：
@@ -168,21 +168,31 @@ export function splitOwnerName(name) {
   return { lastName: text, firstName: '' };
 }
 
-function clientXml(owner) {
+// client_id 是主機畫面最下面的「病歷號碼」：放貓咪 _id，結果回來時系統靠它精確認貓（labResultApply 的 matchByPatient）。
+// 主機畫面上的「動物患者 ID」另外放飼主手機（idexxPatientId），讓技術員看得懂。
+function clientXml(owner, pet) {
   if (!owner) return '';
-  const id = owner._id ? ` client_id="${xmlText(owner._id)}"` : '';
+  const id = pet?._id ? ` client_id="${xmlText(pet._id)}"` : '';
   const { lastName, firstName } = splitOwnerName(owner.name);
   return `      <client${id}>\n        <first_name>${xmlText(firstName)}</first_name>\n        <last_name>${xmlText(lastName)}</last_name>\n      </client>\n`;
 }
 
+// IDEXX 主機畫面的「動物患者 ID」：用飼主手機（存的就是純數字，shared/phone.js），技術員一看就知道是誰家的貓。
+// 同一位飼主的貓共用同一個號碼，所以認貓不靠它（靠病歷號碼 client_id＝貓咪 _id），電話加貓名只是備援。
+// 沒有飼主或沒有手機時退回貓咪 _id，至少主機上不會是空的。
+export function idexxPatientId(pet, owner) {
+  const phone = String(owner?.phone ?? '').replace(/\D/g, '');
+  return phone || String(pet._id);
+}
+
 // DTD 規定的順序：patient_name → patient_breed → patient_birth_dt → patient_weight。
-function patientXml(pet, weightKg) {
+function patientXml(pet, weightKg, owner) {
   const gender = idexxGender(pet.sex, pet.neutered);
   const breed = idexxBreed(pet.breed);
   const birth = idexxDate(pet.birthDate);
   const weight = weightText(weightKg);
   return [
-    `      <patient patient_id="${xmlText(pet._id)}" patient_species="${idexxSpecies(pet.species)}"${gender ? ` patient_gender="${gender}"` : ''}>`,
+    `      <patient patient_id="${xmlText(idexxPatientId(pet, owner))}" patient_species="${idexxSpecies(pet.species)}"${gender ? ` patient_gender="${gender}"` : ''}>`,
     `        <patient_name>${xmlText(pet.name)}</patient_name>`,
     breed ? `        <patient_breed>${xmlText(breed)}</patient_breed>` : '',
     birth ? `        <patient_birth_dt>${birth}</patient_birth_dt>` : '',
@@ -198,7 +208,7 @@ export function buildIdexxRequestXml({ mode, kind, messageId, now, encoding, app
   const dtd = census ? 'census_20.dtd' : 'work_request_20.dtd';
   const type = census ? 'Census_Notice' : 'Work_Request';
   const subType = census ? kind : kind === 'in' ? 'New' : 'Cancel';
-  const subject = clientXml(owner) + patientXml(pet, weightKg);
+  const subject = clientXml(owner, pet) + patientXml(pet, weightKg, owner);
   const body = census
     ? `    <census_notice census_notice_reason="inclinic">\n${subject}    </census_notice>\n`
     : `    <work_request requisition_number="${xmlText(appointmentId)}">\n${subject}${

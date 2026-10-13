@@ -13,7 +13,7 @@ const pet = {
   _id: '66f0a1b2c3d4e5f601234567', name: '牛奶', species: '貓', breed: '米克斯', sex: 'female', neutered: 'yes',
   birthDate: new Date('2023-04-30T16:00:00Z'), ownerId: 'o1',
 };
-const owner = { _id: '66f0a1b2c3d4e5f60123aaaa', name: '王小明' };
+const owner = { _id: '66f0a1b2c3d4e5f60123aaaa', name: '王小明', phone: '0912345678' };
 // 2026-10-04 14:05:09.123 台北時間
 const now = new Date('2026-10-04T06:05:09.123Z');
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' });
@@ -128,10 +128,10 @@ describe('idexxCensus', () => {
     assert.equal(message.message_dt, '10/04/2026 02:05:09 PM');
     const notice = message.body.census_notice;
     assert.equal(notice.census_notice_reason, 'inclinic');
-    assert.equal(notice.client.client_id, owner._id);
+    assert.equal(notice.client.client_id, pet._id, '病歷號碼＝貓咪 _id');
     assert.equal(notice.client.last_name, '王');
     assert.equal(notice.client.first_name, '小明');
-    assert.equal(notice.patient.patient_id, pet._id);
+    assert.equal(String(notice.patient.patient_id), owner.phone, '動物患者 ID＝飼主手機');
     assert.equal(notice.patient.patient_species, 'FELINE');
     assert.equal(notice.patient.patient_gender, 'FEMALE_SPAYED');
     assert.equal(notice.patient.patient_name, '牛奶');
