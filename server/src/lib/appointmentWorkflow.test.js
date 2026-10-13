@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyJournalFields, applyWorkflowAction, appointmentJournalContent, appointmentJournalSections, assertWorkflowVersion } from './appointmentWorkflow.js';
+import { applyJournalFields, applyWorkflowAction, appointmentJournalContent, appointmentJournalFields, appointmentJournalSections, assertWorkflowVersion } from './appointmentWorkflow.js';
 import { workflowState, workflowFilter } from '../../../shared/appointmentWorkflow.js';
 
 const appointment = () => ({ __v: 0, status: 'arrived', petId: 'pet-1', checkinNumber: 3, checkinNumberHistory: [3] });
@@ -109,6 +109,41 @@ test('完成處理時一起送出「上傳影像」；沒帶就不動，格式�
   const invalid = appointment();
   applyWorkflowAction(invalid, 'handoff', {});
   assert.throws(() => applyWorkflowAction(invalid, 'complete', { imageUpload: 'yes' }), /上傳影像的格式不正確/);
+
+  // 處理事項：完成處理時一起送出，照定義順序存；沒帶不動；互斥組只能選一個；不認得的項目擋下。
+  const desk = appointment();
+  applyWorkflowAction(desk, 'handoff', {});
+  applyWorkflowAction(desk, 'complete', { deskItems: ['consent_signed', 'receipt', 'image_usb'] });
+  assert.deepEqual(desk.deskItems, ['image_usb', 'receipt', 'consent_signed']);
+  assert.deepEqual(appointmentJournalSections(desk).find((section) => section.key === 'deskItems'), {
+    key: 'deskItems', label: '櫃台處理', text: '影像USB、已開收據、已簽用藥同意書',
+    groups: [
+      { key: 'image', label: '影像', items: [{ key: 'image_usb', label: '影像USB' }] },
+      { key: 'receipt', label: '收據', items: [{ key: 'receipt', label: '已開收據' }] },
+      { key: 'other', label: '其他', items: [{ key: 'consent_signed', label: '已簽用藥同意書' }] },
+    ],
+  });
+  assert.equal(appointmentJournalSections(appointment()).some((section) => section.key === 'deskItems'), false);
+  const bad = appointment();
+  applyWorkflowAction(bad, 'handoff', {});
+  assert.throws(() => applyWorkflowAction(bad, 'complete', { deskItems: ['receipt', 'receipt_no_stamp'] }), /只能選一個/);
+  assert.throws(() => applyWorkflowAction(bad, 'complete', { deskItems: ['image_usb', 'no_image'] }), /只能選一個/);
+  assert.throws(() => applyWorkflowAction(bad, 'complete', { deskItems: ['nope'] }), /不在清單/);
+  assert.throws(() => applyWorkflowAction(bad, 'complete', { deskItems: 'receipt' }), /格式不正確/);
+  assert.equal(bad.deskItems, undefined);
+
+  // 日誌的修改模式也能改處理事項與上傳影像；日誌編輯用的原始值帶出目前的勾選。
+  const journal = appointment();
+  journal.reason = '咳嗽';
+  applyJournalFields(journal, { deskItems: ['report_sent', 'receipt'], imageUpload: true });
+  assert.deepEqual(journal.deskItems, ['receipt', 'report_sent']);
+  assert.equal(journal.imageUpload, true);
+  assert.deepEqual(
+    [appointmentJournalFields(journal).deskItems, appointmentJournalFields(journal).imageUpload],
+    [['receipt', 'report_sent'], true]
+  );
+  assert.equal(appointmentJournalFields(appointment()).imageUpload, false);
+  assert.throws(() => applyJournalFields(journal, { deskItems: ['image_usb', 'no_image'] }), /只能選一個/);
   assert.equal(invalid.deskCompletedAt, undefined);
 });
 

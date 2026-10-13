@@ -8,6 +8,8 @@ import { http } from '../api/http';
 import { getSocket } from '../api/socket';
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
+import { sortDeskItems } from '../../../shared/deskItems.js';
+import DeskItemsChecklist from './DeskItemsChecklist.vue';
 import { describeVisitChanges } from '../lib/appointmentNotifications';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { medicationLabel } from '../../../shared/medicationWorkflow.js';
@@ -191,6 +193,16 @@ function imageUploadChange() {
     ? {}
     : { imageUpload: imageUploadDraft.value, staff: identity.value };
 }
+// 「處理事項」（影像USB、已開收據、已給藥單……，shared/deskItems.js）同樣先記在視窗裡，按完成處理才一起送出，
+// 全部寫進病歷日誌的「櫃台處理」一列。跟「上傳影像」不同，這些不新增待辦。
+// 勾選框與互斥規則在 DeskItemsChecklist.vue（病歷日誌的修改模式共用）。
+const deskItemsDraft = ref(sortDeskItems(props.appointment.deskItems));
+watch(() => props.appointment.deskItems, (value) => { deskItemsDraft.value = sortDeskItems(value); });
+// 只有跟目前存的不同才送：沒動過就不帶，避免完成處理時把別台剛改的勾選蓋掉。
+function deskItemsChange() {
+  const saved = sortDeskItems(props.appointment.deskItems);
+  return deskItemsDraft.value.join() === saved.join() ? {} : { deskItems: deskItemsDraft.value };
+}
 function close() { if (!busy.value) emit('close'); }
 
 async function run(action, values = {}, options = {}) {
@@ -344,7 +356,7 @@ async function complete() {
   busy.value = true;
   try {
     if (followUpStarted.value) await run('followup', followUpPayload(), { silentToast: true });
-    await run('complete', imageUploadChange());
+    await run('complete', { ...imageUploadChange(), ...deskItemsChange() });
     emit('close');
   } catch (err) {
     error.value = err.response?.data?.message || err.message || '操作失敗，請稍後重試';
@@ -439,13 +451,7 @@ async function reopen() {
               <div class="flex flex-wrap items-center gap-2.5">
                 <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-card" aria-hidden="true">2</span>
                 <h3 id="desk-note-heading" class="text-base font-semibold">本次簡易紀錄</h3>
-                <!-- 上傳影像是這一段的選項，放標題列：夾在紀錄框和它的說明、儲存鈕中間時，說明看起來像在講上傳影像。
-                     按完成處理才送出，送出後出現在病歷日誌，並新增一筆院內待辦。 -->
-                <label for="desk-image-upload" class="ml-auto flex min-h-9 cursor-pointer items-center gap-2 text-sm font-medium">
-                  <Checkbox id="desk-image-upload" :model-value="imageUploadDraft" :disabled="busy || state.completed" @update:model-value="imageUploadDraft = $event === true" />
-                  上傳影像
-                </label>
-                <Button v-if="!editingNote && !state.completed" variant="secondary" size="sm" :disabled="busy" @click="startEditNote"><Pencil stroke-width="1.75" />編輯</Button>
+                <Button v-if="!editingNote && !state.completed" variant="secondary" size="sm" class="ml-auto" :disabled="busy" @click="startEditNote"><Pencil stroke-width="1.75" />編輯</Button>
               </div>
               <!-- 體重、體溫是這次看診的資料，跟紀錄放同一段、排在紀錄上面（講紀錄時常順便說「今天幾公斤」）。
                    這裡只看不改：量測是診療台的欄位。沒量就留白，格子照畫。 -->
@@ -486,6 +492,18 @@ async function reopen() {
               <p v-if="medicationError" class="text-sm text-danger" role="alert">{{ medicationError }}</p>
             </section>
 
+            <!-- 處理事項：櫃台對這次看診做了哪些事。按完成處理才送出，全部寫進病歷日誌；只有「上傳影像」另外新增一筆院內待辦。
+                 影像、收據兩組一次只能選一個（勾新的會取消同組原本那個），其他可複選。沒勾就是沒做，不用特地勾「否」。 -->
+            <section class="space-y-3" aria-labelledby="desk-items-heading">
+              <div class="flex items-center gap-2.5">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-card" aria-hidden="true">4</span>
+                <h3 id="desk-items-heading" class="text-base font-semibold">處理事項</h3>
+              </div>
+              <div class="rounded-xl bg-sunken px-4 py-2.5">
+                <DeskItemsChecklist v-model:items="deskItemsDraft" v-model:image-upload="imageUploadDraft" :disabled="busy || state.completed" />
+              </div>
+            </section>
+
             <!-- 歷次病歷日誌直接展開在下面（使用者要求，不收進頁籤）：飼主常會問「上次開的藥還能吃嗎」。 -->
             <ClinicalNotesPanel
               :notes="notes"
@@ -503,7 +521,7 @@ async function reopen() {
           <!-- 一律預留捲軸的位置：約回診的時段選擇器依自己的寬度決定並排或上下疊，捲軸出現與否（例如多了保證金那塊）不能讓同一個視窗大小換排法。 -->
           <section class="space-y-4 px-6 py-5 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-gutter:stable]" aria-labelledby="desk-followup-heading">
             <div class="flex items-center gap-2.5">
-              <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground" aria-hidden="true">4</span>
+              <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground" aria-hidden="true">5</span>
               <h3 id="desk-followup-heading" class="text-base font-semibold">約回診</h3>
             </div>
             <!-- 標籤跟內容同一行，標籤不另佔一行。醫師沒寫也照樣留這一格、內容空白，不補說明文字。 -->

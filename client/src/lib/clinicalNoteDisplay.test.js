@@ -4,6 +4,7 @@ import {
   journalDateEditable,
   journalEditError,
   journalEditFields,
+  journalEditLayout,
   journalEditForm,
   journalEditNotice,
   journalEditPayload,
@@ -52,6 +53,27 @@ test('appointment journal rows merge the measurements into one vitals row and ke
   assert.equal(rows[0].emphasis, true)
 })
 
+test('櫃台處理：處理事項與上傳影像併成一列勾選框；什麼都沒勾（含勾過又取消）不畫', () => {
+  const sections = (extra) => [{ key: 'reason', label: '來院原因', text: '咳嗽' }, ...extra]
+  const groups = [
+    { key: 'image', label: '影像', items: [{ key: 'image_usb', label: '影像USB' }] },
+    { key: 'other', label: '其他', items: [{ key: 'prescription_given', label: '已給藥單' }] },
+  ]
+  const rows = journalRows({ appointmentId: 'apt', sections: sections([
+    { key: 'imageUpload', label: '上傳影像', text: '已完成　10/9 14:32' },
+    { key: 'deskItems', label: '櫃台處理', text: '影像USB、已給藥單', groups },
+  ]) })
+  const desk = rows.filter((row) => row.desk)
+  assert.equal(desk.length, 1)
+  assert.deepEqual(desk[0].desk, { items: ['image_usb', 'prescription_given'], imageUpload: true, uploadNote: '已完成　10/9 14:32' })
+  assert.equal(rows.some((row) => row.key === 'imageUpload'), false, '上傳影像不再單獨一列')
+
+  const onlyUpload = journalRows({ appointmentId: 'apt', sections: sections([{ key: 'imageUpload', label: '上傳影像', text: '是' }]) })
+  assert.deepEqual(onlyUpload.find((row) => row.desk).desk, { items: [], imageUpload: true, uploadNote: '' })
+  const untickedAgain = journalRows({ appointmentId: 'apt', sections: sections([{ key: 'imageUpload', label: '上傳影像', text: '否' }]) })
+  assert.equal(untickedAgain.some((row) => row.desk), false)
+})
+
 test('a lone measurement still gets its vitals row', () => {
   const rows = journalRows({ appointmentId: 'apt', sections: [{ key: 'temperatureC', label: '體溫', text: '38 °C' }] })
   assert.deepEqual(rows.map((row) => [row.key, row.items.length]), [['vitals', 1]])
@@ -65,7 +87,20 @@ test('appointment edits send every journal field, numbers as numbers and blanks 
   form.reason = ' 咳嗽加劇 '
   assert.deepEqual(journalEditPayload(appointmentNote, form).fields, {
     reason: '咳嗽加劇', weightKg: 4.5, temperatureC: null, visitNote: '安排檢查', prescription: '', specialCareNote: '傷口勿舔舐', followUpRecommendation: '兩週後',
+    deskItems: [],
   })
+
+  // 櫃台處理：處理事項整組送；上傳影像只有跟目前存的不同才送（沒勾過的不能被存成「否」）。
+  const desk = { ...appointmentNote, fields: { ...appointmentNote.fields, deskItems: ['receipt'], imageUpload: false } }
+  const deskForm = journalEditForm(desk)
+  assert.deepEqual([deskForm.deskItems, deskForm.imageUpload], [['receipt'], false])
+  assert.equal('imageUpload' in journalEditPayload(desk, deskForm).fields, false)
+  deskForm.deskItems = ['image_usb', 'receipt']
+  deskForm.imageUpload = true
+  const deskFields = journalEditPayload(desk, deskForm).fields
+  assert.deepEqual([deskFields.deskItems, deskFields.imageUpload], [['image_usb', 'receipt'], true])
+  // 修改模式的版面：處理事項與上傳影像合成一個勾選框列，沒勾過也有。
+  assert.deepEqual(journalEditLayout(appointmentNote).filter((entry) => entry.type === 'desk').map((entry) => entry.key), ['deskItems'])
   assert.equal(journalEditError(appointmentNote, { ...form, weightKg: '-1' }), '體重必須是有效的非負數')
   const empty = Object.fromEntries(journalEditFields(appointmentNote).map((field) => [field.key, '']))
   assert.equal(journalEditError(appointmentNote, empty), '日誌內容不能全部清空')

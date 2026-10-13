@@ -1,5 +1,6 @@
 <script setup>
 import RichText from './RichText.vue'
+import DeskItemsChecklist from './DeskItemsChecklist.vue'
 import LabResultGroups from './LabResultGroups.vue'
 
 // 病歷日誌一列的「內容」格（dd）。檢視模式與編輯模式裡改不到的列共用，兩邊長一樣。
@@ -19,6 +20,11 @@ defineProps({
   </dd>
   <!-- 檢驗不是一段文字：IDEXX 原始結果排成表格（跟診療台的檢驗報告同一張），報告上的數值一項一格。 -->
   <dd v-else-if="row.results"><LabResultGroups :results="row.results" :base-date="baseDate" dense /></dd>
+  <!-- 櫃台處理：跟櫃台處理視窗、修改模式同一組勾選框（唯讀），全部選項都列、勾了的打勾。 -->
+  <dd v-else-if="row.desk" class="space-y-1">
+    <DeskItemsChecklist :items="row.desk.items" :image-upload="row.desk.imageUpload" readonly />
+    <p v-if="row.desk.uploadNote" class="text-xs text-muted-foreground">上傳影像{{ row.desk.uploadNote }}</p>
+  </dd>
   <dd v-else-if="row.labs" class="flex flex-wrap gap-x-5 gap-y-1 text-sm">
     <span v-for="lab in row.labs" :key="lab.key">
       <span class="mr-1.5 text-xs text-muted-foreground">{{ lab.label }}</span>

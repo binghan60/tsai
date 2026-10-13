@@ -23,13 +23,12 @@ const VISIT_STATUSES = ['arrived', 'pending_checkout', 'completed'];
 // 這次看診該不該有一筆病歷日誌（純邏輯）：
 //   - 貓在院內或已完成才有。取消掛號、取消報到的看診沒有成立，不留在病歷上——
 //     曾經取消過這件事記在出席紀錄（lib/attendance.js），不是病歷。
-//   - 要有內容。只有來院原因時，要等醫師開始看診才算：剛報到、還在候診的貓不該在病歷上多出一筆只有來院原因的看診紀錄。
+//   - 看診過（醫師開始看診、或已送交櫃台／完成）就有，不看有沒有填內容：有掛號、有看診，病歷上就該有這一次。
+//   - 還在候診的（報到了、醫師還沒開始）要等有實際內容才有：剛報到的貓不該在病歷上多出一筆只有來院原因的空紀錄。
 export function visitHasJournal(appointment, labResults = []) {
   if (!appointment?.petId || !VISIT_STATUSES.includes(appointment.status)) return false;
-  const sections = appointmentJournalSections(appointment, labResults);
-  if (!sections.length) return false;
-  const started = Boolean(appointment.visitStartedAt || appointment.handoffAt || appointment.deskCompletedAt);
-  return started || sections.some((section) => section.key !== 'reason');
+  if (appointment.visitStartedAt || appointment.handoffAt || appointment.deskCompletedAt) return true;
+  return appointmentJournalSections(appointment, labResults).some((section) => section.key !== 'reason');
 }
 
 // 掛號日誌不存內容、讀取時由看診即時組出；這裡只確保「該有就有一筆、不該有就沒有」（visitHasJournal）。

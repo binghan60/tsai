@@ -163,6 +163,19 @@ describe('independent appointment workflow HTTP routes', () => {
     assert.equal(done.body.checkinNumber, null);
     assert.deepEqual(done.body.checkinNumberHistory, [1]);
   });
+  it('keeps a diary for a visit that was seen even when nothing was written, and shows the desk items on it', async () => {
+    // 有掛號、有看診就有日誌：醫師什麼都沒寫（沒來院原因、沒紀錄）也一樣。
+    store.get(id).reason = '';
+    assert.equal((await post('start')).status, 200);
+    assert.equal(diary.size, 1, '開始看診就有日誌');
+    assert.equal((await post('handoff')).status, 200);
+    assert.equal(diary.size, 1);
+    // 櫃台完成處理時勾的處理事項寫進同一筆日誌。
+    const done = await post('complete', { deskItems: ['image_usb', 'receipt'] });
+    assert.equal(done.status, 200);
+    assert.equal(diary.size, 1);
+    assert.equal(await diaryContent(), '櫃台處理：影像USB、已開收據');
+  });
   it('lets the vet reclaim a handed-off visit until the desk completes it', async () => {
     await post('handoff');
     assert.equal((await post('clinical', { specialCareNote: '取回前不應修改' })).status, 409);

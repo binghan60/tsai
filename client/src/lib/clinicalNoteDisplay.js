@@ -3,6 +3,7 @@
 // 這裡把它們排成報告式的「標籤｜內容」列，以及編輯表單的初始值與送出格式。
 // 手動與舊系統匯入的日誌是自由文字，沒有 sections，整段顯示、整段編輯。
 import { richTextLength, richTextToPlain } from '../../../shared/richText.js'
+import { sortDeskItems } from '../../../shared/deskItems.js'
 
 export function journalKind(note) {
   if (note?.appointmentId) return 'appointment'
@@ -24,6 +25,20 @@ const EMPHASIS_KEYS = new Set(['reason', 'prescription'])
 // 可以上色、加粗的欄位（shared/richText.js）：卡片用 RichText 顯示、編輯用 RichTextEditor。
 export const RICH_TEXT_KEYS = new Set(['visitNote', 'condition', 'prescription', 'note'])
 
+const DESK_KEYS = ['imageUpload', 'deskItems']
+
+// 櫃台處理那一列：items＝勾了哪些處理事項（key 陣列，由後端結構化的 groups 還原）、imageUpload＝上傳影像有沒有勾、
+// uploadNote＝待辦完成後的「已完成　10/9 14:32」。什麼都沒勾（含「勾過又取消」的上傳影像）就不畫這一列。
+function deskRow(sections) {
+  const groups = sections.find((section) => section.key === 'deskItems')?.groups ?? []
+  const items = sortDeskItems(groups.flatMap((group) => (group.items ?? []).map((item) => item.key)))
+  const upload = sections.find((section) => section.key === 'imageUpload')
+  const imageUpload = Boolean(upload) && String(upload.text).trim() !== '否'
+  if (!items.length && !imageUpload) return null
+  const done = imageUpload && String(upload.text).startsWith('已完成') ? String(upload.text) : ''
+  return { key: 'deskItems', label: '櫃台處理', text: '', tone: 'default', emphasis: false, rich: false, desk: { items, imageUpload, uploadNote: done } }
+}
+
 // 報告的每一列：{ key, label, text, tone, emphasis, rich }；量測併成一列「生命徵象」，用 items 各自呈現。
 // 檢驗兩列帶結構、不是一段文字：labs＝報告上的檢驗數值（一項一格），results＝IDEXX 原始結果（排成表格）。
 // 沒有 sections（自由文字日誌、找不到來源）回 null，照舊整段顯示 content。
@@ -32,7 +47,17 @@ export function journalRows(note) {
   const sections = note.sections.filter((section) => String(section?.text ?? '').trim())
   const vitals = sections.filter((section) => VITAL_KEYS.includes(section.key))
   const rows = []
+  let deskRowDone = false
   for (const section of sections) {
+    // 櫃台處理：處理事項與上傳影像併成同一列勾選框（跟修改模式、櫃台處理視窗同一個樣子）。
+    if (DESK_KEYS.includes(section.key)) {
+      if (!deskRowDone) {
+        deskRowDone = true
+        const row = deskRow(sections)
+        if (row) rows.push(row)
+      }
+      continue
+    }
     if (VITAL_KEYS.includes(section.key)) {
       if (section === vitals[0]) rows.push({ key: 'vitals', label: '生命徵象', items: vitals, tone: 'default', emphasis: false })
       continue
@@ -47,6 +72,8 @@ export function journalRows(note) {
       ...(section.stage ? { stage: section.stage, medicationStatus: section.medicationStatus, needsRepack: section.needsRepack } : {}),
       ...(Array.isArray(section.items) && section.items.length ? { labs: section.items } : {}),
       ...(Array.isArray(section.results) && section.results.length ? { results: section.results } : {}),
+      // 櫃台處理：依影像／收據／其他分組的結構化項目，畫成一組一行的徽章。
+      ...(Array.isArray(section.groups) && section.groups.length ? { groups: section.groups } : {}),
     })
   }
   return rows
@@ -84,10 +111,10 @@ export function medicationStageTone(status) {
 }
 
 // 看診日誌每一列的畫面順序（後端 appointmentJournalSections 的順序，量測併成 vitals）。
-const APPOINTMENT_ROW_ORDER = ['reason', 'vitals', 'labValues', 'idexx', 'visitNote', 'prescription', 'imageUpload', 'specialCareNote', 'followUpRecommendation']
+const APPOINTMENT_ROW_ORDER = ['reason', 'vitals', 'labValues', 'idexx', 'visitNote', 'prescription', 'imageUpload', 'deskItems', 'specialCareNote', 'followUpRecommendation']
 
 // 編輯模式的版面：跟檢視同一個順序、同一種分列。能改的列變成輸入框（體重體溫併成一列），
-// 改不到的列（檢驗、藥單、上傳影像）原樣留在原位，IDEXX 檢驗在原位換成可逐項修改的表格；
+// 改不到的列（檢驗、藥單）原樣留在原位；櫃台處理（處理事項＋上傳影像）換成勾選框，IDEXX 檢驗在原位換成可逐項修改的表格；
 // 這樣按下「修改」畫面只有輸入框變了，其他列不會消失或跳位置。
 // 回傳 [{ type: 'field'|'vitals'|'static'|'idexx', key, label?, field?, fields?, row? }]。
 export function journalEditLayout(note) {
@@ -100,6 +127,9 @@ export function journalEditLayout(note) {
     if (key === 'vitals') layout.push({ type: 'vitals', key, label: '生命徵象', fields: [byKey.weightKg, byKey.temperatureC] })
     else if (byKey[key]) layout.push({ type: 'field', key, field: byKey[key], row: rows.get(key) })
     else if (key === 'idexx') { if (rows.get(key)?.results) layout.push({ type: 'idexx', key, label: rows.get(key).label }) }
+    // 櫃台處理：處理事項與上傳影像合成一組勾選框，沒勾過也要出現（修改模式才能補勾）；檢視模式的兩列在這裡不單獨畫。
+    else if (key === 'deskItems') layout.push({ type: 'desk', key, label: '櫃台處理' })
+    else if (key === 'imageUpload') continue
     else if (rows.has(key)) layout.push({ type: 'static', key, row: rows.get(key) })
   }
   return layout
@@ -117,7 +147,13 @@ export function journalEditable(note) {
 export function journalEditForm(note) {
   const fields = journalEditFields(note)
   if (fields === FREE_TEXT_FIELDS) return { content: note?.editableContent ?? note?.content ?? '' }
-  return Object.fromEntries(fields.map((field) => [field.key, note.fields[field.key] ?? '']))
+  const form = Object.fromEntries(fields.map((field) => [field.key, note.fields[field.key] ?? '']))
+  // 看診日誌另有櫃台處理的勾選（處理事項＋上傳影像），表單裡是陣列與布林。
+  if (fields === APPOINTMENT_EDIT_FIELDS) {
+    form.deskItems = sortDeskItems(note.fields.deskItems)
+    form.imageUpload = Boolean(note.fields.imageUpload)
+  }
+  return form
 }
 
 function blank(value) {
@@ -132,13 +168,17 @@ const fieldLength = (field, value) => (field.rich ? richTextLength(String(value 
 export function journalEditPayload(note, form) {
   const fields = journalEditFields(note)
   if (fields === FREE_TEXT_FIELDS) return { content: String(form.content ?? '').trim() }
-  return {
-    fields: Object.fromEntries(fields.map((field) => {
-      const value = form[field.key]
-      if (field.numeric) return [field.key, blank(value) ? null : Number(value)]
-      return [field.key, String(value ?? '').trim()]
-    })),
+  const payload = Object.fromEntries(fields.map((field) => {
+    const value = form[field.key]
+    if (field.numeric) return [field.key, blank(value) ? null : Number(value)]
+    return [field.key, String(value ?? '').trim()]
+  }))
+  if (fields === APPOINTMENT_EDIT_FIELDS) {
+    payload.deskItems = sortDeskItems(form.deskItems)
+    // 上傳影像只有跟目前存的不同才送：從沒勾過（null）的看診不能因為存檔被寫成「否」，日誌會多一行「上傳影像：否」。
+    if (Boolean(form.imageUpload) !== Boolean(note.fields?.imageUpload)) payload.imageUpload = Boolean(form.imageUpload)
   }
+  return { fields: payload }
 }
 
 // 送出前的檢查，回傳錯誤訊息（空字串＝可以送）。後端會再驗一次，這裡只是讓按鈕早點變灰、訊息講人話。

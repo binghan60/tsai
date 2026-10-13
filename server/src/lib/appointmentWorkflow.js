@@ -1,6 +1,7 @@
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 import { effectiveAssays, labFlag } from '../../../shared/labValues.js';
+import { checkDeskItems, deskItemGroups, deskItemsText, sortDeskItems } from '../../../shared/deskItems.js';
 
 // 看診流水線的規則（純邏輯，不碰資料庫）。動作有：
 //   clinical 存看診內容／start 開始看診／unstart 取消看診／handoff 送交櫃台／reclaim 取回／complete 櫃台完成／
@@ -11,9 +12,9 @@ export function workflowError(message, status = 422) {
 
 // 診療台的文字欄位。系統不計價、不保存金額；收費與領藥由櫃台直接處理。
 const CLINICAL_TEXT_FIELDS = ['visitNote', 'prescription', 'internalNote', 'specialCareNote', 'followUpRecommendation'];
-const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC', 'labValues', 'imageUpload'];
+const CLINICAL_FIELDS = [...CLINICAL_TEXT_FIELDS, 'weightKg', 'temperatureC', 'labValues', 'imageUpload', 'deskItems'];
 // 交給櫃台之後櫃台自己還能改的欄位（櫃台處理視窗上有）；其餘要醫師先取回。
-const DESK_EDITABLE_FIELDS = ['visitNote', 'internalNote', 'imageUpload'];
+const DESK_EDITABLE_FIELDS = ['visitNote', 'internalNote', 'imageUpload', 'deskItems'];
 const LAB_VALUE_MAX = 40;
 
 // 病歷日誌裡的一行檢驗摘要：「WBC 22.4 ×10³/µL ↑　ALT 168 U/L ↑」。
@@ -122,6 +123,9 @@ export function appointmentJournalSections(appointment, labResults = []) {
     // 櫃台處理視窗的「上傳影像」：勾了是「是」，勾過又取消是「否」（使用者要求留著、不要消失）；從來沒勾過（null）不列。
     // 那筆待辦完成後改成「已完成」加完成時間（診所時區）。
     { key: 'imageUpload', label: '上傳影像', text: imageUploadText(appointment) },
+    // 櫃台處理視窗「處理事項」勾的其他項目（影像USB、已開收據、已給藥單……），照定義順序用「、」接起來；沒勾不列。
+    // groups 是同一份內容的結構化版本（依影像／收據／其他分組），前端用它畫徽章；text 給純文字版與 content 用。
+    { key: 'deskItems', label: '櫃台處理', text: deskItemsText(appointment.deskItems), groups: deskItemGroups(appointment.deskItems) },
     { key: 'specialCareNote', label: '請轉告飼主', text: text(appointment.specialCareNote) },
     { key: 'followUpRecommendation', label: '回診建議', text: text(appointment.followUpRecommendation) },
   ].filter(section => section.text);
@@ -140,6 +144,7 @@ export function appointmentJournalContent(appointment, labResults = []) {
     richTextToPlain(byKey.get('visitNote')?.text || ''),
     byKey.has('prescription') ? `藥單：${richTextToPlain(byKey.get('prescription').text)}` : '',
     labelled('imageUpload'),
+    labelled('deskItems'),
     labelled('specialCareNote'),
     labelled('followUpRecommendation'),
   ].filter(Boolean).join('\n\n');
@@ -150,7 +155,12 @@ export const APPOINTMENT_JOURNAL_FIELDS = ['reason', 'weightKg', 'temperatureC',
 const JOURNAL_TEXT_LIMITS = { reason: 500, visitNote: 10000, prescription: 10000, specialCareNote: 500, followUpRecommendation: 500 };
 
 export function appointmentJournalFields(appointment) {
-  return Object.fromEntries(APPOINTMENT_JOURNAL_FIELDS.map(key => [key, appointment[key] ?? (key === 'weightKg' || key === 'temperatureC' ? null : '')]));
+  return {
+    ...Object.fromEntries(APPOINTMENT_JOURNAL_FIELDS.map(key => [key, appointment[key] ?? (key === 'weightKg' || key === 'temperatureC' ? null : '')])),
+    // 櫃台處理的勾選（日誌修改模式的勾選框）：處理事項是 key 陣列，上傳影像是布林（沒勾過＝false）。
+    deskItems: sortDeskItems(appointment.deskItems),
+    imageUpload: Boolean(appointment.imageUpload),
+  };
 }
 
 // 從病歷日誌直接改這次就診的內容。跟 workflow 的 clinical 不同，這裡**不看流程階段**：
@@ -172,6 +182,9 @@ export function applyJournalFields(appointment, body, { labResults = [] } = {}) 
     if (value !== null && (!Number.isFinite(value) || value < 0)) throw workflowError('量測值必須是有效的非負數');
     appointment[key] = value;
   }
+  // 櫃台處理：處理事項（整組取代）與上傳影像（待辦的增減由路由在同一個 transaction 裡接著做）。
+  applyDeskItems(appointment, body.deskItems);
+  applyImageUpload(appointment, body.imageUpload);
   if (!appointmentJournalSections(appointment, labResults).length) throw workflowError('日誌內容不能全部清空');
 }
 
@@ -187,6 +200,14 @@ function applyImageUpload(appointment, value) {
   if (value === undefined) return;
   if (typeof value !== 'boolean') throw workflowError('上傳影像的格式不正確');
   appointment.imageUpload = value;
+}
+
+// 「處理事項」：沒帶就不動；帶了是項目 key 的陣列（空陣列＝全部取消），互斥組只能選一個。
+function applyDeskItems(appointment, value) {
+  if (value === undefined) return;
+  const { items, error } = checkDeskItems(value);
+  if (error) throw workflowError(error);
+  appointment.deskItems = items;
 }
 
 export function applyWorkflowAction(appointment, action, body, now = new Date(), { labItems = [] } = {}) {
@@ -211,6 +232,7 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
     }
     if (body.labValues !== undefined) appointment.labValues = mergeLabValues(appointment.labValues, body.labValues, labItems);
     applyImageUpload(appointment, body.imageUpload);
+    applyDeskItems(appointment, body.deskItems);
   } else if (action === 'start') {
     if (!state.handedOff) appointment.visitStartedAt ||= now;
   } else if (action === 'unstart') {
@@ -233,6 +255,7 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
     if (state.completed) throw workflowError('這筆就診已完成處理', 409);
     // 櫃台處理視窗的「上傳影像」在按完成處理時才一起送出：勾錯、改主意、按稍後處理，都不會先建待辦又收掉。
     applyImageUpload(appointment, body.imageUpload);
+    applyDeskItems(appointment, body.deskItems);
     appointment.deskCompletedAt = now;
   } else if (action === 'request-reopen') {
     if (!state.completed) throw workflowError('只有已完成的就診可以申請修改', 409);

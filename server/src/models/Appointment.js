@@ -116,6 +116,9 @@ const appointmentSchema = new mongoose.Schema(
     // 那筆待辦被完成的時間（routes/todos.js 完成／改回未完成時寫回來），日誌上顯示「已完成」與時間。
     // 存在掛號上而不是讀取時去查待辦：待辦之後被刪掉，日誌上的完成紀錄還在。
     imageUploadDoneAt: { type: Date, default: null },
+    // 櫃台處理視窗「處理事項」勾的項目（shared/deskItems.js：影像USB、已開收據、已給藥單……），
+    // 值是項目 key、照定義順序存。全部寫進病歷日誌的「櫃台處理」一列；跟「上傳影像」不同，這些不新增待辦。
+    deskItems: { type: [String], default: [] },
     // 面向飼主的照護提醒（例如「傷口勿舔舐」），由醫師填、櫃台當面轉告飼主。
     // 在櫃台處理視窗用警示樣式獨立呈現——這是最容易漏講的一件事。
     specialCareNote: { type: String, default: '', trim: true, maxlength: 500 },

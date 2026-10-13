@@ -80,7 +80,7 @@ router.post('/:action', async (req, res, next) => {
 
       // 病歷日誌跟著看診走（lib/appointmentJournal.js）：存了內容、送交櫃台（沒填任何東西時來院原因也算內容），
       // 以及取消看診（只有來院原因的那筆退回候診後不留日誌）都要重新同步。
-      if (['clinical', 'handoff', 'unstart'].includes(action)) await syncAppointmentJournal(appointment, { session });
+      if (['clinical', 'start', 'handoff', 'unstart'].includes(action)) await syncAppointmentJournal(appointment, { session });
 
       if (action === 'record') {
         if (appointment.recordId) {

@@ -4,6 +4,7 @@ import { computed, reactive, ref } from 'vue'
 import { Pencil } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
+import { useStaffIdentity } from '../composables/useStaffIdentity'
 import { clinicDateInput, formatDate } from '../lib/datetime'
 import {
   journalDateEditable,
@@ -26,6 +27,7 @@ import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
 import LabResultGroups from './LabResultGroups.vue'
 import ClinicalNoteRowValue from './ClinicalNoteRowValue.vue'
+import DeskItemsChecklist from './DeskItemsChecklist.vue'
 import RichTextEditor from './RichTextEditor.vue'
 
 // 一則病歷日誌，排成一張小報告：標頭（日期、類型、進度）＋「標籤｜內容」列。
@@ -40,6 +42,7 @@ const props = defineProps({
 
 const emit = defineEmits(['saved'])
 const toast = useToast()
+const { identity } = useStaffIdentity()
 
 const kind = computed(() => journalKind(props.note))
 const rows = computed(() => journalRows(props.note))
@@ -78,7 +81,8 @@ async function save() {
   saving.value = true
   serverError.value = ''
   try {
-    const body = { ...journalEditPayload(props.note, form) }
+    // staff：在日誌上勾了「上傳影像」會新增待辦，待辦署名這台裝置的身分。
+    const body = { ...journalEditPayload(props.note, form), staff: identity.value }
     if (journalDateEditable(props.note) && entryDate.value) body.entryDate = entryDate.value
     // 檢驗先送：最後那支日誌的 PUT 回來的內容才包含改過的檢驗。
     const lab = labEditor?.changes() ?? { removed: [], edits: [] }
@@ -169,6 +173,11 @@ const kindBadgeClass = computed(() =>
               <span class="text-sm text-muted-foreground">{{ field.unit }}</span>
             </div>
           </div>
+        </div>
+        <!-- 櫃台處理：跟櫃台處理視窗同一組勾選框（影像、收據一次選一個）。 -->
+        <div v-else-if="entry.type === 'desk'" :class="ROW">
+          <span :class="[LABEL, 'text-muted-foreground']">{{ entry.label }}</span>
+          <DeskItemsChecklist v-model:items="form.deskItems" v-model:image-upload="form.imageUpload" :id-prefix="`journal-desk-${note._id}`" :disabled="saving" />
         </div>
         <div v-else-if="entry.type === 'idexx'" :class="ROW">
           <span :class="[LABEL, 'text-muted-foreground']">{{ entry.label }}</span>

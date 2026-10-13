@@ -4,6 +4,9 @@ import Appointment from '../models/Appointment.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import MedicationOrder from '../models/MedicationOrder.js';
 import { applyJournalFields } from '../lib/appointmentWorkflow.js';
+import { syncImageUploadTodo } from '../lib/imageUploadTodo.js';
+import { publishTodos } from '../lib/todos.js';
+import { STAFF_SENDERS } from '../lib/pinnedPets.js';
 import { applyMedicationJournalEdit } from '../lib/medicationWorkflow.js';
 import { syncMedicationJournal } from '../lib/medicationJournal.js';
 import { syncOrderFromJournal } from '../lib/visitMedicationOrder.js';
@@ -72,7 +75,9 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
     let appointment;
     let order;
     let visitOrder;
+    let todosChanged = false;
     await withTransaction(async session => {
+      todosChanged = false;
       const existing = await ClinicalNote.findById(req.params.id).session(session);
       if (existing?.medicationOrderId) {
         order = await MedicationOrder.findById(existing.medicationOrderId).session(session);
@@ -92,7 +97,13 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
         if (req.body.fields !== undefined) {
           const labResults = (await linkedLabResults([appointment._id], { session })).get(String(appointment._id)) ?? [];
           const previousPrescription = appointment.prescription;
+          const imageUploadBefore = Boolean(appointment.imageUpload);
           applyJournalFields(appointment, req.body.fields, { labResults });
+          // 日誌上勾起來或取消「上傳影像」：同一個 transaction 新增／收掉那筆院內待辦（跟櫃台處理視窗一樣）。
+          if (Boolean(appointment.imageUpload) !== imageUploadBefore) {
+            const createdBy = STAFF_SENDERS.includes(req.body.staff) ? req.body.staff : 'front_desk';
+            todosChanged = await syncImageUploadTodo(appointment, createdBy, { session });
+          }
           // 日誌上改了藥單：連著的藥單同一個 transaction 跟著改，兩邊不會各說各話。
           visitOrder = await syncOrderFromJournal(appointment, previousPrescription, req.user?.username || '', { session });
           appointment.increment();
@@ -115,6 +126,7 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
     });
     if (!note) return res.status(404).json({ message: '找不到病歷日誌' });
     if (appointment) emitAppointmentUpdate(appointment);
+    if (todosChanged) await publishTodos();
     if (order) emitMedicationUpdate(order);
     if (visitOrder) emitMedicationUpdate(visitOrder);
     const [view] = await clinicalNoteViews([note]);

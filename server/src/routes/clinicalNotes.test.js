@@ -6,6 +6,7 @@ import ClinicalNote from '../models/ClinicalNote.js';
 import LabResult from '../models/LabResult.js';
 import Appointment from '../models/Appointment.js';
 import MedicationOrder from '../models/MedicationOrder.js';
+import Todo from '../models/Todo.js';
 import mongoose from 'mongoose';
 
 // 關聯日誌編輯會回寫掛號；手動日誌保留原有操作。
@@ -171,6 +172,44 @@ describe('clinical notes routes', () => {
     );
     const cleared = await put({ fields: { reason: '', weightKg: null, visitNote: '', specialCareNote: '', followUpRecommendation: '' } });
     assert.equal(cleared.status, 422);
+  });
+
+  it('在日誌上改櫃台處理：處理事項整組取代，勾上傳影像同一個 transaction 新增待辦，取消則收掉', async () => {
+    const appointment = { _id: 'apt-linked', reason: '咳嗽', deskItems: [], imageUpload: null, imageUploadTodoId: null, increment() {}, async save() {} };
+    mock.method(Appointment, 'findById', () => ({ session: async () => appointment }));
+    // 待辦清單重讀（publishTodos）會查掛號與飼主；日誌檢視也查掛號：同一個假查詢兩邊都接得住。
+    mock.method(Appointment, 'find', () => { const q = { lean: async () => [], select: () => q }; return q; });
+    const created = [];
+    mock.method(Todo, 'create', async ([doc]) => { created.push(doc); return [{ _id: 'todo-1', ...doc }]; });
+    const deleted = [];
+    mock.method(Todo, 'deleteOne', filter => ({ session: async () => { deleted.push(filter); return { deletedCount: 1 }; } }));
+    mock.method(Todo, 'find', () => { const q = { lean: async () => [], select: () => q, session: () => q }; return { sort: () => ({ limit: () => q }) }; });
+    const put = body => fetch(`${origin}/api/clinical-notes/note-linked`, {
+      method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+
+    const first = await put({ fields: { deskItems: ['receipt', 'image_usb'], imageUpload: false }, staff: 'vet' });
+    assert.equal(first.status, 200);
+    assert.deepEqual(appointment.deskItems, ['image_usb', 'receipt']);
+    assert.equal(created.length, 0, '只改處理事項、上傳影像沒變，不新增待辦');
+
+    const ticked = await put({ fields: { deskItems: [], imageUpload: true }, staff: 'vet' });
+    assert.equal(ticked.status, 200);
+    assert.equal(appointment.imageUpload, true);
+    assert.deepEqual(appointment.deskItems, []);
+    assert.equal(created.length, 1);
+    assert.equal(created[0].createdBy, 'vet');
+    assert.equal(String(appointment.imageUploadTodoId), 'todo-1');
+
+    mock.method(Todo, 'exists', () => ({ session: async () => null }));
+    const unticked = await put({ fields: { imageUpload: false } });
+    assert.equal(unticked.status, 200);
+    assert.equal(appointment.imageUpload, false);
+    assert.equal(deleted.length, 1);
+    assert.equal(appointment.imageUploadTodoId, null);
+
+    const invalid = await put({ fields: { deskItems: ['receipt', 'receipt_no_stamp'] } });
+    assert.equal(invalid.status, 422);
   });
 
   it('藥單日誌可以更正內容（寫回藥單並留軌跡），但不能單獨刪除', async () => {
