@@ -56,6 +56,8 @@ export function emitAppointmentUpdate(appointment, previousDate) {
   // 帶 petId 的「這隻貓的日誌請重讀」。放在這裡而不是各路由自己 emit，才不會有路徑漏掉。
   const petId = payload.petId?._id ?? payload.petId;
   if (petId) emitClinicalNoteUpdate({ petId, appointmentId: payload._id });
+  // 報告清單的「櫃台處理狀態」也是由掛號推導的：櫃台完成處理、醫師送交或取回時，清單要跟著重讀。
+  if (payload.recordId) emitRecordsUpdate();
 }
 
 // IDEXX 檢驗結果的待確認清單有變動（收到新結果、有人確認／復原／忽略）；前端重讀工具欄的數字。

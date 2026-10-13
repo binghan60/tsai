@@ -31,6 +31,7 @@ import { reportPdfFilename } from '../../../shared/reportFilename.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { applyVisitEdits, hasVisitEdits, stripVisitFields, templateLabItems, visitOverlay } from '../lib/recordVisitLink.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
+import { deskStatusByRecordId } from '../lib/recordDeskStatus.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -419,7 +420,11 @@ recordsRouter.get('/', async (req, res, next) => {
       ).then(Object.fromEntries),
     ]);
 
-    res.json({ items, total, page, limit, view, counts });
+    // 櫃台處理狀態讓醫師看得出這筆看診櫃台做完了沒；報告沒連著看診時是空字串。
+    const deskStatuses = await deskStatusByRecordId(items.map((item) => item._id));
+    const rows = items.map((item) => ({ ...item.toJSON(), deskStatus: deskStatuses.get(String(item._id)) ?? '' }));
+
+    res.json({ items: rows, total, page, limit, view, counts });
   } catch (err) {
     next(err);
   }

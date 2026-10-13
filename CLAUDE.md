@@ -283,7 +283,7 @@ DELETE /api/clinical-notes/:id           只限手動／匯入；看診與藥單
 GET    /api/pets/:petId/records ／ POST /api/pets/:petId/records（templateId 必填）
 GET    /api/pets/:petId/records/previous-values   上次數值對照
 GET    /api/pets/:petId/records/finalized-sources 「從既有報告帶入」的來源清單
-GET    /api/records                      跨貓咪清單：?view= todo|drafts|pending|failed|sent|all、?q=、分頁；回 counts（佇列數字不套用搜尋）
+GET    /api/records                      跨貓咪清單：?view= todo|drafts|pending|failed|sent|all、?q=、分頁；回 counts（佇列數字不套用搜尋）；每列另帶 `deskStatus`（連著看診才有：`with_doctor`／`desk_pending`／`reopen_requested`／`desk_done`，否則空字串；由掛號即時推導，`shared/appointmentWorkflow.js` 的 `deskProcessingState`，不存欄位）
 GET    /api/records/:id ／ PUT /api/records/:id（帶 expectedVersion，連著看診的另收 visitEdits）
 POST   /api/records/:id/finalize         驗證必填 → 凍結 sections → 排 PDF；帶 autoSend: true 時記下 autoSendRequestedAt、PDF 產好自動寄出（信箱有問題回 autoSendError，照樣結案）
 POST   /api/records/:id/pdf/retry ／ GET /api/records/:id/pdf（加密後下載）
@@ -382,7 +382,7 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 | `/medications` | 藥單 | 清單頁模板；頁籤依裝置身分預設（醫師：待醫師確認；櫃台：未完成），點貓咪切到詳情。工具欄面板是同一個 `MedicationWorkspace` 的 `compact` 版。「藥單」是物件，「領藥」只指交付 |
 | `/pets`、`/pets/:id` | 貓咪 | 詳情頁：頁首名字、舊病歷號、藥物過敏、遲到／未到徽章、「約診需收保證金」；左貓咪右飼主兩欄可就地編輯；頁籤：病歷日誌（最上面就地新增）、健檢報告、出席紀錄（含保證金與已取消的掛號，可修改保證金紀錄；頁籤數字＝清單筆數）。遲到與未到只算這隻貓自己的 |
 | `/pets/new` | 新增貓咪 | 飼主與貓咪同一頁（既有飼主／新增飼主），寬螢幕左右兩欄，有離開前的未儲存提示 |
-| `/records` | 健檢報告清單 | 跨貓咪，佇列頁籤；寄送失敗的列左側紅線 |
+| `/records` | 健檢報告清單 | 跨貓咪，佇列頁籤；寄送失敗的列左側紅線；「櫃台處理」欄讓醫師看出這次看診櫃台做完了沒（醫師處理中／待櫃台處理／待核准修改／櫃台已完成，沒連著看診留白），掛號異動時清單跟著重讀 |
 | `/records/deliveries` | 寄送歷程 | 流水帳，含已刪除報告 |
 | `/pets/:petId/records/new`、`/records/:id/edit` | 健檢報告填寫 | 自動存草稿、離開前攔截；套用預填模板；連著看診的草稿有「引用本次看診」說明條（體重、體溫、檢驗數值在這裡改會寫回看診）與填入狀態燈號，有未處理的檢驗差異時自動跳比對視窗 |
 | `/records/:id/preview` | 報告預覽 | 結案、寄送、分享、下載 |

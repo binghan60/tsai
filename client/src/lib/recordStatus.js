@@ -27,6 +27,16 @@ export const DELIVERY_STATUS_META = {
   uncertain: { label: '結果待確認', class: 'border-danger/45 text-danger', dotClass: 'bg-danger/60' },
 };
 
+// 報告清單的「櫃台處理」欄：這筆看診櫃台那一端走到哪（shared/appointmentWorkflow.js 的 deskProcessingState）。
+// 醫師還在處理＝info（進行中，還沒輪到櫃台）；待櫃台處理與待核准修改＝warning（球在櫃台手上）；
+// 完成＝success。沒有連著看診或不在流程中時沒有狀態，欄位留白。
+export const DESK_STATUS_META = {
+  with_doctor: { label: '醫師處理中', class: 'bg-info-surface text-info', dotClass: 'bg-info' },
+  desk_pending: { label: '待櫃台處理', class: 'bg-warning-surface text-warning', dotClass: 'bg-warning' },
+  reopen_requested: { label: '待核准修改', class: 'bg-warning-surface text-warning', dotClass: 'bg-warning' },
+  desk_done: { label: '櫃台已完成', class: 'bg-success-surface text-success', dotClass: 'bg-success' },
+};
+
 // 寄送流水帳的事件。跟 DELIVERY_STATUS_META 分開是因為兩者回答的問題不同：
 // 那個是「這份報告現在的寄送狀態」，這個是「當時那一次嘗試發生了什麼」。
 export const DELIVERY_EVENT_META = {

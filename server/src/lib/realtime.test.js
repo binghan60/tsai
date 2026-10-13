@@ -34,6 +34,14 @@ describe('連動資料的即時通知', () => {
     assert.deepEqual(events.at(-1), { event: 'clinical-note:updated', payload: { petId: 'pet-9', appointmentId: 'apt-3' } });
   });
 
+  it('連著健檢報告的掛號有變：報告清單的櫃台處理狀態也要重讀', async () => {
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    events.length = 0;
+    emitAppointmentUpdate({ _id: 'apt-4', petId: 'pet-1', recordId: 'rec-1', date: '2026-10-13' });
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    assert.ok(events.some((item) => item.event === 'records:updated'));
+  });
+
   it('貓咪／報告的失效通知：短時間內多次合併成一次，而且延後發出（避開 transaction 還沒 commit）', async () => {
     events.length = 0;
     emitPatientsUpdate();

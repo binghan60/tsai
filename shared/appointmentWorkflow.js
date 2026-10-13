@@ -9,6 +9,22 @@ export function workflowState(appointment = {}) {
   };
 }
 
+// 健檢報告清單用：這筆看診目前在櫃台那一端的進度，讓醫師看得出「櫃台處理完了沒」。
+// 沒有連著看診、或看診不在流程中（待報到、已取消、未到）回空字串，由畫面留白。
+// 跟 workflowFilter 同一個口徑（依 status），已完成但醫師正在申請修改的另外標出來，因為那時櫃台還有事要做。
+export function deskProcessingState(appointment) {
+  if (!appointment) return '';
+  switch (appointment.status) {
+    case 'arrived': return 'with_doctor';
+    case 'pending_checkout': return 'desk_pending';
+    case 'completed': {
+      const request = appointment.reopenRequest;
+      return request?.requestedAt && !request.approvedAt ? 'reopen_requested' : 'desk_done';
+    }
+    default: return '';
+  }
+}
+
 // 每一個篩選鍵就是流水線上的一段，掛號在任一時刻只落在其中一格。依 status 分（總覽的數字也是），
 // 只有候診與看診中要再看 visitStartedAt。
 // 醫師端用 waiting／visiting／handoff／completed，櫃台端用 scheduled／onsite／handoff／followup／completed。

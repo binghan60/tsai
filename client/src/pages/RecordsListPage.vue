@@ -5,7 +5,7 @@ import PatientLink from '../components/PatientLink.vue';
 import { Cat, FileText, Plus } from '@lucide/vue';
 import { http } from '../api/http';
 import { formatDate as formatClinicDate, relativeDayLabel } from '../lib/datetime';
-import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
+import { DELIVERY_STATUS_META, DESK_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { useRoute, useRouter } from 'vue-router';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { usePagedList } from '../composables/usePagedList';
@@ -178,7 +178,7 @@ async function removeRecord(confirmText) {
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
-    <DataCard title="報告清單" :count="loading && !total ? null : total" style="--data-columns: minmax(12rem, 1.6fr) minmax(8rem, 1fr) minmax(9rem, 1.2fr) 8.5rem minmax(11rem, 1.2fr) 11rem">
+    <DataCard title="報告清單" :count="loading && !total ? null : total" style="--data-columns: minmax(9rem, 1.2fr) minmax(6.5rem, 0.9fr) minmax(8rem, 1.3fr) minmax(7rem, 0.7fr) minmax(5rem, 0.5fr) minmax(7rem, 0.7fr) minmax(7rem, 0.7fr) 8.5rem">
       <template #filters>
         <FilterBar
           id="records-search"
@@ -205,7 +205,7 @@ async function removeRecord(confirmText) {
       <!-- 桌機：一列一份。寄送失敗的列左側一條警示色條。 -->
       <div class="hidden xl:block">
         <div class="desktop-data-header">
-          <span>貓咪</span><span>飼主</span><span>健檢類型</span><span>看診日</span><span>狀態</span><span></span>
+          <span>貓咪</span><span>飼主</span><span>健檢類型</span><span>看診日</span><span>報告</span><span>寄送</span><span>櫃台處理</span><span></span>
         </div>
         <div
           v-for="record in records"
@@ -226,9 +226,14 @@ async function removeRecord(confirmText) {
             <span class="num block text-sm">{{ formatDate(record.visitDate) }}</span>
             <span class="block text-xs text-subtle-foreground">{{ relativeDayLabel(record.visitDate) }}</span>
           </span>
-          <span class="desktop-data-cell flex flex-wrap items-center gap-1.5">
+          <span class="desktop-data-cell">
             <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
+          </span>
+          <span class="desktop-data-cell">
             <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" v-tip="record.deliveryError || undefined">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
+          </span>
+          <span class="desktop-data-cell">
+            <Badge v-if="DESK_STATUS_META[record.deskStatus]" variant="status" :class="DESK_STATUS_META[record.deskStatus].class">{{ DESK_STATUS_META[record.deskStatus].label }}</Badge>
           </span>
           <span class="desktop-data-cell flex items-center justify-end gap-1">
             <Button as-child variant="soft" size="sm"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
@@ -251,6 +256,7 @@ async function removeRecord(confirmText) {
           <div class="flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
             <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
+            <Badge v-if="DESK_STATUS_META[record.deskStatus]" variant="status" :class="DESK_STATUS_META[record.deskStatus].class">{{ DESK_STATUS_META[record.deskStatus].label }}</Badge>
             <Button as-child variant="soft" size="sm" class="ml-auto"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
           </div>
           <p v-if="record.deliveryError" class="text-sm text-danger">{{ record.deliveryError }}</p>

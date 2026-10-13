@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { applyJournalFields, applyWorkflowAction, appointmentJournalContent, appointmentJournalFields, appointmentJournalSections, assertWorkflowVersion } from './appointmentWorkflow.js';
-import { workflowState, workflowFilter } from '../../../shared/appointmentWorkflow.js';
+import { workflowState, workflowFilter, deskProcessingState } from '../../../shared/appointmentWorkflow.js';
 
 const appointment = () => ({ __v: 0, status: 'arrived', petId: 'pet-1', checkinNumber: 3, checkinNumberHistory: [3] });
 
@@ -218,6 +218,21 @@ test('every filter key owns one segment of the line, so the counts partition the
   assert.equal(counts.reduce((sum, n) => sum + n, 0), day.length);
   // 櫃台的「在院中」就是候診＋看診中這兩段合起來。
   assert.equal(day.filter(item => workflowFilter(item, 'onsite')).length, 2);
+});
+
+test('報告清單的櫃台處理狀態：依看診走到哪一段，不在流程中的留白', () => {
+  assert.equal(deskProcessingState(null), '');
+  assert.equal(deskProcessingState({ status: 'scheduled' }), '');
+  assert.equal(deskProcessingState({ status: 'cancelled' }), '');
+  assert.equal(deskProcessingState({ status: 'no_show' }), '');
+  assert.equal(deskProcessingState({ status: 'arrived' }), 'with_doctor');
+  assert.equal(deskProcessingState({ status: 'pending_checkout' }), 'desk_pending');
+  assert.equal(deskProcessingState({ status: 'completed' }), 'desk_done');
+  // 申請修改還沒核准時櫃台還有事；核准後 status 會退回待櫃台處理，舊的申請紀錄不影響。
+  const requested = { requestedAt: new Date(), approvedAt: null };
+  assert.equal(deskProcessingState({ status: 'completed', reopenRequest: requested }), 'reopen_requested');
+  assert.equal(deskProcessingState({ status: 'completed', reopenRequest: { ...requested, approvedAt: new Date() } }), 'desk_done');
+  assert.equal(deskProcessingState({ status: 'pending_checkout', reopenRequest: { ...requested, approvedAt: new Date() } }), 'desk_pending');
 });
 
 test('follow-up bucket only holds visits the vet asked to return that have no booking yet', () => {
