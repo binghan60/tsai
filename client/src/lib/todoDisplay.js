@@ -15,6 +15,19 @@ export const DUE_TONE_CLASS = {
   info: 'bg-info-surface text-info',
 };
 
+// 待辦的顏色標記（Todo.color）：名稱同 shared/todoColors.js；前四色對應狀態語意 token，紫用 surgery、青用 primary／accent，文字顏色同一組。
+// class 全部寫成完整字串，Tailwind 才掃得到。row＝整列底色、dot＝總覽的色點、swatch＝選單裡的實心色塊（邊框同色）。
+export const TODO_COLORS = [
+  { key: 'red', label: '紅色', row: 'bg-danger-surface', dot: 'fill-danger text-danger', swatch: 'bg-danger border-danger' },
+  { key: 'orange', label: '橙色', row: 'bg-warning-surface', dot: 'fill-warning text-warning', swatch: 'bg-warning border-warning' },
+  { key: 'green', label: '綠色', row: 'bg-success-surface', dot: 'fill-success text-success', swatch: 'bg-success border-success' },
+  { key: 'blue', label: '藍色', row: 'bg-info-surface', dot: 'fill-info text-info', swatch: 'bg-info border-info' },
+  { key: 'purple', label: '紫色', row: 'bg-surgery-surface', dot: 'fill-surgery text-surgery', swatch: 'bg-surgery border-surgery' },
+  { key: 'teal', label: '青色', row: 'bg-accent', dot: 'fill-primary text-primary', swatch: 'bg-primary border-primary' },
+];
+
+export const todoColor = (key) => TODO_COLORS.find((color) => color.key === key) ?? null;
+
 // 沒有期限、或日期讀不懂時回 null，畫面就不出徽章。
 export function dueStatus(dueDate, today) {
   const due = toDayNumber(dueDate);

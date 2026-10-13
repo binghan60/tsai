@@ -6,6 +6,7 @@ import { mentionSnapshots, parseMentionIds } from '../lib/petMentions.js';
 import { isValidDateInput, listTodos, moveTodo, publishTodos, searchDoneTodos } from '../lib/todos.js';
 import { recordImageUploadTodoDone } from '../lib/imageUploadTodo.js';
 import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
+import { TODO_COLOR_KEYS } from '../../../shared/todoColors.js';
 
 const router = Router();
 
@@ -103,9 +104,12 @@ router.put('/:id', async (req, res, next) => {
       if (progressError) return invalid(res, progressError);
       todo.progress = progress;
     }
-    if (body.starred !== undefined) {
-      if (typeof body.starred !== 'boolean') return invalid(res, '星號參數不正確');
-      todo.starred = body.starred;
+    // 顏色標記：紅／橙／綠／藍／紫／青，空字串＝拿掉。
+    if (body.color !== undefined) {
+      if (typeof body.color !== 'string' || (body.color && !TODO_COLOR_KEYS.includes(body.color))) {
+        return invalid(res, '顏色參數不正確');
+      }
+      todo.color = body.color;
     }
     // mentions 帶了就整組取代（前端改內文時會把還留在內文裡的標記一起送回來）；沒帶則不動。
     if (body.mentions !== undefined) {

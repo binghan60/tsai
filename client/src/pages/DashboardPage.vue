@@ -1,9 +1,9 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import PatientLink from '../components/PatientLink.vue'
-import { AlertTriangle, ArrowRight, ListTodo, Star } from '@lucide/vue'
+import { AlertTriangle, ArrowRight, Circle, ListTodo } from '@lucide/vue'
 import { clinicDateInput, clinicTimeInput, weekdayLabel } from '../lib/datetime'
-import { DUE_TONE_CLASS, dueStatus } from '../lib/todoDisplay'
+import { DUE_TONE_CLASS, dueStatus, todoColor } from '../lib/todoDisplay'
 import { http } from '../api/http'
 import { useTodosStore } from '../stores/todos'
 import { useUtilityPanelStore } from '../stores/utilityPanel'
@@ -225,7 +225,7 @@ async function completeTodo(item) {
                 :aria-label="`完成：${richTextToPlain(item.content)}`"
                 @update:model-value="completeTodo(item)"
               />
-              <Star v-if="item.starred" class="size-4 shrink-0 fill-star text-star-outline" stroke-width="1.75" role="img" aria-label="已標星號" />
+              <Circle v-if="todoColor(item.color)" class="size-4 shrink-0" :class="todoColor(item.color).dot" stroke-width="1.75" role="img" :aria-label="`標示${todoColor(item.color).label}`" />
               <button type="button" class="min-w-0 flex-1 text-left hover:text-primary" @click="panel.open('todos')"><RichText tag="span" one-line class="block" :text="item.content" v-tip.overflow="richTextToPlain(item.content)" /></button>
               <span v-if="dueStatus(item.dueDate, todayInput)" class="inline-flex h-6 shrink-0 items-center rounded-full px-2 text-2xs leading-none font-semibold" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, todayInput).tone]">{{ dueStatus(item.dueDate, todayInput).label }}</span>
             </li>

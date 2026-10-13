@@ -54,9 +54,9 @@
 
 ## 三、資料模型（MongoDB collections）
 
-### 格式標記（粗體／四色）
+### 格式標記（粗體／六色）
 
-本次簡易紀錄 `appointments.visitNote`、診療台藥單 `appointments.prescription`、藥單的 `condition`／`prescription`／`note`、待辦 `todos.content`、文字模板 `textTemplates.content`，以及**健檢報告所有多行文字項目**（`type: 'textarea'`）可以加粗與上色（紅／橙／綠／藍，對應 `danger`／`warning`／`success`／`info`）。欄位仍是一般字串，內容是 `shared/richText.js` 的極簡標記：粗體 `**字**`、顏色 `[red]字[/red]`，換行就是 `\n`、標記不跨行，`\` 跳脫 `\ * [`（不用 `#`，那是寵物標記）。前後端共用 `parseRichText`／`normalizeRichText`／`richTextToPlain`／`richTextLength`：
+本次簡易紀錄 `appointments.visitNote`、診療台藥單 `appointments.prescription`、藥單的 `condition`／`prescription`／`note`、待辦 `todos.content`、文字模板 `textTemplates.content`，以及**健檢報告所有多行文字項目**（`type: 'textarea'`）可以加粗與上色（紅／橙／綠／藍／紫／青，對應 `danger`／`warning`／`success`／`info`／`surgery`／`primary`；報告紙面走 `report-*` token）。欄位仍是一般字串，內容是 `shared/richText.js` 的極簡標記：粗體 `**字**`、顏色 `[red]字[/red]`，換行就是 `\n`、標記不跨行，`\` 跳脫 `\ * [`（不用 `#`，那是寵物標記）。前後端共用 `parseRichText`／`normalizeRichText`／`richTextToPlain`／`richTextLength`：
 
 - **存之前一律 `normalizeRichText`**（編輯器送出的字串跟伺服器整理後的一致，自動存檔才不會一存就被判成「有修改」）；**字數上限與「不可空白」都看純文字**（schema 用 `lib/richTextSchema.js` 的 `richTextMaxLength`），只剩標記算空白。
 - **顯示一律走 `RichText.vue`**（拆成片段、文字插值輸出，**永遠不用 `v-html`**）。清單上的一行摘要用 `RichText one-line`（換行以 `joiner` 接起來），多行截斷加 `line-clamp-*`——摘要也要畫出顏色。編輯用 `RichTextEditor.vue`（Tiptap）。
@@ -186,9 +186,9 @@
 
 ### todos 院內待辦
 
-`content`（可格式化，≤500 字）、`createdBy`、`dueDate`、`starred`（星號，只是標記、不影響順序）、`sortOrder`（手動順序）、`status`（`open`／`done`）、`doneAt`、`doneBy`、`progress`（處理過程，純文字可多行 ≤500 字；只在未完成時能寫（`PUT` 對已完成的回 409），完成後純展示，改回未完成才又能改；未完成而有內容時畫面標「處理中」——不是另一個 status）、`mentions[]`（內文的 `#` 標記，≤5 隻；不會放進暫存區）。全站共用的行政雜務清單，沒有指派對象、沒有重複待辦。
+`content`（可格式化，≤500 字）、`createdBy`、`dueDate`、`color`（使用者自選的顏色標記：`red`／`orange`／`green`／`blue`／`purple`／`teal`，`shared/todoColors.js`，空字串＝沒標；只是標記、不影響順序）、`sortOrder`（手動順序）、`status`（`open`／`done`）、`doneAt`、`doneBy`、`progress`（處理過程，純文字可多行 ≤500 字；只在未完成時能寫（`PUT` 對已完成的回 409），完成後純展示，改回未完成才又能改；未完成而有內容時畫面標「處理中」——不是另一個 status）、`mentions[]`（內文的 `#` 標記，≤5 隻；不會放進暫存區）。全站共用的行政雜務清單，沒有指派對象、沒有重複待辦。
 
-- **未完成清單完全照手動順序**（拖拉排序，`shared/todoOrder.js`）：期限、星號都不影響位置。`sortOrder` 沒有值時以建立時間（毫秒）代替，所以新增的在最下面；改回未完成換成當下時間、回到最下面。**這欄刻意不設 schema default**（Mongoose 讀出舊文件會補 default、下次 save 就寫進去，舊待辦一改就跳到最下面）。拖拉＝`POST /:id/move { beforeId }`（null＝最後），在 transaction 裡把整份未完成清單重新編號 0、1、2…；要排的那筆或 `beforeId` 已經不在未完成清單上回 409 附最新清單。
+- **未完成清單完全照手動順序**（拖拉排序，`shared/todoOrder.js`）：期限、顏色都不影響位置。`sortOrder` 沒有值時以建立時間（毫秒）代替，所以新增的在最下面；改回未完成換成當下時間、回到最下面。**這欄刻意不設 schema default**（Mongoose 讀出舊文件會補 default、下次 save 就寫進去，舊待辦一改就跳到最下面）。拖拉＝`POST /:id/move { beforeId }`（null＝最後），在 transaction 裡把整份未完成清單重新編號 0、1、2…；要排的那筆或 `beforeId` 已經不在未完成清單上回 409 附最新清單。
 - `GET /api/todos` 回未完成（上限 200，超過時留最新建立的）＋最近完成 50 筆；任何異動後整份重讀並廣播。
 - **「上傳影像」待辦附飼主 Email**：`listTodos` 對未完成的待辦用 `imageUploadTodoId` 反查掛號 → 飼主，即時帶回 `ownerEmail`（不在待辦上存快照，飼主改了信箱跟著對；沒連到掛號或飼主沒填的不帶這欄）。面板上 Email 接在內文同一行（「#貓咪名 要寄影像 email」，放不下時整串換行），整串字是複製鈕，點一下複製。Email 不寫進 `content`，所以內文不會因飼主改信箱而過時。飼主在別處改了 Email 不會觸發待辦廣播，下一次清單異動或重新整理才更新。
 - 搜尋：未完成的在前端比對（`lib/todoDisplay.js` 的 `todoMatches`）；已完成的走 `GET /api/todos/search?q=`，查全部歷史（不只最近 50 筆，最多 200 筆、新到舊）。兩邊比對同樣三處：去掉格式標記的內文、處理過程、`#` 標記的貓咪名字。搜尋中不能拖拉排序。

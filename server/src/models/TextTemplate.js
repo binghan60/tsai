@@ -4,7 +4,7 @@ import { richTextMaxLength } from '../lib/richTextSchema.js';
 const textTemplateSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 80 },
-    // 帶格式標記（shared/richText.js）：粗體與四色。字數上限算純文字。
+    // 帶格式標記（shared/richText.js）：粗體與六色。字數上限算純文字。
     content: { type: String, required: true, trim: true, validate: richTextMaxLength(2000) },
     availableForAllFields: { type: Boolean, default: false },
     applicableItemKeys: [{ type: String, trim: true }],

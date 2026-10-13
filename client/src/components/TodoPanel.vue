@@ -2,7 +2,7 @@
 import { useClientPagination } from '../composables/useClientPagination';
 import { apiErrorMessage } from '../lib/apiError.js';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { Check, ChevronDown, Copy, CornerDownRight, GripVertical, ListTodo, Pencil, Plus, Search, Star, Trash2 } from '@lucide/vue';
+import { Check, ChevronDown, CircleSlash, Copy, CornerDownRight, GripVertical, ListTodo, Pencil, Plus, Search, Trash2 } from '@lucide/vue';
 import { useTodosStore } from '../stores/todos';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
@@ -10,7 +10,7 @@ import { useToast } from '../composables/useToast';
 import { useCopy } from '../composables/useCopy';
 import { clinicDateInput, formatDateTime } from '../lib/datetime';
 import { mentionsStillInContent, splitMentionSegments } from '../lib/chatMentions';
-import { DUE_TONE_CLASS, dueStatus, todoMatches } from '../lib/todoDisplay';
+import { DUE_TONE_CLASS, TODO_COLORS, dueStatus, todoColor, todoMatches } from '../lib/todoDisplay';
 import { dropBeforeId, stepBeforeId } from '../lib/dragReorder';
 import { useDragReorder } from '../composables/useDragReorder';
 import { Badge } from './ui/badge';
@@ -106,7 +106,7 @@ watch([view, searchTerm], () => { page.value = 1; });
 defineExpose({ page, totalPages, goToPage });
 
 // 拖拉排序：只排未完成的（「全部」頁籤裡未完成的也排在前面，一樣能拖）。清單有分頁，只拖得到這一頁；
-// 跨頁用把手上的方向鍵一格一格移。順序完全由人決定，期限、星號都不影響位置。
+// 跨頁用把手上的方向鍵一格一格移。順序完全由人決定，期限、顏色都不影響位置。
 // 搜尋中不能排：篩過的清單不是連續的一段，拖完不知道該插在完整清單的哪裡。
 const sortable = computed(() => !searching.value && view.value !== 'done' && store.openItems.length > 1);
 const pageOpenIds = computed(() => pageItems.value.filter((item) => item.status === 'open').map((item) => item._id));
@@ -215,22 +215,25 @@ function startEdit(item) {
   editMentions.value = (item.mentions ?? []).filter((m) => m.petId).map((m) => ({ petId: String(m.petId), petName: m.petName }));
 }
 
-// 已完成的星號不亮底色：完成了就不再「比較急」，槓掉的內文配淡橙底反而搶眼。
-const isStarred = (item) => item.status === 'open' && Boolean(item.starred);
+// 已完成的不亮底色：完成了就不再「比較急」，槓掉的內文配彩色底反而搶眼。
+const markColor = (item) => (item.status === 'open' ? todoColor(item.color) : null);
 
-// 「⋯」選單：星號、編輯（只有未完成的）、刪除。處理過程不在這裡——每列最右邊有手風琴的展開鈕。
-// 星號收進選單：標了星號的整列是淡橙底、時間那行有一顆亮黃星，不必再佔一顆常駐按鈕的寬度。
+// 「⋯」選單：標示顏色（六色，已標的那色不列，另有「取消顏色」）、編輯（只有未完成的）、刪除。處理過程不在這裡——
+// 每列最右邊有手風琴的展開鈕。顏色收進選單：標了顏色的整列換成該色淡底，不必常駐一顆按鈕。
 function rowActions(item) {
   const open = item.status === 'open';
   return [
-    ...(open ? [{ key: 'star', label: item.starred ? '取消星號' : '標星號', icon: Star }] : []),
+    ...(open ? TODO_COLORS.filter((color) => color.key !== item.color).map((color) => ({
+      key: `color:${color.key}`, label: `標示${color.label}`, swatch: color.swatch,
+    })) : []),
+    ...(open && item.color ? [{ key: 'color:', label: '取消顏色', icon: CircleSlash }] : []),
     ...(open ? [{ key: 'edit', label: '編輯', icon: Pencil }] : []),
     { key: 'delete', label: '刪除', icon: Trash2, danger: true, disabled: busyId.value === item._id },
   ];
 }
 
 function runRowAction(key, item) {
-  if (key === 'star') run(item._id, () => store.update(item._id, { starred: !item.starred }), '操作失敗，請稍後再試');
+  if (key.startsWith('color:')) run(item._id, () => store.update(item._id, { color: key.slice('color:'.length) }), '操作失敗，請稍後再試');
   if (key === 'edit') startEdit(item);
   if (key === 'delete') run(item._id, () => store.remove(item._id), '刪除失敗，請稍後再試');
 }
@@ -316,8 +319,8 @@ async function saveEdit(item) {
         class="group grid items-start gap-3 py-3 pr-5"
         :class="[
           sortable ? 'grid-cols-[1.75rem_2rem_minmax(0,1fr)_auto] pl-2' : 'grid-cols-[2rem_minmax(0,1fr)_auto] pl-5',
-          isStarred(item) ? 'bg-warning-surface' : '',
-          drag.dragging.value?.from === pageOpenIds.indexOf(item._id) ? ['shadow-lg ring-1 ring-border-strong', isStarred(item) ? '' : 'bg-card'] : '',
+          markColor(item)?.row ?? '',
+          drag.dragging.value?.from === pageOpenIds.indexOf(item._id) ? ['shadow-lg ring-1 ring-border-strong', markColor(item) ? '' : 'bg-card'] : '',
         ]"
         :data-drag-row="sortable && item.status === 'open' ? '' : undefined"
         :style="sortable && item.status === 'open' ? drag.rowStyle(pageOpenIds.indexOf(item._id)) : undefined"
@@ -356,7 +359,7 @@ async function saveEdit(item) {
         </Checkbox>
 
         <!-- 編輯中：輸入框連同右邊按鈕那一欄一起佔滿（格式工具列在輸入框上方，窄了會擠成兩行），
-             儲存／取消放在輸入框下面靠右，右邊的星號與選單先收起來。 -->
+             儲存／取消放在輸入框下面靠右，右邊的選單先收起來。 -->
         <form v-if="editingId === item._id" class="col-span-2 min-w-0 space-y-2" @submit.prevent="saveEdit(item)">
           <TodoMentionInput v-model="editText" v-model:mentions="editMentions" maxlength="500" aria-label="編輯待辦內容" @submit="saveEdit(item)" />
           <div class="flex justify-end gap-2">
@@ -384,9 +387,8 @@ async function saveEdit(item) {
           </button>
           </div>
 
-          <!-- 時間這一行：星號（標了才畫）、「處理中」（未完成而寫了處理過程；info＝還在進行的狀態）、期限、建立／完成。 -->
+          <!-- 時間這一行：「處理中」（未完成而寫了處理過程；info＝還在進行的狀態）、期限、建立／完成。 -->
           <p class="flex flex-wrap items-center gap-2 text-xs text-subtle-foreground">
-            <Star v-if="isStarred(item)" class="size-4 shrink-0 fill-star text-star-outline" stroke-width="1.75" role="img" aria-label="已標星號" />
             <Badge v-if="inProgress(item)" variant="status" class="bg-info-surface text-info">處理中</Badge>
             <Badge v-if="item.status === 'open' && dueStatus(item.dueDate, clinicDateInput())" variant="status" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, clinicDateInput()).tone]">{{ dueStatus(item.dueDate, clinicDateInput()).label }}</Badge>
             {{ metaLabel(item) }}
@@ -400,7 +402,7 @@ async function saveEdit(item) {
           </p>
         </div>
 
-        <!-- 右邊兩顆：「⋯」（星號、編輯、刪除）與手風琴的展開鈕。展開鈕放最右邊，每一列同一個位置；已完成的沒有展開鈕。 -->
+        <!-- 右邊兩顆：「⋯」（標示顏色、編輯、刪除）與手風琴的展開鈕。展開鈕放最右邊，每一列同一個位置；已完成的沒有展開鈕。 -->
         <div v-if="editingId !== item._id" class="flex shrink-0 items-center gap-1">
           <RowActions :actions="rowActions(item)" :label="`更多操作：${plain(item.content)}`" @select="(key) => runRowAction(key, item)" />
           <Button

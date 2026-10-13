@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { richTextMaxLength } from '../lib/richTextSchema.js';
+import { TODO_COLOR_KEYS } from '../../../shared/todoColors.js';
 
 // 全站共用的院內待辦：「明天叫貨」「回電給王小姐」這類行政雜務，跟任何掛號無關。
 // 沒有指派對象——診所只有醫師／櫃台兩種裝置身分，指派沒有可以落腳的「人」。
@@ -14,12 +15,13 @@ const todoSchema = new mongoose.Schema(
     createdBy: { type: String, enum: ['vet', 'front_desk'], required: true },
     // YYYY-MM-DD 字串，理由跟 Appointment.date 一樣：避免日期因伺服器時區偏移。
     dueDate: { type: String, default: null, match: /^\d{4}-\d{2}-\d{2}$/ },
-    // 星號只是標記（「這件比較急」），不影響排序。
-    starred: { type: Boolean, default: false },
+    // 使用者自己標的顏色（紅／橙／綠／藍／紫／青，shared/todoColors.js；空字串＝沒標）。
+    // 只是標記（「這件比較急」「這類是叫貨」），不影響排序，意義由使用者自己決定。
+    color: { type: String, enum: ['', ...TODO_COLOR_KEYS], default: '' },
     // 手動順序（拖拉排序，shared/todoOrder.js）：數字小的在上面。沒有值時以建立時間（毫秒）代替，
     // 所以新增的一律在最下面；拖拉後整份未完成清單重新編號；改回未完成時換成當下時間，回到最下面。
     // 刻意不設 default：Mongoose 讀出沒有這欄的舊文件時會補上 default，下次 save 就寫進去，
-    // 一筆舊待辦只是標個星號就會跳到最下面。
+    // 一筆舊待辦只是標個顏色就會跳到最下面。
     sortOrder: { type: Number },
     status: { type: String, enum: ['open', 'done'], default: 'open' },
     doneAt: { type: Date, default: null },

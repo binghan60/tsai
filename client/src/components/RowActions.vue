@@ -6,7 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 // 清單每一列的次要操作。主要操作留在列上，其餘收進這個選單，
 // 一列上才不會並排四五顆同等重量的按鈕。危險項放在最後、前面隔一條線、靜止時就是紅字。
 const props = defineProps({
-  // [{ key, label, icon?, danger?, disabled? }]
+  // [{ key, label, icon?, swatch?, danger?, disabled? }]；swatch 是背景色 class，畫成小圓色塊（背景與邊框用同色系 class）
   actions: { type: Array, required: true },
   label: { type: String, default: '更多操作' },
   triggerText: { type: String, default: '' },
@@ -44,7 +44,8 @@ function isFirstDanger(action, index) {
           :disabled="action.disabled"
           @select="emit('select', action.key)"
         >
-          <component :is="action.icon" v-if="action.icon" stroke-width="1.75" />
+          <span v-if="action.swatch" class="size-4 shrink-0 rounded-full border" :class="action.swatch" aria-hidden="true" />
+          <component :is="action.icon" v-else-if="action.icon" stroke-width="1.75" />
           {{ action.label }}
         </DropdownMenuItem>
       </template>

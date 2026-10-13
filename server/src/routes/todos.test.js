@@ -44,9 +44,9 @@ function mockTodoDoc(fields) {
 }
 
 describe('todo lib', () => {
-  it('未完成清單完全照手動順序：星號與期限不影響位置', () => {
+  it('未完成清單完全照手動順序：顏色與期限不影響位置', () => {
     const rows = [
-      { _id: 'a', sortOrder: 2, starred: true, dueDate: '2026-09-01', createdAt: '2026-09-01T00:00:00Z' },
+      { _id: 'a', sortOrder: 2, color: 'red', dueDate: '2026-09-01', createdAt: '2026-09-01T00:00:00Z' },
       { _id: 'b', sortOrder: 0, dueDate: null, createdAt: '2026-09-03T00:00:00Z' },
       { _id: 'c', sortOrder: 1, dueDate: '2026-09-30', createdAt: '2026-08-01T00:00:00Z' },
     ];
@@ -64,7 +64,7 @@ describe('todo lib', () => {
 
   it('sortOrder 沒有 default：舊待辦被讀出來改別的欄位，不會被寫入順序而跳到最下面', () => {
     const doc = Todo.hydrate({ _id: todoId, content: '舊待辦', createdBy: 'vet', status: 'open', createdAt: new Date('2026-01-01') });
-    doc.starred = true;
+    doc.color = 'red';
     assert.equal(doc.getChanges().$set.sortOrder, undefined);
   });
 
@@ -194,17 +194,20 @@ describe('todos routes', () => {
     assert.equal((await put(`/${todoId}`, { content: '內容' })).status, 404);
   });
 
-  it('PUT starred 標上／拿掉星號，不動其他欄位；不是布林回 422', async () => {
-    const doc = mockTodoDoc({ content: '內容', dueDate: '2026-09-25', starred: false });
+  it('PUT color 標上／換色／拿掉顏色，不動其他欄位；不認得的顏色回 422', async () => {
+    const doc = mockTodoDoc({ content: '內容', dueDate: '2026-09-25', color: '' });
     mockList();
-    assert.equal((await put(`/${todoId}`, { starred: true })).status, 200);
-    assert.equal(doc.starred, true);
+    assert.equal((await put(`/${todoId}`, { color: 'red' })).status, 200);
+    assert.equal(doc.color, 'red');
     assert.equal(doc.content, '內容');
     assert.equal(doc.dueDate, '2026-09-25');
-    assert.equal((await put(`/${todoId}`, { starred: false })).status, 200);
-    assert.equal(doc.starred, false);
-    assert.equal((await put(`/${todoId}`, { starred: 'yes' })).status, 422);
-    assert.equal(doc.saved, 2);
+    assert.equal((await put(`/${todoId}`, { color: 'blue' })).status, 200);
+    assert.equal(doc.color, 'blue');
+    assert.equal((await put(`/${todoId}`, { color: '' })).status, 200);
+    assert.equal(doc.color, '');
+    assert.equal((await put(`/${todoId}`, { color: 'pink' })).status, 422);
+    assert.equal((await put(`/${todoId}`, { color: true })).status, 422);
+    assert.equal(doc.saved, 3);
   });
 
   it('完成是冪等的：已完成的不會被覆寫完成時間', async () => {
@@ -261,13 +264,13 @@ describe('todos routes', () => {
   });
 
   it('處理過程：已完成的不能改（409），其他欄位照樣能改', async () => {
-    const doc = mockTodoDoc({ status: 'done', content: '回電', progress: '10/13 已回電', starred: false });
+    const doc = mockTodoDoc({ status: 'done', content: '回電', progress: '10/13 已回電', color: '' });
     mockList();
     assert.equal((await put(`/${todoId}`, { progress: '偷改' })).status, 409);
     assert.equal(doc.progress, '10/13 已回電');
     assert.equal(doc.saved, 0);
-    assert.equal((await put(`/${todoId}`, { starred: true })).status, 200);
-    assert.equal(doc.starred, true);
+    assert.equal((await put(`/${todoId}`, { color: 'green' })).status, 200);
+    assert.equal(doc.color, 'green');
   });
 
   it('GET /search 只查已完成、比對內文／處理過程／貓咪名字（關鍵字當字面字串）；沒關鍵字回空', async () => {

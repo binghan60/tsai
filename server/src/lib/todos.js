@@ -9,7 +9,7 @@ import { compareTodoOrder, moveBefore } from '../../../shared/todoOrder.js';
 export const MAX_OPEN_TODOS = 200;
 export const MAX_DONE_TODOS = 50;
 
-// 完全照手動順序（拖拉排序）：期限、星號都不影響位置。
+// 完全照手動順序（拖拉排序）：期限、顏色標記都不影響位置。
 // 未完成清單上限 200 筆、在記憶體裡排，跟資料庫的 32MB 排序上限無關。
 export function sortOpenTodos(rows) {
   return [...rows].sort(compareTodoOrder);

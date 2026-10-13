@@ -21,8 +21,8 @@ describe('parseRichText', () => {
   });
 
   it('單一星號、不認得的方括號與跳脫都當成文字', () => {
-    assert.deepEqual(parseRichText('3*2 [備註] [purple]x[/purple] \\*\\*不是粗體'), [[
-      { text: '3*2 [備註] [purple]x[/purple] **不是粗體', bold: false, color: null },
+    assert.deepEqual(parseRichText('3*2 [備註] [pink]x[/pink] \\*\\*不是粗體'), [[
+      { text: '3*2 [備註] [pink]x[/pink] **不是粗體', bold: false, color: null },
     ]]);
   });
 
@@ -64,7 +64,7 @@ describe('Tiptap 文件轉換', () => {
   });
 
   it('文件裡不認得的顏色被丟掉', () => {
-    const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '字', marks: [{ type: 'tint', attrs: { color: 'purple' } }] }] }] };
+    const doc = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: '字', marks: [{ type: 'tint', attrs: { color: 'pink' } }] }] }] };
     assert.equal(docToRichText(doc), '字');
   });
 });

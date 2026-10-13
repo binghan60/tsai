@@ -1,6 +1,6 @@
 // 自由文字欄位的輕量格式標記（本次簡易紀錄、藥單、待辦）。欄位仍是一般字串，只多兩種標記：
 //   粗體  **文字**
-//   顏色  [red]文字[/red]    只認 RICH_TEXT_COLORS 的四個名字
+//   顏色  [red]文字[/red]    只認 RICH_TEXT_COLORS 的六個名字
 // 換行就是 \n，標記不跨行；\ 可跳脫 \ * [。
 //
 // 為什麼不存 HTML：顯示端用這裡的 parser 拆成片段、以文字插值渲染，永遠不必 v-html，
@@ -15,6 +15,8 @@ export const RICH_TEXT_COLORS = Object.freeze({
   orange: 'warning',
   green: 'success',
   blue: 'info',
+  purple: 'surgery',
+  teal: 'primary',
 });
 
 const COLOR_NAMES = Object.keys(RICH_TEXT_COLORS);
