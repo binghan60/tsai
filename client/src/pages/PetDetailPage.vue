@@ -8,6 +8,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
 import { http } from '../api/http';
+import { useLiveReload } from '../composables/useLiveReload';
 import { ageLabel as calcAgeLabel, clinicDateInput, formatDate as formatClinicDate, formatDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { Button } from '../components/ui/button';
@@ -253,6 +254,17 @@ const {
   error: attendanceError,
   load: loadAttendance,
 } = usePetAttendance(() => route.params.id);
+
+// 連動的資料用 websocket 推：貓咪／飼主資料（別台改了）、這隻貓的健檢報告（結案、PDF、寄送結果）、
+// 這隻貓的看診日誌與出席紀錄（掛號有變）。靜默重讀，編輯中的表單是另存的一份，不受影響。
+useLiveReload(() => {
+  if (!pet.value) return;
+  fetchPet();
+  loadAttendance({ silent: true });
+}, {
+  events: ['patients:updated', 'records:updated', 'clinical-note:updated'],
+  match: (event, payload) => event !== 'clinical-note:updated' || String(payload?.petId ?? '') === String(route.params.id),
+});
 
 async function openAttendance() {
   activeSection.value = 'attendance';

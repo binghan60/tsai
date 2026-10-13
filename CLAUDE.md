@@ -23,6 +23,7 @@
 - **看診（掛號文件）是看診資料的唯一存放處。** 病歷日誌與連著看診的健檢報告草稿都不另存一份，而是讀取時即時引用看診；從日誌或報告改，就是寫回看診。
 - **報告結案後鎖定不可改。** 要更正得建立修訂版（新的一份，舊版保留並標記 `supersededBy`）。結案時把當下的表單結構與作答存成 `sections` 快照，之後改範本不會回頭改動已結案的報告。
 - **跨文件的寫入一律走 transaction**（`server/src/lib/transaction.js`，MongoDB 必須是 replica set），要嘛一起成功、要嘛一起回滾。會被多台裝置同時編輯的文件帶版本號（`__v`），送出時版本不符回 409，不默默覆蓋別人剛做的事。
+- **資料有連動的畫面一律用 websocket 推，不靠重新整理、也不另外輪詢**（藥單↔看診、待辦↔掛號與日誌、報告↔貓咪頁與總覽、飼主 Email↔待辦……）。新增有連動的功能時，要同時決定「它變了會通知誰」：伺服器端在寫入的那一刻（路由，或 model 層的 `liveInvalidation`）發失效通知，前端用 `useLiveReload`（或 `usePagedList` 的 `liveEvents`）收到就靜默重讀。
 - **即時同步靠 Socket.IO**，重新連上時整份重抓補回斷線期間的異動（掛號台、診療台不定時輪詢）。
 - **沒有值就留白**，畫面不替資料補「未填」「—」之類的字（見第七節）。
 
@@ -350,7 +351,10 @@ GET    /api/search?q=                    全站搜尋（飼主＋貓咪）
 GET    /api/dashboard                    總覽數字
 ```
 
-Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到那一天的房間；前端以 `join-day`／`leave-day` 加入）、`chat:new`、`pinned-pets:updated`、`todos:updated`（後兩個帶完整清單）、`medication:updated`、`intake:updated`、`lab-results:updated`、`clinical-note:updated`（後幾個只是「請重讀」）。
+Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到那一天的房間；前端以 `join-day`／`leave-day` 加入）、`chat:new`、`pinned-pets:updated`、`todos:updated`（後兩個帶完整清單）、`medication:updated`、`intake:updated`、`lab-results:updated`、`clinical-note:updated`、`patients:updated`、`records:updated`（後幾個只是「請重讀」）。
+
+- `clinical-note:updated` 帶 `{ petId, appointmentId? }`：看診日誌是由掛號即時組成的，所以**每次 `emitAppointmentUpdate` 都會順帶廣播一則**（診療台存紀錄、櫃台勾處理事項、待辦完成寫回時間、報告填寫頁改體重……），日誌畫面（貓咪頁、病歷速覽、診療台右欄、處理視窗）以 `petId` 比對、靜默重讀；手動記事新增與刪除也發。IDEXX 數值有變走 `lab-results:updated`，日誌面板另外聽它。
+- `patients:updated`（貓咪或飼主資料變了）與 `records:updated`（健檢報告與寄送流水帳變了）由 **model 層 hook**（`lib/liveInvalidation.js`，掛在 Owner／Pet／MedicalRecord／DeliveryLog）在任何寫入時觸發，不管從路由、PDF 背景工作、寄信結果還是退信讀取來的；合併短時間內的多次並延後 400ms 才發，避開 transaction 還沒 commit 就重讀到舊資料。聽的畫面：貓咪頁與清單（`patients:updated`、`clinical-note:updated`）、健檢報告清單與寄送歷程、貓咪頁的報告頁籤、總覽數字（`records:updated`，另加今天的掛號房間）、全站待辦（`patients:updated` → 重讀，待辦上附的飼主 Email 才會跟著變）。
 
 **儀錶板的數字必須跟點進去的清單筆數對得起來**（總覽四格對應掛號台 `?stage=`、報告四格對應 `/records?view=`），兩邊用同一套條件。
 

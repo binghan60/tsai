@@ -9,6 +9,8 @@ import { useTodosStore } from '../stores/todos'
 import { useUtilityPanelStore } from '../stores/utilityPanel'
 import { useStaffIdentity } from '../composables/useStaffIdentity'
 import { useToast } from '../composables/useToast'
+import { useLiveReload } from '../composables/useLiveReload'
+import { useAppointmentRealtime } from '../composables/useAppointmentRealtime'
 import { useClinicDateStore } from '../stores/clinicDate'
 import { richTextToPlain } from '../../../shared/richText.js'
 import { Button } from '../components/ui/button'
@@ -32,16 +34,19 @@ const toast = useToast()
 // 這頁的數字都是今天的：從這裡點進掛號台、診療台要落在今天。
 useClinicDateStore().reset()
 
-async function fetchDashboard() {
-  loading.value = true
-  error.value = ''
+// silent：即時推播觸發的重讀，不閃載入畫面、失敗不蓋掉現有數字。
+async function fetchDashboard(silent = false) {
+  if (!silent) {
+    loading.value = true
+    error.value = ''
+  }
   try {
     const { data } = await http.get('/dashboard')
     dashboard.value = data
   } catch {
-    error.value = '目前無法讀取總覽，請稍後再試。'
+    if (!silent) error.value = '目前無法讀取總覽，請稍後再試。'
   } finally {
-    loading.value = false
+    if (!silent) loading.value = false
   }
 }
 
@@ -55,6 +60,9 @@ onMounted(() => {
 })
 onBeforeUnmount(() => clearInterval(clock))
 const todayInput = computed(() => clinicDateInput(now.value))
+// 總覽的數字跟掛號（今天的房間）、健檢報告、貓咪資料連動，一律用 websocket 推，不靠重新整理。
+const live = useLiveReload(() => fetchDashboard(true), { events: ['records:updated', 'patients:updated', 'clinical-note:updated'] })
+useAppointmentRealtime(todayInput, { onAppointmentUpdate: live.schedule })
 const headerMeta = computed(() => {
   const [, month, day] = todayInput.value.split('-')
   return { time: clinicTimeInput(now.value), date: `${Number(month)} 月 ${Number(day)} 日 ${weekdayLabel(todayInput.value)}` }
@@ -132,7 +140,7 @@ async function completeTodo(item) {
     </PageHeader>
 
     <Alert v-if="error" variant="destructive">
-      <AlertDescription class="flex items-center justify-between gap-3"><span>{{ error }}</span><Button type="button" variant="secondary" size="sm" :disabled="loading" @click="fetchDashboard">重新整理</Button></AlertDescription>
+      <AlertDescription class="flex items-center justify-between gap-3"><span>{{ error }}</span><Button type="button" variant="secondary" size="sm" :disabled="loading" @click="fetchDashboard()">重新整理</Button></AlertDescription>
     </Alert>
     <ListSkeleton v-if="loading && !dashboard" :rows="7" />
 

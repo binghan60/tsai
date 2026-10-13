@@ -1,6 +1,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { clampPage, pageCount } from '../lib/pagination';
 import { useSearchQueryParam } from './useSearchQueryParam';
+import { useLiveReload } from './useLiveReload';
 
 // 伺服器分頁的清單頁（貓咪、健檢報告、寄送歷程）共用的那一段：頁碼記在網址上、
 // 換頁就重查、只採用最後一次送出的查詢結果、頁碼超出最後一頁時退回。
@@ -8,7 +9,8 @@ import { useSearchQueryParam } from './useSearchQueryParam';
 // fetch({ page }) 回傳後端的 { items, total, limit }；篩選條件（關鍵字、佇列、日期）由頁面自己
 // 用 useSearchQueryParam 管，在 fetch 裡組進參數。呼叫這支之前要先把那些 ref 準備好——
 // 第一次查詢在這裡面就送出了。
-export function usePagedList({ fetch, errorMessage, defaultLimit = 10, onData }) {
+// liveEvents：這份清單連動的 socket 失效通知（例如 ['records:updated']），收到就靜默重查（不閃載入畫面）。
+export function usePagedList({ fetch, errorMessage, defaultLimit = 10, onData, liveEvents = [] }) {
   const pageParam = useSearchQueryParam('page', '1');
   const items = ref([]);
   const total = ref(0);
@@ -19,10 +21,13 @@ export function usePagedList({ fetch, errorMessage, defaultLimit = 10, onData })
   const totalPages = computed(() => pageCount(total.value, limit.value));
   let requestSequence = 0;
 
-  async function reload() {
+  // silent：即時推播觸發的重查——不顯示載入中、失敗也不蓋掉現有清單。
+  async function load(silent = false) {
     const currentRequest = ++requestSequence;
-    loading.value = true;
-    error.value = '';
+    if (!silent) {
+      loading.value = true;
+      error.value = '';
+    }
     try {
       const data = await fetch({ page: page.value });
       if (currentRequest !== requestSequence) return;
@@ -36,11 +41,12 @@ export function usePagedList({ fetch, errorMessage, defaultLimit = 10, onData })
         pageParam.value = String(totalPages.value);
       }
     } catch {
-      if (currentRequest === requestSequence) error.value = errorMessage;
+      if (currentRequest === requestSequence && !silent) error.value = errorMessage;
     } finally {
-      if (currentRequest === requestSequence) loading.value = false;
+      if (currentRequest === requestSequence && !silent) loading.value = false;
     }
   }
+  const reload = () => load(false);
 
   function goToPage(next) {
     const target = clampPage(next, totalPages.value);
@@ -54,6 +60,7 @@ export function usePagedList({ fetch, errorMessage, defaultLimit = 10, onData })
   }
 
   watch(pageParam, reload, { immediate: true });
+  if (liveEvents.length) useLiveReload(() => load(true), { events: liveEvents });
   // 離開頁面後才回來的結果不再寫進已經卸載的畫面。
   onBeforeUnmount(() => {
     requestSequence += 1;

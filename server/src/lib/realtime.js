@@ -51,6 +51,11 @@ export function emitAppointmentUpdate(appointment, previousDate) {
   const payload = typeof appointment.toObject === 'function' ? appointment.toObject() : appointment;
   io?.to(dayRoom(appointment.date)).emit('appointment:updated', payload);
   if (previousDate && previousDate !== appointment.date) io?.to(dayRoom(previousDate)).emit('appointment:updated', payload);
+  // 看診日誌是由掛號即時組成的：掛號變了，這隻貓的日誌就變了（診療台存紀錄、櫃台勾處理事項、待辦完成寫回時間、
+  // 報告填寫頁改體重……）。日誌畫面不一定開著那一天的房間（貓咪詳情頁、病歷速覽），所以另外全站廣播一則
+  // 帶 petId 的「這隻貓的日誌請重讀」。放在這裡而不是各路由自己 emit，才不會有路徑漏掉。
+  const petId = payload.petId?._id ?? payload.petId;
+  if (petId) emitClinicalNoteUpdate({ petId, appointmentId: payload._id });
 }
 
 // IDEXX 檢驗結果的待確認清單有變動（收到新結果、有人確認／復原／忽略）；前端重讀工具欄的數字。
@@ -97,6 +102,27 @@ export function emitClinicalNoteUpdate(note) {
 export function emitMedicationUpdate(order) {
   io?.emit('medication:updated', { _id: String(order._id), version: order.__v });
 }
+
+// 沒有內容的「請重讀」通知：貓咪／飼主資料、健檢報告（含寄送結果）有變動。
+// 合併短時間內的多次，並且延後一小段再發——資料寫在 transaction 裡時，hook 觸發當下還沒 commit，
+// 立刻通知的話前端重讀會讀到舊的。
+const INVALIDATION_DELAY_MS = 400;
+function coalescedEmitter(event) {
+  let timer = null;
+  return () => {
+    if (timer) return;
+    timer = setTimeout(() => {
+      timer = null;
+      io?.emit(event);
+    }, INVALIDATION_DELAY_MS);
+    timer.unref?.();
+  };
+}
+
+// 貓咪或飼主資料變了（建檔、改名、改電話／Email、刪除）：貓咪頁與清單、待辦上附的飼主 Email 都要重讀。
+export const emitPatientsUpdate = coalescedEmitter('patients:updated');
+// 健檢報告有變動（建立、填寫、結案、PDF 產生、寄送結果、刪除）與寄送流水帳：報告清單、貓咪頁、總覽數字、寄送歷程要重讀。
+export const emitRecordsUpdate = coalescedEmitter('records:updated');
 
 // 待審初診表有增減（飼主送出、櫃台核准或退回）。只是失效通知，前端自己重讀待審筆數。
 export function emitIntakeUpdate() {

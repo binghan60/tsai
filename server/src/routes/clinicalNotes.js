@@ -53,6 +53,7 @@ petClinicalNotesRouter.post('/', async (req, res, next) => {
     const fields = pickNoteFields(req.body);
     if (typeof fields.content !== 'string' || !fields.content.trim()) return res.status(422).json({ message: '請填寫日誌內容' });
     const note = await ClinicalNote.create({ ...fields, petId: req.params.petId });
+    emitClinicalNoteUpdate({ petId: req.params.petId, _id: note._id });
     res.status(201).json(note);
   } catch (err) {
     next(err);
@@ -147,6 +148,7 @@ clinicalNotesRouter.delete('/:id', async (req, res, next) => {
       deleted = await ClinicalNote.findByIdAndDelete(req.params.id, { session });
     });
     if (!deleted) return res.status(404).json({ message: '找不到病歷日誌' });
+    emitClinicalNoteUpdate({ petId: deleted.petId, _id: deleted._id });
     res.status(204).end();
   } catch (err) {
     next(err);

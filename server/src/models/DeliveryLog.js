@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { liveInvalidation } from '../lib/liveInvalidation.js';
+import { emitRecordsUpdate } from '../lib/realtime.js';
 
 // 報告寄送的事件流水帳。只增不改，每一次寄送嘗試都留下一筆。
 //
@@ -35,5 +37,8 @@ const deliveryLogSchema = new mongoose.Schema(
 deliveryLogSchema.index({ recordId: 1, createdAt: -1 });
 deliveryLogSchema.index({ attemptId: 1, createdAt: 1 });
 deliveryLogSchema.index({ createdAt: -1 });
+
+// 任何路徑寫入（含背景工作）都通知前端重讀，見 lib/liveInvalidation.js。
+liveInvalidation(deliveryLogSchema, emitRecordsUpdate);
 
 export default mongoose.model('DeliveryLog', deliveryLogSchema);

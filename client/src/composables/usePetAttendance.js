@@ -18,7 +18,8 @@ export function usePetAttendance(petId, { limit = 10 } = {}) {
   let request = 0;
   let loadedPetId = null;
 
-  async function load({ page: nextPage = page.value, scope: nextScope = scope.value } = {}) {
+  // silent：即時推播觸發的重讀，不顯示載入中、失敗不蓋掉現有內容。
+  async function load({ page: nextPage = page.value, scope: nextScope = scope.value, silent = false } = {}) {
     const token = ++request;
     const id = toValue(petId);
     // 換了一隻貓：先清掉上一隻的數字與清單，別讓它留在畫面上。
@@ -31,18 +32,18 @@ export function usePetAttendance(petId, { limit = 10 } = {}) {
       loadedPetId = id;
     }
     scope.value = nextScope;
-    error.value = '';
+    if (!silent) error.value = '';
     if (!id) {
       loading.value = false;
       return;
     }
-    loading.value = true;
+    if (!silent) loading.value = true;
     try {
       const { data } = await http.get(`/pets/${id}/attendance`, { params: { scope: nextScope, page: nextPage, limit } });
       if (token !== request || toValue(petId) !== id) return;
       const pages = data.totalPages || 1;
       if (nextPage > pages) {
-        await load({ page: pages, scope: nextScope });
+        await load({ page: pages, scope: nextScope, silent });
         return;
       }
       items.value = data.items || [];
@@ -52,9 +53,9 @@ export function usePetAttendance(petId, { limit = 10 } = {}) {
       totalPages.value = pages;
       total.value = data.total || 0;
     } catch {
-      if (token === request) error.value = '出席紀錄未能載入，請重試。';
+      if (token === request && !silent) error.value = '出席紀錄未能載入，請重試。';
     } finally {
-      if (token === request) loading.value = false;
+      if (token === request && !silent) loading.value = false;
     }
   }
 

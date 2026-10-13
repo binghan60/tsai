@@ -20,6 +20,8 @@ const props = defineProps({
   scrollable: { type: Boolean, default: false },
   // 撐滿父層高度、只有清單本身捲動（診療台工作區的右欄用）
   fill: { type: Boolean, default: false },
+  // 清單本來就排除的那一筆看診（診療台、櫃台處理視窗不列「這次看診自己」）：它的異動不必重讀清單。
+  excludeAppointmentId: { type: [String, Number], default: '' },
 })
 
 const emit = defineEmits(['load', 'saved'])
@@ -29,17 +31,34 @@ function noteBelongsToPanel(note) {
   return props.petId && String(note?.petId || '') === String(props.petId)
 }
 
-// 別台電腦改了日誌就重讀；正在修改的那一則由 ClinicalNoteEntry 自己保留輸入（以 _id 為 key，重讀不會卸載）。
+// 日誌有變就靜默重讀（不閃「載入中」）；正在修改的那一則由 ClinicalNoteEntry 自己保留輸入（以 _id 為 key，重讀不會卸載）。
+// 診療台自動存檔、IDEXX 補傳都會連發通知，合併成一次。
+let reloadTimer = null
+function scheduleReload() {
+  clearTimeout(reloadTimer)
+  reloadTimer = setTimeout(() => emit('load', props.page, { silent: true }), 250)
+}
+
 function handleRemoteNoteUpdate(note) {
-  if (noteBelongsToPanel(note)) emit('load', props.page)
+  if (!noteBelongsToPanel(note)) return
+  if (props.excludeAppointmentId && String(note?.appointmentId || '') === String(props.excludeAppointmentId)) return
+  scheduleReload()
+}
+
+// IDEXX 結果歸到看診、改數值、移除：日誌的「IDEXX 檢驗」那一列跟著變。這個通知沒有 petId，有貓咪才重讀。
+function handleLabResultsUpdate() {
+  if (props.petId) scheduleReload()
 }
 
 onMounted(() => {
   socket.on('clinical-note:updated', handleRemoteNoteUpdate)
+  socket.on('lab-results:updated', handleLabResultsUpdate)
 })
 
 onBeforeUnmount(() => {
+  clearTimeout(reloadTimer)
   socket.off('clinical-note:updated', handleRemoteNoteUpdate)
+  socket.off('lab-results:updated', handleLabResultsUpdate)
 })
 </script>
 

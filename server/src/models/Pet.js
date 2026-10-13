@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { liveInvalidation } from '../lib/liveInvalidation.js';
+import { emitPatientsUpdate } from '../lib/realtime.js';
 
 const petSchema = new mongoose.Schema(
   {
@@ -44,5 +46,8 @@ petSchema.index(
   }
 );
 petSchema.index({ updatedAt: -1, _id: -1 });
+
+// 任何路徑寫入（含背景工作）都通知前端重讀，見 lib/liveInvalidation.js。
+liveInvalidation(petSchema, emitPatientsUpdate);
 
 export default mongoose.model('Pet', petSchema);

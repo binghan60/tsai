@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { liveInvalidation } from '../lib/liveInvalidation.js';
+import { emitRecordsUpdate } from '../lib/realtime.js';
 import { v4 as uuidv4 } from 'uuid';
 
 const examinationFindingSchema = new mongoose.Schema(
@@ -202,5 +204,8 @@ medicalRecordSchema.index(
   { revisionRootId: 1, reportVersion: 1 },
   { unique: true, partialFilterExpression: { revisionRootId: { $type: 'objectId' } } }
 );
+
+// 任何路徑寫入（含背景工作）都通知前端重讀，見 lib/liveInvalidation.js。
+liveInvalidation(medicalRecordSchema, emitRecordsUpdate);
 
 export default mongoose.model('MedicalRecord', medicalRecordSchema);

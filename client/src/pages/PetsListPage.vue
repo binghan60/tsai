@@ -26,6 +26,8 @@ import { catBreedLabel } from '../../../shared/catBreeds.js';
 const query = useSearchQueryParam('q');
 // 關鍵字是即時搜尋：FilterBar 等停止打字才送出（applyFilters）。查詢中舊清單留著，不換成骨架，才不會每停一次就閃一下。
 const { items: pets, total, limit, loading, error, page: currentPage, totalPages, goToPage, applyFilters } = usePagedList({
+  // 貓咪資料、最近一則日誌（lastEntryAt）都會連動。
+  liveEvents: ['patients:updated', 'clinical-note:updated'],
   errorMessage: '貓咪資料暫時無法載入，請稍後重試',
   fetch: async ({ page }) => (await http.get('/pets', {
     params: { page, ...(query.value.trim() ? { q: query.value.trim() } : {}) },

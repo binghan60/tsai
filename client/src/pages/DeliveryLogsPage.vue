@@ -50,6 +50,7 @@ const expandedDetails = ref(new Set());
 // 關鍵字是即時搜尋（FilterBar 等停止打字才送出 applyFilters）；日期要在選單裡按「套用」——
 // 翻月份的過程會經過好幾個「還沒決定好」的中間值。查詢中舊清單留著，不換成骨架。
 const { items: logs, total, limit, loading, error, page: currentPage, totalPages, goToPage, applyFilters } = usePagedList({
+  liveEvents: ['records:updated'],
   errorMessage: '寄送歷程暫時無法載入，請稍後重試',
   fetch: async ({ page }) => (await http.get('/delivery-logs', {
     params: {

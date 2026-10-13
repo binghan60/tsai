@@ -512,6 +512,7 @@ async function reopen() {
               :page="notePage"
               :total-pages="noteTotalPages"
               :pet-id="appointment.petId"
+              :exclude-appointment-id="appointment._id"
               full-record-label="完整病歷"
               @load="loadNotes"
               @saved="handleHistoricalNoteSaved"

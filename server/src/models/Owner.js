@@ -1,4 +1,6 @@
 import mongoose from 'mongoose';
+import { liveInvalidation } from '../lib/liveInvalidation.js';
+import { emitPatientsUpdate } from '../lib/realtime.js';
 
 const ownerSchema = new mongoose.Schema(
   {
@@ -17,5 +19,8 @@ const ownerSchema = new mongoose.Schema(
 ownerSchema.index({ name: 1 });
 ownerSchema.index({ phone: 1 });
 ownerSchema.index({ createdAt: -1, _id: -1 });
+
+// 任何路徑寫入（含背景工作）都通知前端重讀，見 lib/liveInvalidation.js。
+liveInvalidation(ownerSchema, emitPatientsUpdate);
 
 export default mongoose.model('Owner', ownerSchema);

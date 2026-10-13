@@ -15,7 +15,8 @@ export function usePetClinicalNotes({ petId, excludeAppointmentId, limit = 5 }) 
   let request = 0;
   let loadedPetId = null;
 
-  async function load(nextPage = 1) {
+  // silent：即時推播觸發的重讀——不顯示「載入中」、失敗不蓋掉現有清單（診療台自動存檔會連發通知）。
+  async function load(nextPage = 1, { silent = false } = {}) {
     const token = ++request;
     const id = toValue(petId);
     // 換了一隻貓（或這筆掛號還沒建檔）：先清掉上一隻的日誌，別讓它留在畫面上。
@@ -25,12 +26,12 @@ export function usePetClinicalNotes({ petId, excludeAppointmentId, limit = 5 }) 
       totalPages.value = 1;
       loadedPetId = id;
     }
-    error.value = '';
+    if (!silent) error.value = '';
     if (!id) {
       loading.value = false;
       return;
     }
-    loading.value = true;
+    if (!silent) loading.value = true;
     try {
       const exclude = toValue(excludeAppointmentId);
       const { data } = await http.get(`/pets/${id}/clinical-notes`, {
@@ -39,16 +40,16 @@ export function usePetClinicalNotes({ petId, excludeAppointmentId, limit = 5 }) 
       if (token !== request || toValue(petId) !== id) return;
       const pages = data.totalPages || 1;
       if (nextPage > pages) {
-        await load(pages);
+        await load(pages, { silent });
         return;
       }
       notes.value = data.items || [];
       page.value = nextPage;
       totalPages.value = pages;
     } catch {
-      if (token === request) error.value = '病歷日誌未能載入，請重試。';
+      if (token === request && !silent) error.value = '病歷日誌未能載入，請重試。';
     } finally {
-      if (token === request) loading.value = false;
+      if (token === request && !silent) loading.value = false;
     }
   }
 

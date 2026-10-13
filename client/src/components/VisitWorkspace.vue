@@ -674,7 +674,7 @@ onBeforeUnmount(() => {
         </div>
         <!-- 病歷日誌自己捲動，並在往下捲時黏在頂端，寫到交給櫃台時仍看得到歷次紀錄。 -->
         <div class="h-128 px-6 py-5 @4xl/visit:sticky @4xl/visit:top-0 @4xl/visit:h-[calc(100dvh-11rem)] @4xl/visit:self-start @4xl/visit:pl-0">
-          <ClinicalNotesPanel :notes="notes" :loading="notesLoading" :error="notesError" :page="notePage" :total-pages="noteTotalPages" :pet-id="appointment.petId" full-record-label="完整病歷" fill class="h-full" @load="loadNotes" @saved="handleHistoricalNoteSaved" />
+          <ClinicalNotesPanel :notes="notes" :loading="notesLoading" :error="notesError" :page="notePage" :total-pages="noteTotalPages" :pet-id="appointment.petId" :exclude-appointment-id="appointment._id" full-record-label="完整病歷" fill class="h-full" @load="loadNotes" @saved="handleHistoricalNoteSaved" />
         </div>
       </div>
     </div>
