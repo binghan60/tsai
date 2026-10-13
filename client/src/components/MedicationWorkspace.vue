@@ -428,7 +428,8 @@ onBeforeUnmount(() => {
         <div class="desktop-data-header">
           <span>貓咪</span><span>藥單內容</span><span>登記</span><span>來源</span><span>狀態</span><span></span>
         </div>
-        <div v-for="item in items" :key="item._id" data-medication-row class="desktop-data-row hover:bg-hover" :class="item.needsRepack ? 'shadow-[inset_3px_0_0_var(--danger)]' : ''">
+        <!-- 藥單內容整段換行顯示（不截斷）：列高隨內容，最少 4rem。 -->
+        <div v-for="item in items" :key="item._id" data-medication-row class="desktop-data-row desktop-data-row--expanded min-h-16 hover:bg-hover" :class="item.needsRepack ? 'shadow-[inset_3px_0_0_var(--danger)]' : ''">
           <span class="desktop-data-cell flex min-w-0 items-center gap-3">
             <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
             <span class="min-w-0">
@@ -437,7 +438,7 @@ onBeforeUnmount(() => {
             </span>
           </span>
           <!-- 貓咪名、飼主名連到貓咪詳情；點藥單內容才是開這張藥單。 -->
-          <button type="button" class="desktop-data-cell min-w-0 text-left text-sm hover:text-primary" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" @click="openOrder(item)"><RichText tag="span" one-line joiner="；" class="block" :text="item.prescription" v-tip.overflow="richTextToPlain(item.prescription)" /></button>
+          <button type="button" class="desktop-data-cell min-w-0 text-left text-sm hover:text-primary" :disabled="busy" :aria-label="`開啟 ${item.petName} 的藥單`" @click="openOrder(item)"><RichText tag="span" class="block py-1" :text="item.prescription" /></button>
           <span class="desktop-data-cell">
             <span class="num block text-sm">{{ formatDateTime(item.createdAt, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) }}</span>
             <span class="block text-xs text-subtle-foreground">{{ relativeTimeLabel(item.createdAt) }}</span>
@@ -466,7 +467,7 @@ onBeforeUnmount(() => {
             </div>
             <RowActions v-if="rowActions(item).length" :actions="rowActions(item)" :label="`${item.petName} 藥單的更多操作`" @select="(key) => runRowAction(key, item)" />
           </div>
-          <RichText tag="p" class="line-clamp-2 text-sm" :text="item.prescription" />
+          <RichText tag="p" class="text-sm" :text="item.prescription" />
           <div class="flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
             <Badge v-if="item.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge>
@@ -501,7 +502,7 @@ onBeforeUnmount(() => {
           </div>
           <Badge variant="status" :class="tone(item.status)">{{ medicationLabel(item.status) }}</Badge>
         </div>
-        <RichText v-if="item.prescription" tag="p" :text="item.prescription" class="line-clamp-3 rounded-lg bg-sunken px-3 py-2 text-sm" />
+        <RichText v-if="item.prescription" tag="p" :text="item.prescription" class="rounded-lg bg-sunken px-3 py-2 text-sm" />
         <p v-if="item.needsRepack" class="text-sm font-semibold text-danger">暫停處理，需重新包藥</p>
         <div class="flex items-center gap-2">
           <span class="num text-xs text-subtle-foreground">{{ formatDateTime(item.createdAt) }}</span>
