@@ -1,5 +1,6 @@
 // 待辦期限的顯示規則。tone 對應狀態語意 token：逾期＝danger、今天＝warning，之後的日期＝info（不用灰色，灰色看起來像沒有狀態）。
 // 日期一律當 YYYY-MM-DD 純日曆值處理（全程只用 Date.UTC 做整數日相減），不經過本地時區。
+import { richTextToPlain } from '../../../shared/richText.js';
 const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function toDayNumber(value) {
@@ -27,3 +28,16 @@ export function dueStatus(dueDate, today) {
   return { tone: 'info', label: `${Number(month)}/${Number(day)}`, overdue: false };
 }
 
+
+// 待辦搜尋（未完成的在前端比對；已完成的由伺服器 /todos/search 查全部歷史，比對同樣三個地方）：
+// 內文（去掉粗體／顏色標記）、處理過程、# 標記的貓咪名字。不分大小寫，關鍵字當字面字串。
+export function todoMatches(item, keyword) {
+  const needle = String(keyword ?? '').trim().toLowerCase();
+  if (!needle) return true;
+  const haystack = [
+    richTextToPlain(item?.content ?? ''),
+    item?.progress ?? '',
+    ...(item?.mentions ?? []).map((mention) => mention.petName ?? ''),
+  ].join('\n').toLowerCase();
+  return haystack.includes(needle);
+}

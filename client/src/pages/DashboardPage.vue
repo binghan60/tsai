@@ -106,7 +106,7 @@ const weeks = computed(() => (dashboard.value?.weeklyTrend ?? []).map((week) => 
 const maxWeek = computed(() => Math.max(1, ...weeks.value.map((week) => week.count)))
 const thisWeek = computed(() => weeks.value.at(-1)?.count ?? 0)
 
-// 院內待辦：未完成的前幾筆（伺服器已排好：有期限的由早到晚，接著沒期限的）。
+// 院內待辦：未完成的前幾筆（照待辦面板拖拉排好的順序）。
 const openTodos = computed(() => todos.openItems.slice(0, 8))
 const busyTodo = ref('')
 async function completeTodo(item) {
@@ -217,7 +217,7 @@ async function completeTodo(item) {
                 :aria-label="`完成：${richTextToPlain(item.content)}`"
                 @update:model-value="completeTodo(item)"
               />
-              <Star v-if="item.starred" class="size-4 shrink-0 fill-warning text-warning" stroke-width="1.75" role="img" aria-label="已置頂" />
+              <Star v-if="item.starred" class="size-4 shrink-0 fill-star text-star-outline" stroke-width="1.75" role="img" aria-label="已標星號" />
               <button type="button" class="min-w-0 flex-1 text-left hover:text-primary" @click="panel.open('todos')"><RichText tag="span" one-line class="block" :text="item.content" v-tip.overflow="richTextToPlain(item.content)" /></button>
               <span v-if="dueStatus(item.dueDate, todayInput)" class="inline-flex h-6 shrink-0 items-center rounded-full px-2 text-2xs leading-none font-semibold" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, todayInput).tone]">{{ dueStatus(item.dueDate, todayInput).label }}</span>
             </li>

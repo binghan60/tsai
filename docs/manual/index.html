@@ -695,7 +695,7 @@ footer.end { color: var(--subtle); font-size: 14px; text-align: center; }
           <figcaption>內部聊天：標「自動通知」的是系統發的</figcaption>
         </figure>
         <figure class="shot">
-          <div class="frame"><img src="images/18-todos.webp" alt="院內待辦：星號置頂、期限、上傳影像待辦" loading="lazy"></div>
+          <div class="frame"><img src="images/18-todos.webp" alt="院內待辦：拖拉排序、星號、期限、上傳影像待辦" loading="lazy"></div>
           <figcaption>院內待辦：「上傳影像 #阿虎」是勾選框自動新增的</figcaption>
         </figure>
       </div>
@@ -713,7 +713,11 @@ footer.end { color: var(--subtle); font-size: 14px; text-align: center; }
       <h3>待辦</h3>
       <ul>
         <li>「明天叫貨」「回電給某某」這類院內雜事，全院共用。打 # 可以標記貓咪（不會放進暫存區）。</li>
-        <li>星號＝置頂；可以設期限。勾起來＝完成，取消勾選＝改回未完成。</li>
+        <li>順序自己排：按住每一列最左邊的 <span class="ui">⠿</span> 上下拖。新增的放在最下面，改回未完成的也回到最下面。星號只是標記（例如「這件比較急」，整列會變淡橙色），不會自動排到上面；期限也不影響順序。</li>
+        <li>可以設期限。勾起來＝完成，取消勾選＝改回未完成。</li>
+        <li>每列最右邊的 <span class="ui">˅</span> 展開「處理過程」，一行一筆接著寫（例如「10/12 打過沒接」「10/13 已回電，飼主下週二來」）。有寫的會標「處理中」，做完再勾掉。勾掉之後處理過程只能看、不能再改（改回未完成才能改）。</li>
+        <li>星號、編輯、刪除在每列的 <span class="ui">⋯</span> 裡。</li>
+        <li>上面的搜尋框可以找內文、處理過程、標記的貓咪名字；已完成的會查全部的歷史，不只最近 50 筆。</li>
         <li><span class="who auto">系統自動</span> 櫃台勾「上傳影像」並完成處理會新增一筆；完成它，那次看診的病歷日誌會記下完成時間。</li>
       </ul>
     </section>

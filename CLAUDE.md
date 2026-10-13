@@ -184,7 +184,11 @@
 
 ### todos 院內待辦
 
-`content`（可格式化，≤500 字）、`createdBy`、`dueDate`、`starred`（置頂）、`status`（`open`／`done`）、`doneAt`、`doneBy`、`mentions[]`（內文的 `#` 標記，≤5 隻；不會放進暫存區）。全站共用的行政雜務清單，沒有指派對象、沒有重複待辦。`GET /api/todos` 回未完成（上限 200，置頂優先、有期限的由早到晚，超過上限時留最新的）＋最近完成 50 筆；任何異動後整份重讀並廣播。
+`content`（可格式化，≤500 字）、`createdBy`、`dueDate`、`starred`（星號，只是標記、不影響順序）、`sortOrder`（手動順序）、`status`（`open`／`done`）、`doneAt`、`doneBy`、`progress`（處理過程，純文字可多行 ≤500 字；只在未完成時能寫（`PUT` 對已完成的回 409），完成後純展示，改回未完成才又能改；未完成而有內容時畫面標「處理中」——不是另一個 status）、`mentions[]`（內文的 `#` 標記，≤5 隻；不會放進暫存區）。全站共用的行政雜務清單，沒有指派對象、沒有重複待辦。
+
+- **未完成清單完全照手動順序**（拖拉排序，`shared/todoOrder.js`）：期限、星號都不影響位置。`sortOrder` 沒有值時以建立時間（毫秒）代替，所以新增的在最下面；改回未完成換成當下時間、回到最下面。**這欄刻意不設 schema default**（Mongoose 讀出舊文件會補 default、下次 save 就寫進去，舊待辦一改就跳到最下面）。拖拉＝`POST /:id/move { beforeId }`（null＝最後），在 transaction 裡把整份未完成清單重新編號 0、1、2…；要排的那筆或 `beforeId` 已經不在未完成清單上回 409 附最新清單。
+- `GET /api/todos` 回未完成（上限 200，超過時留最新建立的）＋最近完成 50 筆；任何異動後整份重讀並廣播。
+- 搜尋：未完成的在前端比對（`lib/todoDisplay.js` 的 `todoMatches`）；已完成的走 `GET /api/todos/search?q=`，查全部歷史（不只最近 50 筆，最多 200 筆、新到舊）。兩邊比對同樣三處：去掉格式標記的內文、處理過程、`#` 標記的貓咪名字。搜尋中不能拖拉排序。
 
 ### textTemplates 文字模板
 
@@ -332,7 +336,7 @@ POST   /api/intake-submissions/:id/approve（date、time 必填）／ reject
 協作
 GET/POST /api/chat/messages（GET 一頁 30 則、正序；?before=<最舊那則 _id> 往前翻，回 hasMore）
 GET/POST /api/pinned-pets ／ DELETE /api/pinned-pets/:petId
-GET/POST /api/todos ／ PUT /api/todos/:id ／ POST /api/todos/:id/complete|reopen ／ DELETE /api/todos/:id
+GET/POST /api/todos ／ GET /api/todos/search?q=（已完成的全部歷史）／ PUT /api/todos/:id（可帶 progress）／ POST /api/todos/:id/complete|reopen ／ POST /api/todos/:id/move（拖拉排序）／ DELETE /api/todos/:id
 
 設定與其他
 GET/POST /api/settings/form-templates ／ GET/PUT/DELETE /api/settings/form-templates/:id

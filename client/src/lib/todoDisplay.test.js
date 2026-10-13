@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { dueStatus } from './todoDisplay.js';
+import { dueStatus, todoMatches } from './todoDisplay.js';
 
 describe('todo due status', () => {
   const today = '2026-09-22';
@@ -24,4 +24,18 @@ describe('todo due status', () => {
     assert.equal(dueStatus('明天', today), null);
   });
 
+});
+
+describe('todo search', () => {
+  const item = { content: '叫貨：**腎臟處方飼料 k/d** 3 包', progress: '已訂，週五到', mentions: [{ petName: '雪球' }] };
+  it('比對去掉格式標記的內文、處理過程、貓咪名字，不分大小寫', () => {
+    assert.equal(todoMatches(item, '飼料 K/D'), true);
+    assert.equal(todoMatches(item, '週五'), true);
+    assert.equal(todoMatches(item, '雪球'), true);
+    assert.equal(todoMatches(item, '**'), false);
+    assert.equal(todoMatches(item, '阿虎'), false);
+  });
+  it('空白關鍵字全部符合', () => {
+    assert.equal(todoMatches(item, '  '), true);
+  });
 });

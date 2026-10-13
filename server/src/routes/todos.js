@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 import Todo from '../models/Todo.js';
 import { MAX_MENTIONS, STAFF_SENDERS } from '../lib/pinnedPets.js';
 import { mentionSnapshots, parseMentionIds } from '../lib/petMentions.js';
-import { isValidDateInput, listTodos, publishTodos } from '../lib/todos.js';
+import { isValidDateInput, listTodos, moveTodo, publishTodos, searchDoneTodos } from '../lib/todos.js';
 import { recordImageUploadTodoDone } from '../lib/imageUploadTodo.js';
 import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 
@@ -31,9 +31,29 @@ async function resolveMentions(value) {
   return { mentions };
 }
 
+// 處理過程：純文字、可多行，選填，500 字。回傳 { progress } 或 { error }。
+function cleanProgress(value) {
+  if (typeof value !== 'string') return { error: '處理過程格式不正確' };
+  const progress = value.replace(/\r\n?/g, '\n').trim();
+  if (progress.length > 500) return { error: '處理過程最多 500 字' };
+  return { progress };
+}
+
 router.get('/', async (req, res, next) => {
   try {
     res.json({ items: await listTodos() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 搜尋已完成的待辦（全部歷史，不只最近 50 筆）。
+router.get('/search', async (req, res, next) => {
+  try {
+    const keyword = String(req.query.q ?? '').trim();
+    if (!keyword) return res.json({ items: [] });
+    if (keyword.length > 100) return invalid(res, '搜尋關鍵字太長');
+    res.json({ items: await searchDoneTodos(keyword) });
   } catch (err) {
     next(err);
   }
@@ -75,6 +95,13 @@ router.put('/:id', async (req, res, next) => {
       const dueDate = body.dueDate || null;
       if (dueDate !== null && !isValidDateInput(String(dueDate))) return invalid(res, '期限日期格式不正確');
       todo.dueDate = dueDate;
+    }
+    // 處理過程只在未完成時能寫；完成後純展示（改回未完成才又能改）。
+    if (body.progress !== undefined) {
+      if (todo.status === 'done') return res.status(409).json({ message: '待辦已完成，處理過程不能再修改' });
+      const { progress, error: progressError } = cleanProgress(body.progress);
+      if (progressError) return invalid(res, progressError);
+      todo.progress = progress;
     }
     if (body.starred !== undefined) {
       if (typeof body.starred !== 'boolean') return invalid(res, '星號參數不正確');
@@ -124,8 +151,27 @@ router.post('/:id/reopen', async (req, res, next) => {
       todo.status = 'open';
       todo.doneAt = null;
       todo.doneBy = null;
+      // 改回未完成的排到最下面，跟新增一樣；原本的位置早就被拖拉重新編號過，不一定還有意義。
+      todo.sortOrder = Date.now();
       await todo.save();
       await recordImageUploadTodoDone(todo._id, null);
+    }
+    res.json({ items: await publishTodos() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 拖拉排序：body.beforeId 是放開後排在它下面的那一筆，null＝移到最後。只排未完成的。
+router.post('/:id/move', async (req, res, next) => {
+  try {
+    const beforeId = req.body?.beforeId ?? null;
+    if (!mongoose.isValidObjectId(req.params.id)) return invalid(res, '待辦參數不正確');
+    if (beforeId !== null && (!mongoose.isValidObjectId(beforeId) || String(beforeId) === req.params.id)) {
+      return invalid(res, '排序參數不正確');
+    }
+    if (!await moveTodo(req.params.id, beforeId)) {
+      return res.status(409).json({ message: '待辦清單剛被更新，請再排一次', items: await listTodos() });
     }
     res.json({ items: await publishTodos() });
   } catch (err) {

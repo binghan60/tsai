@@ -129,6 +129,9 @@
   --success-surface: #e8f9e9;
   --warning: #874c00;
   --warning-surface: #fff0e0;
+  /* 待辦星號：亮黃填色＋深一階的外框（淡橙底的星號列上也看得出輪廓）。 */
+  --star: #ffb400;
+  --star-outline: #a35c00;
   --info: #4260c4;
   --info-surface: #ebf3ff;
   --danger: var(--destructive);
@@ -240,6 +243,8 @@
   --success-surface: #19321d;
   --warning: #f8b05d;
   --warning-surface: #3c260d;
+  --star: #ffc933;
+  --star-outline: #ffc933;
   --info: #82a1f6;
   --info-surface: #212a44;
   --surgery: #d3adff;
@@ -310,6 +315,8 @@
   --color-success-surface: var(--success-surface);
   --color-warning: var(--warning);
   --color-warning-surface: var(--warning-surface);
+  --color-star: var(--star);
+  --color-star-outline: var(--star-outline);
   --color-info: var(--info);
   --color-info-surface: var(--info-surface);
   --color-danger: var(--danger);

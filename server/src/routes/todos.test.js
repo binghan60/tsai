@@ -1,6 +1,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
+import mongoose from 'mongoose';
 import { app } from '../app.js';
 import Pet from '../models/Pet.js';
 import Todo from '../models/Todo.js';
@@ -11,10 +12,14 @@ const todoId = '64b000000000000000000010';
 const petId = '64b000000000000000000001';
 const jsonHeaders = { 'content-type': 'application/json' };
 
+// 清單查詢走 find().sort().limit()[.select().session()].lean()（拖拉排序在 transaction 裡讀同一份清單）。
 function mockList(open = [], done = []) {
-  Todo.find = (filter) => ({
-    sort: () => ({ limit: () => ({ lean: async () => (filter.status === 'open' ? open : done) }) }),
-  });
+  Todo.find = (filter) => {
+    const query = { lean: async () => (filter.status === 'open' ? open : done) };
+    query.select = () => query;
+    query.session = () => query;
+    return { sort: () => ({ limit: () => query }) };
+  };
 }
 
 // 貓咪名字快照走 Pet.find(...).select().populate().lean()，跟聊天室的 # 標記同一條路徑。
@@ -34,25 +39,28 @@ function mockTodoDoc(fields) {
 }
 
 describe('todo lib', () => {
-  it('未完成清單：有期限的在前且由早到晚，沒期限的照建立順序接後面', () => {
+  it('未完成清單完全照手動順序：星號與期限不影響位置', () => {
     const rows = [
-      { _id: 'a', dueDate: null, createdAt: '2026-09-01T00:00:00Z' },
-      { _id: 'b', dueDate: '2026-09-30', createdAt: '2026-09-03T00:00:00Z' },
-      { _id: 'c', dueDate: null, createdAt: '2026-08-01T00:00:00Z' },
-      { _id: 'd', dueDate: '2026-09-10', createdAt: '2026-09-05T00:00:00Z' },
-      { _id: 'e', dueDate: '2026-09-10', createdAt: '2026-09-02T00:00:00Z' },
+      { _id: 'a', sortOrder: 2, starred: true, dueDate: '2026-09-01', createdAt: '2026-09-01T00:00:00Z' },
+      { _id: 'b', sortOrder: 0, dueDate: null, createdAt: '2026-09-03T00:00:00Z' },
+      { _id: 'c', sortOrder: 1, dueDate: '2026-09-30', createdAt: '2026-08-01T00:00:00Z' },
     ];
-    assert.deepEqual(sortOpenTodos(rows).map((row) => row._id), ['e', 'd', 'b', 'c', 'a']);
+    assert.deepEqual(sortOpenTodos(rows).map((row) => row._id), ['b', 'c', 'a']);
   });
 
-  it('未完成清單：標星號的置頂，星號那一組裡照樣依期限與建立順序排', () => {
+  it('沒有 sortOrder 的舊資料以建立時間代替，排在拖拉編號過的後面', () => {
     const rows = [
-      { _id: 'a', dueDate: '2026-09-01', createdAt: '2026-09-01T00:00:00Z' },
-      { _id: 'b', starred: true, dueDate: null, createdAt: '2026-09-03T00:00:00Z' },
-      { _id: 'c', starred: false, dueDate: null, createdAt: '2026-08-01T00:00:00Z' },
-      { _id: 'd', starred: true, dueDate: '2026-09-30', createdAt: '2026-09-05T00:00:00Z' },
+      { _id: 'old2', createdAt: '2026-09-02T00:00:00Z' },
+      { _id: 'old1', createdAt: '2026-09-01T00:00:00Z' },
+      { _id: 'moved', sortOrder: 0, createdAt: '2026-09-05T00:00:00Z' },
     ];
-    assert.deepEqual(sortOpenTodos(rows).map((row) => row._id), ['d', 'b', 'a', 'c']);
+    assert.deepEqual(sortOpenTodos(rows).map((row) => row._id), ['moved', 'old1', 'old2']);
+  });
+
+  it('sortOrder 沒有 default：舊待辦被讀出來改別的欄位，不會被寫入順序而跳到最下面', () => {
+    const doc = Todo.hydrate({ _id: todoId, content: '舊待辦', createdBy: 'vet', status: 'open', createdAt: new Date('2026-01-01') });
+    doc.starred = true;
+    assert.equal(doc.getChanges().$set.sortOrder, undefined);
   });
 
   it('日期驗證只接受真實存在的日曆日', () => {
@@ -90,7 +98,7 @@ describe('todos routes', () => {
     );
     const response = await fetch(`${origin}/api/todos`);
     assert.equal(response.status, 200);
-    assert.deepEqual((await response.json()).items.map((item) => item._id), ['o2', 'o1', 'd1']);
+    assert.deepEqual((await response.json()).items.map((item) => item._id), ['o1', 'o2', 'd1']);
   });
 
   it('POST 建立待辦：內容去空白、# 標記的名字快照由伺服器查、重複的 id 只算一次', async () => {
@@ -203,10 +211,112 @@ describe('todos routes', () => {
     assert.equal(done.status, 'open');
     assert.equal(done.doneAt, null);
     assert.equal(done.doneBy, null);
+    // 改回未完成的排到最下面（sortOrder 換成當下時間）。
+    assert.ok(done.sortOrder >= Date.now() - 60_000);
 
     const open = mockTodoDoc({ status: 'open' });
     assert.equal((await post(`/${todoId}/reopen`, {})).status, 200);
     assert.equal(open.saved, 0);
+  });
+
+  it('處理過程：PUT 帶 progress 寫入（多行、去頭尾空白、換行統一成 \\n），不動完成狀態；太長或不是字串回 422', async () => {
+    const doc = mockTodoDoc({ status: 'open', content: '回電', progress: '' });
+    mockList();
+    assert.equal((await put(`/${todoId}`, { progress: '  10/12 沒接\r\n10/13 已回電  ' })).status, 200);
+    assert.equal(doc.progress, '10/12 沒接\n10/13 已回電');
+    assert.equal(doc.status, 'open');
+    assert.equal(doc.content, '回電');
+
+    assert.equal((await put(`/${todoId}`, { progress: '' })).status, 200);
+    assert.equal(doc.progress, '');
+
+    assert.equal((await put(`/${todoId}`, { progress: 'x'.repeat(501) })).status, 422);
+    assert.equal((await put(`/${todoId}`, { progress: 3 })).status, 422);
+  });
+
+  it('處理過程：已完成的不能改（409），其他欄位照樣能改', async () => {
+    const doc = mockTodoDoc({ status: 'done', content: '回電', progress: '10/13 已回電', starred: false });
+    mockList();
+    assert.equal((await put(`/${todoId}`, { progress: '偷改' })).status, 409);
+    assert.equal(doc.progress, '10/13 已回電');
+    assert.equal(doc.saved, 0);
+    assert.equal((await put(`/${todoId}`, { starred: true })).status, 200);
+    assert.equal(doc.starred, true);
+  });
+
+  it('GET /search 只查已完成、比對內文／處理過程／貓咪名字（關鍵字當字面字串）；沒關鍵字回空', async () => {
+    let filter;
+    Todo.find = (value) => { filter = value; return { sort: () => ({ limit: () => ({ lean: async () => [{ _id: 'd1', status: 'done' }] }) }) }; };
+    const response = await fetch(`${origin}/api/todos/search?q=${encodeURIComponent('k/d (3')}`);
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).items.map((item) => item._id), ['d1']);
+    assert.equal(filter.status, 'done');
+    assert.deepEqual(filter.$or.map((part) => Object.keys(part)[0]), ['content', 'progress', 'mentions.petName']);
+    assert.ok(filter.$or[0].content.test('叫貨 k/d (3 包'));
+
+    filter = null;
+    assert.deepEqual((await (await fetch(`${origin}/api/todos/search?q=%20`)).json()).items, []);
+    assert.equal(filter, null);
+  });
+
+  describe('POST /:id/move 拖拉排序', () => {
+    const ids = ['64b000000000000000000a01', '64b000000000000000000a02', '64b000000000000000000a03', '64b000000000000000000a04'];
+    const writes = [];
+    let originalBulkWrite;
+    let originalStartSession;
+
+    before(() => {
+      originalBulkWrite = Todo.bulkWrite;
+      originalStartSession = mongoose.startSession;
+      Todo.bulkWrite = async (operations) => { writes.push(operations.map((op) => [op.updateOne.filter._id, op.updateOne.update.$set.sortOrder])); };
+      mongoose.startSession = async () => ({ withTransaction: async (callback) => callback(), endSession: async () => {} });
+    });
+    after(() => {
+      Todo.bulkWrite = originalBulkWrite;
+      mongoose.startSession = originalStartSession;
+    });
+
+    // a01..a04 已依序編號 0..3。
+    const openRows = () => ids.map((_id, index) => ({ _id, status: 'open', sortOrder: index, createdAt: '2026-09-01T00:00:00Z' }));
+
+    it('移到某一筆前面：整份重新編號，只寫有變的', async () => {
+      mockList(openRows());
+      writes.length = 0;
+      const response = await post(`/${ids[3]}/move`, { beforeId: ids[1] });
+      assert.equal(response.status, 200);
+      // 新順序 a01, a04, a02, a03
+      assert.deepEqual(writes, [[[ids[3], 1], [ids[1], 2], [ids[2], 3]]]);
+    });
+
+    it('beforeId 為 null＝移到最後', async () => {
+      mockList(openRows());
+      writes.length = 0;
+      assert.equal((await post(`/${ids[0]}/move`, { beforeId: null })).status, 200);
+      assert.deepEqual(writes, [[[ids[1], 0], [ids[2], 1], [ids[3], 2], [ids[0], 3]]]);
+    });
+
+    it('位置沒變不寫資料庫', async () => {
+      mockList(openRows());
+      writes.length = 0;
+      assert.equal((await post(`/${ids[1]}/move`, { beforeId: ids[2] })).status, 200);
+      assert.deepEqual(writes, []);
+    });
+
+    it('要排的那筆或 beforeId 已經不在未完成清單上回 409（附最新清單），不寫資料庫', async () => {
+      mockList(openRows().slice(0, 3));
+      writes.length = 0;
+      const gone = await post(`/${ids[3]}/move`, { beforeId: ids[0] });
+      assert.equal(gone.status, 409);
+      assert.equal((await gone.json()).items.length, 3);
+      assert.equal((await post(`/${ids[0]}/move`, { beforeId: ids[3] })).status, 409);
+      assert.deepEqual(writes, []);
+    });
+
+    it('參數不正確回 422', async () => {
+      assert.equal((await post('/not-an-id/move', { beforeId: null })).status, 422);
+      assert.equal((await post(`/${ids[0]}/move`, { beforeId: 'x' })).status, 422);
+      assert.equal((await post(`/${ids[0]}/move`, { beforeId: ids[0] })).status, 422);
+    });
   });
 
   it('DELETE 已經不存在也算成功', async () => {
