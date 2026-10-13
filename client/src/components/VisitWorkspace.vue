@@ -3,7 +3,7 @@ import { usePetClinicalNotes } from '../composables/usePetClinicalNotes'
 import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from './PatientLink.vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { ArrowRight, FileText, FlaskConical, Pencil, Stethoscope, Undo2 } from '@lucide/vue'
 import SurgeryBadge from './SurgeryBadge.vue'
 import LatenessBadge from './LatenessBadge.vue'
@@ -19,7 +19,7 @@ import { useTextTemplates } from '../composables/useTextTemplates'
 import { canRequestLab, labRequestDelivered, useLabRequest } from '../composables/useLabRequest'
 import { workflowState } from '../../../shared/appointmentWorkflow.js'
 import { clinicalDraft, draftPatch, mergeClinicalUpdate, takeBaseline } from '../lib/visitDraft'
-import { ageLabel, clinicTimeInput } from '../lib/datetime'
+import { ageLabel, clinicTimeInput, formatDate } from '../lib/datetime'
 import { medicalHistoryText } from '../lib/petDisplay'
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue'
 import VisitLabTable from './VisitLabTable.vue'
@@ -53,7 +53,43 @@ const { openPicker } = useTextTemplates()
 // notes-updated：貓咪／飼主備註改了，讓佇列上的備註標籤跟著更新。
 const emit = defineEmits(['updated', 'open-record', 'start', 'notes-updated'])
 
+const router = useRouter()
 const labTable = ref(null)
+// 這隻貓上次（最近一份已結案）的健檢報告（量測區標頭的「上次報告」鈕）：看診中想對照上次的數值。
+// 在新分頁開預覽頁，診療台的草稿與畫面位置都不動。
+// 查得到、確定沒有已結案報告（含還沒建檔的初診）才標「無上次報告」——這是「沒有值就留白」的刻意例外，
+// 醫師要知道是沒有、不是還沒載入；查詢失敗或還在查時什麼都不畫，不能把「查不到」說成「沒有」。
+const latestReport = ref(null)
+const latestReportChecked = ref(false)
+let latestReportSeq = 0
+watch(
+  () => props.appointment.petId,
+  async (petId) => {
+    const seq = ++latestReportSeq
+    latestReport.value = null
+    latestReportChecked.value = false
+    if (!petId) {
+      latestReportChecked.value = true
+      return
+    }
+    try {
+      const { data } = await http.get(`/pets/${petId}/records/finalized-sources`)
+      // 回的不是陣列就當查不到（不標「無上次報告」）。
+      if (seq === latestReportSeq && Array.isArray(data)) {
+        latestReport.value = data[0] ?? null
+        latestReportChecked.value = true
+      }
+    } catch {
+      // 查不到就不畫按鈕，不影響看診。
+    }
+  },
+  { immediate: true }
+)
+function openLatestReport() {
+  if (!latestReport.value) return
+  const { href } = router.resolve({ name: 'record-preview', params: { id: latestReport.value._id } })
+  window.open(href, '_blank', 'noopener')
+}
 const labImportOpen = ref(false)
 // 填入狀態燈號的明細按了「比對」：開 IDEXX 與報告數值的比對視窗。
 const labConflictGroup = ref(null)
@@ -561,7 +597,10 @@ onBeforeUnmount(() => {
       <div class="grid @4xl/visit:grid-cols-[minmax(0,65fr)_minmax(20rem,35fr)]">
         <div class="flex flex-col gap-6 px-6 py-5">
           <section class="space-y-3" :aria-labelledby="`measure-heading-${appointment._id}`">
-            <div class="flex items-center gap-2"><h3 :id="`measure-heading-${appointment._id}`" class="text-base font-semibold">量測</h3><DestTag :to="['journal', 'report']" /></div>
+            <div class="flex items-center gap-2"><h3 :id="`measure-heading-${appointment._id}`" class="text-base font-semibold">量測</h3><DestTag :to="['journal', 'report']" />
+              <Button v-if="latestReport" type="button" variant="soft" size="sm" class="ml-auto" @click="openLatestReport"><FileText stroke-width="1.75" />上次報告<span v-if="formatDate(latestReport.visitDate)" class="num">{{ formatDate(latestReport.visitDate) }}</span></Button>
+              <Badge v-else-if="latestReportChecked" variant="status" class="ml-auto bg-sunken text-muted-foreground">無上次報告</Badge>
+            </div>
             <!-- 量測用文字框＋數字鍵盤，不用 type="number"：數字框在空白時按上下鍵或滾輪會直接帶入最小值 0，
                  醫師捲動工作區時游標停在體溫欄，就莫名其妙存了 0 °C。填寫頁的量測欄位也是這樣做。 -->
             <div class="grid grid-cols-2 gap-3">
