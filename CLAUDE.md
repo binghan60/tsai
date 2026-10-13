@@ -420,7 +420,6 @@ npm run build                  # 含色碼／title 檢查，最後把 /assets �
 npm test                       # node --test，src/lib/*.test.js（純邏輯）
 npm run test:workflow-browser  # 瀏覽器實測診療台與掛號台（記憶體資料，不連資料庫）
 npm run test:medication-browser
-npm run manual:screenshots     # 重新產生使用手冊的截圖（docs/manual/images/，假資料在 scripts/manual-fixtures.mjs，不連資料庫）
 npm run dev                    # 使用者自己開，不要主動啟動（會搶 port）
 
 # 後端（server/）
@@ -464,6 +463,5 @@ npm run build:installer        # 產生 dist/IDEXX-Bridge-Setup.cmd；有 instal
 | 換套件、加開發指令 | 第四節、第八節 |
 | 狀態語意（`status`／`deliveryStatus`／藥單階段） | 第三節、STYLE_GUIDE 色彩語意 |
 | 做完待辦、發現新限制 | 第九節 |
-| 使用者看得到的流程、按鈕名稱、自動連鎖動作 | `docs/manual/index.html`（給醫師與櫃台的使用手冊），畫面變了就 `npm run manual:screenshots` 重產截圖 |
 
 只改實作細節（重構、修 bug、調樣式）而沒有動到上面這些面向時，不需要動這份文件。

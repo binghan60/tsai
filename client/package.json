@@ -10,7 +10,6 @@
     "test": "node --test",
     "test:workflow-browser": "node scripts/check-appointment-workflow.mjs",
     "test:medication-browser": "node scripts/check-medication-workflow.mjs",
-    "manual:screenshots": "node scripts/manual-screenshots.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
