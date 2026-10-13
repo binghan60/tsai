@@ -542,9 +542,9 @@ try {
   await step('18-待辦', async () => {
     await go(desk, `/reception?date=${today}`, '今日看診');
     await click(desk, 'aside[aria-label="工具欄"] button', '待辦');
-    await waitText(desk, '上傳影像');
+    await waitText(desk, '要寄影像');
     const header = await el(desk, 'section[aria-label] header', '院內共用');
-    const last = await el(desk, 'section[aria-label] li', '上傳影像');
+    const last = await el(desk, 'section[aria-label] li', '要寄影像');
     await shot(desk, '18-todos', [header, last], 16);
   });
 } finally {

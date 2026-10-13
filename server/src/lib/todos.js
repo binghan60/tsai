@@ -1,4 +1,6 @@
 import Todo from '../models/Todo.js';
+import Appointment from '../models/Appointment.js';
+import Owner from '../models/Owner.js';
 import { emitTodosUpdate } from './realtime.js';
 import { withTransaction } from './transaction.js';
 import { escapeRegExp } from './regex.js';
@@ -25,7 +27,26 @@ export async function listTodos() {
     openTodosQuery().lean(),
     Todo.find({ status: 'done' }).sort({ doneAt: -1, _id: -1 }).limit(MAX_DONE_TODOS).lean(),
   ]);
-  return [...sortOpenTodos(open), ...done];
+  return [...sortOpenTodos(await withOwnerEmails(open)), ...done];
+}
+
+// 掛號「上傳影像」帶出來的待辦要附飼主 Email（上傳影像時要寄給飼主）：即時由掛號查到飼主、
+// 讀他現在的 Email，不在待辦上存快照——飼主改了信箱，待辦上的也跟著對。沒有連到掛號、飼主沒填
+// Email 的待辦不帶 ownerEmail。只查未完成的：做完的不再需要。
+async function withOwnerEmails(rows) {
+  if (!rows.length) return rows;
+  const appointments = await Appointment.find({ imageUploadTodoId: { $in: rows.map((row) => row._id) } })
+    .select('imageUploadTodoId ownerId').lean();
+  const ownerIds = [...new Set(appointments.filter((a) => a.ownerId).map((a) => String(a.ownerId)))];
+  if (!ownerIds.length) return rows;
+  const owners = await Owner.find({ _id: { $in: ownerIds } }).select('email').lean();
+  const emailByOwner = new Map(owners.filter((o) => o.email).map((o) => [String(o._id), o.email]));
+  const emailByTodo = new Map();
+  for (const appointment of appointments) {
+    const email = emailByOwner.get(String(appointment.ownerId));
+    if (email) emailByTodo.set(String(appointment.imageUploadTodoId), email);
+  }
+  return rows.map((row) => (emailByTodo.has(String(row._id)) ? { ...row, ownerEmail: emailByTodo.get(String(row._id)) } : row));
 }
 
 // 搜尋已完成的待辦：不限最近 50 筆，翻得到全部歷史（「上次叫 k/d 是哪天」）。

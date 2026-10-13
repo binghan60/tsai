@@ -2,11 +2,12 @@
 import { useClientPagination } from '../composables/useClientPagination';
 import { apiErrorMessage } from '../lib/apiError.js';
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
-import { Check, ChevronDown, CornerDownRight, GripVertical, ListTodo, Pencil, Plus, Search, Star, Trash2 } from '@lucide/vue';
+import { Check, ChevronDown, Copy, CornerDownRight, GripVertical, ListTodo, Pencil, Plus, Search, Star, Trash2 } from '@lucide/vue';
 import { useTodosStore } from '../stores/todos';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { useToast } from '../composables/useToast';
+import { useCopy } from '../composables/useCopy';
 import { clinicDateInput, formatDateTime } from '../lib/datetime';
 import { mentionsStillInContent, splitMentionSegments } from '../lib/chatMentions';
 import { DUE_TONE_CLASS, dueStatus, todoMatches } from '../lib/todoDisplay';
@@ -32,6 +33,7 @@ const store = useTodosStore();
 const pinned = usePinnedPetsStore();
 const { identity } = useStaffIdentity();
 const toast = useToast();
+const { copyEmail } = useCopy();
 // KeepAlive 會讓面板跨日掛著，「今天」每次用到才算，不在掛載時存一份。
 const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
 const dateTimeOptions = { month: 'numeric', day: 'numeric', ...timeOptions };
@@ -366,7 +368,21 @@ async function saveEdit(item) {
           <!-- 標籤緊貼標籤寫在同一行：RichText 是 whitespace-pre-wrap，標籤之間多一個換行就會多一個空格。
                RichText 先把粗體／顏色拆成片段，每個片段裡再把 #名字 換成可點的貓咪標籤（點了開病歷速覽）；
                petId 是 null 代表貓咪資料已被刪除，只留下當時的名字、不可點。 -->
-          <RichText v-slot="{ text }" tag="p" :text="item.content" class="pt-1 text-base leading-snug" :class="item.status === 'done' ? 'text-muted-foreground line-through' : ''"><template v-for="(segment, index) in splitMentionSegments(text, item.mentions)" :key="index"><button v-if="segment.type === 'mention' && segment.mention.petId" type="button" class="mx-0.5 inline-flex items-center rounded-full bg-accent px-1.5 font-medium text-accent-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" v-tip="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined" @click="pinned.openQuickView(segment.mention.petId)">#{{ segment.mention.petName }}</button><span v-else-if="segment.type === 'mention'" class="text-muted-foreground" v-tip="'貓咪資料已刪除'">#{{ segment.mention.petName }}</span><template v-else>{{ segment.text }}</template></template></RichText>
+          <!-- 「#貓咪名 要寄影像 email」：掛號「上傳影像」帶出來的待辦，飼主 Email（伺服器即時查）接在內文同一行，
+               整串字就是複製鈕，點一下複製；同一行放不下時整串換到下一行。 -->
+          <div class="flex flex-wrap items-baseline gap-x-2">
+          <RichText v-slot="{ text }" tag="p" :text="item.content" class="min-w-0 pt-1 text-base leading-snug" :class="item.status === 'done' ? 'text-muted-foreground line-through' : ''"><template v-for="(segment, index) in splitMentionSegments(text, item.mentions)" :key="index"><button v-if="segment.type === 'mention' && segment.mention.petId" type="button" class="mx-0.5 inline-flex items-center rounded-full bg-accent px-1.5 font-medium text-accent-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" v-tip="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined" @click="pinned.openQuickView(segment.mention.petId)">#{{ segment.mention.petName }}</button><span v-else-if="segment.type === 'mention'" class="text-muted-foreground" v-tip="'貓咪資料已刪除'">#{{ segment.mention.petName }}</span><template v-else>{{ segment.text }}</template></template></RichText>
+          <button
+            v-if="item.ownerEmail"
+            type="button"
+            class="inline-flex max-w-full items-center gap-1.5 rounded-md text-base text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            :aria-label="`複製飼主 Email：${item.ownerEmail}`"
+            @click="copyEmail(item.ownerEmail)"
+          >
+            <span class="min-w-0 truncate">{{ item.ownerEmail }}</span>
+            <Copy class="size-4 shrink-0" stroke-width="1.75" aria-hidden="true" />
+          </button>
+          </div>
 
           <!-- 時間這一行：星號（標了才畫）、「處理中」（未完成而寫了處理過程；info＝還在進行的狀態）、期限、建立／完成。 -->
           <p class="flex flex-wrap items-center gap-2 text-xs text-subtle-foreground">
@@ -375,6 +391,7 @@ async function saveEdit(item) {
             <Badge v-if="item.status === 'open' && dueStatus(item.dueDate, clinicDateInput())" variant="status" :class="DUE_TONE_CLASS[dueStatus(item.dueDate, clinicDateInput()).tone]">{{ dueStatus(item.dueDate, clinicDateInput()).label }}</Badge>
             {{ metaLabel(item) }}
           </p>
+
 
           <!-- 已完成的處理過程純展示：不能展開、不能改，直接寫在時間行下面（改回未完成才又能編輯）。 -->
           <p v-if="item.status === 'done' && item.progress" class="flex items-start gap-1.5 pt-1 text-sm text-muted-foreground">

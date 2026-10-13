@@ -103,7 +103,7 @@
 - `internalNote` 內部備註：只給院內看，不進病歷日誌與健檢報告。
 - `specialCareNote` 請轉告飼主：櫃台處理視窗最上面用警示樣式呈現。
 - `followUpRecommendation` 回診建議：醫師寫期間與原因，櫃台約下一次時預設帶進來院原因。
-- `imageUpload`（`null` 沒勾過／`true`／`false` 勾過又取消）：櫃台處理視窗的「上傳影像」。勾選先記在視窗裡，按完成處理時跟著送出（`complete` 帶 `imageUpload`，有變才帶）；勾了同一個 transaction 新增一筆待辦「上傳影像 #貓咪名」（`lib/imageUploadTodo.js`，id 記在 `imageUploadTodoId`），取消勾選收掉還沒完成的那筆；待辦完成時把時間寫回 `imageUploadDoneAt`，日誌顯示「已完成　10/9 14:32」。
+- `imageUpload`（`null` 沒勾過／`true`／`false` 勾過又取消）：櫃台處理視窗的「上傳影像」。勾選先記在視窗裡，按完成處理時跟著送出（`complete` 帶 `imageUpload`，有變才帶）；勾了同一個 transaction 新增一筆待辦「#貓咪名 要寄影像」（`lib/imageUploadTodo.js`，id 記在 `imageUploadTodoId`），取消勾選收掉還沒完成的那筆；待辦完成時把時間寫回 `imageUploadDoneAt`，日誌顯示「已完成　10/9 14:32」。
 
 交給櫃台之後，櫃台還能改 `visitNote`、`internalNote`、`imageUpload`（`DESK_EDITABLE_FIELDS`），其餘要醫師取回；櫃台完成處理後整組鎖定（從病歷日誌更正不受這個限制）。
 
@@ -188,6 +188,7 @@
 
 - **未完成清單完全照手動順序**（拖拉排序，`shared/todoOrder.js`）：期限、星號都不影響位置。`sortOrder` 沒有值時以建立時間（毫秒）代替，所以新增的在最下面；改回未完成換成當下時間、回到最下面。**這欄刻意不設 schema default**（Mongoose 讀出舊文件會補 default、下次 save 就寫進去，舊待辦一改就跳到最下面）。拖拉＝`POST /:id/move { beforeId }`（null＝最後），在 transaction 裡把整份未完成清單重新編號 0、1、2…；要排的那筆或 `beforeId` 已經不在未完成清單上回 409 附最新清單。
 - `GET /api/todos` 回未完成（上限 200，超過時留最新建立的）＋最近完成 50 筆；任何異動後整份重讀並廣播。
+- **「上傳影像」待辦附飼主 Email**：`listTodos` 對未完成的待辦用 `imageUploadTodoId` 反查掛號 → 飼主，即時帶回 `ownerEmail`（不在待辦上存快照，飼主改了信箱跟著對；沒連到掛號或飼主沒填的不帶這欄）。面板上 Email 接在內文同一行（「#貓咪名 要寄影像 email」，放不下時整串換行），整串字是複製鈕，點一下複製。Email 不寫進 `content`，所以內文不會因飼主改信箱而過時。飼主在別處改了 Email 不會觸發待辦廣播，下一次清單異動或重新整理才更新。
 - 搜尋：未完成的在前端比對（`lib/todoDisplay.js` 的 `todoMatches`）；已完成的走 `GET /api/todos/search?q=`，查全部歷史（不只最近 50 筆，最多 200 筆、新到舊）。兩邊比對同樣三處：去掉格式標記的內文、處理過程、`#` 標記的貓咪名字。搜尋中不能拖拉排序。
 
 ### textTemplates 文字模板

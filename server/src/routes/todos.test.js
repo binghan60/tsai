@@ -6,6 +6,7 @@ import { app } from '../app.js';
 import Pet from '../models/Pet.js';
 import Todo from '../models/Todo.js';
 import Appointment from '../models/Appointment.js';
+import Owner from '../models/Owner.js';
 import { isValidDateInput, sortOpenTodos } from '../lib/todos.js';
 
 const todoId = '64b000000000000000000010';
@@ -13,7 +14,11 @@ const petId = '64b000000000000000000001';
 const jsonHeaders = { 'content-type': 'application/json' };
 
 // 清單查詢走 find().sort().limit()[.select().session()].lean()（拖拉排序在 transaction 裡讀同一份清單）。
-function mockList(open = [], done = []) {
+// links：掛號「上傳影像」帶出待辦的連結，listTodos 會由此查到飼主 Email（預設沒有）。
+function mockList(open = [], done = [], links = { appointments: [], owners: [] }) {
+  const chain = (rows) => { const query = { lean: async () => rows }; query.select = () => query; return query; };
+  Appointment.find = () => chain(links.appointments);
+  Owner.find = () => chain(links.owners);
   Todo.find = (filter) => {
     const query = { lean: async () => (filter.status === 'open' ? open : done) };
     query.select = () => query;
@@ -99,6 +104,27 @@ describe('todos routes', () => {
     const response = await fetch(`${origin}/api/todos`);
     assert.equal(response.status, 200);
     assert.deepEqual((await response.json()).items.map((item) => item._id), ['o1', 'o2', 'd1']);
+  });
+
+  it('GET 上傳影像待辦附飼主 Email（即時查，沒有 Email 或沒連到掛號的不帶）', async () => {
+    const owner = '64b0000000000000000000b1';
+    const noEmailOwner = '64b0000000000000000000b2';
+    mockList(
+      [
+        { _id: 'u1', status: 'open', content: '上傳影像', createdAt: '2026-09-01T00:00:00Z' },
+        { _id: 'u2', status: 'open', content: '上傳影像', createdAt: '2026-09-02T00:00:00Z' },
+        { _id: 'u3', status: 'open', content: '叫貨', createdAt: '2026-09-03T00:00:00Z' },
+      ],
+      [],
+      {
+        appointments: [{ imageUploadTodoId: 'u1', ownerId: owner }, { imageUploadTodoId: 'u2', ownerId: noEmailOwner }],
+        owners: [{ _id: owner, email: 'wang@example.com' }, { _id: noEmailOwner }],
+      }
+    );
+    const items = (await (await fetch(`${origin}/api/todos`)).json()).items;
+    assert.equal(items.find((item) => item._id === 'u1').ownerEmail, 'wang@example.com');
+    assert.equal('ownerEmail' in items.find((item) => item._id === 'u2'), false);
+    assert.equal('ownerEmail' in items.find((item) => item._id === 'u3'), false);
   });
 
   it('POST 建立待辦：內容去空白、# 標記的名字快照由伺服器查、重複的 id 只算一次', async () => {

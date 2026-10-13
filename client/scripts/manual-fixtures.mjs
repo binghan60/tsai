@@ -204,9 +204,10 @@ export function buildFixtures(today = clinicToday()) {
   };
 
   // ── 待辦 ──
-  const todo = (data) => build(Todo, { _id: data._id ?? oid(), ...data });
+  // ownerEmail 不是 Todo 的欄位（伺服器由掛號即時查出來附上），模型會濾掉，建好之後再補回去。
+  const todo = ({ ownerEmail, ...data }) => ({ ...build(Todo, { _id: data._id ?? oid(), ...data }), ...(ownerEmail ? { ownerEmail } : {}) });
   const todos = [
-    todo({ _id: todoIds.tiger, content: '上傳影像 #阿虎', createdBy: 'front_desk', mentions: [{ petId: pets.tiger._id, petName: '阿虎', ownerName: '吳佩珊' }], createdAt: at('14:26') }),
+    todo({ _id: todoIds.tiger, content: '#阿虎 要寄影像', ownerEmail: 'pei-shan.wu@example.com', createdBy: 'front_desk', mentions: [{ petId: pets.tiger._id, petName: '阿虎', ownerName: '吳佩珊' }], createdAt: at('14:26') }),
     todo({ content: '叫貨：**腎臟處方飼料 k/d** 3 包', createdBy: 'front_desk', starred: true, dueDate: tomorrow, createdAt: at('11:30') }),
     todo({ content: '回電給 #雪球 的飼主確認回診時間', createdBy: 'vet', mentions: [{ petId: pets.snow._id, petName: '雪球', ownerName: '趙子涵' }], dueDate: today, createdAt: at('11:05') }),
     todo({ content: '[green]更換診間消毒液[/green]', createdBy: 'front_desk', status: 'done', doneAt: at('18:40', yesterday), doneBy: 'front_desk', createdAt: at('09:10', yesterday) }),

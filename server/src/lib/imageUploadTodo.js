@@ -4,13 +4,14 @@ import { emitAppointmentUpdate } from './realtime.js';
 import { mentionSnapshots } from './petMentions.js';
 import { escapeRichText } from '../../../shared/richText.js';
 
-export const IMAGE_UPLOAD_LABEL = '上傳影像';
+export const IMAGE_UPLOAD_LABEL = '要寄影像';
 
-// 待辦內文：「上傳影像 #貓咪名」，貓咪用 # 標記（跟手動打的待辦同一套，點得進病歷速覽）。
+// 待辦內文：「#貓咪名 要寄影像」，貓咪用 # 標記（跟手動打的待辦同一套，點得進病歷速覽）。
+// 飼主 Email 不寫進內文：面板在同一行即時帶出飼主現在的信箱（lib/todos.js 的 withOwnerEmails）。
 // 貓咪名是資料，不是格式標記，先跳脫。
 export function imageUploadTodoContent(petName) {
   const name = String(petName ?? '').trim();
-  return name ? `${IMAGE_UPLOAD_LABEL} #${escapeRichText(name)}` : IMAGE_UPLOAD_LABEL;
+  return name ? `#${escapeRichText(name)} ${IMAGE_UPLOAD_LABEL}` : IMAGE_UPLOAD_LABEL;
 }
 
 // 櫃台處理視窗的「上傳影像」勾選框變動時呼叫（勾起來或取消，值沒變不要呼叫）：

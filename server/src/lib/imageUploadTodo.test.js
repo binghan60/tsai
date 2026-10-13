@@ -36,7 +36,7 @@ test('restoreImageUploadTodo does nothing unless ticked and the todo was withdra
 });
 
 test('the todo names the cat with a # mention, escaping markup characters in the name', () => {
-  assert.equal(imageUploadTodoContent('豆豆'), '上傳影像 #豆豆');
-  assert.equal(imageUploadTodoContent('*星星*'), String.raw`上傳影像 #\*星星\*`);
-  assert.equal(imageUploadTodoContent(''), '上傳影像');
+  assert.equal(imageUploadTodoContent('豆豆'), '#豆豆 要寄影像');
+  assert.equal(imageUploadTodoContent('*星星*'), String.raw`#\*星星\* 要寄影像`);
+  assert.equal(imageUploadTodoContent(''), '要寄影像');
 });

@@ -12,6 +12,7 @@ export function useCopy() {
 
   return {
     copyPhone: (phone) => copy(phone, { copied: '已複製電話', failed: '無法複製，請手動選取電話' }),
+    copyEmail: (email) => copy(email, { copied: '已複製 Email', failed: '無法複製，請手動選取 Email' }),
     copyIntakeCode: (code) => copy(code, { copied: '已複製驗證碼', failed: '無法複製，請手動抄下驗證碼' }),
   };
 }
