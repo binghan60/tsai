@@ -3,7 +3,7 @@ import { apiErrorMessage } from '../lib/apiError';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import PatientLink from '../components/PatientLink.vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, Link2, LockKeyhole, Save, Settings2, Trash2 } from '@lucide/vue';
+import { Activity, CalendarCheck, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, Link2, LockKeyhole, Save, Settings2, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, clinicTimeInput, combineClinicDateTime, formatDate } from '../lib/datetime';
@@ -39,6 +39,8 @@ import TextTemplatePickerDialog from '../components/formfields/TextTemplatePicke
 import { provideRecordForm } from '../components/formfields/context';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { useToast } from '../composables/useToast';
+import { useAppointmentRealtime } from '../composables/useAppointmentRealtime';
+import { useLiveReload } from '../composables/useLiveReload';
 import { useWorkCountsStore } from '../stores/workCounts';
 import { catBreedLabel } from '../../../shared/catBreeds.js';
 
@@ -217,6 +219,43 @@ async function refreshVisitValues() {
     // 下一次存檔回來也會換成伺服器的值。
   }
 }
+
+// 櫃台約好（或改期）回診：回診日期只能在掛號台安排，這裡不給改，所以直接換成看診上的值並提示醫師。
+// 掛號的即時推播要加入看診那一天的房間；斷線期間錯過的，重新連上時整份重讀補回。
+function applyFollowUp(date, time) {
+  if (!isVisitLinked.value) return;
+  if (date === followUpDate.value && time === followUpTime.value) return;
+  const hadBooking = Boolean(followUpDate.value);
+  followUpDate.value = date;
+  followUpTime.value = time;
+  followUpNotice.value = !date ? 'cancelled' : hadBooking ? 'rescheduled' : 'booked';
+}
+
+// 回診日期欄位自己變色並標出「櫃台剛約好」（不用 toast，醫師不在這個欄位旁邊時也不會被蓋掉）；點一下欄位區塊就收起。
+const followUpNotice = ref('');
+const FOLLOW_UP_NOTICE = {
+  booked: { label: '櫃台已約好', box: 'bg-success-surface ring-success/50 text-success' },
+  rescheduled: { label: '櫃台已改約', box: 'bg-success-surface ring-success/50 text-success' },
+  cancelled: { label: '回診已取消', box: 'bg-warning-surface ring-warning/50 text-warning' },
+};
+
+const followUpRoomDate = computed(() => (isVisitLinked.value ? visitLink.value?.date ?? '' : ''));
+useAppointmentRealtime(followUpRoomDate, {
+  onAppointmentUpdate: (appointment) => {
+    if (!visitLink.value?.appointmentId || String(appointment?._id) !== String(visitLink.value.appointmentId)) return;
+    applyFollowUp(appointment.followUpDate || '', appointment.followUpTime || '');
+  },
+});
+useLiveReload(async () => {
+  if (!isVisitLinked.value || !recordId.value) return;
+  try {
+    const { data } = await http.get(`/records/${recordId.value}`);
+    if (data.followUpDate === undefined) return;
+    applyFollowUp(clinicDateInput(data.followUpDate), data.followUpDate ? clinicTimeInput(data.followUpDate) : '');
+  } catch {
+    // 下一次存檔回來也會換成伺服器的值。
+  }
+});
 
 const showDiscardConfirm = ref(false);
 const discarding = ref(false);
@@ -1189,8 +1228,17 @@ function handleBeforeUnload(event) {
         </SpecGrid>
         <ReminderTags :pet="pet" />
         <div class="ml-auto flex flex-wrap items-end gap-2">
-          <div class="space-y-1">
-            <Label for="record-follow-up-date">回診日期</Label>
+          <div
+            class="space-y-1 rounded-lg transition-colors"
+            :class="followUpNotice ? ['-m-2 cursor-pointer p-2 ring-1', FOLLOW_UP_NOTICE[followUpNotice].box] : ''"
+            @click="followUpNotice = ''"
+          >
+            <div class="flex items-center gap-1.5">
+              <Label for="record-follow-up-date">回診日期</Label>
+              <span v-if="followUpNotice" class="inline-flex items-center gap-1 text-xs font-semibold" role="status">
+                <CalendarCheck class="size-4" stroke-width="1.75" />{{ FOLLOW_UP_NOTICE[followUpNotice].label }}
+              </span>
+            </div>
             <div class="flex gap-2">
               <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="" aria-label="選擇回診日期" :disabled="isVisitLinked" class="w-52" />
               <TimePicker id="record-follow-up-time" v-model="followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="isVisitLinked || !followUpDate" class="w-32 shrink-0" />
