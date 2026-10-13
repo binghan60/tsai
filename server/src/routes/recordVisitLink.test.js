@@ -121,6 +121,9 @@ describe('健檢報告草稿引用看診', () => {
     const body = await (await fetch(`${origin}/${recordId}`)).json();
     assert.equal(body.visitLink.noVisitRecord, true);
     assert.equal(body.noVisitRecord, true);
+    assert.equal(String(body.visitInfo.appointmentId), appointmentId);
+    assert.equal(body.visitInfo.date, '2026-09-07');
+    assert.equal(body.visitInfo.noVisitRecord, true);
   });
 
   it('報告上改的值寫回看診與病歷日誌，草稿不存', async () => {

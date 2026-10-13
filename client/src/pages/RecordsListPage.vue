@@ -25,6 +25,13 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import DataCard from '../components/DataCard.vue';
 
+// 櫃台處理徽章點得進那次看診（只有看診報告有；獨立報告是普通的 span）。
+function deskVisitLink(record) {
+  if (!record.deskVisit) return {};
+  const { date, appointmentId } = record.deskVisit;
+  return { to: { path: '/appointments', query: { date, open: appointmentId } }, 'aria-label': `在診療台打開 ${date} 的看診` };
+}
+
 // 預設先提供完整紀錄；需要處理的工作則依優先級排列在後續篩選中。
 const VIEWS = [
   { key: 'all', label: '全部', tone: 'neutral' },
@@ -233,9 +240,9 @@ async function removeRecord(confirmText) {
             <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" v-tip="record.deliveryError || undefined">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
           </span>
           <span class="desktop-data-cell">
-            <span v-if="deskBadges(record).length" class="flex flex-wrap items-center gap-1">
+            <component :is="record.deskVisit ? 'router-link' : 'span'" v-if="deskBadges(record).length" v-bind="deskVisitLink(record)" class="flex flex-wrap items-center gap-1">
               <Badge v-for="badge in deskBadges(record)" :key="badge.key" variant="status" :class="badge.class">{{ badge.label }}</Badge>
-            </span>
+            </component>
           </span>
           <span class="desktop-data-cell flex items-center justify-end gap-1">
             <Button as-child variant="soft" size="sm"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
@@ -258,7 +265,9 @@ async function removeRecord(confirmText) {
           <div class="flex flex-wrap items-center gap-1.5">
             <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
             <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
-            <Badge v-for="badge in deskBadges(record)" :key="badge.key" variant="status" :class="badge.class">{{ badge.label }}</Badge>
+            <component :is="record.deskVisit ? 'router-link' : 'span'" v-if="deskBadges(record).length" v-bind="deskVisitLink(record)" class="contents">
+              <Badge v-for="badge in deskBadges(record)" :key="badge.key" variant="status" :class="badge.class">{{ badge.label }}</Badge>
+            </component>
             <Button as-child variant="soft" size="sm" class="ml-auto"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
           </div>
           <p v-if="record.deliveryError" class="text-sm text-danger">{{ record.deliveryError }}</p>

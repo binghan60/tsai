@@ -79,7 +79,7 @@ export async function claimDelivery(recordId, { onlyIfNotSent = false } = {}) {
     return { response: { status: 409, body: { message: '請先完成結案，再寄送正式報告' } } };
   }
   // 強制防呆：櫃台勾了「不寄就診紀錄」就一律不寄（手動、自動都走這裡）。
-  if (await hasNoVisitRecord(record._id)) {
+  if (await hasNoVisitRecord(record)) {
     return { response: { status: 409, body: { message: NO_VISIT_RECORD_MESSAGE, noVisitRecord: true } } };
   }
   if (effectiveDeliveryStatus(record) === 'sending') {

@@ -31,7 +31,7 @@ import { reportPdfFilename } from '../../../shared/reportFilename.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { applyVisitEdits, hasVisitEdits, stripVisitFields, templateLabItems, visitOverlay } from '../lib/recordVisitLink.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
-import { deskStatusByRecordId, hasNoVisitRecord, NO_VISIT_RECORD_MESSAGE } from '../lib/recordDeskStatus.js';
+import { deskStatusByRecordId, hasNoVisitRecord, NO_VISIT_RECORD_MESSAGE, visitInfoForRecord } from '../lib/recordDeskStatus.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -426,10 +426,16 @@ recordsRouter.get('/', async (req, res, next) => {
     ]);
 
     // 櫃台處理狀態讓醫師看得出這筆看診櫃台做完了沒；報告沒連著看診時是空字串。
-    const deskStatuses = await deskStatusByRecordId(items.map((item) => item._id));
+    const deskStatuses = await deskStatusByRecordId(items);
     const rows = items.map((item) => {
       const desk = deskStatuses.get(String(item._id));
-      return { ...item.toJSON(), deskStatus: desk?.deskStatus ?? '', deskNoVisitRecord: Boolean(desk?.noVisitRecord) };
+      return {
+        ...item.toJSON(),
+        deskStatus: desk?.deskStatus ?? '',
+        deskNoVisitRecord: Boolean(desk?.noVisitRecord),
+        // 清單上的櫃台處理徽章點得進那次看診；沒有對應看診（獨立報告）是 null。
+        deskVisit: desk?.visit ?? null,
+      };
     });
 
     res.json({ items: rows, total, page, limit, view, counts });
@@ -449,6 +455,8 @@ recordsRouter.get('/:id', async (req, res, next) => {
     const visit = await applyLinkedVisit(record);
     // 預覽模式與報告頁共用同一套渲染，草稿也要能拿到區塊結構與歷史對照數值。
     const sections = await sectionsForView(record);
+    // 對應看診（草稿、結案、修訂版都有；獨立報告是 null）：預覽頁的「對應看診」一條與寄送防呆都看這個。
+    const visitInfo = await visitInfoForRecord(record);
     // 一定要用 toJSON()：toObject() 預設不 flatten Map，展開後 customValues 會變成 {}，
     // 自訂項目的作答一開啟編輯頁就空白，接著自動儲存把 {} 寫回資料庫。
     res.json({
@@ -457,7 +465,8 @@ recordsRouter.get('/:id', async (req, res, next) => {
       deliveryStatus: effectiveDeliveryStatus(record),
       visitLink: visitLinkPayload(visit),
       // 櫃台勾了「這次看診不寄就診紀錄」：預覽頁停用 Email 寄送（伺服器也擋）。
-      noVisitRecord: await hasNoVisitRecord(record._id),
+      visitInfo,
+      noVisitRecord: Boolean(visitInfo?.noVisitRecord),
     });
   } catch (err) {
     next(err);
@@ -588,7 +597,7 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
     let autoSend = false;
     let autoSendError = '';
     if (req.body?.autoSend === true) {
-      const problem = await hasNoVisitRecord(record._id) ? NO_VISIT_RECORD_MESSAGE : await autoSendRecipientProblem(record.petId);
+      const problem = await hasNoVisitRecord(record) ? NO_VISIT_RECORD_MESSAGE : await autoSendRecipientProblem(record.petId);
       if (problem) autoSendError = `沒有自動寄出：${problem}`;
       else autoSend = true;
     }
