@@ -56,7 +56,7 @@
 
 ### 格式標記（粗體／六色）
 
-本次簡易紀錄 `appointments.visitNote`、診療台藥單 `appointments.prescription`、藥單的 `condition`／`prescription`／`note`、待辦 `todos.content`、文字模板 `textTemplates.content`，以及**健檢報告所有多行文字項目**（`type: 'textarea'`）可以加粗與上色（紅／橙／綠／藍／紫／青，對應 `danger`／`warning`／`success`／`info`／`surgery`／`primary`；報告紙面走 `report-*` token）。欄位仍是一般字串，內容是 `shared/richText.js` 的極簡標記：粗體 `**字**`、顏色 `[red]字[/red]`，換行就是 `\n`、標記不跨行，`\` 跳脫 `\ * [`（不用 `#`，那是寵物標記）。前後端共用 `parseRichText`／`normalizeRichText`／`richTextToPlain`／`richTextLength`：
+本次簡易紀錄 `appointments.visitNote`、診療台藥單 `appointments.prescription`、藥單的 `condition`／`prescription`／`note`、待辦 `todos.content`、文字模板 `textTemplates.content`，以及**健檢報告所有多行文字項目**（`type: 'textarea'`）可以加粗與上色（紅／橙／綠／藍／紫／青，對應 `danger`／`warning`／`success`／`info`／`mark-purple`／`primary`；報告紙面走 `report-*` token）。欄位仍是一般字串，內容是 `shared/richText.js` 的極簡標記：粗體 `**字**`、顏色 `[red]字[/red]`，換行就是 `\n`、標記不跨行，`\` 跳脫 `\ * [`（不用 `#`，那是寵物標記）。前後端共用 `parseRichText`／`normalizeRichText`／`richTextToPlain`／`richTextLength`：
 
 - **存之前一律 `normalizeRichText`**（編輯器送出的字串跟伺服器整理後的一致，自動存檔才不會一存就被判成「有修改」）；**字數上限與「不可空白」都看純文字**（schema 用 `lib/richTextSchema.js` 的 `richTextMaxLength`），只剩標記算空白。
 - **顯示一律走 `RichText.vue`**（拆成片段、文字插值輸出，**永遠不用 `v-html`**）。清單上的一行摘要用 `RichText one-line`（換行以 `joiner` 接起來），多行截斷加 `line-clamp-*`——摘要也要畫出顏色。編輯用 `RichTextEditor.vue`（Tiptap）。
@@ -145,6 +145,7 @@
 - **已結案報告的內容一律讀 `sections` 快照**。草稿每次讀取時用目前範本即時組合，並補上「上次數值」對照（最近 20 份已結案報告裡同一項目的值，`lib/historyValues.js`）。
 - **連著看診的草稿引用看診、不複製**（`lib/recordVisitLink.js`）：體重、體溫、回診日期、檢驗數值不存在草稿上。讀取（`GET /records/:id`）時把看診的值疊上去（`visitOverlay`，另帶 `visitLink`）；寫入（`PUT`）時這幾欄一律清掉，醫師在報告上改過的放在 `visitEdits`，同一個 transaction 寫回看診與病歷日誌（報告寫不進去，看診也回滾）。回診日期只能讀（只在掛號台約回診）。結案時把看診的值凍結進報告。看診被永久刪除前，先把值寫進還連著的草稿。
 - **飼主開啟報告連結與 PDF 要密碼＝飼主手機後 6 碼**（`lib/reportPasscode.js`，不另存欄位，每次用當下的電話算；湊不滿 6 碼就沒有密碼）。公開頁 `GET /api/public/reports/:token` 要帶 `X-Report-Passcode` 標頭，同一個連結 15 分鐘內打錯 10 次就鎖。GridFS 裡存的是沒有密碼的原檔，**交出去（下載、Email 附件）那一刻才加密**（`lib/pdfEncrypt.js`）。
+- **櫃台處理勾了「這次看診不寄就診紀錄」＝強制不寄 Email**：`claimDelivery`（手動與自動寄送共用）回 409，結案時帶 `autoSend` 也不排自動寄送；預覽頁停用寄送鈕與結案視窗的自動寄送勾選，`GET /records/:id` 帶 `noVisitRecord`（`lib/recordDeskStatus.js` 的 `hasNoVisitRecord`，由連著看診的 `deskItems` 即時查）。要寄請櫃台取消勾選。只擋 Email，分享連結不受影響。
 - 刪除：已寄出、寄送中、結果待確認的不能刪；已結案的要打字確認（`confirmText`＝貓咪名稱），草稿直接刪。刪除時同一個 transaction 回復修訂鏈、把指向它的掛號 `recordId` 清成 null（`__v` +1、廣播），之後刪掉 Cloudinary 圖片與 GridFS 裡的 PDF。
 - 索引：`petId`、`shareToken`、`{supersededBy, updatedAt}`、`{supersededBy, visitDate}`、`{status, deliveryStatus}`、修訂相關兩條。跨貓咪清單沒有索引會變成記憶體排序（32MB 上限會直接失敗）——**新增查詢模式時要確認索引接得上**。
 
@@ -283,7 +284,7 @@ DELETE /api/clinical-notes/:id           只限手動／匯入；看診與藥單
 GET    /api/pets/:petId/records ／ POST /api/pets/:petId/records（templateId 必填）
 GET    /api/pets/:petId/records/previous-values   上次數值對照
 GET    /api/pets/:petId/records/finalized-sources 「從既有報告帶入」的來源清單
-GET    /api/records                      跨貓咪清單：?view= todo|drafts|pending|failed|sent|all、?q=、分頁；回 counts（佇列數字不套用搜尋）；每列另帶 `deskStatus`（連著看診才有：`with_doctor`／`desk_pending`／`reopen_requested`／`desk_done`，否則空字串；由掛號即時推導，`shared/appointmentWorkflow.js` 的 `deskProcessingState`，不存欄位）
+GET    /api/records                      跨貓咪清單：?view= todo|drafts|pending|failed|sent|all、?q=、分頁；回 counts（佇列數字不套用搜尋）；每列另帶 `deskNoVisitRecord`（櫃台處理勾了「這次看診不寄就診紀錄」，清單在櫃台處理欄標「不寄就診紀錄」；已完成處理時只標這一顆、取代「櫃台已完成」）、`deskStatus`（連著看診才有：`with_doctor`／`desk_pending`／`reopen_requested`／`desk_done`，否則空字串；由掛號即時推導，`shared/appointmentWorkflow.js` 的 `deskProcessingState`，不存欄位）
 GET    /api/records/:id ／ PUT /api/records/:id（帶 expectedVersion，連著看診的另收 visitEdits）
 POST   /api/records/:id/finalize         驗證必填 → 凍結 sections → 排 PDF；帶 autoSend: true 時記下 autoSendRequestedAt、PDF 產好自動寄出（信箱有問題回 autoSendError，照樣結案）
 POST   /api/records/:id/pdf/retry ／ GET /api/records/:id/pdf（加密後下載）
@@ -384,7 +385,7 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 | `/pets/new` | 新增貓咪 | 飼主與貓咪同一頁（既有飼主／新增飼主），寬螢幕左右兩欄，有離開前的未儲存提示 |
 | `/records` | 健檢報告清單 | 跨貓咪，佇列頁籤；寄送失敗的列左側紅線；「櫃台處理」欄讓醫師看出這次看診櫃台做完了沒（醫師處理中／待櫃台處理／待核准修改／櫃台已完成，沒連著看診留白），掛號異動時清單跟著重讀 |
 | `/records/deliveries` | 寄送歷程 | 流水帳，含已刪除報告 |
-| `/pets/:petId/records/new`、`/records/:id/edit` | 健檢報告填寫 | 自動存草稿、離開前攔截；套用預填模板；連著看診的草稿有「引用本次看診」說明條（體重、體溫、檢驗數值在這裡改會寫回看診）與填入狀態燈號，有未處理的檢驗差異時自動跳比對視窗；櫃台約好或改期回診時（加入看診當天的房間聽 `appointment:updated`，斷線重連整份重讀），回診日期欄位即時換成新值，並讓那一塊變色、標上「櫃台已約好／已改約／回診已取消」（不用 toast，點一下收起） |
+| `/pets/:petId/records/new`、`/records/:id/edit` | 健檢報告填寫 | 自動存草稿、離開前攔截；套用預填模板；連著看診的草稿有「引用本次看診」說明條（體重、體溫、檢驗數值在這裡改會寫回看診），櫃台勾了「這次看診不寄就診紀錄」時最下面的操作列多一顆「不寄就診紀錄」徽章（即時更新，`visitLink.noVisitRecord`）與填入狀態燈號，有未處理的檢驗差異時自動跳比對視窗；櫃台約好或改期回診時（加入看診當天的房間聽 `appointment:updated`，斷線重連整份重讀），回診日期欄位即時換成新值，並讓那一塊變色、標上「櫃台已約好／已改約／回診已取消」（不用 toast，點一下收起） |
 | `/records/:id/preview` | 報告預覽 | 結案、寄送、分享、下載 |
 | `/report/:token` | 報告（公開） | 飼主看的頁面＋PDF 來源；先輸入手機後 6 碼（記在 `sessionStorage`） |
 | `/intake` | 初診填寫（公開） | 飼主用手機填，獨立版面（`--intake-*` token），見 STYLE_GUIDE 第 10 節 |

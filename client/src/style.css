@@ -136,6 +136,9 @@
   /* 手術只是另一種掛號，不是警示：紫色，跟遲到的紅色分開色相。 */
   --surgery: #7238a5;
   --surgery-surface: #f8efff;
+  /* 使用者自選的紫（文字上色、待辦標記）：不佔用手術專用的 surgery，之後要分開時只改這兩個。 */
+  --mark-purple: #7238a5;
+  --mark-purple-surface: #f8efff;
   /* 待辦數字的紅徽章（工具欄、分頁上的數字）。 */
   --badge: #c62828;
   --badge-foreground: #ffffff;
@@ -246,6 +249,8 @@
   --info-surface: #212a44;
   --surgery: #d3adff;
   --surgery-surface: #31253f;
+  --mark-purple: #d3adff;
+  --mark-purple-surface: #31253f;
   --badge: #ff8a80;
   --badge-foreground: #2a0806;
 
@@ -318,6 +323,8 @@
   --color-danger-surface: var(--danger-surface);
   --color-surgery: var(--surgery);
   --color-surgery-surface: var(--surgery-surface);
+  --color-mark-purple: var(--mark-purple);
+  --color-mark-purple-surface: var(--mark-purple-surface);
   --color-badge: var(--badge);
   --color-badge-foreground: var(--badge-foreground);
   --color-nav: var(--nav);

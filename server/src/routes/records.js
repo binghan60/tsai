@@ -31,7 +31,7 @@ import { reportPdfFilename } from '../../../shared/reportFilename.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
 import { applyVisitEdits, hasVisitEdits, stripVisitFields, templateLabItems, visitOverlay } from '../lib/recordVisitLink.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
-import { deskStatusByRecordId } from '../lib/recordDeskStatus.js';
+import { deskStatusByRecordId, hasNoVisitRecord, NO_VISIT_RECORD_MESSAGE } from '../lib/recordDeskStatus.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
@@ -111,10 +111,15 @@ async function cleanUpImages(publicIds, context) {
 // 草稿還沒凍結結構，仍要即時用目前範本組合並補上對照值。
 // 報到建立的草稿連著一筆看診。體重、體溫、回診日期、檢驗數值只存在看診上，
 // 讀草稿時把看診的值疊到文件上（只改記憶體裡這一份，不存回去），之後的組區塊、預覽都看得到。
-const VISIT_SELECT = '_id date weightKg temperatureC followUpDate followUpTime labValues';
+const VISIT_SELECT = '_id date weightKg temperatureC followUpDate followUpTime labValues deskItems';
 async function linkedVisitFor(record) {
   if (!record || record.status !== 'draft') return null;
   return Appointment.findOne({ recordId: record._id }).select(VISIT_SELECT).lean();
+}
+// 填寫頁靠 visitLink 知道連著哪一筆看診；noVisitRecord＝櫃台處理勾了「這次看診不寄就診紀錄」，醫師填寫時就看得到。
+function visitLinkPayload(visit) {
+  if (!visit) return null;
+  return { appointmentId: visit._id, date: visit.date, noVisitRecord: (visit.deskItems ?? []).includes('no_visit_record') };
 }
 async function applyLinkedVisit(record, visit = undefined) {
   const linked = visit === undefined ? await linkedVisitFor(record) : visit;
@@ -422,7 +427,10 @@ recordsRouter.get('/', async (req, res, next) => {
 
     // 櫃台處理狀態讓醫師看得出這筆看診櫃台做完了沒；報告沒連著看診時是空字串。
     const deskStatuses = await deskStatusByRecordId(items.map((item) => item._id));
-    const rows = items.map((item) => ({ ...item.toJSON(), deskStatus: deskStatuses.get(String(item._id)) ?? '' }));
+    const rows = items.map((item) => {
+      const desk = deskStatuses.get(String(item._id));
+      return { ...item.toJSON(), deskStatus: desk?.deskStatus ?? '', deskNoVisitRecord: Boolean(desk?.noVisitRecord) };
+    });
 
     res.json({ items: rows, total, page, limit, view, counts });
   } catch (err) {
@@ -447,7 +455,9 @@ recordsRouter.get('/:id', async (req, res, next) => {
       ...record.toJSON(),
       sections,
       deliveryStatus: effectiveDeliveryStatus(record),
-      visitLink: visit ? { appointmentId: visit._id, date: visit.date } : null,
+      visitLink: visitLinkPayload(visit),
+      // 櫃台勾了「這次看診不寄就診紀錄」：預覽頁停用 Email 寄送（伺服器也擋）。
+      noVisitRecord: await hasNoVisitRecord(record._id),
     });
   } catch (err) {
     next(err);
@@ -518,7 +528,7 @@ recordsRouter.put('/:id', async (req, res, next) => {
     if (editedVisit) emitAppointmentUpdate(editedVisit);
     // 回傳時一樣疊上看診的最新值：診療台剛改的數字，填寫頁存一次檔就看得到。
     const visit = linkedVisit ? await applyLinkedVisit(record) : null;
-    res.json({ ...record.toJSON(), visitLink: visit ? { appointmentId: visit._id, date: visit.date } : null });
+    res.json({ ...record.toJSON(), visitLink: visitLinkPayload(visit) });
   } catch (err) {
     next(err);
   }
@@ -578,7 +588,7 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
     let autoSend = false;
     let autoSendError = '';
     if (req.body?.autoSend === true) {
-      const problem = await autoSendRecipientProblem(record.petId);
+      const problem = await hasNoVisitRecord(record._id) ? NO_VISIT_RECORD_MESSAGE : await autoSendRecipientProblem(record.petId);
       if (problem) autoSendError = `沒有自動寄出：${problem}`;
       else autoSend = true;
     }

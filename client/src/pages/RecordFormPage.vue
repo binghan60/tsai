@@ -244,12 +244,17 @@ useAppointmentRealtime(followUpRoomDate, {
   onAppointmentUpdate: (appointment) => {
     if (!visitLink.value?.appointmentId || String(appointment?._id) !== String(visitLink.value.appointmentId)) return;
     applyFollowUp(appointment.followUpDate || '', appointment.followUpTime || '');
+    // 櫃台勾或取消「這次看診不寄就診紀錄」。
+    if (Array.isArray(appointment.deskItems)) {
+      visitLink.value = { ...visitLink.value, noVisitRecord: appointment.deskItems.includes('no_visit_record') };
+    }
   },
 });
 useLiveReload(async () => {
   if (!isVisitLinked.value || !recordId.value) return;
   try {
     const { data } = await http.get(`/records/${recordId.value}`);
+    if (data.visitLink) visitLink.value = { ...visitLink.value, noVisitRecord: Boolean(data.visitLink.noVisitRecord) };
     if (data.followUpDate === undefined) return;
     applyFollowUp(clinicDateInput(data.followUpDate), data.followUpDate ? clinicTimeInput(data.followUpDate) : '');
   } catch {
@@ -887,6 +892,7 @@ function buildPayload() {
 // 存檔回來的草稿帶著看診的最新值（診療台可能剛改過）：存檔期間畫面沒動的欄位換成新值。
 function receiveVisitValues(saved, sent) {
   if (!saved.visitLink || !isVisitLinked.value) return;
+  visitLink.value = { ...visitLink.value, noVisitRecord: Boolean(saved.visitLink.noVisitRecord) };
   const server = visitSnapshot(saved, labKeys.value);
   for (const key of refreshedVisitKeys({ current: currentVisitSnapshot(), sent, server })) applyVisitValue(key, saved);
   if (saved.followUpDate !== undefined) {
@@ -1423,7 +1429,7 @@ function handleBeforeUnload(event) {
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
       <div v-if="!isLocked" id="record-action-bar" class="bottom-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 lg:left-18 lg:right-16">
         <div class="mx-auto max-w-[1440px]">
-          <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
+          <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段<Badge v-if="isVisitLinked && visitLink?.noVisitRecord" variant="status" class="ml-auto bg-warning-surface text-warning">不寄就診紀錄</Badge></p>
           <div class="grid grid-cols-3 gap-2 sm:hidden">
             <Button type="button" variant="destructive" class="w-full px-2" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄</Button>
             <Button type="button" variant="secondary" class="w-full px-2" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中' : '儲存' }}</Button>
@@ -1431,6 +1437,7 @@ function handleBeforeUnload(event) {
           </div>
           <div class="hidden sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
             <p class="hidden sm:mr-auto sm:flex sm:items-center sm:gap-1.5 sm:text-xs sm:text-muted-foreground"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
+            <Badge v-if="isVisitLinked && visitLink?.noVisitRecord" variant="status" class="bg-warning-surface text-warning">不寄就診紀錄</Badge>
             <Button type="button" variant="destructive" class="w-full sm:w-auto" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄草稿</Button>
             <Button type="button" variant="secondary" class="w-full sm:w-auto" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
             <Button type="button" class="col-span-2 w-full sm:col-auto sm:w-auto" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>

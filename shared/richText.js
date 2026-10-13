@@ -15,7 +15,7 @@ export const RICH_TEXT_COLORS = Object.freeze({
   orange: 'warning',
   green: 'success',
   blue: 'info',
-  purple: 'surgery',
+  purple: 'mark-purple',
   teal: 'primary',
 });
 

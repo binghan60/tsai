@@ -37,6 +37,17 @@ export const DESK_STATUS_META = {
   desk_done: { label: '櫃台已完成', class: 'bg-success-surface text-success', dotClass: 'bg-success' },
 };
 
+// 「櫃台處理」欄實際畫的徽章。櫃台勾了「這次看診不寄就診紀錄」且已完成處理時，只標「不寄就診紀錄」一顆
+// （不寄就等於處理完了，不必再疊一顆「櫃台已完成」）；還沒完成處理（含退回處理中）時兩顆都畫，才看得出球在誰手上。
+export function deskBadges(record) {
+  const noVisit = Boolean(record?.deskNoVisitRecord);
+  const status = DESK_STATUS_META[record?.deskStatus];
+  const badges = [];
+  if (status && !(noVisit && record.deskStatus === 'desk_done')) badges.push({ key: 'status', label: status.label, class: status.class });
+  if (noVisit) badges.push({ key: 'no-visit', label: '不寄就診紀錄', class: 'bg-warning-surface text-warning' });
+  return badges;
+}
+
 // 寄送流水帳的事件。跟 DELIVERY_STATUS_META 分開是因為兩者回答的問題不同：
 // 那個是「這份報告現在的寄送狀態」，這個是「當時那一次嘗試發生了什麼」。
 export const DELIVERY_EVENT_META = {

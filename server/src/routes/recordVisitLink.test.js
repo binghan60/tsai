@@ -79,6 +79,11 @@ describe('健檢報告草稿引用看診', () => {
       endSession: async () => {},
     }));
     mock.method(Appointment, 'findOne', (filter) => query(() => [...appointments.values()].find((item) => String(item.recordId) === String(filter.recordId)) ?? null));
+    mock.method(Appointment, 'exists', async (filter) => {
+      const found = [...appointments.values()].find((item) => String(item.recordId) === String(filter.recordId)
+        && (!filter.deskItems || (item.deskItems ?? []).includes(filter.deskItems)));
+      return found ? { _id: found._id } : null;
+    });
     mock.method(Appointment, 'findById', (key) => query(() => appointmentDoc(appointments.get(String(key)))));
     mock.method(FormTemplate, 'findById', () => query(() => template));
     mock.method(LabResult, 'find', () => ({ select: () => ({ sort: () => ({ session: () => ({ lean: async () => [] }) }) }) }));
@@ -103,12 +108,19 @@ describe('健檢報告草稿引用看診', () => {
     const response = await fetch(`${origin}/${recordId}`);
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.deepEqual(body.visitLink, { appointmentId, date: '2026-09-07' });
+    assert.deepEqual(body.visitLink, { appointmentId, date: '2026-09-07', noVisitRecord: false });
     assert.equal(body.weightKg, 4.2);
     assert.equal(body.followUpDate, '2026-10-09T06:30:00.000Z');
     const wbc = body.labFindings.find((finding) => finding.key === 'wbc');
     assert.deepEqual([wbc.value, wbc.status, wbc.note], ['22.4', 'abnormal', '重抽一次']);
     assert.equal(records.get(recordId).weightKg, null, '只是讀，草稿本身沒被寫入');
+  });
+
+  it('櫃台勾了不寄就診紀錄：visitLink 與報告都帶 noVisitRecord', async () => {
+    appointments.get(appointmentId).deskItems = ['receipt', 'no_visit_record'];
+    const body = await (await fetch(`${origin}/${recordId}`)).json();
+    assert.equal(body.visitLink.noVisitRecord, true);
+    assert.equal(body.noVisitRecord, true);
   });
 
   it('報告上改的值寫回看診與病歷日誌，草稿不存', async () => {

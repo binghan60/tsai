@@ -59,6 +59,8 @@ const shareActionLabel = computed(() => {
   return '建立飼主分享連結';
 });
 const ownerEmail = computed(() => record.value?.owner?.email?.trim() ?? '');
+// 櫃台勾了「這次看診不寄就診紀錄」：Email 寄送與自動寄送都停用（伺服器也擋），要寄請櫃台取消勾選。
+const sendBlocked = computed(() => Boolean(record.value?.noVisitRecord));
 const autoSendPending = computed(() => Boolean(record.value?.autoSendRequestedAt));
 const finalizeDescription = computed(() => (ownerEmail.value
   ? '系統會驗證內容、產生正式 PDF 並鎖定此版本。結案後若需修改，請建立修訂版。'
@@ -254,7 +256,7 @@ async function finalizeReport() {
   try {
     const { data } = await http.post(
       `/records/${route.params.id}/finalize`,
-      { expectedVersion: record.value.__v, autoSend: Boolean(ownerEmail.value) && autoSendOnFinalize.value }
+      { expectedVersion: record.value.__v, autoSend: Boolean(ownerEmail.value) && !sendBlocked.value && autoSendOnFinalize.value }
     );
     if (identity !== reportIdentity()) return;
     record.value.status = 'finalized';
@@ -507,7 +509,7 @@ watch(
       >
         <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案（第 {{ record.reportVersion || 1 }} 版）</strong><span class="block">{{ isSent ? `已寄出至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : autoSendPending ? `PDF 產生後自動寄給 ${ownerEmail}` : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
-          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="emailing || deliverySending || !pdfReady" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
+          <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="emailing || deliverySending || !pdfReady || sendBlocked" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ sendBlocked ? '不寄就診紀錄' : !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ sendBlocked ? '不寄就診紀錄' : !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
           <Button v-else-if="record.pet?._id" as-child variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm"><router-link :to="`/pets/${record.pet._id}?editOwner=1`">補填 Email</router-link></Button>
           <Button type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" /><span class="sm:hidden">{{ sharing ? '處理中…' : shareIsActive ? '複製連結' : '建立連結' }}</span><span class="hidden sm:inline">{{ shareActionLabel }}</span></Button>
           <div class="col-span-2 sm:col-auto">
@@ -556,6 +558,7 @@ watch(
         </div>
         <p v-if="!ownerEmail" class="mt-3 text-xs text-report-warning">這位飼主尚未填寫 Email，請先複製連結，再透過其他方式傳送。</p>
       </div>
+      <p v-if="sendBlocked && !isSent" class="rounded-xl border border-report-warning-border bg-report-warning-surface px-4 py-3 text-sm font-medium text-report-warning-strong print:hidden">櫃台設定這次看診不寄就診紀錄，Email 寄送已停用；要寄請櫃台先取消該勾選。</p>
       <p v-if="autoSendNotice && !isSent" class="rounded-xl border border-report-danger-border bg-report-danger-surface px-4 py-3 text-sm text-report-danger print:hidden">{{ autoSendNotice }}</p>
       <p v-if="error" class="rounded-xl border border-report-danger-border bg-report-danger-surface px-4 py-3 text-sm text-report-danger print:hidden">{{ error }}</p>
 
@@ -664,7 +667,8 @@ watch(
       @update:open="showFinalizeConfirm = $event"
       @confirm="finalizeReport"
     >
-      <label v-if="ownerEmail" class="flex items-start gap-2 pt-2 text-sm text-foreground">
+      <p v-if="ownerEmail && sendBlocked" class="pt-2 text-sm font-medium text-warning">櫃台設定這次看診不寄就診紀錄，不會自動寄送；要寄請櫃台先取消該勾選。</p>
+      <label v-else-if="ownerEmail" class="flex items-start gap-2 pt-2 text-sm text-foreground">
         <Checkbox v-model="autoSendOnFinalize" :disabled="finalizing" class="mt-px" />
         <span class="min-w-0 break-all">PDF 產生後自動寄給飼主（{{ ownerEmail }}）</span>
       </label>

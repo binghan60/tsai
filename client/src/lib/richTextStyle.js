@@ -5,7 +5,7 @@ export const TINT_OPTIONS = [
   { color: 'orange', label: '橙色', textClass: 'text-warning', swatchClass: 'bg-warning' },
   { color: 'green', label: '綠色', textClass: 'text-success', swatchClass: 'bg-success' },
   { color: 'blue', label: '藍色', textClass: 'text-info', swatchClass: 'bg-info' },
-  { color: 'purple', label: '紫色', textClass: 'text-surgery', swatchClass: 'bg-surgery' },
+  { color: 'purple', label: '紫色', textClass: 'text-mark-purple', swatchClass: 'bg-mark-purple' },
   { color: 'teal', label: '青色', textClass: 'text-primary', swatchClass: 'bg-primary' },
 ];
 
