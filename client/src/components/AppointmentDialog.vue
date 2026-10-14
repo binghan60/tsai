@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useField, useForm } from 'vee-validate';
 import { History, Search, UserPlus, X } from '@lucide/vue';
 import { http } from '../api/http';
@@ -19,6 +19,7 @@ import DepositField from './DepositField.vue';
 import { checkDepositDecision } from '../../../shared/deposit.js';
 import { shortDate, weekdayLabel } from '../lib/datetime';
 import { breedText } from '../lib/petDisplay';
+import { useCandidateSearch } from '../composables/useCandidateSearch';
 import { checkMobilePhone } from '../../../shared/phone.js';
 
 // 新增與修改掛號共用的 Modal（取代原本的 AppointmentDrawer 側邊抽屜）。
@@ -92,49 +93,7 @@ const { value: internalNote } = useField('internalNote');
 const { value: isSurgery } = useField('isSurgery');
 const { value: surgeryName, errorMessage: surgeryNameError } = useField('surgeryName', requiredForSurgery);
 
-// ── 貓咪／飼主搜尋：直接放在 Modal 裡，不再疊一層選擇對話框 ─────────────────
-// 這是「選人用的候選清單」，邊打邊查。
-// 清單限高、超過就在框內捲動（同名的貓、同一位飼主養很多隻時，只列前幾筆會找不到要的那一隻）；
-// 一次最多拿 CANDIDATE_LIMIT 筆，再多就提示還有幾筆沒列出。
-const CANDIDATE_LIMIT = 50;
-function useCandidateSearch(endpoint) {
-  const query = ref('');
-  const results = ref([]);
-  const total = ref(0);
-  const loading = ref(false);
-  const failed = ref(false);
-  let timer;
-  let sequence = 0;
-  watch(query, (value) => {
-    clearTimeout(timer);
-    const keyword = value.trim();
-    if (!keyword) {
-      results.value = [];
-      total.value = 0;
-      loading.value = false;
-      return;
-    }
-    loading.value = true;
-    timer = setTimeout(async () => {
-      const current = ++sequence;
-      try {
-        const { data } = await http.get(endpoint, { params: { q: keyword, limit: CANDIDATE_LIMIT } });
-        if (current !== sequence) return;
-        results.value = data.items ?? [];
-        total.value = data.total ?? results.value.length;
-        failed.value = false;
-      } catch {
-        if (current === sequence) failed.value = true;
-      } finally {
-        if (current === sequence) loading.value = false;
-      }
-    }, 250);
-  });
-  onBeforeUnmount(() => clearTimeout(timer));
-  const hiddenCount = computed(() => (loading.value || failed.value ? 0 : Math.max(total.value - results.value.length, 0)));
-  return { query, results, loading, failed, hiddenCount };
-}
-
+// ── 貓咪／飼主搜尋：直接放在 Modal 裡，不再疊一層選擇對話框（composables/useCandidateSearch.js）──
 const petSearch = useCandidateSearch('/pets');
 const ownerSearch = useCandidateSearch('/owners');
 const selectedPet = ref(null);

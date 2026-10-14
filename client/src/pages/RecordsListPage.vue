@@ -12,7 +12,6 @@ import { useRoute, useRouter } from 'vue-router';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { usePagedList } from '../composables/usePagedList';
 import { useToast } from '../composables/useToast';
-import PetPickerDialog from '../components/PetPickerDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
@@ -65,7 +64,6 @@ if (!route.query.view) {
 }
 
 const counts = ref({});
-const petPickerOpen = ref(false);
 const recordToRemove = ref(null);
 const deletingRecordId = ref(null);
 const removeError = ref('');
@@ -94,30 +92,19 @@ function selectView(key) {
   view.value = key;
 }
 
-function openPetPicker() {
-  petPickerOpen.value = true;
+// 「新增健檢」：一張視窗先選貓、再選看診或補登（components/NewReportDialog.vue）。網址帶 ?new=1 也會打開。
+const newReportOpen = ref(false);
+function openNewReport() {
+  newReportOpen.value = true;
 }
-
-function closePetPicker() {
-  petPickerOpen.value = false;
+function closeNewReport() {
+  newReportOpen.value = false;
   if (route.query.new === '1') {
     const query = { ...route.query };
     delete query.new;
     router.replace({ path: route.path, query });
   }
 }
-
-async function startRecordForPet(pet) {
-  petPickerOpen.value = false;
-  if (route.query.new === '1') {
-    const query = { ...route.query };
-    delete query.new;
-    await router.replace({ path: route.path, query });
-  }
-  newReportPet.value = pet;
-}
-// 「新增健檢」選看診的視窗：先選貓（PetPickerDialog），再選這隻貓的一次看診。
-const newReportPet = ref(null);
 
 watch(view, applyFilters);
 watch(view, (nextView) => {
@@ -128,7 +115,7 @@ watch(view, (nextView) => {
   }
 });
 watch(() => route.query.new, (value) => {
-  if (value === '1') openPetPicker();
+  if (value === '1') openNewReport();
 }, { immediate: true });
 
 function shortDate(value) {
@@ -182,7 +169,7 @@ async function removeRecord(confirmText) {
   <section class="flex flex-col gap-5">
     <PageHeader title="健檢報告">
       <template #actions>
-        <Button type="button" @click="openPetPicker"><Plus stroke-width="1.75" />新增健檢</Button>
+        <Button type="button" @click="openNewReport"><Plus stroke-width="1.75" />新增健檢</Button>
       </template>
     </PageHeader>
 
@@ -281,9 +268,8 @@ async function removeRecord(confirmText) {
         <ListFooter :page="currentPage" :total-pages="totalPages" :total="total" :page-size="limit" @update:page="goToPage" />
       </template>
     </DataCard>
-    <NewReportDialog v-if="newReportPet" :pet-id="String(newReportPet._id)" :pet-name="newReportPet.name" @close="newReportPet = null" />
   </section>
-  <PetPickerDialog :open="petPickerOpen" @close="closePetPicker" @select="startRecordForPet" />
+  <NewReportDialog v-if="newReportOpen" @close="closeNewReport" />
   <!-- 草稿只要一般確認，已結案報告才要打字（與貓咪詳情頁、後端刪除端點同一個判準）。 -->
   <ConfirmDialog
     :open="Boolean(recordToRemove) && !isFinalizedRecord(recordToRemove)"

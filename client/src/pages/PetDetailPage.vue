@@ -1045,7 +1045,7 @@ watch(pet, async (value) => {
           @close="recordToRemove = null"
           @submit="removeRecord"
         />
-        <NewReportDialog v-if="newReportOpen && pet" :pet-id="String(pet._id)" :pet-name="pet.name" @close="closeNewReport" />
+        <NewReportDialog v-if="newReportOpen && pet" :pet="pet" @close="closeNewReport" />
   </section>
     
       <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>

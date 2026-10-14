@@ -12,14 +12,14 @@ defineProps({
   icon: { type: [Object, Function], default: null },
   count: { type: Number, default: null },
 });
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'open-auto-focus']);
 </script>
 
 <template>
   <Dialog :open="true" @update:open="(value) => !value && emit('close')">
     <!-- 兩層是刻意的：外層 DialogContent 不捲動，關閉鈕與頂部漸層條這些
          absolute 裝飾才會固定在原位；捲動一律交給內層這個容器。 -->
-    <DialogContent :size="size" class="max-h-[90vh] flex flex-col p-0">
+    <DialogContent :size="size" class="max-h-[90vh] flex flex-col p-0" @open-auto-focus="emit('open-auto-focus', $event)">
       <div class="relative flex max-h-[90vh] flex-col overflow-y-auto">
         <div v-if="title" class="shrink-0 border-b border-border px-6 pt-5 pb-4 pr-16">
           <DialogTitle class="flex items-center gap-2">

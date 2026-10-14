@@ -130,6 +130,6 @@ const newReportPet = ref(null);
         <ListFooter :page="currentPage" :total-pages="totalPages" :total="total" :page-size="limit" @update:page="goToPage" />
       </template>
     </DataCard>
-    <NewReportDialog v-if="newReportPet" :pet-id="String(newReportPet._id)" :pet-name="newReportPet.name" @close="newReportPet = null" />
+    <NewReportDialog v-if="newReportPet" :pet="newReportPet" @close="newReportPet = null" />
   </section>
 </template>
