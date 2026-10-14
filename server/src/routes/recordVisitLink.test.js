@@ -108,7 +108,10 @@ describe('健檢報告草稿引用看診', () => {
     const response = await fetch(`${origin}/${recordId}`);
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.deepEqual(body.visitLink, { appointmentId, date: '2026-09-07', noVisitRecord: false });
+    assert.deepEqual(body.visitLink, {
+      appointmentId, date: '2026-09-07', noVisitRecord: false,
+      deskStatus: 'with_doctor', bookedFollowUp: '2026-10-09T06:30:00.000Z', ownFollowUp: false,
+    });
     assert.equal(body.weightKg, 4.2);
     assert.equal(body.followUpDate, '2026-10-09T06:30:00.000Z');
     const wbc = body.labFindings.find((finding) => finding.key === 'wbc');
@@ -175,5 +178,27 @@ describe('健檢報告草稿引用看診', () => {
     assert.equal(records.get(unlinkedId).weightKg, 4.8);
     assert.equal(saved.body.visitLink, null);
     assert.equal(appointments.get(appointmentId).__v, 3);
+  });
+
+  it('回診日期跟櫃台約好的一樣不存；醫師填了別天就存成報告自己的，之後櫃台改約也不蓋掉', async () => {
+    const same = await put(recordId, { expectedVersion: 2, followUpDate: '2026-10-09T06:30:00.000Z' });
+    assert.equal(same.status, 200);
+    assert.equal(records.get(recordId).followUpDate, null, '畫面只是把櫃台約的原樣送回來');
+    assert.equal(same.body.visitLink.ownFollowUp, false);
+
+    const own = await put(recordId, { expectedVersion: 3, followUpDate: '2026-10-21T07:00:00.000Z' });
+    assert.equal(own.status, 200);
+    assert.equal(new Date(records.get(recordId).followUpDate).toISOString(), '2026-10-21T07:00:00.000Z');
+    assert.equal(own.body.followUpDate, '2026-10-21T07:00:00.000Z');
+    assert.deepEqual([own.body.visitLink.ownFollowUp, own.body.visitLink.bookedFollowUp], [true, '2026-10-09T06:30:00.000Z']);
+
+    appointments.get(appointmentId).followUpDate = '2026-10-12';
+    const body = await (await fetch(`${origin}/${recordId}`)).json();
+    assert.equal(body.followUpDate, '2026-10-21T07:00:00.000Z', '報告上醫師填的不被櫃台改約蓋掉');
+    assert.equal(body.visitLink.bookedFollowUp, '2026-10-12T06:30:00.000Z');
+
+    const cleared = await put(recordId, { expectedVersion: 4, followUpDate: null });
+    assert.equal(records.get(recordId).followUpDate, null);
+    assert.equal(cleared.body.followUpDate, '2026-10-12T06:30:00.000Z', '清掉就回到櫃台約的');
   });
 });

@@ -38,3 +38,13 @@ export function visitEdits(current, baseline) {
 export function refreshedVisitKeys({ current, sent, server }) {
   return Object.keys(server).filter((key) => current[key] === sent[key] && current[key] !== server[key]);
 }
+
+// 櫃台約好、改約或取消回診（before → booked，都是 { date, time }）時，報告上的回診（form）要不要跟著換：
+// 報告是跟著櫃台的（沒填，或就是櫃台原本約的那天）就換成新的，notice 是畫面要標的「櫃台已約好／已改約／回診已取消」；
+// 報告上是醫師自己填的別天就不動（notice 空字串，畫面另外提示兩邊不同）。
+export function followDeskBooking(form, before, booked) {
+  if (before.date === booked.date && before.time === booked.time) return { form, notice: '' };
+  const followingDesk = !form.date || (form.date === before.date && form.time === before.time);
+  if (!followingDesk) return { form, notice: '' };
+  return { form: { date: booked.date, time: booked.time }, notice: !booked.date ? 'cancelled' : before.date ? 'rescheduled' : 'booked' };
+}

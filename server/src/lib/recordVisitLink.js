@@ -7,9 +7,10 @@ import { mergeLabValues, workflowError } from './appointmentWorkflow.js';
 //   - 讀取時由看診即時疊上去（visitOverlay）；
 //   - 在報告上改＝寫回看診（applyVisitEdits），診療台、病歷日誌、報告永遠是同一個值；
 //   - 結案時才把當下的值凍結進報告（routes/records.js 的 finalize）。
-// 回診日期例外只能讀：它是櫃台敲定時段、同時建立下一筆掛號的那一步，只在掛號台改。
+// 回診日期例外：報告可以有自己的回診日期（醫師填的，不建立掛號），沒填就引用櫃台約好的那一天
+// （看診的 followUpDate／followUpTime，櫃台約回診時同時建立下一筆掛號）。見 followUpToStore。
 // 檢驗項目靠範本裡「檢驗」類型項目的 key 對應，不是表單設計器上的設定。
-export const VISIT_FIELDS = ['weightKg', 'temperatureC', 'followUpDate'];
+export const VISIT_FIELDS = ['weightKg', 'temperatureC'];
 
 export { templateLabItems };
 
@@ -57,7 +58,23 @@ export function visitOverlay(record, appointment, template) {
   }
   // 範本裡已經拿掉的檢驗項目照原樣留著。
   for (const [key, finding] of current) if (!items.some((item) => item.key === key)) labFindings.push(finding);
-  return { weightKg: visit.weightKg, temperatureC: visit.temperatureC, followUpDate: visit.followUpDate, labFindings };
+  // 回診日期：報告自己有填就用報告的，沒有才用櫃台約好的。
+  return { weightKg: visit.weightKg, temperatureC: visit.temperatureC, followUpDate: record?.followUpDate ?? visit.followUpDate, labFindings };
+}
+
+// 櫃台約好的回診時刻（沒約回 null）。
+export function bookedFollowUp(appointment) {
+  return visitValues(appointment).followUpDate;
+}
+
+// 填寫頁送來的回診日期要存成報告自己的嗎：跟櫃台約好的同一個時刻（畫面只是把疊上去的值原樣送回來）、
+// 或清空，都存 null——之後櫃台改約，報告跟著變；不一樣才是醫師自己填的。
+export function followUpToStore(value, appointment) {
+  if (value === null || value === undefined || value === '') return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const booked = bookedFollowUp(appointment);
+  return booked && booked.getTime() === date.getTime() ? null : value;
 }
 
 // 填寫頁送來的草稿欄位裡，屬於看診的那幾欄不存：值一律清掉，只留檢驗的狀態與備註。

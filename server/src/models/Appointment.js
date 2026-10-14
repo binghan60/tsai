@@ -131,6 +131,9 @@ const appointmentSchema = new mongoose.Schema(
     handoffAt: { type: Date, default: null },
     // 櫃台「完成處理」。寫入後醫師不能再取回；要改得由櫃台退回處理中（或核准醫師的修改申請），那時清成 null。
     deskCompletedAt: { type: Date, default: null },
+    // 補登的看診（POST /appointments/backfill）：事後補一筆過去的看診來寫健檢報告，
+    // 建立時三個里程碑就一起寫成看診當時、直接是已完成——流水線上唯一的捷徑，不經過掛號台與診療台。
+    backfilledAt: { type: Date, default: null },
     // 醫師對已完成的就診提出的修改申請；保留原因與時間，櫃台核准後才可再修改。
     reopenRequest: {
       reason: { type: String, default: '', trim: true, maxlength: 500 },

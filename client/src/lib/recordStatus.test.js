@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DELIVERY_STATUS_META, RECORD_STATUS_META, deskMark, getAvailabilityStatusMeta, getDeliveryStatus, isFinalizedRecord, reportMark, reportMarkNote } from './recordStatus.js';
+import { DELIVERY_STATUS_META, RECORD_STATUS_META, deskMark, visitDeskMarks, getAvailabilityStatusMeta, getDeliveryStatus, isFinalizedRecord, reportMark, reportMarkNote } from './recordStatus.js';
 
 describe('record status helpers', () => {
   it('keeps lifecycle and delivery state independent', () => {
@@ -44,5 +44,17 @@ describe('records list marks', () => {
     assert.equal(deskMark({ deskStatus: 'with_doctor' }).style, 'text');
     assert.deepEqual([deskMark({ deskStatus: 'desk_done' }).style, deskMark({ deskStatus: 'desk_done' }).label], ['check', '已完成']);
     assert.equal(deskMark({ deskStatus: '' }), null);
+  });
+});
+
+describe('填寫頁固定列的櫃台狀態', () => {
+  const labels = (visitLink) => visitDeskMarks(visitLink).map((mark) => `${mark.style}:${mark.label}`);
+  it('球在櫃台手上、或不寄就診紀錄才是膠囊；不寄取代櫃台已完成', () => {
+    assert.deepEqual(labels({ deskStatus: 'with_doctor' }), ['text:還沒送交櫃台']);
+    assert.deepEqual(labels({ deskStatus: 'desk_pending' }), ['pill:櫃台還沒處理完']);
+    assert.deepEqual(labels({ deskStatus: 'desk_done' }), ['check:櫃台已完成']);
+    assert.deepEqual(labels({ deskStatus: 'desk_done', noVisitRecord: true }), ['pill:不寄就診紀錄']);
+    assert.deepEqual(labels({ deskStatus: 'reopen_requested', noVisitRecord: true }), ['pill:待核准修改', 'pill:不寄就診紀錄']);
+    assert.deepEqual(labels(null), []);
   });
 });

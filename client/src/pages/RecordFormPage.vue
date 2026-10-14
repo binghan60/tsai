@@ -3,11 +3,11 @@ import { apiErrorMessage } from '../lib/apiError';
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import PatientLink from '../components/PatientLink.vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { Activity, CalendarCheck, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, Link2, LockKeyhole, Save, Settings2, Trash2 } from '@lucide/vue';
+import { Activity, CalendarCheck, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, Link2, LockKeyhole, Save, Settings2, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
 import { clinicDateInput, clinicTimeInput, combineClinicDateTime, shortDate } from '../lib/datetime';
-import { refreshedVisitKeys, visitEdits, visitSnapshot } from '../lib/recordVisitLink';
+import { followDeskBooking, refreshedVisitKeys, visitEdits, visitSnapshot } from '../lib/recordVisitLink';
 import { collectPreviewIssues } from '../lib/recordFormValidation';
 import { defaultValueForItem } from '../../../shared/formDefaults';
 import { planPresetApplication } from '../lib/formPresets';
@@ -20,9 +20,7 @@ import SpecGrid from '../components/SpecGrid.vue';
 import SpecCell from '../components/SpecCell.vue';
 import PetSex from '../components/PetSex.vue';
 import PageHeader from '../components/PageHeader.vue';
-import { Badge } from '../components/ui/badge';
 import { petReminders } from '../lib/petDisplay';
-import MechanismTooltip from '../components/MechanismTooltip.vue';
 import { Button } from '../components/ui/button';
 import { DatePicker } from '../components/ui/date-picker';
 import { TimePicker } from '../components/ui/time-picker';
@@ -43,8 +41,12 @@ import { useAppointmentRealtime } from '../composables/useAppointmentRealtime';
 import { useLiveReload } from '../composables/useLiveReload';
 import { useWorkCountsStore } from '../stores/workCounts';
 import { catBreedLabel } from '../../../shared/catBreeds.js';
+import { deskProcessingState } from '../../../shared/appointmentWorkflow.js';
+import { visitDeskMarks } from '../lib/recordStatus';
+import StatusMark from '../components/StatusMark.vue';
+import RowActions from '../components/RowActions.vue';
 
-const { template, loadTemplate, listTemplates } = useFormTemplate();
+const { template, loadTemplate } = useFormTemplate();
 const { loadTemplates: loadTextTemplates } = useTextTemplates();
 
 // 區塊與項目定義全部來自範本，不再寫死在頁面裡。
@@ -126,7 +128,6 @@ const visitReturnTarget = computed(() => /^[a-f\d]{24}$/i.test(String(route.quer
 const toast = useToast();
 const petId = ref(route.params.petId ?? null);
 const recordId = ref(route.params.id ?? null);
-const isEdit = computed(() => Boolean(recordId.value));
 const recordStatus = ref('draft');
 const reportVersion = ref(1);
 const documentVersion = ref(0);
@@ -220,16 +221,40 @@ async function refreshVisitValues() {
   }
 }
 
-// 櫃台約好（或改期）回診：回診日期只能在掛號台安排，這裡不給改，所以直接換成看診上的值並提示醫師。
+// 回診日期：報告可以自己填（不建立掛號）；沒自己填就跟著櫃台約好的那天（bookedFollowUp）。
+// 櫃台約好、改約或取消時：報告是跟著櫃台的，就換成新的值、整塊變色提示；報告上是醫師自己填的別天，
+// 不蓋掉，改成提示「櫃台約了…」讓醫師決定（followUpConflict）。
 // 掛號的即時推播要加入看診那一天的房間；斷線期間錯過的，重新連上時整份重讀補回。
-function applyFollowUp(date, time) {
+const bookedFollowUp = ref({ date: '', time: '' });
+const followUpParts = (value) => ({ date: value ? clinicDateInput(value) : '', time: value ? clinicTimeInput(value) : '' });
+function applyBookedFollowUp(booked) {
   if (!isVisitLinked.value) return;
-  if (date === followUpDate.value && time === followUpTime.value) return;
-  const hadBooking = Boolean(followUpDate.value);
-  followUpDate.value = date;
-  followUpTime.value = time;
-  followUpNotice.value = !date ? 'cancelled' : hadBooking ? 'rescheduled' : 'booked';
+  const { form, notice } = followDeskBooking({ date: followUpDate.value, time: followUpTime.value }, bookedFollowUp.value, booked);
+  bookedFollowUp.value = { date: booked.date, time: booked.time };
+  followUpDate.value = form.date;
+  followUpTime.value = form.time;
+  if (notice) followUpNotice.value = notice;
 }
+const followUpConflict = computed(() => isVisitLinked.value && Boolean(bookedFollowUp.value.date) && Boolean(followUpDate.value)
+  && (followUpDate.value !== bookedFollowUp.value.date || followUpTime.value !== bookedFollowUp.value.time));
+function useBookedFollowUp() {
+  followUpDate.value = bookedFollowUp.value.date;
+  followUpTime.value = bookedFollowUp.value.time;
+  followUpNotice.value = '';
+}
+const deskMarks = computed(() => (isVisitLinked.value ? visitDeskMarks(visitLink.value) : []));
+
+// 固定列的高度（會折行、會隨提醒多寡變）：直排區段清單接在它下面、捲到區段時讓開它。
+const stickyBar = ref(null);
+const stickyBarHeight = ref(0);
+let stickyBarObserver = null;
+watch(stickyBar, (element) => {
+  stickyBarObserver?.disconnect();
+  if (!element || typeof ResizeObserver === 'undefined') return;
+  stickyBarObserver = new ResizeObserver(([entry]) => { stickyBarHeight.value = Math.ceil(entry.target.getBoundingClientRect().height); });
+  stickyBarObserver.observe(element);
+});
+onBeforeUnmount(() => stickyBarObserver?.disconnect());
 
 // 回診日期欄位自己變色並標出「櫃台剛約好」（不用 toast，醫師不在這個欄位旁邊時也不會被蓋掉）；點一下欄位區塊就收起。
 const followUpNotice = ref('');
@@ -243,20 +268,22 @@ const followUpRoomDate = computed(() => (isVisitLinked.value ? visitLink.value?.
 useAppointmentRealtime(followUpRoomDate, {
   onAppointmentUpdate: (appointment) => {
     if (!visitLink.value?.appointmentId || String(appointment?._id) !== String(visitLink.value.appointmentId)) return;
-    applyFollowUp(appointment.followUpDate || '', appointment.followUpTime || '');
-    // 櫃台勾或取消「這次看診不寄就診紀錄」。
-    if (Array.isArray(appointment.deskItems)) {
-      visitLink.value = { ...visitLink.value, noVisitRecord: appointment.deskItems.includes('no_visit_record') };
-    }
+    applyBookedFollowUp({ date: appointment.followUpDate || '', time: appointment.followUpTime || '' });
+    // 櫃台處理到哪、勾或取消「這次看診不寄就診紀錄」。
+    visitLink.value = {
+      ...visitLink.value,
+      deskStatus: deskProcessingState(appointment),
+      ...(Array.isArray(appointment.deskItems) ? { noVisitRecord: appointment.deskItems.includes('no_visit_record') } : {}),
+    };
   },
 });
 useLiveReload(async () => {
   if (!isVisitLinked.value || !recordId.value) return;
   try {
     const { data } = await http.get(`/records/${recordId.value}`);
-    if (data.visitLink) visitLink.value = { ...visitLink.value, noVisitRecord: Boolean(data.visitLink.noVisitRecord) };
-    if (data.followUpDate === undefined) return;
-    applyFollowUp(clinicDateInput(data.followUpDate), data.followUpDate ? clinicTimeInput(data.followUpDate) : '');
+    if (!data.visitLink) return;
+    visitLink.value = { ...visitLink.value, noVisitRecord: Boolean(data.visitLink.noVisitRecord), deskStatus: data.visitLink.deskStatus };
+    applyBookedFollowUp(followUpParts(data.visitLink.bookedFollowUp));
   } catch {
     // 下一次存檔回來也會換成伺服器的值。
   }
@@ -269,22 +296,12 @@ const showRecopyDialog = ref(false);
 const recopyFromId = ref('');
 const recopying = ref(false);
 
-// 健檢類型 = 用哪一份範本，只在建立報告時決定；建立後不可更改，
-// 否則已填的作答會對不上表單結構。
-const examTypes = ref([]);
-const SPECIES_LABELS = { cat: '貓', dog: '犬', all: '不限物種' };
+// 健檢類型 = 用哪一份範本，在看診建立報告時決定（掛號選的表單）；之後不可更改，否則已填的作答會對不上表單結構。
 const chosenTemplateId = ref('');
 const examTypeName = ref('');
-// 建立報告一律先選類型 —— 類型決定整份表單且建立後不可更改，
-// 所以做成「選擇 → 確認」兩步，避免誤點就定案。
-const pendingTemplateId = ref('');
-const startMode = ref('blank');
+// 「重新帶入報告內容」的來源（已結案報告），記住上一次選的那份。
 const finalizedSources = ref([]);
-const copyFromId = ref(String(route.query.copyFrom ?? ''));
-const selectedFinalizedSource = computed(() => finalizedSources.value.find((record) => String(record._id) === copyFromId.value) ?? null);
-const needsTypeChoice = computed(() => !recordId.value && !chosenTemplateId.value);
-const confirmingExamType = ref(false);
-const typeChoiceError = ref('');
+const copyFromId = ref('');
 
 const pet = ref(null);
 // 參考範圍就存在範本項目上，不必另外請求。
@@ -360,32 +377,6 @@ async function applyTemplate(templateId, fallback = {}) {
   return loadedTemplate;
 }
 
-async function confirmExamType() {
-  if (!pendingTemplateId.value || confirmingExamType.value) return;
-  confirmingExamType.value = true;
-  typeChoiceError.value = '';
-  hydrated.value = false;
-  try {
-    await applyTemplate(pendingTemplateId.value);
-    if (startMode.value === 'previous' && selectedFinalizedSource.value?._id) {
-      const { data } = await http.get(`/records/${selectedFinalizedSource.value._id}`);
-      const copiedCount = copyForwardAllValues(data);
-      toast.info(
-        copiedCount ? `已帶入 ${copiedCount} 個欄位的內容。` : '來源報告沒有可帶入的相同欄位，因此保持空白。',
-        copiedCount ? '已帶入上次報告' : '沒有可帶入的內容',
-      );
-    }
-    await nextTick();
-    isDirty.value = false;
-    saveState.value = 'saved';
-  } catch (err) {
-    typeChoiceError.value = apiErrorMessage(err, '健檢表單載入失敗，請稍後再試');
-  } finally {
-    hydrated.value = true;
-    confirmingExamType.value = false;
-  }
-}
-
 // 帶入來源報告的每一個欄位（理學檢查／檢驗／量測／牙齒圖／圖片／獸醫師／看診日期全部覆蓋），
 // 不再侷限於文字類欄位——來源報告的 sections 快照已經是 composeReportSections() 組好的
 // { status, value, note... } 形狀，跟 finding/lab/measurement 在畫面上讀寫的欄位一一對應，
@@ -432,7 +423,7 @@ async function loadFinalizedSources() {
   try {
     const { data } = await http.get(`/pets/${petId.value}/records/finalized-sources`);
     finalizedSources.value = Array.isArray(data) ? data : [];
-    if (!selectedFinalizedSource.value) copyFromId.value = '';
+    if (!finalizedSources.value.some((source) => String(source._id) === copyFromId.value)) copyFromId.value = '';
   } catch (err) {
     finalizedSources.value = [];
     copyFromId.value = '';
@@ -693,51 +684,24 @@ async function init() {
   loading.value = true;
   loadError.value = '';
   try {
-    if (recordId.value) {
-      // 編輯既有報告：一定要用它自己的健檢類型，不能用目前的預設類型。
-      const { data } = await http.get(`/records/${recordId.value}`);
-      if (typeof data.petId === 'object') {
-        pet.value = data.petId;
-        petId.value = data.petId._id;
-      } else {
-        petId.value = data.petId;
-      }
-      await applyTemplate(data.templateId, { sections: data.sections, name: data.examType });
-      examTypeName.value = data.examType || examTypeName.value;
-      visitLink.value = data.visitLink ?? null;
-      applyRecord(data);
-      await loadPreviousValues();
-      // 草稿才可能用到「重新帶入」；已結案報告唯讀，不必多打這支 API。
-      if (data.status === 'draft') await loadFinalizedSources();
-      // 已結案的報告已經凍結，不再比對；isVisitLinked 已經排除了。
-      await loadLabConflicts({ popup: true });
+    // 報告一律從看診建立（components/NewReportDialog.vue），這頁只開既有的報告，用它自己的健檢類型。
+    const { data } = await http.get(`/records/${recordId.value}`);
+    if (typeof data.petId === 'object') {
+      pet.value = data.petId;
+      petId.value = data.petId._id;
     } else {
-      // 新報告：先知道是哪隻貓咪，才能只列出適用該物種的表單。
-      // 這個階段「不」載入任何表單結構，等使用者確認類型後才載入。
-      await loadPetContext(petId.value);
-      await loadPreviousValues();
-      await loadFinalizedSources();
-      examTypes.value = await listTemplates({ species: pet.value?.species });
-      if (!examTypes.value.length) {
-        loadError.value = `目前沒有適用於「${pet.value?.species || '這個物種'}」的健檢表單，請先到設定新增。`;
-        return;
-      }
-      // 從已結案報告按下「以此開始新健檢」時，來源已經明確，
-      // 直接套用同一份表單並帶入內容，不再要求使用者重選一次。
-      if (route.query.copyFrom && selectedFinalizedSource.value?.templateId) {
-        const sourceTemplateId = String(selectedFinalizedSource.value.templateId);
-        const sourceTemplate = examTypes.value.find((template) => String(template._id) === sourceTemplateId);
-        if (sourceTemplate) {
-          startMode.value = 'previous';
-          pendingTemplateId.value = String(sourceTemplate._id);
-          await confirmExamType();
-          return;
-        }
-      }
-      // 只有一種可選時先幫忙選起來，仍需按下確認。
-      if (examTypes.value.length === 1) pendingTemplateId.value = examTypes.value[0]._id;
-      return;
+      petId.value = data.petId;
     }
+    await applyTemplate(data.templateId, { sections: data.sections, name: data.examType });
+    examTypeName.value = data.examType || examTypeName.value;
+    visitLink.value = data.visitLink ?? null;
+    bookedFollowUp.value = followUpParts(data.visitLink?.bookedFollowUp);
+    applyRecord(data);
+    await loadPreviousValues();
+    // 草稿才可能用到「重新帶入」；已結案報告唯讀，不必多打這支 API。
+    if (data.status === 'draft') await loadFinalizedSources();
+    // 已結案的報告已經凍結，不再比對；isVisitLinked 已經排除了。
+    await loadLabConflicts({ popup: true });
     if (!pet.value) await loadPetContext(petId.value);
   } catch (err) {
     loadError.value = '健檢資料暫時無法載入，請稍後重試';
@@ -894,13 +858,12 @@ function buildPayload() {
 // 存檔回來的草稿帶著看診的最新值（診療台可能剛改過）：存檔期間畫面沒動的欄位換成新值。
 function receiveVisitValues(saved, sent) {
   if (!saved.visitLink || !isVisitLinked.value) return;
-  visitLink.value = { ...visitLink.value, noVisitRecord: Boolean(saved.visitLink.noVisitRecord) };
+  visitLink.value = { ...visitLink.value, noVisitRecord: Boolean(saved.visitLink.noVisitRecord), deskStatus: saved.visitLink.deskStatus };
   const server = visitSnapshot(saved, labKeys.value);
   for (const key of refreshedVisitKeys({ current: currentVisitSnapshot(), sent, server })) applyVisitValue(key, saved);
-  if (saved.followUpDate !== undefined) {
-    followUpDate.value = clinicDateInput(saved.followUpDate);
-    followUpTime.value = saved.followUpDate ? clinicTimeInput(saved.followUpDate) : '';
-  }
+  applyBookedFollowUp(followUpParts(saved.visitLink.bookedFollowUp));
+  // 醫師把自己填的回診日期清掉：回到櫃台約好的那天。
+  if (!followUpDate.value && saved.followUpDate) ({ date: followUpDate.value, time: followUpTime.value } = followUpParts(saved.followUpDate));
   visitBaseline.value = server;
 }
 
@@ -909,7 +872,7 @@ function comparablePayload(payload) {
 }
 
 async function saveRecord({ silent = false, uploadImages = false } = {}) {
-  if (saving.value || !petId.value || isLocked.value) return false;
+  if (saving.value || !recordId.value || isLocked.value) return false;
   saving.value = true;
   saveState.value = 'saving';
   if (!silent) saveError.value = '';
@@ -919,19 +882,10 @@ async function saveRecord({ silent = false, uploadImages = false } = {}) {
     const sentVisit = currentVisitSnapshot();
     let savedSnapshot = comparablePayload(payload);
     let saved;
-    if (recordId.value) {
-      ({ data: saved } = await http.put(`/records/${recordId.value}`, {
-        ...payload,
-        expectedVersion: documentVersion.value,
-      }));
-    } else {
-      ({ data: saved } = await http.post(`/pets/${petId.value}/records`, { ...payload, templateId: chosenTemplateId.value }));
-      recordId.value = saved._id;
-      const wasLeavingAfterAction = leavingAfterAction.value;
-      leavingAfterAction.value = true;
-      await router.replace(`/records/${saved._id}/edit`);
-      leavingAfterAction.value = wasLeavingAfterAction;
-    }
+    ({ data: saved } = await http.put(`/records/${recordId.value}`, {
+      ...payload,
+      expectedVersion: documentVersion.value,
+    }));
     if (uploadImages) {
       await uploadPendingImages();
       const imagePayload = buildPayload();
@@ -996,9 +950,10 @@ async function goToValidationIssue(issue) {
 
   const viewportHeight = window.visualViewport?.height ?? window.innerHeight;
   const appHeaderRect = document.getElementById('app-header')?.getBoundingClientRect();
+  const stickyRect = document.getElementById('record-sticky-bar')?.getBoundingClientRect();
   const actionRect = document.getElementById('record-action-bar')?.getBoundingClientRect();
-  const visibleTop = Math.max(appHeaderRect?.bottom ?? 0, 0) + 12;
-  const visibleBottom = Math.min(actionRect?.top ?? viewportHeight, viewportHeight) - 12;
+  const visibleTop = Math.max(appHeaderRect?.bottom ?? 0, stickyRect?.bottom ?? 0, 0) + 12;
+  const visibleBottom = Math.min(actionRect?.height ? actionRect.top : viewportHeight, viewportHeight) - 12;
   const targetRect = target.getBoundingClientRect();
   const availableHeight = Math.max(visibleBottom - visibleTop, 1);
   const desiredTop = targetRect.height < availableHeight
@@ -1067,9 +1022,7 @@ async function confirmLeave() {
 async function confirmDiscard() {
   discarding.value = true;
   try {
-    if (recordId.value) {
-      await http.delete(`/records/${recordId.value}`);
-    }
+    await http.delete(`/records/${recordId.value}`);
     toast.success('已成功捨棄健檢報告草稿', '已捨棄草稿');
     leavingAfterAction.value = true;
     showDiscardConfirm.value = false;
@@ -1100,21 +1053,16 @@ function handleBeforeUnload(event) {
 </script>
 
 <template>
-  <section class="flex flex-col gap-5 pb-48 sm:pb-32">
-    <!-- 頁首：返回、標題、草稿／自動儲存狀態；右邊是套用預填模板與重新帶入。 -->
+  <section class="flex flex-col gap-5 pb-48 sm:pb-32 xl:pb-8" :style="{ '--record-bar': `${stickyBarHeight}px` }">
+    <!-- 頁首：返回、標題；右邊是套用預填模板與重新帶入（開始填的時候用，捲走沒關係）。儲存狀態在固定列。 -->
     <PageHeader
-      :title="isLocked ? '已結案健檢報告' : isEdit && reportVersion > 1 ? `第 ${reportVersion} 版修訂草稿` : isEdit ? '編輯健檢報告' : '新增健檢報告'"
+      :title="isLocked ? '已結案健檢報告' : reportVersion > 1 ? `第 ${reportVersion} 版修訂草稿` : '編輯健檢報告'"
       :back-to="visitReturnTarget || (petId ? `/pets/${petId}` : '/pets')"
       :back-label="visitReturnTarget ? '返回診療台' : '返回貓咪資料'"
       :description="revisionReason ? `修訂原因：${revisionReason}` : ''"
     >
-      <template #meta>
-        <span v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="inline-flex items-center gap-1.5 text-sm" :class="saveState === 'error' ? 'text-danger' : 'text-subtle-foreground'" v-tip="'停止輸入約 1.5 秒後自動儲存為草稿'">
-          <Check v-if="saveState === 'saved'" class="size-4 text-success" stroke-width="2.4" /><Clock3 v-else class="size-4" stroke-width="1.75" />{{ saveLabel }}
-        </span>
-      </template>
       <template v-if="!isLocked" #actions>
-        <Popover v-if="!needsTypeChoice && chosenTemplateId" v-model:open="presetMenuOpen">
+        <Popover v-if="chosenTemplateId" v-model:open="presetMenuOpen">
           <PopoverTrigger as-child>
             <Button type="button" variant="soft" size="sm"><Layers class="h-4 w-4" />套用預填模板<ChevronDown class="h-4 w-4" /></Button>
           </PopoverTrigger>
@@ -1138,74 +1086,12 @@ function handleBeforeUnload(event) {
             ><Settings2 class="h-4 w-4" stroke-width="1.75" />{{ presets.length ? '管理預填模板' : '新增預填模板' }}</router-link>
           </PopoverContent>
         </Popover>
-        <Button v-if="!needsTypeChoice && finalizedSources.length" type="button" variant="secondary" size="sm" @click="openRecopyDialog"><Copy class="h-4 w-4" />重新帶入報告內容</Button>
+        <Button v-if="finalizedSources.length" type="button" variant="secondary" size="sm" @click="openRecopyDialog"><Copy class="h-4 w-4" />重新帶入報告內容</Button>
       </template>
     </PageHeader>
 
     <Alert v-if="loadError" variant="destructive"><AlertDescription>{{ loadError }}</AlertDescription></Alert>
     <ListSkeleton v-else-if="loading" :rows="6" />
-
-    <!-- 建立報告的第一步：選健檢類型，決定要套用哪一份表單 -->
-    <div v-else-if="needsTypeChoice" class="rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-6">
-      <h2 class="text-base font-semibold text-foreground">選擇健檢類型</h2>
-      <p class="mt-1 text-sm text-muted-foreground">
-        每種類型有各自的健檢表單。<strong class="font-medium text-foreground">建立後就不能更改</strong>，請確認後再開始填寫。
-      </p>
-      <div v-if="finalizedSources.length" class="mt-4 rounded-xl border border-border bg-muted/20 p-4">
-        <p class="text-sm font-medium text-foreground">開始方式</p>
-        <p class="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">可選擇任一份已結案報告，帶入其中的文字內容。<MechanismTooltip text="帶入會覆蓋目前草稿中可對應的欄位；理學檢查、檢驗、量測、牙齒圖、圖片、獸醫師與看診日期也會一併帶入。" /></p>
-        <div class="mt-3 grid gap-2 sm:grid-cols-2">
-          <button type="button" class="rounded-lg border px-3 py-3 text-left transition-colors" :class="startMode === 'blank' ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-muted/40'" :aria-pressed="startMode === 'blank'" @click="startMode = 'blank'">
-            <span class="block text-sm font-medium text-foreground">從空白開始</span>
-            <span class="mt-1 block text-xs text-muted-foreground">所有欄位維持空白。</span>
-          </button>
-          <button type="button" class="rounded-lg border px-3 py-3 text-left transition-colors" :class="startMode === 'previous' ? 'border-primary bg-primary/5 ring-1 ring-primary/20' : 'border-border bg-card hover:bg-muted/40'" :aria-pressed="startMode === 'previous'" @click="startMode = 'previous'; if (!copyFromId) copyFromId = String(finalizedSources[0]?._id ?? '')">
-            <span class="block text-sm font-medium text-foreground">從已結案報告開始</span>
-            <span class="mt-1 block text-xs text-muted-foreground">會帶入來源報告的所有欄位內容，包含理學檢查、檢驗、量測值、牙齒圖、圖片、獸醫師與看診日期。</span>
-          </button>
-        </div>
-        <div v-if="startMode === 'previous'" class="mt-3">
-          <Label for="copy-from-record">選擇要帶入的報告</Label>
-          <Select v-model="copyFromId">
-            <SelectTrigger id="copy-from-record" class="mt-1 w-full"><SelectValue placeholder="請選擇一份報告" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="source in finalizedSources" :key="source._id" :value="String(source._id)">
-                <span class="flex gap-x-3"><span class="num">{{ shortDate(source.visitDate) }}</span><span>{{ source.examType || '健檢報告' }}</span><span class="text-muted-foreground">第 {{ source.reportVersion || 1 }} 版</span></span>
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <button
-          v-for="type in examTypes"
-          :key="type._id"
-          type="button"
-          class="rounded-xl border p-4 text-left transition-colors"
-          :class="pendingTemplateId === type._id
-            ? 'border-primary bg-accent ring-1 ring-primary'
-            : 'border-border bg-field hover:border-primary hover:bg-accent'"
-          :aria-pressed="pendingTemplateId === type._id"
-          @click="pendingTemplateId = type._id"
-        >
-          <span class="flex flex-wrap items-center gap-2">
-            <span class="text-sm font-medium text-foreground">{{ type.name }}</span>
-            <span v-if="type.species !== 'all'" class="rounded-full bg-muted/60 px-2 py-0.5 text-xs font-medium text-foreground">{{ SPECIES_LABELS[type.species] }}用</span>
-            <Check v-if="pendingTemplateId === type._id" class="h-4 w-4 text-primary" stroke-width="1.75" />
-          </span>
-          <span class="mt-1 block text-xs text-muted-foreground">{{ type.description || `${type.sectionCount} 個區塊、${type.itemCount} 個項目` }}</span>
-        </button>
-      </div>
-      <div class="mt-5 flex flex-wrap items-center gap-3 border-t border-border pt-4">
-        <Alert v-if="typeChoiceError" variant="destructive"><AlertDescription>{{ typeChoiceError }}</AlertDescription></Alert>
-        <Button type="button" :disabled="!pendingTemplateId || confirmingExamType" @click="confirmExamType">
-          {{ confirmingExamType ? '載入表單中…' : `開始填寫${pendingTemplateId ? `「${examTypes.find((type) => type._id === pendingTemplateId)?.name}」` : ''}` }}
-        </Button>
-        <Button as-child variant="secondary">
-          <router-link :to="petId ? `/pets/${petId}` : '/pets'">取消</router-link>
-        </Button>
-      </div>
-    </div>
 
     <template v-else>
       <div v-if="isLocked" class="rounded-2xl border border-warning/35 bg-warning-surface p-5 text-warning shadow-sm">
@@ -1222,57 +1108,66 @@ function handleBeforeUnload(event) {
         </div>
       </div>
 
-      <div v-if="!isLocked" id="record-context-bar" class="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-xl border border-border bg-card px-5 py-3 shadow-card">
-        <div class="flex items-center gap-3">
-          <span class="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground"><Cat class="size-5" stroke-width="1.75" /></span>
-          <span class="text-lg font-semibold"><PatientLink :pet-id="pet?._id">{{ pet?.name }}</PatientLink></span>
-        </div>
-        <SpecGrid>
-          <SpecCell label="品種"><span>{{ catBreedLabel(pet?.breed) || pet?.species }}</span><PetSex :sex="pet?.sex" /></SpecCell>
-          <SpecCell label="飼主"><PatientLink v-if="pet?.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink></SpecCell>
-          <SpecCell v-if="examTypeName" label="類型">{{ examTypeName }}</SpecCell>
-          <SpecCell v-if="visitDate" label="看診日" mono>{{ shortDate(visitDate) }}</SpecCell>
-        </SpecGrid>
-        <!-- 提醒直接寫內容：只寫「備註」兩字、要滑過才看得到的小膠囊，填報告時等於沒寫。 -->
-        <span v-if="reminders.length" class="flex min-w-0 max-w-xl flex-col gap-0.5 text-sm font-medium">
-          <span v-for="tag in reminders" :key="tag.key" class="truncate" :class="tag.tone === 'notes' ? 'text-warning' : 'text-danger'" v-tip.overflow="reminderText(tag)">{{ reminderText(tag) }}</span>
-        </span>
-        <div class="ml-auto flex flex-wrap items-end gap-2">
-          <div
-            class="space-y-1 rounded-lg transition-colors"
-            :class="followUpNotice ? ['-m-2 cursor-pointer p-2 ring-1', FOLLOW_UP_NOTICE[followUpNotice].box] : ''"
-            @click="followUpNotice = ''"
-          >
-            <div class="flex items-center gap-1.5">
-              <Label for="record-follow-up-date">回診日期</Label>
-              <span v-if="followUpNotice" class="inline-flex items-center gap-1 text-xs font-semibold" role="status">
+      <!-- 固定在頂端的一列（取代原本的貓咪資料列、「引用本次看診」那一條，寬螢幕時也取代底部操作列）：
+           往下捲到哪裡都看得到是哪隻貓、有沒有過敏、引用哪次看診、回診日期、檢驗燈號、櫃台處理到哪。
+           上排是誰＋儲存狀態＋動作，下排是這次看診。窄螢幕的區段導覽也收在這裡一起固定。 -->
+      <div v-if="!isLocked" id="record-sticky-bar" ref="stickyBar" class="sticky top-16 z-30 -mx-4 flex flex-col gap-2 bg-background px-4 pt-2 pb-1 sm:-mx-6 sm:px-6 lg:top-0">
+        <div class="overflow-hidden rounded-xl border border-border bg-card shadow-card">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5">
+            <span class="text-lg font-semibold"><PatientLink :pet-id="pet?._id">{{ pet?.name }}</PatientLink></span>
+            <SpecGrid>
+              <SpecCell label="品種"><span>{{ catBreedLabel(pet?.breed) || pet?.species }}</span><PetSex :sex="pet?.sex" /></SpecCell>
+              <SpecCell label="飼主"><PatientLink v-if="pet?.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink></SpecCell>
+              <SpecCell v-if="examTypeName" label="類型">{{ examTypeName }}</SpecCell>
+            </SpecGrid>
+            <!-- 提醒直接寫內容：只寫「備註」兩字、要滑過才看得到的小膠囊，填報告時等於沒寫。太長截斷、滑過看全文。 -->
+            <span class="flex min-w-0 flex-1 flex-col gap-0.5 text-sm font-medium">
+              <span v-for="tag in reminders" :key="tag.key" class="truncate" :class="tag.tone === 'notes' ? 'text-warning' : 'text-danger'" v-tip.overflow="reminderText(tag)">{{ reminderText(tag) }}</span>
+            </span>
+            <span v-if="recordId || isDirty || saveState === 'saving' || saveState === 'error'" class="inline-flex items-center gap-1.5 text-sm" :class="saveState === 'error' ? 'text-danger' : 'text-subtle-foreground'" v-tip="'停止輸入約 1.5 秒後自動儲存為草稿'">
+              <Check v-if="saveState === 'saved'" class="size-4 text-success" stroke-width="2.4" /><Clock3 v-else class="size-4" stroke-width="1.75" />{{ saveLabel }}
+            </span>
+            <div class="hidden items-center gap-2 xl:flex">
+              <RowActions size="default" :actions="[{ key: 'discard', label: '捨棄草稿', danger: true }]" label="更多操作" @select="showDiscardConfirm = true" />
+              <Button type="button" variant="secondary" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存並返回' }}</Button>
+              <Button type="button" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-border px-4 py-2" :class="isVisitLinked ? 'bg-info-surface' : 'bg-sunken'">
+            <p v-if="isVisitLinked && visitLink?.date" class="flex items-center gap-1.5 text-sm font-semibold text-info"><Link2 class="size-4" stroke-width="2" />看診<RouterLink :to="{ path: '/appointments', query: { date: visitLink.date, open: visitLink.appointmentId } }" class="num underline underline-offset-4 hover:text-foreground" :aria-label="`在診療台打開 ${visitLink.date} 的看診`">{{ shortDate(visitLink.date) }}</RouterLink></p>
+            <!-- 回診日期：報告可以自己填（不建立掛號），沒填就是櫃台約好的那天。櫃台約好或改約時整塊變色，點一下收起；
+                 報告上是醫師自己填的別天時不蓋掉，提示「櫃台約了…」讓醫師決定。 -->
+            <div
+              class="flex flex-wrap items-center gap-2 rounded-lg transition-colors"
+              :class="followUpNotice ? ['-mx-2 cursor-pointer px-2 py-1 ring-1', FOLLOW_UP_NOTICE[followUpNotice].box] : ''"
+              @click="followUpNotice = ''"
+            >
+              <Label for="record-follow-up-date" class="text-sm text-muted-foreground">回診</Label>
+              <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="" aria-label="選擇回診日期" class="w-52" />
+              <TimePicker id="record-follow-up-time" v-model="followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="!followUpDate" class="w-28 shrink-0" />
+              <span v-if="followUpNotice" class="inline-flex items-center gap-1 text-sm font-semibold" role="status">
                 <CalendarCheck class="size-4" stroke-width="1.75" />{{ FOLLOW_UP_NOTICE[followUpNotice].label }}
               </span>
+              <template v-else-if="followUpConflict">
+                <span class="text-sm font-semibold text-warning" role="status">櫃台約了 <span class="num">{{ shortDate(bookedFollowUp.date) }} {{ bookedFollowUp.time }}</span></span>
+                <button type="button" class="text-sm font-semibold text-primary hover:underline" @click.stop="useBookedFollowUp">改用櫃台的</button>
+              </template>
+              <p v-if="followUpTimeError" class="w-full text-sm font-medium text-destructive">{{ followUpTimeError }}</p>
             </div>
-            <div class="flex gap-2">
-              <DatePicker id="record-follow-up-date" v-model="followUpDate" placeholder="" aria-label="選擇回診日期" :disabled="isVisitLinked" class="w-52" />
-              <TimePicker id="record-follow-up-time" v-model="followUpTime" placeholder="時間" aria-label="選擇回診時間" :disabled="isVisitLinked || !followUpDate" class="w-32 shrink-0" />
-            </div>
-            <p v-if="followUpTimeError" class="text-sm font-medium text-destructive">{{ followUpTimeError }}</p>
+            <!-- IDEXX 結果有哪些數值進了這份報告；「比對」沿用這一頁的比對視窗（處理完要同步畫面上的值）。 -->
+            <LabFillStatus v-if="isVisitLinked && visitLink?.appointmentId" :pet-id="String(petId ?? '')" :appointment-id="String(visitLink.appointmentId)" :base-date="visitLink.date ?? ''" @compare="labConflictGroup = $event" />
+            <!-- 櫃台處理到哪、勾了不寄就診紀錄（lib/recordStatus.js 的 visitDeskMarks）。 -->
+            <span v-if="deskMarks.length" class="ml-auto flex flex-wrap items-center gap-2">
+              <StatusMark v-for="mark in deskMarks" :key="mark.key" :mark="mark" />
+            </span>
           </div>
         </div>
-      </div>
-
-      <!-- 引用本次看診：這幾欄只有一份，在看診上。 -->
-      <div v-if="isVisitLinked" class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-info-surface px-5 py-3">
-        <p class="flex items-center gap-2 font-semibold text-info"><Link2 class="size-5" stroke-width="2" />引用本次看診<RouterLink v-if="visitLink?.date" :to="{ path: '/appointments', query: { date: visitLink.date, open: visitLink.appointmentId } }" class="num font-normal underline underline-offset-4 hover:text-foreground" :aria-label="`在診療台打開 ${visitLink.date} 的看診`">{{ shortDate(visitLink.date) }}</RouterLink></p>
-        <!-- IDEXX 結果有哪些數值進了這份報告；「比對」沿用這一頁的比對視窗（處理完要同步畫面上的值）。 -->
-        <LabFillStatus v-if="visitLink?.appointmentId" :pet-id="String(petId ?? '')" :appointment-id="String(visitLink.appointmentId)" :base-date="visitLink.date ?? ''" @compare="labConflictGroup = $event" />
-        <!-- 櫃台勾了「這次看診不寄就診紀錄」：寄送的事，跟引用的看診放一起，不夾在底部「捨棄草稿」旁邊。 -->
-        <span v-if="visitLink?.noVisitRecord" class="ml-auto text-sm font-semibold text-warning">不寄就診紀錄</span>
-      </div>
-
       <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序。
            區段不多時橫向清單一次看到全部；超過門檻改用固定寬度的目前位置＋抽屜，見下方 useCompactNav 分支。 -->
       <nav
         v-if="!isLocked && !useCompactNav"
         aria-label="健檢表單區段"
-        class="sticky top-16 z-20 overflow-x-auto rounded-xl border border-border bg-card px-2 py-2 shadow-card lg:top-0 xl:hidden"
+        class="overflow-x-auto rounded-xl border border-border bg-card px-2 py-2 shadow-card xl:hidden"
       >
         <ol class="flex min-w-max items-center">
           <li v-for="(section, index) in FORM_SECTIONS" :key="section.id" class="flex items-center">
@@ -1312,7 +1207,7 @@ function handleBeforeUnload(event) {
       <nav
         v-if="!isLocked && useCompactNav"
         aria-label="健檢表單區段"
-        class="sticky top-16 z-20 flex items-center gap-1 rounded-xl border border-border bg-card px-2 py-2 shadow-card lg:top-0 xl:hidden"
+        class="flex items-center gap-1 rounded-xl border border-border bg-card px-2 py-2 shadow-card xl:hidden"
       >
         <Button
           type="button"
@@ -1348,6 +1243,7 @@ function handleBeforeUnload(event) {
           @click="adjacentSection(1)"
         ><ChevronRight class="h-4 w-4" /></Button>
       </nav>
+      </div>
 
       <Sheet v-model:open="sectionListOpen">
         <SheetContent side="right" class="flex flex-col gap-0 p-0">
@@ -1379,7 +1275,7 @@ function handleBeforeUnload(event) {
       </Sheet>
 
       <div :class="isLocked ? '' : 'xl:grid xl:grid-cols-[16rem_minmax(0,1fr)] xl:items-start xl:gap-4'">
-      <nav v-if="!isLocked" aria-label="健檢表單區段（直排）" class="sticky top-5 hidden flex-col gap-0.5 rounded-xl border border-border bg-card p-2 shadow-card xl:flex">
+      <nav v-if="!isLocked" aria-label="健檢表單區段（直排）" class="sticky top-[calc(var(--record-bar,0px)+1rem)] hidden flex-col gap-0.5 rounded-xl border border-border bg-card p-2 shadow-card xl:flex">
         <button
           v-for="(section, index) in FORM_SECTIONS"
           :key="section.id"
@@ -1408,7 +1304,7 @@ function handleBeforeUnload(event) {
           v-show="activeSectionId === section.id"
           :id="section.id"
           :key="section.key"
-          class="scroll-mt-40 rounded-xl border border-border bg-card p-5 shadow-card sm:p-6"
+          class="scroll-mt-[calc(var(--record-bar,0px)+1rem)] rounded-xl border border-border bg-card p-5 shadow-card sm:p-6"
         >
           <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-3">
@@ -1432,7 +1328,7 @@ function handleBeforeUnload(event) {
       </div>
 
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
-      <div v-if="!isLocked" id="record-action-bar" class="bottom-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 lg:left-18 lg:right-16">
+      <div v-if="!isLocked" id="record-action-bar" class="bottom-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 lg:left-18 lg:right-16 xl:hidden">
         <div class="sm:px-2">
           <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
           <div class="grid grid-cols-3 gap-2 sm:hidden">

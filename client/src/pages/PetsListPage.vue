@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue';
 import { apiErrorMessage } from '../lib/apiError';
 import PatientLink from '../components/PatientLink.vue';
 import { Cat, Plus } from '@lucide/vue';
@@ -13,6 +14,7 @@ import PetSex from '../components/PetSex.vue';
 import PetLine from '../components/PetLine.vue';
 import ReminderTags from '../components/ReminderTags.vue';
 import RowActions from '../components/RowActions.vue';
+import NewReportDialog from '../components/NewReportDialog.vue';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { useToast } from '../composables/useToast';
@@ -54,6 +56,9 @@ async function rowAction(key, pet) {
     toast.error(apiErrorMessage(err, '暫存區更新失敗，請稍後再試'));
   }
 }
+
+// 「新增健檢」選看診的視窗（健檢報告一律從看診建立）。
+const newReportPet = ref(null);
 </script>
 
 <template>
@@ -97,7 +102,7 @@ async function rowAction(key, pet) {
             </span>
             <span class="desktop-data-cell"><ReminderTags :pet="pet" /></span>
             <span class="desktop-data-cell flex items-center justify-end gap-1">
-              <Button as-child variant="soft" size="sm"><router-link :to="`/pets/${pet._id}/records/new`">新增健檢</router-link></Button>
+              <Button type="button" variant="soft" size="sm" @click="newReportPet = pet">新增健檢</Button>
               <RowActions :actions="rowActions(pet)" :label="`${pet.name}的更多操作`" @select="(key) => rowAction(key, pet)" />
             </span>
           </div>
@@ -115,7 +120,7 @@ async function rowAction(key, pet) {
             </router-link>
             <div class="flex items-center gap-2">
               <ReminderTags :pet="pet" class="min-w-0 flex-1" />
-              <Button as-child variant="soft" size="sm" class="ml-auto shrink-0"><router-link :to="`/pets/${pet._id}/records/new`">新增健檢</router-link></Button>
+              <Button type="button" variant="soft" size="sm" class="ml-auto shrink-0" @click="newReportPet = pet">新增健檢</Button>
             </div>
           </li>
         </ul>
@@ -125,5 +130,6 @@ async function rowAction(key, pet) {
         <ListFooter :page="currentPage" :total-pages="totalPages" :total="total" :page-size="limit" @update:page="goToPage" />
       </template>
     </DataCard>
+    <NewReportDialog v-if="newReportPet" :pet-id="String(newReportPet._id)" :pet-name="newReportPet.name" @close="newReportPet = null" />
   </section>
 </template>

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyVisitEdits, hasVisitEdits, stripVisitFields, templateLabItems, visitOverlay } from './recordVisitLink.js';
+import { applyVisitEdits, followUpToStore, hasVisitEdits, stripVisitFields, templateLabItems, visitOverlay } from './recordVisitLink.js';
 
 const template = {
   sections: [
@@ -46,6 +46,21 @@ test('檢驗的手動判讀與備註是報告自己的內容，只有數值來�
   assert.equal(byKey.retired.value, '1');
 });
 
+test('報告自己填了回診日期就用報告的，沒填才用櫃台約好的', () => {
+  const own = new Date('2026-10-21T07:00:00.000Z');
+  assert.equal(visitOverlay({ followUpDate: own, labFindings: [] }, visit(), template).followUpDate, own);
+  assert.equal(visitOverlay({ followUpDate: null, labFindings: [] }, visit(), template).followUpDate.toISOString(), '2026-10-09T06:30:00.000Z');
+});
+
+test('回診日期跟櫃台約好的同一個時刻、或清空，都不存成報告自己的', () => {
+  assert.equal(followUpToStore('2026-10-09T06:30:00.000Z', visit()), null);
+  assert.equal(followUpToStore('', visit()), null);
+  assert.equal(followUpToStore(null, visit()), null);
+  assert.equal(followUpToStore('2026-10-21T07:00:00.000Z', visit()), '2026-10-21T07:00:00.000Z');
+  // 櫃台還沒約：醫師填的就是報告自己的。
+  assert.equal(followUpToStore('2026-10-09T06:30:00.000Z', visit({ followUpDate: '', followUpTime: '' })), '2026-10-09T06:30:00.000Z');
+});
+
 test('看診清空了，報告上也跟著空', () => {
   const overlay = visitOverlay({ labFindings: [{ key: 'wbc', value: '', status: 'abnormal', statusSource: 'auto' }] }, visit({ weightKg: null, followUpDate: '', labValues: [] }), template);
   assert.equal(overlay.weightKg, null);
@@ -53,12 +68,13 @@ test('看診清空了，報告上也跟著空', () => {
   assert.deepEqual(overlay.labFindings.map((f) => [f.key, f.value, f.status]), [['wbc', '', 'not_checked']]);
 });
 
-test('存草稿時看診的欄位一律不存，檢驗只清數值、留狀態與備註', () => {
+test('存草稿時看診的欄位一律不存，檢驗只清數值、留狀態與備註；回診日期另外看 followUpToStore', () => {
+  const followUpDate = new Date();
   const stripped = stripVisitFields({
-    weightKg: 4, temperatureC: 38, followUpDate: new Date(), chiefComplaint: '嘔吐',
+    weightKg: 4, temperatureC: 38, followUpDate, chiefComplaint: '嘔吐',
     labFindings: [{ key: 'wbc', value: '9', status: 'normal', note: '備註' }, { key: 'custom', value: '留著' }],
   }, template);
-  assert.deepEqual([stripped.weightKg, stripped.temperatureC, stripped.followUpDate, stripped.chiefComplaint], [null, null, null, '嘔吐']);
+  assert.deepEqual([stripped.weightKg, stripped.temperatureC, stripped.followUpDate, stripped.chiefComplaint], [null, null, followUpDate, '嘔吐']);
   assert.deepEqual(stripped.labFindings, [{ key: 'wbc', value: '', status: 'normal', note: '備註' }, { key: 'custom', value: '留著' }]);
   // 沒送的欄位不會被補成 null。
   assert.equal('weightKg' in stripVisitFields({ chiefComplaint: 'x' }, template), false);

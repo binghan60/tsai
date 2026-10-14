@@ -352,6 +352,76 @@ router.post('/', async (req, res, next) => {
   }
 });
 
+// GET /api/appointments/visits?petId=
+// 「新增健檢」選看診用：這隻貓有看診的掛號（在院、待櫃台處理、已完成），新到舊。
+// 每筆帶 report：這次看診的健檢報告（修訂過的指向最新一版）{ _id, status }，還沒建立是 null。
+const VISIT_LIST_STATUSES = ['arrived', 'pending_checkout', 'completed'];
+router.get('/visits', async (req, res, next) => {
+  try {
+    if (!mongoose.isValidObjectId(req.query.petId)) return res.status(422).json({ message: '貓咪編號格式不正確' });
+    const items = await Appointment.find({ petId: req.query.petId, status: { $in: VISIT_LIST_STATUSES } })
+      .sort({ date: -1, scheduledAt: -1 })
+      .limit(30)
+      .select('date time scheduledAt reason status recordId templateId reopenRequest backfilledAt __v')
+      .lean();
+    const rootIds = items.map((item) => item.recordId).filter(Boolean);
+    const latest = rootIds.length
+      ? await MedicalRecord.find({ $or: [{ _id: { $in: rootIds } }, { revisionRootId: { $in: rootIds } }], supersededBy: null })
+        .select('_id status revisionRootId').lean()
+      : [];
+    const reportByRoot = new Map(latest.map((record) => [String(record.revisionRootId || record._id), { _id: record._id, status: record.status }]));
+    res.json({ items: items.map((item) => ({ ...item, report: item.recordId ? reportByRoot.get(String(item.recordId)) ?? null : null })) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/appointments/backfill { petId, date, time?, reason?, templateId? }
+// 補登看診：要寫健檢報告的那次看診不在系統裡（當天忘了掛號、補建以前的健檢）。建立一筆已完成的看診——
+// 報到、開始看診、送交櫃台、完成處理都寫成看診當時，不進掛號台與診療台的流程、沒有號碼牌——
+// 同時建立健檢報告草稿與病歷日誌。只能補今天以前（含今天）的。
+router.post('/backfill', async (req, res, next) => {
+  try {
+    const { petId } = req.body;
+    if (!mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '請選擇貓咪' });
+    const date = String(req.body.date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !combineClinicDateTime(date, '')) return res.status(422).json({ message: '請選擇看診日期' });
+    if (date > clinicToday()) return res.status(422).json({ message: '補登只能補今天以前的看診' });
+    const time = String(req.body.time || '').trim();
+    if (time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) return res.status(422).json({ message: '時間格式不正確' });
+    const template = await resolveAppointmentTemplate(req.body.templateId);
+    let appointment;
+    let record;
+    await withTransaction(async (session) => {
+      const pet = await Pet.findById(petId).populate('ownerId', 'name phone').session(session);
+      if (!pet) throw Object.assign(new Error('找不到指定的貓咪'), { status: 422 });
+      const at = combineClinicDateTime(date, time);
+      [appointment] = await Appointment.create([{
+        date, time, scheduledAt: at,
+        ownerId: pet.ownerId?._id ?? null, petId: pet._id,
+        ownerName: pet.ownerId?.name ?? '', ownerPhone: pet.ownerId?.phone ?? '',
+        petName: pet.name, species: pet.species,
+        visitType: 'return',
+        reason: String(req.body.reason || '').trim(),
+        templateId: template._id,
+        status: 'completed',
+        checkedInAt: at, visitStartedAt: at, handoffAt: at, deskCompletedAt: at,
+        backfilledAt: new Date(),
+      }], { session });
+      await createCheckinRecord(appointment, session);
+      record = await MedicalRecord.findById(appointment.recordId).session(session);
+      await appointment.save({ session });
+      await syncAppointmentJournal(appointment, { session });
+    });
+    emitAppointmentUpdate(appointment);
+    emitClinicalNoteUpdate({ petId: appointment.petId, appointmentId: appointment._id });
+    res.status(201).json({ appointment, record });
+    await applyPendingLabResults(appointment);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/:id', async (req, res, next) => {
   try {
     const appointment = await Appointment.findById(req.params.id);

@@ -18,7 +18,7 @@ import {
 } from '../lib/reportDelivery.js';
 import { hasPdfRenderAccess } from '../config/pdfAccess.js';
 import { publicAppOrigin } from '../config/publicUrl.js';
-import { defaultRecordFields, storageFor, templateForRecord } from '../lib/formTemplate.js';
+import { storageFor, templateForRecord } from '../lib/formTemplate.js';
 import { deleteCloudinaryImages, removedImagePublicIds, imagePublicIds, sanitizeImageValue } from '../lib/imageUploads.js';
 import { composeReportSections } from '../lib/reportSections.js';
 import { escapeRegExp } from '../lib/regex.js';
@@ -29,7 +29,8 @@ import { enrichSectionsWithPreviousValues, getPetPreviousValues, plainSections }
 import { clinicDayStart } from '../lib/clinicTime.js';
 import { reportPdfFilename } from '../../../shared/reportFilename.js';
 import { emitAppointmentUpdate } from '../lib/realtime.js';
-import { applyVisitEdits, hasVisitEdits, stripVisitFields, templateLabItems, visitOverlay } from '../lib/recordVisitLink.js';
+import { applyVisitEdits, bookedFollowUp, followUpToStore, hasVisitEdits, stripVisitFields, templateLabItems, visitOverlay } from '../lib/recordVisitLink.js';
+import { deskProcessingState } from '../../../shared/appointmentWorkflow.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
 import { deskStatusByRecordId, hasNoVisitRecord, NO_VISIT_RECORD_MESSAGE, visitInfoForRecord } from '../lib/recordDeskStatus.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -109,17 +110,26 @@ async function cleanUpImages(publicIds, context) {
 // 正是 Puppeteer 產 PDF 的來源，結案與寄信路徑上各會走一次。
 //
 // 草稿還沒凍結結構，仍要即時用目前範本組合並補上對照值。
-// 報到建立的草稿連著一筆看診。體重、體溫、回診日期、檢驗數值只存在看診上，
+// 報到建立的草稿連著一筆看診。體重、體溫、檢驗數值只存在看診上；回診日期報告沒自己填就用櫃台約好的。
 // 讀草稿時把看診的值疊到文件上（只改記憶體裡這一份，不存回去），之後的組區塊、預覽都看得到。
-const VISIT_SELECT = '_id date weightKg temperatureC followUpDate followUpTime labValues deskItems';
+const VISIT_SELECT = '_id date status reopenRequest weightKg temperatureC followUpDate followUpTime labValues deskItems';
 async function linkedVisitFor(record) {
   if (!record || record.status !== 'draft') return null;
   return Appointment.findOne({ recordId: record._id }).select(VISIT_SELECT).lean();
 }
 // 填寫頁靠 visitLink 知道連著哪一筆看診；noVisitRecord＝櫃台處理勾了「這次看診不寄就診紀錄」，醫師填寫時就看得到。
-function visitLinkPayload(visit) {
+// deskStatus＝櫃台處理到哪（醫師先寫報告時，飼主可能還在櫃台決定要不要寄）；
+// bookedFollowUp＝櫃台約好的回診、ownFollowUp＝報告上是醫師自己填的回診日期（兩個不同時畫面會提示）。
+function visitLinkPayload(visit, ownFollowUp = false) {
   if (!visit) return null;
-  return { appointmentId: visit._id, date: visit.date, noVisitRecord: (visit.deskItems ?? []).includes('no_visit_record') };
+  return {
+    appointmentId: visit._id,
+    date: visit.date,
+    noVisitRecord: (visit.deskItems ?? []).includes('no_visit_record'),
+    deskStatus: deskProcessingState(visit),
+    bookedFollowUp: bookedFollowUp(visit),
+    ownFollowUp,
+  };
 }
 async function applyLinkedVisit(record, visit = undefined) {
   const linked = visit === undefined ? await linkedVisitFor(record) : visit;
@@ -264,58 +274,11 @@ petRecordsRouter.get('/finalized-sources', async (req, res, next) => {
   }
 });
 
-petRecordsRouter.post('/', async (req, res, next) => {
-  try {
-    // 健檢類型就是「用哪一份範本」，只在建立時決定；
-    // 中途換範本會讓已填的作答對不上結構，所以之後不允許更改。
-    // 沒有預設類型，一律要求明確指定。
-    if (!req.body.templateId) return res.status(422).json({ message: '請先選擇健檢類型' });
-    // 嚴格比對：id 不存在就要明確報錯，不能悄悄退到別份範本，
-    // 否則使用者選了 A 卻建出 B 類型的報告。
-    if (!mongoose.isValidObjectId(req.body.templateId)) {
-      return res.status(422).json({ message: '健檢類型格式不正確' });
-    }
-    let record;
-    await withTransaction(async (session) => {
-      // 遞增父文件 relationVersion，讓「建立報告」與「刪除貓咪／表單」無法同時提交。
-      const pet = await Pet.findOneAndUpdate(
-        { _id: req.params.petId },
-        { $inc: { relationVersion: 1 } },
-        { new: true, session }
-      ).select('+relationVersion');
-      if (!pet) {
-        const error = new Error('找不到貓咪');
-        error.status = 404;
-        throw error;
-      }
-
-      const template = await FormTemplate.findOneAndUpdate(
-        { _id: req.body.templateId, enabled: { $ne: false } },
-        { $inc: { relationVersion: 1 } },
-        { new: true, session }
-      ).select('+relationVersion');
-      if (!template) {
-        const error = new Error('找不到指定的健檢類型，或該類型已停用');
-        error.status = 422;
-        throw error;
-      }
-
-      const recordFields = sanitizeRecordImages(pickRecordFields(req.body), template);
-      const defaults = defaultRecordFields(template);
-      [record] = await MedicalRecord.create([{
-        petId: pet._id,
-        ...defaults,
-        ...recordFields,
-        customValues: { ...(defaults.customValues ?? {}), ...(recordFields.customValues ?? {}) },
-        templateId: template._id,
-        templateVersion: template.version,
-        examType: template.name,
-      }], { session });
-    });
-    res.status(201).json(record);
-  } catch (err) {
-    next(err);
-  }
+// 健檢報告一律從看診建立（報到時建立，或「新增健檢」選一次看診走 workflow 的 record；
+// 要寫的看診不在系統裡就先補登，POST /api/appointments/backfill）。不再建立沒有對應看診的獨立報告：
+// 報告的體重、體溫、檢驗、回診、櫃台處理狀態、病歷日誌都跟著看診走，兩種模式並存只會讓規則分岔。
+petRecordsRouter.post('/', (_req, res) => {
+  res.status(422).json({ message: '健檢報告要從看診建立：請選擇這隻貓的一次看診，或先補登看診' });
 });
 
 // 掛載於 /api/records
@@ -452,6 +415,7 @@ recordsRouter.get('/:id', async (req, res, next) => {
     });
     if (!record) return res.status(404).json({ message: '找不到報告' });
     // 連著看診的草稿先疊上看診的值；填寫頁靠 visitLink 知道這幾欄改了會寫回看診。
+    const ownFollowUp = Boolean(record.followUpDate);
     const visit = await applyLinkedVisit(record);
     // 預覽模式與報告頁共用同一套渲染，草稿也要能拿到區塊結構與歷史對照數值。
     const sections = await sectionsForView(record);
@@ -463,7 +427,7 @@ recordsRouter.get('/:id', async (req, res, next) => {
       ...record.toJSON(),
       sections,
       deliveryStatus: effectiveDeliveryStatus(record),
-      visitLink: visitLinkPayload(visit),
+      visitLink: visitLinkPayload(visit, ownFollowUp),
       // 櫃台勾了「這次看診不寄就診紀錄」：預覽頁停用 Email 寄送（伺服器也擋）。
       visitInfo,
       noVisitRecord: Boolean(visitInfo?.noVisitRecord),
@@ -483,10 +447,14 @@ recordsRouter.put('/:id', async (req, res, next) => {
     if (!existingForValidation) return res.status(404).json({ message: '找不到指定的健康報告' });
     const template = await templateForRecord(existingForValidation);
     let recordFields = sanitizeRecordImages(pickRecordFields(req.body), template, existingForValidation);
-    // 連著看診的草稿：體重、體溫、回診日期、檢驗數值不存在報告上（送來的一律清掉），
+    // 連著看診的草稿：體重、體溫、檢驗數值不存在報告上（送來的一律清掉），
     // 醫師在報告上改過的那幾欄由前端放在 visitEdits，同一個 transaction 裡寫回看診。
-    const linkedVisit = await Appointment.findOne({ recordId: req.params.id }).select('_id');
-    if (linkedVisit) recordFields = stripVisitFields(recordFields, template);
+    // 回診日期跟櫃台約好的一樣就不存（之後櫃台改約，報告跟著變），不一樣才是報告自己的。
+    const linkedVisit = await Appointment.findOne({ recordId: req.params.id }).select('_id followUpDate followUpTime');
+    if (linkedVisit) {
+      recordFields = stripVisitFields(recordFields, template);
+      if (recordFields.followUpDate !== undefined) recordFields.followUpDate = followUpToStore(recordFields.followUpDate, linkedVisit);
+    }
     const visitEdits = linkedVisit && hasVisitEdits(req.body.visitEdits) ? req.body.visitEdits : null;
     let record = null;
     let editedVisit = null;
@@ -536,8 +504,9 @@ recordsRouter.put('/:id', async (req, res, next) => {
     await cleanUpImages(removedImagePublicIds(existingForValidation, record), `record ${record._id} updated`);
     if (editedVisit) emitAppointmentUpdate(editedVisit);
     // 回傳時一樣疊上看診的最新值：診療台剛改的數字，填寫頁存一次檔就看得到。
+    const ownFollowUp = Boolean(record.followUpDate);
     const visit = linkedVisit ? await applyLinkedVisit(record) : null;
-    res.json({ ...record.toJSON(), visitLink: visitLinkPayload(visit) });
+    res.json({ ...record.toJSON(), visitLink: visitLinkPayload(visit, ownFollowUp) });
   } catch (err) {
     next(err);
   }

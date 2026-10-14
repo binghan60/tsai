@@ -58,7 +58,8 @@ const router = createRouter({
     // transient：不列入「使用者從哪來」的紀錄。存檔後這頁會 replace 成 /records/:id/edit，
     // 之後再回到這個 new 網址只會又開一份新草稿。
     // nav：這頁的網址掛在 /pets 底下，但它做的是健檢報告，側邊欄該亮的是那一項。
-    { path: '/pets/:petId/records/new', component: RecordFormPage, meta: { title: '新增健檢', transient: true, nav: '/records' } },
+    // 健檢報告一律從看診建立：舊的建立頁網址導回貓咪頁、打開「新增健檢」選看診的視窗。
+    { path: '/pets/:petId/records/new', redirect: (to) => ({ path: `/pets/${to.params.petId}`, query: { newReport: '1' } }) },
     { path: '/records/:id/edit', component: RecordFormPage, meta: { title: '編輯健檢' } },
     { path: '/records/:id/preview', name: 'record-preview', component: ReportViewPage, meta: { bare: true, title: '報告預覽' } },
     // 公開頁面：無後台導覽列，飼主查看用 + Puppeteer PDF 截圖來源

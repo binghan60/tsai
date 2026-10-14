@@ -30,6 +30,7 @@ import { precompressedAssets } from './lib/precompressedAssets.js';
 import { startBounceChecks, stopBounceChecks } from './lib/mailBounces.js';
 import { onPdfReady, resumePdfJobs } from './lib/reportPdfJobs.js';
 import { runAutoSends, waitForAutoSends } from './lib/reportDelivery.js';
+import { onDeskCompleted } from './lib/deskEvents.js';
 import { initRealtime } from './lib/realtime.js';
 
 const app = express();
@@ -158,6 +159,8 @@ export async function startServer() {
   await ensureBootstrapUser();
   // 結案時勾了自動寄送的，PDF 產好就寄；啟動時也補寄一次重啟前沒寄到的（PDF 已經好了、還沒寄）。
   onPdfReady(runAutoSends);
+  // 自動寄送等櫃台完成處理：櫃台按下去那一刻再跑一輪。
+  onDeskCompleted(runAutoSends);
   await resumePdfJobs();
   runAutoSends();
   httpServer = app.listen(port, () => console.log(`[server] listening on http://localhost:${port}`));

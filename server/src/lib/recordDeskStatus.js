@@ -25,6 +25,16 @@ export async function visitInfoForRecord(record) {
   };
 }
 
+// 自動寄送要等櫃台完成處理：醫師常常看完診就先寫報告、結案，飼主到了櫃台才說不要寄或還有別的事。
+// 回傳這批報告裡「連著看診、而櫃台還沒按完成處理」的那些的根 id（修訂版沿 revisionRootId 找同一筆看診）；
+// 沒連著看診的舊獨立報告、補登的看診（建立時就是已完成）都不在裡面。
+export async function rootIdsAwaitingDesk(records) {
+  const rootIds = [...new Set(records.filter((record) => record?._id).map((record) => String(rootRecordId(record))))];
+  if (!rootIds.length) return new Set();
+  const waiting = await Appointment.find({ recordId: { $in: rootIds }, deskCompletedAt: null }).select('recordId').lean();
+  return new Set(waiting.map((appointment) => String(appointment.recordId)));
+}
+
 export async function hasNoVisitRecord(record) {
   if (!record?._id) return false;
   return Boolean(await Appointment.exists({ recordId: rootRecordId(record), deskItems: 'no_visit_record' }));

@@ -17,6 +17,7 @@ import { syncImageUploadTodo } from '../lib/imageUploadTodo.js';
 import { publishTodos } from '../lib/todos.js';
 import { STAFF_SENDERS } from '../lib/pinnedPets.js';
 import { templateLabItems } from '../lib/recordVisitLink.js';
+import { notifyDeskCompleted } from '../lib/deskEvents.js';
 import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDuration, normalizeSurgeryFields, validateAppointmentDuration } from '../lib/appointmentTime.js';
 
 const router = Router({ mergeParams: true });
@@ -141,6 +142,8 @@ router.post('/:action', async (req, res, next) => {
     });
     // 櫃台完成處理＝離開診所：從 IDEXX 主機的在院清單收掉（伺服器有開才會排隊）。
     if (action === 'complete') await queueIdexxCensus(appointment);
+    // 結案時排了自動寄送、在等櫃台的報告：現在可以寄了（勾了不寄就診紀錄的由寄送本身擋下）。
+    if (action === 'complete') notifyDeskCompleted();
     emitAppointmentUpdate(appointment);
     if (todosChanged) await publishTodos();
     if (medicationOrder) emitMedicationUpdate(medicationOrder);

@@ -16,6 +16,7 @@ import { Button } from '../components/ui/button';
 import { Checkbox } from '../components/ui/checkbox';
 import { reportPdfFilename } from '../../../shared/reportFilename.js';
 import { catBreedLabel } from '../../../shared/catBreeds.js';
+import { useLiveReload } from '../composables/useLiveReload';
 
 const route = useRoute();
 const router = useRouter();
@@ -80,6 +81,8 @@ const visitDeskBadges = computed(() => {
 });
 const sendBlocked = computed(() => Boolean(record.value?.noVisitRecord));
 const autoSendPending = computed(() => Boolean(record.value?.autoSendRequestedAt));
+// 自動寄送等櫃台完成處理：連著的看診櫃台還沒按「完成處理」，排著的自動寄送先不寄（伺服器 runAutoSends 也這樣擋）。
+const awaitingDesk = computed(() => ['with_doctor', 'desk_pending'].includes(visitInfo.value?.deskStatus));
 const finalizeDescription = computed(() => (ownerEmail.value
   ? '系統會驗證內容、產生正式 PDF 並鎖定此版本。結案後若需修改，請建立修訂版。'
   : '系統會驗證內容、產生正式 PDF 並鎖定此版本。結案後若需修改，請建立修訂版；Email 可稍後另外寄送。'));
@@ -434,7 +437,7 @@ async function retryPdf() {
 }
 
 function handleMoreReportAction(action) {
-  if (action === 'new-record') return router.push(`/pets/${record.value?.pet?._id}/records/new?copyFrom=${record.value?._id}`);
+  if (action === 'new-record') return router.push({ path: `/pets/${record.value?.pet?._id}`, query: { newReport: '1' } });
   if (action === 'revision') showRevisionDialog.value = true;
 }
 
@@ -461,10 +464,12 @@ onBeforeUnmount(() => {
 const backgroundWorkPending = computed(() => Boolean(
   isPreview.value && record.value && !isDraft.value && (
     ['pending', 'generating'].includes(pdfStatus.value)
-    || (autoSendPending.value && !pdfFailed.value)
+    || (autoSendPending.value && !pdfFailed.value && !(awaitingDesk.value && pdfStatus.value === 'ready'))
     || (deliverySending.value && !emailing.value)
   )
 ));
+// 預覽（後台）才聽即時更新：櫃台處理到哪、等櫃台的自動寄送寄出了沒。公開報告頁（也是 PDF 來源）不開連線。
+if (isPreview.value) useLiveReload(() => fetchReport(), { events: ['records:updated', 'clinical-note:updated'] });
 let pdfPollTimer = null;
 function syncPdfPolling(polling, wasPolling) {
   window.clearInterval(pdfPollTimer);
@@ -530,7 +535,7 @@ watch(
         class="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3 text-sm print:hidden"
         :class="deliveryFailed ? 'border-report-danger-border bg-report-danger-surface text-report-danger-strong' : isSent ? 'border-report-success-border bg-report-success-surface text-report-success-strong' : deliverySending ? 'border-report-info-border bg-report-info-surface text-report-info' : 'border-report-warning-border bg-report-warning-surface text-report-warning'"
       >
-        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案（第 {{ record.reportVersion || 1 }} 版）</strong><span class="block">{{ isSent ? `已寄出至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : autoSendPending ? `PDF 產生後自動寄給 ${ownerEmail}` : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
+        <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案（第 {{ record.reportVersion || 1 }} 版）</strong><span class="block">{{ isSent ? `已寄出至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : autoSendPending ? `${awaitingDesk ? '櫃台完成處理後' : 'PDF 產生後'}自動寄給 ${ownerEmail}` : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
           <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="emailing || deliverySending || !pdfReady || sendBlocked" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ sendBlocked ? '不寄就診紀錄' : !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ sendBlocked ? '不寄就診紀錄' : !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
           <Button v-else-if="record.pet?._id" as-child variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm"><router-link :to="`/pets/${record.pet._id}?editOwner=1`">補填 Email</router-link></Button>
@@ -693,7 +698,7 @@ watch(
       <p v-if="ownerEmail && sendBlocked" class="pt-2 text-sm font-medium text-warning">櫃台設定這次看診不寄就診紀錄，不會自動寄送；要寄請櫃台先取消該勾選。</p>
       <label v-else-if="ownerEmail" class="flex items-start gap-2 pt-2 text-sm text-foreground">
         <Checkbox v-model="autoSendOnFinalize" :disabled="finalizing" class="mt-px" />
-        <span class="min-w-0 break-all">PDF 產生後自動寄給飼主（{{ ownerEmail }}）</span>
+        <span class="min-w-0 break-all">{{ awaitingDesk ? '櫃台完成處理後' : 'PDF 產生後' }}自動寄給飼主（{{ ownerEmail }}）</span>
       </label>
     </ConfirmDialog>
     <ConfirmDialog

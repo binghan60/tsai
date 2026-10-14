@@ -40,9 +40,21 @@ import { usePinnedPetsStore } from '../stores/pinnedPets';
 import AttendanceBadges from '../components/AttendanceBadges.vue';
 import DepositBadge from '../components/DepositBadge.vue';
 import AttendancePanel from '../components/AttendancePanel.vue';
+import NewReportDialog from '../components/NewReportDialog.vue';
 import { usePetAttendance } from '../composables/usePetAttendance';
 
 const route = useRoute();
+// 「新增健檢」選看診的視窗（components/NewReportDialog.vue）。其他頁（貓咪清單、報告預覽）導過來時帶 ?newReport=1。
+const newReportOpen = ref(route.query.newReport === '1');
+watch(() => route.query.newReport, (value) => { if (value === '1') newReportOpen.value = true; });
+function closeNewReport() {
+  newReportOpen.value = false;
+  if (route.query.newReport) {
+    const query = { ...route.query };
+    delete query.newReport;
+    router.replace({ path: route.path, query });
+  }
+}
 const router = useRouter();
 const toast = useToast();
 const pinnedPets = usePinnedPetsStore();
@@ -638,7 +650,7 @@ watch(pet, async (value) => {
         <Button type="button" :variant="petPinned ? 'destructive' : 'secondary'" :disabled="pinBusy" @click="togglePin">
           <component :is="petPinned ? PinOff : Pin" stroke-width="1.75" />{{ petPinned ? '移出暫存區' : '加入暫存區' }}
         </Button>
-        <Button as-child><router-link :to="`/pets/${pet._id}/records/new`"><Plus stroke-width="1.75" />新增健檢</router-link></Button>
+        <Button type="button" @click="newReportOpen = true"><Plus stroke-width="1.75" />新增健檢</Button>
       </template>
     </PageHeader>
 
@@ -1033,7 +1045,8 @@ watch(pet, async (value) => {
           @close="recordToRemove = null"
           @submit="removeRecord"
         />
-      </section>
+        <NewReportDialog v-if="newReportOpen && pet" :pet-id="String(pet._id)" :pet-name="pet.name" @close="closeNewReport" />
+  </section>
     
       <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
       <ListSkeleton v-else :rows="5" />

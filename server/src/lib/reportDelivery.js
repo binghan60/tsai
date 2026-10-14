@@ -7,7 +7,7 @@ import { encryptPdf } from './pdfEncrypt.js';
 import { reportPasscode } from './reportPasscode.js';
 import { assertMailConfigured, isAmbiguousMailFailure, sendHealthReportEmail } from './mailer.js';
 import { emailProblem } from './emailCheck.js';
-import { hasNoVisitRecord, NO_VISIT_RECORD_MESSAGE } from './recordDeskStatus.js';
+import { hasNoVisitRecord, NO_VISIT_RECORD_MESSAGE, rootIdsAwaitingDesk, rootRecordId } from './recordDeskStatus.js';
 import { checkBouncesSoon } from './mailBounces.js';
 import { configuredAppOrigin } from '../config/publicUrl.js';
 
@@ -307,7 +307,8 @@ export async function performDelivery({ record, pet, owner, recipient, deliveryA
 
 // ── 結案時勾了「PDF 產生後自動寄給飼主」──
 // 意圖記在報告的 autoSendRequestedAt，伺服器重啟也不會掉。PDF 背景工作每產好一份就叫 runAutoSends
-// （app.js 用 onPdfReady 接上），伺服器啟動時也跑一次，補上重啟前沒寄到的。
+// （app.js 用 onPdfReady 接上），櫃台按「完成處理」時也叫一次（onDeskCompleted），伺服器啟動時也跑一次，補上重啟前沒寄到的。
+// 連著看診、而櫃台還沒完成處理的報告先排著不寄：飼主可能到了櫃台才說不要（櫃台會勾「不寄就診紀錄」）。
 // 每份報告只會自動寄一次：先把 autoSendRequestedAt 清掉、清得到的那個才寄；寄不出去就停在失敗，由人決定要不要重寄。
 
 // 結案當下就檢查信箱：有問題趁醫師還在畫面上講，不要等 PDF 產好才在背景默默失敗。回傳錯誤訊息（空字串＝可以寄）。
@@ -362,6 +363,8 @@ async function autoSendOne(recordId) {
 }
 
 const AUTO_SEND_BATCH = 20;
+// 一輪先看這麼多份排著的報告，扣掉還在等櫃台的再寄；等櫃台的不能卡住後面已經可以寄的。
+const AUTO_SEND_SCAN = 200;
 const AUTO_SEND_MAX_ROUNDS = 10;
 let autoSendRun = null;
 let autoSendAgain = false;
@@ -377,11 +380,13 @@ export function runAutoSends() {
     do {
       autoSendAgain = false;
       rounds += 1;
-      const pending = await MedicalRecord.find({
+      const queued = await MedicalRecord.find({
         autoSendRequestedAt: { $type: 'date' },
         status: 'finalized',
         pdfStatus: 'ready',
-      }).select('_id').sort({ autoSendRequestedAt: 1 }).limit(AUTO_SEND_BATCH);
+      }).select('_id revisionRootId').sort({ autoSendRequestedAt: 1 }).limit(AUTO_SEND_SCAN);
+      const awaitingDesk = await rootIdsAwaitingDesk(queued);
+      const pending = queued.filter((record) => !awaitingDesk.has(String(rootRecordId(record)))).slice(0, AUTO_SEND_BATCH);
       for (const { _id } of pending) {
         try {
           await autoSendOne(_id);

@@ -7,6 +7,7 @@ import { http } from '../api/http';
 import { shortDate as formatClinicDate, relativeDayLabel } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, deskMark, getDeliveryStatus, isFinalizedRecord, reportMark, reportMarkNote } from '../lib/recordStatus';
 import StatusMark from '../components/StatusMark.vue';
+import NewReportDialog from '../components/NewReportDialog.vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { usePagedList } from '../composables/usePagedList';
@@ -113,8 +114,10 @@ async function startRecordForPet(pet) {
     delete query.new;
     await router.replace({ path: route.path, query });
   }
-  await router.push(`/pets/${pet._id}/records/new`);
+  newReportPet.value = pet;
 }
+// 「新增健檢」選看診的視窗：先選貓（PetPickerDialog），再選這隻貓的一次看診。
+const newReportPet = ref(null);
 
 watch(view, applyFilters);
 watch(view, (nextView) => {
@@ -278,6 +281,7 @@ async function removeRecord(confirmText) {
         <ListFooter :page="currentPage" :total-pages="totalPages" :total="total" :page-size="limit" @update:page="goToPage" />
       </template>
     </DataCard>
+    <NewReportDialog v-if="newReportPet" :pet-id="String(newReportPet._id)" :pet-name="newReportPet.name" @close="newReportPet = null" />
   </section>
   <PetPickerDialog :open="petPickerOpen" @close="closePetPicker" @select="startRecordForPet" />
   <!-- 草稿只要一般確認，已結案報告才要打字（與貓咪詳情頁、後端刪除端點同一個判準）。 -->

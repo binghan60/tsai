@@ -69,6 +69,20 @@ export function deskMark(record) {
   return { key: status, label: meta.label, style: 'text', class: 'text-muted-foreground' };
 }
 
+// 填寫報告頁固定列的櫃台狀態：醫師常常看完診就先寫報告，飼主還在櫃台，可能還會決定不寄或有別的事。
+// 球在櫃台手上、或櫃台勾了不寄就診紀錄才是膠囊；醫師處理中、櫃台已完成只寫字。visitLink 來自 GET /records/:id。
+export function visitDeskMarks(visitLink) {
+  if (!visitLink) return [];
+  const marks = [];
+  const status = visitLink.deskStatus;
+  if (status === 'with_doctor') marks.push({ key: status, label: '還沒送交櫃台', style: 'text', class: 'text-muted-foreground' });
+  if (status === 'desk_pending') marks.push({ key: status, label: '櫃台還沒處理完', style: 'pill', class: DESK_STATUS_META.desk_pending.class });
+  if (status === 'reopen_requested') marks.push({ key: status, label: DESK_STATUS_META.reopen_requested.label, style: 'pill', class: DESK_STATUS_META.reopen_requested.class });
+  if (visitLink.noVisitRecord) marks.push({ key: 'no_visit', label: '不寄就診紀錄', style: 'pill', class: 'bg-warning-surface text-warning' });
+  else if (status === 'desk_done') marks.push({ key: status, label: '櫃台已完成', style: 'check', class: 'text-muted-foreground' });
+  return marks;
+}
+
 // 寄送流水帳的事件。跟 DELIVERY_STATUS_META 分開是因為兩者回答的問題不同：
 // 那個是「這份報告現在的寄送狀態」，這個是「當時那一次嘗試發生了什麼」。
 export const DELIVERY_EVENT_META = {
