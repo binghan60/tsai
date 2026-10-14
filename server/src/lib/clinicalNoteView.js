@@ -1,6 +1,7 @@
 import Appointment from '../models/Appointment.js';
 import MedicationOrder from '../models/MedicationOrder.js';
-import { appointmentJournalContent, appointmentJournalFields, appointmentJournalSections } from './appointmentWorkflow.js';
+import MedicalRecord from '../models/MedicalRecord.js';
+import { appointmentJournalContent, appointmentJournalFields, appointmentJournalSections, labTimeLabel } from './appointmentWorkflow.js';
 import { linkedLabResults } from './appointmentJournal.js';
 import { medicationJournalContent, medicationJournalFields, medicationJournalSections, medicationJournalStage, medicationJournalTitle } from './medicationWorkflow.js';
 
@@ -10,6 +11,15 @@ function withMedicationStage(sections, order) {
   return sections.map(section => (section.key === 'prescription'
     ? { ...section, stage: medicationJournalStage(order), medicationStatus: order.status, needsRepack: Boolean(order.needsRepack) }
     : section));
+}
+
+// 看診日誌的「健檢報告」列：這次看診的報告（含修訂版）寄出過就記「已寄出　時間」；沒寄過不列。
+// 寄送狀態由報告即時推導，不另存在掛號上，所以櫃台不必再手動勾。
+function withReportDelivery(sections, sentAt) {
+  if (!sentAt) return sections;
+  const row = { key: 'reportDelivery', label: '健檢報告', text: `已寄出　${labTimeLabel(sentAt)}` };
+  const at = sections.findIndex(section => section.key === 'deskItems');
+  return at < 0 ? [...sections, row] : [...sections.slice(0, at + 1), row, ...sections.slice(at + 1)];
 }
 
 // 日誌只保存掛號／藥單關聯；每次讀取都以來源文件的最新欄位組成內容。
@@ -34,6 +44,19 @@ export async function clinicalNoteViews(notes) {
   const visitOrders = visitOrderIds.length ? await MedicationOrder.find({ _id: { $in: visitOrderIds } }).select('-history').lean() : [];
   const orderById = new Map([...orders, ...visitOrders].map(item => [String(item._id), item]));
 
+  // 掛號的 recordId 是報告根；修訂版沿 revisionRootId 找回來。同一次看診任何一版寄出過就算已寄出，取最近一次。
+  const rootIds = appointments.map(item => item.recordId).filter(Boolean);
+  const sentRecords = rootIds.length
+    ? await MedicalRecord.find({ deliveryStatus: 'sent', $or: [{ _id: { $in: rootIds } }, { revisionRootId: { $in: rootIds } }] }).select('revisionRootId sentAt').lean()
+    : [];
+  const sentAtByRoot = new Map();
+  for (const record of sentRecords) {
+    const root = String(record.revisionRootId || record._id);
+    const at = record.sentAt ? new Date(record.sentAt) : null;
+    const prev = sentAtByRoot.get(root);
+    if (!prev || (at && at > prev)) sentAtByRoot.set(root, at || prev || new Date(0));
+  }
+
   return items.map(note => {
     if (note.appointmentId) {
       const appointment = appointmentById.get(String(note.appointmentId));
@@ -42,7 +65,7 @@ export async function clinicalNoteViews(notes) {
       return {
         ...note,
         content: appointment ? appointmentJournalContent(appointment, labs) : (note.content || '找不到對應的就診資料'),
-        ...(appointment && { sections: withMedicationStage(appointmentJournalSections(appointment, labs), orderById.get(String(appointment.medicationOrderId))), fields: appointmentJournalFields(appointment) }),
+        ...(appointment && { sections: withReportDelivery(withMedicationStage(appointmentJournalSections(appointment, labs), orderById.get(String(appointment.medicationOrderId))), appointment.recordId && sentAtByRoot.get(String(appointment.recordId))), fields: appointmentJournalFields(appointment) }),
         editableContent: appointment?.visitNote ?? note.content ?? '',
         readOnly: !appointment,
       };

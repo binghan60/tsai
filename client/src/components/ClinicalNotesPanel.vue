@@ -45,7 +45,8 @@ function handleRemoteNoteUpdate(note) {
   scheduleReload()
 }
 
-// IDEXX 結果歸到看診、改數值、移除：日誌的「IDEXX 檢驗」那一列跟著變。這個通知沒有 petId，有貓咪才重讀。
+// IDEXX 結果歸到看診、改數值、移除：日誌的「IDEXX 檢驗」那一列跟著變；報告寄出（或退信）時「健檢報告」那一列跟著變。
+// 這兩個通知都沒有 petId，有貓咪才重讀。
 function handleLabResultsUpdate() {
   if (props.petId) scheduleReload()
 }
@@ -53,12 +54,14 @@ function handleLabResultsUpdate() {
 onMounted(() => {
   socket.on('clinical-note:updated', handleRemoteNoteUpdate)
   socket.on('lab-results:updated', handleLabResultsUpdate)
+  socket.on('records:updated', handleLabResultsUpdate)
 })
 
 onBeforeUnmount(() => {
   clearTimeout(reloadTimer)
   socket.off('clinical-note:updated', handleRemoteNoteUpdate)
   socket.off('lab-results:updated', handleLabResultsUpdate)
+  socket.off('records:updated', handleLabResultsUpdate)
 })
 </script>
 

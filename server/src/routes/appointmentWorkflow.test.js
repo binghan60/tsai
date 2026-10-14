@@ -87,6 +87,7 @@ describe('independent appointment workflow HTTP routes', () => {
       records.set(String(record._id), record);
       return [record];
     });
+    mock.method(MedicalRecord, 'find', () => ({ select: () => ({ lean: async () => [] }) }));
     mock.method(MedicalRecord, 'findById', key => chain(records.get(String(key))));
     mock.method(MedicalRecord, 'updateOne', async (query, update, options) => {
       assert.ok(options.session);

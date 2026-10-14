@@ -28,7 +28,7 @@ function labSummary(labValues) {
 
 const LAB_TIME = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 // 診所時區的「10/7 14:32」。自己組字串，不用 Intl 排好的那一串（各版本夾的空白字元不一樣）。
-function labTimeLabel(value) {
+export function labTimeLabel(value) {
   const parts = Object.fromEntries(LAB_TIME.formatToParts(new Date(value)).map((part) => [part.type, part.value]));
   return `${Number(parts.month)}/${Number(parts.day)} ${parts.hour}:${parts.minute}`;
 }
@@ -169,6 +169,8 @@ export function appointmentJournalFields(appointment) {
 // labResults：連到這次看診的 IDEXX 結果——日誌上還有檢驗時，六個欄位全空也不算清空（日誌仍有內容）。
 export function applyJournalFields(appointment, body, { labResults = [] } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw workflowError('日誌欄位格式不正確');
+  // 本來就沒有內容的看診（開始看診就有日誌）存檔不算「清空」，只在原本有內容、被清光時擋。
+  const hadContent = appointmentJournalSections(appointment, labResults).length > 0;
   for (const [key, max] of Object.entries(JOURNAL_TEXT_LIMITS)) {
     if (body[key] === undefined) continue;
     if (body[key] !== null && typeof body[key] !== 'string') throw workflowError('日誌欄位格式不正確');
@@ -185,7 +187,7 @@ export function applyJournalFields(appointment, body, { labResults = [] } = {}) 
   // 櫃台處理：處理事項（整組取代）與上傳影像（待辦的增減由路由在同一個 transaction 裡接著做）。
   applyDeskItems(appointment, body.deskItems);
   applyImageUpload(appointment, body.imageUpload);
-  if (!appointmentJournalSections(appointment, labResults).length) throw workflowError('日誌內容不能全部清空');
+  if (hadContent && !appointmentJournalSections(appointment, labResults).length) throw workflowError('日誌內容不能全部清空');
 }
 
 export function assertWorkflowVersion(appointment, version) {

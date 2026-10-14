@@ -29,7 +29,6 @@ export const DESK_ITEM_GROUPS = [
     exclusive: false,
     items: [
       { key: 'itemized_bill', label: '已開明細' },
-      { key: 'report_sent', label: '已寄送健檢報告' },
       { key: 'diagnosis_certificate', label: '已開診斷證明' },
       { key: 'prescription_given', label: '已給藥單' },
       { key: 'consent_signed', label: '已簽用藥同意書' },

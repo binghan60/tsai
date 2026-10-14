@@ -48,7 +48,9 @@ test('journal edits write every journal field back regardless of workflow stage,
   assert.equal(visit.handoffNote, undefined);
   assert.throws(() => applyJournalFields(visit, { weightKg: -1 }), /非負數/);
   assert.throws(() => applyJournalFields(visit, { specialCareNote: 'x'.repeat(501) }), /最多 500 字/);
-  assert.throws(() => applyJournalFields({}, { reason: '' }), /不能全部清空/);
+  assert.throws(() => applyJournalFields({ reason: '咳嗽' }, { reason: '' }), /不能全部清空/);
+  // 本來就沒有內容的看診（開始看診就有日誌）存檔不算清空。
+  assert.doesNotThrow(() => applyJournalFields({}, { reason: '' }));
 });
 
 test('the four steps run in order and only the desk releases the queue number', () => {
@@ -135,12 +137,12 @@ test('完成處理時一起送出「上傳影像」；沒帶就不動，格式�
   // 日誌的修改模式也能改處理事項與上傳影像；日誌編輯用的原始值帶出目前的勾選。
   const journal = appointment();
   journal.reason = '咳嗽';
-  applyJournalFields(journal, { deskItems: ['report_sent', 'receipt'], imageUpload: true });
-  assert.deepEqual(journal.deskItems, ['receipt', 'report_sent']);
+  applyJournalFields(journal, { deskItems: ['prescription_given', 'receipt'], imageUpload: true });
+  assert.deepEqual(journal.deskItems, ['receipt', 'prescription_given']);
   assert.equal(journal.imageUpload, true);
   assert.deepEqual(
     [appointmentJournalFields(journal).deskItems, appointmentJournalFields(journal).imageUpload],
-    [['receipt', 'report_sent'], true]
+    [['receipt', 'prescription_given'], true]
   );
   assert.equal(appointmentJournalFields(appointment()).imageUpload, false);
   assert.throws(() => applyJournalFields(journal, { deskItems: ['image_usb', 'no_image'] }), /只能選一個/);

@@ -130,7 +130,7 @@ export function medicationStageTone(status) {
 }
 
 // 看診日誌每一列的畫面順序（後端 appointmentJournalSections 的順序，量測併成 vitals）。
-const APPOINTMENT_ROW_ORDER = ['reason', 'vitals', 'labValues', 'idexx', 'visitNote', 'prescription', 'imageUpload', 'deskItems', 'specialCareNote', 'followUpRecommendation']
+const APPOINTMENT_ROW_ORDER = ['reason', 'vitals', 'labValues', 'idexx', 'visitNote', 'prescription', 'imageUpload', 'deskItems', 'reportDelivery', 'specialCareNote', 'followUpRecommendation']
 
 // 編輯模式的版面：跟檢視同一個順序、同一種分列。能改的列變成輸入框（體重體溫併成一列），
 // 改不到的列（檢驗、藥單）原樣留在原位；櫃台處理（處理事項＋上傳影像）換成勾選框，IDEXX 檢驗在原位換成可逐項修改的表格；
@@ -210,9 +210,11 @@ export function journalEditError(note, form) {
     if (field.maxlength && fieldLength(field, value) > field.maxlength) return `${field.label}最多 ${field.maxlength} 字`
   }
   // 日誌上還有改不到的內容（檢驗、IDEXX 檢驗）時，這幾欄全空也不算清空——只有檢驗、沒寫紀錄的看診就是這樣。
-  const editableKeys = new Set(fields.map((field) => field.key))
+  const editableKeys = new Set([...fields.map((field) => field.key), 'reportDelivery'])
   const hasOtherContent = (note?.sections ?? []).some((section) => !editableKeys.has(section.key) && String(section?.text ?? '').trim())
-  if (fields === APPOINTMENT_EDIT_FIELDS && !hasOtherContent && fields.every((field) => fieldBlank(field, form[field.key]))) return '日誌內容不能全部清空'
+  // 本來就沒有內容的看診（醫師開始看診就有日誌，不看有沒有填）一打開修改就報錯沒有意義；只在「原本有內容、被清光」時擋。
+  const hadContent = hasOtherContent || fields.some((field) => !fieldBlank(field, note?.fields?.[field.key]))
+  if (fields === APPOINTMENT_EDIT_FIELDS && hadContent && !hasOtherContent && fields.every((field) => fieldBlank(field, form[field.key]))) return '日誌內容不能全部清空'
   return ''
 }
 
