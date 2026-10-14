@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { drugQueryAt, rankDrugs } from './drugSuggest.js';
+import { drugQueryAt, pinnedDrugs, rankDrugs } from './drugSuggest.js';
 
 describe('drugQueryAt', () => {
   it('取游標前從上一個空白或標點開始的那一段', () => {
@@ -45,5 +45,17 @@ describe('rankDrugs', () => {
     assert.equal(first.matchStart, 15);
     assert.equal(first.matchLength, 3);
     assert.deepEqual(rankDrugs(drugs, 'mirtazapine'), []);
+  });
+});
+
+describe('pinnedDrugs', () => {
+  it('只列常用而且啟用的，依設成常用的先後', () => {
+    const drugs = [
+      { _id: 'a', pinnedAt: '2026-10-03T00:00:00Z' },
+      { _id: 'b', pinnedAt: null },
+      { _id: 'c', pinnedAt: '2026-10-01T00:00:00Z' },
+      { _id: 'd', pinnedAt: '2026-10-02T00:00:00Z', enabled: false },
+    ];
+    assert.deepEqual(pinnedDrugs(drugs).map((drug) => drug._id), ['c', 'a']);
   });
 });

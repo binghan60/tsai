@@ -8,7 +8,12 @@ const drugSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: DRUG_NAME_MAX_LENGTH },
     nameKey: { type: String, required: true },
     enabled: { type: Boolean, default: true },
+    // 使用次數分兩種記：usageCount 是打字時從建議清單選用（建議清單的排序看它），
+    // pinnedUsageCount 是點輸入框上方的常用按鈕。
     usageCount: { type: Number, default: 0, min: 0 },
+    pinnedUsageCount: { type: Number, default: 0, min: 0 },
+    // 常用：設成常用的時間。常用藥品常駐在藥單輸入框上方當快捷按鈕，依這個時間排；null＝不是常用。
+    pinnedAt: { type: Date, default: null },
   },
   { timestamps: true, optimisticConcurrency: true }
 );

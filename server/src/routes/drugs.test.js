@@ -10,7 +10,7 @@ const drugId = '64b0000000000000000000d1';
 describe('drugs routes', () => {
   let server;
   let origin;
-  const original = { find: Drug.find, findOne: Drug.findOne, insertMany: Drug.insertMany, findOneAndUpdate: Drug.findOneAndUpdate };
+  const original = { find: Drug.find, findOne: Drug.findOne, findById: Drug.findById, updateOne: Drug.updateOne, insertMany: Drug.insertMany, findOneAndUpdate: Drug.findOneAndUpdate };
 
   before(async () => {
     server = app.listen(0, '127.0.0.1');
@@ -50,6 +50,29 @@ describe('drugs routes', () => {
     const response = await send('PUT', `/${drugId}`, { name: 'famotidine', expectedVersion: 0 });
     assert.equal(response.status, 409);
     assert.equal(wrote, false);
+  });
+
+  it('常用：已經是常用的再存不改時間、取消清成 null、沒帶 pinned 不動', async () => {
+    const pinnedAt = new Date('2026-10-01T00:00:00Z');
+    Drug.findOne = () => ({ select: () => ({ lean: async () => null }) });
+    Drug.findById = () => ({ select: () => ({ lean: async () => ({ pinnedAt }) }) });
+    const sets = [];
+    Drug.findOneAndUpdate = (filter, update) => { sets.push(update.$set); return { select: async () => ({ _id: drugId }) }; };
+    for (const pinned of [true, false, undefined]) {
+      const response = await send('PUT', `/${drugId}`, { name: 'Famotidine', expectedVersion: 0, pinned });
+      assert.equal(response.status, 200);
+    }
+    assert.equal(sets[0].pinnedAt.toISOString(), pinnedAt.toISOString());
+    assert.equal(sets[1].pinnedAt, null);
+    assert.equal('pinnedAt' in sets[2], false);
+  });
+
+  it('使用次數分開記：點常用按鈕記 pinnedUsageCount，從建議清單選記 usageCount', async () => {
+    const incs = [];
+    Drug.updateOne = async (filter, update) => { incs.push(update.$inc); return { matchedCount: 1 }; };
+    assert.equal((await send('POST', `/${drugId}/use`, { source: 'pinned' })).status, 204);
+    assert.equal((await send('POST', `/${drugId}/use`, {})).status, 204);
+    assert.deepEqual(incs, [{ pinnedUsageCount: 1 }, { usageCount: 1 }]);
   });
 
   it('修改要帶版本號', async () => {

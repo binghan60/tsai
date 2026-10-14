@@ -73,11 +73,18 @@ router.put('/:id', async (req, res, next) => {
     const nameKey = drugNameKey(name);
     const clash = await Drug.findOne({ nameKey, _id: { $ne: req.params.id } }).select('_id').lean();
     if (clash) return res.status(409).json({ message: `藥櫃裡已經有「${name}」` });
+    const fields = { name, nameKey, enabled: req.body?.enabled !== false };
+    // 常用：沒帶 pinned 就不動。設成常用的時間決定輸入框上方按鈕的順序，已經是常用的再存一次不改時間。
+    if (req.body?.pinned === false) fields.pinnedAt = null;
+    if (req.body?.pinned === true) {
+      const current = await Drug.findById(req.params.id).select('pinnedAt').lean();
+      fields.pinnedAt = current?.pinnedAt ?? new Date();
+    }
     let drug;
     try {
       drug = await Drug.findOneAndUpdate(
         { _id: req.params.id, __v: expectedVersion },
-        { $set: { name, nameKey, enabled: req.body?.enabled !== false }, $inc: { __v: 1 } },
+        { $set: fields, $inc: { __v: 1 } },
         { new: true, runValidators: true }
       ).select('-nameKey');
     } catch (err) {
@@ -96,9 +103,11 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
+// 記一次使用：body.source 是 'pinned'（點常用按鈕）記在 pinnedUsageCount，其他（從建議清單選）記在 usageCount。
 router.post('/:id/use', async (req, res, next) => {
   try {
-    const result = await Drug.updateOne({ _id: req.params.id }, { $inc: { usageCount: 1 } });
+    const field = req.body?.source === 'pinned' ? 'pinnedUsageCount' : 'usageCount';
+    const result = await Drug.updateOne({ _id: req.params.id }, { $inc: { [field]: 1 } });
     if (!result.matchedCount) return res.status(404).json({ message: '找不到這筆藥品' });
     res.status(204).end();
   } catch (err) {

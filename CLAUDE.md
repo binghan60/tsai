@@ -202,12 +202,13 @@
 
 ### drugs 藥櫃
 
-`name`（≤200 字、一行）、`nameKey`（不分大小寫、連續空白併成一個的名稱，unique，擋重複；`lib/drugs.js`）、`enabled`、`usageCount`。打藥單時邊打邊跳的建議清單。**一筆就是一行要插進去的文字**，可以連用法一起寫（「Metoclopramide（胃排空劑）0.5 mg/kg PO BID」），同一種藥有幾種常用法就存幾筆；刻意不拆藥名／劑量欄位，藥單照舊是一般字串，藥單流程、日誌、報告都不知道藥櫃的存在。
+`name`（≤200 字、一行）、`nameKey`（不分大小寫、連續空白併成一個的名稱，unique，擋重複；`lib/drugs.js`）、`enabled`、`usageCount`（從建議清單選用的次數，建議排序看它）、`pinnedUsageCount`（點常用按鈕的次數，分開記）、`pinnedAt`（畫面叫「常用」；設成常用的時間，null＝不是常用）。打藥單時邊打邊跳的建議清單。**一筆就是一行要插進去的文字**，可以連用法一起寫（「Metoclopramide（胃排空劑）0.5 mg/kg PO BID」），同一種藥有幾種常用法就存幾筆；刻意不拆藥名／劑量欄位，藥單照舊是一般字串，藥單流程、日誌、報告都不知道藥櫃的存在。
 
 - **用在哪**：`DrugSuggestEditor.vue`（包著 `RichTextEditor`，屬性、插槽、expose 照傳）——診療台的藥單、藥單面板的藥單內容、病歷日誌修改藥單，以及開了 `drugSuggest` 的健檢報告多行文字項目。
 - **比對**（前端，`lib/drugSuggest.js`）：取游標前從上一個空白或標點（或行首）到游標的那一段，開頭編號「1.」不算；英文至少兩個字、有中文一個字就比。不分大小寫、任何位置都算，開頭符合 > 英文字首符合 > 中間符合，同一級看 `usageCount`；已經打完整的那筆不再建議。
 - **操作**：只在打字時開（移動游標不開）、注音組字中不比；上下鍵選、Enter／Tab 插入、Esc 只關清單。插入或 Esc 之後同一段字不再跳，接著打字才再比；清單關著時 Enter 照常換行。
-- 清單整份快取在前端（`composables/useDrugCabinet.js`）；增刪改後廣播 `drugs:updated`，各裝置重讀。選用一筆記一次使用（只影響排序、不廣播）。
+- **常用**：常用的藥品常駐在輸入框上方一排按鈕（像 LINE 的快速回覆），依設成常用的先後排、位置固定，停用的不出現。點一下插成獨立的一行：游標那一行是空的就填這行，有字就接在這行後面另起一行（不切開一行藥），沒聚焦時接在最後；不延續上一行的格式，插完不跳建議清單（`RichTextEditor` 的 `insertLine`）。`PUT` 帶 `pinned` 才動，已經是常用的再存不改時間。
+- 清單整份快取在前端（`composables/useDrugCabinet.js`）；增刪改後廣播 `drugs:updated`，各裝置重讀。從建議清單選記 `usageCount`、點常用按鈕記 `pinnedUsageCount`（`POST /:id/use` 帶 `source: 'pinned'`；只是統計與排序，不廣播）。
 
 ### intakeSubmissions 初診表
 
@@ -359,7 +360,7 @@ GET/POST /api/todos ／ GET /api/todos/search?q=（已完成的全部歷史）�
 GET/POST /api/settings/form-templates ／ GET/PUT/DELETE /api/settings/form-templates/:id
 GET/PUT  /api/settings/appointment-settings    預設表單
 GET    /api/text-templates（?includeDisabled=&q=）／ GET /api/text-templates/fields ／ POST ／ PUT /:id ／ POST /:id/use ／ DELETE /:id
-GET    /api/drugs（?includeDisabled=）／ POST（{ names }：陣列或一行一筆，已有的略過，回 { created, skipped }）／ PUT /:id（帶 expectedVersion）／ POST /:id/use ／ DELETE /:id   藥櫃
+GET    /api/drugs（?includeDisabled=）／ POST（{ names }：陣列或一行一筆，已有的略過，回 { created, skipped }）／ PUT /:id（帶 expectedVersion；可帶 pinned 設／取消常用）／ POST /:id/use（{ source: 'pinned' } 記常用按鈕，否則記建議選用）／ DELETE /:id   藥櫃
 GET    /api/delivery-logs                寄送流水帳（?recordId=&event=&q=&from=&to=）
 GET    /api/uploads/image-signature      Cloudinary 直傳簽章（限流）
 GET    /api/search?q=                    全站搜尋（飼主＋貓咪）
@@ -407,7 +408,7 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 | `/settings/forms`、`/settings/forms/:id` | 表單管理／設計 | |
 | `/settings/text-templates` | 文字模板 | |
 | `/settings/presets`、`/settings/presets/:formId/:presetKey` | 預填模板 | 左表單清單、右模板；選中的表單記在 `?form=` |
-| `/settings/drugs` | 藥櫃 | 清單頁模板（啟用開關、使用次數）。新增視窗一列一個輸入框：貼上多行自動拆成多列、Enter 開新的一列、空的一列 Backspace 收掉；編輯是單筆 |
+| `/settings/drugs` | 藥櫃 | 清單頁模板（建議選用與常用點選兩欄次數、常用與啟用兩個開關、編輯與刪除直接放在列上；篩選多一個「常用」）。新增視窗一列一個輸入框：貼上多行自動拆成多列、Enter 開新的一列、空的一列 Backspace 收掉；編輯是單筆 |
 
 另有 `/login`（登入，未登入時一律導過去、登入後回到原本的網址）。不存在的網址導回總覽。
 

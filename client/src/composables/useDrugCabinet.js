@@ -40,12 +40,14 @@ export function useDrugCabinet() {
     return fetchDrugs();
   }
 
-  // 選了建議就記一次使用，排序靠它；只影響排序，失敗不打擾。
-  function markUsed(drug) {
+  // 記一次使用，兩種分開記：從建議清單選（usageCount，建議清單的排序靠它）、點常用按鈕（source 'pinned'，
+  // pinnedUsageCount）。只是統計與排序，失敗不打擾。
+  function markUsed(drug, source = 'suggest') {
     if (!drug?._id) return;
+    const field = source === 'pinned' ? 'pinnedUsageCount' : 'usageCount';
     const current = drugs.value.find((entry) => entry._id === drug._id);
-    if (current) current.usageCount = (current.usageCount ?? 0) + 1;
-    http.post(`/drugs/${drug._id}/use`).catch(() => {});
+    if (current) current[field] = (current[field] ?? 0) + 1;
+    http.post(`/drugs/${drug._id}/use`, { source }).catch(() => {});
   }
 
   // 一筆或一次很多筆（一行一筆）；回 { created, skipped }。

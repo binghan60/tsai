@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { Pill, Plus, SearchX, X } from '@lucide/vue';
+import { Pill, Plus, SearchX, Trash2, X } from '@lucide/vue';
 import { useClientPagination } from '../composables/useClientPagination';
 import { useDrugCabinet } from '../composables/useDrugCabinet';
 import { useToast } from '../composables/useToast';
@@ -13,7 +13,6 @@ import ListFooter from '../components/ListFooter.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import ModalDialog from '../components/ModalDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
-import RowActions from '../components/RowActions.vue';
 import SegmentedControl from '../components/SegmentedControl.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
@@ -34,6 +33,7 @@ const query = ref('');
 const status = ref('all');
 const STATUS_FILTERS = [
   { value: 'all', label: '全部' },
+  { value: 'pinned', label: '常用' },
   { value: 'enabled', label: '使用中' },
   { value: 'disabled', label: '已停用' },
 ];
@@ -42,6 +42,7 @@ const sortedDrugs = computed(() => [...drugs.value].sort((a, b) => a.name.locale
 const visibleDrugs = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   return sortedDrugs.value.filter((drug) => {
+    if (status.value === 'pinned' && !drug.pinnedAt) return false;
     if (status.value === 'enabled' && drug.enabled === false) return false;
     if (status.value === 'disabled' && drug.enabled !== false) return false;
     return !keyword || drug.name.toLowerCase().includes(keyword);
@@ -148,6 +149,16 @@ async function save() {
   }
 }
 
+// 常用：常駐在藥單輸入框上方的快捷按鈕（依設成常用的先後排）。
+async function togglePinned(drug, pinned) {
+  try {
+    await updateDrug(drug._id, { name: drug.name, enabled: drug.enabled !== false, pinned, expectedVersion: drug.__v });
+  } catch (err) {
+    toast.error(apiErrorMessage(err, '更新失敗'));
+    await loadDrugs({ force: true }).catch(() => {});
+  }
+}
+
 async function toggleEnabled(drug, enabled) {
   try {
     await updateDrug(drug._id, { name: drug.name, enabled, expectedVersion: drug.__v });
@@ -173,7 +184,6 @@ async function confirmDelete() {
   }
 }
 
-const ROW_ACTIONS = [{ key: 'delete', label: '刪除', danger: true }];
 
 onMounted(async () => {
   try {
@@ -194,7 +204,7 @@ onMounted(async () => {
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-if="loading" :rows="6" :avatar="false" />
 
-    <DataCard v-else title="藥品" :count="visibleDrugs.length" style="--data-columns: minmax(18rem, 2fr) minmax(7rem, 1fr) 6rem 9rem">
+    <DataCard v-else title="藥品" :count="visibleDrugs.length" style="--data-columns: minmax(18rem, 2fr) minmax(6rem, 0.6fr) minmax(6rem, 0.6fr) 5rem 6rem 9rem">
       <template #filters>
         <SegmentedControl v-model="status" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
         <FilterBar id="drug-search" v-model="queryInput" label="搜尋藥品" class="w-full min-w-0 md:w-80" @submit="applyFilters" />
@@ -204,22 +214,26 @@ onMounted(async () => {
       </EmptyState>
       <template v-else>
         <div class="hidden xl:block">
-          <div class="desktop-data-header"><span>藥品</span><span>使用次數</span><span>啟用</span><span></span></div>
+          <div class="desktop-data-header"><span>藥品</span><span>建議選用</span><span>常用點選</span><span>常用</span><span>啟用</span><span></span></div>
           <div v-for="drug in pageItems" :key="drug._id" class="desktop-data-row hover:bg-hover">
             <button type="button" class="desktop-data-cell min-w-0 text-left font-medium text-foreground hover:text-primary" @click="openEdit(drug)"><span class="block truncate" v-tip.overflow="drug.name">{{ drug.name }}</span></button>
             <span class="desktop-data-cell num text-sm text-muted-foreground">{{ drug.usageCount || '' }}</span>
+            <span class="desktop-data-cell num text-sm text-muted-foreground">{{ drug.pinnedUsageCount || '' }}</span>
+            <span class="desktop-data-cell"><Switch :model-value="Boolean(drug.pinnedAt)" :aria-label="`常用${drug.name}`" @update:model-value="togglePinned(drug, $event)" /></span>
             <span class="desktop-data-cell"><Switch :model-value="drug.enabled !== false" :aria-label="`啟用${drug.name}`" @update:model-value="toggleEnabled(drug, $event)" /></span>
             <span class="desktop-data-cell flex items-center justify-end gap-1">
               <Button type="button" variant="soft" size="sm" @click="openEdit(drug)">編輯</Button>
-              <RowActions :actions="ROW_ACTIONS" :label="`${drug.name}的更多操作`" @select="deleteTarget = drug" />
+              <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${drug.name}`" v-tip="'刪除'" @click="deleteTarget = drug"><Trash2 stroke-width="1.75" /></Button>
             </span>
           </div>
         </div>
         <ul class="divide-y divide-border xl:hidden">
           <li v-for="drug in pageItems" :key="drug._id" class="flex items-center gap-3 px-4 py-3">
             <button type="button" class="min-w-0 flex-1 text-left font-medium text-foreground wrap-break-word" @click="openEdit(drug)">{{ drug.name }}</button>
-            <Switch :model-value="drug.enabled !== false" :aria-label="`啟用${drug.name}`" @update:model-value="toggleEnabled(drug, $event)" />
-            <RowActions :actions="ROW_ACTIONS" :label="`${drug.name}的更多操作`" @select="deleteTarget = drug" />
+            <!-- 兩個開關並排，各帶小標才分得出來。 -->
+            <label class="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">常用<Switch :model-value="Boolean(drug.pinnedAt)" :aria-label="`常用${drug.name}`" @update:model-value="togglePinned(drug, $event)" /></label>
+            <label class="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">啟用<Switch :model-value="drug.enabled !== false" :aria-label="`啟用${drug.name}`" @update:model-value="toggleEnabled(drug, $event)" /></label>
+            <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${drug.name}`" v-tip="'刪除'" @click="deleteTarget = drug"><Trash2 stroke-width="1.75" /></Button>
           </li>
         </ul>
       </template>

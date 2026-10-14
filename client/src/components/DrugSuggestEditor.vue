@@ -1,12 +1,14 @@
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, useAttrs } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs } from 'vue';
 import RichTextEditor from './RichTextEditor.vue';
+import { Button } from './ui/button';
 import { useDrugCabinet } from '../composables/useDrugCabinet';
-import { drugQueryAt, rankDrugs } from '../lib/drugSuggest';
+import { drugQueryAt, pinnedDrugs, rankDrugs } from '../lib/drugSuggest';
 
 // 藥單用的文字框：跟 RichTextEditor 一樣（v-model、屬性、插槽照傳），另外邊打邊跳藥櫃建議。
 // 比對規則在 lib/drugSuggest.js。只在使用者打字時才開清單（點來點去移動游標不開）；
 // 上下鍵選、Enter／Tab 插入、Esc 關掉。插入或按 Esc 之後，同一段字不再跳，接著打字才會再比對。
+// 常用藥品常駐在輸入框上方（像 LINE 的快速回覆），點一下插成一行。
 defineOptions({ inheritAttrs: false });
 const model = defineModel({ type: String, default: '' });
 const attrs = useAttrs();
@@ -25,6 +27,9 @@ const listId = `drug-suggest-${Math.random().toString(36).slice(2, 9)}`;
 // 插入或按 Esc 當下游標前的文字；文字沒變之前不再跳清單。
 let suppressedText = null;
 let typing = false;
+let inserting = false;
+
+const pinned = computed(() => pinnedDrugs(drugs.value));
 
 function close() {
   suggestion.value = null;
@@ -79,6 +84,7 @@ function onInput(value) {
 function onCursor() {
   const typed = typing;
   typing = false;
+  if (inserting) return;
   if (typed || suggestion.value) evaluate();
 }
 
@@ -91,6 +97,21 @@ function select(item) {
   close();
   instance.replaceBeforeCursor(current.start, item.name);
   markUsed(item);
+}
+
+// 常用藥品按鈕：插成一行（規則見 RichTextEditor 的 insertLine），插完不跳建議清單。
+function insertPinned(drug) {
+  const instance = editor.value;
+  if (!instance) return;
+  close();
+  inserting = true;
+  try {
+    instance.insertLine(drug.name);
+  } finally {
+    inserting = false;
+  }
+  suppressedText = instance.textBeforeCursor().text;
+  markUsed(drug, 'pinned');
 }
 
 function onKeydown(event) {
@@ -134,6 +155,19 @@ defineExpose({
 
 <template>
   <div ref="root" class="relative min-w-0">
+    <div v-if="pinned.length && attrs.disabled !== true" class="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="常用藥品">
+      <Button
+        v-for="drug in pinned"
+        :key="drug._id"
+        type="button"
+        variant="secondary"
+        size="xs"
+        class="max-w-72"
+        :aria-label="`插入${drug.name}`"
+        @mousedown.prevent
+        @click="insertPinned(drug)"
+      ><span v-tip.overflow="drug.name" class="truncate">{{ drug.name }}</span></Button>
+    </div>
     <RichTextEditor
       ref="editor"
       v-bind="attrs"

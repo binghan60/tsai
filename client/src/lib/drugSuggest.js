@@ -53,3 +53,10 @@ function wordStartIndex(lower, keyword) {
   }
   return -1;
 }
+
+// 常用藥品（pinnedAt 有值）：常駐在藥單輸入框上方的快捷按鈕。停用的不出現；依設成常用的時間排，先設的在前，位置才固定好記。
+export function pinnedDrugs(drugs) {
+  return (drugs ?? [])
+    .filter((drug) => drug?.pinnedAt && drug.enabled !== false)
+    .sort((a, b) => new Date(a.pinnedAt) - new Date(b.pinnedAt));
+}
