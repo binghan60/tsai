@@ -59,7 +59,7 @@ function toggle(option, checked) {
 
 <template>
   <FieldShell :item="item" :input-id="inputId">
-    <RichTextField v-if="item.type === 'textarea'" :id="inputId" v-model="value" :item-key="item.key" :label="item.label" :rows="item.rows ?? 3" :placeholder="item.placeholder" />
+    <RichTextField v-if="item.type === 'textarea'" :id="inputId" v-model="value" :item-key="item.key" :label="item.label" :rows="item.rows ?? 3" :placeholder="item.placeholder" :drug-suggest="item.drugSuggest === true" />
     <Select v-else-if="item.type === 'select'" v-model="selectValue">
       <SelectTrigger :id="inputId" class="w-full"><SelectValue placeholder="請選擇" /></SelectTrigger>
       <SelectContent>

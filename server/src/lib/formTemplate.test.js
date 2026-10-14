@@ -13,6 +13,17 @@ const existing = (sections = [], retiredKeys = []) => ({ sections, retiredKeys }
 const section = (key, title, items = [], extra = {}) => ({ key, title, items, ...extra });
 const item = (key, label, type = 'text', extra = {}) => ({ key, label, type, ...extra });
 
+describe('sanitizeSections：藥櫃建議', () => {
+  it('只有多行文字留得住 drugSuggest，其他型別一律關掉', () => {
+    const before = existing([section('sec_a', '區塊', [item('med', '用藥', 'textarea'), item('note', '備註')])]);
+    const { sections } = sanitizeSections(
+      [section('sec_a', '區塊', [item('med', '用藥', 'textarea', { drugSuggest: true }), item('note', '備註', 'text', { drugSuggest: true })])],
+      before
+    );
+    assert.deepEqual(sections[0].items.map((entry) => entry.drugSuggest), [true, false]);
+  });
+});
+
 describe('sanitizeSections：key 的沿用與汰換', () => {
   it('既有的 key 一律沿用，使用者改的是 label', () => {
     const before = existing([section('sec_a', '原標題', [item('item_a', '原名稱')])]);

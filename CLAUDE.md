@@ -154,6 +154,7 @@
 
 `name`（unique）、`description`、`species`（`cat`／`dog`／`all`）、`enabled`、`order`、`version`、`sections[]`（區塊：`key`、`title`、`reportTitle`、`presentation`、`items[]`）、`presets[]`、`retiredKeys`。使用者自由增刪區塊與項目；key 由後端產生、永不修改、刪掉的不再重用。帶 `role` 的項目（`vet`、`visitDate` 印在報告頁首，`weight` 結案時寫回貓咪體重）被移除會讓對應功能失效，存檔要確認。詳見 [docs/FORM_BUILDER.md](docs/FORM_BUILDER.md)。
 
+- 多行文字項目的 `drugSuggest`：表單設計裡的「藥櫃建議」開關，打開的欄位填寫時跳藥櫃建議（給「用藥」這種欄位，見 drugs 藥櫃）。
 - 檢驗項目的 `idexxCodes[]`（IDEXX 項目代號，可多個，「、」或逗號分隔）與 `idexxInstrument`（檢驗別＝儀器名稱，留空＝任何儀器）：IDEXX 結果依「檢驗別＋代號」對到項目（`lib/labResultFill.js` 的 `matchLabItem`），撞名在存檔時擋。
 - **預填模板** `presets[]`（`{ key, name, order, values }`）：同一份表單的另幾組預填值（「預防針」「牙齒」），在 `/settings/presets` 設定（不在表單設計頁，兩邊存檔不互相覆蓋），填報告時從頁首一鍵套用。只收文字／選項類欄位（`shared/formDefaults.js` 的 `presetEligible`：排除日期型別、名稱含「日期」的欄位、獸醫師）。疊在項目 `defaultValue` 之上；切換模板時上一組帶入而沒被改過的欄位退回預設值（`client/src/lib/formPresets.js`）。不影響結構、不動 `version`、不進快照。
 - 被報告引用的表單不能刪，只能停用；掛號的預設表單（`clinicSettings.defaultAppointmentTemplateId`）不能停用或刪除，要先改預設。至少保留一份。
@@ -198,6 +199,15 @@
 ### textTemplates 文字模板
 
 `name`、`content`（可格式化，≤2,000 字）、`availableForAllFields`、`applicableItemKeys`、`enabled`、`usageCount`。填健檢報告與診療台時插入常用長文（診療台欄位用 `visit:visitNote`／`visit:specialCareNote` 這種固定 key）。
+
+### drugs 藥櫃
+
+`name`（≤200 字、一行）、`nameKey`（不分大小寫、連續空白併成一個的名稱，unique，擋重複；`lib/drugs.js`）、`enabled`、`usageCount`。打藥單時邊打邊跳的建議清單。**一筆就是一行要插進去的文字**，可以連用法一起寫（「Metoclopramide（胃排空劑）0.5 mg/kg PO BID」），同一種藥有幾種常用法就存幾筆；刻意不拆藥名／劑量欄位，藥單照舊是一般字串，藥單流程、日誌、報告都不知道藥櫃的存在。
+
+- **用在哪**：`DrugSuggestEditor.vue`（包著 `RichTextEditor`，屬性、插槽、expose 照傳）——診療台的藥單、藥單面板的藥單內容、病歷日誌修改藥單，以及開了 `drugSuggest` 的健檢報告多行文字項目。
+- **比對**（前端，`lib/drugSuggest.js`）：取游標前從上一個空白或標點（或行首）到游標的那一段，開頭編號「1.」不算；英文至少兩個字、有中文一個字就比。不分大小寫、任何位置都算，開頭符合 > 英文字首符合 > 中間符合，同一級看 `usageCount`；已經打完整的那筆不再建議。
+- **操作**：只在打字時開（移動游標不開）、注音組字中不比；上下鍵選、Enter／Tab 插入、Esc 只關清單。插入或 Esc 之後同一段字不再跳，接著打字才再比；清單關著時 Enter 照常換行。
+- 清單整份快取在前端（`composables/useDrugCabinet.js`）；增刪改後廣播 `drugs:updated`，各裝置重讀。選用一筆記一次使用（只影響排序、不廣播）。
 
 ### intakeSubmissions 初診表
 
@@ -349,13 +359,14 @@ GET/POST /api/todos ／ GET /api/todos/search?q=（已完成的全部歷史）�
 GET/POST /api/settings/form-templates ／ GET/PUT/DELETE /api/settings/form-templates/:id
 GET/PUT  /api/settings/appointment-settings    預設表單
 GET    /api/text-templates（?includeDisabled=&q=）／ GET /api/text-templates/fields ／ POST ／ PUT /:id ／ POST /:id/use ／ DELETE /:id
+GET    /api/drugs（?includeDisabled=）／ POST（{ names }：陣列或一行一筆，已有的略過，回 { created, skipped }）／ PUT /:id（帶 expectedVersion）／ POST /:id/use ／ DELETE /:id   藥櫃
 GET    /api/delivery-logs                寄送流水帳（?recordId=&event=&q=&from=&to=）
 GET    /api/uploads/image-signature      Cloudinary 直傳簽章（限流）
 GET    /api/search?q=                    全站搜尋（飼主＋貓咪）
 GET    /api/dashboard                    總覽數字
 ```
 
-Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到那一天的房間；前端以 `join-day`／`leave-day` 加入）、`chat:new`、`pinned-pets:updated`、`todos:updated`（後兩個帶完整清單）、`medication:updated`、`intake:updated`、`lab-results:updated`、`clinical-note:updated`、`patients:updated`、`records:updated`（後幾個只是「請重讀」）。
+Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到那一天的房間；前端以 `join-day`／`leave-day` 加入）、`chat:new`、`pinned-pets:updated`、`todos:updated`（後兩個帶完整清單）、`medication:updated`、`intake:updated`、`lab-results:updated`、`clinical-note:updated`、`patients:updated`、`records:updated`、`drugs:updated`（後幾個只是「請重讀」）。
 
 - `clinical-note:updated` 帶 `{ petId, appointmentId? }`：看診日誌是由掛號即時組成的，所以**每次 `emitAppointmentUpdate` 都會順帶廣播一則**（診療台存紀錄、櫃台勾處理事項、待辦完成寫回時間、報告填寫頁改體重……），日誌畫面（貓咪頁、病歷速覽、診療台右欄、處理視窗）以 `petId` 比對、靜默重讀；手動記事新增與刪除也發。IDEXX 數值有變走 `lab-results:updated`，日誌面板另外聽它。
 - `patients:updated`（貓咪或飼主資料變了）與 `records:updated`（健檢報告與寄送流水帳變了）由 **model 層 hook**（`lib/liveInvalidation.js`，掛在 Owner／Pet／MedicalRecord／DeliveryLog）在任何寫入時觸發，不管從路由、PDF 背景工作、寄信結果還是退信讀取來的；合併短時間內的多次並延後 400ms 才發，避開 transaction 還沒 commit 就重讀到舊資料。聽的畫面：貓咪頁與清單（`patients:updated`、`clinical-note:updated`）、健檢報告清單與寄送歷程、貓咪頁的報告頁籤、總覽數字（`records:updated`，另加今天的掛號房間）、全站待辦（`patients:updated` → 重讀，待辦上附的飼主 Email 才會跟著變）。
@@ -370,7 +381,7 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 
 - **外殼元件一律 `defineAsyncComponent` 載入**（左側導覽、右側工具欄與面板、設定選單、全站搜尋）：它們只在非 bare 路由畫出來；直接 import 會讓公開頁（`/intake`、`/report/:token`、`/login`）也得下載整套員工系統。頁面本身已在 router 用 `() => import()`。
 
-- **左側導覽**（`components/shell/NavRail.vue`，項目 `lib/navigation.js`）：看診（總覽、診療台、掛號台、藥單）、資料（貓咪、報告、寄送）、設定（表單、模板、預填）。上方 Logo 與搜尋（`Ctrl/Cmd+K` 命令面板），下方設定選單（裝置身分、明暗主題、自動通知、登出）。手機寬度改成頁首漢堡選單。active 判斷用網址前綴，路由可用 `meta.nav` 指定歸屬。
+- **左側導覽**（`components/shell/NavRail.vue`，項目 `lib/navigation.js`）：看診（總覽、診療台、掛號台、藥單）、資料（貓咪、報告、寄送）、設定（表單、模板、預填、藥櫃）。上方 Logo 與搜尋（`Ctrl/Cmd+K` 命令面板），下方設定選單（裝置身分、明暗主題、自動通知、登出）。手機寬度改成頁首漢堡選單。active 判斷用網址前綴，路由可用 `meta.nav` 指定歸屬。
 - **右側工具欄**（`components/shell/UtilityRail.vue`）開側滑面板：暫存、藥單、待辦、檢驗（含 IDEXX 抓檔程式燈號）、初診（只在掛號台）、聊天。數字是紅色徽章＝要人動手（0 不畫）。藥單、初診、檢驗的數字在 `stores/workCounts.js`，隨對應的 socket 事件重讀；抓檔程式心跳每分鐘讀一次，有一台離線就亮「!」。
 - **側滑面板**（`UtilityPanelHost.vue`＋`stores/utilityPanel.js`）：一次開一個，不加遮罩、不鎖背景；1600px 以上推開工作區，更窄時浮在上面。面板內可以「推入」一層（暫存區的貓 → 病歷速覽 `PetQuickView`；藥單 → 新增；初診 → 逐欄審核）。`KeepAlive` 保留草稿。外框統一 `panels/SidePanel.vue`。
 - Toast 一律在畫面底部置中。
@@ -396,6 +407,7 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 | `/settings/forms`、`/settings/forms/:id` | 表單管理／設計 | |
 | `/settings/text-templates` | 文字模板 | |
 | `/settings/presets`、`/settings/presets/:formId/:presetKey` | 預填模板 | 左表單清單、右模板；選中的表單記在 `?form=` |
+| `/settings/drugs` | 藥櫃 | 清單頁模板（啟用開關、使用次數）。新增視窗一列一個輸入框：貼上多行自動拆成多列、Enter 開新的一列、空的一列 Backspace 收掉；編輯是單筆 |
 
 另有 `/login`（登入，未登入時一律導過去、登入後回到原本的網址）。不存在的網址導回總覽。
 

@@ -46,6 +46,8 @@ const formItemSchema = new mongoose.Schema(
     // IDEXX 檢驗別：代號是哪一台儀器的（結果上的 instrument，例如 Catalyst_One）。不同儀器的代號可能撞名，
     // 所以比對是「檢驗別＋代號」；留空＝任何儀器都對（舊資料）。同一個代號只能對到一個項目（檢驗別相同或留空都算撞名）。
     idexxInstrument: { type: String, default: '' },
+    // 只有多行文字用：填寫時邊打邊跳藥櫃建議（跟診療台的藥單同一套），給「用藥」這種欄位。
+    drugSuggest: { type: Boolean, default: false },
   },
   { _id: false }
 );

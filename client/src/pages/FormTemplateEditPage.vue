@@ -306,6 +306,7 @@ function addItem(type) {
     referenceMax: null,
     idexxCodes: [],
     idexxInstrument: '',
+    drugSuggest: false,
   })
   selectedItemKey.value = key
   mobileEditorPane.value = 'settings'
@@ -741,6 +742,11 @@ function resolveLeave(confirmed) {
                     <p v-else class="text-xs text-muted-foreground">還沒有選項，這個欄位在表單上會是空的。</p>
                     <Button type="button" variant="soft" size="sm" class="w-full" @click="addOption()"> <Plus class="h-4 w-4" stroke-width="1.75" />新增選項 </Button>
                     <p class="text-xs text-muted-foreground">按 Enter 可以直接接著加下一個；留空的選項會在儲存時移除。</p>
+                  </div>
+
+                  <div v-if="selectedItem.type === 'textarea'" class="flex min-h-12 items-center justify-between gap-2 rounded-xl border border-border px-3">
+                    <span class="text-sm font-medium text-foreground">藥櫃建議</span>
+                    <Switch :model-value="selectedItem.drugSuggest === true" aria-label="藥櫃建議" @update:model-value="selectedItem.drugSuggest = $event" />
                   </div>
 
                   <div v-if="DEFAULT_VALUE_TYPES.has(selectedItem.type)" class="space-y-1.5">

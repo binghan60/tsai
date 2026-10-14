@@ -29,6 +29,7 @@ import LabResultGroups from './LabResultGroups.vue'
 import ClinicalNoteRowValue from './ClinicalNoteRowValue.vue'
 import DeskItemsChecklist from './DeskItemsChecklist.vue'
 import RichTextEditor from './RichTextEditor.vue'
+import DrugSuggestEditor from './DrugSuggestEditor.vue'
 
 // 一則病歷日誌，排成一張小報告：標頭（日期、類型、進度）＋「標籤｜內容」列。
 // 掛號與藥單日誌依後端回傳的分欄 sections 分列，每一欄都能就地修改並寫回來源（掛號／藥單）；
@@ -141,7 +142,9 @@ const kindBadgeClass = computed(() =>
           <div class="min-w-0 space-y-2">
             <!-- 藥單階段：放在內容區最上面，標籤欄只留標籤。 -->
             <span v-if="entry.row?.stage" class="flex flex-wrap gap-1.5"><Badge variant="status" :class="medicationStageTone(entry.row.medicationStatus)">{{ entry.row.stage }}</Badge><Badge v-if="entry.row.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge></span>
-            <RichTextEditor
+            <!-- 藥單欄位邊打邊跳藥櫃建議。 -->
+            <component
+              :is="entry.key === 'prescription' ? DrugSuggestEditor : RichTextEditor"
               v-if="entry.field.rich"
               :id="`journal-${entry.key}-${note._id}`"
               v-model="form[entry.key]"

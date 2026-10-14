@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { FileText } from '@lucide/vue';
 import RichTextEditor from '../RichTextEditor.vue';
+import DrugSuggestEditor from '../DrugSuggestEditor.vue';
 import { Button } from '../ui/button';
 import { useRecordForm } from './context';
 import { useTextTemplates } from '../../composables/useTextTemplates';
@@ -17,6 +18,8 @@ const props = defineProps({
   label: { type: String, default: '' },
   rows: { type: Number, default: 3 },
   placeholder: { type: String, default: '' },
+  // 表單設計裡這個項目開了「藥櫃建議」（給「用藥」這種欄位）。
+  drugSuggest: { type: Boolean, default: false },
 });
 const emit = defineEmits(['update:modelValue']);
 const { preview } = useRecordForm();
@@ -35,7 +38,8 @@ function openTemplates() {
 </script>
 
 <template>
-  <RichTextEditor
+  <component
+    :is="drugSuggest ? DrugSuggestEditor : RichTextEditor"
     :id="id"
     ref="editor"
     :model-value="String(modelValue ?? '')"
@@ -47,5 +51,5 @@ function openTemplates() {
     <template v-if="!preview" #toolbar-end>
       <Button type="button" variant="secondary" size="icon-xs" :aria-label="label ? `開啟${label}文字模板` : '開啟文字模板'" v-tip="'文字模板'" @mousedown.prevent @click="openTemplates"><FileText stroke-width="1.75" /></Button>
     </template>
-  </RichTextEditor>
+  </component>
 </template>

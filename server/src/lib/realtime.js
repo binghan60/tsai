@@ -125,6 +125,8 @@ function coalescedEmitter(event) {
 export const emitPatientsUpdate = coalescedEmitter('patients:updated');
 // 健檢報告有變動（建立、填寫、結案、PDF 產生、寄送結果、刪除）與寄送流水帳：報告清單、貓咪頁、總覽數字、寄送歷程要重讀。
 export const emitRecordsUpdate = coalescedEmitter('records:updated');
+// 藥櫃有增刪改：各裝置打藥單時的建議清單要重讀。
+export const emitDrugsUpdate = coalescedEmitter('drugs:updated');
 
 // 待審初診表有增減（飼主送出、櫃台核准或退回）。只是失效通知，前端自己重讀待審筆數。
 export function emitIntakeUpdate() {

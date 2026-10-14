@@ -1,0 +1,59 @@
+import { after, before, describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import { app } from '../app.js';
+import Drug from '../models/Drug.js';
+
+const jsonHeaders = { 'content-type': 'application/json' };
+const drugId = '64b0000000000000000000d1';
+
+describe('drugs routes', () => {
+  let server;
+  let origin;
+  const original = { find: Drug.find, findOne: Drug.findOne, insertMany: Drug.insertMany, findOneAndUpdate: Drug.findOneAndUpdate };
+
+  before(async () => {
+    server = app.listen(0, '127.0.0.1');
+    if (!server.listening) await once(server, 'listening');
+    origin = `http://127.0.0.1:${server.address().port}`;
+  });
+
+  after(async () => {
+    Object.assign(Drug, original);
+    if (server) await new Promise((resolve) => server.close(resolve));
+  });
+
+  const send = (method, path, body) => fetch(`${origin}/api/drugs${path}`, { method, headers: jsonHeaders, body: JSON.stringify(body) });
+
+  it('批次新增：一行一筆，已經在藥櫃裡的（不分大小寫）略過', async () => {
+    Drug.find = () => ({ select: () => ({ lean: async () => [{ nameKey: 'famotidine' }] }) });
+    let inserted = [];
+    Drug.insertMany = async (docs) => { inserted = docs; return docs; };
+    const response = await send('POST', '', { names: 'Metoclopramide（胃排空劑）\nFamotidine\n\nmetoclopramide（胃排空劑）' });
+    assert.equal(response.status, 201);
+    const body = await response.json();
+    assert.deepEqual(inserted.map((doc) => doc.name), ['Metoclopramide（胃排空劑）']);
+    assert.equal(inserted[0].nameKey, 'metoclopramide（胃排空劑）');
+    assert.deepEqual(body.skipped, ['Famotidine']);
+    assert.equal(body.created[0].nameKey, undefined);
+  });
+
+  it('空白內容回 422', async () => {
+    const response = await send('POST', '', { names: ' \n ' });
+    assert.equal(response.status, 422);
+  });
+
+  it('改名撞到另一筆回 409，不寫入', async () => {
+    Drug.findOne = () => ({ select: () => ({ lean: async () => ({ _id: 'other' }) }) });
+    let wrote = false;
+    Drug.findOneAndUpdate = () => { wrote = true; return { select: async () => null }; };
+    const response = await send('PUT', `/${drugId}`, { name: 'famotidine', expectedVersion: 0 });
+    assert.equal(response.status, 409);
+    assert.equal(wrote, false);
+  });
+
+  it('修改要帶版本號', async () => {
+    const response = await send('PUT', `/${drugId}`, { name: 'Famotidine' });
+    assert.equal(response.status, 428);
+  });
+});

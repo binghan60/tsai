@@ -32,6 +32,7 @@
       numeric, rows, min, max, step,
       referenceMin, referenceMax,   // 參考範圍，自動判讀用；屬於這份表單，改 A 不影響 B
       idexxCodes, idexxInstrument,  // 只有檢驗項目：IDEXX 自動填入的對照，見 IDEXX_INTERLINK.md
+      drugSuggest,             // 只有多行文字：填寫時跳藥櫃建議（「用藥」這種欄位）
     }],
   }],
   presets: [...],              // 預填模板，見第五節

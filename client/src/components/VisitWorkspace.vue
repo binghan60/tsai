@@ -34,6 +34,7 @@ import { Label } from './ui/label'
 import { Textarea } from './ui/textarea'
 import RichText from './RichText.vue'
 import RichTextEditor from './RichTextEditor.vue'
+import DrugSuggestEditor from './DrugSuggestEditor.vue'
 import { richTextToPlain } from '../../../shared/richText.js'
 import { catBreedLabel } from '../../../shared/catBreeds.js'
 import { Alert, AlertDescription } from './ui/alert'
@@ -645,7 +646,7 @@ onBeforeUnmount(() => {
           <!-- 藥單：跟本次簡易紀錄一樣寫進這次看診的病歷日誌；送交櫃台時在藥單新增一筆（待包藥）。 -->
           <section class="space-y-2" :aria-labelledby="`prescription-heading-${appointment._id}`">
             <div class="flex items-center gap-2"><h3 :id="`prescription-heading-${appointment._id}`" class="text-base font-semibold">藥單</h3><DestTag :to="['journal', 'medication']" /></div>
-            <RichTextEditor :id="textareaId('prescription')" v-model="draft.prescription" aria-label="藥單" :min-rows="4" :disabled="!editable || committing" />
+            <DrugSuggestEditor :id="textareaId('prescription')" v-model="draft.prescription" aria-label="藥單" :min-rows="4" :disabled="!editable || committing" />
           </section>
 
           <section class="space-y-2">

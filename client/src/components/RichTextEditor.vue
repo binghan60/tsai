@@ -32,7 +32,7 @@ const props = defineProps({
   singleLine: { type: Boolean, default: false },
   class: { type: [Boolean, null, String, Object, Array], default: undefined },
 });
-const emit = defineEmits(['update:modelValue', 'submit', 'keydown', 'cursor', 'blur']);
+const emit = defineEmits(['update:modelValue', 'submit', 'keydown', 'cursor', 'blur', 'composed']);
 
 // 格式按鈕（粗體、顏色、清除格式）只在正在輸入時出現：常駐的話一個畫面好幾組，是最大的雜訊來源。
 // 多行時放在框內右下角，框底一律預留那一塊高度——聚焦時才「長出」工具列會把下面的欄位往下推，
@@ -229,11 +229,31 @@ function replaceBeforeCursor(startOffset, text) {
   editor.value.chain().focus().insertContentAt({ from: start, to: from }, [{ type: 'text', text }]).run();
 }
 
+// 藥櫃建議：注音組字中不比對；建議清單貼著游標那一行往下開。
+function isComposing() {
+  return Boolean(editor.value?.view.composing);
+}
+function caretCoords() {
+  const instance = editor.value;
+  if (!instance) return null;
+  try {
+    return instance.view.coordsAtPos(instance.state.selection.from);
+  } catch {
+    return null;
+  }
+}
+// 組字結束時 ProseMirror 稍後才把字寫進文件，等它寫完再通知（選完字才比對藥櫃）。
+function onCompositionEnd() {
+  setTimeout(() => emit('composed'), 30);
+}
+
 defineExpose({
   focus: () => editor.value?.commands.focus(),
   insertRichText,
   textBeforeCursor,
   replaceBeforeCursor,
+  isComposing,
+  caretCoords,
 });
 </script>
 
@@ -249,6 +269,7 @@ defineExpose({
     @focusin="onFocusIn"
     @focusout="onFocusOut"
     @keydown.esc="closeColors"
+    @compositionend="onCompositionEnd"
   >
     <EditorContent :editor="editor" class="min-w-0 flex-1" :class="singleLine ? '' : 'rich-text-editor__body'" />
     <div

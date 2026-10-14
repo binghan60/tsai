@@ -28,7 +28,7 @@ const runs = computed(() => sectionRuns(items.value, (item) => item.type === 'te
               {{ item.label }}
               <span v-if="item.required" class="text-danger" aria-hidden="true">*</span>
             </Label>
-            <RichTextField :id="`record-${item.key}`" :model-value="valueFor(item)" :item-key="item.key" :label="item.label" :rows="item.rows ?? 4" :placeholder="item.placeholder" @update:model-value="setValue(item, $event)" />
+            <RichTextField :id="`record-${item.key}`" :model-value="valueFor(item)" :item-key="item.key" :label="item.label" :rows="item.rows ?? 4" :placeholder="item.placeholder" :drug-suggest="item.drugSuggest === true" @update:model-value="setValue(item, $event)" />
           </div>
         </SelectableItem>
       </div>

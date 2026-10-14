@@ -190,6 +190,7 @@ function sanitizeItem(raw, key, index) {
     referenceMax: numberOrNull(raw.referenceMax),
     idexxCodes: type === 'lab' ? normalizeIdexxCodes(raw.idexxCodes) : [],
     idexxInstrument: type === 'lab' ? normalizeIdexxInstrument(raw.idexxInstrument) : '',
+    drugSuggest: type === 'textarea' && raw.drugSuggest === true,
   };
 }
 
