@@ -1,20 +1,24 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, useAttrs } from 'vue';
+import { Pill } from '@lucide/vue';
 import RichTextEditor from './RichTextEditor.vue';
+import DrugPickerDialog from './DrugPickerDialog.vue';
 import { Button } from './ui/button';
 import { useDrugCabinet } from '../composables/useDrugCabinet';
-import { drugQueryAt, pinnedDrugs, rankDrugs } from '../lib/drugSuggest';
+import { drugQueryAt, rankDrugs } from '../lib/drugSuggest';
 
 // 藥單用的文字框：跟 RichTextEditor 一樣（v-model、屬性、插槽照傳），另外邊打邊跳藥櫃建議。
 // 比對規則在 lib/drugSuggest.js。只在使用者打字時才開清單（點來點去移動游標不開）；
 // 上下鍵選、Enter／Tab 插入、Esc 關掉。插入或按 Esc 之後，同一段字不再跳，接著打字才會再比對。
-// 常用藥品常駐在輸入框上方（像 LINE 的快速回覆），點一下插成一行。
+// 輸入框下方一顆「藥櫃」鈕，開藥櫃視窗（分類＋勾選多選），確認後依序插成獨立的幾行。
 defineOptions({ inheritAttrs: false });
 const model = defineModel({ type: String, default: '' });
 const attrs = useAttrs();
 const emit = defineEmits(['keydown']);
+// 藥櫃鈕預設在輸入框下方；標籤列有空位的使用端自己放鈕（hideButton），用 expose 的 openPicker 開視窗。
+defineProps({ hideButton: { type: Boolean, default: false } });
 
-const { drugs, loadDrugs, markUsed } = useDrugCabinet();
+const { drugs, loadDrugs } = useDrugCabinet();
 onMounted(() => loadDrugs().catch(() => {}));
 
 const root = ref(null);
@@ -29,7 +33,7 @@ let suppressedText = null;
 let typing = false;
 let inserting = false;
 
-const pinned = computed(() => pinnedDrugs(drugs.value));
+const pickerOpen = ref(false);
 
 function close() {
   suggestion.value = null;
@@ -96,22 +100,25 @@ function select(item) {
   suppressedText = before.slice(0, current.start) + item.name;
   close();
   instance.replaceBeforeCursor(current.start, item.name);
-  markUsed(item);
 }
 
-// 常用藥品按鈕：插成一行（規則見 RichTextEditor 的 insertLine），插完不跳建議清單。
-function insertPinned(drug) {
+// 藥櫃視窗確認：每一種插成獨立的一行（規則見 RichTextEditor 的 insertLine），插完不跳建議清單。
+// 視窗開著時焦點在視窗上，關掉後等焦點回來才插（沒聚焦時 insertLine 會接在最後）。
+async function insertPicked(picked) {
+  pickerOpen.value = false;
+  await nextTick();
   const instance = editor.value;
   if (!instance) return;
   close();
   inserting = true;
   try {
-    instance.insertLine(drug.name);
+    for (const drug of picked) {
+      instance.insertLine(drug.name);
+    }
   } finally {
     inserting = false;
   }
   suppressedText = instance.textBeforeCursor().text;
-  markUsed(drug, 'pinned');
 }
 
 function onKeydown(event) {
@@ -146,6 +153,7 @@ function parts(item) {
 }
 
 defineExpose({
+  openPicker: () => { if (attrs.disabled !== true) pickerOpen.value = true; },
   focus: () => editor.value?.focus(),
   insertRichText: (...args) => editor.value?.insertRichText(...args),
   textBeforeCursor: () => editor.value?.textBeforeCursor(),
@@ -155,19 +163,6 @@ defineExpose({
 
 <template>
   <div ref="root" class="relative min-w-0">
-    <div v-if="pinned.length && attrs.disabled !== true" class="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="常用藥品">
-      <Button
-        v-for="drug in pinned"
-        :key="drug._id"
-        type="button"
-        variant="secondary"
-        size="xs"
-        class="max-w-72"
-        :aria-label="`插入${drug.name}`"
-        @mousedown.prevent
-        @click="insertPinned(drug)"
-      ><span v-tip.overflow="drug.name" class="truncate">{{ drug.name }}</span></Button>
-    </div>
     <RichTextEditor
       ref="editor"
       v-bind="attrs"
@@ -180,6 +175,10 @@ defineExpose({
     >
       <template v-for="(_, name) in $slots" #[name]="slotProps"><slot :name="name" v-bind="slotProps ?? {}" /></template>
     </RichTextEditor>
+    <div v-if="!hideButton && attrs.disabled !== true" class="mt-2">
+      <Button type="button" variant="secondary" size="sm" @click="pickerOpen = true"><Pill stroke-width="1.75" />藥櫃</Button>
+    </div>
+    <DrugPickerDialog v-if="pickerOpen" @close="pickerOpen = false" @confirm="insertPicked" />
     <!-- 滑鼠真的移動才換選取：清單剛好開在靜止的滑鼠底下時，不能把 Enter 要插的那筆換掉。 -->
     <ul
       v-if="suggestion"

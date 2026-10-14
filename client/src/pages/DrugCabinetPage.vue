@@ -1,64 +1,145 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { Pill, Plus, SearchX, Trash2, X } from '@lucide/vue';
-import { useClientPagination } from '../composables/useClientPagination';
+import { GripVertical, Pencil, Pill, Plus, SearchX, Trash2, X } from '@lucide/vue';
+import { useDragReorder } from '../composables/useDragReorder';
+import { useGridDragReorder } from '../composables/useGridDragReorder';
 import { useDrugCabinet } from '../composables/useDrugCabinet';
 import { useToast } from '../composables/useToast';
 import { apiErrorMessage } from '../lib/apiError';
+import { groupDrugs } from '../lib/drugGroups';
+import { stepBeforeId } from '../lib/dragReorder';
 import SettingsLayout from '../components/SettingsLayout.vue';
-import DataCard from '../components/DataCard.vue';
 import EmptyState from '../components/EmptyState.vue';
 import FilterBar from '../components/FilterBar.vue';
-import ListFooter from '../components/ListFooter.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import ModalDialog from '../components/ModalDialog.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
-import SegmentedControl from '../components/SegmentedControl.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 import { DialogFooter, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 
-// 藥櫃：打藥單時邊打邊跳的建議清單（診療台、藥單、病歷日誌的藥單欄位，以及開了「藥櫃建議」的健檢報告欄位）。
-// 一筆就是一行要插進去的文字；新增可以一次貼很多行，一行一筆，已經有的略過。
+// 藥櫃：藥品分組、手動排序。打藥單時邊打邊跳的建議清單，以及藥單欄位旁的「藥櫃」視窗（分類＋勾選多選）都讀這裡。
+// 一筆就是一行要插進去的文字；新增可以一次貼很多行，一行一筆，已經有的略過。一個藥品只屬於一個分類。
 const toast = useToast();
-const { drugs, loadDrugs, createDrugs, updateDrug, deleteDrug } = useDrugCabinet();
+const {
+  drugs, groups, loadDrugs, createDrugs, updateDrug, deleteDrug, moveDrug,
+  createGroup, renameGroup, moveGroup, deleteGroup,
+} = useDrugCabinet();
 
+const NONE = '__none__'; // 未分類在畫面與下拉裡的 key（資料上是 groupId null）
 const loading = ref(true);
 const error = ref('');
 const queryInput = ref('');
 const query = ref('');
-const status = ref('all');
-const STATUS_FILTERS = [
-  { value: 'all', label: '全部' },
-  { value: 'pinned', label: '常用' },
-  { value: 'enabled', label: '使用中' },
-  { value: 'disabled', label: '已停用' },
-];
 
-const sortedDrugs = computed(() => [...drugs.value].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant')));
+const sections = computed(() => groupDrugs(groups.value, drugs.value));
+const keyOf = (section) => section.id ?? NONE;
+const activeKey = ref(NONE);
+// 預設選第一個分類；選的分類被刪（另一台剛刪）時退回未分類。
+watch(sections, (next) => {
+  if (!next.some((section) => keyOf(section) === activeKey.value)) activeKey.value = NONE;
+});
+const activeSection = computed(() => sections.value.find((section) => keyOf(section) === activeKey.value) ?? sections.value.at(-1));
+const realSections = computed(() => sections.value.filter((section) => section.id !== null));
+
+const searching = computed(() => query.value.trim().length > 0);
 const visibleDrugs = computed(() => {
   const keyword = query.value.trim().toLowerCase();
-  return sortedDrugs.value.filter((drug) => {
-    if (status.value === 'pinned' && !drug.pinnedAt) return false;
-    if (status.value === 'enabled' && drug.enabled === false) return false;
-    if (status.value === 'disabled' && drug.enabled !== false) return false;
-    return !keyword || drug.name.toLowerCase().includes(keyword);
-  });
+  const rows = activeSection.value?.drugs ?? [];
+  return keyword ? rows.filter((drug) => drug.name.toLowerCase().includes(keyword)) : rows;
 });
-const PAGE_SIZE = 20;
-const { page, totalPages, pageItems } = useClientPagination(visibleDrugs, { pageSize: PAGE_SIZE });
-watch(status, () => { page.value = 1; });
 function applyFilters() {
   query.value = queryInput.value;
-  page.value = 1;
+}
+
+// 拖拉排序（跟院內待辦同一套，useDragReorder）。搜尋中不能排：篩過的清單不是連續的一段。
+const busy = ref(false);
+async function run(task, fallback) {
+  if (busy.value) return;
+  busy.value = true;
+  try {
+    await task();
+  } catch (err) {
+    toast.error(apiErrorMessage(err, fallback));
+    await loadDrugs({ force: true }).catch(() => {});
+  } finally {
+    busy.value = false;
+  }
+}
+
+// 先在本機排好（不等伺服器），伺服器回來再整份重讀對齊。
+function applyLocalOrder(items, orderedIds) {
+  orderedIds.forEach((id, index) => {
+    const entry = items.find((item) => item._id === id);
+    if (entry) entry.sortOrder = index;
+  });
+}
+function beforeIdAt(ids, from, to) {
+  const rest = ids.filter((_, index) => index !== from);
+  return rest[to] ?? null;
+}
+function reorder(ids, from, to) {
+  const next = ids.filter((_, index) => index !== from);
+  next.splice(to, 0, ids[from]);
+  return next;
+}
+
+const groupList = ref(null);
+const groupIds = computed(() => realSections.value.map((section) => section.id));
+function dropGroup(from, to) {
+  const ids = groupIds.value;
+  const id = ids[from];
+  const beforeId = beforeIdAt(ids, from, to);
+  applyLocalOrder(groups.value, reorder(ids, from, to));
+  run(() => moveGroup(id, beforeId), '排序失敗，請稍後再試');
+}
+const groupDrag = useDragReorder(groupList, { canStart: () => !busy.value, onDrop: dropGroup });
+
+const drugList = ref(null);
+const sortable = computed(() => !searching.value && visibleDrugs.value.length > 1);
+const drugIds = computed(() => visibleDrugs.value.map((drug) => drug._id));
+function dropDrug(from, to) {
+  const ids = drugIds.value;
+  const id = ids[from];
+  const beforeId = beforeIdAt(ids, from, to);
+  applyLocalOrder(drugs.value, reorder(ids, from, to));
+  run(() => moveDrug(id, { groupId: activeSection.value?.id ?? null, beforeId }), '排序失敗，請稍後再試');
+}
+// 藥品是兩欄排列，拖拉用二維版（依左到右、上到下的順序）。
+const drugDrag = useGridDragReorder(drugList, { canStart: () => !busy.value && sortable.value, onDrop: dropDrug });
+watch(drugIds, (next, prev) => {
+  if (drugDrag.dragging.value && next.join() !== prev.join()) drugDrag.cancel();
+});
+watch(groupIds, (next, prev) => {
+  if (groupDrag.dragging.value && next.join() !== prev.join()) groupDrag.cancel();
+});
+
+// 鍵盤：把手上按上下鍵一格一格移，移完焦點留在同一筆。
+async function stepDrug(drug, step) {
+  const target = stepBeforeId(drugIds.value, drug._id, step);
+  if (!target || busy.value) return;
+  applyLocalOrder(drugs.value, reorder(drugIds.value, drugIds.value.indexOf(drug._id), drugIds.value.indexOf(drug._id) + step));
+  await run(() => moveDrug(drug._id, { groupId: activeSection.value?.id ?? null, beforeId: target.beforeId }), '排序失敗，請稍後再試');
+  await nextTick();
+  drugList.value?.querySelector(`[data-drug-handle="${drug._id}"]`)?.focus();
+}
+async function stepGroup(section, step) {
+  const target = stepBeforeId(groupIds.value, section.id, step);
+  if (!target || busy.value) return;
+  const index = groupIds.value.indexOf(section.id);
+  applyLocalOrder(groups.value, reorder(groupIds.value, index, index + step));
+  await run(() => moveGroup(section.id, target.beforeId), '排序失敗，請稍後再試');
+  await nextTick();
+  groupList.value?.querySelector(`[data-group-handle="${section.id}"]`)?.focus();
 }
 
 // 新增與修改共用一個視窗。新增是一列一個輸入框（像 Vercel 的環境變數）：
 // 貼上多行文字自動拆成多列、Enter 在下面開新的一列、空的一列按 Backspace 收掉。
-const editor = ref(null); // { mode: 'create', rows: [{ id, text }] } ｜ { mode: 'edit', drug, text }
+const editor = ref(null); // { mode: 'create', rows, groupKey } ｜ { mode: 'edit', drug, text, groupKey }
 const saving = ref(false);
 const editorError = ref('');
 let rowSeq = 0;
@@ -68,11 +149,11 @@ const filledRows = computed(() => (editor.value?.mode === 'create' ? editor.valu
 const canSave = computed(() => (editor.value?.mode === 'create' ? filledRows.value.length > 0 : Boolean(editor.value?.text.trim())));
 
 function openCreate() {
-  editor.value = { mode: 'create', rows: [newRow()] };
+  editor.value = { mode: 'create', rows: [newRow()], groupKey: activeKey.value };
   editorError.value = '';
 }
 function openEdit(drug) {
-  editor.value = { mode: 'edit', drug, text: drug.name };
+  editor.value = { mode: 'edit', drug, text: drug.name, groupKey: drug.groupId && realSections.value.some((s) => s.id === String(drug.groupId)) ? String(drug.groupId) : NONE };
   editorError.value = '';
 }
 
@@ -131,13 +212,16 @@ async function save() {
   saving.value = true;
   editorError.value = '';
   try {
+    const targetGroupId = editor.value.groupKey === NONE ? null : editor.value.groupKey;
     if (editor.value.mode === 'create') {
-      const { created, skipped } = await createDrugs(filledRows.value.map((row) => row.text));
+      const { created, skipped } = await createDrugs(filledRows.value.map((row) => row.text), targetGroupId);
       if (created.length) toast.success(skipped.length ? `已新增 ${created.length} 筆，${skipped.length} 筆已在藥櫃裡` : `已新增 ${created.length} 筆`);
       else toast.info(`${skipped.length} 筆都已在藥櫃裡`);
     } else {
       const { drug } = editor.value;
-      await updateDrug(drug._id, { name: editor.value.text, enabled: drug.enabled !== false, expectedVersion: drug.__v });
+      const updated = await updateDrug(drug._id, { name: editor.value.text, enabled: drug.enabled !== false, expectedVersion: drug.__v });
+      const currentGroupId = updated.groupId ? String(updated.groupId) : null;
+      if (currentGroupId !== targetGroupId) await moveDrug(drug._id, { groupId: targetGroupId, beforeId: null });
       toast.success('已更新');
     }
     editor.value = null;
@@ -146,16 +230,6 @@ async function save() {
     if (err.response?.status === 409) await loadDrugs({ force: true }).catch(() => {});
   } finally {
     saving.value = false;
-  }
-}
-
-// 常用：常駐在藥單輸入框上方的快捷按鈕（依設成常用的先後排）。
-async function togglePinned(drug, pinned) {
-  try {
-    await updateDrug(drug._id, { name: drug.name, enabled: drug.enabled !== false, pinned, expectedVersion: drug.__v });
-  } catch (err) {
-    toast.error(apiErrorMessage(err, '更新失敗'));
-    await loadDrugs({ force: true }).catch(() => {});
   }
 }
 
@@ -184,10 +258,64 @@ async function confirmDelete() {
   }
 }
 
+// 分類：新增與重新命名共用一個小視窗；刪除時組內藥品移到未分類。
+const groupEditor = ref(null); // { group: null | group, name }
+const groupError = ref('');
+const groupSaving = ref(false);
+function openGroupCreate() {
+  groupEditor.value = { group: null, name: '' };
+  groupError.value = '';
+}
+function openGroupRename(section) {
+  groupEditor.value = { group: section.group, name: section.name };
+  groupError.value = '';
+}
+async function saveGroup() {
+  if (!groupEditor.value || groupSaving.value || !groupEditor.value.name.trim()) return;
+  groupSaving.value = true;
+  groupError.value = '';
+  try {
+    const { group, name } = groupEditor.value;
+    if (group) {
+      await renameGroup(group, name);
+      toast.success('已更新');
+    } else {
+      const created = await createGroup(name);
+      activeKey.value = String(created._id);
+      toast.success(`已新增分類「${created.name}」`);
+    }
+    groupEditor.value = null;
+  } catch (err) {
+    groupError.value = apiErrorMessage(err, '儲存失敗');
+    if (err.response?.status === 409) await loadDrugs({ force: true }).catch(() => {});
+  } finally {
+    groupSaving.value = false;
+  }
+}
+
+const groupDeleteTarget = ref(null);
+const groupDeleting = ref(false);
+async function confirmDeleteGroup() {
+  const target = groupDeleteTarget.value;
+  if (!target || groupDeleting.value) return;
+  groupDeleting.value = true;
+  try {
+    await deleteGroup(target.id);
+    toast.success(`已刪除分類「${target.name}」`);
+    groupDeleteTarget.value = null;
+    activeKey.value = NONE;
+  } catch (err) {
+    toast.error(apiErrorMessage(err, '刪除失敗'));
+  } finally {
+    groupDeleting.value = false;
+  }
+}
 
 onMounted(async () => {
   try {
     await loadDrugs({ force: true });
+    const first = groups.value.length ? sections.value[0] : null;
+    if (first) activeKey.value = keyOf(first);
   } catch {
     error.value = '藥櫃暫時無法載入，請稍後重試';
   } finally {
@@ -199,54 +327,116 @@ onMounted(async () => {
 <template>
   <SettingsLayout title="藥櫃">
     <template #actions>
+      <Button type="button" variant="secondary" @click="openGroupCreate"><Plus stroke-width="1.75" />新增分類</Button>
       <Button type="button" @click="openCreate"><Plus stroke-width="1.75" />新增藥品</Button>
     </template>
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
     <ListSkeleton v-if="loading" :rows="6" :avatar="false" />
 
-    <DataCard v-else title="藥品" :count="visibleDrugs.length" style="--data-columns: minmax(18rem, 2fr) minmax(6rem, 0.6fr) minmax(6rem, 0.6fr) 5rem 6rem 9rem">
-      <template #filters>
-        <SegmentedControl v-model="status" aria-label="依使用狀態篩選" :options="STATUS_FILTERS" />
-        <FilterBar id="drug-search" v-model="queryInput" label="搜尋藥品" class="w-full min-w-0 md:w-80" @submit="applyFilters" />
-      </template>
-      <EmptyState v-if="!visibleDrugs.length" :icon="drugs.length ? SearchX : Pill" :title="drugs.length ? '找不到符合條件的藥品' : '藥櫃是空的'" inset>
-        <Button v-if="!drugs.length" type="button" class="mt-4" @click="openCreate">新增藥品</Button>
-      </EmptyState>
-      <template v-else>
-        <div class="hidden xl:block">
-          <div class="desktop-data-header"><span>藥品</span><span>建議選用</span><span>常用點選</span><span>常用</span><span>啟用</span><span></span></div>
-          <div v-for="drug in pageItems" :key="drug._id" class="desktop-data-row hover:bg-hover">
-            <button type="button" class="desktop-data-cell min-w-0 text-left font-medium text-foreground hover:text-primary" @click="openEdit(drug)"><span class="block truncate" v-tip.overflow="drug.name">{{ drug.name }}</span></button>
-            <span class="desktop-data-cell num text-sm text-muted-foreground">{{ drug.usageCount || '' }}</span>
-            <span class="desktop-data-cell num text-sm text-muted-foreground">{{ drug.pinnedUsageCount || '' }}</span>
-            <span class="desktop-data-cell"><Switch :model-value="Boolean(drug.pinnedAt)" :aria-label="`常用${drug.name}`" @update:model-value="togglePinned(drug, $event)" /></span>
-            <span class="desktop-data-cell"><Switch :model-value="drug.enabled !== false" :aria-label="`啟用${drug.name}`" @update:model-value="toggleEnabled(drug, $event)" /></span>
-            <span class="desktop-data-cell flex items-center justify-end gap-1">
-              <Button type="button" variant="soft" size="sm" @click="openEdit(drug)">編輯</Button>
-              <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${drug.name}`" v-tip="'刪除'" @click="deleteTarget = drug"><Trash2 stroke-width="1.75" /></Button>
-            </span>
-          </div>
-        </div>
-        <ul class="divide-y divide-border xl:hidden">
-          <li v-for="drug in pageItems" :key="drug._id" class="flex items-center gap-3 px-4 py-3">
-            <button type="button" class="min-w-0 flex-1 text-left font-medium text-foreground wrap-break-word" @click="openEdit(drug)">{{ drug.name }}</button>
-            <!-- 兩個開關並排，各帶小標才分得出來。 -->
-            <label class="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">常用<Switch :model-value="Boolean(drug.pinnedAt)" :aria-label="`常用${drug.name}`" @update:model-value="togglePinned(drug, $event)" /></label>
-            <label class="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">啟用<Switch :model-value="drug.enabled !== false" :aria-label="`啟用${drug.name}`" @update:model-value="toggleEnabled(drug, $event)" /></label>
+    <div v-else class="grid items-start gap-5 lg:grid-cols-[18rem_minmax(0,1fr)]">
+      <!-- 左：分類（拖拉排序）；未分類固定在最後。 -->
+      <nav class="rounded-xl border border-border bg-card p-3" aria-label="藥品分類">
+        <ul ref="groupList" class="relative space-y-1">
+          <li
+            v-for="(section, index) in realSections"
+            :key="section.id"
+            data-drag-row
+            class="flex h-12 items-center gap-1 rounded-lg pr-3"
+            :class="[
+              activeKey === section.id ? 'bg-accent ring-1 ring-primary' : 'hover:bg-hover',
+              groupDrag.dragging.value?.from === index ? 'bg-card shadow-lg ring-1 ring-border-strong' : '',
+            ]"
+            :style="groupDrag.rowStyle(index)"
+          >
+            <button
+              v-if="realSections.length > 1"
+              type="button"
+              :data-group-handle="section.id"
+              class="flex size-8 shrink-0 touch-none items-center justify-center rounded-md text-subtle-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              :class="groupDrag.dragging.value ? 'cursor-grabbing' : 'cursor-grab'"
+              :aria-label="`調整順序：${section.name}`"
+              v-on="groupDrag.handleEvents(index)"
+              @keydown.up.prevent="stepGroup(section, -1)"
+              @keydown.down.prevent="stepGroup(section, 1)"
+            ><GripVertical class="size-5" stroke-width="1.75" /></button>
+            <button type="button" class="flex min-w-0 flex-1 items-center justify-between gap-2 text-left" :class="activeKey === section.id ? 'font-semibold text-primary' : 'text-foreground'" @click="activeKey = section.id">
+              <span class="truncate">{{ section.name }}</span>
+              <span class="num shrink-0 text-sm text-muted-foreground">{{ section.drugs.length || '' }}</span>
+            </button>
+          </li>
+        </ul>
+        <button
+          v-for="section in sections.filter((entry) => entry.id === null)"
+          :key="NONE"
+          type="button"
+          class="mt-1 flex h-12 w-full items-center justify-between gap-2 rounded-lg px-3 text-left"
+          :class="[activeKey === NONE ? 'bg-accent font-semibold text-primary ring-1 ring-primary' : 'text-foreground hover:bg-hover', realSections.length ? 'border-t border-border' : '']"
+          @click="activeKey = NONE"
+        >
+          <span>未分類</span>
+          <span class="num shrink-0 text-sm text-muted-foreground">{{ section.drugs.length || '' }}</span>
+        </button>
+      </nav>
+
+      <!-- 右：這個分類的藥品（拖拉排序） -->
+      <section class="min-w-0 rounded-xl border border-border bg-card">
+        <header class="flex flex-wrap items-center gap-3 border-b border-border px-5 py-4">
+          <h2 class="text-lg font-semibold">{{ activeSection?.name }}</h2>
+          <span class="num text-sm text-muted-foreground">{{ activeSection?.drugs.length ? `${activeSection.drugs.length} 項` : '' }}</span>
+          <FilterBar id="drug-search" v-model="queryInput" label="搜尋藥品" class="ml-auto w-full min-w-0 md:w-72" @submit="applyFilters" />
+          <template v-if="activeSection?.id">
+            <Button type="button" variant="secondary" size="sm" @click="openGroupRename(activeSection)">重新命名</Button>
+            <Button type="button" variant="destructive" size="sm" @click="groupDeleteTarget = activeSection">刪除分類</Button>
+          </template>
+        </header>
+
+        <EmptyState v-if="!visibleDrugs.length" :icon="drugs.length ? SearchX : Pill" :title="searching ? '找不到符合條件的藥品' : drugs.length ? '這個分類還沒有藥品' : '藥櫃是空的'" inset>
+          <Button v-if="!searching" type="button" class="mt-4" @click="openCreate">新增藥品</Button>
+        </EmptyState>
+        <ul v-else ref="drugList" class="relative grid grid-cols-1 gap-2 p-3 lg:grid-cols-2">
+          <li
+            v-for="(drug, index) in visibleDrugs"
+            :key="drug._id"
+            data-drag-row
+            class="flex min-h-14 items-center gap-2 rounded-lg border border-border bg-card px-2 py-2"
+            :class="drugDrag.dragging.value?.from === index ? 'shadow-lg ring-1 ring-border-strong' : 'hover:bg-hover'"
+            :style="drugDrag.rowStyle(index)"
+          >
+            <button
+              v-if="sortable"
+              type="button"
+              :data-drug-handle="drug._id"
+              class="flex size-8 shrink-0 touch-none items-center justify-center rounded-md text-subtle-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              :class="drugDrag.dragging.value ? 'cursor-grabbing' : 'cursor-grab'"
+              :aria-label="`調整順序：${drug.name}`"
+              v-on="drugDrag.handleEvents(index)"
+              @keydown.up.prevent="stepDrug(drug, -1)"
+              @keydown.down.prevent="stepDrug(drug, 1)"
+            ><GripVertical class="size-5" stroke-width="1.75" /></button>
+            <button type="button" class="min-w-0 flex-1 text-left font-medium text-foreground wrap-break-word hover:text-primary" :class="drug.enabled === false ? 'text-muted-foreground' : ''" @click="openEdit(drug)">{{ drug.name }}</button>
+            <Switch :model-value="drug.enabled !== false" :aria-label="`啟用${drug.name}`" @update:model-value="toggleEnabled(drug, $event)" />
+            <Button type="button" variant="secondary" size="icon-sm" :aria-label="`編輯${drug.name}`" v-tip="'編輯'" @click="openEdit(drug)"><Pencil stroke-width="1.75" /></Button>
             <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${drug.name}`" v-tip="'刪除'" @click="deleteTarget = drug"><Trash2 stroke-width="1.75" /></Button>
           </li>
         </ul>
-      </template>
-      <template v-if="visibleDrugs.length" #footer>
-        <ListFooter :page="page" :total-pages="totalPages" :total="visibleDrugs.length" :page-size="PAGE_SIZE" @update:page="page = $event" />
-      </template>
-    </DataCard>
+      </section>
+    </div>
 
     <ModalDialog v-if="editor" @close="editor = null">
       <div class="p-6 pb-4 pr-16"><DialogTitle>{{ editor.mode === 'create' ? '新增藥品' : '編輯藥品' }}</DialogTitle></div>
       <form @submit.prevent="save">
         <div class="space-y-4 px-6 pb-6">
           <Alert v-if="editorError" variant="destructive"><AlertDescription>{{ editorError }}</AlertDescription></Alert>
+          <div class="space-y-1.5">
+            <Label for="drug-group">分類</Label>
+            <Select v-model="editor.groupKey">
+              <SelectTrigger id="drug-group" class="w-full"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="section in realSections" :key="section.id" :value="section.id">{{ section.name }}</SelectItem>
+                <SelectItem :value="NONE">未分類</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div v-if="editor.mode === 'create'" class="space-y-2">
             <Label :for="rowInputId(editor.rows[0])">藥品</Label>
             <ul class="max-h-[50vh] space-y-2 overflow-y-auto p-0.5">
@@ -277,6 +467,24 @@ onMounted(async () => {
       </form>
     </ModalDialog>
 
+    <ModalDialog v-if="groupEditor" size="sm" @close="groupEditor = null">
+      <div class="p-6 pb-4 pr-16"><DialogTitle>{{ groupEditor.group ? '重新命名分類' : '新增分類' }}</DialogTitle></div>
+      <form @submit.prevent="saveGroup">
+        <div class="space-y-4 px-6 pb-6">
+          <Alert v-if="groupError" variant="destructive"><AlertDescription>{{ groupError }}</AlertDescription></Alert>
+          <div class="space-y-1.5">
+            <Label for="drug-group-name">分類名稱</Label>
+            <Input id="drug-group-name" v-model="groupEditor.name" maxlength="200" autofocus />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="secondary" @click="groupEditor = null">取消</Button>
+          <Button type="submit" :disabled="groupSaving || !groupEditor.name.trim()">{{ groupSaving ? '儲存中…' : '儲存' }}</Button>
+        </DialogFooter>
+      </form>
+    </ModalDialog>
+
     <ConfirmDialog :open="Boolean(deleteTarget)" title="刪除藥品" :description="`確定要從藥櫃刪除「${deleteTarget?.name || ''}」嗎？已經寫進藥單的文字不受影響。`" confirm-label="刪除" :loading="deleting" destructive @update:open="(value) => !value && (deleteTarget = null)" @confirm="confirmDelete" />
+    <ConfirmDialog :open="Boolean(groupDeleteTarget)" title="刪除分類" :description="`確定要刪除分類「${groupDeleteTarget?.name || ''}」嗎？裡面的藥品會移到「未分類」，不會被刪除。`" confirm-label="刪除" :loading="groupDeleting" destructive @update:open="(value) => !value && (groupDeleteTarget = null)" @confirm="confirmDeleteGroup" />
   </SettingsLayout>
 </template>

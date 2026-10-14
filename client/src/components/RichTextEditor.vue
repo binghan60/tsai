@@ -229,7 +229,7 @@ function replaceBeforeCursor(startOffset, text) {
   editor.value.chain().focus().insertContentAt({ from: start, to: from }, [{ type: 'text', text }]).run();
 }
 
-// 藥櫃常用藥品按鈕：插成獨立的一行。游標所在這一行是空的就填在這行；已經有字就接在這一行後面另起一行
+// 藥櫃視窗選的藥品：插成獨立的一行。游標所在這一行是空的就填在這行；已經有字就接在這一行後面另起一行
 // （不把一行藥切成兩半），新的一行不延續上一行的粗體或顏色。沒聚焦時接在最後面。
 function insertLine(text) {
   const instance = editor.value;

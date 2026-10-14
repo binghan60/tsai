@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { drugQueryAt, pinnedDrugs, rankDrugs } from './drugSuggest.js';
+import { drugQueryAt, rankDrugs } from './drugSuggest.js';
 
 describe('drugQueryAt', () => {
   it('取游標前從上一個空白或標點開始的那一段', () => {
@@ -24,19 +24,19 @@ describe('drugQueryAt', () => {
 
 describe('rankDrugs', () => {
   const drugs = [
-    { _id: '1', name: 'Metoclopramide（胃排空劑）', usageCount: 1 },
-    { _id: '2', name: 'Famotidine（胃藥）', usageCount: 5 },
-    { _id: '3', name: 'Mirtazapine', usageCount: 9 },
-    { _id: '4', name: 'Prednisolone met', usageCount: 0 },
-    { _id: '5', name: 'Cimetidine', usageCount: 20 },
-    { _id: '6', name: 'Metronidazole', usageCount: 0, enabled: false },
+    { _id: '1', name: 'Metoclopramide（胃排空劑）' },
+    { _id: '2', name: 'Famotidine（胃藥）' },
+    { _id: '3', name: 'Mirtazapine' },
+    { _id: '4', name: 'Prednisolone met' },
+    { _id: '5', name: 'Cimetidine' },
+    { _id: '6', name: 'Metronidazole', enabled: false },
   ];
 
   it('英文不分大小寫：開頭符合 > 字首符合 > 中間符合，停用的不出現', () => {
     assert.deepEqual(rankDrugs(drugs, 'MET').map((drug) => drug._id), ['1', '4', '5']);
   });
 
-  it('中文任何位置都算，同一級依使用次數', () => {
+  it('中文任何位置都算，同一級依名稱', () => {
     assert.deepEqual(rankDrugs(drugs, '胃').map((drug) => drug._id), ['2', '1']);
   });
 
@@ -45,17 +45,5 @@ describe('rankDrugs', () => {
     assert.equal(first.matchStart, 15);
     assert.equal(first.matchLength, 3);
     assert.deepEqual(rankDrugs(drugs, 'mirtazapine'), []);
-  });
-});
-
-describe('pinnedDrugs', () => {
-  it('只列常用而且啟用的，依設成常用的先後', () => {
-    const drugs = [
-      { _id: 'a', pinnedAt: '2026-10-03T00:00:00Z' },
-      { _id: 'b', pinnedAt: null },
-      { _id: 'c', pinnedAt: '2026-10-01T00:00:00Z' },
-      { _id: 'd', pinnedAt: '2026-10-02T00:00:00Z', enabled: false },
-    ];
-    assert.deepEqual(pinnedDrugs(drugs).map((drug) => drug._id), ['c', 'a']);
   });
 });

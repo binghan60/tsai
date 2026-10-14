@@ -4,7 +4,7 @@ import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from './PatientLink.vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
-import { ArrowRight, FileText, FlaskConical, Pencil, Stethoscope, Undo2 } from '@lucide/vue'
+import { ArrowRight, FileText, FlaskConical, Pencil, Pill, Stethoscope, Undo2 } from '@lucide/vue'
 import SurgeryBadge from './SurgeryBadge.vue'
 import LatenessBadge from './LatenessBadge.vue'
 import CheckinNumber from './CheckinNumber.vue'
@@ -171,6 +171,7 @@ function textareaId(field) {
 // 本次簡易紀錄是可上色的編輯器，插入直接交給它（模板的粗體與顏色一起帶入）；
 // 請轉告飼主是純文字欄位，只取模板的文字。
 const visitNoteEditor = ref(null)
+const prescriptionEditor = ref(null)
 function openTemplates(field) {
   const meta = TEMPLATE_FIELDS[field]
   if (field === 'visitNote') {
@@ -645,8 +646,8 @@ onBeforeUnmount(() => {
 
           <!-- 藥單：跟本次簡易紀錄一樣寫進這次看診的病歷日誌；送交櫃台時在藥單新增一筆（待包藥）。 -->
           <section class="space-y-2" :aria-labelledby="`prescription-heading-${appointment._id}`">
-            <div class="flex items-center gap-2"><h3 :id="`prescription-heading-${appointment._id}`" class="text-base font-semibold">藥單</h3><DestTag :to="['journal', 'medication']" /></div>
-            <DrugSuggestEditor :id="textareaId('prescription')" v-model="draft.prescription" aria-label="藥單" :min-rows="4" :disabled="!editable || committing" />
+            <div class="flex items-center gap-2"><h3 :id="`prescription-heading-${appointment._id}`" class="text-base font-semibold">藥單</h3><DestTag :to="['journal', 'medication']" /><Button v-if="editable" type="button" variant="secondary" size="xs" class="ml-auto" :disabled="committing" @click="prescriptionEditor?.openPicker()"><Pill stroke-width="1.75" />藥櫃</Button></div>
+            <DrugSuggestEditor ref="prescriptionEditor" :id="textareaId('prescription')" v-model="draft.prescription" aria-label="藥單" :min-rows="4" :disabled="!editable || committing" hide-button />
           </section>
 
           <section class="space-y-2">

@@ -1,11 +1,16 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import Drug from '../models/Drug.js';
+import DrugGroup from '../models/DrugGroup.js';
 import { cleanDrugName, DRUG_BULK_MAX, DRUG_NAME_MAX_LENGTH, drugNameKey, parseDrugNames } from '../lib/drugs.js';
+import { moveDrug } from '../lib/drugCabinet.js';
 import { emitDrugsUpdate } from '../lib/realtime.js';
 
 // 藥櫃。清單整份給前端（量不大），比對與排序在前端做，打字時不必每個字打一次 API。
-// 新增、修改、刪除後廣播 drugs:updated，其他裝置的建議清單跟著重讀；使用次數只影響排序，不廣播。
+// 新增、修改、搬移、刪除後廣播 drugs:updated，其他裝置的建議清單與藥櫃視窗跟著重讀。
 const router = Router();
+
+const isObjectId = (value) => mongoose.isValidObjectId(value) && String(value).length === 24;
 
 const isDuplicateKeyError = (err) => err?.code === 11000;
 
@@ -14,7 +19,7 @@ router.get('/', async (req, res, next) => {
     const includeDisabled = req.query.includeDisabled === '1' || req.query.includeDisabled === 'true';
     const drugs = await Drug.find(includeDisabled ? {} : { enabled: true })
       .select('-nameKey')
-      .sort({ usageCount: -1, name: 1 })
+      .sort({ name: 1 })
       .lean();
     res.json(drugs);
   } catch (err) {
@@ -31,6 +36,14 @@ router.post('/', async (req, res, next) => {
     const tooLong = names.find((name) => name.length > DRUG_NAME_MAX_LENGTH);
     if (tooLong) return res.status(422).json({ message: `每筆請控制在 ${DRUG_NAME_MAX_LENGTH} 字以內：${tooLong.slice(0, 20)}…` });
 
+    // 新增到哪個分類（沒帶＝未分類）。
+    const groupId = req.body?.groupId ?? null;
+    if (groupId !== null) {
+      if (!isObjectId(groupId) || !(await DrugGroup.exists({ _id: groupId }))) {
+        return res.status(422).json({ message: '找不到這個分類' });
+      }
+    }
+
     const keys = names.map(drugNameKey);
     const existing = new Set((await Drug.find({ nameKey: { $in: keys } }).select('nameKey').lean()).map((drug) => drug.nameKey));
     const fresh = names.filter((name) => !existing.has(drugNameKey(name)));
@@ -38,7 +51,7 @@ router.post('/', async (req, res, next) => {
     let created = [];
     if (fresh.length) {
       try {
-        created = await Drug.insertMany(fresh.map((name) => ({ name, nameKey: drugNameKey(name) })), { ordered: false });
+        created = await Drug.insertMany(fresh.map((name) => ({ name, nameKey: drugNameKey(name), groupId })), { ordered: false });
       } catch (err) {
         // 同時有人新增了同一筆：其他的照樣寫進去，撞到的算略過。
         if (!isDuplicateKeyError(err)) throw err;
@@ -74,12 +87,7 @@ router.put('/:id', async (req, res, next) => {
     const clash = await Drug.findOne({ nameKey, _id: { $ne: req.params.id } }).select('_id').lean();
     if (clash) return res.status(409).json({ message: `藥櫃裡已經有「${name}」` });
     const fields = { name, nameKey, enabled: req.body?.enabled !== false };
-    // 常用：沒帶 pinned 就不動。設成常用的時間決定輸入框上方按鈕的順序，已經是常用的再存一次不改時間。
-    if (req.body?.pinned === false) fields.pinnedAt = null;
-    if (req.body?.pinned === true) {
-      const current = await Drug.findById(req.params.id).select('pinnedAt').lean();
-      fields.pinnedAt = current?.pinnedAt ?? new Date();
-    }
+    // 換分類要同時排順序，一律走 /:id/move，這裡不收 groupId。
     let drug;
     try {
       drug = await Drug.findOneAndUpdate(
@@ -103,12 +111,18 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-// 記一次使用：body.source 是 'pinned'（點常用按鈕）記在 pinnedUsageCount，其他（從建議清單選）記在 usageCount。
-router.post('/:id/use', async (req, res, next) => {
+// 搬到某個分類（groupId，null＝未分類）的 beforeId 前面（null＝最後）；同一分類內拖拉排序也走這支。
+router.post('/:id/move', async (req, res, next) => {
   try {
-    const field = req.body?.source === 'pinned' ? 'pinnedUsageCount' : 'usageCount';
-    const result = await Drug.updateOne({ _id: req.params.id }, { $inc: { [field]: 1 } });
-    if (!result.matchedCount) return res.status(404).json({ message: '找不到這筆藥品' });
+    const groupId = req.body?.groupId ?? null;
+    const beforeId = req.body?.beforeId ?? null;
+    if (!isObjectId(req.params.id) || (groupId !== null && !isObjectId(groupId)) || (beforeId !== null && !isObjectId(beforeId))) {
+      return res.status(422).json({ message: '資料格式不正確' });
+    }
+    const result = await moveDrug(req.params.id, { groupId, beforeId });
+    if (result === 'missing') return res.status(404).json({ message: '找不到這筆藥品或分類' });
+    if (result === 'stale') return res.status(409).json({ message: '順序剛被其他裝置改過，請重新整理後再試' });
+    emitDrugsUpdate();
     res.status(204).end();
   } catch (err) {
     next(err);

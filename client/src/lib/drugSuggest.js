@@ -39,7 +39,6 @@ export function rankDrugs(drugs, query, limit = 8) {
     ranked.push({ drug, tier, matchStart: tier === 1 ? wordStartIndex(lower, keyword) : index });
   }
   ranked.sort((a, b) => a.tier - b.tier
-    || (b.drug.usageCount ?? 0) - (a.drug.usageCount ?? 0)
     || String(a.drug.name).localeCompare(String(b.drug.name), 'zh-Hant'));
   return ranked.slice(0, limit).map(({ drug, matchStart }) => ({ ...drug, matchStart, matchLength: keyword.length }));
 }
@@ -52,11 +51,4 @@ function wordStartIndex(lower, keyword) {
     index = lower.indexOf(keyword, index + 1);
   }
   return -1;
-}
-
-// 常用藥品（pinnedAt 有值）：常駐在藥單輸入框上方的快捷按鈕。停用的不出現；依設成常用的時間排，先設的在前，位置才固定好記。
-export function pinnedDrugs(drugs) {
-  return (drugs ?? [])
-    .filter((drug) => drug?.pinnedAt && drug.enabled !== false)
-    .sort((a, b) => new Date(a.pinnedAt) - new Date(b.pinnedAt));
 }
