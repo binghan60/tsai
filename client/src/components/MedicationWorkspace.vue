@@ -87,6 +87,9 @@ const pet = ref(null);
 const form = reactive({ condition: '', prescription: '', note: '' });
 const initial = ref('');
 const modalError = ref('');
+const EMPTY_PRESCRIPTION_MESSAGE = '請填寫藥單內容後再送交包藥';
+const PET_REQUIRED_MESSAGE = '請先選擇貓咪';
+const UNSAVED_BEFORE_COLLECT_MESSAGE = '藥單有未儲存的修改，請先儲存或取消修改，再確認領藥';
 const stale = ref(false);
 const confirmation = ref(null);
 const returning = ref(false);
@@ -164,6 +167,12 @@ async function sync(payload) {
   return refresh();
 }
 watch([filter, page], () => { loading.value = true; refresh(); });
+// 「請填寫藥單內容」的提示在醫師開始填寫後就收掉。
+watch(() => form.prescription, value => {
+  if (modalError.value === EMPTY_PRESCRIPTION_MESSAGE && richTextToPlain(value).trim()) modalError.value = '';
+});
+watch(dirty, value => { if (!value && modalError.value === UNSAVED_BEFORE_COLLECT_MESSAGE) modalError.value = ''; });
+watch(pet, value => { if (value && modalError.value === PET_REQUIRED_MESSAGE) modalError.value = ''; });
 function applySearch() {
   query.value = queryInput.value.trim();
   if (page.value !== 1) page.value = 1;
@@ -314,7 +323,7 @@ function reload() {
 }
 async function execute(action, extra = {}) {
   if (busy.value || stale.value) return;
-  if (!selected.value && !pet.value) { modalError.value = '請先選擇貓咪'; return; }
+  if (!selected.value && !pet.value) { modalError.value = PET_REQUIRED_MESSAGE; return; }
   busy.value = true;
   modalError.value = '';
   try {
@@ -332,6 +341,14 @@ async function execute(action, extra = {}) {
   } finally { busy.value = false; }
 }
 function requestAction(action) {
+  if (action === 'approve' && !richTextToPlain(form.prescription).trim()) {
+    modalError.value = EMPTY_PRESCRIPTION_MESSAGE;
+    return;
+  }
+  if (action === 'collect' && dirty.value) {
+    modalError.value = UNSAVED_BEFORE_COLLECT_MESSAGE;
+    return;
+  }
   if (action === 'edit' && changedClinical.value && selected.value.status !== 'review') {
     confirmation.value = { title: '修改並重新送交醫師確認？', description: '修改後須由醫師重新確認。若已完成包藥，將暫停交付並標示需要重新包藥。', run: () => execute(action) };
   } else if (action === 'ready' && selected.value.needsRepack) {
@@ -363,9 +380,9 @@ function completeFromList(item) {
 const primaryAction = computed(() => {
   const order = selected.value;
   if (!order || terminal.value || returning.value || editing.value) return null;
-  if (doctor.value) return order.status === 'review' ? { key: 'approve', label: '確認藥單並送交包藥', disabled: !richTextToPlain(form.prescription).trim() } : null;
+  if (doctor.value) return order.status === 'review' ? { key: 'approve', label: '確認藥單並送交包藥' } : null;
   if (order.status === 'approved') return { key: 'ready', label: order.needsRepack ? '完成重新包藥' : '完成包藥' };
-  if (order.status === 'ready') return { key: 'collect', label: '確認領藥', disabled: dirty.value };
+  if (order.status === 'ready') return { key: 'collect', label: '確認領藥' };
   return null;
 });
 const moreActions = computed(() => {
@@ -680,7 +697,7 @@ onBeforeUnmount(() => {
         </template>
         <template v-else-if="!selected">
           <Button variant="secondary" :disabled="busy" @click="cancelEditing">取消</Button>
-          <Button :disabled="busy || !pet" @click="execute('create')">建立並送醫師確認</Button>
+          <Button :disabled="busy" @click="execute('create')">建立並送醫師確認</Button>
         </template>
         <template v-else-if="editing">
           <Button variant="secondary" :disabled="busy" @click="cancelEditing">取消修改</Button>
@@ -698,12 +715,12 @@ onBeforeUnmount(() => {
           <Button v-if="selected && !doctor && !returning" variant="secondary" :disabled="busy || stale" @click="requestAction('cancel')">取消藥單</Button>
           <template v-if="returning"><Button variant="secondary" :disabled="busy" @click="returning = false">返回</Button><Button :disabled="busy || stale || !returnReason.trim()" @click="execute('return', { reason: returnReason })">送回醫師重審</Button></template>
           <template v-else>
-            <Button v-if="!selected" :disabled="busy || !pet" @click="execute('create')">建立並送醫師確認</Button>
+            <Button v-if="!selected" :disabled="busy" @click="execute('create')">建立並送醫師確認</Button>
             <Button v-if="selected && (clinicalEditable || (!doctor && selected.status === 'ready'))" variant="secondary" :disabled="busy || stale || !dirty" @click="requestAction('edit')">{{ changedClinical && selected.status !== 'review' ? '修改並重新送審' : '儲存修改' }}</Button>
-            <Button v-if="doctor && selected?.status === 'review'" :disabled="busy || stale || !richTextToPlain(form.prescription).trim()" @click="requestAction('approve')">確認藥單並送交包藥</Button>
+            <Button v-if="doctor && selected?.status === 'review'" :disabled="busy || stale" @click="requestAction('approve')">確認藥單並送交包藥</Button>
             <Button v-if="!doctor && selected?.status === 'approved'" variant="secondary" :disabled="busy || stale" @click="returning = true">提出意見</Button>
             <Button v-if="!doctor && selected?.status === 'approved'" :disabled="busy || stale" @click="requestAction('ready')">{{ selected.needsRepack ? '完成重新包藥' : '完成包藥' }}</Button>
-            <Button v-if="!doctor && selected?.status === 'ready'" :disabled="busy || stale || dirty" @click="requestAction('collect')">確認領藥</Button>
+            <Button v-if="!doctor && selected?.status === 'ready'" :disabled="busy || stale" @click="requestAction('collect')">確認領藥</Button>
           </template>
         </template>
         <p v-else class="text-xs text-muted-foreground">這筆藥單已結束，內容唯讀。</p>

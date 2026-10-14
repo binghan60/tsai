@@ -55,6 +55,8 @@ const { identity } = useStaffIdentity();
 
 const busy = ref(false);
 const error = ref('');
+// 完成處理時本次簡易紀錄還在編輯中：按鈕不灰掉，按下去才說原因（按鈕在最底下，編輯區可能已經捲出畫面）。
+const NOTE_EDITING_MESSAGE = '請先儲存或取消本次簡易紀錄的修改，再完成處理';
 const visitNote = ref(props.appointment.visitNote || '');
 const noteBaseline = ref(visitNote.value);
 const noteDirty = computed(() => visitNote.value !== noteBaseline.value);
@@ -170,6 +172,7 @@ function startEditNote() {
 function cancelEditNote() {
   resetNote();
   editingNote.value = false;
+  if (error.value === NOTE_EDITING_MESSAGE) error.value = '';
 }
 
 async function saveNote() {
@@ -350,7 +353,12 @@ function cancelReschedule() {
 // 一顆按鈕收尾：還沒掛號的回診先掛上，再結束這次就診。分成兩顆只會讓櫃台漏按其中一顆。
 // 回診只填了一半（有日期沒時段）時擋下來，不默默丟掉。
 async function complete() {
-  if (busy.value || editingNote.value) return;
+  if (busy.value) return;
+  if (editingNote.value) {
+    error.value = NOTE_EDITING_MESSAGE;
+    document.getElementById('desk-visit-note')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    return;
+  }
   error.value = followUpStarted.value ? followUpError() : '';
   if (error.value) return;
   busy.value = true;
@@ -408,6 +416,7 @@ async function reopen() {
               <SurgeryBadge v-if="appointment.isSurgery" :name="appointment.surgeryName" />
               <LatenessBadge :minutes="appointment.latenessMinutes" />
               <DepositBadge :status="appointment.depositStatus" />
+              <Badge v-if="!state.handedOff && !state.completed" variant="status" class="bg-info-surface text-info">醫師已取回</Badge>
             </div>
             <div class="flex flex-wrap items-baseline gap-x-2.5">
               <span class="spec-label">來院原因</span>
@@ -595,7 +604,7 @@ async function reopen() {
             <Button variant="secondary" :disabled="busy" @click="close">{{ state.completed ? '關閉' : '稍後處理' }}</Button>
             <Button v-if="state.completed && appointment.reopenRequest?.requestedAt && !appointment.reopenRequest?.approvedAt" :disabled="busy" @click="approveReopen">核准修改</Button>
             <Button v-else-if="state.completed" variant="soft" :disabled="busy" @click="reopen"><Undo2 stroke-width="1.75" />退回處理中</Button>
-            <Button v-else :disabled="busy || editingNote || !state.handedOff" @click="complete"><Check stroke-width="2" />完成處理</Button>
+            <Button v-else :disabled="busy || !state.handedOff" @click="complete"><Check stroke-width="2" />完成處理</Button>
           </div>
         </footer>
       </div>
