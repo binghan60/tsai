@@ -7,6 +7,8 @@ import { Checkbox } from './ui/checkbox';
 import { Input } from './ui/input';
 import { useDrugCabinet } from '../composables/useDrugCabinet';
 import { groupDrugs, searchDrugs } from '../lib/drugGroups';
+import RichText from './RichText.vue';
+import { richTextToPlain } from '../../../shared/richText.js';
 
 // 藥櫃視窗：左邊分類、右邊藥品，勾選後一次插入（依勾選順序）。勾選會跨分類、跨搜尋保留。
 // 搜尋時右邊改列所有分類裡符合的藥品；沒有搜尋時「全部」列出每個分類（含分類標題）。
@@ -103,8 +105,8 @@ function confirm() {
           <ul v-if="searching" class="grid grid-cols-1 gap-1 lg:grid-cols-2">
             <li v-for="drug in searchResults" :key="drug._id">
               <label class="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-hover" :class="selectedSet.has(drug._id) ? 'bg-accent' : ''">
-                <Checkbox :model-value="selectedSet.has(drug._id)" :aria-label="`選取${drug.name}`" @update:model-value="toggle(drug, $event === true)" />
-                <span class="min-w-0 flex-1 wrap-break-word">{{ drug.name }}</span>
+                <Checkbox :model-value="selectedSet.has(drug._id)" :aria-label="`選取${richTextToPlain(drug.name)}`" @update:model-value="toggle(drug, $event === true)" />
+                <RichText :text="drug.name" tag="span" class="min-w-0 flex-1" />
                 <span class="shrink-0 text-xs text-subtle-foreground">{{ groupNameOf(drug) }}</span>
               </label>
             </li>
@@ -115,8 +117,8 @@ function confirm() {
               <ul class="grid grid-cols-1 gap-1 lg:grid-cols-2">
                 <li v-for="drug in section.drugs" :key="drug._id">
                   <label class="flex min-h-12 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 hover:bg-hover" :class="selectedSet.has(drug._id) ? 'bg-accent' : ''">
-                    <Checkbox :model-value="selectedSet.has(drug._id)" :aria-label="`選取${drug.name}`" @update:model-value="toggle(drug, $event === true)" />
-                    <span class="min-w-0 flex-1 wrap-break-word">{{ drug.name }}</span>
+                    <Checkbox :model-value="selectedSet.has(drug._id)" :aria-label="`選取${richTextToPlain(drug.name)}`" @update:model-value="toggle(drug, $event === true)" />
+                    <RichText :text="drug.name" tag="span" class="min-w-0 flex-1" />
                   </label>
                 </li>
               </ul>
@@ -127,8 +129,8 @@ function confirm() {
       <!-- 已選：依勾選順序（＝插入順序），點 ✕ 取消；沒選時整條不出現。最多兩行高，超過在區內捲動。 -->
       <ul v-if="selectedDrugs.length" class="flex max-h-24 shrink-0 flex-wrap gap-1.5 overflow-y-auto border-t border-border bg-sunken px-6 py-2.5" aria-label="已選藥品">
         <li v-for="drug in selectedDrugs" :key="drug._id" class="flex max-w-full items-center gap-1 rounded-lg bg-card py-1 pr-1 pl-2.5 text-sm ring-1 ring-border">
-          <span class="min-w-0 truncate" v-tip.overflow="drug.name">{{ drug.name }}</span>
-          <button type="button" class="flex size-6 shrink-0 items-center justify-center rounded-md text-subtle-foreground hover:bg-hover hover:text-foreground" :aria-label="`取消選取${drug.name}`" @click="toggle(drug, false)"><X class="size-4" stroke-width="1.75" /></button>
+          <RichText :text="drug.name" tag="span" one-line class="min-w-0" v-tip.overflow="richTextToPlain(drug.name)" />
+          <button type="button" class="flex size-6 shrink-0 items-center justify-center rounded-md text-subtle-foreground hover:bg-hover hover:text-foreground" :aria-label="`取消選取${richTextToPlain(drug.name)}`" @click="toggle(drug, false)"><X class="size-4" stroke-width="1.75" /></button>
         </li>
       </ul>
       <div class="flex shrink-0 items-center gap-2 border-t border-border px-6 py-4">

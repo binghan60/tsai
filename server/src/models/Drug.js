@@ -1,12 +1,14 @@
 import mongoose from 'mongoose';
 import { DRUG_NAME_MAX_LENGTH } from '../lib/drugs.js';
+import { richTextMaxLength } from '../lib/richTextSchema.js';
 
 // 藥櫃：醫師打藥單時邊打邊跳的建議清單，也是「藥櫃」視窗裡分類排好的藥品。
 // 一筆就是一行要插進藥單的文字（可以連劑量一起寫）。
 // nameKey 是不分大小寫的名稱（lib/drugs.js 的 drugNameKey），擋重複。
 const drugSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true, maxlength: DRUG_NAME_MAX_LENGTH },
+    // 可格式化（粗體、六色標記），字數上限看純文字。
+    name: { type: String, required: true, trim: true, validate: richTextMaxLength(DRUG_NAME_MAX_LENGTH) },
     nameKey: { type: String, required: true },
     enabled: { type: Boolean, default: true },
     // 所屬分類；null＝未分類。

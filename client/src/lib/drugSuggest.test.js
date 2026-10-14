@@ -40,6 +40,14 @@ describe('rankDrugs', () => {
     assert.deepEqual(rankDrugs(drugs, '胃').map((drug) => drug._id), ['2', '1']);
   });
 
+  it('藥品名稱帶格式標記：比對看純文字，原值照樣帶回供插入', () => {
+    const [first] = rankDrugs([{ _id: 'x', name: '[red]Famotidine[/red] 0.5 mg' }], 'famo');
+    assert.equal(first._id, 'x');
+    assert.equal(first.plain, 'Famotidine 0.5 mg');
+    assert.equal(first.name, '[red]Famotidine[/red] 0.5 mg');
+    assert.equal(first.matchStart, 0);
+  });
+
   it('帶回符合的位置給畫面標示；已經打完整的不再建議', () => {
     const [first] = rankDrugs(drugs, '胃排空');
     assert.equal(first.matchStart, 15);

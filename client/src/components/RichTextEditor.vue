@@ -222,23 +222,28 @@ function textBeforeCursor() {
   const { $from } = selection;
   return { text: $from.parent.textBetween(0, $from.parentOffset), caret: $from.parentOffset };
 }
-function replaceBeforeCursor(startOffset, text) {
+// markup 為 true 時 text 是帶格式標記的一行（藥櫃的藥品），粗體與顏色照樣帶進來；否則當純文字。
+function replaceBeforeCursor(startOffset, text, markup = false) {
   if (!editor.value) return;
   const { $from, from } = editor.value.state.selection;
   const start = $from.start() + startOffset;
-  editor.value.chain().focus().insertContentAt({ from: start, to: from }, [{ type: 'text', text }]).run();
+  const content = markup ? (richTextToDoc(flatten(String(text ?? ''))).content[0]?.content ?? []) : [{ type: 'text', text }];
+  editor.value.chain().focus().insertContentAt({ from: start, to: from }, content).run();
 }
 
 // 藥櫃視窗選的藥品：插成獨立的一行。游標所在這一行是空的就填在這行；已經有字就接在這一行後面另起一行
 // （不把一行藥切成兩半），新的一行不延續上一行的粗體或顏色。沒聚焦時接在最後面。
+// text 是帶格式標記的一行（shared/richText.js），藥品名稱上的粗體與顏色照樣帶進來。
 function insertLine(text) {
   const instance = editor.value;
   if (!instance || !text) return;
+  const content = richTextToDoc(flatten(String(text))).content[0]?.content ?? [];
+  if (!content.length) return;
   if (!instance.isFocused) instance.commands.focus('end');
   const { $from } = instance.state.selection;
   let chain = instance.chain().focus();
   if ($from.parent.textContent) chain = chain.setTextSelection($from.end()).splitBlock({ keepMarks: false });
-  chain.insertContent([{ type: 'text', text }]).command(({ tr }) => {
+  chain.insertContent(content).command(({ tr }) => {
     tr.setStoredMarks([]);
     return true;
   }).run();

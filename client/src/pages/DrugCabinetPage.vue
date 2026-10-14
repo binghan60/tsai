@@ -8,6 +8,9 @@ import { useToast } from '../composables/useToast';
 import { apiErrorMessage } from '../lib/apiError';
 import { groupDrugs } from '../lib/drugGroups';
 import { stepBeforeId } from '../lib/dragReorder';
+import { escapeRichText, richTextToPlain } from '../../../shared/richText.js';
+import RichText from '../components/RichText.vue';
+import RichTextEditor from '../components/RichTextEditor.vue';
 import SettingsLayout from '../components/SettingsLayout.vue';
 import EmptyState from '../components/EmptyState.vue';
 import FilterBar from '../components/FilterBar.vue';
@@ -50,7 +53,7 @@ const searching = computed(() => query.value.trim().length > 0);
 const visibleDrugs = computed(() => {
   const keyword = query.value.trim().toLowerCase();
   const rows = activeSection.value?.drugs ?? [];
-  return keyword ? rows.filter((drug) => drug.name.toLowerCase().includes(keyword)) : rows;
+  return keyword ? rows.filter((drug) => richTextToPlain(drug.name).toLowerCase().includes(keyword)) : rows;
 });
 function applyFilters() {
   query.value = queryInput.value;
@@ -146,7 +149,7 @@ let rowSeq = 0;
 const newRow = (text = '') => ({ id: ++rowSeq, text });
 const rowInputId = (row) => `drug-row-${row.id}`;
 const filledRows = computed(() => (editor.value?.mode === 'create' ? editor.value.rows.filter((row) => row.text.trim()) : []));
-const canSave = computed(() => (editor.value?.mode === 'create' ? filledRows.value.length > 0 : Boolean(editor.value?.text.trim())));
+const canSave = computed(() => (editor.value?.mode === 'create' ? filledRows.value.length > 0 : Boolean(richTextToPlain(editor.value?.text ?? '').trim())));
 
 function openCreate() {
   editor.value = { mode: 'create', rows: [newRow()], groupKey: activeKey.value };
@@ -214,7 +217,8 @@ async function save() {
   try {
     const targetGroupId = editor.value.groupKey === NONE ? null : editor.value.groupKey;
     if (editor.value.mode === 'create') {
-      const { created, skipped } = await createDrugs(filledRows.value.map((row) => row.text), targetGroupId);
+      // 新增視窗打的是純文字：標記字元跳脫掉再送（要上色請新增後在編輯視窗設定）。
+      const { created, skipped } = await createDrugs(filledRows.value.map((row) => escapeRichText(row.text)), targetGroupId);
       if (created.length) toast.success(skipped.length ? `已新增 ${created.length} 筆，${skipped.length} 筆已在藥櫃裡` : `已新增 ${created.length} 筆`);
       else toast.info(`${skipped.length} 筆都已在藥櫃裡`);
     } else {
@@ -249,7 +253,7 @@ async function confirmDelete() {
   deleting.value = true;
   try {
     await deleteDrug(deleteTarget.value._id);
-    toast.success(`已刪除「${deleteTarget.value.name}」`);
+    toast.success(`已刪除「${richTextToPlain(deleteTarget.value.name)}」`);
     deleteTarget.value = null;
   } catch (err) {
     toast.error(apiErrorMessage(err, '刪除失敗'));
@@ -408,15 +412,15 @@ onMounted(async () => {
               :data-drug-handle="drug._id"
               class="flex size-8 shrink-0 touch-none items-center justify-center rounded-md text-subtle-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               :class="drugDrag.dragging.value ? 'cursor-grabbing' : 'cursor-grab'"
-              :aria-label="`調整順序：${drug.name}`"
+              :aria-label="`調整順序：${richTextToPlain(drug.name)}`"
               v-on="drugDrag.handleEvents(index)"
               @keydown.up.prevent="stepDrug(drug, -1)"
               @keydown.down.prevent="stepDrug(drug, 1)"
             ><GripVertical class="size-5" stroke-width="1.75" /></button>
-            <button type="button" class="min-w-0 flex-1 text-left font-medium text-foreground wrap-break-word hover:text-primary" :class="drug.enabled === false ? 'text-muted-foreground' : ''" @click="openEdit(drug)">{{ drug.name }}</button>
-            <Switch :model-value="drug.enabled !== false" :aria-label="`啟用${drug.name}`" @update:model-value="toggleEnabled(drug, $event)" />
-            <Button type="button" variant="secondary" size="icon-sm" :aria-label="`編輯${drug.name}`" v-tip="'編輯'" @click="openEdit(drug)"><Pencil stroke-width="1.75" /></Button>
-            <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${drug.name}`" v-tip="'刪除'" @click="deleteTarget = drug"><Trash2 stroke-width="1.75" /></Button>
+            <button type="button" class="min-w-0 flex-1 text-left font-medium text-foreground hover:text-primary" :class="drug.enabled === false ? 'text-muted-foreground' : ''" @click="openEdit(drug)"><RichText :text="drug.name" tag="span" class="block" /></button>
+            <Switch :model-value="drug.enabled !== false" :aria-label="`啟用${richTextToPlain(drug.name)}`" @update:model-value="toggleEnabled(drug, $event)" />
+            <Button type="button" variant="secondary" size="icon-sm" :aria-label="`編輯${richTextToPlain(drug.name)}`" v-tip="'編輯'" @click="openEdit(drug)"><Pencil stroke-width="1.75" /></Button>
+            <Button type="button" variant="destructive" size="icon-sm" :aria-label="`刪除${richTextToPlain(drug.name)}`" v-tip="'刪除'" @click="deleteTarget = drug"><Trash2 stroke-width="1.75" /></Button>
           </li>
         </ul>
       </section>
@@ -457,7 +461,7 @@ onMounted(async () => {
           </div>
           <div v-else class="space-y-1.5">
             <Label for="drug-name">藥品</Label>
-            <Input id="drug-name" v-model="editor.text" maxlength="200" autofocus />
+            <RichTextEditor id="drug-name" v-model="editor.text" aria-label="藥品" single-line :maxlength="200" />
           </div>
         </div>
         <DialogFooter>
@@ -484,7 +488,7 @@ onMounted(async () => {
       </form>
     </ModalDialog>
 
-    <ConfirmDialog :open="Boolean(deleteTarget)" title="刪除藥品" :description="`確定要從藥櫃刪除「${deleteTarget?.name || ''}」嗎？已經寫進藥單的文字不受影響。`" confirm-label="刪除" :loading="deleting" destructive @update:open="(value) => !value && (deleteTarget = null)" @confirm="confirmDelete" />
+    <ConfirmDialog :open="Boolean(deleteTarget)" title="刪除藥品" :description="`確定要從藥櫃刪除「${richTextToPlain(deleteTarget?.name || '')}」嗎？已經寫進藥單的文字不受影響。`" confirm-label="刪除" :loading="deleting" destructive @update:open="(value) => !value && (deleteTarget = null)" @confirm="confirmDelete" />
     <ConfirmDialog :open="Boolean(groupDeleteTarget)" title="刪除分類" :description="`確定要刪除分類「${groupDeleteTarget?.name || ''}」嗎？裡面的藥品會移到「未分類」，不會被刪除。`" confirm-label="刪除" :loading="groupDeleting" destructive @update:open="(value) => !value && (groupDeleteTarget = null)" @confirm="confirmDeleteGroup" />
   </SettingsLayout>
 </template>

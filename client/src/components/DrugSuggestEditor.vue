@@ -97,9 +97,9 @@ function select(item) {
   const current = suggestion.value;
   if (!instance || !current || !item) return;
   const before = instance.textBeforeCursor().text;
-  suppressedText = before.slice(0, current.start) + item.name;
+  suppressedText = before.slice(0, current.start) + item.plain;
   close();
-  instance.replaceBeforeCursor(current.start, item.name);
+  instance.replaceBeforeCursor(current.start, item.name, true);
 }
 
 // 藥櫃視窗確認：每一種插成獨立的一行（規則見 RichTextEditor 的 insertLine），插完不跳建議清單。
@@ -148,7 +148,7 @@ function onKeydown(event) {
 }
 
 function parts(item) {
-  const { name, matchStart, matchLength } = item;
+  const { plain: name, matchStart, matchLength } = item;
   return [name.slice(0, matchStart), name.slice(matchStart, matchStart + matchLength), name.slice(matchStart + matchLength)];
 }
 

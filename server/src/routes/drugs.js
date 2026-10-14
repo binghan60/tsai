@@ -2,7 +2,7 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import Drug from '../models/Drug.js';
 import DrugGroup from '../models/DrugGroup.js';
-import { cleanDrugName, DRUG_BULK_MAX, DRUG_NAME_MAX_LENGTH, drugNameKey, parseDrugNames } from '../lib/drugs.js';
+import { cleanDrugName, DRUG_BULK_MAX, DRUG_NAME_MAX_LENGTH, drugNameKey, drugNameLength, parseDrugNames } from '../lib/drugs.js';
 import { moveDrug } from '../lib/drugCabinet.js';
 import { emitDrugsUpdate } from '../lib/realtime.js';
 
@@ -33,7 +33,7 @@ router.post('/', async (req, res, next) => {
     const names = parseDrugNames(req.body?.names ?? req.body?.name ?? '');
     if (!names.length) return res.status(422).json({ message: '請填寫藥品' });
     if (names.length > DRUG_BULK_MAX) return res.status(422).json({ message: `一次最多新增 ${DRUG_BULK_MAX} 筆` });
-    const tooLong = names.find((name) => name.length > DRUG_NAME_MAX_LENGTH);
+    const tooLong = names.find((name) => drugNameLength(name) > DRUG_NAME_MAX_LENGTH);
     if (tooLong) return res.status(422).json({ message: `每筆請控制在 ${DRUG_NAME_MAX_LENGTH} 字以內：${tooLong.slice(0, 20)}…` });
 
     // 新增到哪個分類（沒帶＝未分類）。
@@ -78,7 +78,7 @@ router.put('/:id', async (req, res, next) => {
   try {
     const name = cleanDrugName(req.body?.name);
     if (!name) return res.status(422).json({ message: '請填寫藥品' });
-    if (name.length > DRUG_NAME_MAX_LENGTH) return res.status(422).json({ message: `請控制在 ${DRUG_NAME_MAX_LENGTH} 字以內` });
+    if (drugNameLength(name) > DRUG_NAME_MAX_LENGTH) return res.status(422).json({ message: `請控制在 ${DRUG_NAME_MAX_LENGTH} 字以內` });
     const expectedVersion = Number(req.body?.expectedVersion);
     if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
       return res.status(428).json({ message: '缺少版本資訊，請重新整理後再試' });

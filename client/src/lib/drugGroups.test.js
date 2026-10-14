@@ -33,5 +33,6 @@ describe('searchDrugs', () => {
   it('不分大小寫、任何位置', () => {
     assert.deepEqual(searchDrugs(drugs, 'FAMO').map((drug) => drug._id), ['a']);
     assert.deepEqual(searchDrugs(drugs, '  '), []);
+    assert.deepEqual(searchDrugs([{ _id: 'r', name: '**[red]Famotidine[/red]**' }], 'famo').map((drug) => drug._id), ['r']);
   });
 });

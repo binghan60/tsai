@@ -1,3 +1,5 @@
+import { richTextToPlain } from '../../../shared/richText.js';
+
 // 藥櫃建議的比對邏輯：打藥單時，拿游標前正在打的那一段去比對藥櫃，跳出建議。
 //
 // 「正在打的那一段」＝從上一個空白或標點（或行首）到游標。開頭的編號（「1.」「2)」）不算進去，
@@ -28,7 +30,7 @@ export function rankDrugs(drugs, query, limit = 8) {
   const ranked = [];
   for (const drug of drugs ?? []) {
     if (drug?.enabled === false) continue;
-    const name = String(drug?.name ?? '');
+    const name = richTextToPlain(drug?.name ?? ''); // 藥品名稱可帶格式，比對看純文字
     const lower = name.toLowerCase();
     if (lower === keyword) continue;
     const index = lower.indexOf(keyword);
@@ -36,11 +38,12 @@ export function rankDrugs(drugs, query, limit = 8) {
     let tier = 2;
     if (index === 0) tier = 0;
     else if (wordStartIndex(lower, keyword) >= 0) tier = 1;
-    ranked.push({ drug, tier, matchStart: tier === 1 ? wordStartIndex(lower, keyword) : index });
+    ranked.push({ drug, name, tier, matchStart: tier === 1 ? wordStartIndex(lower, keyword) : index });
   }
   ranked.sort((a, b) => a.tier - b.tier
-    || String(a.drug.name).localeCompare(String(b.drug.name), 'zh-Hant'));
-  return ranked.slice(0, limit).map(({ drug, matchStart }) => ({ ...drug, matchStart, matchLength: keyword.length }));
+    || a.name.localeCompare(b.name, 'zh-Hant'));
+  // plain 是純文字名稱（建議清單顯示與標示符合處用）；name 仍是帶格式的原值，插入時顏色一起帶入。
+  return ranked.slice(0, limit).map(({ drug, name, matchStart }) => ({ ...drug, plain: name, matchStart, matchLength: keyword.length }));
 }
 
 // 關鍵字出現在某個英文字開頭的位置（前一個字元不是英數字），找不到回 -1。
