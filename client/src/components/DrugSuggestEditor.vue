@@ -101,7 +101,7 @@ function select(item) {
 
 // 藥櫃視窗確認：每一種插成獨立的一行（規則見 RichTextEditor 的 insertLine），插完不跳建議清單。
 // 視窗開著時焦點在視窗上，關掉後等焦點回來才插（沒聚焦時 insertLine 會接在最後）。
-async function insertPicked(picked) {
+async function insertPicked(picked, { newline = true } = {}) {
   pickerOpen.value = false;
   await nextTick();
   const instance = editor.value;
@@ -109,8 +109,11 @@ async function insertPicked(picked) {
   close();
   inserting = true;
   try {
-    for (const drug of picked) {
-      instance.insertLine(drug.name);
+    if (newline) {
+      for (const drug of picked) instance.insertLine(drug.name);
+    } else {
+      // 不換行：全部接在游標處，以空白隔開，粗體與顏色照樣帶入。
+      instance.insertRichText(picked.map((drug) => drug.name).join(' '));
     }
   } finally {
     inserting = false;

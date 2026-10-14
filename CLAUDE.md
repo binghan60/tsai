@@ -208,7 +208,7 @@
 - **比對**（前端，`lib/drugSuggest.js`）：取游標前從上一個空白或標點（或行首）到游標的那一段，開頭編號「1.」不算；英文至少兩個字、有中文一個字就比。不分大小寫、任何位置都算，開頭符合 > 英文字首符合 > 中間符合，同一級依名稱；已經打完整的那筆不再建議。
 - **操作**：只在打字時開（移動游標不開）、注音組字中不比；上下鍵選、Enter／Tab 插入、Esc 只關清單。插入或 Esc 之後同一段字不再跳，接著打字才再比；清單關著時 Enter 照常換行。
 - **格式**：藥品名稱存 `shared/richText.js` 的標記字串，存之前 `cleanDrugName` 整理成標準形式（字數用 `richTextMaxLength`）。顯示一律 `RichText`，編輯用單行 `RichTextEditor`（只在編輯視窗；新增視窗是純文字輸入框，送出前 `escapeRichText`，要上色新增後再編輯）。打字建議只比對純文字（`rankDrugs` 回 `plain` 給清單顯示與標示符合處），選用與藥櫃視窗插入時顏色與粗體一起帶進藥單（`replaceBeforeCursor(..., true)`、`insertLine`）。
-- **藥櫃視窗**：藥單欄位標籤列右上角一顆「藥櫃」鈕（診療台、藥單面板、日誌修改藥單、開了藥櫃建議的報告欄位一律如此；日誌那一列與藥單階段並排）開 `DrugPickerDialog.vue`——左邊分類（含數量，只列有啟用藥品的分類）、右邊藥品，每列一個勾選框（寬螢幕兩欄排列），頂端搜尋（跨分類）。勾選跨分類、跨搜尋保留，按「插入 N 項」依勾選順序各插成獨立的一行：游標那一行是空的就填這行，有字就接在這行後面另起一行（不切開一行藥），沒聚焦時接在最後；插完不跳建議清單（`RichTextEditor` 的 `insertLine`）。分組與搜尋的純邏輯在 `lib/drugGroups.js`。
+- **藥櫃視窗**：藥單欄位標籤列右上角一顆「藥櫃」鈕（診療台、藥單面板、日誌修改藥單、開了藥櫃建議的報告欄位一律如此；日誌那一列與藥單階段並排）開 `DrugPickerDialog.vue`——左邊分類（含數量，只列有啟用藥品的分類）、右邊藥品，每列一個勾選框（寬螢幕兩欄排列），頂端搜尋（跨分類）。勾選跨分類、跨搜尋保留，視窗底部「每種藥換行」勾選框（預設勾，記在這台裝置的 `localStorage`）；取消勾選時全部接在游標處、以空白隔開。按「插入 N 項」依勾選順序各插成獨立的一行：游標那一行是空的就填這行，有字就接在這行後面另起一行（不切開一行藥），沒聚焦時接在最後；插完不跳建議清單（`RichTextEditor` 的 `insertLine`）。分組與搜尋的純邏輯在 `lib/drugGroups.js`。
 - **分類與排序**：分類是 `drugGroups`（`name`、`nameKey` unique、`sortOrder`，順序規則同待辦，`shared/drugOrder.js` 重用 `shared/todoOrder.js`）。「未分類」不是一筆資料，固定排最後。拖拉排序跟待辦同一套（`useDragReorder`），搬移走 `POST /api/drugs/:id/move { groupId, beforeId }`、`POST /api/drug-groups/:id/move { beforeId }`，在 transaction 裡把該組重新編號（`lib/drugCabinet.js`）；`beforeId` 已經不在目標分類回 409。換分類在編輯視窗的「分類」下拉（呼叫 move，接在該組最後）。刪除分類時同一個 transaction 把組內藥品移到未分類。
 - 清單（分類＋藥品）整份快取在前端（`composables/useDrugCabinet.js`）；增刪改搬移後廣播 `drugs:updated`，各裝置重讀。不記使用次數。
 

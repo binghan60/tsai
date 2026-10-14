@@ -65,10 +65,28 @@ const selectedDrugs = computed(() => {
   return selectedIds.value.map((id) => byId.get(id)).filter((drug) => drug && drug.enabled !== false);
 });
 
+// 每種藥是否各插成獨立的一行（預設是）；關掉就全部接在游標處、以空白隔開。選擇記在這台裝置。
+const NEWLINE_KEY = 'drug-picker-newline';
+function readNewline() {
+  try {
+    return localStorage.getItem(NEWLINE_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+const newline = ref(readNewline());
+watch(newline, (value) => {
+  try {
+    localStorage.setItem(NEWLINE_KEY, value ? '1' : '0');
+  } catch {
+    // 讀寫不到瀏覽器儲存也不影響使用
+  }
+});
+
 function confirm() {
   const byId = new Map(drugs.value.map((drug) => [drug._id, drug]));
   const picked = selectedIds.value.map((id) => byId.get(id)).filter(Boolean);
-  if (picked.length) emit('confirm', picked);
+  if (picked.length) emit('confirm', picked, { newline: newline.value });
   else emit('close');
 }
 </script>
@@ -134,7 +152,10 @@ function confirm() {
         </li>
       </ul>
       <div class="flex shrink-0 items-center gap-2 border-t border-border px-6 py-4">
-        <Button type="button" variant="secondary" class="ml-auto" @click="emit('close')">取消</Button>
+        <label class="mr-auto flex cursor-pointer items-center gap-2 text-base">
+          <Checkbox :model-value="newline" aria-label="每種藥換行" @update:model-value="newline = $event === true" />每種藥換行
+        </label>
+        <Button type="button" variant="secondary" @click="emit('close')">取消</Button>
         <Button type="button" :disabled="!selectedIds.length" @click="confirm">{{ selectedIds.length ? `插入 ${selectedIds.length} 項` : '插入' }}</Button>
       </div>
     </div>
