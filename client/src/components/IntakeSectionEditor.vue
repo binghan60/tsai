@@ -24,12 +24,12 @@ const props = defineProps({
 });
 const emit = defineEmits(['saved', 'cancel']);
 
-const SEX = [{ value: 'unknown', label: '未填' }, { value: 'male', label: '公' }, { value: 'female', label: '母' }];
-const NEUTERED = [{ value: 'unknown', label: '未填' }, { value: 'yes', label: '已結紮' }, { value: 'no', label: '未結紮' }];
-const FEEDING = [{ value: 'unknown', label: '未填' }, { value: 'free', label: '任食' }, { value: 'scheduled', label: '定食定量' }];
-const VACCINE = [{ value: 'unknown', label: '未填' }, { value: 'none', label: '未注射' }, { value: 'done', label: '已注射' }];
-const ALLERGY = [{ value: 'unknown', label: '未填' }, { value: 'none', label: '無過敏' }, { value: 'yes', label: '有' }];
-const CHECKUP = [{ value: 'unknown', label: '未填' }, { value: 'none', label: '未健檢' }, { value: 'done', label: '有' }];
+const SEX = [{ value: 'unknown', label: '未記錄' }, { value: 'male', label: '公' }, { value: 'female', label: '母' }];
+const NEUTERED = [{ value: 'unknown', label: '未記錄' }, { value: 'yes', label: '已結紮' }, { value: 'no', label: '未結紮' }];
+const FEEDING = [{ value: 'unknown', label: '未記錄' }, { value: 'free', label: '任食' }, { value: 'scheduled', label: '定食定量' }];
+const VACCINE = [{ value: 'unknown', label: '未記錄' }, { value: 'none', label: '未注射' }, { value: 'done', label: '已注射' }];
+const ALLERGY = [{ value: 'unknown', label: '未記錄' }, { value: 'none', label: '無過敏' }, { value: 'yes', label: '有' }];
+const CHECKUP = [{ value: 'unknown', label: '未記錄' }, { value: 'none', label: '未健檢' }, { value: 'done', label: '有' }];
 
 const source = props.submission;
 const owner = ref({ ...source.owner });

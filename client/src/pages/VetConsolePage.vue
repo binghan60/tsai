@@ -10,7 +10,7 @@ import { useClinicSync } from '../composables/useClinicSync'
 import { useSearchQueryParam } from '../composables/useSearchQueryParam'
 import { useClinicDate } from '../composables/useClinicDate'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
-import { clinicDateInput, clinicTimeInput, shiftDateInput } from '../lib/datetime'
+import { clinicDateInput, clinicTimeInput, elapsedLabel, shiftDateInput } from '../lib/datetime'
 import { workflowFilter, workflowState } from '../../../shared/appointmentWorkflow.js'
 import { latenessLabel, patientNotesFor } from '../lib/appointmentDisplay'
 import { LAB_PROGRESS, labProgress } from '../lib/labResults'
@@ -140,15 +140,13 @@ function rowTone(item) {
   return 'hover:bg-hover'
 }
 
-function minutesSince(value) {
-  if (!value) return null
-  return Math.max(0, Math.floor((now.value - new Date(value).getTime()) / 60000))
-}
-// 候診超過這個分鐘數，「候診 N 分」變紅——診間裡看不到候診區，數字要自己跳出來。
+// 候診超過這個分鐘數，「候診 N 分」變紅——診間裡看不到候診區，數字要自己跳出來。只看今天。
 const LONG_WAIT_MINUTES = 20
 function waitingTooLong(item) {
   const state = workflowState(item)
-  return item.status === 'arrived' && !state.started && Boolean(item.checkedInAt) && minutesSince(item.checkedInAt) >= LONG_WAIT_MINUTES
+  if (item.status !== 'arrived' || state.started || !item.checkedInAt) return false
+  const { minutes } = elapsedLabel(item.checkedInAt, now.value)
+  return minutes !== null && minutes >= LONG_WAIT_MINUTES
 }
 // 過了預約時段（寬限同掛號台）還沒來的，徽章從「未報到」換成紅色「遲到 N 分」。只看今天。
 function overdueMinutes(item) {
@@ -167,8 +165,10 @@ const STATUS_TONE = {
 // 徽章只畫圖示＋數字（分鐘或時刻），省下寬度給來院原因；文字放滑過提示與 aria-label。
 // 圖示：未報到虛線圓、候診沙漏、看診聽診器、交出箭頭、完成勾。遲到未報到仍是虛線圓、只換紅色——
 // 時鐘圖示已經是列上「報到時遲到」的標記，不能再拿來表示別的事。
-function minutesValue(value) {
-  return `${minutesSince(value)} 分`
+// 當天寫經過多久（「12 分」「1 時 05 分」）；看過去的日子寫當時的時刻，label 換成「10:35 開始看診」這種寫法。
+function elapsedBadge(value, verb, clockVerb) {
+  const elapsed = elapsedLabel(value, now.value)
+  return { value: elapsed.text, label: elapsed.clock ? `${elapsed.text} ${clockVerb}` : `${verb} ${elapsed.text}` }
 }
 function statusBadge(item) {
   const state = workflowState(item)
@@ -187,10 +187,10 @@ function statusBadge(item) {
     const at = clinicTimeInput(item.handoffAt)
     return { icon: ArrowRight, value: at, label: at ? `${at} 交出` : '已交櫃台', tone: 'handoff' }
   }
-  if (state.started) return { icon: Stethoscope, value: minutesValue(item.visitStartedAt), label: `看診 ${minutesValue(item.visitStartedAt)}`, tone: 'visiting' }
+  if (state.started) return { icon: Stethoscope, ...elapsedBadge(item.visitStartedAt, '看診', '開始看診'), tone: 'visiting' }
   if (item.status === 'arrived') {
     return item.checkedInAt
-      ? { icon: Hourglass, value: minutesValue(item.checkedInAt), label: `候診 ${minutesValue(item.checkedInAt)}`, tone: waitingTooLong(item) ? 'alert' : 'waiting' }
+      ? { icon: Hourglass, ...elapsedBadge(item.checkedInAt, '候診', '報到'), tone: waitingTooLong(item) ? 'alert' : 'waiting' }
       : { icon: Hourglass, value: '', label: '候診中', tone: 'waiting' }
   }
   return null
@@ -488,8 +488,8 @@ onBeforeUnmount(() => {
 
               <div class="min-w-0 flex-1" :class="compact ? '' : 'space-y-1'">
                 <div class="flex min-w-0 items-center gap-2">
-                  <span class="max-w-[70%] shrink-0 truncate text-base font-semibold text-foreground" v-tip.overflow="item.petName">{{ item.petName }}</span>
-                  <Badge v-if="item.visitType === 'new'" variant="status" class="h-6 bg-info-surface px-2 text-info">初診</Badge>
+                  <span class="min-w-[2.5em] max-w-[70%] truncate text-base font-semibold text-foreground" v-tip.overflow="item.petName">{{ item.petName }}</span>
+                  <Badge v-if="item.visitType === 'new'" variant="status" class="h-6 shrink-0 bg-info-surface px-2 text-info">初診</Badge>
                   <!-- 精簡版只寫「手術」（一行放不下「手術：結紮」），手術名稱滑過才出；詳細版整顆帶名稱。 -->
                   <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" :short="compact" class="h-6 min-w-0 shrink px-2" />
                   <!-- 檢驗進度：詳細版寫字，精簡版只放一個燒瓶圖示（跟遲到、備註圖示同一排）。 -->
@@ -538,7 +538,7 @@ onBeforeUnmount(() => {
               </div>
 
               <template v-if="compact">
-                <Badge v-if="status && item.status !== 'scheduled'" variant="status" class="num h-6 px-2" :class="STATUS_TONE[status.tone]" v-tip="status.label" :aria-label="status.label"><component :is="status.icon" stroke-width="2" aria-hidden="true" />{{ status.value }}</Badge>
+                <Badge v-if="status && item.status !== 'scheduled'" variant="status" class="num h-6 shrink-0 px-2" :class="STATUS_TONE[status.tone]" v-tip="status.label" :aria-label="status.label"><component :is="status.icon" stroke-width="2" aria-hidden="true" />{{ status.value }}</Badge>
                 <span v-if="item.status === 'scheduled'" class="inline-flex h-9 w-20 shrink-0 items-center justify-center rounded-lg px-2 text-sm whitespace-nowrap leading-none font-semibold" :class="status?.tone === 'alert' ? 'border border-destructive/30 bg-destructive-surface text-destructive' : 'bg-secondary text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)]'">{{ status?.short || status?.label }}</span>
                 <Button v-if="canStart(item)" size="xs" class="w-20 shrink-0" :disabled="busy" @click.stop="startVisit(item)"><Stethoscope stroke-width="1.75" />看診</Button>
                 <Button v-if="queueTab === 'handoff'" size="xs" class="w-20 shrink-0" :disabled="busy" @click.stop="reclaim(item)"><Undo2 stroke-width="1.75" />取回</Button>
@@ -552,7 +552,7 @@ onBeforeUnmount(() => {
       <section class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card shadow-card" aria-label="看診工作區">
         <!-- 一次只掛目前這一筆；key 綁掛號 id，換貓就重建，草稿一定是那隻貓自己的。 -->
         <VisitWorkspace v-if="active" ref="workspace" :key="active._id" class="min-h-0 flex-1" :appointment="active" :templates="templates" @updated="onWorkspaceUpdate" @start="startVisit" @notes-updated="onNotesUpdated" @open-record="(appointment) => router.push({ path: `/records/${appointment.recordId}/edit`, query: { visit: appointment._id, visitDate: appointment.date } })" />
-        <EmptyState v-if="!active && !loading" :icon="CalendarClock" title="從左邊選一位病患" description="點一筆可以先看資料，按「看診」才會記錄開始時間。輸入會自動存檔，換下一隻前會先存好。" inset class="my-auto" />
+        <EmptyState v-if="!active && !loading" :icon="CalendarClock" title="從左邊選一位病患" inset class="my-auto" />
       </section>
     </div>
     <TextTemplatePickerDialog />

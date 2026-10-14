@@ -17,7 +17,7 @@ import { DEFAULT_ESTIMATED_DURATION_MINUTES, durationOverflowError } from '../li
 import AttendanceSummaryTable from './AttendanceSummaryTable.vue';
 import DepositField from './DepositField.vue';
 import { checkDepositDecision } from '../../../shared/deposit.js';
-import { formatDate, weekdayLabel } from '../lib/datetime';
+import { shortDate, weekdayLabel } from '../lib/datetime';
 import { breedText } from '../lib/petDisplay';
 import { checkMobilePhone } from '../../../shared/phone.js';
 
@@ -200,10 +200,10 @@ const duplicatePetName = computed(() => (isEdit.value ? props.appointment.petNam
 
 // ── 送出 ─────────────────────────────────────────────────────────────────
 const title = computed(() => (isEdit.value ? `修改掛號：${props.appointment.petName}` : '新增掛號'));
-const description = computed(() => (isEdit.value ? '只更新這筆掛號，不會修改飼主或貓咪主檔' : '電話掛號可先指定日期與時段，飼主資料報到時再補齊'));
+const description = computed(() => (isEdit.value ? '只更新這筆掛號，不會修改飼主或貓咪主檔' : ''));
 const summary = computed(() => {
   const name = isEdit.value ? petName.value : mode.value === 'return' ? selectedPet.value?.name : petName.value;
-  const when = time.value ? `${formatDate(slotDate.value)}（${weekdayLabel(slotDate.value)}）${time.value}` : '';
+  const when = time.value ? `${shortDate(slotDate.value)}（${weekdayLabel(slotDate.value)}）${time.value}` : '';
   return [name, when, `預估 ${estimatedDurationMinutes.value} 分鐘`, reason.value?.trim()].filter(Boolean);
 });
 function onOpenChange(value) {
@@ -423,7 +423,7 @@ const onSubmit = handleSubmit((values) => {
                   <SelectItem v-for="template in templates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
                 </SelectContent>
               </Select>
-              <p class="text-sm text-muted-foreground">{{ appointment?.recordId ? '已經用這份建立健檢報告草稿，不能再換。' : '報到時用這份建立健檢報告草稿。' }}</p>
+              <p class="text-sm text-muted-foreground">{{ appointment?.recordId ? '已經用這份建立健檢報告草稿，不能再換。' : '' }}</p>
             </div>
             <div v-if="!isEdit" class="space-y-1.5">
               <Label for="dialog-internal-note" class="text-xs font-medium">內部備註</Label>

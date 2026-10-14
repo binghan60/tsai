@@ -4,8 +4,9 @@ import { ref, watch } from 'vue';
 import PatientLink from '../components/PatientLink.vue';
 import { Cat, FileText, Plus } from '@lucide/vue';
 import { http } from '../api/http';
-import { formatDate as formatClinicDate, relativeDayLabel } from '../lib/datetime';
-import { DELIVERY_STATUS_META, RECORD_STATUS_META, deskBadges, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
+import { shortDate as formatClinicDate, relativeDayLabel } from '../lib/datetime';
+import { DELIVERY_STATUS_META, RECORD_STATUS_META, deskMark, getDeliveryStatus, isFinalizedRecord, reportMark, reportMarkNote } from '../lib/recordStatus';
+import StatusMark from '../components/StatusMark.vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { usePagedList } from '../composables/usePagedList';
@@ -21,7 +22,6 @@ import ListFooter from '../components/ListFooter.vue';
 import RowActions from '../components/RowActions.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
-import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import DataCard from '../components/DataCard.vue';
 
@@ -128,7 +128,7 @@ watch(() => route.query.new, (value) => {
   if (value === '1') openPetPicker();
 }, { immediate: true });
 
-function formatDate(value) {
+function shortDate(value) {
   return formatClinicDate(value);
 }
 
@@ -161,7 +161,7 @@ async function removeRecord(confirmText) {
   try {
     await http.delete(`/records/${record._id}`, { data: { confirmText } });
     recordToRemove.value = null;
-    toast.success(`已刪除「${record.petId?.name || '貓咪'}」${formatDate(record.visitDate)} 的健檢報告`, '刪除紀錄成功');
+    toast.success(`已刪除「${record.petId?.name || '貓咪'}」${shortDate(record.visitDate)} 的健檢報告`, '刪除紀錄成功');
     // 刪掉這頁最後一筆時，fetchRecords 會自己退回有效頁碼。
     await fetchRecords();
   } catch (err) {
@@ -185,7 +185,7 @@ async function removeRecord(confirmText) {
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
-    <DataCard title="報告清單" :count="loading && !total ? null : total" style="--data-columns: minmax(9rem, 1.2fr) minmax(6.5rem, 0.9fr) minmax(8rem, 1.3fr) minmax(7rem, 0.7fr) minmax(5rem, 0.5fr) minmax(7rem, 0.7fr) minmax(7rem, 0.7fr) 8.5rem">
+    <DataCard title="報告清單" :count="loading && !total ? null : total" style="--data-columns: minmax(9rem, 1.2fr) minmax(6.5rem, 0.9fr) minmax(8rem, 1.3fr) minmax(7rem, 0.7fr) minmax(9rem, 0.9fr) minmax(8rem, 0.8fr) 8.5rem">
       <template #filters>
         <FilterBar
           id="records-search"
@@ -212,7 +212,7 @@ async function removeRecord(confirmText) {
       <!-- 桌機：一列一份。寄送失敗的列左側一條警示色條。 -->
       <div class="hidden xl:block">
         <div class="desktop-data-header">
-          <span>貓咪</span><span>飼主</span><span>健檢類型</span><span>看診日</span><span>報告</span><span>寄送</span><span>櫃台處理</span><span></span>
+          <span>貓咪</span><span>飼主</span><span>健檢類型</span><span>看診日</span><span>報告</span><span>櫃台</span><span></span>
         </div>
         <div
           v-for="record in records"
@@ -230,18 +230,17 @@ async function removeRecord(confirmText) {
             <span v-if="record.reportVersion > 1" class="block text-xs text-subtle-foreground">第 <span class="num">{{ record.reportVersion }}</span> 版</span>
           </span>
           <span class="desktop-data-cell">
-            <span class="num block text-sm">{{ formatDate(record.visitDate) }}</span>
+            <span class="num block text-sm">{{ shortDate(record.visitDate) }}</span>
             <span class="block text-xs text-subtle-foreground">{{ relativeDayLabel(record.visitDate) }}</span>
           </span>
-          <span class="desktop-data-cell">
-            <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
+          <!-- 報告與寄送併成一欄、一列最多一顆膠囊：淡底只給要人動手的狀態（lib/recordStatus.js 的 reportMark／deskMark）。 -->
+          <span class="desktop-data-cell flex flex-col items-start gap-0.5">
+            <span v-tip="record.deliveryError || undefined"><StatusMark :mark="reportMark(record)" /></span>
+            <span v-if="reportMarkNote(record)" class="text-xs font-semibold text-warning">{{ reportMarkNote(record) }}</span>
           </span>
           <span class="desktop-data-cell">
-            <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class" v-tip="record.deliveryError || undefined">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
-          </span>
-          <span class="desktop-data-cell">
-            <component :is="record.deskVisit ? 'router-link' : 'span'" v-if="deskBadges(record).length" v-bind="deskVisitLink(record)" class="flex flex-wrap items-center gap-1">
-              <Badge v-for="badge in deskBadges(record)" :key="badge.key" variant="status" :class="badge.class">{{ badge.label }}</Badge>
+            <component :is="record.deskVisit ? 'router-link' : 'span'" v-if="deskMark(record)" v-bind="deskVisitLink(record)" class="inline-flex">
+              <StatusMark :mark="deskMark(record)" />
             </component>
           </span>
           <span class="desktop-data-cell flex items-center justify-end gap-1">
@@ -258,15 +257,15 @@ async function removeRecord(confirmText) {
           <div class="flex items-start gap-3">
             <router-link :to="record.petId ? `/pets/${record.petId._id}` : recordLink(record)" class="min-w-0 flex-1">
               <span class="block truncate font-semibold text-primary">{{ record.petId?.name || '找不到貓咪' }}</span>
-              <span class="flex gap-3 text-sm text-muted-foreground"><span class="truncate">{{ record.examType || '健檢報告' }}</span><span class="num shrink-0">{{ formatDate(record.visitDate) }}</span></span>
+              <span class="flex gap-3 text-sm text-muted-foreground"><span class="truncate">{{ record.examType || '健檢報告' }}</span><span class="num shrink-0">{{ shortDate(record.visitDate) }}</span></span>
             </router-link>
             <RowActions v-if="canDelete(record)" :actions="[{ key: 'delete', label: record.status === 'draft' ? '捨棄草稿' : '刪除報告', danger: true }]" :label="`${record.petId?.name || '這份報告'}的更多操作`" @select="openRemoveRecord(record)" />
           </div>
           <div class="flex flex-wrap items-center gap-1.5">
-            <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label }}</Badge>
-            <Badge v-if="record.status !== 'draft'" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge>
-            <component :is="record.deskVisit ? 'router-link' : 'span'" v-if="deskBadges(record).length" v-bind="deskVisitLink(record)" class="contents">
-              <Badge v-for="badge in deskBadges(record)" :key="badge.key" variant="status" :class="badge.class">{{ badge.label }}</Badge>
+            <StatusMark :mark="reportMark(record)" />
+            <span v-if="reportMarkNote(record)" class="text-xs font-semibold text-warning">{{ reportMarkNote(record) }}</span>
+            <component :is="record.deskVisit ? 'router-link' : 'span'" v-if="deskMark(record)" v-bind="deskVisitLink(record)" class="inline-flex">
+              <StatusMark :mark="deskMark(record)" />
             </component>
             <Button as-child variant="soft" size="sm" class="ml-auto"><router-link :to="recordLink(record)">{{ actionLabel(record) }}</router-link></Button>
           </div>
@@ -285,7 +284,7 @@ async function removeRecord(confirmText) {
   <ConfirmDialog
     :open="Boolean(recordToRemove) && !isFinalizedRecord(recordToRemove)"
     title="捨棄健檢草稿"
-    :description="`確定要捨棄「${recordToRemove?.petId?.name || '貓咪'}」${formatDate(recordToRemove?.visitDate)} 這筆草稿嗎？此操作無法復原。`"
+    :description="`確定要捨棄「${recordToRemove?.petId?.name || '貓咪'}」${shortDate(recordToRemove?.visitDate)} 這筆草稿嗎？此操作無法復原。`"
     confirm-label="捨棄草稿"
     destructive
     :loading="Boolean(deletingRecordId)"

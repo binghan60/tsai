@@ -11,7 +11,7 @@ import { useSearchQueryParam } from '../composables/useSearchQueryParam'
 import { useClinicDate } from '../composables/useClinicDate'
 import { useAppointmentNotifier } from '../composables/useAppointmentNotifier'
 import { canRequestLab, labRequestDelivered, useLabRequest } from '../composables/useLabRequest'
-import { clinicDateInput, clinicTimeInput, shiftDateInput, weekdayLabel } from '../lib/datetime'
+import { clinicDateInput, clinicTimeInput, elapsedLabel, shiftDateInput, shortDate, weekdayLabel } from '../lib/datetime'
 import { appointmentsForTimeline, groupBySession, isIdentityConfirmed, MIDDAY_BREAK, nowIndexInSession } from '../lib/appointmentTimeline'
 import { isOverdue, minutesPastSchedule, sessionAutoCollapsed } from '../lib/receptionBoard'
 import { workflowFilter, workflowState } from '../../../shared/appointmentWorkflow.js'
@@ -229,10 +229,10 @@ function nowPosition(group) {
   return nowIndexInSession(group.items, new Date(now.value))
 }
 
-function minutesSince(value) {
-  const time = new Date(value).getTime()
-  if (Number.isNaN(time)) return 0
-  return Math.max(0, Math.floor((now.value - time) / 60000))
+// 看診中：當天寫經過多久（「12 分」「1 時 05 分」），看過去的日子寫幾點開始的。
+function startedLabel(value) {
+  const elapsed = elapsedLabel(value, now.value)
+  return elapsed.clock ? `${elapsed.text} 開始` : elapsed.text
 }
 function overdueMinutes(item) {
   return isToday.value ? minutesPastSchedule(item, new Date(now.value)) : 0
@@ -270,8 +270,8 @@ const TONE = {
 }
 // 卡片右側的進度欄（沒有小標題）：一行狀態＋一行時間，跟飼主、電話兩欄並排。號碼牌在卡片最左邊，這裡不重複。
 function progress(item, kind) {
-  if (kind === 'handoff') return { label: '待櫃台處理', detail: `交出 ${minutesSince(item.handoffAt)} 分` }
-  if (kind === 'visiting') return { label: '看診中', detail: `${minutesSince(item.visitStartedAt)} 分` }
+  if (kind === 'handoff') return { label: '待櫃台處理', detail: `交出 ${elapsedLabel(item.handoffAt, now.value).text}` }
+  if (kind === 'visiting') return { label: '看診中', detail: startedLabel(item.visitStartedAt) }
   if (kind === 'waiting') return { label: '候診中', detail: item.checkedInAt ? `${clinicTimeInput(item.checkedInAt)} 報到` : '' }
   if (kind === 'late') return { label: '遲到未報到', detail: `已遲 ${overdueMinutes(item)} 分` }
   return { label: '未報到', detail: '' }
@@ -604,6 +604,16 @@ onBeforeUnmount(() => {
             <p v-if="!stageFilter" class="mt-1 text-sm text-muted-foreground">按右上角「掛號」，掛號會依預約時段排在時間軸上。</p>
           </div>
 
+          <!-- 欄位表頭（寬螢幕，捲動時釘在頂端）：卡片上不再每張重複「飼主」「電話」小標，一天二十張卡就重複四十次。
+               左右內距照卡片的位置疊出來（時段縮排、左邊軌道線、卡片邊框與內距），欄寬跟卡片同一組；進度欄照舊不寫小標。 -->
+          <div v-if="timelineCount" class="sticky -top-3 z-10 -mx-5 -mt-3 mb-1 hidden border-b border-border bg-card px-5 py-2 xl:block" aria-hidden="true">
+            <div class="ml-19 border-l-2 border-transparent pl-5">
+              <div class="grid gap-x-5 border border-transparent px-4 text-sm font-semibold text-muted-foreground xl:grid-cols-[minmax(0,1fr)_8rem_10rem_9rem_8.5rem]">
+                <span class="pl-13">貓咪</span><span class="pl-2">飼主</span><span>電話</span><span></span><span></span>
+              </div>
+            </div>
+          </div>
+
           <template v-for="(group, groupIndex) in timeline" :key="group.session.id">
             <div v-if="groupIndex === 1" class="my-3 flex items-center gap-3" :aria-label="`${MIDDAY_BREAK.label} ${MIDDAY_BREAK.start} 到 ${MIDDAY_BREAK.end}`">
               <span class="h-px flex-1 bg-border" aria-hidden="true"></span>
@@ -672,13 +682,14 @@ onBeforeUnmount(() => {
                         </div>
                       </div>
 
-                      <!-- 右側三欄：飼主、電話、進度，每張卡片上下對齊，掃一眼就能對上是誰、打給誰、到哪一步。進度那一欄不放小標題（使用者要求拿掉「進度」兩個字）。 -->
+                      <!-- 右側三欄：飼主、電話、進度，每張卡片上下對齊，掃一眼就能對上是誰、打給誰、到哪一步。進度那一欄不放小標題（使用者要求拿掉「進度」兩個字）。
+                           寬螢幕的小標在時間軸頂端的表頭，卡片裡只留給螢幕報讀器；窄的時候卡片上下疊，小標放回來。 -->
                       <div class="min-w-0 xl:pl-2">
-                        <span class="spec-label block">飼主</span>
+                        <span class="spec-label block xl:sr-only">飼主</span>
                         <span class="block min-h-lh truncate"><PatientLink v-if="item.ownerName" :pet-id="item.petId" quiet>{{ item.ownerName }}</PatientLink></span>
                       </div>
                       <div class="min-w-0">
-                        <span class="spec-label block">電話</span>
+                        <span class="spec-label block xl:sr-only">電話</span>
                         <span v-if="item.ownerPhone" class="flex items-center gap-1">
                           <span class="num truncate">{{ item.ownerPhone }}</span>
                           <button type="button" class="flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-muted-foreground shadow-[inset_0_0_0_1px_var(--border)] hover:bg-secondary-hover hover:text-foreground" :aria-label="`複製 ${item.ownerName || item.petName} 的電話`" @click.stop="copyPhone(item.ownerPhone)"><Copy class="size-4" stroke-width="1.75" /></button>
@@ -692,7 +703,7 @@ onBeforeUnmount(() => {
 
                       <div class="flex shrink-0 items-center justify-end gap-1.5" @click.stop>
                         <template v-if="item.ui.kind === 'handoff'">
-                          <Button @click="openSheet(item)">處理</Button>
+                          <Button variant="soft" @click="openSheet(item)">處理</Button>
                           <!-- 沒有 ⋯ 選單時補一個同尺寸的空位，主要按鈕才跟其他卡片對齊。 -->
                           <span class="size-10 shrink-0" aria-hidden="true"></span>
                         </template>
@@ -737,7 +748,7 @@ onBeforeUnmount(() => {
                   <span class="min-w-0 flex-1 truncate font-semibold text-primary">{{ item.petName }}</span>
                   <span class="truncate text-sm text-muted-foreground">{{ item.ownerName }}</span>
                   <span v-if="item.deskCompletedAt" class="num shrink-0 text-sm text-subtle-foreground">{{ clinicTimeInput(item.deskCompletedAt) }}</span>
-                  <Badge v-if="item.followUpAppointmentId" variant="status" class="bg-accent text-accent-foreground">回診 <span class="num">{{ item.followUpDate?.slice(5) }}</span></Badge>
+                  <Badge v-if="item.followUpAppointmentId" variant="status" class="bg-accent text-accent-foreground">回診 <span class="num">{{ shortDate(item.followUpDate) }}</span></Badge>
                 </button>
               </div>
             </section>

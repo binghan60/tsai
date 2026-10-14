@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import { Banknote } from '@lucide/vue';
 import { http } from '../api/http';
 import { apiErrorMessage } from '../lib/apiError.js';
+import { shortDate } from '../lib/datetime';
 import ModalDialog from './ModalDialog.vue';
 import { DialogDescription, DialogFooter, DialogTitle } from './ui/dialog';
 import { Label } from './ui/label';
@@ -54,7 +55,7 @@ async function submit() {
       </div>
       <div class="min-w-0">
         <DialogTitle>修改保證金紀錄</DialogTitle>
-        <DialogDescription class="mt-1 text-sm leading-relaxed"><span class="num">{{ String(item.date ?? '').replaceAll('-', '/') }} {{ item.time }}</span> 的掛號。改成已收會從現在起把遲到與未到的次數歸零。</DialogDescription>
+        <DialogDescription class="mt-1 text-sm leading-relaxed"><span class="num">{{ shortDate(item.date) }} {{ item.time }}</span> 的掛號。改成已收會從現在起把遲到與未到的次數歸零。</DialogDescription>
       </div>
     </div>
 

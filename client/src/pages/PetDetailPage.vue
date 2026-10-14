@@ -9,7 +9,7 @@ import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
 import FilterTabs from '../components/FilterTabs.vue';
 import { http } from '../api/http';
 import { useLiveReload } from '../composables/useLiveReload';
-import { ageLabel as calcAgeLabel, clinicDateInput, formatDate as formatClinicDate, formatDateTime } from '../lib/datetime';
+import { ageLabel as calcAgeLabel, clinicDateInput, shortDate as formatClinicDate, formatDateTime } from '../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
@@ -298,7 +298,7 @@ function handleRowAction(record, action) {
   if (action === 'revoke') return openRevokeShare(record);
   if (action === 'delete') return openRemoveRecord(record);
 }
-function formatDate(value) {
+function shortDate(value) {
   return formatClinicDate(value);
 }
 
@@ -515,7 +515,7 @@ async function removeRecord(confirmText) {
   try {
     await http.delete(`/records/${record._id}`, { data: { confirmText } });
     recordToRemove.value = null;
-    toast.success(`已成功刪除「${formatDate(record.visitDate)}」的健檢報告`, '刪除紀錄成功');
+    toast.success(`已成功刪除「${shortDate(record.visitDate)}」的健檢報告`, '刪除紀錄成功');
     await fetchPet();
   } catch (err) {
     const msg = apiErrorMessage(err, '刪除健檢報告失敗');
@@ -949,7 +949,7 @@ watch(pet, async (value) => {
             <Card v-if="shareNotice" class="border-success/35 bg-success-surface p-4 text-sm text-success shadow-none">
               <p class="font-medium">{{ shareNotice.copied ? '分享連結已複製' : '分享連結已建立' }}</p>
               <p class="mt-1 break-all">{{ shareNotice.url }}</p>
-              <p class="mt-1 text-xs opacity-80">連結有效至 {{ formatDate(shareNotice.expiresAt) }}，到期或手動撤銷後即無法開啟</p>
+              <p class="mt-1 text-xs opacity-80">連結有效至 {{ shortDate(shareNotice.expiresAt) }}，到期或手動撤銷後即無法開啟</p>
             </Card>
     
             <Card v-if="pet.medicalRecords.length" class="hidden overflow-hidden p-0 shadow-sm lg:block dark:shadow-none" style="--data-columns: minmax(9rem, 1.15fr) minmax(8rem, 1fr) minmax(10rem, 1fr) 10.5rem">
@@ -960,10 +960,10 @@ watch(pet, async (value) => {
                 <span class="desktop-data-cell"></span>
               </div>
               <div v-for="record in pet.medicalRecords" :key="record._id" class="desktop-data-row">
-                <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ formatDate(record.visitDate) }}</span>
+                <span class="desktop-data-cell flex items-center gap-2 text-sm text-foreground"><CalendarDays class="h-4 w-4 shrink-0 text-muted-foreground" />{{ shortDate(record.visitDate) }}</span>
                 <span class="desktop-data-cell min-w-0 truncate text-sm text-foreground" v-tip.overflow="record.examType || ''">{{ record.examType }}<span v-if="record.reportVersion > 1" class="ml-2 text-xs text-muted-foreground">第 {{ record.reportVersion }} 版</span></span>
                 <span class="desktop-data-cell flex items-center gap-1.5 whitespace-nowrap"><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge></span>
-                <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${formatDate(record.visitDate)} 的健檢報告`" @select="(action) => handleRowAction(record, action)" /><span v-else class="size-9 shrink-0" aria-hidden="true" /></span>
+                <span class="desktop-data-cell flex justify-end gap-1.5"><Button v-if="record.status === 'draft'" as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button><Button v-else as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button><RowActions v-if="rowActions(record).length" :actions="rowActions(record)" :label="`${shortDate(record.visitDate)} 的健檢報告`" @select="(action) => handleRowAction(record, action)" /><span v-else class="size-9 shrink-0" aria-hidden="true" /></span>
               </div>
             </Card>
     
@@ -971,14 +971,14 @@ watch(pet, async (value) => {
               <li v-for="record in pet.medicalRecords" :key="record._id">
                 <Card class="p-4 shadow-sm dark:shadow-none">
                 <div class="flex flex-wrap items-start justify-between gap-3">
-                  <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ formatDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground"><span>第 {{ record.reportVersion || 1 }} 版</span><span v-if="record.vet">{{ record.vet }}</span><span>更新於 {{ formatDateTime(record.updatedAt) }}</span><span v-if="record.sentTo">寄至 {{ record.sentTo }}</span></p></div></div>
+                  <div class="flex min-w-0 items-start gap-3"><CalendarDays class="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" /><div><div class="flex flex-wrap items-center gap-2"><span class="font-medium text-foreground">{{ shortDate(record.visitDate) }}</span><Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge><Badge v-if="isFinalizedRecord(record)" variant="status" :class="DELIVERY_STATUS_META[getDeliveryStatus(record)]?.class">{{ DELIVERY_STATUS_META[getDeliveryStatus(record)]?.label }}</Badge><Badge v-if="record.supersededBy" class="rounded-full bg-warning-surface px-3 py-1 text-xs font-medium text-warning">已有新版</Badge><Badge v-if="isShareActive(record)" class="rounded-full bg-success-surface px-3 py-1 text-xs font-medium text-success">分享中</Badge></div><p class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground"><span>第 {{ record.reportVersion || 1 }} 版</span><span v-if="record.vet">{{ record.vet }}</span><span>更新於 {{ formatDateTime(record.updatedAt) }}</span><span v-if="record.sentTo">寄至 {{ record.sentTo }}</span></p></div></div>
                   <div class="flex shrink-0 items-center gap-1.5 text-sm">
                     <Button v-if="record.status === 'draft'" as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/edit`">繼續填寫</router-link></Button>
                     <Button v-else as-child variant="soft" size="sm"><router-link :to="`/records/${record._id}/preview`"><FileText class="h-4 w-4" />查看報告</router-link></Button>
                     <RowActions
                       v-if="rowActions(record).length"
                       :actions="rowActions(record)"
-                      :label="`${formatDate(record.visitDate)} 的更多操作`"
+                      :label="`${shortDate(record.visitDate)} 的更多操作`"
                       @select="(action) => handleRowAction(record, action)"
                     />
                   </div>
@@ -1017,7 +1017,7 @@ watch(pet, async (value) => {
         <ConfirmDialog
           :open="Boolean(recordToRemove) && !isFinalizedRecord(recordToRemove)"
           title="捨棄健檢草稿"
-          :description="`確定要捨棄「${formatDate(recordToRemove?.visitDate)}」這筆草稿嗎？此操作無法復原。`"
+          :description="`確定要捨棄「${shortDate(recordToRemove?.visitDate)}」這筆草稿嗎？此操作無法復原。`"
           confirm-label="捨棄草稿"
           destructive
           :loading="Boolean(deletingRecordId)"

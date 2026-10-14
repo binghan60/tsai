@@ -7,7 +7,7 @@ import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
-import { formatDate } from '../lib/datetime';
+import { shortDate } from '../lib/datetime';
 
 // 刪除報告要求先打字才能按下確認，仿 GitHub 刪除 repository 的做法——
 // 這是唯一可以刪掉已結案報告的入口，防的是「手滑點到刪除、又手滑點到確認」。
@@ -32,7 +32,7 @@ const canSubmit = computed(() => Boolean(expected.value) && input.value.trim() =
 
 // 這份報告是哪一份，用看得懂的方式描述——日期與健檢類型比編號好認。
 const recordLabel = computed(() => {
-  const label = [formatDate(props.record?.visitDate), props.record?.examType].filter(Boolean).join(' ');
+  const label = [shortDate(props.record?.visitDate), props.record?.examType].filter(Boolean).join(' ');
   return (props.record?.reportVersion ?? 1) > 1 ? `${label}，第 ${props.record.reportVersion} 版` : label;
 });
 

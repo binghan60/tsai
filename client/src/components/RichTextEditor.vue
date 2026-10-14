@@ -1,5 +1,5 @@
 <script setup>
-import { onBeforeUnmount, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { EditorContent, useEditor } from '@tiptap/vue-3';
 import { Extension, Mark } from '@tiptap/core';
 import { Plugin } from '@tiptap/pm/state';
@@ -8,7 +8,7 @@ import Paragraph from '@tiptap/extension-paragraph';
 import Text from '@tiptap/extension-text';
 import Bold from '@tiptap/extension-bold';
 import { Placeholder, UndoRedo } from '@tiptap/extensions';
-import { Bold as BoldIcon, RemoveFormatting } from '@lucide/vue';
+import { Bold as BoldIcon, ChevronDown, RemoveFormatting } from '@lucide/vue';
 import { RICH_TEXT_COLORS } from '../../../shared/richText.js';
 import { docToRichText, richTextToDoc } from '../lib/richTextDoc';
 import { cn } from '@/lib/utils';
@@ -30,12 +30,34 @@ const props = defineProps({
   maxlength: { type: [Number, String], default: undefined },
   // 單行（待辦）：Enter 送出、不換行，貼上的換行併成空白。
   singleLine: { type: Boolean, default: false },
-  // 工具列位置：inline＝單行時排在文字右邊（省高度）；top＝排在上面一條（窄欄用，文字才有整行寬度）。
-  // 多行編輯器一律在上面，這個選項只影響單行。
-  toolbarPosition: { type: String, default: 'inline' },
   class: { type: [Boolean, null, String, Object, Array], default: undefined },
 });
 const emit = defineEmits(['update:modelValue', 'submit', 'keydown', 'cursor', 'blur']);
+
+// 格式按鈕（粗體、顏色、清除格式）只在正在輸入時出現：常駐的話一個畫面好幾組，是最大的雜訊來源。
+// 多行時放在框內右下角，框底一律預留那一塊高度——聚焦時才「長出」工具列會把下面的欄位往下推，
+// 點下一格的瞬間整頁跳一下、游標落錯地方。單行時排在文字右邊。
+// 按鈕都 mousedown.prevent，點下去焦點留在編輯器裡；色盤也畫在這個元件裡、不傳送到 body，同一個道理。
+const root = ref(null);
+const focused = ref(false);
+const colorsOpen = ref(false);
+function onFocusIn() {
+  focused.value = true;
+}
+function onFocusOut(event) {
+  if (root.value?.contains(event.relatedTarget)) return;
+  focused.value = false;
+  colorsOpen.value = false;
+}
+// Esc 先收色盤；色盤沒開時照常往外傳（關對話框、收起編輯）。
+function closeColors(event) {
+  if (!colorsOpen.value) return;
+  event.stopPropagation();
+  colorsOpen.value = false;
+}
+const showTools = computed(() => !props.disabled && focused.value);
+// 「顏色」鈕底下那條線＝游標所在文字的顏色，沒有顏色就是一般文字色。
+const activeTint = computed(() => TINT_OPTIONS.find((option) => editor.value?.isActive('tint', { color: option.color })) ?? null);
 
 const Tint = Mark.create({
   name: 'tint',
@@ -171,6 +193,7 @@ function toggleBold() {
 function toggleTint(color) {
   const active = editor.value?.isActive('tint', { color });
   applyFormatting((chain) => (active ? chain.unsetMark('tint') : chain.setMark('tint', { color })));
+  colorsOpen.value = false;
 }
 function clearFormatting() {
   applyFormatting((chain) => chain.unsetAllMarks().command(({ tr }) => {
@@ -219,60 +242,88 @@ defineExpose({
     :class="cn(
       'rich-text-editor min-w-0 rounded-lg border border-input bg-field transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
       disabled ? 'cursor-not-allowed opacity-50' : '',
-      singleLine ? 'rich-text-editor--single' : '',
-      singleLine && toolbarPosition === 'inline' ? 'flex items-center' : '',
+      singleLine ? 'rich-text-editor--single flex items-center' : 'relative',
       props.class,
     )"
+    ref="root"
+    @focusin="onFocusIn"
+    @focusout="onFocusOut"
+    @keydown.esc="closeColors"
   >
+    <EditorContent :editor="editor" class="min-w-0 flex-1" :class="singleLine ? '' : 'rich-text-editor__body'" />
     <div
-      v-if="editor"
-      class="flex flex-wrap items-center gap-1"
-      :class="singleLine && toolbarPosition === 'inline' ? 'order-2 shrink-0 pr-1.5' : 'border-b border-border/70 px-1.5 py-1'"
+      v-if="editor && (showTools || $slots['toolbar-end'])"
+      class="flex items-center gap-1"
+      :class="singleLine ? 'relative shrink-0 pr-1.5' : 'absolute right-1.5 bottom-1.5'"
       role="toolbar"
       aria-label="文字格式"
     >
-      <button
-        type="button"
-        class="rich-text-editor__tool"
-        :class="editor.isActive('bold') ? 'bg-accent text-accent-foreground' : 'bg-muted/60 text-foreground hover:bg-muted'"
-        :disabled="disabled"
-        :aria-pressed="editor.isActive('bold')"
-        aria-label="粗體（Ctrl+B）"
-        v-tip="'粗體（Ctrl+B）'"
-        @mousedown.prevent
-        @click="toggleBold"
-      >
-        <BoldIcon class="h-4 w-4" stroke-width="2.25" />
-      </button>
-      <button
-        v-for="option in TINT_OPTIONS"
-        :key="option.color"
-        type="button"
-        class="rich-text-editor__tool"
-        :class="editor.isActive('tint', { color: option.color }) ? 'bg-accent ring-2 ring-ring/60' : 'bg-muted/60 hover:bg-muted'"
-        :disabled="disabled"
-        :aria-pressed="editor.isActive('tint', { color: option.color })"
-        :aria-label="option.label"
-        v-tip="option.label"
-        @mousedown.prevent
-        @click="toggleTint(option.color)"
-      >
-        <span class="h-3.5 w-3.5 rounded-full" :class="option.swatchClass" aria-hidden="true" />
-      </button>
-      <button
-        type="button"
-        class="rich-text-editor__tool bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
-        :disabled="disabled"
-        aria-label="清除格式"
-        v-tip="'清除格式'"
-        @mousedown.prevent
-        @click="clearFormatting"
-      >
-        <RemoveFormatting class="h-4 w-4" stroke-width="1.75" />
-      </button>
-      <div v-if="$slots['toolbar-end']" class="ml-auto flex items-center gap-1"><slot name="toolbar-end" /></div>
+      <template v-if="showTools">
+        <button
+          type="button"
+          class="rich-text-editor__tool"
+          :class="editor.isActive('bold') ? 'bg-accent text-accent-foreground' : 'bg-muted/60 text-foreground hover:bg-muted'"
+          :aria-pressed="editor.isActive('bold')"
+          aria-label="粗體（Ctrl+B）"
+          v-tip="'粗體（Ctrl+B）'"
+          @mousedown.prevent
+          @click="toggleBold"
+        >
+          <BoldIcon class="h-4 w-4" stroke-width="2.25" />
+        </button>
+        <button
+          type="button"
+          class="rich-text-editor__tool rich-text-editor__tool--wide"
+          :class="colorsOpen || activeTint ? 'bg-accent text-accent-foreground' : 'bg-muted/60 text-foreground hover:bg-muted'"
+          :aria-expanded="colorsOpen"
+          aria-haspopup="true"
+          aria-label="文字顏色"
+          v-tip="'文字顏色'"
+          @mousedown.prevent
+          @click="colorsOpen = !colorsOpen"
+        >
+          <span class="flex flex-col items-center leading-none" aria-hidden="true">
+            <span class="text-sm font-bold">A</span>
+            <span class="mt-0.5 h-1 w-3.5 rounded-full" :class="activeTint?.swatchClass ?? 'bg-foreground'" />
+          </span>
+          <ChevronDown class="size-3.5" stroke-width="2" />
+        </button>
+        <button
+          type="button"
+          class="rich-text-editor__tool bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="清除格式"
+          v-tip="'清除格式'"
+          @mousedown.prevent
+          @click="clearFormatting"
+        >
+          <RemoveFormatting class="h-4 w-4" stroke-width="1.75" />
+        </button>
+        <!-- 色盤：六色一排。多行時往上開（工具列在框底），單行時往下開。 -->
+        <div
+          v-if="colorsOpen"
+          class="absolute right-0 z-30 flex gap-1 rounded-xl border border-border bg-popover p-1.5 shadow-lg"
+          :class="singleLine ? 'top-full mt-1.5' : 'bottom-full mb-1.5'"
+          role="group"
+          aria-label="選擇文字顏色"
+        >
+          <button
+            v-for="option in TINT_OPTIONS"
+            :key="option.color"
+            type="button"
+            class="rich-text-editor__tool"
+            :class="editor.isActive('tint', { color: option.color }) ? 'bg-accent ring-2 ring-ring/60' : 'bg-muted/60 hover:bg-muted'"
+            :aria-pressed="editor.isActive('tint', { color: option.color })"
+            :aria-label="option.label"
+            v-tip="option.label"
+            @mousedown.prevent
+            @click="toggleTint(option.color)"
+          >
+            <span class="h-3.5 w-3.5 rounded-full" :class="option.swatchClass" aria-hidden="true" />
+          </button>
+        </div>
+      </template>
+      <slot name="toolbar-end" />
     </div>
-    <EditorContent :editor="editor" class="min-w-0 flex-1" />
   </div>
 </template>
 
@@ -285,6 +336,15 @@ defineExpose({
   height: 2rem;
   border-radius: 0.5rem;
   transition: background-color 150ms, color 150ms;
+}
+.rich-text-editor__tool--wide {
+  width: auto;
+  gap: 0.125rem;
+  padding-inline: 0.375rem;
+}
+/* 多行：框底固定預留工具列的高度，聚焦時工具列出現不會把下面的欄位往下推。 */
+.rich-text-editor__body :deep(.rich-text-editor__content) {
+  padding-bottom: 2.75rem;
 }
 .rich-text-editor__tool:focus-visible {
   outline: 2px solid var(--ring);

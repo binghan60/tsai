@@ -2,7 +2,7 @@
 import { computed } from 'vue';
 import { ExternalLink } from '@lucide/vue';
 import { useRecordForm } from './context';
-import { formatDate } from '../../lib/datetime';
+import { shortDate } from '../../lib/datetime';
 
 // 填表時的對照資訊：這隻貓咪「上次」量到這個項目時的值。
 // 不限上次做的是哪一種健檢 —— 只要以前量過，這次表單上有同一個項目就顯示，
@@ -30,7 +30,7 @@ const isAbnormal = computed(() => entry.value?.status === 'abnormal');
 
 // 日期、健檢種類、備註各自是一種資訊，分開排版才有層次；
 // 全部串成一行只會變成一條看不出重點的灰字。
-const dateText = computed(() => (entry.value?.visitDate ? formatDate(entry.value.visitDate, '') : ''));
+const dateText = computed(() => (entry.value?.visitDate ? shortDate(entry.value.visitDate, '') : ''));
 const examTypeText = computed(() => String(entry.value?.examType ?? '').trim());
 const noteText = computed(() => String(entry.value?.note ?? '').trim());
 const tooltip = computed(() => {

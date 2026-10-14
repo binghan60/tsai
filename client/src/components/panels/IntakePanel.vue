@@ -156,7 +156,7 @@ onActivated(refreshAll);
     >
       <IntakeReview :key="view.submissionId" :submission-id="view.submissionId" @decided="onDecided" />
     </SidePanel>
-    <SidePanel v-else title="初診" description="飼主用驗證碼在初診頁填表，送出後在這裡審核" flush @close="panel.close()">
+    <SidePanel v-else title="初診" flush @close="panel.close()">
       <div ref="listTop" class="space-y-3 border-b border-border px-5 py-4">
         <Button variant="soft" class="w-full" :disabled="issuing" @click="issueCode"><KeyRound stroke-width="1.75" />發初診驗證碼</Button>
         <FilterTabs v-model="tab" :items="TABS" :counts="tabCounts" aria-label="初診清單" fit />

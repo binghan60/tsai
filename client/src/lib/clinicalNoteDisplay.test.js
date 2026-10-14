@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  deskChips,
   journalDateEditable,
   journalEditError,
   journalEditFields,
@@ -125,4 +126,13 @@ test('free-text journals edit their whole content', () => {
   assert.equal(journalEditError(note, { content: '' }), '請填寫內容')
   assert.equal(journalDateEditable(note), true)
   assert.equal(journalEditNotice(note), '')
+})
+
+test('檢視模式的櫃台處理只列有勾的項目，上傳影像排第一、完成了帶時間', () => {
+  assert.deepEqual(deskChips({ items: ['prescription_given', 'image_usb'], imageUpload: false, uploadNote: '' }).map((chip) => chip.label), ['影像USB', '已給藥單'])
+  const [upload] = deskChips({ items: ['receipt'], imageUpload: true, uploadNote: '已完成　10/9 14:32' })
+  assert.deepEqual([upload.label, upload.done, upload.time], ['上傳影像', true, '10/9 14:32'])
+  assert.deepEqual(deskChips({ items: [], imageUpload: true, uploadNote: '' }).map((chip) => [chip.label, chip.done]), [['上傳影像', false]])
+  assert.deepEqual(deskChips({ items: ['no_visit_record'], imageUpload: false, uploadNote: '' }).map((chip) => [chip.label, chip.tone]), [['不寄就診紀錄', 'warning']])
+  assert.deepEqual(deskChips(null), [])
 })

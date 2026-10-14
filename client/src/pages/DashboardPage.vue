@@ -131,12 +131,9 @@ async function completeTodo(item) {
 </script>
 
 <template>
-  <section class="flex flex-col gap-5 xl:min-h-[calc(100vh-2.5rem)]">
+  <section class="flex flex-col gap-5">
     <PageHeader title="總覽">
       <template #meta><span class="flex items-baseline gap-3 text-sm text-subtle-foreground"><span class="num">{{ headerMeta.time }}</span><span>{{ headerMeta.date }}</span></span></template>
-      <template #actions>
-        <Button as-child variant="soft"><router-link to="/reception">前往掛號台<ArrowRight stroke-width="1.75" /></router-link></Button>
-      </template>
     </PageHeader>
 
     <Alert v-if="error" variant="destructive">
@@ -181,14 +178,15 @@ async function completeTodo(item) {
         </div>
       </section>
 
-      <div class="grid gap-3.5 xl:flex-1 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+      <!-- 圖表固定高度：不撐滿剩下的視窗高度（螢幕越高、8 根長條拉得越長，旁邊的待辦卡大半空白）。 -->
+      <div class="grid gap-3.5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <section class="flex min-w-0 flex-col gap-2.5 rounded-xl border border-border bg-card px-4.5 py-4 shadow-card" aria-labelledby="dashboard-trend-title">
           <div class="flex items-baseline gap-2">
             <h3 id="dashboard-trend-title" class="text-base font-semibold">近 8 週健檢量</h3>
             <span class="text-xs text-subtle-foreground">本週 <span class="num">{{ thisWeek }}</span> 份</span>
           </div>
           <TooltipProvider :delay-duration="0" disable-hoverable-content>
-            <div class="flex min-h-64 flex-1 items-end gap-1.5 border-b border-border-strong" aria-hidden="true">
+            <div class="flex h-56 items-end gap-1.5 border-b border-border-strong" aria-hidden="true">
               <Tooltip v-for="(week, index) in weeks" :key="week.label">
                 <!-- 整欄都是觸發範圍（不只長條本身）：0 份那週只有 2px 高，只認長條會幾乎滑不到。 -->
                 <TooltipTrigger as-child>
@@ -215,7 +213,7 @@ async function completeTodo(item) {
             <button type="button" class="ml-auto text-sm font-semibold text-primary hover:underline" @click="panel.open('todos')">全部待辦</button>
           </div>
           <EmptyState v-if="todos.loaded && !openTodos.length" :icon="ListTodo" title="目前沒有未完成的待辦" description="從右側工具欄的「待辦」新增。" inset />
-          <ul v-else>
+          <ul v-else class="max-h-60 overflow-y-auto">
             <li v-for="item in openTodos" :key="item._id" class="flex items-center gap-2.5 border-b border-border py-2">
               <!-- 這裡只列未完成的，勾下去就完成、從清單消失；樣子跟待辦面板的勾選框一致。 -->
               <Checkbox

@@ -3,7 +3,7 @@
 // 這裡把它們排成報告式的「標籤｜內容」列，以及編輯表單的初始值與送出格式。
 // 手動與舊系統匯入的日誌是自由文字，沒有 sections，整段顯示、整段編輯。
 import { richTextLength, richTextToPlain } from '../../../shared/richText.js'
-import { sortDeskItems } from '../../../shared/deskItems.js'
+import { deskItemLabel, sortDeskItems } from '../../../shared/deskItems.js'
 
 export function journalKind(note) {
   if (note?.appointmentId) return 'appointment'
@@ -39,6 +39,25 @@ function deskRow(sections) {
   return { key: 'deskItems', label: '櫃台處理', text: '', tone: 'default', emphasis: false, rich: false, desk: { items, imageUpload, uploadNote: done } }
 }
 
+// 檢視模式的櫃台處理列只列有勾的項目，一項一顆小標（全部選項的勾選框只在修改模式出現——
+// 每筆日誌十二個勾選框、只勾一項也佔三列，比體重、紀錄、藥單還醒目，唯讀的勾選框也看起來點得動）。
+// 「上傳影像」排第一（它在影像那一組的最前面），待辦完成了才打勾、帶完成時間；「不寄就診紀錄」用琥珀色，
+// 跟報告清單、填寫頁上的同一件事同一個顏色。回傳 [{ key, label, done, time, tone }]。
+export function deskChips(desk) {
+  if (!desk) return []
+  const chips = []
+  if (desk.imageUpload) {
+    const time = String(desk.uploadNote ?? '').replace(/^已完成\s*/, '')
+    chips.push({ key: 'image_upload', label: '上傳影像', done: Boolean(desk.uploadNote), time: desk.uploadNote ? time : '', tone: 'default' })
+  }
+  for (const key of sortDeskItems(desk.items)) {
+    chips.push(key === 'no_visit_record'
+      ? { key, label: '不寄就診紀錄', done: false, time: '', tone: 'warning' }
+      : { key, label: deskItemLabel(key), done: false, time: '', tone: 'default' })
+  }
+  return chips
+}
+
 // 報告的每一列：{ key, label, text, tone, emphasis, rich }；量測併成一列「生命徵象」，用 items 各自呈現。
 // 檢驗兩列帶結構、不是一段文字：labs＝報告上的檢驗數值（一項一格），results＝IDEXX 原始結果（排成表格）。
 // 沒有 sections（自由文字日誌、找不到來源）回 null，照舊整段顯示 content。
@@ -49,7 +68,7 @@ export function journalRows(note) {
   const rows = []
   let deskRowDone = false
   for (const section of sections) {
-    // 櫃台處理：處理事項與上傳影像併成同一列勾選框（跟修改模式、櫃台處理視窗同一個樣子）。
+    // 櫃台處理：處理事項與上傳影像併成同一列（檢視模式只列有勾的，見 deskChips）。
     if (DESK_KEYS.includes(section.key)) {
       if (!deskRowDone) {
         deskRowDone = true

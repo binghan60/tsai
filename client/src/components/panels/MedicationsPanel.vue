@@ -28,10 +28,10 @@ function backFromCreate() {
 <template>
   <!-- KeepAlive 底下的根節點要是普通元素：直接放元件（還用 v-if 切換）收起時 Vue 會出錯。 -->
   <div class="h-full min-h-0">
-    <SidePanel v-if="view?.type === 'create'" title="新增藥單" description="送交醫師確認後才會包藥" :can-back="true" back-label="返回藥單" @back="backFromCreate" @close="panel.close()">
+    <SidePanel v-if="view?.type === 'create'" title="新增藥單" :can-back="true" back-label="返回藥單" @back="backFromCreate" @close="panel.close()">
       <MedicationWorkspace ref="createForm" mode="reception" compact create-only @close="panel.back()" />
     </SidePanel>
-    <SidePanel v-else title="藥單" :description="doctor ? '待醫師確認的藥單在最前面' : '包藥與領藥'" @close="panel.close()">
+    <SidePanel v-else title="藥單" @close="panel.close()">
       <MedicationWorkspace
         ref="list"
         :key="identity"

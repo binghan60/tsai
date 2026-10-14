@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ageLabel, clinicDateInput, clinicTimeInput, combineClinicDateTime, parseDateInput, shiftDateInput, weekdayLabel, relativeTimeLabel } from './datetime.js';
+import { ageLabel, clinicDateInput, clinicTimeInput, combineClinicDateTime, parseDateInput, shiftDateInput, weekdayLabel, relativeTimeLabel, shortDate, elapsedLabel } from './datetime.js';
 
 describe('clinic date helpers', () => {
   it('uses the Taipei calendar day around UTC midnight', () => {
@@ -130,5 +130,29 @@ describe('relativeTimeLabel', () => {
     assert.equal(relativeTimeLabel('2026-09-26T09:30:00Z', now), '昨天 17:30');
     assert.equal(relativeTimeLabel('2026-09-18T06:30:00Z', now), '9/18 14:30');
     assert.equal(relativeTimeLabel(null, now), '');
+  });
+});
+
+describe('shortDate', () => {
+  const now = '2026-10-14T03:00:00Z';
+  it('drops the year inside the current year and never uses dashes', () => {
+    assert.equal(shortDate('2026-10-12', now), '10/12');
+    assert.equal(shortDate('2026-10-12T16:30:00Z', now), '10/13');
+    assert.equal(shortDate('2025-12-31', now), '2025/12/31');
+    assert.equal(shortDate('', now), '');
+  });
+});
+
+describe('elapsedLabel', () => {
+  const now = '2026-10-14T06:00:00Z'; // 台北 14:00
+  it('counts minutes, then hours and minutes, within the same clinic day', () => {
+    assert.deepEqual(elapsedLabel('2026-10-14T05:48:00Z', now), { text: '12 分', clock: false, minutes: 12 });
+    assert.deepEqual(elapsedLabel('2026-10-14T04:55:00Z', now), { text: '1 時 05 分', clock: false, minutes: 65 });
+  });
+  it('shows the clock time when the start was on another day', () => {
+    assert.deepEqual(elapsedLabel('2026-10-12T02:35:00Z', now), { text: '10:35', clock: true, minutes: null });
+  });
+  it('is empty without a start', () => {
+    assert.equal(elapsedLabel(null, now).text, '');
   });
 });

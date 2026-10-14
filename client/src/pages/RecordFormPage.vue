@@ -6,7 +6,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { Activity, CalendarCheck, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, FileText, Layers, Link2, LockKeyhole, Save, Settings2, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
-import { clinicDateInput, clinicTimeInput, combineClinicDateTime, formatDate } from '../lib/datetime';
+import { clinicDateInput, clinicTimeInput, combineClinicDateTime, shortDate } from '../lib/datetime';
 import { refreshedVisitKeys, visitEdits, visitSnapshot } from '../lib/recordVisitLink';
 import { collectPreviewIssues } from '../lib/recordFormValidation';
 import { defaultValueForItem } from '../../../shared/formDefaults';
@@ -19,9 +19,9 @@ import { useTextTemplates } from '../composables/useTextTemplates';
 import SpecGrid from '../components/SpecGrid.vue';
 import SpecCell from '../components/SpecCell.vue';
 import PetSex from '../components/PetSex.vue';
-import ReminderTags from '../components/ReminderTags.vue';
 import PageHeader from '../components/PageHeader.vue';
 import { Badge } from '../components/ui/badge';
+import { petReminders } from '../lib/petDisplay';
 import MechanismTooltip from '../components/MechanismTooltip.vue';
 import { Button } from '../components/ui/button';
 import { DatePicker } from '../components/ui/date-picker';
@@ -552,6 +552,8 @@ const completionSections = computed(() =>
   FORM_SECTIONS.value.map((section) => (section.items ?? []).some(itemHasContent))
 );
 const completedCount = computed(() => completionSections.value.filter(Boolean).length);
+const reminders = computed(() => petReminders(pet.value));
+const reminderText = (tag) => (tag.key === 'notes' ? `貓咪備註　${tag.title}` : tag.title);
 const saveLabel = computed(() => {
   if (saveState.value === 'saving') return '自動儲存中…';
   if (saveState.value === 'error') return '自動儲存失敗';
@@ -1107,7 +1109,6 @@ function handleBeforeUnload(event) {
       :description="revisionReason ? `修訂原因：${revisionReason}` : ''"
     >
       <template #meta>
-        <Badge v-if="!isLocked && !needsTypeChoice" variant="status" class="bg-info-surface text-info">草稿</Badge>
         <span v-if="!isLocked && (recordId || isDirty || saveState === 'saving' || saveState === 'error')" class="inline-flex items-center gap-1.5 text-sm" :class="saveState === 'error' ? 'text-danger' : 'text-subtle-foreground'" v-tip="'停止輸入約 1.5 秒後自動儲存為草稿'">
           <Check v-if="saveState === 'saved'" class="size-4 text-success" stroke-width="2.4" /><Clock3 v-else class="size-4" stroke-width="1.75" />{{ saveLabel }}
         </span>
@@ -1169,7 +1170,7 @@ function handleBeforeUnload(event) {
             <SelectTrigger id="copy-from-record" class="mt-1 w-full"><SelectValue placeholder="請選擇一份報告" /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="source in finalizedSources" :key="source._id" :value="String(source._id)">
-                <span class="flex gap-x-3"><span class="num">{{ formatDate(source.visitDate) }}</span><span>{{ source.examType || '健檢報告' }}</span><span class="text-muted-foreground">第 {{ source.reportVersion || 1 }} 版</span></span>
+                <span class="flex gap-x-3"><span class="num">{{ shortDate(source.visitDate) }}</span><span>{{ source.examType || '健檢報告' }}</span><span class="text-muted-foreground">第 {{ source.reportVersion || 1 }} 版</span></span>
               </SelectItem>
             </SelectContent>
           </Select>
@@ -1230,9 +1231,12 @@ function handleBeforeUnload(event) {
           <SpecCell label="品種"><span>{{ catBreedLabel(pet?.breed) || pet?.species }}</span><PetSex :sex="pet?.sex" /></SpecCell>
           <SpecCell label="飼主"><PatientLink v-if="pet?.ownerId?.name" :pet-id="pet._id" quiet>{{ pet.ownerId.name }}</PatientLink></SpecCell>
           <SpecCell v-if="examTypeName" label="類型">{{ examTypeName }}</SpecCell>
-          <SpecCell v-if="visitDate" label="看診日" mono>{{ visitDate.slice(5).replace('-', '/') }}</SpecCell>
+          <SpecCell v-if="visitDate" label="看診日" mono>{{ shortDate(visitDate) }}</SpecCell>
         </SpecGrid>
-        <ReminderTags :pet="pet" />
+        <!-- 提醒直接寫內容：只寫「備註」兩字、要滑過才看得到的小膠囊，填報告時等於沒寫。 -->
+        <span v-if="reminders.length" class="flex min-w-0 max-w-xl flex-col gap-0.5 text-sm font-medium">
+          <span v-for="tag in reminders" :key="tag.key" class="truncate" :class="tag.tone === 'notes' ? 'text-warning' : 'text-danger'" v-tip.overflow="reminderText(tag)">{{ reminderText(tag) }}</span>
+        </span>
         <div class="ml-auto flex flex-wrap items-end gap-2">
           <div
             class="space-y-1 rounded-lg transition-colors"
@@ -1256,10 +1260,11 @@ function handleBeforeUnload(event) {
 
       <!-- 引用本次看診：這幾欄只有一份，在看診上。 -->
       <div v-if="isVisitLinked" class="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl bg-info-surface px-5 py-3">
-        <p class="flex items-center gap-2 font-semibold text-info"><Link2 class="size-5" stroke-width="2" />引用本次看診<RouterLink v-if="visitLink?.date" :to="{ path: '/appointments', query: { date: visitLink.date, open: visitLink.appointmentId } }" class="num font-normal underline underline-offset-4 hover:text-foreground" :aria-label="`在診療台打開 ${visitLink.date} 的看診`">{{ visitLink.date }}</RouterLink></p>
+        <p class="flex items-center gap-2 font-semibold text-info"><Link2 class="size-5" stroke-width="2" />引用本次看診<RouterLink v-if="visitLink?.date" :to="{ path: '/appointments', query: { date: visitLink.date, open: visitLink.appointmentId } }" class="num font-normal underline underline-offset-4 hover:text-foreground" :aria-label="`在診療台打開 ${visitLink.date} 的看診`">{{ shortDate(visitLink.date) }}</RouterLink></p>
         <!-- IDEXX 結果有哪些數值進了這份報告；「比對」沿用這一頁的比對視窗（處理完要同步畫面上的值）。 -->
         <LabFillStatus v-if="visitLink?.appointmentId" :pet-id="String(petId ?? '')" :appointment-id="String(visitLink.appointmentId)" :base-date="visitLink.date ?? ''" @compare="labConflictGroup = $event" />
-        <p class="text-sm text-foreground">體重、體溫、檢驗數值與診療台、病歷日誌是同一份，在這裡改會一起更新；回診日期由掛號台安排。結案時凍結成報告的內容。</p>
+        <!-- 櫃台勾了「這次看診不寄就診紀錄」：寄送的事，跟引用的看診放一起，不夾在底部「捨棄草稿」旁邊。 -->
+        <span v-if="visitLink?.noVisitRecord" class="ml-auto text-sm font-semibold text-warning">不寄就診紀錄</span>
       </div>
 
       <!-- 分段導覽同時是進度指示：圓圈顯示該區塊是否已有內容，連接線串起順序。
@@ -1390,7 +1395,7 @@ function handleBeforeUnload(event) {
           </span>
           <span class="min-w-0">
             <span class="block truncate" :class="activeSectionId === section.id ? 'font-semibold text-accent-foreground' : 'font-medium text-foreground'">{{ section.label }}</span>
-            <span class="block text-xs text-subtle-foreground">{{ completionSections[index] ? '已有內容' : '未填' }}</span>
+            <span class="sr-only">{{ completionSections[index] ? '（已有內容）' : '（尚未填寫）' }}</span>
           </span>
         </button>
       </nav>
@@ -1428,8 +1433,8 @@ function handleBeforeUnload(event) {
 
       <Alert v-if="!isLocked && saveError" variant="destructive"><AlertDescription>{{ saveError }}</AlertDescription></Alert>
       <div v-if="!isLocked" id="record-action-bar" class="bottom-action-bar fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card px-4 py-3 lg:left-18 lg:right-16">
-        <div class="mx-auto max-w-[1440px]">
-          <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段<Badge v-if="isVisitLinked && visitLink?.noVisitRecord" variant="status" class="ml-auto bg-warning-surface text-warning">不寄就診紀錄</Badge></p>
+        <div class="sm:px-2">
+          <p class="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground sm:mb-0 sm:hidden"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
           <div class="grid grid-cols-3 gap-2 sm:hidden">
             <Button type="button" variant="destructive" class="w-full px-2" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄</Button>
             <Button type="button" variant="secondary" class="w-full px-2" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中' : '儲存' }}</Button>
@@ -1437,7 +1442,6 @@ function handleBeforeUnload(event) {
           </div>
           <div class="hidden sm:flex sm:flex-wrap sm:items-center sm:justify-end sm:gap-2">
             <p class="hidden sm:mr-auto sm:flex sm:items-center sm:gap-1.5 sm:text-xs sm:text-muted-foreground"><Activity class="h-4 w-4" />已有內容 {{ completedCount }}/{{ FORM_SECTIONS.length }} 個區段</p>
-            <Badge v-if="isVisitLinked && visitLink?.noVisitRecord" variant="status" class="bg-warning-surface text-warning">不寄就診紀錄</Badge>
             <Button type="button" variant="destructive" class="w-full sm:w-auto" :disabled="saving || discarding" @click="showDiscardConfirm = true"><Trash2 class="h-4 w-4" />捨棄草稿</Button>
             <Button type="button" variant="secondary" class="w-full sm:w-auto" :disabled="saving || discarding" @click="submitDraft"><Save class="h-4 w-4" />{{ saving ? '儲存中…' : '儲存草稿並返回' }}</Button>
             <Button type="button" class="col-span-2 w-full sm:col-auto sm:w-auto" :disabled="saving || discarding" @click="openPreview"><FileText class="h-4 w-4" />預覽並準備結案</Button>
@@ -1481,7 +1485,7 @@ function handleBeforeUnload(event) {
             <SelectTrigger id="recopy-from-record" class="mt-1 w-full"><SelectValue placeholder="請選擇一份報告" /></SelectTrigger>
             <SelectContent>
               <SelectItem v-for="source in finalizedSources" :key="source._id" :value="String(source._id)">
-                <span class="flex gap-x-3"><span class="num">{{ formatDate(source.visitDate) }}</span><span>{{ source.examType || '健檢報告' }}</span><span class="text-muted-foreground">第 {{ source.reportVersion || 1 }} 版</span></span>
+                <span class="flex gap-x-3"><span class="num">{{ shortDate(source.visitDate) }}</span><span>{{ source.examType || '健檢報告' }}</span><span class="text-muted-foreground">第 {{ source.reportVersion || 1 }} 版</span></span>
               </SelectItem>
             </SelectContent>
           </Select>

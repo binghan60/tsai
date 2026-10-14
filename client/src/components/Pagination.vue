@@ -40,7 +40,7 @@ function goTo(next) {
           type="button"
           :variant="item.value === page ? 'soft' : 'secondary'"
           size="icon-sm"
-          class="num text-sm"
+          class="num w-auto min-w-9 px-2 text-sm"
           :aria-label="`第 ${item.value} 頁`"
           :aria-current="item.value === page ? 'page' : undefined"
           @click="goTo(item.value)"

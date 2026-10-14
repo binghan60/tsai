@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { DELIVERY_STATUS_META, RECORD_STATUS_META, getAvailabilityStatusMeta, getDeliveryStatus, isFinalizedRecord } from './recordStatus.js';
+import { DELIVERY_STATUS_META, RECORD_STATUS_META, deskMark, getAvailabilityStatusMeta, getDeliveryStatus, isFinalizedRecord, reportMark, reportMarkNote } from './recordStatus.js';
 
 describe('record status helpers', () => {
   it('keeps lifecycle and delivery state independent', () => {
@@ -17,5 +17,32 @@ describe('record status helpers', () => {
     assert.match(DELIVERY_STATUS_META.failed.class, /danger/);
     assert.equal(getAvailabilityStatusMeta(true).label, '使用中');
     assert.equal(getAvailabilityStatusMeta(false).label, '已停用');
+  });
+});
+
+describe('records list marks', () => {
+  const styleOf = (record) => `${reportMark(record).style}:${reportMark(record).label}`;
+  it('merges report and delivery state into one mark, filled only when someone must act', () => {
+    assert.equal(styleOf({ status: 'draft' }), 'dot:草稿');
+    assert.equal(styleOf({ status: 'finalized', deliveryStatus: 'not_sent' }), 'pill:待寄送');
+    assert.equal(styleOf({ status: 'finalized', deliveryStatus: 'failed' }), 'pill:寄送失敗');
+    assert.equal(styleOf({ status: 'finalized', deliveryStatus: 'uncertain' }), 'pill:結果待確認');
+    assert.equal(styleOf({ status: 'finalized', deliveryStatus: 'sending' }), 'dot:寄送中');
+    assert.equal(styleOf({ status: 'finalized', deliveryStatus: 'sent' }), 'check:已寄出');
+  });
+
+  it('treats an unsent report the desk marked as not to be sent as settled, and notes it elsewhere', () => {
+    assert.equal(styleOf({ status: 'finalized', deliveryStatus: 'not_sent', deskNoVisitRecord: true }), 'dot:不寄就診紀錄');
+    assert.equal(reportMarkNote({ status: 'finalized', deliveryStatus: 'not_sent', deskNoVisitRecord: true }), '');
+    assert.equal(reportMarkNote({ status: 'draft', deskNoVisitRecord: true }), '不寄就診紀錄');
+    assert.equal(reportMarkNote({ status: 'draft' }), '');
+  });
+
+  it('fills the desk mark only while the ball is with the desk', () => {
+    assert.equal(deskMark({ deskStatus: 'desk_pending' }).style, 'pill');
+    assert.equal(deskMark({ deskStatus: 'reopen_requested' }).style, 'pill');
+    assert.equal(deskMark({ deskStatus: 'with_doctor' }).style, 'text');
+    assert.deepEqual([deskMark({ deskStatus: 'desk_done' }).style, deskMark({ deskStatus: 'desk_done' }).label], ['check', '已完成']);
+    assert.equal(deskMark({ deskStatus: '' }), null);
   });
 });

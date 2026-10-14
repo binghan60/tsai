@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from './ui/alert';
 import { DatePicker } from './ui/date-picker';
 import { buildSlotGrid, duplicateBookings } from '../lib/receptionBoard';
 import { MAX_ESTIMATED_DURATION_MINUTES, durationOverflowError } from '../lib/appointmentTime';
-import { clinicDateInput, formatDate } from '../lib/datetime';
+import { clinicDateInput, shiftDateInput, shortDate, weekdayLabel } from '../lib/datetime';
 
 // 「什麼時候」的共用區塊：日期（＋今天）→ 預估診療時間 → 時段格。
 // 所有排掛號的地方都用這一塊——掛號視窗、櫃台處理視窗的回診安排、初診表審核——
@@ -62,9 +62,17 @@ const overflowError = computed(() => (time.value ? durationOverflowError(time.va
 const duplicateWarning = computed(() => {
   const found = duplicateBookings(items.value, props.petId, props.excludeId);
   if (!found.length) return '';
-  const when = date.value === today ? '今天' : formatDate(date.value);
+  const when = date.value === today ? '今天' : shortDate(date.value);
   return `${props.petName || '這隻貓咪'}${when} ${found.map((item) => item.time || '未定時段').join('、')} 已有掛號${found[0].reason ? `（${found[0].reason}）` : ''}，確認不是重複掛號。`;
 });
+
+// 約回診常用的間隔，從今天算。
+const quickDates = [
+  { days: 3, label: '3 天後' },
+  { days: 7, label: '1 週後' },
+  { days: 14, label: '2 週後' },
+  { days: 28, label: '4 週後' },
+].map((option) => ({ ...option, date: shiftDateInput(today, option.days) }));
 
 function changeDuration(delta) {
   duration.value = Math.min(MAX_ESTIMATED_DURATION_MINUTES, Math.max(15, Number(duration.value) + delta));
@@ -80,7 +88,7 @@ function changeDuration(delta) {
       <Label class="text-xs font-medium">{{ label }}<template v-if="required"><span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></template></Label>
       <div class="flex items-center gap-2">
         <DatePicker v-model="date" :clearable="clearable && !dateLocked" :disabled="dateLocked" aria-label="預約日期" class="min-w-0 flex-1" />
-        <Button v-if="!dateLocked" type="button" class="h-10 shrink-0 px-5 font-semibold shadow-sm" @click="date = today">今天</Button>
+        <Button v-if="!dateLocked" type="button" variant="secondary" class="h-10 shrink-0 px-5" @click="date = today">今天</Button>
       </div>
       <p v-if="showErrors && !date" class="text-xs font-medium text-destructive">請選擇日期</p>
     </div>
@@ -102,9 +110,17 @@ function changeDuration(delta) {
   </div>
   <div :class="split ? 'flex flex-col gap-3' : 'space-y-3'">
     <SlotGrid v-if="date" v-model="time" :sessions="sessions" :duration-minutes="Number(duration)" :invalid="showErrors && Boolean(!time || overflowError)" />
-    <!-- 並排時撐滿時段格的位置、字置中：只有一行高的灰條貼在右欄頂端，跟左邊的欄位對不齊，看起來是歪的。 -->
-    <p v-else-if="split" class="flex min-h-40 flex-1 items-center justify-center rounded-lg border border-dashed border-border-strong px-3 text-sm text-subtle-foreground">先選日期，才看得到那天的時段。</p>
-    <p v-else class="rounded-lg bg-sunken px-3 py-3 text-sm text-subtle-foreground">先選日期，才看得到那天的時段。</p>
+    <!-- 並排（約回診）還沒選日期時，時段格的位置放常用的回診間隔：點一下就選好日期、時段格接著出現。
+         原本是一大塊虛線框寫「先選日期」——大部分就診都會當場約回診，這塊空著最浪費。 -->
+    <div v-else-if="split" class="space-y-2">
+      <Label class="text-xs font-medium">快速選日期</Label>
+      <div class="grid grid-cols-2 gap-2">
+        <Button v-for="option in quickDates" :key="option.date" type="button" variant="secondary" class="h-auto flex-col items-start gap-0.5 py-2" @click="date = option.date">
+          <span class="text-sm font-semibold">{{ option.label }}</span>
+          <span class="num text-xs text-muted-foreground">{{ shortDate(option.date) }}（{{ weekdayLabel(option.date) }}）</span>
+        </Button>
+      </div>
+    </div>
     <p v-if="showErrors && date && !time" class="text-xs font-medium text-destructive">請選擇預約時段</p>
     <p v-if="overflowError" class="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{{ overflowError }}</p>
     <Alert v-if="duplicateWarning" class="border-warning/35 bg-warning-surface text-warning">

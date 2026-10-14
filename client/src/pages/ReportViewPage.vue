@@ -6,7 +6,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { AlertTriangle, ArrowLeft, ArrowUp, CheckCircle2, ClipboardPlus, Copy, Download, FilePenLine, List, LockKeyhole, Mail, Printer, Share2 } from '@lucide/vue';
 import { PDF_TIMEOUT_MS, http } from '../api/http';
 import { extractErrorMessage } from '../lib/downloadFile';
-import { ageLabel, formatDate, formatDateTime } from '../lib/datetime';
+import { ageLabel, formatDate, formatDateTime, shortDate } from '../lib/datetime';
 import { DESK_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../lib/recordStatus';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import RevisionDialog from '../components/RevisionDialog.vue';
@@ -515,7 +515,7 @@ watch(
 
       <div v-if="visitInfo" class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-report-border bg-report-surface px-4 py-2.5 text-sm text-report-text print:hidden">
         <span class="font-semibold">對應看診</span>
-        <router-link :to="{ path: '/appointments', query: { date: visitInfo.date, open: visitInfo.appointmentId } }" class="num underline underline-offset-4 hover:text-report-foreground" :aria-label="`在診療台打開 ${visitInfo.date} 的看診`">{{ visitInfo.date }}</router-link>
+        <router-link :to="{ path: '/appointments', query: { date: visitInfo.date, open: visitInfo.appointmentId } }" class="num underline underline-offset-4 hover:text-report-foreground" :aria-label="`在診療台打開 ${visitInfo.date} 的看診`">{{ shortDate(visitInfo.date) }}</router-link>
         <span v-for="badge in visitDeskBadges" :key="badge.key" class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold" :class="badge.class">{{ badge.label }}</span>
       </div>
       <div v-if="isDraft" class="rounded-xl border border-report-warning-border bg-report-warning-surface px-4 py-3 text-sm text-report-warning-strong print:hidden"><p class="font-semibold">結案前預覽</p><p class="mt-1">目前仍是草稿。確認結案後會產生正式 PDF 並鎖定此版本；Email 可在結案後另外寄送。</p><p v-if="!ownerEmail" class="mt-2">飼主尚未填寫 Email，但不影響結案。<router-link v-if="record.pet?._id" :to="`/pets/${record.pet._id}?editOwner=1`" class="font-medium underline">前往補填飼主資料</router-link></p></div>

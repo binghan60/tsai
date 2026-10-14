@@ -9,7 +9,7 @@ import { http } from '../../api/http';
 import { usePinnedPetsStore } from '../../stores/pinnedPets';
 import { useStaffIdentity } from '../../composables/useStaffIdentity';
 import { useToast } from '../../composables/useToast';
-import { ageLabel, formatDate } from '../../lib/datetime';
+import { ageLabel, shortDate } from '../../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../../lib/recordStatus';
 import { medicalHistoryText } from '../../lib/petDisplay';
 import SidePanel from './SidePanel.vue';
@@ -159,7 +159,7 @@ async function togglePin() {
             <router-link :to="recordLink(record)" class="flex flex-col gap-1.5 px-4 py-3 hover:bg-hover">
               <span class="flex items-baseline justify-between gap-3">
                 <span class="truncate font-semibold text-primary">{{ record.examType || '健檢報告' }}</span>
-                <span class="num shrink-0 text-sm text-subtle-foreground">{{ formatDate(record.visitDate) }}</span>
+                <span class="num shrink-0 text-sm text-subtle-foreground">{{ shortDate(record.visitDate) }}</span>
               </span>
               <span class="flex items-center gap-1.5">
                 <Badge variant="status" :class="RECORD_STATUS_META[record.status]?.class">{{ RECORD_STATUS_META[record.status]?.label ?? record.status }}</Badge>

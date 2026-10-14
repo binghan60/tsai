@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue';
 import { ChevronDown, ChevronUp, Mail, Trash2 } from '@lucide/vue';
 import { http } from '../api/http';
-import { formatDate, formatDateTime } from '../lib/datetime';
+import { shortDate, formatDateTime } from '../lib/datetime';
 import { DELIVERY_EVENT_META } from '../lib/recordStatus';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { usePagedList } from '../composables/usePagedList';
@@ -135,7 +135,7 @@ watch(event, (nextEvent) => {
           class="desktop-data-row hover:bg-hover"
           :class="[log.event === 'failed' ? 'shadow-[inset_3px_0_0_var(--danger)]' : '', detailExpanded(log) ? 'desktop-data-row--expanded' : '']"
         >
-          <span class="desktop-data-cell"><span class="num block text-sm">{{ formatDate(log.completedAt || log.startedAt) }}</span><span class="num block text-xs text-subtle-foreground">{{ formatDateTime(log.completedAt || log.startedAt, { hour: '2-digit', minute: '2-digit', hour12: false }) }}</span></span>
+          <span class="desktop-data-cell"><span class="num block text-sm">{{ shortDate(log.completedAt || log.startedAt) }}</span><span class="num block text-xs text-subtle-foreground">{{ formatDateTime(log.completedAt || log.startedAt, { hour: '2-digit', minute: '2-digit', hour12: false }) }}</span></span>
           <span class="desktop-data-cell"><Badge variant="status" :class="DELIVERY_EVENT_META[log.event]?.class">{{ DELIVERY_EVENT_META[log.event]?.label || log.event }}</Badge></span>
           <span class="desktop-data-cell">
             <router-link v-if="log.recordExists" :to="`/records/${log.recordId}/preview`" class="block truncate font-semibold text-primary">{{ log.petName }}</router-link>

@@ -19,7 +19,7 @@ import { useTextTemplates } from '../composables/useTextTemplates'
 import { canRequestLab, labRequestDelivered, useLabRequest } from '../composables/useLabRequest'
 import { workflowState } from '../../../shared/appointmentWorkflow.js'
 import { clinicalDraft, draftPatch, mergeClinicalUpdate, takeBaseline } from '../lib/visitDraft'
-import { ageLabel, clinicTimeInput, formatDate } from '../lib/datetime'
+import { ageLabel, clinicTimeInput, elapsedLabel, shortDate } from '../lib/datetime'
 import { medicalHistoryText } from '../lib/petDisplay'
 import ClinicalNotesPanel from './ClinicalNotesPanel.vue'
 import VisitLabTable from './VisitLabTable.vue'
@@ -204,7 +204,8 @@ function openTemplates(field) {
 
 const now = ref(Date.now())
 const clock = setInterval(() => { now.value = Date.now() }, 30000)
-const visitMinutes = computed(() => (props.appointment.visitStartedAt && !state.value.handedOff ? Math.max(0, Math.floor((now.value - new Date(props.appointment.visitStartedAt).getTime()) / 60000)) : null))
+// 當天寫經過多久；看過去的日子寫幾點開始的（標題換成「開始看診」）。
+const visitElapsed = computed(() => (props.appointment.visitStartedAt && !state.value.handedOff ? elapsedLabel(props.appointment.visitStartedAt, now.value) : null))
 const CONFLICT_LABELS = {
   visitNote: '本次簡易紀錄',
   prescription: '藥單',
@@ -521,7 +522,7 @@ onBeforeUnmount(() => {
                 <SpecGrid>
                   <SpecCell label="預約" mono>{{ appointment.time }}</SpecCell>
                   <SpecCell v-if="appointment.checkedInAt" label="報到" mono>{{ clinicTimeInput(appointment.checkedInAt) }}</SpecCell>
-                  <SpecCell v-if="visitMinutes !== null" label="看診" mono>{{ visitMinutes }} 分</SpecCell>
+                  <SpecCell v-if="visitElapsed" :label="visitElapsed.clock ? '開始看診' : '看診'" mono>{{ visitElapsed.text }}</SpecCell>
                   <SpecCell v-if="appointment.handoffAt" label="交櫃台" mono>{{ clinicTimeInput(appointment.handoffAt) }}</SpecCell>
                   <SpecCell v-if="appointment.deskCompletedAt" label="完成" mono>{{ clinicTimeInput(appointment.deskCompletedAt) }}</SpecCell>
                 </SpecGrid>
@@ -598,7 +599,7 @@ onBeforeUnmount(() => {
         <div class="flex flex-col gap-6 px-6 py-5">
           <section class="space-y-3" :aria-labelledby="`measure-heading-${appointment._id}`">
             <div class="flex items-center gap-2"><h3 :id="`measure-heading-${appointment._id}`" class="text-base font-semibold">量測</h3><DestTag :to="['journal', 'report']" />
-              <Button v-if="latestReport" type="button" variant="soft" size="sm" class="ml-auto" @click="openLatestReport"><FileText stroke-width="1.75" />上次報告<span v-if="formatDate(latestReport.visitDate)" class="num">{{ formatDate(latestReport.visitDate) }}</span></Button>
+              <Button v-if="latestReport" type="button" variant="soft" size="sm" class="ml-auto" @click="openLatestReport"><FileText stroke-width="1.75" />上次報告<span v-if="shortDate(latestReport.visitDate)" class="num">{{ shortDate(latestReport.visitDate) }}</span></Button>
               <Badge v-else-if="latestReportChecked" variant="status" class="ml-auto bg-sunken text-muted-foreground">無上次報告</Badge>
             </div>
             <!-- 量測用文字框＋數字鍵盤，不用 type="number"：數字框在空白時按上下鍵或滾輪會直接帶入最小值 0，
@@ -655,7 +656,6 @@ onBeforeUnmount(() => {
           <section class="space-y-4 border-t border-border pt-5" :aria-labelledby="`handoff-heading-${appointment._id}`">
             <div>
               <h3 :id="`handoff-heading-${appointment._id}`" class="text-base font-semibold">交給櫃台</h3>
-              <p class="text-sm text-muted-foreground">櫃台處理時會先看到這兩欄；收費與領藥由櫃台直接處理，系統不計價。</p>
             </div>
             <div class="grid gap-4 @2xl/visit:grid-cols-2">
               <div class="space-y-1.5">

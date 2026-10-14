@@ -13,10 +13,10 @@ import ListFooter from './ListFooter.vue';
 import ListSkeleton from './ListSkeleton.vue';
 import SpecCell from './SpecCell.vue';
 import SpecGrid from './SpecGrid.vue';
-import { clinicTimeInput, formatDate, relativeDayLabel } from '../lib/datetime';
+import { clinicTimeInput, shortDate, relativeDayLabel } from '../lib/datetime';
 
 // 取消時間：日期＋時刻（診所時區）。
-const cancelledLabel = (value) => [formatDate(value), clinicTimeInput(value)].filter(Boolean).join(' ');
+const cancelledLabel = (value) => [shortDate(value), clinicTimeInput(value)].filter(Boolean).join(' ');
 
 // 貓咪詳情頁的「出席紀錄」頁籤：這隻貓遲到與未到的逐筆清單（資料來自掛號），上面一排次數。
 // 約診時決定過保證金（已收／這次不收）的掛號也列在同一份清單——收了之後次數歸零，
@@ -50,11 +50,11 @@ const summary = computed(() => [
 ].filter((cell) => cell.count > 0));
 
 function dateLabel(date) {
-  return String(date ?? '').replaceAll('-', '/');
+  return shortDate(date);
 }
 // 保證金是約診那天決定的，跟這一列的看診日期不是同一天，滑過徽章時說清楚。
 function depositTip(item) {
-  const day = formatDate(item.depositDecidedAt);
+  const day = shortDate(item.depositDecidedAt);
   if (!day) return undefined;
   if (item.depositStatus === 'waived') return `${day} 約診時決定不收`;
   return `${day} 約診時收的`;

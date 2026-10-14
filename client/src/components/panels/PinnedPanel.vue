@@ -31,7 +31,7 @@ const { page, totalPages, pageItems, goToPage } = useClientPagination(() => pinn
       @back="panel.back()"
       @close="panel.close()"
     />
-    <SidePanel v-else title="暫存區" description="在聊天打 # 標記的貓咪會放進來" flush @close="panel.close()">
+    <SidePanel v-else title="暫存區" flush @close="panel.close()">
       <span ref="listTop" aria-hidden="true"></span>
       <PinnedPetsList :items="pageItems" @open="panel.openPet" />
       <EmptyState v-if="!pinned.items.length" :icon="Pin" title="暫存區是空的" description="在聊天打 # 加上貓咪名字，或在貓咪資料頁按「加入暫存區」。" inset />

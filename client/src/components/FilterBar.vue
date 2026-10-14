@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { DatePicker } from './ui/date-picker';
 import { Input } from './ui/input';
-import { formatDate } from '@/lib/datetime';
+import { shortDate } from '@/lib/datetime';
 
 // 全站清單頁共用的搜尋膠囊，取代原本一張固定佔版面的表單（關鍵字＋兩個日期欄位＋
 // 搜尋／清除四個並排元件）。日期範圍平常收在「篩選日期」這顆次要按鈕裡，點了才展開，
@@ -50,8 +50,8 @@ const hasDateRange = computed(() => Boolean(props.dateFrom || props.dateTo));
 
 const dateRangeLabel = computed(() => {
   if (!hasDateRange.value) return '篩選日期';
-  const from = props.dateFrom ? formatDate(props.dateFrom) : '';
-  const to = props.dateTo ? formatDate(props.dateTo) : '';
+  const from = props.dateFrom ? shortDate(props.dateFrom) : '';
+  const to = props.dateTo ? shortDate(props.dateTo) : '';
   if (from && to) return `${from} － ${to}`;
   return from || to;
 });

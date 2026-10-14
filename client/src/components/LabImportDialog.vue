@@ -5,7 +5,7 @@ import { FlaskConical, Search } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useWorkCountsStore } from '../stores/workCounts'
-import { clinicDateInput, clinicTimeInput } from '../lib/datetime'
+import { clinicDateInput, clinicTimeInput, shortDate } from '../lib/datetime'
 import { fillMessage, instrumentLabel } from '../lib/labResults'
 import { labFlag } from '../../../shared/labValues.js'
 import ModalDialog from './ModalDialog.vue'
@@ -48,7 +48,7 @@ const rows = computed(() => items.value.map((item) => {
     id: item._id,
     title: [purpose, name].filter(Boolean).join(' '),
     // 當天驗的只寫時間，其他天的連日期一起寫。
-    time: !item.runAt ? '' : day === props.appointment.date ? clinicTimeInput(item.runAt) : `${day} ${clinicTimeInput(item.runAt)}`,
+    time: !item.runAt ? '' : day === props.appointment.date ? clinicTimeInput(item.runAt) : `${shortDate(day)} ${clinicTimeInput(item.runAt)}`,
     today: day === props.appointment.date,
     patient: item.patient?.name ?? '',
     owner: [item.client?.lastName, item.client?.firstName].filter(Boolean).join(' '),

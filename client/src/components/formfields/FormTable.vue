@@ -49,6 +49,10 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
             <Button type="button" variant="soft" size="sm" @click="markEmptyLabGroupNormal(section, group)">未標示項目全部正常</Button>
           </div>
           <div class="divide-y divide-border rounded-xl border border-border">
+            <!-- 寬的時候一列表頭，列上不再每列重複「檢驗結果／檢驗數值／前次數值／備註」；窄的時候上下疊，小標放回每一列。 -->
+            <div class="hidden gap-3 rounded-t-xl bg-sunken px-4 py-2 text-xs font-medium text-muted-foreground @5xl:grid @5xl:grid-cols-[200px_240px_160px_145px_minmax(11rem,1fr)]" aria-hidden="true">
+              <span>項目</span><span>檢驗結果</span><span>檢驗數值</span><span>前次數值</span><span>備註</span>
+            </div>
             <SelectableItem v-for="finding in labsOfGroup(run, group)" :key="finding.key" :item-key="finding.key">
               <div
                 :id="`record-lab-row-${finding.key}`"
@@ -56,15 +60,14 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
               >
                 <div class="min-w-0">
                   <p class="text-sm font-medium text-foreground">{{ finding.label }}</p>
-                  <p v-if="labRangeLabel(finding)" class="mt-0.5 text-xs text-success">參考 {{ labRangeLabel(finding) }}</p>
+                  <p v-if="labRangeLabel(finding)" class="mt-0.5 text-xs text-subtle-foreground">參考 {{ labRangeLabel(finding) }}</p>
                 </div>
-                <!-- 三個控制項都有標題列，橫向才對得齊；沒有標題的欄位會比隔壁高出一截。 -->
-                <div class="space-y-1.5">
-                  <p class="text-xs font-medium text-muted-foreground">檢驗結果</p>
+                <div class="space-y-1.5 @5xl:space-y-0">
+                  <p class="text-xs font-medium text-muted-foreground @5xl:sr-only">檢驗結果</p>
                   <StatusToggle :finding="finding" :aria-label="`${finding.label}檢驗結果`" show-auto-badge @select="setLabStatus(finding, $event)" />
                 </div>
-                <div class="space-y-1.5">
-                  <Label :for="`record-lab-value-${finding.key}`" class="text-xs font-medium text-muted-foreground">{{ finding.numeric === false ? '結果描述' : '檢驗數值' }}</Label>
+                <div class="space-y-1.5 @5xl:space-y-0">
+                  <Label :for="`record-lab-value-${finding.key}`" class="text-xs font-medium text-muted-foreground @5xl:sr-only">{{ finding.numeric === false ? '結果描述' : '檢驗數值' }}</Label>
                   <div class="relative">
                     <Input
                       :id="`record-lab-value-${finding.key}`"
@@ -88,12 +91,12 @@ const labsOfGroup = (run, group) => labsOf(run).filter((item) => (item.group ?? 
                   </div>
                   <PreviousValue :item="finding" type="lab" compact class="@5xl:hidden" />
                 </div>
-                <div class="hidden min-w-0 space-y-1.5 @5xl:block">
-                  <p class="text-xs font-medium text-muted-foreground">前次數值</p>
+                <div class="hidden min-w-0 @5xl:block">
+                  <p class="sr-only">前次數值</p>
                   <PreviousValue :item="finding" type="lab" :show-label="false" />
                 </div>
-                <div class="space-y-1.5">
-                  <Label :for="`record-lab-note-${finding.key}`" class="text-xs font-medium text-muted-foreground">
+                <div class="space-y-1.5 @5xl:space-y-0">
+                  <Label :for="`record-lab-note-${finding.key}`" class="text-xs font-medium text-muted-foreground @5xl:sr-only">
                     備註
                   </Label>
                   <div class="relative">

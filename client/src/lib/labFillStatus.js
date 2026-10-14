@@ -1,4 +1,4 @@
-import { clinicDateInput, clinicTimeInput } from './datetime.js';
+import { clinicDateInput, clinicTimeInput, shortDate } from './datetime.js';
 import { instrumentLabel } from './labResults.js';
 
 // IDEXX 檢驗結果「填入狀態」燈號：這次看診連到的每一份結果，哪些數值進了健檢報告、哪些沒進。
@@ -29,7 +29,7 @@ export function labFillStatus({ results = [], conflictGroups = [], appointmentId
       id: String(result._id),
       title: [purpose, name].filter(Boolean).join(' '),
       // 跟檢驗報告表格同一個寫法：當天驗的只寫時間，別天的連日期一起寫。
-      time: !result.runAt ? '' : baseDate && day === baseDate ? clinicTimeInput(result.runAt) : `${day} ${clinicTimeInput(result.runAt)}`,
+      time: !result.runAt ? '' : baseDate && day === baseDate ? clinicTimeInput(result.runAt) : `${shortDate(day)} ${clinicTimeInput(result.runAt)}`,
       filled: (result.filled ?? []).map((entry) => ({ key: entry.key, label: entry.label || entry.key, value: entry.value })),
       conflicts: group?.items ?? [],
       unmapped: result.unmappedCodes ?? [],

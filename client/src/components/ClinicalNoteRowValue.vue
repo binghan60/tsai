@@ -1,7 +1,8 @@
 <script setup>
+import { Check } from '@lucide/vue'
 import RichText from './RichText.vue'
-import DeskItemsChecklist from './DeskItemsChecklist.vue'
 import LabResultGroups from './LabResultGroups.vue'
+import { deskChips } from '../lib/clinicalNoteDisplay'
 
 // 病歷日誌一列的「內容」格（dd）。檢視模式與編輯模式裡改不到的列共用，兩邊長一樣。
 // row 是 lib/clinicalNoteDisplay.js 的 journalRows 回傳的一列。
@@ -20,10 +21,18 @@ defineProps({
   </dd>
   <!-- 檢驗不是一段文字：IDEXX 原始結果排成表格（跟診療台的檢驗報告同一張），報告上的數值一項一格。 -->
   <dd v-else-if="row.results"><LabResultGroups :results="row.results" :base-date="baseDate" dense /></dd>
-  <!-- 櫃台處理：跟櫃台處理視窗、修改模式同一組勾選框（唯讀），全部選項都列、勾了的打勾。 -->
-  <dd v-else-if="row.desk" class="space-y-1">
-    <DeskItemsChecklist :items="row.desk.items" :image-upload="row.desk.imageUpload" readonly />
-    <p v-if="row.desk.uploadNote" class="text-xs text-muted-foreground">上傳影像{{ row.desk.uploadNote }}</p>
+  <!-- 櫃台處理：只列有勾的項目，一項一顆小標（lib/clinicalNoteDisplay.js 的 deskChips）。完整的勾選框只在修改模式。 -->
+  <dd v-else-if="row.desk" class="flex flex-wrap gap-1.5">
+    <span
+      v-for="chip in deskChips(row.desk)"
+      :key="chip.key"
+      class="inline-flex h-7 items-center gap-1.5 rounded-md border px-2 text-sm"
+      :class="chip.tone === 'warning' ? 'border-warning/30 bg-warning-surface font-semibold text-warning' : 'border-border bg-sunken text-foreground'"
+    >
+      <Check v-if="chip.done" class="size-3.5 text-success" stroke-width="2.5" aria-hidden="true" />
+      {{ chip.label }}
+      <span v-if="chip.time" class="num text-xs text-subtle-foreground"><span class="sr-only">已完成</span>{{ chip.time }}</span>
+    </span>
   </dd>
   <dd v-else-if="row.labs" class="flex flex-wrap gap-x-5 gap-y-1 text-sm">
     <span v-for="lab in row.labs" :key="lab.key">

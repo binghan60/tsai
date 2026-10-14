@@ -23,7 +23,7 @@ import ClinicalNotesPanel from './ClinicalNotesPanel.vue';
 import SpecGrid from './SpecGrid.vue';
 import SpecCell from './SpecCell.vue';
 import CheckinNumber from './CheckinNumber.vue';
-import { clinicTimeInput, weekdayLabel } from '../lib/datetime';
+import { clinicTimeInput, shortDate, weekdayLabel } from '../lib/datetime';
 import LatenessBadge from './LatenessBadge.vue';
 import DepositBadge from './DepositBadge.vue';
 import DepositField from './DepositField.vue';
@@ -93,7 +93,7 @@ const followUpStarted = computed(() => editingFollowUp.value && Boolean(followUp
 // 底部那一句：按下「完成處理」之前就看得出這次會不會約回診、約在哪。只填了一半（有日期沒時段）時不說，
 // 按下去會由 followUpError 擋下來。
 function whenLabel(date, time) {
-  return `${date.slice(5).replace('-', '/')}（${weekdayLabel(date)}）${time}`;
+  return `${shortDate(date)}（${weekdayLabel(date)}）${time}`;
 }
 const followUpSummary = computed(() => {
   if (state.value.completed) return null;
@@ -207,6 +207,11 @@ function deskItemsChange() {
   return deskItemsDraft.value.join() === saved.join() ? {} : { deskItems: deskItemsDraft.value };
 }
 function close() { if (!busy.value) emit('close'); }
+const sheetBody = ref(null);
+function focusSheet(event) {
+  event.preventDefault();
+  sheetBody.value?.focus();
+}
 
 async function run(action, values = {}, options = {}) {
   const { data } = await http.post(`/appointments/${props.appointment._id}/workflow/${action}`, { version: props.appointment.__v ?? 0, ...values });
@@ -403,8 +408,10 @@ async function reopen() {
       class="h-[min(calc(100dvh-3rem),54rem)] gap-0 p-0"
       @escape-key-down="event => busy && event.preventDefault()"
       @pointer-down-outside="event => busy && event.preventDefault()"
+      @open-auto-focus="focusSheet"
     >
-      <div class="flex h-full min-h-0 flex-col">
+      <!-- 打開時焦點放在視窗本身：預設會落在第一個可聚焦的貓名連結上，一開就框著一圈、按 Enter 還會離開視窗。 -->
+      <div ref="sheetBody" tabindex="-1" class="flex h-full min-h-0 flex-col outline-none">
         <!-- 標頭一排：號碼牌｜貓咪、徽章、來院原因｜飼主與時間規格欄｜關閉。
              舊版第二排的四段進度條拿掉了：打開這個視窗時一定是「待櫃台處理」，改成規格欄裡的「交櫃台」時間。 -->
         <header class="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-3 border-b border-border px-6 py-4">
@@ -418,16 +425,17 @@ async function reopen() {
               <DepositBadge :status="appointment.depositStatus" />
               <Badge v-if="!state.handedOff && !state.completed" variant="status" class="bg-info-surface text-info">醫師已取回</Badge>
             </div>
-            <div class="flex flex-wrap items-baseline gap-x-2.5">
+            <div v-if="appointment.reason" class="flex flex-wrap items-baseline gap-x-2.5">
               <span class="spec-label">來院原因</span>
               <DialogDescription class="text-base font-medium text-foreground">{{ appointment.reason }}</DialogDescription>
             </div>
+            <DialogDescription v-else class="sr-only">櫃台處理</DialogDescription>
           </div>
           <div class="flex items-center gap-3">
             <SpecGrid>
               <SpecCell label="飼主"><PatientLink v-if="appointment.ownerName" :pet-id="appointment.petId" quiet>{{ appointment.ownerName }}</PatientLink></SpecCell>
               <SpecCell v-if="appointment.ownerPhone" label="電話" mono><a :href="`tel:${appointment.ownerPhone}`" class="text-primary">{{ appointment.ownerPhone }}</a></SpecCell>
-              <SpecCell label="預約" mono>{{ appointment.date?.slice(5) }} {{ appointment.time || '' }}</SpecCell>
+              <SpecCell label="預約" mono>{{ shortDate(appointment.date) }} {{ appointment.time || '' }}</SpecCell>
               <SpecCell v-if="appointment.handoffAt" label="交櫃台" mono>{{ clinicTimeInput(appointment.handoffAt) }}</SpecCell>
               <SpecCell v-if="appointment.deskCompletedAt" label="完成" mono>{{ clinicTimeInput(appointment.deskCompletedAt) }}</SpecCell>
             </SpecGrid>
@@ -480,7 +488,7 @@ async function reopen() {
                 <Button variant="secondary" size="sm" :disabled="busy" @click="resetNote">採用最新內容</Button>
               </Alert>
               <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-sm text-muted-foreground" role="status">{{ state.completed ? '已結案，退回處理中才能編輯' : editingNote ? '按「儲存」才會保存；取消或關閉會放棄修改' : noteSaved ? '已儲存' : '跟診療台、病歷日誌是同一份紀錄' }}</p>
+                <p class="text-sm text-muted-foreground" role="status">{{ state.completed ? '已結案，退回處理中才能編輯' : editingNote ? '按「儲存」才會保存；取消或關閉會放棄修改' : noteSaved ? '已儲存' : '' }}</p>
                 <div v-if="editingNote" class="flex gap-2">
                   <Button variant="secondary" size="sm" :disabled="busy" @click="cancelEditNote">取消</Button>
                   <Button size="sm" :disabled="busy || noteConflict || state.completed" @click="saveNote">儲存</Button>
@@ -501,18 +509,6 @@ async function reopen() {
               <p v-if="medicationError" class="text-sm text-danger" role="alert">{{ medicationError }}</p>
             </section>
 
-            <!-- 處理事項：櫃台對這次看診做了哪些事。按完成處理才送出，全部寫進病歷日誌；只有「上傳影像」另外新增一筆院內待辦。
-                 影像、收據兩組一次只能選一個（勾新的會取消同組原本那個），其他可複選。沒勾就是沒做，不用特地勾「否」。 -->
-            <section class="space-y-3" aria-labelledby="desk-items-heading">
-              <div class="flex items-center gap-2.5">
-                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-card" aria-hidden="true">4</span>
-                <h3 id="desk-items-heading" class="text-base font-semibold">處理事項</h3>
-              </div>
-              <div class="rounded-xl bg-sunken px-4 py-2.5">
-                <DeskItemsChecklist v-model:items="deskItemsDraft" v-model:image-upload="imageUploadDraft" :disabled="busy || state.completed" />
-              </div>
-            </section>
-
             <!-- 歷次病歷日誌直接展開在下面（使用者要求，不收進頁籤）：飼主常會問「上次開的藥還能吃嗎」。 -->
             <ClinicalNotesPanel
               :notes="notes"
@@ -528,65 +524,80 @@ async function reopen() {
             />
           </div>
 
-          <!-- 一律預留捲軸的位置：約回診的時段選擇器依自己的寬度決定並排或上下疊，捲軸出現與否（例如多了保證金那塊）不能讓同一個視窗大小換排法。 -->
-          <section class="space-y-4 px-6 py-5 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-gutter:stable]" aria-labelledby="desk-followup-heading">
-            <div class="flex items-center gap-2.5">
-              <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground" aria-hidden="true">5</span>
-              <h3 id="desk-followup-heading" class="text-base font-semibold">約回診</h3>
-            </div>
-            <!-- 標籤跟內容同一行，標籤不另佔一行。醫師沒寫也照樣留這一格、內容空白，不補說明文字。 -->
-            <p class="flex min-h-lh items-baseline gap-3 rounded-xl bg-accent px-4 py-3 text-accent-foreground">
-              <span class="spec-label shrink-0 text-accent-foreground">醫師建議</span>
-              <span class="min-w-0 font-medium wrap-anywhere">{{ appointment.followUpRecommendation }}</span>
-            </p>
+          <!-- 右欄：④處理事項在最上面（櫃台每一次都要勾，打開就要看得到），⑤約回診接在下面。
+               一律預留捲軸的位置：約回診的時段選擇器依自己的寬度決定並排或上下疊，捲軸出現與否（例如多了保證金那塊）不能讓同一個視窗大小換排法。 -->
+          <div class="space-y-6 px-6 py-5 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain lg:[scrollbar-gutter:stable]">
+            <!-- 處理事項：櫃台對這次看診做了哪些事。按完成處理才送出，全部寫進病歷日誌；只有「上傳影像」另外新增一筆院內待辦。
+                 影像、收據兩組一次只能選一個（勾新的會取消同組原本那個），其他可複選。沒勾就是沒做，不用特地勾「否」。 -->
+            <section class="space-y-3" aria-labelledby="desk-items-heading">
+              <div class="flex items-center gap-2.5">
+                <span class="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-bold text-card" aria-hidden="true">4</span>
+                <h3 id="desk-items-heading" class="text-base font-semibold">處理事項</h3>
+              </div>
+              <div class="rounded-xl bg-sunken px-4 py-2.5">
+                <DeskItemsChecklist v-model:items="deskItemsDraft" v-model:image-upload="imageUploadDraft" :disabled="busy || state.completed" />
+              </div>
+            </section>
 
-            <div v-if="booked" class="flex items-center gap-3 rounded-xl bg-success-surface px-4 py-3 text-success">
-              <Check class="size-5" stroke-width="2" />
-              <span class="font-semibold">已安排回診</span>
-              <span class="num text-lg font-semibold">{{ appointment.followUpDate }} {{ appointment.followUpTime }}</span>
-              <Button v-if="!rescheduling" variant="secondary" size="sm" class="ml-auto" :disabled="busy" @click="startReschedule"><Pencil stroke-width="1.75" />修改</Button>
-            </div>
-            <template v-if="editingFollowUp">
-              <!-- 日期、診療時間、來院原因、手術一窄欄在左，時段格在右：打開就看得到時段，不用往下捲。 -->
-              <AppointmentSlotPicker
-                v-model:date="followUp.date"
-                v-model:time="followUp.time"
-                v-model:duration="followUp.duration"
-                :exclude-id="String(rescheduling ? appointment.followUpAppointmentId : appointment._id)"
-                :pet-id="appointment.petId ? String(appointment.petId) : ''"
-                :pet-name="appointment.petName"
-                :show-errors="followUpAttempted && followUpStarted"
-                :required="false"
-                clearable
-                split
-                label="回診日期"
-              >
-                <template #aside>
-                  <div class="space-y-1.5">
-                    <Label for="desk-followup-reason">來院原因</Label>
-                    <Input id="desk-followup-reason" v-model="followUp.reason" placeholder="例：拆線、複診" />
-                  </div>
-                  <SurgeryField v-model:is-surgery="followUp.isSurgery" v-model:surgery-name="followUp.surgeryName" :error="surgeryNameError" />
-                  <DepositField
-                    v-if="!booked"
-                    v-model:status="depositStatus"
-                    v-model:reason="depositReason"
-                    :state="depositState"
-                    :pet-name="appointment.petName"
-                    :error="depositError"
-                    id-prefix="desk-deposit"
-                  />
-                </template>
-              </AppointmentSlotPicker>
-              <div v-if="rescheduling" class="flex items-center justify-end gap-2">
-                <Button variant="secondary" size="sm" :disabled="busy" @click="cancelReschedule">取消</Button>
-                <Button variant="soft" size="sm" :disabled="busy || !followUpStarted" @click="bookFollowUp">儲存回診變更</Button>
+            <section class="space-y-4" aria-labelledby="desk-followup-heading">
+              <!-- 醫師建議接在標題同一行，有寫才出現：空的色塊看起來像少了什麼。 -->
+              <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span class="flex size-6 shrink-0 items-center justify-center self-center rounded-full bg-foreground text-xs font-bold text-card" aria-hidden="true">5</span>
+                <h3 id="desk-followup-heading" class="text-base font-semibold">約回診</h3>
+                <p v-if="appointment.followUpRecommendation" class="flex min-w-0 items-baseline gap-2">
+                  <span class="spec-label shrink-0">醫師建議</span>
+                  <span class="min-w-0 font-semibold wrap-anywhere">{{ appointment.followUpRecommendation }}</span>
+                </p>
               </div>
-              <div v-else-if="state.completed" class="flex justify-end">
-                <Button variant="soft" size="sm" :disabled="busy || !followUpStarted" @click="bookFollowUp">確認回診預約</Button>
+
+              <div v-if="booked" class="flex items-center gap-3 rounded-xl bg-success-surface px-4 py-3 text-success">
+                <Check class="size-5" stroke-width="2" />
+                <span class="font-semibold">已安排回診</span>
+                <span class="num text-lg font-semibold">{{ shortDate(appointment.followUpDate) }} {{ appointment.followUpTime }}</span>
+                <Button v-if="!rescheduling" variant="secondary" size="sm" class="ml-auto" :disabled="busy" @click="startReschedule"><Pencil stroke-width="1.75" />修改</Button>
               </div>
-            </template>
-          </section>
+              <template v-if="editingFollowUp">
+                <!-- 日期、診療時間、來院原因、手術一窄欄在左，時段格在右：打開就看得到時段，不用往下捲。 -->
+                <AppointmentSlotPicker
+                  v-model:date="followUp.date"
+                  v-model:time="followUp.time"
+                  v-model:duration="followUp.duration"
+                  :exclude-id="String(rescheduling ? appointment.followUpAppointmentId : appointment._id)"
+                  :pet-id="appointment.petId ? String(appointment.petId) : ''"
+                  :pet-name="appointment.petName"
+                  :show-errors="followUpAttempted && followUpStarted"
+                  :required="false"
+                  clearable
+                  split
+                  label="回診日期"
+                >
+                  <template #aside>
+                    <div class="space-y-1.5">
+                      <Label for="desk-followup-reason">來院原因</Label>
+                      <Input id="desk-followup-reason" v-model="followUp.reason" placeholder="例：拆線、複診" />
+                    </div>
+                    <SurgeryField v-model:is-surgery="followUp.isSurgery" v-model:surgery-name="followUp.surgeryName" :error="surgeryNameError" />
+                    <DepositField
+                      v-if="!booked"
+                      v-model:status="depositStatus"
+                      v-model:reason="depositReason"
+                      :state="depositState"
+                      :pet-name="appointment.petName"
+                      :error="depositError"
+                      id-prefix="desk-deposit"
+                    />
+                  </template>
+                </AppointmentSlotPicker>
+                <div v-if="rescheduling" class="flex items-center justify-end gap-2">
+                  <Button variant="secondary" size="sm" :disabled="busy" @click="cancelReschedule">取消</Button>
+                  <Button variant="soft" size="sm" :disabled="busy || !followUpStarted" @click="bookFollowUp">儲存回診變更</Button>
+                </div>
+                <div v-else-if="state.completed" class="flex justify-end">
+                  <Button variant="soft" size="sm" :disabled="busy || !followUpStarted" @click="bookFollowUp">確認回診預約</Button>
+                </div>
+              </template>
+            </section>
+          </div>
         </div>
 
         <div v-if="state.completed && appointment.reopenRequest?.requestedAt && !appointment.reopenRequest?.approvedAt" class="mx-6 my-3 rounded-lg bg-warning-surface px-4 py-2.5 text-warning">

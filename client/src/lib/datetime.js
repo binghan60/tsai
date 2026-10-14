@@ -116,6 +116,29 @@ export function formatDate(value, fallback = '') {
   return date ? date.toLocaleDateString('zh-TW', { timeZone: CLINIC_TIME_ZONE }) : fallback;
 }
 
+// 員工畫面的短日期：今年內「10/12」，其他年份「2025/10/12」。不用「-」。
+// 報告紙面（PDF）照舊用 formatDate 的完整年份，不要換成這個。
+export function shortDate(value, reference = new Date(), fallback = '') {
+  const match = typeof value === 'string' ? DATE_ONLY.exec(value) : null;
+  const date = match ? null : toValidDate(value);
+  if (!match && !date) return fallback;
+  const { year, month, day } = match ? { year: Number(match[1]), month: Number(match[2]), day: Number(match[3]) } : dateParts(date);
+  const thisYear = dateParts(toValidDate(reference) ?? new Date()).year;
+  return year === thisYear ? `${month}/${day}` : `${year}/${month}/${day}`;
+}
+
+// 經過時間：當天未滿 60 分寫「12 分」，滿 60 分寫「1 時 05 分」。
+// 起點不是今天（看過去的日子，或跨日沒收尾的看診）時累加分鐘沒有意義，改回傳當時的時刻「10:35」，clock 為 true。
+export function elapsedLabel(from, now = new Date()) {
+  const start = toValidDate(from);
+  if (!start) return { text: '', clock: false, minutes: null };
+  const current = toValidDate(now) ?? new Date();
+  if (clinicDateInput(start) !== clinicDateInput(current)) return { text: clinicTimeInput(start), clock: true, minutes: null };
+  const minutes = Math.max(0, Math.floor((current.getTime() - start.getTime()) / 60000));
+  const text = minutes < 60 ? `${minutes} 分` : `${Math.floor(minutes / 60)} 時 ${String(minutes % 60).padStart(2, '0')} 分`;
+  return { text, clock: false, minutes };
+}
+
 export function formatDateTime(value, options = { dateStyle: 'medium', timeStyle: 'short' }, fallback = '') {
   const date = toValidDate(value);
   return date ? date.toLocaleString('zh-TW', { ...options, timeZone: CLINIC_TIME_ZONE }) : fallback;

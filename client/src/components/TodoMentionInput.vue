@@ -30,7 +30,6 @@ const { mention, candidates, highlighted, updateMention, closeMention, selectCan
       ref="editor"
       v-model="text"
       single-line
-      toolbar-position="top"
       :placeholder="placeholder"
       :aria-label="ariaLabel"
       :maxlength="maxlength"

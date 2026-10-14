@@ -59,7 +59,7 @@
 本次簡易紀錄 `appointments.visitNote`、診療台藥單 `appointments.prescription`、藥單的 `condition`／`prescription`／`note`、待辦 `todos.content`、文字模板 `textTemplates.content`，以及**健檢報告所有多行文字項目**（`type: 'textarea'`）可以加粗與上色（紅／橙／綠／藍／紫／青，對應 `danger`／`warning`／`success`／`info`／`mark-purple`／`primary`；報告紙面走 `report-*` token）。欄位仍是一般字串，內容是 `shared/richText.js` 的極簡標記：粗體 `**字**`、顏色 `[red]字[/red]`，換行就是 `\n`、標記不跨行，`\` 跳脫 `\ * [`（不用 `#`，那是寵物標記）。前後端共用 `parseRichText`／`normalizeRichText`／`richTextToPlain`／`richTextLength`：
 
 - **存之前一律 `normalizeRichText`**（編輯器送出的字串跟伺服器整理後的一致，自動存檔才不會一存就被判成「有修改」）；**字數上限與「不可空白」都看純文字**（schema 用 `lib/richTextSchema.js` 的 `richTextMaxLength`），只剩標記算空白。
-- **顯示一律走 `RichText.vue`**（拆成片段、文字插值輸出，**永遠不用 `v-html`**）。清單上的一行摘要用 `RichText one-line`（換行以 `joiner` 接起來），多行截斷加 `line-clamp-*`——摘要也要畫出顏色。編輯用 `RichTextEditor.vue`（Tiptap）。
+- **顯示一律走 `RichText.vue`**（拆成片段、文字插值輸出，**永遠不用 `v-html`**）。清單上的一行摘要用 `RichText one-line`（換行以 `joiner` 接起來），多行截斷加 `line-clamp-*`——摘要也要畫出顏色。編輯用 `RichTextEditor.vue`（Tiptap；粗體／顏色／清除格式只在聚焦時出現在框內右下角，六色收在一顆「文字顏色」鈕裡）。
 - 健檢報告的多行文字：填寫用 `formfields/RichTextField.vue`，報告頁與 PDF 用 `RichText palette="report"`（紙面固定淺色，顏色走 `report-*` token）。單行文字、理學檢查與檢驗的備註、圖片說明不支援格式。
 - 當純文字用的地方一律 `richTextToPlain`：病歷日誌的 `content`、聊天快照、`aria-label`、滑過提示、搜尋比對、`#寵物` 比對。文字模板插進可上色欄位時格式一起帶入（`insertRichText`），插進純文字欄位只取文字；從純文字欄位「存成模板」時先 `escapeRichText`。
 
@@ -104,7 +104,7 @@
 - `internalNote` 內部備註：只給院內看，不進病歷日誌與健檢報告。
 - `specialCareNote` 請轉告飼主：櫃台處理視窗最上面用警示樣式呈現。
 - `followUpRecommendation` 回診建議：醫師寫期間與原因，櫃台約下一次時預設帶進來院原因。
-- `deskItems`（櫃台處理視窗「處理事項」，`shared/deskItems.js`：影像 `image_usb`／`no_image`、收據 `receipt`／`receipt_no_stamp`、其他 `itemized_bill` 已開明細／`report_sent` 已寄送健檢報告／`diagnosis_certificate` 已開診斷證明／`prescription_given` 已給藥單／`consent_signed` 已簽用藥同意書／`no_visit_record` 這次看診不寄就診紀錄）：key 陣列、照定義順序存；影像、收據兩組一次只能選一個（伺服器也驗）；跟 `imageUpload` 一樣按完成處理時才送出（`clinical`／`complete` 都收，`DESK_EDITABLE_FIELDS`）；**全部寫進病歷日誌的「櫃台處理」一列**，**不新增待辦**；日誌 API 的這個 section 除了 `text`（用「、」接起來的純文字版，給 `content` 用）另帶 `groups`（`[{ key, label, items: [{ key, label }] }]`，依影像／收據／其他分組、只回有勾的組，`shared/deskItems.js` 的 `deskItemGroups`），前端檢視模式把它跟「上傳影像」併成一列唯讀勾選框（`DeskItemsChecklist.vue` 的 `readonly`，全部選項都列、勾了的打勾；待辦完成後在下面註明「上傳影像已完成　時間」），修改模式是可點的同一組；什麼都沒勾（含上傳影像勾過又取消）不畫這一列——只有「上傳影像」會。「上傳影像」在畫面上屬於影像那一組（跟影像USB／NO影像互相取消），但資料與待辦照舊走 `imageUpload`。
+- `deskItems`（櫃台處理視窗「處理事項」，`shared/deskItems.js`：影像 `image_usb`／`no_image`、收據 `receipt`／`receipt_no_stamp`、其他 `itemized_bill` 已開明細／`report_sent` 已寄送健檢報告／`diagnosis_certificate` 已開診斷證明／`prescription_given` 已給藥單／`consent_signed` 已簽用藥同意書／`no_visit_record` 這次看診不寄就診紀錄）：key 陣列、照定義順序存；影像、收據兩組一次只能選一個（伺服器也驗）；跟 `imageUpload` 一樣按完成處理時才送出（`clinical`／`complete` 都收，`DESK_EDITABLE_FIELDS`）；**全部寫進病歷日誌的「櫃台處理」一列**，**不新增待辦**；日誌 API 的這個 section 除了 `text`（用「、」接起來的純文字版，給 `content` 用）另帶 `groups`（`[{ key, label, items: [{ key, label }] }]`，依影像／收據／其他分組、只回有勾的組，`shared/deskItems.js` 的 `deskItemGroups`），前端檢視模式把它跟「上傳影像」併成一列，**只列有勾的項目**、一項一顆小標（`lib/clinicalNoteDisplay.js` 的 `deskChips`：上傳影像排第一、待辦完成了打勾帶完成時間，「不寄就診紀錄」琥珀色），修改模式才是完整的勾選框（`DeskItemsChecklist.vue`，跟櫃台處理視窗同一組）；什麼都沒勾（含上傳影像勾過又取消）不畫這一列——只有「上傳影像」會。「上傳影像」在畫面上屬於影像那一組（跟影像USB／NO影像互相取消），但資料與待辦照舊走 `imageUpload`。
 - `imageUpload`（`null` 沒勾過／`true`／`false` 勾過又取消）：櫃台處理視窗的「上傳影像」。勾選先記在視窗裡，按完成處理時跟著送出（`complete` 帶 `imageUpload`，有變才帶）；勾了同一個 transaction 新增一筆待辦「#貓咪名 要寄影像」（`lib/imageUploadTodo.js`，id 記在 `imageUploadTodoId`），取消勾選收掉還沒完成的那筆；待辦完成時把時間寫回 `imageUploadDoneAt`，日誌顯示「已完成　10/9 14:32」。
 
 交給櫃台之後，櫃台還能改 `visitNote`、`internalNote`、`imageUpload`（`DESK_EDITABLE_FIELDS`），其餘要醫師取回；櫃台完成處理後整組鎖定（從病歷日誌更正不受這個限制）。
@@ -285,7 +285,7 @@ DELETE /api/clinical-notes/:id           只限手動／匯入；看診與藥單
 GET    /api/pets/:petId/records ／ POST /api/pets/:petId/records（templateId 必填）
 GET    /api/pets/:petId/records/previous-values   上次數值對照
 GET    /api/pets/:petId/records/finalized-sources 「從既有報告帶入」的來源清單
-GET    /api/records                      跨貓咪清單：?view= todo|drafts|pending|failed|sent|all、?q=、分頁；回 counts（佇列數字不套用搜尋）；每列另帶 `deskNoVisitRecord`（櫃台處理勾了「這次看診不寄就診紀錄」，清單在櫃台處理欄標「不寄就診紀錄」；已完成處理時只標這一顆、取代「櫃台已完成」）、`deskStatus`（連著看診才有：`with_doctor`／`desk_pending`／`reopen_requested`／`desk_done`，否則空字串；由掛號即時推導，`shared/appointmentWorkflow.js` 的 `deskProcessingState`，不存欄位）
+GET    /api/records                      跨貓咪清單：?view= todo|drafts|pending|failed|sent|all、?q=、分頁；回 counts（佇列數字不套用搜尋）；每列另帶 `deskNoVisitRecord`（櫃台處理勾了「這次看診不寄就診紀錄」；清單畫在「報告」欄：已結案還沒寄的直接寫「不寄就診紀錄」取代「待寄送」，其他狀態下另起一行註明）、`deskStatus`（連著看診才有：`with_doctor`／`desk_pending`／`reopen_requested`／`desk_done`，否則空字串；由掛號即時推導，`shared/appointmentWorkflow.js` 的 `deskProcessingState`，不存欄位）
 GET    /api/records/:id ／ PUT /api/records/:id（帶 expectedVersion，連著看診的另收 visitEdits）
 POST   /api/records/:id/finalize         驗證必填 → 凍結 sections → 排 PDF；帶 autoSend: true 時記下 autoSendRequestedAt、PDF 產好自動寄出（信箱有問題回 autoSendError，照樣結案）
 POST   /api/records/:id/pdf/retry ／ GET /api/records/:id/pdf（加密後下載）
@@ -378,15 +378,15 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 
 | 路由 | 頁面 | 重點 |
 |---|---|---|
-| `/` | 總覽 | 寄送失敗橫幅（有才出現）→ 今天的門診四格（今日掛號、在院、待櫃台處理、已完成）→ 健檢報告四格（草稿、待寄送、寄送失敗、本月已寄出）→ 近 8 週健檢量（CSS 長條）＋院內待辦前 8 筆。每個數字都點得進對應清單 |
+| `/` | 總覽 | 寄送失敗橫幅（有才出現）→ 今天的門診四格（今日掛號、在院、待櫃台處理、已完成）→ 健檢報告四格（草稿、待寄送、寄送失敗、本月已寄出）→ 近 8 週健檢量（CSS 長條，固定高度、不撐滿視窗）＋院內待辦前 8 筆。每個數字都點得進對應清單 |
 | `/appointments` | 診療台 | 左欄「今日病患」（頁籤：進行中／已交櫃台／已完成；精簡／詳細切換）：每列左邊預約時間、右邊一顆狀態徽章，時間軸軌道＋「現在」線＋午休分隔，順序只由預約時間決定。右欄看診工作區（`VisitWorkspace`，一次一筆，切換前先存檔）：標頭規格欄（貓咪、飼主、就診時間）、醫療警示、可就地改的貓咪與飼主備註；內容依序量測（標頭右上有「上次報告」鈕：這隻貓最近一份已結案的健檢報告，帶健檢日期，新分頁開預覽頁；確定沒有已結案報告（含還沒建檔的初診）改標灰色「無上次報告」——「沒有值就留白」的刻意例外；還在查或查詢失敗什麼都不畫，不把查不到說成沒有。資料來自 `GET /pets/:petId/records/finalized-sources` 的第一筆）→ 檢驗報告（`VisitLabTable`，IDEXX 原文，唯讀；「匯入檢驗結果」`LabImportDialog`；填入狀態燈號）→ 本次簡易紀錄 → 藥單 → 內部備註 → 交給櫃台（請轉告飼主、回診建議）；右邊歷次病歷日誌。每個欄位旁有去處標記（`DestTag`：日誌／報告／院內／藥單）。底部：送 IDEXX、開啟健檢報告、取消看診、完成看診送交櫃台（或取回修改、申請修改） |
-| `/reception` | 掛號台 | 頁首（日期、包藥、掛號；「包藥」直接開右側藥單面板的新增藥單表單）→ 流程列四格（待報到、在院、待櫃台處理、已完成；點一格篩選 `?stage=`）→ 例外才出現的警示列（醫師申請修改、遲到未報到、待審初診表）→ 整頁時間軸（上午／下午可收合、「現在」線；已完成與未到／取消收在下面）。搜尋是跨日的，有關鍵字時換成搜尋結果表。卡片：左邊號碼牌或貓圖示＋名字與徽章，右邊飼主／電話／進度三欄，最右主要動作（報到、遲到、審核、處理）＋⋯。已建檔的貓一鍵報到（自動配號碼、過了寬限自動記遲到、可復原）；初診要等飼主填好初診表、審核通過才報得了到。掛號是雙欄 Modal（`AppointmentDialog`：誰與為什麼｜時段格），選了貓之後出現出席對照表與保證金欄位。已交櫃台的開櫃台處理視窗（`HandoffSheet`）：①請轉告飼主 ②本次簡易紀錄（體重體溫）③藥單（唯讀內容＋藥單階段，待領藥時可直接確認領藥）④處理事項（影像／收據／其他三組勾選框，含「上傳影像」；歷次日誌接在下面）⑤約回診（`AppointmentSlotPicker split`），底部完成處理／退回處理中／核准修改 |
+| `/reception` | 掛號台 | 頁首（日期、包藥、掛號；「包藥」直接開右側藥單面板的新增藥單表單）→ 流程列四格（待報到、在院、待櫃台處理、已完成；點一格篩選 `?stage=`）→ 例外才出現的警示列（醫師申請修改、遲到未報到、待審初診表）→ 整頁時間軸（上午／下午可收合、「現在」線；已完成與未到／取消收在下面）。搜尋是跨日的，有關鍵字時換成搜尋結果表。卡片：左邊號碼牌或貓圖示＋名字與徽章，右邊飼主／電話／進度三欄（寬螢幕時小標在時間軸頂端的一列表頭、捲動時釘住，卡片只留值），最右主要動作（報到、遲到、審核、處理）＋⋯。已建檔的貓一鍵報到（自動配號碼、過了寬限自動記遲到、可復原）；初診要等飼主填好初診表、審核通過才報得了到。掛號是雙欄 Modal（`AppointmentDialog`：誰與為什麼｜時段格），選了貓之後出現出席對照表與保證金欄位。已交櫃台的開櫃台處理視窗（`HandoffSheet`）：左欄①請轉告飼主 ②本次簡易紀錄（體重體溫）③藥單（唯讀內容＋藥單階段，待領藥時可直接確認領藥），歷次日誌接在下面；右欄④處理事項（影像／收據／其他三組勾選框，含「上傳影像」，放最上面）⑤約回診（醫師建議有寫才接在標題後；`AppointmentSlotPicker split`，還沒選日期時時段格的位置是「快速選日期」3 天／1 週／2 週／4 週後），底部完成處理／退回處理中／核准修改 |
 | `/medications` | 藥單 | 清單頁模板；頁籤依裝置身分預設（醫師：待醫師確認；櫃台：未完成），點貓咪切到詳情。工具欄面板是同一個 `MedicationWorkspace` 的 `compact` 版。「藥單」是物件，「領藥」只指交付 |
 | `/pets`、`/pets/:id` | 貓咪 | 詳情頁：頁首名字、舊病歷號、藥物過敏、遲到／未到徽章、「約診需收保證金」；左貓咪右飼主兩欄可就地編輯；頁籤：病歷日誌（最上面就地新增）、健檢報告、出席紀錄（含保證金與已取消的掛號，可修改保證金紀錄；頁籤數字＝清單筆數）。遲到與未到只算這隻貓自己的 |
 | `/pets/new` | 新增貓咪 | 飼主與貓咪同一頁（既有飼主／新增飼主），寬螢幕左右兩欄，有離開前的未儲存提示 |
-| `/records` | 健檢報告清單 | 跨貓咪，佇列頁籤；寄送失敗的列左側紅線；「櫃台處理」欄讓醫師看出這次看診櫃台做完了沒（醫師處理中／待櫃台處理／待核准修改／櫃台已完成，沒連著看診留白），掛號異動時清單跟著重讀 |
+| `/records` | 健檢報告清單 | 跨貓咪，佇列頁籤；寄送失敗的列左側紅線；「報告」一欄同時寫報告與寄送（草稿／待寄送／寄送中／已寄出／寄送失敗／結果待確認，`lib/recordStatus.js` 的 `reportMark`），「櫃台」欄讓醫師看出這次看診櫃台做完了沒（醫師處理中／待櫃台處理／待核准修改／已完成，沒連著看診留白，`deskMark`）；一列最多一顆淡底膠囊，只給要人動手的狀態（`StatusMark.vue`）。掛號異動時清單跟著重讀 |
 | `/records/deliveries` | 寄送歷程 | 流水帳，含已刪除報告 |
-| `/pets/:petId/records/new`、`/records/:id/edit` | 健檢報告填寫 | 自動存草稿、離開前攔截；套用預填模板；連著看診的草稿有「引用本次看診」說明條（體重、體溫、檢驗數值在這裡改會寫回看診），櫃台勾了「這次看診不寄就診紀錄」時最下面的操作列多一顆「不寄就診紀錄」徽章（即時更新，`visitLink.noVisitRecord`）與填入狀態燈號，有未處理的檢驗差異時自動跳比對視窗；櫃台約好或改期回診時（加入看診當天的房間聽 `appointment:updated`，斷線重連整份重讀），回診日期欄位即時換成新值，並讓那一塊變色、標上「櫃台已約好／已改約／回診已取消」（不用 toast，點一下收起） |
+| `/pets/:petId/records/new`、`/records/:id/edit` | 健檢報告填寫 | 自動存草稿、離開前攔截；套用預填模板；連著看診的草稿有「引用本次看診」說明條（體重、體溫、檢驗數值在這裡改會寫回看診），說明條上有填入狀態燈號，櫃台勾了「這次看診不寄就診紀錄」時也寫在這一條（即時更新，`visitLink.noVisitRecord`）；有未處理的檢驗差異時自動跳比對視窗；櫃台約好或改期回診時（加入看診當天的房間聽 `appointment:updated`，斷線重連整份重讀），回診日期欄位即時換成新值，並讓那一塊變色、標上「櫃台已約好／已改約／回診已取消」（不用 toast，點一下收起） |
 | `/records/:id/preview` | 報告預覽 | 結案、寄送、分享、下載 |
 | `/report/:token` | 報告（公開） | 飼主看的頁面＋PDF 來源；先輸入手機後 6 碼（記在 `sessionStorage`） |
 | `/intake` | 初診填寫（公開） | 飼主用手機填，獨立版面（`--intake-*` token），見 STYLE_GUIDE 第 10 節 |
@@ -405,7 +405,7 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 - **一律用語意 token**：`bg-background`／`bg-card`／`bg-sunken`／`bg-hover`／`bg-field`；`text-foreground`／`text-muted-foreground`／`text-subtle-foreground`；`border-border`／`border-border-strong`；`bg-primary`、`bg-accent`；狀態 `danger`／`warning`／`success`／`info` 各配 `-surface`；`surgery`（紫，只給手術）。狀態色的明度刻意錯開（色盲時靠明度分辨），危險永遠是對比最高的那一個。
 - **字級**（1920×1080 為目標）：`text-xl` 28 頁面標題／`text-lg` 22 區塊標題／`text-base` 18 內文／`text-sm` 16 控制項與次要文字／`text-xs` 15 註記與徽章／`text-2xs` 14 規格欄小標題（下限）。數字用 `num`。報告紙面 `.report-sheet` 走自己的尺度（A4）。
 - **控制項高度** 36／40／44／48，預設 40。**同一排的按鈕一律同高**（主要動作靠實色突顯，不靠放大）：頁首、底部操作列、掛號台卡片動作是 40，清單列是 36。圓角：小標記 6、控制項 8、卡片 12、對話框 16。
-- **按鈕**：`default` 實色（主要動作）、`soft` 主色淡面（推進流程的動作、清單列唯一的主要動作）、`secondary` 下凹底（輔助動作、圖示鈕、分頁）、`destructive` 淡紅、`destructive-solid` 實心紅（只給確認視窗的最終動作）。所有按鈕靜止時都有底色。狀態徽章盡量有顏色，灰色只給已取消、已停用。
+- **按鈕**：`default` 實色（主要動作）、`soft` 主色淡面（推進流程的動作、清單列唯一的主要動作）、`secondary` 下凹底（輔助動作、圖示鈕、分頁）、`destructive` 淡紅、`destructive-solid` 實心紅（只給確認視窗的最終動作）。所有按鈕靜止時都有底色。狀態盡量有顏色，灰色只給已取消、已停用；**淡底膠囊只給要人動手的狀態**，其餘用圓點或勾＋文字（`StatusMark.vue`），一列不堆好幾顆膠囊。
 - **頁面容器只有一種**：寬度與外距只在 `App.vue` 的 `<main>` 決定（滿版，不設 `max-w`）。每頁根節點 `flex flex-col gap-5`、第一個子元素是 `PageHeader`。會被側滑面板擠窄的區塊用 container query 依自己的寬度排。表單頁靠分欄避免單一輸入框拉成一長條。
 - **清單頁一個模板**：`PageHeader`（標題＋主要動作；詳情頁用 `back-to` 返回鈕）→ `DataCard`（標頭：清單標題＋筆數、`#filters`；`#tabs` 一條 `FilterTabs`；`.desktop-data-header`＋`.desktop-data-row`；`#footer` 放 `ListFooter`）。篩選放卡片標頭；列上一顆主要動作，其餘收進 `RowActions`；1280px 以下改小卡。
 - **身分資訊不用「·」串成一行**：標頭用規格欄（`SpecGrid`＋`SpecCell`），清單只寫「品種＋♂♀」（`PetLine`）；初診才出徽章。
@@ -416,6 +416,7 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 - 圖示 `@lucide/vue`、`stroke-width="1.75"`；頭像一律貓。
 - **用語**：員工畫面「貓咪」「櫃台」「醫師」「健檢報告」；公開初診頁「貓孩兒／家長」。
 - 報告頁固定淺色、用 `report-*` token；`style.css` 的淺色選擇器是 `:root, .report-sheet`，紙面內的共用元件行內樣式寫 `var(--field)` 這種原始 token。公開初診頁也是獨立的一套（`--intake-*`、16px 為底、點擊範圍 44px）。
+- **日期與經過時間**：員工畫面的日期一律 `lib/datetime.js` 的 `shortDate`（今年內「10/12」、其他年份「2025/10/12」，不用「-」）；報告紙面（PDF）與存成文字的聊天自動通知照舊用 `formatDate` 的完整年份。經過時間一律 `elapsedLabel`（當天「12 分」「1 時 05 分」，不是今天就寫當時的時刻）。
 - 前端共用的 helper 不要各頁再寫一份：錯誤訊息 `lib/apiError.js` 的 `apiErrorMessage`；複製 `lib/clipboard.js`／`composables/useCopy.js`；伺服器分頁清單 `composables/usePagedList.js`；前端分頁 `composables/useClientPagination.js`；某隻貓的病歷日誌 `composables/usePetClinicalNotes.js`；網址參數 `composables/useSearchQueryParam.js`。
 
 ## 八、開發與驗證

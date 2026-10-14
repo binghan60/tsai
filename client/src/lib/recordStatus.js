@@ -37,15 +37,36 @@ export const DESK_STATUS_META = {
   desk_done: { label: '櫃台已完成', class: 'bg-success-surface text-success', dotClass: 'bg-success' },
 };
 
-// 「櫃台處理」欄實際畫的徽章。櫃台勾了「這次看診不寄就診紀錄」且已完成處理時，只標「不寄就診紀錄」一顆
-// （不寄就等於處理完了，不必再疊一顆「櫃台已完成」）；還沒完成處理（含退回處理中）時兩顆都畫，才看得出球在誰手上。
-export function deskBadges(record) {
-  const noVisit = Boolean(record?.deskNoVisitRecord);
-  const status = DESK_STATUS_META[record?.deskStatus];
-  const badges = [];
-  if (status && !(noVisit && record.deskStatus === 'desk_done')) badges.push({ key: 'status', label: status.label, class: status.class });
-  if (noVisit) badges.push({ key: 'no-visit', label: '不寄就診紀錄', class: 'bg-warning-surface text-warning' });
-  return badges;
+// 報告清單一列最多一顆膠囊：淡底膠囊只給「要有人動手」的狀態，其餘畫成圓點或勾＋文字（仍然有顏色）。
+// 一列三四顆彩色膠囊時，掃不出哪幾列要處理；同一個琥珀色也同時代表了好幾件事。
+// 回傳 { label, style: 'pill' | 'dot' | 'check' | 'text', class, dotClass? }，由 StatusMark.vue 畫。
+
+// 「報告」欄：報告與寄送併成一欄——草稿以外都是已結案，所以「已結案」不另外畫，直接寫寄送走到哪。
+// 櫃台勾了「這次看診不寄就診紀錄」的報告不會寄，已結案而還沒寄的寫「不寄就診紀錄」、不寫「待寄送」（沒有人要去寄）。
+export function reportMark(record) {
+  if (!isFinalizedRecord(record)) return { key: 'draft', label: RECORD_STATUS_META.draft.label, style: 'dot', class: 'text-foreground', dotClass: RECORD_STATUS_META.draft.dotClass };
+  const delivery = getDeliveryStatus(record);
+  if (delivery === 'not_sent' && record?.deskNoVisitRecord) return { key: 'no_visit', label: '不寄就診紀錄', style: 'dot', class: 'text-warning', dotClass: 'bg-warning' };
+  const meta = DELIVERY_STATUS_META[delivery] ?? DELIVERY_STATUS_META.not_sent;
+  if (delivery === 'sent') return { key: delivery, label: meta.label, style: 'check', class: 'text-success' };
+  if (delivery === 'sending') return { key: delivery, label: meta.label, style: 'dot', class: 'text-foreground', dotClass: meta.dotClass };
+  return { key: delivery, label: meta.label, style: 'pill', class: meta.class };
+}
+
+// 「報告」欄的副行：草稿、已寄出、寄送失敗這些狀態上，另外註明櫃台勾了不寄（主狀態已經寫了的就不重複）。
+export function reportMarkNote(record) {
+  if (!record?.deskNoVisitRecord) return '';
+  return reportMark(record).key === 'no_visit' ? '' : '不寄就診紀錄';
+}
+
+// 「櫃台」欄：球在櫃台手上（待櫃台處理、待核准修改）才是膠囊；醫師處理中、已完成只寫字。
+export function deskMark(record) {
+  const status = record?.deskStatus;
+  const meta = DESK_STATUS_META[status];
+  if (!meta) return null;
+  if (status === 'desk_pending' || status === 'reopen_requested') return { key: status, label: meta.label, style: 'pill', class: meta.class };
+  if (status === 'desk_done') return { key: status, label: '已完成', style: 'check', class: 'text-muted-foreground' };
+  return { key: status, label: meta.label, style: 'text', class: 'text-muted-foreground' };
 }
 
 // 寄送流水帳的事件。跟 DELIVERY_STATUS_META 分開是因為兩者回答的問題不同：

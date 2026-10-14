@@ -494,7 +494,6 @@ function resolveLeave(confirmed) {
       <div v-if="activeView === 'design'" class="space-y-5">
         <div class="rounded-xl border border-border bg-card p-5 shadow-card">
           <h2 class="text-lg font-semibold text-foreground">基本資料</h2>
-          <p class="mt-1 text-sm text-muted-foreground">這些資訊會顯示在建立健檢報告時的類型選單。</p>
           <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(220px,1fr)_180px_2fr]">
             <div class="space-y-1.5">
               <Label for="template-name" class="text-xs font-medium">健檢類型名稱</Label>
@@ -782,7 +781,7 @@ function resolveLeave(confirmed) {
                         <SelectItem v-for="option in PRESENTATION_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p class="text-xs leading-relaxed text-muted-foreground">{{ presentationMeta(activeSection.presentation).hint }}它決定工具箱提供哪些欄位；既有項目會保留原本的種類。</p>
+                    <p class="text-xs leading-relaxed text-muted-foreground">{{ presentationMeta(activeSection.presentation).hint }}</p>
                   </div>
                   <div class="space-y-1.5">
                     <Label for="section-description" class="text-xs font-medium">提示說明</Label>

@@ -27,8 +27,9 @@ const emit = defineEmits(['select']);
       @click="emit('select', option.value)"
     >
       {{ option.label }}
+      <!-- 「依參考範圍判讀」只標在正常／異常上：「未檢查」不是判讀出來的結果，標上去像是系統說這項沒驗。 -->
       <span
-        v-if="showAutoBadge && finding.status === option.value && finding.statusSource === 'auto'"
+        v-if="showAutoBadge && option.value !== 'not_checked' && finding.status === option.value && finding.statusSource === 'auto'"
         class="absolute right-1.5 top-1.5 inline-flex opacity-80"
         v-tip="'依參考範圍判讀'"
       >

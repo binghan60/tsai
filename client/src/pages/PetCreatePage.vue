@@ -431,11 +431,7 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="relative flex flex-col gap-5">
-    <PageHeader title="新增貓咪" back-to="/pets" back-label="返回貓咪清單" description="確認飼主身分、填寫貓咪基本資料與病史，一次送出建立檔案。">
-      <template #actions>
-        <Button type="button" variant="secondary" :disabled="submitting" @click="cancel">取消</Button>
-      </template>
-    </PageHeader>
+    <PageHeader title="新增貓咪" back-to="/pets" back-label="返回貓咪清單" />
 
     <Alert v-if="submitError" variant="destructive">
       <AlertCircle class="h-4 w-4" />

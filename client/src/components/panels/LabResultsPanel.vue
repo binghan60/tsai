@@ -5,7 +5,7 @@ import { FlaskConical, Search } from '@lucide/vue';
 import { http } from '../../api/http';
 import { getSocket } from '../../api/socket';
 import { useToast } from '../../composables/useToast';
-import { clinicDateInput, clinicTimeInput, formatDateTime, weekdayLabel } from '../../lib/datetime';
+import { clinicDateInput, clinicTimeInput, formatDateTime, shortDate, weekdayLabel } from '../../lib/datetime';
 import { bridgeStatusLine, fillMessage, instrumentLabel, visitStatusLabel } from '../../lib/labResults';
 import { labFlag } from '../../../../shared/labValues.js';
 import { useUtilityPanelStore } from '../../stores/utilityPanel';
@@ -41,7 +41,7 @@ const dismissing = ref(false);
 function runTimeLabel(runAt) {
   if (!runAt) return '';
   const day = clinicDateInput(runAt);
-  return day === clinicDateInput() ? clinicTimeInput(runAt) : `${day} ${clinicTimeInput(runAt)}`;
+  return day === clinicDateInput() ? clinicTimeInput(runAt) : `${shortDate(day)} ${clinicTimeInput(runAt)}`;
 }
 
 // 待確認的結果可能堆到上百筆，清單分頁、標題列出總筆數。
@@ -371,7 +371,7 @@ onActivated(refreshAll);
       </template>
     </SidePanel>
 
-    <SidePanel v-else title="檢驗" description="選好是哪隻貓，就會填進健檢報告" flush @close="panel.close()">
+    <SidePanel v-else title="檢驗" flush @close="panel.close()">
       <template v-if="bridgeLights.length" #actions>
         <!-- 燈號外面留 36px 的感應範圍，滑鼠才好停；tabindex 讓鍵盤也看得到提示。 -->
         <component

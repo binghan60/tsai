@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { labFillStatus } from './labFillStatus.js';
+import { shortDate } from './datetime.js';
 
 const visit = 'a1';
 const result = (extra = {}) => ({
@@ -62,6 +63,6 @@ describe('labFillStatus：IDEXX 結果的填入狀態燈號', () => {
   });
 
   it('別天匯入的結果時間連日期一起寫', () => {
-    assert.equal(status([result({ runAt: '2026-10-06T02:00:00Z' })]).sections[0].time, '2026-10-06 10:00');
+    assert.equal(status([result({ runAt: '2026-10-06T02:00:00Z' })]).sections[0].time, `${shortDate('2026-10-06')} 10:00`);
   });
 });

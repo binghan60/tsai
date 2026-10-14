@@ -5,7 +5,7 @@ import OptionButtons from './OptionButtons.vue';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { DEPOSIT_REASON_MAX_LENGTH, depositCauseText } from '../../../shared/deposit.js';
-import { formatDate } from '../lib/datetime';
+import { shortDate } from '../lib/datetime';
 
 // 約診時的保證金決定：這隻貓遲到／未到達到門檻時才出現（規則見 shared/deposit.js）。
 // 掛號視窗與櫃台處理視窗的約回診共用。櫃台二選一：已收，或這次不收（要寫原因）。
@@ -56,14 +56,14 @@ const sinceText = computed(() => [
     <Banknote class="mt-0.5 size-5 shrink-0" stroke-width="1.75" aria-hidden="true" />
     <div class="min-w-0">
       <p class="font-semibold">保證金 <span class="num">{{ state.amount }}</span> 元已經收過，這次沿用</p>
-      <p class="text-sm"><span class="num">{{ formatDate(state.held.decidedAt) }}</span> 收的那筆掛號後來取消，保證金留在診所</p>
+      <p class="text-sm"><span class="num">{{ shortDate(state.held.decidedAt) }}</span> 收的那筆掛號後來取消，保證金留在診所</p>
     </div>
   </div>
   <!-- 繳過保證金、這次不必再收：只提醒，讓櫃台知道這隻貓有前例，以及之後又累積了幾次。 -->
   <div v-else-if="state?.since" class="flex items-start gap-2.5 rounded-lg bg-info-surface px-3.5 py-3 text-info">
     <Banknote class="mt-0.5 size-5 shrink-0" stroke-width="1.75" aria-hidden="true" />
     <div class="min-w-0">
-      <p class="font-semibold"><span class="num">{{ formatDate(state.since) }}</span> {{ petName }}繳過保證金</p>
+      <p class="font-semibold"><span class="num">{{ shortDate(state.since) }}</span> {{ petName }}繳過保證金</p>
       <p v-if="sinceText" class="text-sm">之後又{{ sinceText }}</p>
     </div>
   </div>

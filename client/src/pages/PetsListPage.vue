@@ -20,7 +20,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { usePagedList } from '../composables/usePagedList';
-import { formatDate, relativeDayLabel } from '../lib/datetime';
+import { shortDate, relativeDayLabel } from '../lib/datetime';
 import { catBreedLabel } from '../../../shared/catBreeds.js';
 
 const query = useSearchQueryParam('q');
@@ -91,7 +91,7 @@ async function rowAction(key, pet) {
             </span>
             <span class="desktop-data-cell">
               <template v-if="pet.lastEntryAt">
-                <span class="num block text-sm">{{ formatDate(pet.lastEntryAt) }}</span>
+                <span class="num block text-sm">{{ shortDate(pet.lastEntryAt) }}</span>
                 <span class="block text-xs text-subtle-foreground">{{ relativeDayLabel(pet.lastEntryAt) }}</span>
               </template>
             </span>

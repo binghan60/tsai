@@ -5,7 +5,7 @@ import { Pencil } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useStaffIdentity } from '../composables/useStaffIdentity'
-import { clinicDateInput, formatDate } from '../lib/datetime'
+import { clinicDateInput, shortDate } from '../lib/datetime'
 import {
   journalDateEditable,
   journalEditable,
@@ -118,7 +118,7 @@ const kindBadgeClass = computed(() =>
 <template>
   <article class="@container overflow-hidden rounded-xl border border-border bg-card">
     <header class="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-border bg-muted/50 px-4 py-2">
-      <time class="text-sm font-semibold tabular-nums" :datetime="note.entryDate">{{ formatDate(note.entryDate) }}</time>
+      <time class="text-sm font-semibold tabular-nums" :datetime="note.entryDate">{{ shortDate(note.entryDate) }}</time>
       <Badge variant="status" :class="kindBadgeClass">{{ journalKindLabel(note) }}</Badge>
       <span v-if="note.stage" class="text-xs text-muted-foreground">{{ note.stage }}</span>
       <span class="ml-auto flex shrink-0 items-center gap-1">
