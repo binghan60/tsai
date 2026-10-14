@@ -665,7 +665,7 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="space-y-1.5">
                   <div class="flex items-center gap-2"><Label for="med-prescription" class="text-xs font-medium">藥單內容（選填）</Label><Button type="button" variant="secondary" size="xs" class="ml-auto" :disabled="busy" @click="prescriptionEditor?.openPicker()"><Pill stroke-width="1.75" />藥櫃</Button></div>
-                  <DrugSuggestEditor ref="prescriptionEditor" hide-button id="med-prescription" v-model="form.prescription" aria-label="藥單內容" :min-rows="8" :maxlength="10000" :disabled="busy" placeholder="請輸入藥品名稱、劑量、頻次、天數及用藥指示" />
+                  <DrugSuggestEditor ref="prescriptionEditor" id="med-prescription" v-model="form.prescription" aria-label="藥單內容" :min-rows="8" :maxlength="10000" :disabled="busy" placeholder="請輸入藥品名稱、劑量、頻次、天數及用藥指示" />
                   <p class="text-xs text-muted-foreground">送出後由醫師核對，內容可以由醫師再修改；還不確定可以先留白。</p>
                 </div>
                 <div class="space-y-1.5">
@@ -677,7 +677,7 @@ onBeforeUnmount(() => {
 
             <template v-else>
               <div class="space-y-1.5"><Label for="med-condition">飼主回報</Label><RichTextEditor id="med-condition" v-model="form.condition" aria-label="飼主回報" :min-rows="5" :maxlength="5000" :disabled="busy || !clinicalEditable" placeholder="食慾、精神、症狀變化…" /></div>
-              <div class="space-y-1.5"><div class="flex items-center gap-2"><Label for="med-prescription">藥單內容</Label><Button v-if="!(busy || !clinicalEditable)" type="button" variant="secondary" size="xs" class="ml-auto" @click="prescriptionEditor?.openPicker()"><Pill stroke-width="1.75" />藥櫃</Button></div><DrugSuggestEditor ref="prescriptionEditor" hide-button id="med-prescription" v-model="form.prescription" aria-label="藥單內容" :min-rows="10" :maxlength="10000" :disabled="busy || !clinicalEditable" placeholder="請輸入藥品名稱、劑量、頻次、天數及用藥指示" /><p v-if="!terminal" class="text-xs text-muted-foreground">{{ doctor ? '請核對藥單內容後送交包藥。後續若修改內容，須重新進行醫師確認。' : '藥單經醫師確認後，包藥人員即可開始處理。' }}</p></div>
+              <div class="space-y-1.5"><div class="flex items-center gap-2"><Label for="med-prescription">藥單內容</Label><Button v-if="!(busy || !clinicalEditable)" type="button" variant="secondary" size="xs" class="ml-auto" @click="prescriptionEditor?.openPicker()"><Pill stroke-width="1.75" />藥櫃</Button></div><DrugSuggestEditor ref="prescriptionEditor" id="med-prescription" v-model="form.prescription" aria-label="藥單內容" :min-rows="10" :maxlength="10000" :disabled="busy || !clinicalEditable" placeholder="請輸入藥品名稱、劑量、頻次、天數及用藥指示" /><p v-if="!terminal" class="text-xs text-muted-foreground">{{ doctor ? '請核對藥單內容後送交包藥。後續若修改內容，須重新進行醫師確認。' : '藥單經醫師確認後，包藥人員即可開始處理。' }}</p></div>
               <div class="space-y-1.5"><Label for="med-note">處理備註</Label><RichTextEditor id="med-note" v-model="form.note" aria-label="處理備註" :min-rows="3" :maxlength="3000" :disabled="busy || !clinicalEditable" placeholder="預計領藥時間、需向飼主確認的事項…" /></div>
             </template>
 

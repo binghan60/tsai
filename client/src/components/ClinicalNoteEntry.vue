@@ -1,7 +1,7 @@
 <script setup>
 import { apiErrorMessage } from '../lib/apiError'
 import { computed, reactive, ref } from 'vue'
-import { Pencil } from '@lucide/vue'
+import { Pencil, Pill } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useStaffIdentity } from '../composables/useStaffIdentity'
@@ -50,6 +50,7 @@ const rows = computed(() => journalRows(props.note))
 const editable = computed(() => journalEditable(props.note))
 
 const editing = ref(false)
+const prescriptionEditor = ref(null)
 const saving = ref(false)
 const serverError = ref('')
 const form = reactive({})
@@ -141,10 +142,15 @@ const kindBadgeClass = computed(() =>
           </label>
           <div class="min-w-0 space-y-2">
             <!-- 藥單階段：放在內容區最上面，標籤欄只留標籤。 -->
-            <span v-if="entry.row?.stage" class="flex flex-wrap gap-1.5"><Badge variant="status" :class="medicationStageTone(entry.row.medicationStatus)">{{ entry.row.stage }}</Badge><Badge v-if="entry.row.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge></span>
+            <div v-if="entry.row?.stage || entry.key === 'prescription'" class="flex flex-wrap items-center gap-1.5">
+              <template v-if="entry.row?.stage"><Badge variant="status" :class="medicationStageTone(entry.row.medicationStatus)">{{ entry.row.stage }}</Badge><Badge v-if="entry.row.needsRepack" variant="status" class="bg-danger-surface text-danger">需重新包藥</Badge></template>
+              <!-- 藥櫃鈕在這一列的右上角。 -->
+              <Button v-if="entry.key === 'prescription'" type="button" variant="secondary" size="xs" class="ml-auto" :disabled="saving" @click="prescriptionEditor?.openPicker()"><Pill stroke-width="1.75" />藥櫃</Button>
+            </div>
             <!-- 藥單欄位邊打邊跳藥櫃建議。 -->
             <component
               :is="entry.key === 'prescription' ? DrugSuggestEditor : RichTextEditor"
+              :ref="(el) => { if (entry.key === 'prescription') prescriptionEditor = el }"
               v-if="entry.field.rich"
               :id="`journal-${entry.key}-${note._id}`"
               v-model="form[entry.key]"

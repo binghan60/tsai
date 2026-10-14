@@ -1,15 +1,17 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, reactive } from 'vue';
 import { Label } from '../ui/label';
 import FieldControl from './FieldControl.vue';
 import SelectableItem from './SelectableItem.vue';
 import RichTextField from './RichTextField.vue';
+import DrugCabinetButton from './DrugCabinetButton.vue';
 import { useRecordForm } from './context';
 import { sectionRuns } from '../../lib/sectionRuns';
 import { spanClass } from '../../lib/fieldSpan';
 
 const props = defineProps({ section: { type: Object, required: true } });
-const { valueFor, setValue } = useRecordForm();
+const { valueFor, setValue, preview } = useRecordForm();
+const proseEditors = reactive({});
 
 const items = computed(() => props.section.items ?? []);
 // 長文字一行一個、其餘欄位兩欄一排，但照使用者排定的順序切段落。
@@ -24,11 +26,14 @@ const runs = computed(() => sectionRuns(items.value, (item) => item.type === 'te
       <div v-if="run.kind === 'primary'" class="space-y-4">
         <SelectableItem v-for="item in run.items" :key="item.key" :item-key="item.key">
           <div class="space-y-1.5">
-            <Label :for="`record-${item.key}`" class="text-xs font-medium text-muted-foreground">
-              {{ item.label }}
-              <span v-if="item.required" class="text-danger" aria-hidden="true">*</span>
-            </Label>
-            <RichTextField :id="`record-${item.key}`" :model-value="valueFor(item)" :item-key="item.key" :label="item.label" :rows="item.rows ?? 4" :placeholder="item.placeholder" :drug-suggest="item.drugSuggest === true" @update:model-value="setValue(item, $event)" />
+            <div class="flex items-center gap-2">
+              <Label :for="`record-${item.key}`" class="text-xs font-medium text-muted-foreground">
+                {{ item.label }}
+                <span v-if="item.required" class="text-danger" aria-hidden="true">*</span>
+              </Label>
+              <DrugCabinetButton v-if="item.drugSuggest === true && !preview" class="ml-auto" @click="proseEditors[item.key]?.openPicker()" />
+            </div>
+            <RichTextField :ref="(el) => { proseEditors[item.key] = el }" :id="`record-${item.key}`" :model-value="valueFor(item)" :item-key="item.key" :label="item.label" :rows="item.rows ?? 4" :placeholder="item.placeholder" :drug-suggest="item.drugSuggest === true" @update:model-value="setValue(item, $event)" />
           </div>
         </SelectableItem>
       </div>

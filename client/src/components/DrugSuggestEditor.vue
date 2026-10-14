@@ -1,22 +1,19 @@
 <script setup>
 import { nextTick, onBeforeUnmount, onMounted, ref, useAttrs } from 'vue';
-import { Pill } from '@lucide/vue';
 import RichTextEditor from './RichTextEditor.vue';
 import DrugPickerDialog from './DrugPickerDialog.vue';
-import { Button } from './ui/button';
 import { useDrugCabinet } from '../composables/useDrugCabinet';
 import { drugQueryAt, rankDrugs } from '../lib/drugSuggest';
 
 // 藥單用的文字框：跟 RichTextEditor 一樣（v-model、屬性、插槽照傳），另外邊打邊跳藥櫃建議。
 // 比對規則在 lib/drugSuggest.js。只在使用者打字時才開清單（點來點去移動游標不開）；
 // 上下鍵選、Enter／Tab 插入、Esc 關掉。插入或按 Esc 之後，同一段字不再跳，接著打字才會再比對。
-// 輸入框下方一顆「藥櫃」鈕，開藥櫃視窗（分類＋勾選多選），確認後依序插成獨立的幾行。
+// 「藥櫃」鈕在標籤列右上角（使用端放），開藥櫃視窗（分類＋勾選多選），確認後依序插成獨立的幾行。
 defineOptions({ inheritAttrs: false });
 const model = defineModel({ type: String, default: '' });
 const attrs = useAttrs();
 const emit = defineEmits(['keydown']);
-// 藥櫃鈕預設在輸入框下方；標籤列有空位的使用端自己放鈕（hideButton），用 expose 的 openPicker 開視窗。
-defineProps({ hideButton: { type: Boolean, default: false } });
+// 藥櫃鈕由使用端放在標籤列右上角，用 expose 的 openPicker 開視窗。
 
 const { drugs, loadDrugs } = useDrugCabinet();
 onMounted(() => loadDrugs().catch(() => {}));
@@ -175,9 +172,6 @@ defineExpose({
     >
       <template v-for="(_, name) in $slots" #[name]="slotProps"><slot :name="name" v-bind="slotProps ?? {}" /></template>
     </RichTextEditor>
-    <div v-if="!hideButton && attrs.disabled !== true" class="mt-2">
-      <Button type="button" variant="secondary" size="sm" @click="pickerOpen = true"><Pill stroke-width="1.75" />藥櫃</Button>
-    </div>
     <DrugPickerDialog v-if="pickerOpen" @close="pickerOpen = false" @confirm="insertPicked" />
     <!-- 滑鼠真的移動才換選取：清單剛好開在靜止的滑鼠底下時，不能把 Enter 要插的那筆換掉。 -->
     <ul

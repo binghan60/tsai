@@ -25,6 +25,8 @@ const emit = defineEmits(['update:modelValue']);
 const { preview } = useRecordForm();
 const { openPicker } = useTextTemplates();
 const editor = ref(null);
+// 藥櫃鈕在標籤列（使用端放），由它呼叫。
+defineExpose({ openPicker: () => editor.value?.openPicker?.() });
 
 function openTemplates() {
   openPicker({
@@ -48,7 +50,8 @@ function openTemplates() {
     :placeholder="placeholder"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <template v-if="!preview" #toolbar-end>
+    <!-- 用藥這類開了藥櫃建議的欄位只留藥櫃一個入口，不再放文字模板鈕。 -->
+    <template v-if="!preview && !drugSuggest" #toolbar-end>
       <Button type="button" variant="secondary" size="icon-xs" :aria-label="label ? `開啟${label}文字模板` : '開啟文字模板'" v-tip="'文字模板'" @mousedown.prevent @click="openTemplates"><FileText stroke-width="1.75" /></Button>
     </template>
   </component>

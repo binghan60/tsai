@@ -51,6 +51,8 @@ router.get('/fields', async (req, res, next) => {
       (formTemplate.sections ?? []).forEach((section) => {
         (section.items ?? []).forEach((item) => {
           if (!item.key || !TEXT_TEMPLATE_ITEM_TYPES.has(item.type)) return;
+          // 開了「藥櫃建議」的欄位（用藥）只留藥櫃一個入口，不列進文字模板的適用欄位。
+          if (item.drugSuggest === true) return;
           const label = item.type === 'finding' || item.type === 'lab' ? `${item.label || '未命名欄位'}備註` : (item.label || '未命名欄位');
           const existing = fields.get(item.key) ?? {
             key: item.key,

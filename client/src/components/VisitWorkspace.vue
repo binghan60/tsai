@@ -647,7 +647,7 @@ onBeforeUnmount(() => {
           <!-- 藥單：跟本次簡易紀錄一樣寫進這次看診的病歷日誌；送交櫃台時在藥單新增一筆（待包藥）。 -->
           <section class="space-y-2" :aria-labelledby="`prescription-heading-${appointment._id}`">
             <div class="flex items-center gap-2"><h3 :id="`prescription-heading-${appointment._id}`" class="text-base font-semibold">藥單</h3><DestTag :to="['journal', 'medication']" /><Button v-if="editable" type="button" variant="secondary" size="xs" class="ml-auto" :disabled="committing" @click="prescriptionEditor?.openPicker()"><Pill stroke-width="1.75" />藥櫃</Button></div>
-            <DrugSuggestEditor ref="prescriptionEditor" :id="textareaId('prescription')" v-model="draft.prescription" aria-label="藥單" :min-rows="4" :disabled="!editable || committing" hide-button />
+            <DrugSuggestEditor ref="prescriptionEditor" :id="textareaId('prescription')" v-model="draft.prescription" aria-label="藥單" :min-rows="4" :disabled="!editable || committing" />
           </section>
 
           <section class="space-y-2">

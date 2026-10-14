@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import FieldShell from './FieldShell.vue';
 import { Input } from '../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -8,6 +8,8 @@ import { Checkbox } from '../ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import TextTemplateTrigger from './TextTemplateTrigger.vue';
 import RichTextField from './RichTextField.vue';
+import DrugCabinetButton from './DrugCabinetButton.vue';
+import { useRecordForm } from './context';
 
 // 文字／多行／日期／數字／下拉／單選／複選這幾種一般欄位共用同一個元件，
 // 差別只在控制項本身，標籤與必填標記由 FieldShell 統一處理。
@@ -19,6 +21,8 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue']);
 
 const inputId = computed(() => `record-${props.item.key}`);
+const richField = ref(null);
+const { preview } = useRecordForm();
 const value = computed({
   get: () => props.modelValue ?? '',
   set: (next) => emit('update:modelValue', next),
@@ -59,7 +63,10 @@ function toggle(option, checked) {
 
 <template>
   <FieldShell :item="item" :input-id="inputId">
-    <RichTextField v-if="item.type === 'textarea'" :id="inputId" v-model="value" :item-key="item.key" :label="item.label" :rows="item.rows ?? 3" :placeholder="item.placeholder" :drug-suggest="item.drugSuggest === true" />
+    <template v-if="item.type === 'textarea' && item.drugSuggest === true && !preview" #label-action>
+      <DrugCabinetButton @click="richField?.openPicker()" />
+    </template>
+    <RichTextField v-if="item.type === 'textarea'" :id="inputId" ref="richField" v-model="value" :item-key="item.key" :label="item.label" :rows="item.rows ?? 3" :placeholder="item.placeholder" :drug-suggest="item.drugSuggest === true" />
     <Select v-else-if="item.type === 'select'" v-model="selectValue">
       <SelectTrigger :id="inputId" class="w-full"><SelectValue placeholder="請選擇" /></SelectTrigger>
       <SelectContent>
