@@ -128,7 +128,7 @@ describe('idexxCensus', () => {
     assert.equal(message.message_dt, '10/04/2026 02:05:09 PM');
     const notice = message.body.census_notice;
     assert.equal(notice.census_notice_reason, 'inclinic');
-    assert.equal(notice.client.client_id, pet._id, '病歷號碼＝貓咪 _id');
+    assert.equal(String(notice.client.client_id), owner.phone, '飼主編號（印在報告畜主名字後面）＝飼主手機');
     assert.equal(notice.client.last_name, '王');
     assert.equal(notice.client.first_name, '小明');
     assert.equal(String(notice.patient.patient_id), owner.phone, '動物患者 ID＝飼主手機');

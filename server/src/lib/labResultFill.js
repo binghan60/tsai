@@ -11,7 +11,14 @@ export function petIdFromPatientId(patientId) {
   return /^[0-9a-f]{24}$/i.test(text) ? text : null;
 }
 
-// 結果裡可能放著貓咪 _id 的欄位，依可靠度排序：病歷號碼 client.id（現在送的）、動物患者 ID patient.id（舊版送的）。
+// 結果的 requisition_number：開單（work_request）送出去的單號是掛號 _id，IDEXX 原樣帶回來，認得出貓也認得出是哪次看診。
+// census 與在主機上直接開的檢驗沒有單號（空字串）。是不是真有這筆掛號由呼叫端查資料庫。
+export function appointmentIdFromRequisition(requisitionNumber) {
+  return petIdFromPatientId(requisitionNumber);
+}
+
+// 結果裡可能放著貓咪 _id 的欄位（舊版送的），依可靠度排序：client.id（上一版）、patient.id（更早的版本）。
+// 現在這兩欄送的都是飼主手機，不會列進來。
 // 只留長得像 _id 的、去掉重複；是不是真有這隻貓由呼叫端查資料庫（飼主的 _id 長得一樣，查不到就換下一個）。
 export function petIdCandidates({ clientId, patientId } = {}) {
   const ids = [clientId, patientId].map(petIdFromPatientId).filter(Boolean);
@@ -19,7 +26,7 @@ export function petIdCandidates({ clientId, patientId } = {}) {
 }
 
 // 結果的 patient.id 是飼主手機（送 IDEXX 時填的，lib/idexxCensus.js 的 idexxPatientId）：純數字、至少 8 碼。
-// 舊版送的是貓咪 _id（上面的 petIdFromPatientId），兩種都認。
+// client.id 現在也是同一個號碼。舊版 patient.id 送的是貓咪 _id（上面的 petIdFromPatientId），兩種都認。
 export function phoneFromPatientId(patientId) {
   const text = String(patientId ?? '').trim();
   return /^\d{8,15}$/.test(text) ? text : null;

@@ -31,6 +31,7 @@ describe('lab results routes', () => {
     findById: LabResult.findById,
     petExists: Pet.exists,
     appointmentFind: Appointment.find,
+    appointmentFindById: Appointment.findById,
     requestFind: IdexxRequest.find,
     requestUpdateOne: IdexxRequest.updateOne,
     hospitalizationFindOne: Hospitalization.findOne,
@@ -57,6 +58,7 @@ describe('lab results routes', () => {
     Object.assign(LabResult, { findOneAndUpdate: original.findOneAndUpdate, findById: original.findById });
     Pet.exists = original.petExists;
     Appointment.find = original.appointmentFind;
+    Appointment.findById = original.appointmentFindById;
     Object.assign(IdexxRequest, { find: original.requestFind, updateOne: original.requestUpdateOne });
   });
 
@@ -148,6 +150,30 @@ describe('lab results routes', () => {
     assert.deepEqual(matched.filter, { _id: 'lab-1', petId: null, dismissedAt: null, autoMatchBlocked: { $ne: true } });
     assert.equal(matched.update.$set.matchSource, 'patient_id');
     assert.deepEqual((await response.json()).fill, { status: 'already_applied' });
+  });
+
+  it('IDEXX 帶回開單時的單號（掛號 _id）：認出那筆掛號的貓', async () => {
+    process.env.IDEXX_BRIDGE_TOKEN = token;
+    const petId = '64b000000000000000000001';
+    const appointmentId = '64b0000000000000000000aa';
+    const withRequisition = catalyst.toString('utf8')
+      .replace('requisition_number="1"', `requisition_number="${appointmentId}"`)
+      .replace('client_id="000001"', 'client_id="0912345678"')
+      .replace('patient_id="000001"', 'patient_id="0912345678"');
+    let matched;
+    let appointmentQuery;
+    mockExisting(null);
+    LabResult.create = async () => ({ _id: 'lab-1' });
+    Appointment.findById = (id) => { appointmentQuery = id; return { select: () => ({ lean: async () => ({ _id: appointmentId, petId }) }) }; };
+    Pet.exists = async () => assert.fail('單號認得出來就不必再看患者編號');
+    LabResult.findOneAndUpdate = async (filter, update) => { matched = { filter, update }; return { petId }; };
+    LabResult.findById = () => ({ lean: async () => ({ _id: 'lab-1', petId, appliedAt: new Date() }) });
+    Appointment.find = () => ({ select: () => ({ lean: async () => [{ _id: appointmentId, status: 'arrived', templateId: 't1' }] }) });
+
+    const response = await upload(withRequisition);
+    assert.equal(response.status, 201);
+    assert.equal(appointmentQuery, appointmentId);
+    assert.equal(matched.update.$set.petId, petId);
   });
 
   it('IDEXX 帶回我們的貓咪編號、但當天沒有看診：不配對，留在待確認清單', async () => {

@@ -9,7 +9,7 @@ import { templateLabItems } from '../../../shared/labValues.js';
 import { mergeLabValues } from './appointmentWorkflow.js';
 import { syncAppointmentJournal } from './appointmentJournal.js';
 import { clinicDayStart, clinicToday } from './clinicTime.js';
-import { liveConflicts, matchLabItem, overwriteValues, petIdCandidates, phoneFromPatientId, pickPetForOwnerPhone, pickVisit, planLabFill, planUndo } from './labResultFill.js';
+import { appointmentIdFromRequisition, liveConflicts, matchLabItem, overwriteValues, petIdCandidates, phoneFromPatientId, pickPetForOwnerPhone, pickVisit, planLabFill, planUndo } from './labResultFill.js';
 import { emitAppointmentUpdate, emitLabResultsUpdate } from './realtime.js';
 import { withTransaction } from './transaction.js';
 import { coversTime } from './hospitalization.js';
@@ -31,11 +31,17 @@ async function hospitalizationAt(petId, at) {
   return coversTime(stay, time) ? stay : null;
 }
 
-// 結果上的 patient（id、name）與 client（id）是哪隻貓：
-//   · 病歷號碼 client.id 是貓咪 _id（現在送的），或動物患者 ID 是貓咪 _id（舊版送的），而且那隻貓存在，就是它；
+// 結果上的 requisition_number、patient（id、name）與 client（id）是哪隻貓：
+//   · 單號是掛號 _id（開單送的），而且那筆掛號連著貓，就是那隻貓；
+//   · client.id 或 patient.id 是貓咪 _id（舊版送的），而且那隻貓存在，就是它；
 //   · 動物患者 ID 是飼主手機：飼主名下、檢驗當天有看診的貓，只有一隻就是它，好幾隻用貓名比（labResultFill.pickPetForOwnerPhone）。
 // 認不出來回 null，留在待確認清單。
-async function resolvePetFromPatient({ patient, client }, runAt) {
+async function resolvePetFromPatient({ requisitionNumber, patient, client }, runAt) {
+  const appointmentId = appointmentIdFromRequisition(requisitionNumber);
+  if (appointmentId) {
+    const appointment = await Appointment.findById(appointmentId).select('petId').lean();
+    if (appointment?.petId) return appointment.petId;
+  }
   for (const candidate of petIdCandidates({ clientId: client?.id, patientId: patient?.id })) {
     if (await Pet.exists({ _id: candidate })) return candidate;
   }
@@ -51,12 +57,12 @@ async function resolvePetFromPatient({ patient, client }, runAt) {
   return pickPetForOwnerPhone(withVisit, patient?.name)?._id ?? null;
 }
 
-// 上傳後自動認貓：IDEXX 帶回報到時送出的病歷號碼（貓咪 _id）、動物患者 ID（飼主手機；舊版是貓咪 _id）。已經配對過的不動。
+// 上傳後自動認貓：IDEXX 帶回送出時的單號（掛號 _id）、飼主編號與動物患者 ID（飼主手機；舊版是貓咪 _id）。已經配對過的不動。
 // 人按過「復原」的（autoMatchBlocked）與已忽略的不再自動配回去——IDEXX 重送同一份結果時，不能把人的決定悄悄還原。
 // 檢驗當天沒有看診就不配對、留在待確認清單：沒有看診就沒有病歷日誌與健檢報告可以填，歸了貓反而哪裡都看不到。
 // 之後掛號建立或報到時由 applyPendingLabResults 再認一次。
-export async function matchByPatient(labResultId, { patient, client }, runAt = null) {
-  const petId = await resolvePetFromPatient({ patient, client }, runAt);
+export async function matchByPatient(labResultId, { requisitionNumber, patient, client }, runAt = null) {
+  const petId = await resolvePetFromPatient({ requisitionNumber, patient, client }, runAt);
   if (!petId) return null;
   // 住院中驗的也算（連到住院單）。
   if (!(await visitOnRunDay(petId, { runAt, createdAt: new Date() })).visit && !(await hospitalizationAt(petId, runAt))) return null;
@@ -185,7 +191,7 @@ export async function applyPendingLabResults(appointment) {
     // 帶著這隻貓的編號、卻因為當天還沒有看診而留在待確認清單的：現在有看診了，認回來並填入。
     let linked = 0;
     if (start) {
-      // 患者編號有兩種：貓咪 _id（舊版）與飼主手機（現在）。
+      // 帶回來的編號：單號＝掛號 _id（現在）、患者編號是飼主手機（現在）或貓咪 _id（舊版）。
       const owner = appointment.ownerId ? await Owner.findById(appointment.ownerId).select('phone').lean() : null;
       const patientIds = [String(appointment.petId), String(owner?.phone ?? '').replace(/\D/g, '')].filter(Boolean);
       const petIdText = String(appointment.petId);
@@ -193,9 +199,9 @@ export async function applyPendingLabResults(appointment) {
         petId: null,
         dismissedAt: null,
         autoMatchBlocked: { $ne: true },
-        $or: [{ 'client.id': petIdText }, { 'patient.id': { $in: patientIds } }],
+        $or: [{ requisitionNumber: String(appointment._id) }, { 'client.id': petIdText }, { 'patient.id': { $in: patientIds } }],
         runAt: { $gte: start, $lt: clinicDayStart(appointment.date, 1) },
-      }).select('_id patient client runAt').lean();
+      }).select('_id requisitionNumber patient client runAt').lean();
       for (const result of waiting) {
         if (!(await matchByPatient(result._id, result, result.runAt))) continue;
         await applyLabResult(result._id);
