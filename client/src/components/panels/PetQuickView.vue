@@ -17,6 +17,7 @@ import SidePanel from './SidePanel.vue';
 import SpecGrid from '../SpecGrid.vue';
 import SpecCell from '../SpecCell.vue';
 import PetSex from '../PetSex.vue';
+import StrayBadge from '../StrayBadge.vue';
 import ClinicalNotesPanel from '../ClinicalNotesPanel.vue';
 import FilterTabs from '../FilterTabs.vue';
 import ListSkeleton from '../ListSkeleton.vue';
@@ -130,6 +131,7 @@ async function togglePin() {
     <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
     <div v-else-if="pet" class="space-y-5">
+      <StrayBadge v-if="pet.isStray" />
       <SpecGrid>
         <SpecCell label="品種">{{ catBreedLabel(pet.breed) || pet.species }}</SpecCell>
         <SpecCell v-if="pet.sex === 'male' || pet.sex === 'female'" label="性別"><PetSex :sex="pet.sex" :neutered="pet.neutered" with-label /></SpecCell>

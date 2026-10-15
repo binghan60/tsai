@@ -29,6 +29,7 @@ import DepositBadge from './DepositBadge.vue';
 import DepositField from './DepositField.vue';
 import { checkDepositDecision } from '../../../shared/deposit.js';
 import SurgeryBadge from './SurgeryBadge.vue';
+import StrayBadge from './StrayBadge.vue';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
@@ -420,6 +421,7 @@ async function reopen() {
             <div class="flex flex-wrap items-center gap-2">
               <DialogTitle class="text-xl leading-tight"><PatientLink :pet-id="appointment.petId">{{ appointment.petName }}</PatientLink></DialogTitle>
               <Badge v-if="appointment.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
+              <StrayBadge v-if="appointment.isStray" />
               <SurgeryBadge v-if="appointment.isSurgery" :name="appointment.surgeryName" />
               <LatenessBadge :minutes="appointment.latenessMinutes" />
               <DepositBadge :status="appointment.depositStatus" />
@@ -435,7 +437,8 @@ async function reopen() {
             <SpecGrid>
               <SpecCell label="飼主"><PatientLink v-if="appointment.ownerName" :pet-id="appointment.petId" quiet>{{ appointment.ownerName }}</PatientLink></SpecCell>
               <SpecCell v-if="appointment.ownerPhone" label="電話" mono><a :href="`tel:${appointment.ownerPhone}`" class="text-primary">{{ appointment.ownerPhone }}</a></SpecCell>
-              <SpecCell label="預約" mono>{{ shortDate(appointment.date) }} {{ appointment.time || '' }}</SpecCell>
+              <SpecCell v-if="appointment.walkInAt" label="預約">{{ shortDate(appointment.date) }} 現場</SpecCell>
+              <SpecCell v-else label="預約" mono>{{ shortDate(appointment.date) }} {{ appointment.time || '' }}</SpecCell>
               <SpecCell v-if="appointment.handoffAt" label="交櫃台" mono>{{ clinicTimeInput(appointment.handoffAt) }}</SpecCell>
               <SpecCell v-if="appointment.deskCompletedAt" label="完成" mono>{{ clinicTimeInput(appointment.deskCompletedAt) }}</SpecCell>
             </SpecGrid>

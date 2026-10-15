@@ -31,6 +31,7 @@ import { APPOINTMENT_TIME_ERROR, isValidAppointmentTime, normalizeEstimatedDurat
 import { checkMobilePhone } from '../../../shared/phone.js';
 import { escapeRegExp } from '../lib/regex.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
+import { ensureClinicOwner } from '../lib/clinicOwner.js';
 
 const router = Router();
 router.use('/:id/workflow', appointmentWorkflowRouter);
@@ -268,6 +269,7 @@ router.post('/', async (req, res, next) => {
     let ownerPhone;
     let petName;
     let species;
+    let isStray = false;
 
     if (petId !== undefined && petId !== null && petId !== '') {
       // 回診：不信任前端傳來的快照欄位，一律用資料庫當下的資料覆寫，避免快照與實際病患對不上。
@@ -279,6 +281,7 @@ router.post('/', async (req, res, next) => {
       ownerPhone = pet.ownerId?.phone ?? '';
       petName = pet.name;
       species = pet.species;
+      isStray = pet.isStray === true;
     } else {
       // 初診：身分尚未確定，先存文字快照，報到時才正式建檔。
       ownerName = String(req.body.ownerName || '').trim();
@@ -335,6 +338,7 @@ router.post('/', async (req, res, next) => {
       ownerPhone,
       petName,
       species,
+      isStray,
       reason: reason || '',
       isSurgery,
       surgeryName,
@@ -400,7 +404,7 @@ router.post('/backfill', async (req, res, next) => {
         date, time, scheduledAt: at,
         ownerId: pet.ownerId?._id ?? null, petId: pet._id,
         ownerName: pet.ownerId?.name ?? '', ownerPhone: pet.ownerId?.phone ?? '',
-        petName: pet.name, species: pet.species,
+        petName: pet.name, species: pet.species, isStray: pet.isStray === true,
         visitType: 'return',
         reason: String(req.body.reason || '').trim(),
         templateId: template._id,
@@ -416,6 +420,114 @@ router.post('/backfill', async (req, res, next) => {
     emitAppointmentUpdate(appointment);
     emitClinicalNoteUpdate({ petId: appointment.petId, appointmentId: appointment._id });
     res.status(201).json({ appointment, record });
+    await applyPendingLabResults(appointment);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 報到時櫃台可以填手上實際發出的號碼牌；沒填回 { number: null }，由伺服器配。
+function suppliedCheckinNumber(value) {
+  if (value === undefined || value === null || String(value).trim() === '') return { number: null };
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 1) return { error: '號碼牌必須是從 1 開始的整數' };
+  return { number };
+}
+
+const STRAY_BRINGERS = ['clinic', 'owner', 'new'];
+const PET_SEXES = ['unknown', 'male', 'female'];
+
+// POST /api/appointments/walk-in — 現場加看：沒有掛號、空檔幫忙看的（流浪貓常是這樣）。
+// 只限今天、已建檔的貓（petId），或當場建一隻新的流浪貓（strayPet）；新的一般病患照舊掛號、填初診表。
+// strayPet：{ name, sex, color, bringer: clinic（院內）| owner（既有飼主 ownerId）| new（新的人 ownerName、ownerPhone） }。
+// 同一個 transaction 建貓（與飼主）、建掛號、報到（配號碼牌、建健檢報告草稿）。不算遲到、不收保證金。
+router.post('/walk-in', async (req, res, next) => {
+  try {
+    const { petId } = req.body;
+    const stray = req.body?.strayPet;
+    if (petId) {
+      if (!mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '貓咪編號格式不正確' });
+    } else {
+      if (!stray || typeof stray !== 'object') return res.status(422).json({ message: '請選擇貓咪' });
+      if (!String(stray.name ?? '').trim()) return res.status(422).json({ message: '請填寫貓咪名字' });
+      if (stray.sex !== undefined && !PET_SEXES.includes(stray.sex)) return res.status(422).json({ message: '性別不正確' });
+      if (!STRAY_BRINGERS.includes(stray.bringer)) return res.status(422).json({ message: '請選擇帶貓的人' });
+      if (stray.bringer === 'owner' && !mongoose.isValidObjectId(stray.ownerId)) return res.status(422).json({ message: '請選擇飼主' });
+      if (stray.bringer === 'new') {
+        if (!String(stray.ownerName ?? '').trim()) return res.status(422).json({ message: '請填寫帶貓的人的姓名' });
+        if (!String(stray.ownerPhone ?? '').trim()) return res.status(422).json({ message: '請填寫帶貓的人的手機' });
+        const checked = checkMobilePhone(stray.ownerPhone);
+        if (checked.error) return res.status(422).json({ message: checked.error });
+      }
+    }
+    const supplied = suppliedCheckinNumber(req.body?.checkinNumber);
+    if (supplied.error) return res.status(422).json({ message: supplied.error });
+    const template = await resolveAppointmentTemplate(req.body.templateId);
+    const clinic = !petId && stray.bringer === 'clinic' ? await ensureClinicOwner() : null;
+
+    let appointment;
+    let pet;
+    await withTransaction(async (session) => {
+      if (petId) {
+        pet = await Pet.findById(petId).session(session);
+        if (!pet) throw Object.assign(new Error('找不到指定的貓咪'), { status: 422 });
+        // 今天已經掛了號（還沒報到或人在院內）卻用現場：原本那筆會放著變成遲到、未到，未到還會算進保證金門檻。
+        const booked = await Appointment.exists({ petId: pet._id, date: clinicToday(), status: { $in: ['scheduled', 'arrived', 'pending_checkout'] } }).session(session);
+        if (booked) throw Object.assign(new Error('這隻貓今天已經有掛號，請從那一筆報到'), { status: 409 });
+      } else {
+        let owner;
+        if (stray.bringer === 'new') {
+          [owner] = await Owner.create([{
+            name: String(stray.ownerName).trim(),
+            phone: checkMobilePhone(stray.ownerPhone).phone,
+            relationVersion: 1,
+          }], { session });
+        } else {
+          // 跟「刪除飼主」在 transaction 裡互相衝突，不會建在一位剛被刪掉的飼主名下。
+          owner = await Owner.findOneAndUpdate(
+            { _id: clinic?._id ?? stray.ownerId },
+            { $inc: { relationVersion: 1 } },
+            { new: true, session },
+          );
+          if (!owner) throw Object.assign(new Error('找不到指定的飼主'), { status: 422 });
+        }
+        [pet] = await Pet.create([{
+          name: String(stray.name).trim(),
+          sex: stray.sex ?? 'unknown',
+          color: String(stray.color ?? '').trim(),
+          isStray: true,
+          ownerId: owner._id,
+        }], { session });
+      }
+      const owner = await Owner.findById(pet.ownerId).select('name phone').session(session).lean();
+      const now = new Date();
+      appointment = new Appointment({
+        date: clinicToday(now),
+        time: '',
+        scheduledAt: now,
+        ownerId: pet.ownerId,
+        petId: pet._id,
+        ownerName: owner?.name ?? '',
+        ownerPhone: owner?.phone ?? '',
+        petName: pet.name,
+        species: pet.species,
+        isStray: pet.isStray,
+        visitType: 'return',
+        reason: String(req.body.reason || '').trim(),
+        templateId: template._id,
+        status: 'arrived',
+        checkedInAt: now,
+        walkInAt: now,
+      });
+      await createCheckinRecord(appointment, session);
+      const issuedAppointments = await appointmentsWithIssuedNumbers(appointment.date, session);
+      appointment.checkinNumber = supplied.number ?? nextAvailableCheckinNumber(issuedAppointments);
+      rememberCheckinNumber(appointment, appointment.checkinNumber);
+      await appointment.save({ session });
+      await syncAppointmentJournal(appointment, { session });
+    });
+    emitAppointmentUpdate(appointment);
+    res.status(201).json({ appointment, pet });
     await applyPendingLabResults(appointment);
   } catch (err) {
     next(err);
@@ -536,12 +648,8 @@ router.post('/:id/check-in', async (req, res, next) => {
     const scheduledAt = new Date(appointment.scheduledAt);
     const lateAt = String(req.body?.lateAt || '');
     if (isLate && lateAt && !/^\d{2}:\d{2}$/.test(lateAt)) return res.status(422).json({ message: '實際到院時間格式不正確' });
-    const suppliedNumber = req.body?.checkinNumber;
-    const hasSuppliedNumber = suppliedNumber !== undefined && suppliedNumber !== null && String(suppliedNumber).trim() !== '';
-    const requestedCheckinNumber = hasSuppliedNumber ? Number(suppliedNumber) : null;
-    if (hasSuppliedNumber && (!Number.isSafeInteger(requestedCheckinNumber) || requestedCheckinNumber < 1)) {
-      return res.status(422).json({ message: '號碼牌必須是從 1 開始的整數' });
-    }
+    const supplied = suppliedCheckinNumber(req.body?.checkinNumber);
+    if (supplied.error) return res.status(422).json({ message: supplied.error });
     const arrivalAt = isLate && lateAt ? combineClinicDateTime(appointment.date, lateAt) : new Date();
     const latenessMinutes = isLate && !Number.isNaN(scheduledAt.getTime())
       ? Math.max(0, Math.floor((arrivalAt.getTime() - scheduledAt.getTime()) / 60000))
@@ -566,7 +674,7 @@ router.post('/:id/check-in', async (req, res, next) => {
       appointment.status = 'arrived';
       appointment.checkedInAt = new Date();
       appointment.latenessMinutes = latenessMinutes;
-      appointment.checkinNumber = hasSuppliedNumber ? requestedCheckinNumber : nextAvailableCheckinNumber(issuedAppointments);
+      appointment.checkinNumber = supplied.number ?? nextAvailableCheckinNumber(issuedAppointments);
       rememberCheckinNumber(appointment, appointment.checkinNumber);
       // 取消報到時收掉的「上傳影像」待辦，勾選還在就補回來。
       todosRestored = await restoreImageUploadTodo(appointment, { session });
@@ -692,6 +800,8 @@ router.post('/:id/restore', async (req, res, next) => {
     if (!canTransitionAppointmentStatus(appointment.status, 'scheduled')) {
       return res.status(422).json({ message: describeAppointmentTransition(appointment.status, 'scheduled') });
     }
+    // 現場加看沒有「待報到」這一段：退回去會變成一筆沒有時段、馬上算遲到未報到的掛號。要取消就取消。
+    if (appointment.walkInAt) return res.status(422).json({ message: '現場不能取消報到或恢復，要取消請用取消現場' });
     const wasQueued = appointment.status === 'arrived';
     appointment.status = 'scheduled';
     appointment.cancelReason = '';

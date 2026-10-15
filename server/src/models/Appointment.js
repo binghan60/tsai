@@ -134,6 +134,12 @@ const appointmentSchema = new mongoose.Schema(
     // 補登的看診（POST /appointments/backfill）：事後補一筆過去的看診來寫健檢報告，
     // 建立時三個里程碑就一起寫成看診當時、直接是已完成——流水線上唯一的捷徑，不經過掛號台與診療台。
     backfilledAt: { type: Date, default: null },
+    // 現場加看（POST /appointments/walk-in）：沒有掛號、空檔幫忙看的。建立時就報到（time 留空、scheduledAt＝建立當下），
+    // 不算遲到、不收保證金；沒有「取消報到」（退回待報到會變成遲到未報到），要取消就是取消，出席紀錄不列。
+    walkInAt: { type: Date, default: null },
+    // 貓咪的流浪貓標記快照：掛號台、診療台的卡片畫徽章用（即時廣播只帶掛號本身）。
+    // 貓咪資料改了標記時，跟著更新這隻貓今天以後的掛號（lib/strayPet.js）。
+    isStray: { type: Boolean, default: false },
     // 醫師對已完成的就診提出的修改申請；保留原因與時間，櫃台核准後才可再修改。
     reopenRequest: {
       reason: { type: String, default: '', trim: true, maxlength: 500 },

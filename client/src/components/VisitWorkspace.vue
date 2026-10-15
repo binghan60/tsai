@@ -6,6 +6,7 @@ import PatientLink from './PatientLink.vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
 import { ArrowRight, FileText, FlaskConical, Pencil, Pill, Stethoscope, Undo2 } from '@lucide/vue'
 import SurgeryBadge from './SurgeryBadge.vue'
+import StrayBadge from './StrayBadge.vue'
 import LatenessBadge from './LatenessBadge.vue'
 import CheckinNumber from './CheckinNumber.vue'
 import SpecGrid from './SpecGrid.vue'
@@ -505,6 +506,7 @@ onBeforeUnmount(() => {
             <div class="flex flex-wrap items-center gap-2">
               <h2 class="text-xl leading-tight font-semibold"><PatientLink :pet-id="appointment.petId">{{ appointment.petName }}</PatientLink></h2>
               <Badge v-if="appointment.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
+              <StrayBadge v-if="appointment.isStray" />
             </div>
             <div class="flex flex-wrap items-start justify-between gap-x-8 gap-y-2.5">
               <SpecGrid>
@@ -527,7 +529,8 @@ onBeforeUnmount(() => {
                   </SpecCell>
                 </SpecGrid>
                 <SpecGrid>
-                  <SpecCell label="預約" mono>{{ appointment.time }}</SpecCell>
+                  <SpecCell v-if="appointment.walkInAt" label="預約">現場</SpecCell>
+                  <SpecCell v-else label="預約" mono>{{ appointment.time }}</SpecCell>
                   <SpecCell v-if="appointment.checkedInAt" label="報到" mono>{{ clinicTimeInput(appointment.checkedInAt) }}</SpecCell>
                   <SpecCell v-if="visitElapsed" :label="visitElapsed.clock ? '開始看診' : '看診'" mono>{{ visitElapsed.text }}</SpecCell>
                   <SpecCell v-if="appointment.handoffAt" label="交櫃台" mono>{{ clinicTimeInput(appointment.handoffAt) }}</SpecCell>

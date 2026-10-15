@@ -34,6 +34,7 @@ import { deskProcessingState } from '../../../shared/appointmentWorkflow.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
 import { deskStatusByRecordId, hasNoVisitRecord, NO_VISIT_RECORD_MESSAGE, visitInfoForRecord } from '../lib/recordDeskStatus.js';
 import { v4 as uuidv4 } from 'uuid';
+import { isClinicOwner } from '../lib/clinicOwner.js';
 
 // examType 不在這裡 —— 它等同於「用哪一份範本」，只在建立報告時決定，
 // 之後不能透過一般更新改動，否則已填的作答會對不上表單結構。
@@ -411,7 +412,7 @@ recordsRouter.get('/:id', async (req, res, next) => {
   try {
     const record = await MedicalRecord.findById(req.params.id).populate({
       path: 'petId',
-      populate: { path: 'ownerId', select: 'name phone email' },
+      populate: { path: 'ownerId', select: 'name phone email kind' },
     });
     if (!record) return res.status(404).json({ message: '找不到報告' });
     // 連著看診的草稿先疊上看診的值；填寫頁靠 visitLink 知道這幾欄改了會寫回看診。
@@ -932,6 +933,9 @@ recordsRouter.post('/:id/share', async (req, res, next) => {
     const record = await MedicalRecord.findById(req.params.id);
     if (!record) return res.status(404).json({ message: '找不到報告' });
     if (!isFinalizedRecord(record)) return res.status(409).json({ message: '請先結案，再建立分享連結' });
+    // 院內的流浪貓沒有飼主手機，報告就沒有密碼：分享出去的連結誰拿到都打得開。
+    const pet = await Pet.findById(record.petId).select('ownerId').populate('ownerId', 'kind').lean();
+    if (isClinicOwner(pet?.ownerId)) return res.status(409).json({ message: '院內的貓沒有飼主手機，報告沒有密碼，不能建立分享連結' });
 
     record.shareEnabled = true;
     record.sharedAt = new Date();

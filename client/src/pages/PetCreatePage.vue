@@ -24,6 +24,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import { Card } from '../components/ui/card';
 import { Label } from '../components/ui/label';
 import { Input } from '../components/ui/input';
+import { Checkbox } from '../components/ui/checkbox';
 import { DatePicker } from '../components/ui/date-picker';
 import { Textarea } from '../components/ui/textarea';
 import { Button } from '../components/ui/button';
@@ -51,6 +52,8 @@ const ownerMode = ref('new');
 const OWNER_MODE_OPTIONS = [
   { value: 'new', label: '建立新飼主' },
   { value: 'existing', label: '選擇既有飼主' },
+  // 沒人負責的流浪貓：建在系統內建的「院內」飼主名下（POST /owners/clinic/pets），一律標成流浪貓。
+  { value: 'clinic', label: '院內流浪貓' },
 ];
 
 const ownerQuery = ref('');
@@ -134,13 +137,15 @@ function switchModeToNewWithQuery() {
 
 const newOwner = ref(emptyOwnerDraft());
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const activeOwnerName = computed(() => ownerMode.value === 'existing'
-  ? selectedOwner.value?.name ?? ''
-  : newOwner.value.name.trim());
+const activeOwnerName = computed(() => {
+  if (ownerMode.value === 'existing') return selectedOwner.value?.name ?? '';
+  if (ownerMode.value === 'clinic') return '院內';
+  return newOwner.value.name.trim();
+});
 
 watch(ownerMode, (mode) => {
   errors.owner = '';
-  if (mode === 'new') selectedOwner.value = null;
+  if (mode !== 'existing') selectedOwner.value = null;
 });
 
 // ----------------------------------------------------
@@ -293,7 +298,7 @@ function validateForm() {
       valid = false;
       firstErrorId = firstErrorId || 'owner-search-input';
     }
-  } else {
+  } else if (ownerMode.value === 'new') {
     if (!newOwner.value.name.trim()) {
       errors.newOwnerName = '請填寫飼主姓名';
       valid = false;
@@ -365,7 +370,9 @@ async function submit() {
 
     const { data: pet } = ownerMode.value === 'existing'
       ? await http.post(`/owners/${selectedOwner.value._id}/pets`, payload)
-      : await http.post('/owners/with-pet', { owner: newOwner.value, pet: payload });
+      : ownerMode.value === 'clinic'
+        ? await http.post('/owners/clinic/pets', payload)
+        : await http.post('/owners/with-pet', { owner: newOwner.value, pet: payload });
     toast.success(`已成功為 ${activeOwnerName.value} 新增「${pet.name}」`, '新增貓咪成功');
     leavingAfterAction.value = true;
     await router.push(`/pets/${pet._id}`);
@@ -552,8 +559,8 @@ onBeforeUnmount(() => {
               </div>
             </template>
 
-            <!-- 模式 2：建立新飼主 -->
-            <div v-else class="grid gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
+            <!-- 模式 2：建立新飼主（院內流浪貓不用填飼主） -->
+            <div v-else-if="ownerMode === 'new'" class="grid gap-4 @xl:grid-cols-2 @4xl:grid-cols-3">
               <div class="space-y-1.5">
                 <Label for="new-owner-name" class="text-xs font-medium text-foreground">飼主姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
                 <Input
@@ -637,6 +644,9 @@ onBeforeUnmount(() => {
                 <Label for="new-pet-color" class="text-xs font-medium text-foreground">花色</Label>
                 <Input id="new-pet-color" v-model="petForm.color" placeholder="例：橘白、玳瑁、虎斑" />
               </div>
+              <!-- 院內流浪貓一律是流浪貓；愛媽、志工帶來的自己勾。 -->
+              <label v-if="ownerMode !== 'clinic'" class="flex items-center gap-2.5 self-end pb-2.5 text-sm font-medium text-foreground"><Checkbox v-model="petForm.isStray" />流浪貓</label>
+
 
               <!-- 出生日期＋年齡推算：永遠並排顯示，不做展開收合 -->
               <div class="space-y-1.5">

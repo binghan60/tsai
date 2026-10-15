@@ -39,8 +39,11 @@ import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { usePinnedPetsStore } from '../stores/pinnedPets';
 import AttendanceBadges from '../components/AttendanceBadges.vue';
 import DepositBadge from '../components/DepositBadge.vue';
+import StrayBadge from '../components/StrayBadge.vue';
+import TransferOwnerDialog from '../components/TransferOwnerDialog.vue';
 import AttendancePanel from '../components/AttendancePanel.vue';
 import NewReportDialog from '../components/NewReportDialog.vue';
+import { Checkbox } from '../components/ui/checkbox';
 import { usePetAttendance } from '../composables/usePetAttendance';
 
 const route = useRoute();
@@ -116,9 +119,13 @@ const petForm = reactive({
   checkupStatus: 'unknown',
   checkupDate: '',
   notes: '',
+  isStray: false,
 });
 
 const ownerEditing = ref(false);
+// 院內（系統內建、掛沒人負責的流浪貓）：不能編輯，貓咪的流浪貓標記也拿不掉（要先換飼主）。
+const ownerIsClinic = computed(() => pet.value?.ownerId?.kind === 'clinic');
+const transferOpen = ref(false);
 const ownerSaving = ref(false);
 const ownerError = ref('');
 const ownerForm = reactive({ name: '', phone: '', landline: '', email: '', address: '', notes: '' });
@@ -291,7 +298,8 @@ const hasAnyPetDetail = computed(() => Boolean(
 // 條件跟原本並排按鈕的 v-if 完全一樣，只是換成資料而不是模板分支。
 function rowActions(record) {
   const actions = [];
-  if (isFinalizedRecord(record) && !isShareActive(record)) {
+  // 院內的貓沒有飼主手機，報告沒有密碼，不能開分享連結。
+  if (isFinalizedRecord(record) && !isShareActive(record) && !ownerIsClinic.value) {
     actions.push({ key: 'share', label: sharingId.value === record._id ? '處理中…' : '建立分享連結', icon: Share2, disabled: sharingId.value === record._id });
   }
   if (isShareActive(record)) {
@@ -370,6 +378,7 @@ function startPetEdit() {
     checkupStatus: pet.value.checkupStatus ?? 'unknown',
     checkupDate: pet.value.checkupDate ?? '',
     notes: pet.value.notes ?? '',
+    isStray: pet.value.isStray === true,
   });
   petError.value = '';
   petEditing.value = true;
@@ -394,6 +403,8 @@ async function submitPetEdit() {
       mealsPerDay: petForm.mealsPerDay === '' || petForm.mealsPerDay == null ? null : Number(petForm.mealsPerDay),
       expectedVersion: pet.value.__v,
     };
+    // 院內的貓一定是流浪貓（要拿掉標記得先換飼主），不送這一欄。
+    if (ownerIsClinic.value) delete payload.isStray;
     await http.put(`/pets/${pet.value._id}`, payload);
     petEditing.value = false;
     toast.success(`已成功更新「${petForm.name}」的資料`, '修改資料成功');
@@ -651,6 +662,7 @@ watch(pet, async (value) => {
         <span v-if="pet.allergyStatus === 'yes'" class="inline-flex h-7 items-center gap-1.5 rounded-full bg-destructive-solid px-2.5 text-sm font-semibold text-destructive-solid-foreground"><AlertTriangle class="size-4" stroke-width="2" />藥物過敏：{{ pet.allergyType || '未註明藥物' }}</span>
         <AttendanceBadges :counts="attendanceCounts.pet" :subject="pet.name" @select="openAttendance" />
         <DepositBadge :required="Boolean(attendanceDeposit?.required)" />
+        <StrayBadge v-if="pet.isStray" />
       </template>
       <template #actions>
         <Button type="button" :variant="petPinned ? 'destructive' : 'secondary'" :disabled="pinBusy" @click="togglePin">
@@ -690,6 +702,7 @@ watch(pet, async (value) => {
             <Label for="pet-edit-color" class="text-xs font-medium text-foreground">花色</Label>
             <Input id="pet-edit-color" v-model="petForm.color" class="border-border focus:border-primary" placeholder="例：橘白、虎斑" />
           </div>
+          <label v-if="!ownerIsClinic" class="flex items-center gap-2.5 self-end pb-2.5 text-sm font-medium text-foreground"><Checkbox v-model="petForm.isStray" />流浪貓</label>
           <div class="space-y-1.5">
             <Label for="pet-edit-birth-date" class="text-xs font-medium text-foreground">{{ petForm.birthDateEstimated ? '預估生日' : '生日' }}</Label>
             <DatePicker id="pet-edit-birth-date" v-model="petForm.birthDate" aria-label="生日" class="w-full" @update:model-value="petForm.birthDateEstimated = false" />
@@ -828,7 +841,11 @@ watch(pet, async (value) => {
             <Button type="button" variant="secondary" size="sm" :disabled="ownerSaving" @click="cancelOwnerEdit"><X stroke-width="1.75" />取消</Button>
             <Button type="button" size="sm" :disabled="ownerSaving" @click="submitOwnerEdit"><Check stroke-width="1.75" />{{ ownerSaving ? '儲存中…' : '儲存' }}</Button>
           </div>
-          <Button v-else type="button" variant="secondary" size="sm" class="ml-auto" @click="startOwnerEdit"><Pencil stroke-width="1.75" />編輯</Button>
+          <template v-else>
+            <!-- 院內是系統內建的飼主，不能編輯；換飼主（被認養）收在 ⋯ 裡。 -->
+            <Button v-if="!ownerIsClinic" type="button" variant="secondary" size="sm" class="ml-auto" @click="startOwnerEdit"><Pencil stroke-width="1.75" />編輯</Button>
+            <RowActions :class="ownerIsClinic ? 'ml-auto' : ''" :actions="[{ key: 'transfer', label: '換飼主' }]" label="飼主的更多操作" @select="transferOpen = true" />
+          </template>
         </div>
 
         <Alert v-if="ownerEditing && ownerError" variant="destructive"><AlertDescription>{{ ownerError }}</AlertDescription></Alert>
@@ -1052,6 +1069,7 @@ watch(pet, async (value) => {
           @submit="removeRecord"
         />
         <NewReportDialog v-if="newReportOpen && pet" :pet="pet" @close="closeNewReport" />
+        <TransferOwnerDialog v-if="transferOpen && pet" :pet="pet" @transferred="transferOpen = false; fetchPet()" @close="transferOpen = false" />
   </section>
     
       <Alert v-else-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>

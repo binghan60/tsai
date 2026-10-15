@@ -30,6 +30,9 @@ const petSchema = new mongoose.Schema(
     checkupStatus: { type: String, enum: ['unknown', 'none', 'done'], default: 'unknown' },
     checkupDate: { type: String, default: '', trim: true },
     notes: { type: String, default: '', trim: true },
+    // 流浪貓標記：只是標記（畫面上的「流浪貓」徽章、篩選）。掛在院內飼主名下的一律是流浪貓；
+    // 愛媽、志工帶來的貓掛在他們名下、自己勾。被認養換飼主時可以拿掉。
+    isStray: { type: Boolean, default: false },
     relationVersion: { type: Number, default: 0, select: false },
   },
   { timestamps: true, optimisticConcurrency: true }

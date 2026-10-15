@@ -29,6 +29,7 @@ export function emptyPetDraft() {
     checkupStatus: 'unknown',
     checkupDate: '',
     notes: '',
+    isStray: false,
   };
 }
 

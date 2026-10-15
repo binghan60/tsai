@@ -126,7 +126,7 @@ router.post('/:action', async (req, res, next) => {
             ...booking, scheduledAt: combineClinicDateTime(booking.date, booking.time),
             ownerId: appointment.ownerId, petId: appointment.petId,
             ownerName: appointment.ownerName, ownerPhone: appointment.ownerPhone,
-            petName: appointment.petName, species: appointment.species,
+            petName: appointment.petName, species: appointment.species, isStray: appointment.isStray === true,
             visitType: 'return',
             followUpOfId: appointment._id,
             templateId: appointment.templateId,

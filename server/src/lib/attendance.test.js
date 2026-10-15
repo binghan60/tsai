@@ -17,7 +17,7 @@ test('attendanceListFilter 另外收決定過保證金的掛號，算次數的�
   assert.equal(filter.$or.length, 4);
   assert.deepEqual(filter.$or[2], { depositStatus: { $in: ['collected', 'waived', 'refunded', 'carried'] } });
   // 已取消的掛號也列在清單上，但不算次數。
-  assert.deepEqual(filter.$or[3], { status: 'cancelled' });
+  assert.deepEqual(filter.$or[3], { status: 'cancelled', walkInAt: null });
   assert.equal(attendanceFilter({ petId: 'p1' }).$or.length, 2);
 });
 

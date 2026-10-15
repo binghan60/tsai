@@ -25,6 +25,7 @@ export const PET_FIELDS = [
   'checkupStatus',
   'checkupDate',
   'notes',
+  'isStray',
 ];
 
 export function pickPetFields(body) {

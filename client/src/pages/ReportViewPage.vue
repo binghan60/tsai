@@ -80,6 +80,8 @@ const visitDeskBadges = computed(() => {
   return badges;
 });
 const sendBlocked = computed(() => Boolean(record.value?.noVisitRecord));
+// 院內的流浪貓沒有飼主手機：報告沒有密碼，不能開分享連結（伺服器也擋），也沒有 Email 可以補。
+const clinicOwned = computed(() => record.value?.owner?.kind === 'clinic');
 const autoSendPending = computed(() => Boolean(record.value?.autoSendRequestedAt));
 // 自動寄送等櫃台完成處理：連著的看診櫃台還沒按「完成處理」，排著的自動寄送先不寄（伺服器 runAutoSends 也這樣擋）。
 const awaitingDesk = computed(() => ['with_doctor', 'desk_pending'].includes(visitInfo.value?.deskStatus));
@@ -538,8 +540,8 @@ watch(
         <span class="flex items-start gap-2"><CheckCircle2 class="mt-0.5 h-5 w-5 shrink-0" /><span><strong>報告已結案（第 {{ record.reportVersion || 1 }} 版）</strong><span class="block">{{ isSent ? `已寄出至 ${record.sentTo || ownerEmail}` : deliveryFailed ? (record.deliveryError || '上次寄送失敗，可重新寄送') : deliveryUncertain ? (record.deliveryError || '上次寄送結果待確認，請先檢查收件匣') : deliverySending ? '正在寄送 Email，請稍候' : autoSendPending ? `${awaitingDesk ? '櫃台完成處理後' : 'PDF 產生後'}自動寄給 ${ownerEmail}` : '尚未寄送，可下載 PDF 或選擇寄送' }}<template v-if="record.sentAt && isSent">，時間：{{ formatDateTime(record.sentAt) }}</template></span></span></span>
         <div class="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
           <Button v-if="ownerEmail" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="emailing || deliverySending || !pdfReady || sendBlocked" @click="showEmailConfirm = true"><Mail class="h-4 w-4" /><span class="sm:hidden">{{ sendBlocked ? '不寄就診紀錄' : !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重寄 Email' : deliveryUncertain ? '確認重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span><span class="hidden sm:inline">{{ sendBlocked ? '不寄就診紀錄' : !pdfReady ? 'PDF 準備中' : emailing || deliverySending ? '寄送中…' : isSent ? '重新寄送 Email' : deliveryUncertain ? '確認後重寄' : deliveryFailed ? '重試寄送' : '寄送 Email' }}</span></Button>
-          <Button v-else-if="record.pet?._id" as-child variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm"><router-link :to="`/pets/${record.pet._id}?editOwner=1`">補填 Email</router-link></Button>
-          <Button type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" /><span class="sm:hidden">{{ sharing ? '處理中…' : shareIsActive ? '複製連結' : '建立連結' }}</span><span class="hidden sm:inline">{{ shareActionLabel }}</span></Button>
+          <Button v-else-if="record.pet?._id && !clinicOwned" as-child variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm"><router-link :to="`/pets/${record.pet._id}?editOwner=1`">補填 Email</router-link></Button>
+          <Button v-if="!clinicOwned" type="button" variant="secondary" size="sm" class="w-full justify-center border-current/25 bg-report-surface/85 text-xs text-current hover:border-current/40 hover:bg-report-surface sm:w-auto sm:text-sm" :disabled="sharing" @click="createShareLink"><Share2 class="h-4 w-4" /><span class="sm:hidden">{{ sharing ? '處理中…' : shareIsActive ? '複製連結' : '建立連結' }}</span><span class="hidden sm:inline">{{ shareActionLabel }}</span></Button>
           <div class="col-span-2 sm:col-auto">
           <RowActions
             :actions="[

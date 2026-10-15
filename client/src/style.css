@@ -136,6 +136,9 @@
   /* 手術只是另一種掛號，不是警示：紫色，跟遲到的紅色分開色相。 */
   --surgery: #7238a5;
   --surgery-surface: #f8efff;
+  /* 流浪貓標記：身分標籤，不是狀態也不是警示。暖棕色，跟初診的藍、手術的紫分開；灰色留給已取消／已停用。 */
+  --stray: #6f3919;
+  --stray-surface: #fff7df;
   /* 使用者自選的紫（文字上色、待辦標記）：不佔用手術專用的 surgery，之後要分開時只改這兩個。 */
   --mark-purple: #7238a5;
   --mark-purple-surface: #f8efff;
@@ -249,6 +252,8 @@
   --info-surface: #212a44;
   --surgery: #d3adff;
   --surgery-surface: #31253f;
+  --stray: #f2c98f;
+  --stray-surface: #3a2a17;
   --mark-purple: #d3adff;
   --mark-purple-surface: #31253f;
   --badge: #ff8a80;
@@ -323,6 +328,8 @@
   --color-danger-surface: var(--danger-surface);
   --color-surgery: var(--surgery);
   --color-surgery-surface: var(--surgery-surface);
+  --color-stray: var(--stray);
+  --color-stray-surface: var(--stray-surface);
   --color-mark-purple: var(--mark-purple);
   --color-mark-purple-surface: var(--mark-purple-surface);
   --color-badge: var(--badge);

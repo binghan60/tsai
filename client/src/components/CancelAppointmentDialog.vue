@@ -44,8 +44,10 @@ function submit() {
         <CalendarX2 class="h-5 w-5" stroke-width="1.75" />
       </div>
       <div class="min-w-0">
-        <DialogTitle>取消這筆掛號？</DialogTitle>
-        <DialogDescription class="mt-1 text-sm leading-relaxed">「{{ appointment.petName || '這筆掛號' }}」會移出今日候診流程，之後仍可從頁面下方恢復。</DialogDescription>
+        <DialogTitle>{{ appointment.walkInAt ? '取消這筆現場？' : '取消這筆掛號？' }}</DialogTitle>
+        <!-- 現場加看取消之後不能恢復（沒有待報到這一段），也不進出席紀錄。 -->
+        <DialogDescription v-if="appointment.walkInAt" class="mt-1 text-sm leading-relaxed">「{{ appointment.petName }}」會移出今日候診流程。</DialogDescription>
+        <DialogDescription v-else class="mt-1 text-sm leading-relaxed">「{{ appointment.petName || '這筆掛號' }}」會移出今日候診流程，之後仍可從頁面下方恢復。</DialogDescription>
       </div>
     </div>
 

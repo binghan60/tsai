@@ -11,7 +11,7 @@ import { petDepositState } from '../lib/deposit.js';
 import Todo from '../models/Todo.js';
 import { publishPinnedPets } from '../lib/pinnedPets.js';
 import { publishTodos } from '../lib/todos.js';
-import { emitLabResultsUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitLabResultsUpdate } from '../lib/realtime.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { withTransaction } from '../lib/transaction.js';
 import { paginatedPayload, paginationMeta, paginationOptions } from '../lib/pagination.js';
@@ -21,6 +21,9 @@ import { escapeRegExp } from '../lib/regex.js';
 import MedicationOrder from '../models/MedicationOrder.js';
 import { releaseLabResults } from '../lib/labResultApply.js';
 import { latestPetWeight } from '../lib/latestWeight.js';
+import { ensureClinicOwner, isClinicOwner } from '../lib/clinicOwner.js';
+import { moveScheduledAppointments, syncStraySnapshots } from '../lib/strayPet.js';
+import { checkMobilePhone } from '../../../shared/phone.js';
 
 const MEDICAL_RECORD_SUMMARY_FIELDS =
   'petId vet visitDate examType status deliveryStatus deliveryError reportVersion revisionOf revisionRootId supersededBy shareToken shareEnabled sharedAt shareExpiresAt sentAt sentTo finalizedAt updatedAt createdAt';
@@ -42,16 +45,20 @@ ownerPetsRouter.get('/', async (req, res, next) => {
   }
 });
 
+// ownerId 是 clinic 時建在院內飼主名下（沒人負責的流浪貓），一律標成流浪貓。
 ownerPetsRouter.post('/', async (req, res, next) => {
   try {
     const breed = checkCatBreed(req.body?.breed);
     if (breed.error) return res.status(422).json({ message: breed.error });
     const fields = pickPetFields(req.body);
     if (fields.breed !== undefined) fields.breed = breed.breed;
+    const clinic = req.params.ownerId === 'clinic';
+    const ownerId = clinic ? (await ensureClinicOwner())._id : req.params.ownerId;
+    if (clinic) fields.isStray = true;
     let pet;
     await withTransaction(async (session) => {
       const parent = await Owner.findOneAndUpdate(
-        { _id: req.params.ownerId },
+        { _id: ownerId },
         { $inc: { relationVersion: 1 } },
         { new: true, session }
       ).select('+relationVersion');
@@ -121,7 +128,7 @@ petsRouter.get('/:id', async (req, res, next) => {
     if (excludeAppointmentId !== undefined && !mongoose.isValidObjectId(excludeAppointmentId)) {
       return res.status(422).json({ message: '掛號編號格式不正確' });
     }
-    const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone landline email address notes __v');
+    const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone landline email address notes kind __v');
     if (!pet) return res.status(404).json({ message: '找不到貓咪' });
     const pagination = paginationOptions(req.query, {
       defaultLimit: 10,
@@ -221,11 +228,27 @@ petsRouter.put('/:id', async (req, res, next) => {
       }
       fields.breed = breed.breed;
     }
-    const pet = await Pet.findOneAndUpdate(
-      { _id: req.params.id, __v: expectedVersion },
-      { $set: fields, $inc: { __v: 1 } },
-      { new: true, runValidators: true }
-    );
+    // 院內飼主名下的貓一定是流浪貓：要拿掉標記得先換飼主（被認養）。
+    if (fields.isStray !== undefined) {
+      fields.isStray = fields.isStray === true;
+      if (!fields.isStray) {
+        const stored = await Pet.findById(req.params.id).select('ownerId').populate('ownerId', 'kind').lean();
+        if (!stored) return res.status(404).json({ message: '找不到貓咪' });
+        if (isClinicOwner(stored.ownerId)) return res.status(422).json({ message: '院內的貓要先換飼主，才能拿掉流浪貓標記' });
+      }
+    }
+    let pet = null;
+    let synced = [];
+    await withTransaction(async (session) => {
+      synced = [];
+      pet = await Pet.findOneAndUpdate(
+        { _id: req.params.id, __v: expectedVersion },
+        { $set: fields, $inc: { __v: 1 } },
+        { new: true, runValidators: true, session }
+      );
+      // 流浪貓標記改了：今天以後的掛號卡片跟著換徽章。
+      if (pet && fields.isStray !== undefined) synced = await syncStraySnapshots(pet._id, pet.isStray, { session });
+    });
     if (!pet) {
       const current = await Pet.findById(req.params.id).select('__v');
       if (!current) return res.status(404).json({ message: '找不到貓咪' });
@@ -233,6 +256,76 @@ petsRouter.put('/:id', async (req, res, next) => {
         message: '貓咪資料已被其他分頁更新，已重新載入最新內容，請確認後再修改',
         currentVersion: current.__v,
       });
+    }
+    for (const appointment of synced) emitAppointmentUpdate(appointment);
+    res.json(pet);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /api/pets/:id/transfer-owner — 換飼主（流浪貓被認養、愛媽轉給別人）。
+// body：{ expectedVersion, ownerId } 換到既有飼主，或 { expectedVersion, owner: { name, phone } } 建一位新飼主；
+// clearStray: true 一併拿掉流浪貓標記。不能換到院內（要放回院內的情況少，先不做）。
+// 還沒報到的掛號跟著換到新飼主；已經發生的看診、報告、藥單保留當時的飼主名字（快照）。
+petsRouter.post('/:id/transfer-owner', async (req, res, next) => {
+  try {
+    const expectedVersion = Number(req.body?.expectedVersion);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+      return res.status(428).json({ message: '缺少貓咪資料版本，請重新整理後再試' });
+    }
+    const targetId = req.body?.ownerId;
+    const newOwner = req.body?.owner;
+    let ownerInput = null;
+    if (targetId) {
+      if (!mongoose.isValidObjectId(targetId)) return res.status(422).json({ message: '飼主編號格式不正確' });
+    } else {
+      const name = String(newOwner?.name ?? '').trim();
+      if (!name) return res.status(422).json({ message: '請填寫新飼主姓名' });
+      if (!String(newOwner?.phone ?? '').trim()) return res.status(422).json({ message: '請填寫新飼主手機' });
+      const checked = checkMobilePhone(newOwner.phone);
+      if (checked.error) return res.status(422).json({ message: checked.error });
+      ownerInput = { name, phone: checked.phone };
+    }
+    const clearStray = req.body?.clearStray === true;
+
+    let pet = null;
+    let moved = [];
+    let synced = [];
+    await withTransaction(async (session) => {
+      moved = [];
+      synced = [];
+      const current = await Pet.findById(req.params.id).session(session);
+      if (!current) throw Object.assign(new Error('找不到貓咪'), { status: 404 });
+      if (current.__v !== expectedVersion) {
+        throw Object.assign(new Error('貓咪資料已被其他分頁更新，請重新整理後再試'), { status: 409 });
+      }
+      let owner;
+      if (ownerInput) {
+        [owner] = await Owner.create([{ ...ownerInput, relationVersion: 1 }], { session });
+      } else {
+        // 新舊飼主都遞增 relationVersion：跟「刪除飼主」在 transaction 裡互相衝突，不會換到一位剛被刪掉的飼主。
+        owner = await Owner.findOneAndUpdate({ _id: targetId }, { $inc: { relationVersion: 1 } }, { new: true, session });
+        if (!owner) throw Object.assign(new Error('找不到指定的飼主'), { status: 422 });
+        if (isClinicOwner(owner)) throw Object.assign(new Error('不能換到院內'), { status: 422 });
+      }
+      if (String(owner._id) === String(current.ownerId)) throw Object.assign(new Error('新飼主跟目前的飼主是同一位'), { status: 422 });
+      await Owner.updateOne({ _id: current.ownerId }, { $inc: { relationVersion: 1 } }, { session });
+      const isStray = clearStray ? false : current.isStray;
+      pet = await Pet.findOneAndUpdate(
+        { _id: current._id, __v: expectedVersion },
+        { $set: { ownerId: owner._id, isStray }, $inc: { __v: 1 } },
+        { new: true, session }
+      );
+      if (!pet) throw Object.assign(new Error('貓咪資料已被其他分頁更新，請重新整理後再試'), { status: 409 });
+      moved = await moveScheduledAppointments(pet._id, owner, isStray, { session });
+      if (isStray !== current.isStray) synced = await syncStraySnapshots(pet._id, isStray, { session });
+    });
+    const emitted = new Set();
+    for (const appointment of [...moved, ...synced]) {
+      if (emitted.has(String(appointment._id))) continue;
+      emitted.add(String(appointment._id));
+      emitAppointmentUpdate(appointment);
     }
     res.json(pet);
   } catch (err) {

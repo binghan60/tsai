@@ -21,8 +21,12 @@ export function attendanceFilter(scope) {
 // 「出席紀錄」清單用：遲到、未到，再加上約診時決定過保證金（已收／這次不收）的掛號——
 // 保證金跟遲到是同一條時間線上的事：收了之後次數歸零，列在一起才看得出是哪幾次換來這筆保證金。
 // 已取消的掛號也列：取消不算遲到或未到（不進次數、不影響保證金門檻），但從貓咪這邊要查得到曾經取消過。
+// 現場加看被取消的不列：那不是約了沒來，只是現場臨時不看了。
 export function attendanceListFilter(scope) {
-  return { ...scope, $or: [...incidentConditions(), { depositStatus: { $in: DEPOSIT_DECISIONS } }, { status: 'cancelled' }] };
+  return {
+    ...scope,
+    $or: [...incidentConditions(), { depositStatus: { $in: DEPOSIT_DECISIONS } }, { status: 'cancelled', walkInAt: null }],
+  };
 }
 
 // late／no_show 是出席事件；cancelled＝已取消的掛號；deposit＝這筆掛號本身沒有遲到或未到，只是約診時決定過保證金。

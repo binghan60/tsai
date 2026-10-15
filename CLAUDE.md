@@ -32,7 +32,7 @@
 ```
 掛號 ─(初診)→ 飼主填初診表 → 櫃台審核：建立飼主與貓咪
   │
-報到（只限今天；建立健檢報告草稿、配號碼牌）。事後要寫報告的看診不在系統裡時另有「補登看診」（直接是已完成，見第三節 appointments）
+報到（只限今天；建立健檢報告草稿、配號碼牌）。沒有掛號、空檔幫忙看的（流浪貓常是這樣）用「現場」：建立就報到（見第三節 appointments）。事後要寫報告的看診不在系統裡時另有「補登看診」（直接是已完成，見第三節 appointments）
   │
 醫師開始看診 → 量測、本次簡易紀錄、藥單、請轉告飼主、回診建議（自動存檔，即時成為病歷日誌）
   │
@@ -50,7 +50,7 @@
 | 完成後要改 | 醫師「申請修改」→ 櫃台核准；或櫃台自己「退回處理中」。都回到待櫃台處理，醫師再取回 |
 | 報到報錯 | 櫃台「取消報到」（還沒開始看診才行），或報到提示上的「復原」 |
 
-離開流程（取消掛號、取消報到、標記未到）時：歸還號碼牌、作廢送 IDEXX、取消診療台開的還沒領走的藥單、收掉還沒完成的「上傳影像」待辦、病歷日誌拿掉（內容留在掛號上，重新報到後回來）。另外，取消掛號與標記未到會讓連到這次看診的檢驗結果回到待確認清單（取消報到不動，重新報到後照樣連著）；取消掛號（與永久刪除）還會讓「約出這筆回診的那次看診」回到待安排回診。開始看診之後（含已交櫃台、已完成）不接受取消報到／取消掛號／未到。掛號台上，已報到的卡片只有「取消報到」，要取消掛號得先取消報到。
+離開流程（取消掛號、取消報到、標記未到）時：歸還號碼牌、作廢送 IDEXX、取消診療台開的還沒領走的藥單、收掉還沒完成的「上傳影像」待辦、病歷日誌拿掉（內容留在掛號上，重新報到後回來）。另外，取消掛號與標記未到會讓連到這次看診的檢驗結果回到待確認清單（取消報到不動，重新報到後照樣連著）；取消掛號（與永久刪除）還會讓「約出這筆回診的那次看診」回到待安排回診。開始看診之後（含已交櫃台、已完成）不接受取消報到／取消掛號／未到。掛號台上，已報到的卡片只有「取消報到」，要取消掛號得先取消報到；「現場」例外：沒有待報到這一段，只有「取消現場」（直接取消、不能恢復、不進出席紀錄）。
 
 ## 三、資料模型（MongoDB collections）
 
@@ -65,7 +65,9 @@
 
 ### owners 飼主
 
-`name`、`phone`（必填）、`landline`、`email`、`address`、`notes`。一位飼主可養多隻貓。**`phone` 是手機**：09 開頭 10 碼，存之前整理成純數字（`shared/phone.js` 的 `checkMobilePhone`，前後端、公開初診頁、掛號的 `ownerPhone` 共用），市話放 `landline`。修改時沒動到的舊值照收（舊系統匯入的「電話」常是市話）。
+`name`、`phone`（必填）、`landline`、`email`、`address`、`notes`、`kind`。一位飼主可養多隻貓。**`phone` 是手機**：09 開頭 10 碼，存之前整理成純數字（`shared/phone.js` 的 `checkMobilePhone`，前後端、公開初診頁、掛號的 `ownerPhone` 共用），市話放 `landline`。修改時沒動到的舊值照收（舊系統匯入的「電話」常是市話）。
+
+**院內飼主**（`kind: 'clinic'`，`lib/clinicOwner.js`）：系統內建的一筆、名字「院內」，沒人負責的流浪貓掛在它名下（每隻貓一定要有飼主）。第一次用到時建立（partial unique 索引保證只有一筆），不需要手機；不能修改、刪除，`GET /owners` 不列。因為沒有手機，這些貓的報告沒有密碼——不能開分享連結（伺服器回 409、畫面不出按鈕），也沒有 Email 可寄；IDEXX 認不出來，要手動匯入。
 
 ### pets 寵物
 
@@ -74,6 +76,8 @@
 - **`breed` 只能是 `shared/catBreeds.js` 清單上的品種**（IDEXX 主機支援的 55 種；`{ label 中文, idexx 英文, aliases 俗稱 }`）。**資料庫存 IDEXX 英文名稱**（舊系統匯入的資料本來就是這樣存，送 IDEXX 也不必轉），畫面一律經 `catBreedLabel`／`breedText` 顯示中文。存之前一律 `checkCatBreed` 整理成清單寫法；沒動到的清單外舊值照收（`checkCatBreed(value, previous)`），編輯時列「原本填寫：…」。輸入一律用 `BreedSelect.vue`。
 - **最近體重不存欄位**：`GET /pets/:id` 帶 `latestWeight { kg, date }`，讀取時從看診（已報到之後的）與已結案、沒被取代的報告（快照裡 `role: 'weight'` 那一項）挑日期最新的，同一天看診優先（`lib/latestWeight.js`）。`weightKg` 是手填的備用值（初診表、新增貓咪），只在沒有任何量測紀錄時用、`date` 為空；有量測紀錄後貓咪頁的編輯表單不再出現體重欄。結案不寫回貓咪資料。送 IDEXX 的體重也走它。
 - 寵物與報告沒有自己的編號，一律用 `_id`。報告 PDF 檔名是「貓咪名＿健檢報告＿健檢日期」（`shared/reportFilename.js`）。
+- **流浪貓** `isStray`：只是標記（「流浪貓」徽章，`StrayBadge.vue`）。院內名下的一律是流浪貓（要拿掉得先換飼主，`PUT` 回 422）；愛媽、志工帶來的建成一般飼主、自己勾。掛號上存一份快照（卡片畫徽章用），貓咪的標記改了就同一個 transaction 改這隻貓今天以後的掛號（`lib/strayPet.js`，不推進掛號版本號）。
+- **換飼主**（`POST /pets/:id/transfer-owner`，被認養）：換到既有飼主或當場建一位新飼主，可一併拿掉流浪貓標記；新舊飼主都遞增 `relationVersion`。還沒報到的掛號換成新飼主（快照一起換、版本號 +1）；已經發生的看診、報告、藥單保留當時的飼主名字。不能換到院內。
 - **刪除貓咪**：有健檢報告或病歷日誌時擋；有還在流程裡（待報到、在院、已完成）的掛號或沒取消的藥單時也擋。已取消／未到的掛號與已取消的藥單一起刪；認到這隻貓的檢驗結果回到待確認清單；暫存紀錄刪掉；待辦裡的 `#` 標記只把 `petId` 清成 null、名字快照留著。
 
 ### appointments 掛號與看診
@@ -81,7 +85,7 @@
 **一筆掛號＝一次看診**，是看診資料的唯一存放處。
 
 - 時間：`date`（`YYYY-MM-DD`，診所時區的那一天）、`time`（`HH:MM`，可留空）、`scheduledAt`（排序用的實際時刻）、`estimatedDurationMinutes`（15–240、15 的倍數，整段要落在同一診別內；跟別人重疊只提醒）。門診時段 10:00–11:45、14:00–19:30，15 分鐘一格（`lib/appointmentTime.js`，前端同一組數字），已過的時段照樣能選（現場補登）。
-- 身分：既有病患帶 `ownerId`／`petId`；初診 `petId` 是空的，等初診表審核通過才補上。兩種都存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。`petName` 必填、`ownerName` 選填（電話裡常只問得到貓名）；`ownerPhone` 填了就要是手機。`visitType`（`new`／`return`）由後端依有沒有連結貓咪決定。
+- 身分：既有病患帶 `ownerId`／`petId`；初診 `petId` 是空的，等初診表審核通過才補上。兩種都存 `ownerName`／`ownerPhone`／`petName`／`species` 快照。`petName` 必填、`ownerName` 選填（電話裡常只問得到貓名）；`ownerPhone` 填了就要是手機。`visitType`（`new`／`return`）由後端依有沒有連結貓咪決定。`isStray` 是貓咪流浪貓標記的快照（見 pets）。
 - 初診驗證碼：`intakeVerificationCode`（4 位數）在預約時間後 24 小時失效（`intakeVerificationExpiresAt`，改掛號時間時跟著移）；飼主送出初診表後記 `intakeVerificationUsedAt` 與 `intakeSubmissionId`。
 - `reason` 來院原因；`isSurgery`／`surgeryName` 手術標記（勾了名稱必填；**只是標記，沒有專屬時段**）。
 - `templateId`：報到時用來建立健檢報告草稿的表單（沒指定就用設定的預設表單）；`recordId`：那份草稿。草稿建好之後不能換表單。
@@ -95,7 +99,7 @@
 | `handoffAt` | 醫師「完成看診，送交櫃台」；「取回」清成 null | `pending_checkout` |
 | `deskCompletedAt` | 櫃台「完成處理」；核准修改／退回處理中清成 null | `completed` |
 
-`status` 由里程碑推導，不是獨立的維度；沒有 `arrived → completed` 的捷徑，每次看診都經過送交櫃台這個交接點——唯一的例外是**補登看診**（`POST /appointments/backfill`，`backfilledAt`）：事後補一筆過去的看診來寫健檢報告，建立時報到、開始看診、送交櫃台、完成處理都寫成看診當時、直接是 `completed`，不進掛號台與診療台的流程、沒有號碼牌，同時建立報告草稿與病歷日誌，只能補今天以前（含今天）。排班動作（報到、取消、未到、恢復）能走的狀態轉換在 `lib/appointmentStatus.js`。清單分段（候診／看診中／待櫃台處理／已完成…）依 `status` 分（`workflowFilter`），總覽的數字也是同一個口徑。`reopenRequest { reason, requestedAt, approvedAt }` 是醫師的修改申請。
+`status` 由里程碑推導，不是獨立的維度；沒有 `arrived → completed` 的捷徑，每次看診都經過送交櫃台這個交接點——唯一的例外是**補登看診**（`POST /appointments/backfill`，`backfilledAt`）：事後補一筆過去的看診來寫健檢報告，建立時報到、開始看診、送交櫃台、完成處理都寫成看診當時、直接是 `completed`，不進掛號台與診療台的流程、沒有號碼牌，同時建立報告草稿與病歷日誌，只能補今天以前（含今天）。另一種不經過「待報到」的是**現場**（`POST /appointments/walk-in`，`walkInAt`）：沒有掛號、空檔幫忙看的，只限今天，建立時就報到（配號碼牌、建報告草稿），`time` 留空、`scheduledAt`＝建立當下（時間軸照這個時刻排，卡片時間寫「現場」）；之後照常看診、送交櫃台、完成處理。不算遲到、不收保證金；不能取消報到或恢復（退回待報到會變成一筆馬上遲到的掛號），要取消就是取消，出席紀錄不列被取消的現場（`attendanceListFilter`）。貓咪是已建檔的貓，或當場建一隻新的流浪貓（帶貓的人：院內／既有飼主／新的人）；新的一般病患照舊掛號、填初診表。這隻貓今天已經有掛號（待報到、在院、待櫃台處理）就擋下（409），要從那一筆報到——不然原本那筆會放到變成未到、算進保證金門檻。排班動作（報到、取消、未到、恢復）能走的狀態轉換在 `lib/appointmentStatus.js`。清單分段（候診／看診中／待櫃台處理／已完成…）依 `status` 分（`workflowFilter`），總覽的數字也是同一個口徑。`reopenRequest { reason, requestedAt, approvedAt }` 是醫師的修改申請。
 
 **看診內容**（同一支 `POST /workflow/clinical` 自動存檔，1.2 秒 debounce）：
 
@@ -279,15 +283,16 @@ POST   /api/lab-results/heartbeat        心跳
 GET    /api/lab-results/requests ／ POST /api/lab-results/requests/:id/delivered   拿待送的 IDEXX 通知、回報已寫好
 
 飼主（沒有獨立頁面，跟著貓咪出現）
-GET    /api/owners?q=                    新增貓咪時搜尋既有飼主
+GET    /api/owners?q=                    新增貓咪時搜尋既有飼主（不列院內）
 POST   /api/owners ／ POST /api/owners/with-pet（新飼主＋第一隻貓，transaction）
 GET    /api/owners/:id ／ PUT /api/owners/:id（帶 expectedVersion）／ DELETE /api/owners/:id（名下還有貓擋；目前沒有畫面入口）
 GET    /api/owners/:id/attendance        飼主名下所有貓的遲到／未到次數（掛號視窗用）
 
 貓咪
-GET    /api/owners/:ownerId/pets ／ POST /api/owners/:ownerId/pets
+GET    /api/owners/:ownerId/pets ／ POST /api/owners/:ownerId/pets（ownerId 寫 clinic＝建在院內名下、標成流浪貓）
 GET    /api/pets?q=                      清單（每筆帶 lastEntryAt：最近一則病歷日誌）
 GET    /api/pets/:id（帶 latestWeight；?excludeAppointmentId= 不算那次看診，診療台用）／ PUT /api/pets/:id（帶 expectedVersion）／ DELETE /api/pets/:id（規則見第三節 pets）
+POST   /api/pets/:id/transfer-owner      換飼主（expectedVersion＋ownerId 或 owner { name, phone }；clearStray 一併拿掉流浪貓標記）
 GET    /api/pets/:id/attendance          出席紀錄清單（kind: late|no_show|cancelled|deposit）＋ counts（只算遲到與未到）＋ deposit（現在約診要不要收）
 
 病歷日誌
@@ -304,7 +309,7 @@ GET    /api/records/:id ／ PUT /api/records/:id（帶 expectedVersion，連著�
 POST   /api/records/:id/finalize         驗證必填 → 凍結 sections → 排 PDF；帶 autoSend: true 時記下 autoSendRequestedAt、PDF 產好自動寄出（信箱有問題回 autoSendError，照樣結案）
 POST   /api/records/:id/pdf/retry ／ GET /api/records/:id/pdf（加密後下載）
 POST   /api/records/:id/revisions        建立修訂草稿
-POST   /api/records/:id/share ／ POST /api/records/:id/revoke-share
+POST   /api/records/:id/share ／ POST /api/records/:id/revoke-share（院內的貓不能分享，409）
 POST   /api/records/:id/send-email       寄 PDF＋連結給飼主（真的會寄出）
 DELETE /api/records/:id                  已結案要 confirmText
 
@@ -313,6 +318,7 @@ GET    /api/appointments?date=           某一天的全部掛號，另回 patie
 GET    /api/appointments/search?q=       跨日搜尋（貓咪、飼主、電話、來院原因），新到舊、分頁
 GET    /api/appointments/intake-codes    還能用的初診驗證碼
 GET    /api/appointments/visits?petId=   「新增健檢」選看診：這隻貓在院／待櫃台處理／已完成的掛號，新到舊 30 筆，每筆帶 report（{ _id, status }，修訂過的指向最新一版；沒建過是 null）
+POST   /api/appointments/walk-in         現場（petId，或 strayPet { name, sex, color, bringer: clinic|owner|new, ownerId, ownerName, ownerPhone }；reason、templateId、checkinNumber）：同一個 transaction 建貓（與飼主）、建掛號並報到，回 { appointment, pet }
 POST   /api/appointments/backfill        補登看診（petId、date 必填，time、reason、templateId）：建立一筆已完成的看診＋報告草稿＋病歷日誌，回 { appointment, record }
 POST   /api/appointments                 新增（date 省略＝今天；達保證金門檻要帶 deposit）
 GET    /api/appointments/:id
@@ -398,10 +404,10 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 |---|---|---|
 | `/` | 總覽 | 寄送失敗橫幅（有才出現）→ 今天的門診四格（今日掛號、在院、待櫃台處理、已完成）→ 健檢報告四格（草稿、待寄送、寄送失敗、本月已寄出）→ 近 8 週健檢量（CSS 長條，固定高度、不撐滿視窗）＋院內待辦前 8 筆。每個數字都點得進對應清單 |
 | `/appointments` | 診療台 | 左欄「今日病患」（頁籤：進行中／已交櫃台／已完成；精簡／詳細切換）：每列左邊預約時間、右邊一顆狀態徽章，時間軸軌道＋「現在」線＋午休分隔，順序只由預約時間決定。右欄看診工作區（`VisitWorkspace`，一次一筆，切換前先存檔）：標頭規格欄（貓咪、飼主、就診時間）、醫療警示、可就地改的貓咪與飼主備註；內容依序量測（標頭右上有「上次報告」鈕：這隻貓最近一份已結案的健檢報告，帶健檢日期，新分頁開預覽頁；確定沒有已結案報告（含還沒建檔的初診）改標灰色「無上次報告」——「沒有值就留白」的刻意例外；還在查或查詢失敗什麼都不畫，不把查不到說成沒有。資料來自 `GET /pets/:petId/records/finalized-sources` 的第一筆）→ 檢驗報告（`VisitLabTable`，IDEXX 原文，唯讀；「匯入檢驗結果」`LabImportDialog`；填入狀態燈號）→ 本次簡易紀錄 → 藥單 → 內部備註 → 交給櫃台（請轉告飼主、回診建議）；右邊歷次病歷日誌。每個欄位旁有去處標記（`DestTag`：日誌／報告／院內／藥單）。底部：送 IDEXX、開啟健檢報告、取消看診、完成看診送交櫃台（或取回修改、申請修改） |
-| `/reception` | 掛號台 | 頁首（日期、包藥、掛號；「包藥」直接開右側藥單面板的新增藥單表單）→ 流程列四格（待報到、在院、待櫃台處理、已完成；點一格篩選 `?stage=`）→ 例外才出現的警示列（醫師申請修改、遲到未報到、待審初診表）→ 整頁時間軸（上午／下午可收合、「現在」線；已完成與未到／取消收在下面）。搜尋是跨日的，有關鍵字時換成搜尋結果表。卡片：左邊號碼牌或貓圖示＋名字與徽章，右邊飼主／電話／進度三欄（寬螢幕時小標在時間軸頂端的一列表頭、捲動時釘住，卡片只留值），最右主要動作（報到、遲到、審核、處理）＋⋯。已建檔的貓一鍵報到（自動配號碼、過了寬限自動記遲到、可復原）；初診要等飼主填好初診表、審核通過才報得了到。掛號是雙欄 Modal（`AppointmentDialog`：誰與為什麼｜時段格），選了貓之後出現出席對照表與保證金欄位。已交櫃台的開櫃台處理視窗（`HandoffSheet`）：左欄①請轉告飼主 ②本次簡易紀錄（體重體溫）③藥單（唯讀內容＋藥單階段，待領藥時可直接確認領藥），歷次日誌接在下面；右欄④處理事項（影像／收據／其他三組勾選框，含「上傳影像」，放最上面）⑤約回診（醫師建議有寫才接在標題後；`AppointmentSlotPicker split`，還沒選日期時時段格的位置是「快速選日期」3 天／1 週／2 週／4 週後），底部完成處理／退回處理中／核准修改 |
+| `/reception` | 掛號台 | 頁首（日期、包藥、現場、掛號；「包藥」直接開右側藥單面板的新增藥單表單；「現場」只在看今天時出現，開 `WalkInDialog`：已建檔的貓｜新的流浪貓）→ 流程列四格（待報到、在院、待櫃台處理、已完成；點一格篩選 `?stage=`）→ 例外才出現的警示列（醫師申請修改、遲到未報到、待審初診表）→ 整頁時間軸（上午／下午可收合、「現在」線；已完成與未到／取消收在下面）。搜尋是跨日的，有關鍵字時換成搜尋結果表。卡片：左邊號碼牌或貓圖示＋名字與徽章，右邊飼主／電話／進度三欄（寬螢幕時小標在時間軸頂端的一列表頭、捲動時釘住，卡片只留值），最右主要動作（報到、遲到、審核、處理）＋⋯。已建檔的貓一鍵報到（自動配號碼、過了寬限自動記遲到、可復原）；初診要等飼主填好初診表、審核通過才報得了到。掛號是雙欄 Modal（`AppointmentDialog`：誰與為什麼｜時段格），選了貓之後出現出席對照表與保證金欄位。已交櫃台的開櫃台處理視窗（`HandoffSheet`）：左欄①請轉告飼主 ②本次簡易紀錄（體重體溫）③藥單（唯讀內容＋藥單階段，待領藥時可直接確認領藥），歷次日誌接在下面；右欄④處理事項（影像／收據／其他三組勾選框，含「上傳影像」，放最上面）⑤約回診（醫師建議有寫才接在標題後；`AppointmentSlotPicker split`，還沒選日期時時段格的位置是「快速選日期」3 天／1 週／2 週／4 週後），底部完成處理／退回處理中／核准修改 |
 | `/medications` | 藥單 | 清單頁模板；頁籤依裝置身分預設（醫師：待醫師確認；櫃台：未完成），點貓咪切到詳情。工具欄面板是同一個 `MedicationWorkspace` 的 `compact` 版。「藥單」是物件，「領藥」只指交付 |
-| `/pets`、`/pets/:id` | 貓咪 | 「新增健檢」（貓咪頁頁首、貓咪清單每一列、報告清單）都開 `NewReportDialog`（一張大視窗；頂端選貓，從貓咪頁、貓咪清單進來時已經選好、可以更換，從報告清單進來先選；下面左右兩欄）：左欄這隻貓的看診新到舊，已有草稿「繼續填寫草稿」、已結案「查看報告」、沒有「建立報告」；右欄「補登看診」（日期、時間、來院原因、表單）。網址帶 `?newReport=1` 也會打開。詳情頁：頁首名字、舊病歷號、藥物過敏、遲到／未到徽章、「約診需收保證金」；左貓咪右飼主兩欄可就地編輯；頁籤：病歷日誌（最上面就地新增）、健檢報告、出席紀錄（含保證金與已取消的掛號，可修改保證金紀錄；頁籤數字＝清單筆數）。遲到與未到只算這隻貓自己的 |
-| `/pets/new` | 新增貓咪 | 飼主與貓咪同一頁（既有飼主／新增飼主），寬螢幕左右兩欄，有離開前的未儲存提示 |
+| `/pets`、`/pets/:id` | 貓咪 | 「新增健檢」（貓咪頁頁首、貓咪清單每一列、報告清單）都開 `NewReportDialog`（一張大視窗；頂端選貓，從貓咪頁、貓咪清單進來時已經選好、可以更換，從報告清單進來先選；下面左右兩欄）：左欄這隻貓的看診新到舊，已有草稿「繼續填寫草稿」、已結案「查看報告」、沒有「建立報告」；右欄「補登看診」（日期、時間、來院原因、表單）。網址帶 `?newReport=1` 也會打開。詳情頁：頁首名字、舊病歷號、藥物過敏、遲到／未到徽章、「約診需收保證金」、「流浪貓」；左貓咪右飼主兩欄可就地編輯（院內飼主不能編輯），飼主卡 ⋯ 裡「換飼主」（`TransferOwnerDialog`）；頁籤：病歷日誌（最上面就地新增）、健檢報告、出席紀錄（含保證金與已取消的掛號，可修改保證金紀錄；頁籤數字＝清單筆數）。遲到與未到只算這隻貓自己的 |
+| `/pets/new` | 新增貓咪 | 飼主與貓咪同一頁（新增飼主／既有飼主／院內流浪貓；前兩種貓咪欄位有「流浪貓」勾選），寬螢幕左右兩欄，有離開前的未儲存提示 |
 | `/records` | 健檢報告清單 | 跨貓咪，佇列頁籤；寄送失敗的列左側紅線；「報告」一欄同時寫報告與寄送（草稿／待寄送／寄送中／已寄出／寄送失敗／結果待確認，`lib/recordStatus.js` 的 `reportMark`），「櫃台」欄讓醫師看出這次看診櫃台做完了沒（醫師處理中／待櫃台處理／待核准修改／已完成，沒連著看診留白，`deskMark`）；一列最多一顆淡底膠囊，只給要人動手的狀態（`StatusMark.vue`）。掛號異動時清單跟著重讀 |
 | `/records/deliveries` | 寄送歷程 | 流水帳，含已刪除報告 |
 | `/records/:id/edit` | 健檢報告填寫 | 自動存草稿、離開前攔截；套用預填模板與重新帶入在頁首。**頂端一條固定列**（往下捲也在）：上排貓咪、品種、飼主、類型、過敏／病史／備註（直接寫內容）、儲存狀態，寬螢幕另有 ⋯（捨棄草稿）、儲存並返回、預覽並準備結案（窄螢幕這三顆在底部操作列）；下排是這次看診——看診日（連到診療台）、回診日期（可以改；櫃台約好或改約時那一塊變色標「櫃台已約好／已改約／回診已取消」、點一下收起，報告上醫師填的跟櫃台約的不同時標「櫃台約了…」＋「改用櫃台的」）、填入狀態燈號、櫃台狀態（`visitDeskMarks`：還沒送交櫃台／櫃台還沒處理完／待核准修改／櫃台已完成／不寄就診紀錄）。加入看診當天的房間聽 `appointment:updated`，斷線重連整份重讀。有未處理的檢驗差異時自動跳比對視窗。舊網址 `/pets/:petId/records/new` 導到貓咪頁並打開「新增健檢」 |

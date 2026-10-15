@@ -9,6 +9,7 @@ import { escapeRegExp } from '../lib/regex.js';
 import { checkMobilePhone } from '../../../shared/phone.js';
 import { checkCatBreed } from '../../../shared/catBreeds.js';
 import { pickPetFields } from '../lib/petFields.js';
+import { isClinicOwner } from '../lib/clinicOwner.js';
 
 const router = Router();
 
@@ -27,9 +28,10 @@ router.get('/', async (req, res, next) => {
   try {
     const { q } = req.query;
     const keyword = q ? new RegExp(escapeRegExp(String(q)), 'i') : null;
+    // 院內（系統內建、掛沒人負責的流浪貓）不是可以選的飼主，不列。
     const filter = keyword
-      ? { $or: [{ name: keyword }, { phone: keyword }, { landline: keyword }] }
-      : {};
+      ? { kind: { $ne: 'clinic' }, $or: [{ name: keyword }, { phone: keyword }, { landline: keyword }] }
+      : { kind: { $ne: 'clinic' } };
     const pagination = paginationOptions(req.query, { defaultLimit: 10 });
     const [owners, total] = await Promise.all([
       Owner.find(filter).sort({ createdAt: -1, _id: -1 }).skip(pagination.skip).limit(pagination.limit),
@@ -124,8 +126,9 @@ router.put('/:id', async (req, res, next) => {
     if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
       return res.status(428).json({ message: '缺少飼主資料版本，請重新整理後再試' });
     }
-    const existing = await Owner.findById(req.params.id).select('phone');
+    const existing = await Owner.findById(req.params.id).select('phone kind');
     if (!existing) return res.status(404).json({ message: '找不到飼主' });
+    if (isClinicOwner(existing)) return res.status(409).json({ message: '院內是系統內建的飼主，不能修改' });
     const validationError = validateOwnerInput({ name, phone: req.body.phone, email }, existing.phone);
     if (validationError) return res.status(422).json({ message: validationError });
     const phone = checkMobilePhone(req.body.phone, existing.phone).phone;
@@ -157,6 +160,7 @@ router.delete('/:id', async (req, res, next) => {
         error.status = 404;
         throw error;
       }
+      if (isClinicOwner(owner)) throw Object.assign(new Error('院內是系統內建的飼主，不能刪除'), { status: 409 });
       if (await Pet.exists({ ownerId: owner._id }).session(session)) {
         const error = new Error('此飼主底下仍有貓咪，請先刪除或轉移貓咪');
         error.status = 409;

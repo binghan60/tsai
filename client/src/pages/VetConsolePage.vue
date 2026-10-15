@@ -19,6 +19,7 @@ import { MIDDAY_BREAK, nowIndexInSession, SESSIONS } from '../lib/appointmentTim
 import PatientNotes from '../components/PatientNotes.vue'
 import VisitWorkspace from '../components/VisitWorkspace.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
+import StrayBadge from '../components/StrayBadge.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
@@ -219,7 +220,8 @@ const rowViews = computed(() => {
     return { kind: 'row', key: String(item._id), item, status, dot: DOT_TONE[dotTone(item, status)] }
   })
   if (queueTab.value !== 'active') return views
-  const breakAt = rows.value.findIndex((item) => item.time >= MIDDAY_BREAK.end)
+  // 現場加看沒有預約時段，用加看的時刻（scheduledAt）判斷落在午休前後。
+  const breakAt = rows.value.findIndex((item) => (item.time || clinicTimeInput(item.scheduledAt)) >= MIDDAY_BREAK.end)
   const nowAt = isToday.value && currentTime.value >= SESSIONS[0].start && currentTime.value <= SESSIONS.at(-1).end ? nowIndexInSession(rows.value, new Date(now.value)) : -1
   const result = []
   views.forEach((view, index) => {
@@ -477,7 +479,8 @@ onBeforeUnmount(() => {
             >
               <!-- 每一列左邊都是預約時間；已報到的底下一行號碼牌，還沒取號就空著。行高壓到 20＋16，精簡版有沒有號碼都是同一個列高。 -->
               <span class="flex w-12 shrink-0 flex-col">
-                <span class="num text-base leading-5 font-semibold text-foreground">{{ item.time }}</span>
+                <span v-if="item.walkInAt" class="text-base leading-5 font-semibold text-accent-foreground" v-tip="`${clinicTimeInput(item.walkInAt)} 現場`">現場</span>
+                <span v-else class="num text-base leading-5 font-semibold text-foreground">{{ item.time }}</span>
                 <span v-if="item.checkinNumber != null" class="num text-xs leading-4 text-muted-foreground">{{ item.checkinNumber }} 號</span>
               </span>
               <!-- 軌道：一條直線貫穿整份清單（往上下撐滿列的內距），圓點是這一筆的階段。精簡版置中，詳細版對齊第一行。 -->
@@ -490,6 +493,7 @@ onBeforeUnmount(() => {
                 <div class="flex min-w-0 items-center gap-2">
                   <span class="min-w-[2.5em] max-w-[70%] truncate text-base font-semibold text-foreground" v-tip.overflow="item.petName">{{ item.petName }}</span>
                   <Badge v-if="item.visitType === 'new'" variant="status" class="h-6 shrink-0 bg-info-surface px-2 text-info">初診</Badge>
+                  <StrayBadge v-if="item.isStray" class="h-6 shrink-0 px-2" />
                   <!-- 精簡版只寫「手術」（一行放不下「手術：結紮」），手術名稱滑過才出；詳細版整顆帶名稱。 -->
                   <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" :short="compact" class="h-6 min-w-0 shrink px-2" />
                   <!-- 檢驗進度：詳細版寫字，精簡版只放一個燒瓶圖示（跟遲到、備註圖示同一排）。 -->

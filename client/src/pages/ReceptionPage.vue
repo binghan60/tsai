@@ -2,7 +2,7 @@
 import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from '../components/PatientLink.vue'
-import { AlertTriangle, CalendarPlus, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, PackageCheck, Pill, Plus, RefreshCw, X } from '@lucide/vue'
+import { AlertTriangle, CalendarPlus, Cat, Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, PackageCheck, Pill, Plus, RefreshCw, X, Zap } from '@lucide/vue'
 import { http } from '../api/http'
 import { useToast } from '../composables/useToast'
 import { useCopy } from '../composables/useCopy'
@@ -23,6 +23,8 @@ import HandoffSheet from '../components/HandoffSheet.vue'
 import RowActions from '../components/RowActions.vue'
 import CheckinNumber from '../components/CheckinNumber.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
+import StrayBadge from '../components/StrayBadge.vue'
+import WalkInDialog from '../components/WalkInDialog.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
 import DepositBadge from '../components/DepositBadge.vue'
 import AppointmentDialog from '../components/AppointmentDialog.vue'
@@ -186,7 +188,8 @@ function arrivedActions(item) {
     ? [item.labRequestedAt ? { key: 'lab-cancel', label: '取消送 IDEXX' } : { key: 'lab-request', label: '送 IDEXX' }]
     : []
   // 開始看診之後不能取消報到（伺服器會擋）：醫師要先在診療台「取消看診」。
-  const restore = workflowState(item).started ? [] : [{ key: 'restore', label: '取消報到' }]
+  // 現場加看沒有待報到這一段，取消報到換成「取消現場」（直接取消，不進出席紀錄）。
+  const restore = workflowState(item).started ? [] : item.walkInAt ? [{ key: 'cancel', label: '取消現場' }] : [{ key: 'restore', label: '取消報到' }]
   return [...lab, ...restore, { key: 'edit', label: '修改掛號' }]
 }
 function decorate(item) {
@@ -435,6 +438,29 @@ async function quickCheckIn(item) {
   }
 }
 
+// 現場加看：沒有掛號、空檔幫忙看的，建立就報到（伺服器 POST /appointments/walk-in）。
+const walkInOpen = ref(false)
+function openWalkIn() {
+  dialogError.value = ''
+  walkInOpen.value = true
+}
+async function submitWalkIn(values) {
+  if (busy.value) return
+  busy.value = true
+  dialogError.value = ''
+  try {
+    const { data } = await http.post('/appointments/walk-in', values)
+    applyUpdate(data.appointment)
+    notifyChat(data.appointment, 'check_in')
+    walkInOpen.value = false
+    toast.success(`號碼牌 ${data.appointment.checkinNumber}`, `${data.appointment.petName} 現場已報到`)
+  } catch (err) {
+    dialogError.value = apiErrorMessage(err, '現場報到失敗，請稍後重試')
+  } finally {
+    busy.value = false
+  }
+}
+
 async function undoCheckIn(id) {
   const current = items.value.find((item) => String(item._id) === String(id))
   if (!current || current.status !== 'arrived' || workflowState(current).started) {
@@ -523,6 +549,7 @@ onBeforeUnmount(() => {
         <Button variant="secondary" size="icon" aria-label="後一天" @click="date = shiftDateInput(date, 1)"><ChevronRight stroke-width="1.75" /></Button>
         <span class="mx-1.5 h-6 w-px bg-border" aria-hidden="true"></span>
         <Button variant="secondary" @click="panel.push({ type: 'create' }, 'medications')"><PackageCheck stroke-width="1.75" />領藥</Button>
+        <Button v-if="isToday" variant="soft" @click="openWalkIn"><Zap stroke-width="1.75" />現場</Button>
         <Button @click="openDrawer('new')"><Plus stroke-width="1.75" />掛號</Button>
       </template>
     </PageHeader>
@@ -648,7 +675,9 @@ onBeforeUnmount(() => {
                 </div>
 
                 <div class="relative py-1">
-                  <span class="num mb-1 block text-sm font-semibold text-muted-foreground sm:absolute sm:top-4 sm:-left-9 sm:mb-0 sm:w-14 sm:-translate-x-full sm:text-right sm:text-base" :class="item.isSurgery && item.status === 'scheduled' ? 'text-surgery' : ''">{{ item.time }}</span>
+                  <!-- 現場加看沒有預約時段：寫「現場」＋加看的時刻。 -->
+                  <span v-if="item.walkInAt" class="mb-1 flex gap-2 text-sm font-semibold sm:absolute sm:top-3 sm:-left-9 sm:mb-0 sm:w-14 sm:-translate-x-full sm:flex-col sm:items-end sm:gap-0 sm:leading-tight"><span class="text-accent-foreground sm:text-base">現場</span><span class="num font-normal text-subtle-foreground">{{ clinicTimeInput(item.walkInAt) }}</span></span>
+                  <span v-else class="num mb-1 block text-sm font-semibold text-muted-foreground sm:absolute sm:top-4 sm:-left-9 sm:mb-0 sm:w-14 sm:-translate-x-full sm:text-right sm:text-base" :class="item.isSurgery && item.status === 'scheduled' ? 'text-surgery' : ''">{{ item.time }}</span>
                   <span class="absolute top-1/2 -left-4.25 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card sm:-left-5.25" :class="item.ui.tone.dot" aria-hidden="true"></span>
 
                   <!-- 整張卡片可點（開處理視窗／初診審核／修改掛號）；裡面的按鈕各自 stop，不會連帶觸發。 -->
@@ -664,6 +693,7 @@ onBeforeUnmount(() => {
                           <div class="flex min-w-0 flex-wrap items-center gap-2">
                             <span class="truncate text-base font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
                             <Badge v-if="item.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
+                            <StrayBadge v-if="item.isStray" />
                             <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
                             <LatenessBadge :minutes="item.ui.lateMinutes" />
                             <DepositBadge :status="item.depositStatus" />
@@ -763,9 +793,9 @@ onBeforeUnmount(() => {
                   <Badge variant="status" :class="closedStatusMeta(item).class">{{ closedStatusMeta(item).label }}</Badge>
                   <div class="min-w-0 flex-1">
                     <p class="truncate font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></p>
-                    <p class="truncate text-sm text-muted-foreground"><span class="num">{{ item.time }}</span>　{{ item.cancelReason || item.ownerName }}</p>
+                    <p class="truncate text-sm text-muted-foreground"><span :class="item.walkInAt ? '' : 'num'">{{ item.walkInAt ? '現場' : item.time }}</span>　{{ item.cancelReason || item.ownerName }}</p>
                   </div>
-                  <RowActions :actions="[{ key: 'restore', label: '恢復待報到' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
+                  <RowActions v-if="!item.walkInAt" :actions="[{ key: 'restore', label: '恢復待報到' }]" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
                 </article>
               </div>
             </section>
@@ -803,6 +833,7 @@ onBeforeUnmount(() => {
 
     <HandoffSheet v-if="activePatient" :key="activePatient._id" :appointment="activePatient" :patient-notes="patientNotesFor(activePatient, patientNotes).filter((note) => note.key === 'owner')" @updated="onSheetUpdate" @close="selected = ''" />
     <CheckInDialog v-if="dialog === 'check-in-detail' && target" :appointment="target" :late="itemIsOverdue(target)" :suggested-checkin-number="suggestedCheckinNumber()" :submitting="busy" :error-message="dialogError" @submit="(values) => submit(values, 'check-in-detail')" @close="dialog = ''" />
+    <WalkInDialog v-if="walkInOpen" :day-items="items" :templates="templates" :default-template-id="defaultTemplate" :suggested-checkin-number="suggestedCheckinNumber()" :submitting="busy" :error-message="dialogError" @submit="submitWalkIn" @close="walkInOpen = false" />
     <CancelAppointmentDialog v-if="dialog === 'cancel' && target" :appointment="target" :submitting="busy" :error-message="dialogError" @submit="(reason, depositOutcome) => submit({ cancelReason: reason, ...(depositOutcome ? { depositOutcome } : {}) }, 'cancel')" @close="dialog = ''" />
     <ConfirmDialog v-if="confirmation" :open="true" :title="confirmation.title" :destructive="confirmation.kind === 'no-show'" :description="`病患：${target.petName}`" :loading="busy" @confirm="submit({}, confirmation.kind)" @cancel="confirmation = null" />
   </div>
