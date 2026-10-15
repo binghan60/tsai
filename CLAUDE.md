@@ -72,6 +72,7 @@
 `name`、`ownerId`、`species`、`breed`、`color`、`sex`、`neutered`、`birthDate`（`birthDateEstimated`＝由年齡回推）、`weightKg`、家中貓口／飲食／疫苗／病史／過敏／健檢等初診欄位、`notes`、`legacyMedicalRecordNumber`（舊系統病歷號，匯入資料才有；unique＋partial）。可寫入欄位集中在 `server/src/lib/petFields.js`。
 
 - **`breed` 只能是 `shared/catBreeds.js` 清單上的品種**（IDEXX 主機支援的 55 種；`{ label 中文, idexx 英文, aliases 俗稱 }`）。**資料庫存 IDEXX 英文名稱**（舊系統匯入的資料本來就是這樣存，送 IDEXX 也不必轉），畫面一律經 `catBreedLabel`／`breedText` 顯示中文。存之前一律 `checkCatBreed` 整理成清單寫法；沒動到的清單外舊值照收（`checkCatBreed(value, previous)`），編輯時列「原本填寫：…」。輸入一律用 `BreedSelect.vue`。
+- **最近體重不存欄位**：`GET /pets/:id` 帶 `latestWeight { kg, date }`，讀取時從看診（已報到之後的）與已結案、沒被取代的報告（快照裡 `role: 'weight'` 那一項）挑日期最新的，同一天看診優先（`lib/latestWeight.js`）。`weightKg` 是手填的備用值（初診表、新增貓咪），只在沒有任何量測紀錄時用、`date` 為空；有量測紀錄後貓咪頁的編輯表單不再出現體重欄。結案不寫回貓咪資料。送 IDEXX 的體重也走它。
 - 寵物與報告沒有自己的編號，一律用 `_id`。報告 PDF 檔名是「貓咪名＿健檢報告＿健檢日期」（`shared/reportFilename.js`）。
 - **刪除貓咪**：有健檢報告或病歷日誌時擋；有還在流程裡（待報到、在院、已完成）的掛號或沒取消的藥單時也擋。已取消／未到的掛號與已取消的藥單一起刪；認到這隻貓的檢驗結果回到待確認清單；暫存紀錄刪掉；待辦裡的 `#` 標記只把 `petId` 清成 null、名字快照留著。
 
@@ -152,7 +153,7 @@
 
 ### formTemplates 健檢表單範本
 
-`name`（unique）、`description`、`species`（`cat`／`dog`／`all`）、`enabled`、`order`、`version`、`sections[]`（區塊：`key`、`title`、`reportTitle`、`presentation`、`items[]`）、`presets[]`、`retiredKeys`。使用者自由增刪區塊與項目；key 由後端產生、永不修改、刪掉的不再重用。帶 `role` 的項目（`vet`、`visitDate` 印在報告頁首，`weight` 結案時寫回貓咪體重）被移除會讓對應功能失效，存檔要確認。詳見 [docs/FORM_BUILDER.md](docs/FORM_BUILDER.md)。
+`name`（unique）、`description`、`species`（`cat`／`dog`／`all`）、`enabled`、`order`、`version`、`sections[]`（區塊：`key`、`title`、`reportTitle`、`presentation`、`items[]`）、`presets[]`、`retiredKeys`。使用者自由增刪區塊與項目；key 由後端產生、永不修改、刪掉的不再重用。帶 `role` 的項目（`vet`、`visitDate` 印在報告頁首，`weight` 是報告上的體重、算進貓咪的最近體重）被移除會讓對應功能失效，存檔要確認。詳見 [docs/FORM_BUILDER.md](docs/FORM_BUILDER.md)。
 
 - 多行文字項目的 `drugSuggest`：表單設計裡的「藥櫃建議」開關，打開的欄位填寫時跳藥櫃建議（給「用藥」這種欄位，見 drugs 藥櫃）。
 - 檢驗項目的 `idexxCodes[]`（IDEXX 項目代號，可多個，「、」或逗號分隔）與 `idexxInstrument`（檢驗別＝儀器名稱，留空＝任何儀器）：IDEXX 結果依「檢驗別＋代號」對到項目（`lib/labResultFill.js` 的 `matchLabItem`），撞名在存檔時擋。
@@ -286,7 +287,7 @@ GET    /api/owners/:id/attendance        飼主名下所有貓的遲到／未到
 貓咪
 GET    /api/owners/:ownerId/pets ／ POST /api/owners/:ownerId/pets
 GET    /api/pets?q=                      清單（每筆帶 lastEntryAt：最近一則病歷日誌）
-GET    /api/pets/:id ／ PUT /api/pets/:id（帶 expectedVersion）／ DELETE /api/pets/:id（規則見第三節 pets）
+GET    /api/pets/:id（帶 latestWeight；?excludeAppointmentId= 不算那次看診，診療台用）／ PUT /api/pets/:id（帶 expectedVersion）／ DELETE /api/pets/:id（規則見第三節 pets）
 GET    /api/pets/:id/attendance          出席紀錄清單（kind: late|no_show|cancelled|deposit）＋ counts（只算遲到與未到）＋ deposit（現在約診要不要收）
 
 病歷日誌

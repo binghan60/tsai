@@ -9,6 +9,7 @@ import { idexxCensusSettings } from '../config/idexxBridge.js';
 import { encodeBig5 } from './big5.js';
 import { buildIdexxRequestXml, idexxMessageId, inClinic, nextCensusKind } from './idexxCensus.js';
 import { emitAppointmentUpdate } from './realtime.js';
+import { latestPetWeight } from './latestWeight.js';
 
 // 開單之後這隻貓已經有檢驗結果：連到這次看診的，或開單之後才驗、已認出是這隻貓的（還沒連上看診，例如當天沒有掛號）。
 // 結果還在待確認清單、沒有 petId 的認不出來，那種情況主機上的單照舊會被取消。
@@ -44,7 +45,7 @@ export async function syncIdexxCensus(appointment, { settings = idexxCensusSetti
   const xml = buildIdexxRequestXml({
     mode, kind, messageId, now, encoding,
     appointmentId: appointment._id, pet, owner,
-    weightKg: appointment.weightKg ?? pet.weightKg,
+    weightKg: appointment.weightKg ?? (await latestPetWeight(pet))?.kg ?? null,
   });
   const { bytes, unmappable } = encoding === 'utf-8' ? { bytes: Buffer.from(xml, 'utf8'), unmappable: [] } : encodeBig5(xml);
   return IdexxRequest.create({

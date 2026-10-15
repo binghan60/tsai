@@ -137,7 +137,7 @@ const FEATURED_TYPE = {
 const ROLE_HINTS = {
   vet: '這裡填的醫師姓名會印在報告最上方。',
   visitDate: '這個日期會印在報告最上方，報告列表也依它排序。',
-  weight: '結案時會把這裡的數值存回貓咪資料的最近體重。',
+  weight: '結案後這裡的數值會算進貓咪的最近體重。',
 }
 
 const activeSection = computed(() => sections.value.find((section) => section.key === activeKey.value) ?? null)

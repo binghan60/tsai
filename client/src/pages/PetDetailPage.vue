@@ -239,7 +239,7 @@ const identityFields = computed(() => filledFields([
   { label: pet.value?.birthDateEstimated ? '預估年齡' : '年齡', value: ageLabel.value },
 ]));
 const secondaryFields = computed(() => filledFields([
-  { label: '最近體重', value: pet.value?.weightKg != null ? `${pet.value.weightKg} kg` : '' },
+  { label: '最近體重', value: latestWeightText(pet.value?.latestWeight) },
   { label: '家中貓口', value: pet.value?.householdCatCount != null ? `${pet.value.householdCatCount} 隻` : '' },
   { label: '飲食', value: pet.value?.diet ?? '' },
   { label: '主餐配菜', value: pet.value?.foods?.join('、') ?? '' },
@@ -312,6 +312,12 @@ function handleRowAction(record, action) {
 }
 function shortDate(value) {
   return formatClinicDate(value);
+}
+
+// 最近體重由伺服器從看診與已結案報告挑出來（server/src/lib/latestWeight.js），帶量測日期；手填的沒有日期。
+function latestWeightText(weight) {
+  if (!weight) return '';
+  return weight.date ? `${weight.kg} kg　${shortDate(weight.date)}` : `${weight.kg} kg`;
 }
 
 function isShareActive(record) {
@@ -707,7 +713,7 @@ watch(pet, async (value) => {
               </SelectContent>
             </Select>
           </div>
-          <div class="space-y-1.5">
+          <div v-if="!pet?.latestWeight?.date" class="space-y-1.5">
             <Label for="pet-edit-weight" class="text-xs font-medium text-foreground">目前體重（kg）</Label>
             <Input id="pet-edit-weight" v-model="petForm.weightKg" type="text" class="border-border focus:border-primary" placeholder="例：4.5" />
           </div>

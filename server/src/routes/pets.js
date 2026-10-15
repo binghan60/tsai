@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import MedicalRecord from '../models/MedicalRecord.js';
@@ -19,6 +20,7 @@ import { pickPetFields } from '../lib/petFields.js';
 import { escapeRegExp } from '../lib/regex.js';
 import MedicationOrder from '../models/MedicationOrder.js';
 import { releaseLabResults } from '../lib/labResultApply.js';
+import { latestPetWeight } from '../lib/latestWeight.js';
 
 const MEDICAL_RECORD_SUMMARY_FIELDS =
   'petId vet visitDate examType status deliveryStatus deliveryError reportVersion revisionOf revisionRootId supersededBy shareToken shareEnabled sharedAt shareExpiresAt sentAt sentTo finalizedAt updatedAt createdAt';
@@ -114,6 +116,11 @@ petsRouter.get('/', async (req, res, next) => {
 
 petsRouter.get('/:id', async (req, res, next) => {
   try {
+    // 診療台開著某次看診時帶 excludeAppointmentId，最近體重不算那一次（lib/latestWeight.js）。
+    const excludeAppointmentId = req.query.excludeAppointmentId;
+    if (excludeAppointmentId !== undefined && !mongoose.isValidObjectId(excludeAppointmentId)) {
+      return res.status(422).json({ message: '掛號編號格式不正確' });
+    }
     const pet = await Pet.findById(req.params.id).populate('ownerId', 'name phone landline email address notes __v');
     if (!pet) return res.status(404).json({ message: '找不到貓咪' });
     const pagination = paginationOptions(req.query, {
@@ -130,7 +137,7 @@ petsRouter.get('/:id', async (req, res, next) => {
       limitParam: 'noteLimit',
     });
     const noteFilter = { petId: pet._id };
-    const [medicalRecords, total, clinicalNotes, noteTotal] = await Promise.all([
+    const [medicalRecords, total, clinicalNotes, noteTotal, latestWeight] = await Promise.all([
       MedicalRecord.find(filter)
         .sort({ visitDate: -1, reportVersion: -1, updatedAt: -1 })
         .skip(pagination.skip)
@@ -144,9 +151,12 @@ petsRouter.get('/:id', async (req, res, next) => {
         .limit(notePagination.limit)
         .lean(),
       ClinicalNote.countDocuments(noteFilter),
+      latestPetWeight(pet, { excludeAppointmentId }),
     ]);
     res.json({
       ...pet.toObject(),
+      // 最近體重：看診與已結案報告裡日期最新的量測，沒有才用貓咪資料手填的 weightKg（lib/latestWeight.js）。
+      latestWeight,
       medicalRecords,
       recordPagination: paginationMeta(total, pagination),
       clinicalNotes: await clinicalNoteViews(clinicalNotes),

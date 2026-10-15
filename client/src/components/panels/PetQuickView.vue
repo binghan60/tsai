@@ -9,6 +9,7 @@ import { http } from '../../api/http';
 import { usePinnedPetsStore } from '../../stores/pinnedPets';
 import { useStaffIdentity } from '../../composables/useStaffIdentity';
 import { useToast } from '../../composables/useToast';
+import { useLiveReload } from '../../composables/useLiveReload';
 import { ageLabel, shortDate } from '../../lib/datetime';
 import { DELIVERY_STATUS_META, RECORD_STATUS_META, getDeliveryStatus, isFinalizedRecord } from '../../lib/recordStatus';
 import { medicalHistoryText } from '../../lib/petDisplay';
@@ -74,6 +75,23 @@ async function loadPet(id) {
   }
 }
 
+// 貓咪資料、最近體重（看診量的）跟著別台的異動靜默重讀；失敗就留著現有內容。
+async function refreshPet() {
+  if (!pet.value) return;
+  const token = ++request;
+  try {
+    const { data } = await http.get(`/pets/${props.petId}`);
+    if (token === request) pet.value = data;
+  } catch {
+    // 靜默重讀失敗不打擾，下一次通知或重開再讀。
+  }
+}
+
+useLiveReload(refreshPet, {
+  events: ['patients:updated', 'records:updated', 'clinical-note:updated'],
+  match: (event, payload) => event !== 'clinical-note:updated' || String(payload?.petId ?? '') === String(props.petId),
+});
+
 watch(() => props.petId, (id) => {
   tab.value = 'notes';
   loadPet(id);
@@ -116,7 +134,7 @@ async function togglePin() {
         <SpecCell label="品種">{{ catBreedLabel(pet.breed) || pet.species }}</SpecCell>
         <SpecCell v-if="pet.sex === 'male' || pet.sex === 'female'" label="性別"><PetSex :sex="pet.sex" :neutered="pet.neutered" with-label /></SpecCell>
         <SpecCell v-if="age" label="年齡">{{ age }}</SpecCell>
-        <SpecCell v-if="pet.weightKg != null" label="體重" mono>{{ pet.weightKg }} kg</SpecCell>
+        <SpecCell v-if="pet.latestWeight" label="體重" mono>{{ pet.latestWeight.kg }} kg<span v-if="pet.latestWeight.date" class="ml-2 text-sm text-subtle-foreground">{{ shortDate(pet.latestWeight.date) }}</span></SpecCell>
       </SpecGrid>
       <SpecGrid v-if="owner">
         <SpecCell label="飼主"><PatientLink :pet-id="pet._id" quiet>{{ owner.name }}</PatientLink></SpecCell>

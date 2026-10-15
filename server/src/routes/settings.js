@@ -166,7 +166,7 @@ router.put('/form-templates/:id', async (req, res, next) => {
       const { sections, retiredKeys, error } = sanitizeSections(req.body.sections, template);
       if (error) return res.status(422).json({ message: error });
 
-      // 帶 role 的項目被移除會讓報告頁首、體重寫回貓咪資料這些功能失效，需要明確確認。
+      // 帶 role 的項目被移除會讓報告頁首、報告體重算進貓咪最近體重這些功能失效，需要明確確認。
       const lost = missingRoles(sections, template);
       if (lost.length && req.body.confirmRoleRemoval !== true) {
         return res.status(409).json({

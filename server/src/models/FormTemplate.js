@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 export const ITEM_TYPES = ['text', 'textarea', 'date', 'number', 'select', 'radio', 'checkbox', 'image', 'measurement', 'finding', 'lab', 'dentalChart'];
 
 // 語意角色：讓系統不必寫死欄位名稱也能找到特定資料。每一個都有實際作用——
-// vet、visitDate 印在報告頁首（報告清單依 visitDate 排序），weight 結案時寫回貓咪的最近體重。
+// vet、visitDate 印在報告頁首（報告清單依 visitDate 排序），weight 是結案報告上的體重，算進貓咪的最近體重（lib/latestWeight.js）。
 // 帶 role 的項目可以停用或搬到別的區塊，但移除前要提醒使用者會失去對應功能。
 // 健檢類型不是表單裡的欄位，就是「用哪一份範本」，見下方 name。
 export const ITEM_ROLES = ['vet', 'visitDate', 'weight'];

@@ -6,10 +6,12 @@ import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import { decodeIdexxXml } from './idexxResult.js';
 import Appointment from '../models/Appointment.js';
+import MedicalRecord from '../models/MedicalRecord.js';
 import { markIdexxRequestDelivered, syncIdexxCensus } from './idexxRequests.js';
 
 const original = {
   findOne: IdexxRequest.findOne, create: IdexxRequest.create, petFindById: Pet.findById, ownerFindById: Owner.findById, labExists: LabResult.exists,
+  appointmentFind: Appointment.find, recordFind: MedicalRecord.find,
 };
 const pet = { _id: '66f0a1b2c3d4e5f601234567', name: '牛奶', species: '貓', sex: 'male', neutered: 'no', ownerId: 'o1', weightKg: 3.9 };
 const census = { mode: 'census', encoding: 'big5' };
@@ -22,6 +24,10 @@ function mockModels({ last = null, hasResult = false } = {}) {
   Pet.findById = () => ({ lean: async () => pet });
   Owner.findById = () => ({ lean: async () => ({ _id: 'o1', name: '王小明' }) });
   LabResult.exists = async () => (hasResult ? { _id: 'lab-1' } : null);
+  // 看診沒量體重時用貓咪的最近體重（lib/latestWeight.js）：沒有量測紀錄，退回貓咪資料上的 weightKg。
+  const none = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
+  Appointment.find = none;
+  MedicalRecord.find = none;
   return created;
 }
 
@@ -31,6 +37,8 @@ describe('idexxRequests.syncIdexxCensus', () => {
     Pet.findById = original.petFindById;
     Owner.findById = original.ownerFindById;
     LabResult.exists = original.labExists;
+    Appointment.find = original.appointmentFind;
+    MedicalRecord.find = original.recordFind;
   });
 
   it('伺服器沒開就什麼都不做，連資料庫都不查', async () => {

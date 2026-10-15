@@ -255,7 +255,11 @@ async function loadContext() {
   if (!props.appointment.petId) return
   const petId = props.appointment.petId
   try {
-    const [{ data: patient }] = await Promise.all([http.get(`/pets/${petId}`), loadNotes(notePage.value)])
+    // 最近體重不算這次看診：標頭有填顯示「本次」，沒填顯示上一次量的。
+    const [{ data: patient }] = await Promise.all([
+      http.get(`/pets/${petId}`, { params: { excludeAppointmentId: props.appointment._id } }),
+      loadNotes(notePage.value),
+    ])
     if (disposed || props.appointment.petId !== petId) return
     pet.value = patient
     if (!editingOwnerNote.value) ownerNoteDraft.value = patient?.ownerId?.notes || ''
@@ -507,9 +511,10 @@ onBeforeUnmount(() => {
                 <SpecCell label="品種">{{ catBreedLabel(pet?.breed) || appointment.species }}</SpecCell>
                 <SpecCell v-if="pet?.sex === 'male' || pet?.sex === 'female'" label="性別"><PetSex :sex="pet.sex" :neutered="pet.neutered" with-label /></SpecCell>
                 <SpecCell v-if="age" label="年齡">{{ age }}</SpecCell>
-                <SpecCell v-if="draft.weightKg !== '' || pet?.weightKg != null" label="體重" mono>
-                  {{ draft.weightKg !== '' ? draft.weightKg : pet.weightKg }} kg
+                <SpecCell v-if="draft.weightKg !== '' || pet?.latestWeight" label="體重" mono>
+                  {{ draft.weightKg !== '' ? draft.weightKg : pet.latestWeight.kg }} kg
                   <span v-if="draft.weightKg !== ''" class="rounded-sm bg-accent px-1.5 py-0.5 font-sans text-2xs leading-none font-semibold text-accent-foreground">本次</span>
+                  <span v-else-if="pet.latestWeight.date" class="text-sm text-subtle-foreground">{{ shortDate(pet.latestWeight.date) }}</span>
                 </SpecCell>
               </SpecGrid>
               <!-- 飼主與就診時間分成兩組：欄位多時各自整組換行，不會把時間切在飼主資料中間。 -->

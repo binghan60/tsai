@@ -604,11 +604,7 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
     }
     record = lockedRecord;
 
-    // 靠 role 找體重，不寫死欄位名稱；使用者若停用或刪除該欄位就不同步。
-    const weightItem = composedSections.flatMap((section) => section.items ?? []).find((item) => item.role === 'weight');
-    // Number(null) 與 Number('') 都是 0 —— 沒填體重時不能把貓咪的體重蓋成 0。
-    const weightText = String(weightItem?.value ?? '').trim();
-    const weightValue = Number(weightText);
+    // 體重不寫回貓咪資料：貓咪的最近體重是讀取時從看診與已結案報告即時挑的（lib/latestWeight.js）。
     const finalizedAt = new Date();
     await withTransaction(async (session) => {
       const finalizedRecord = await MedicalRecord.findOneAndUpdate(
@@ -645,19 +641,6 @@ recordsRouter.post('/:id/finalize', async (req, res, next) => {
         );
         if (superseded.matchedCount !== 1) {
           const error = new Error('前一版報告已被其他修訂取代，無法建立分叉版本');
-          error.status = 409;
-          throw error;
-        }
-      }
-
-      if (weightText && Number.isFinite(weightValue)) {
-        const petUpdate = await Pet.updateOne(
-          { _id: record.petId },
-          { $set: { weightKg: weightValue } },
-          { session }
-        );
-        if (petUpdate.matchedCount !== 1) {
-          const error = new Error('找不到報告所屬貓咪，無法完成結案');
           error.status = 409;
           throw error;
         }
