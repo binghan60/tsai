@@ -8,8 +8,9 @@ import { Input } from './ui/input';
 import { useDrugCabinet } from '../composables/useDrugCabinet';
 import { groupDrugs, searchDrugs } from '../lib/drugGroups';
 import RichText from './RichText.vue';
-import { richTextToPlain } from '../../../shared/richText.js';
+import { escapeRichText, richTextToPlain } from '../../../shared/richText.js';
 
+// 勾選的藥可以各填劑量與頻率（每日幾次／每幾天一次），插入時接在藥名後面。
 // 藥櫃視窗：左邊分類、右邊藥品，勾選後一次插入（依勾選順序）。勾選會跨分類、跨搜尋保留。
 // 搜尋時右邊改列所有分類裡符合的藥品；沒有搜尋時「全部」列出每個分類（含分類標題）。
 const emit = defineEmits(['close', 'confirm']);
@@ -20,6 +21,15 @@ const sections = computed(() => groupDrugs(groups.value, drugs.value, { enabledO
 const active = ref(ALL);
 const keyword = ref('');
 const selectedIds = ref([]); // 依勾選順序
+const doses = ref({}); // 藥品 id → 劑量文字（取消勾選也留著，再勾回來還在）
+const daily = ref({}); // 藥品 id → 每日幾次
+const every = ref({}); // 藥品 id → 每幾天一次（跟每日幾次擇一，填一邊就清掉另一邊）
+
+function setFrequency(id, kind, value) {
+  const digits = String(value ?? '').replace(/\D/g, '').replace(/^0+/, '');
+  daily.value = { ...daily.value, [id]: kind === 'daily' ? digits : '' };
+  every.value = { ...every.value, [id]: kind === 'every' ? digits : '' };
+}
 
 // 目前選的分類被刪或清空（另一台改了）時退回「全部」。
 watch(sections, (next) => {
@@ -85,7 +95,18 @@ watch(newline, (value) => {
 
 function confirm() {
   const byId = new Map(drugs.value.map((drug) => [drug._id, drug]));
-  const picked = selectedIds.value.map((id) => byId.get(id)).filter(Boolean);
+  // 劑量是純文字，接在藥名後面（跳脫後才不會被當成格式標記）。
+  const picked = selectedIds.value
+    .map((id) => byId.get(id))
+    .filter(Boolean)
+    .map((drug) => {
+      const dose = (doses.value[drug._id] ?? '').trim();
+      const times = daily.value[drug._id];
+      const days = every.value[drug._id];
+      const frequency = times ? `每日${times}次` : days ? (days === '1' ? '每天一次' : `每${days}天一次`) : '';
+      const extra = [dose, frequency].filter(Boolean).join(' ');
+      return extra ? { ...drug, name: `${drug.name} ${escapeRichText(extra)}` } : drug;
+    });
   if (picked.length) emit('confirm', picked, { newline: newline.value });
   else emit('close');
 }
@@ -145,9 +166,12 @@ function confirm() {
         </div>
       </div>
       <!-- 已選：依勾選順序（＝插入順序），點 ✕ 取消；沒選時整條不出現。最多兩行高，超過在區內捲動。 -->
-      <ul v-if="selectedDrugs.length" class="flex max-h-24 shrink-0 flex-wrap gap-1.5 overflow-y-auto border-t border-border bg-sunken px-6 py-2.5" aria-label="已選藥品">
-        <li v-for="drug in selectedDrugs" :key="drug._id" class="flex max-w-full items-center gap-1 rounded-lg bg-card py-1 pr-1 pl-2.5 text-sm ring-1 ring-border">
-          <RichText :text="drug.name" tag="span" one-line class="min-w-0" v-tip.overflow="richTextToPlain(drug.name)" />
+      <ul v-if="selectedDrugs.length" class="flex max-h-44 shrink-0 flex-col gap-1.5 overflow-y-auto border-t border-border bg-sunken px-6 py-2.5" aria-label="已選藥品">
+        <li v-for="drug in selectedDrugs" :key="drug._id" class="flex items-center gap-2 rounded-lg bg-card py-1 pr-1 pl-2.5 text-sm ring-1 ring-border">
+          <RichText :text="drug.name" tag="span" one-line class="min-w-0 flex-1" v-tip.overflow="richTextToPlain(drug.name)" />
+          <Input v-model="doses[drug._id]" class="h-8 w-40 shrink-0" maxlength="100" placeholder="劑量" autocomplete="off" :aria-label="`${richTextToPlain(drug.name)}的劑量`" />
+          <span class="flex shrink-0 items-center gap-1 whitespace-nowrap">每日<Input :model-value="daily[drug._id] ?? ''" class="num h-8 w-14 px-2 text-center" placeholder="2" inputmode="numeric" maxlength="2" autocomplete="off" :aria-label="`${richTextToPlain(drug.name)}每日幾次`" @update:model-value="setFrequency(drug._id, 'daily', $event)" />次</span>
+          <span class="flex shrink-0 items-center gap-1 whitespace-nowrap">每<Input :model-value="every[drug._id] ?? ''" class="num h-8 w-14 px-2 text-center" placeholder="2" inputmode="numeric" maxlength="2" autocomplete="off" :aria-label="`${richTextToPlain(drug.name)}每幾天一次`" @update:model-value="setFrequency(drug._id, 'every', $event)" />天一次</span>
           <button type="button" class="flex size-6 shrink-0 items-center justify-center rounded-md text-subtle-foreground hover:bg-hover hover:text-foreground" :aria-label="`取消選取${richTextToPlain(drug.name)}`" @click="toggle(drug, false)"><X class="size-4" stroke-width="1.75" /></button>
         </li>
       </ul>
