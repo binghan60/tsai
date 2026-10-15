@@ -8,6 +8,7 @@ import { Input } from './ui/input';
 import { useDrugCabinet } from '../composables/useDrugCabinet';
 import { groupDrugs, searchDrugs } from '../lib/drugGroups';
 import RichText from './RichText.vue';
+import DrugFrequencyPicker from './DrugFrequencyPicker.vue';
 import { escapeRichText, richTextToPlain } from '../../../shared/richText.js';
 
 // 勾選的藥可以各填劑量與頻率（每日幾次／每幾天一次），插入時接在藥名後面。
@@ -22,17 +23,23 @@ const active = ref(ALL);
 const keyword = ref('');
 const selectedIds = ref([]); // 依勾選順序
 const doses = ref({}); // 藥品 id → 劑量文字（取消勾選也留著，再勾回來還在）
-// 頻率二擇一：每日幾次（daily，預設）或每幾天一次（every）；數字只有一格，切換時保留。
-const FREQUENCIES = [
-  { mode: 'daily', before: '每日', after: '次', width: 'w-28' },
-  { mode: 'every', before: '每', after: '天一次', width: 'w-32' },
-];
-const modes = ref({}); // 藥品 id → 'daily' | 'every'
+const modes = ref({}); // 藥品 id → 'daily' | 'every'（沒設＝每日）
 const counts = ref({}); // 藥品 id → 次數或天數（數字字串）
-const modeOf = (id) => modes.value[id] ?? 'daily';
-const setMode = (id, mode) => { modes.value = { ...modes.value, [id]: mode }; };
-function setCount(id, value) {
-  counts.value = { ...counts.value, [id]: String(value ?? '').replace(/\D/g, '').replace(/^0+/, '') };
+const dayCounts = ref({}); // 藥品 id → 共幾日（只跟每日幾次一組）
+// 整組頻率相同：每種藥不再各填頻率，改成最後另起一行放一句（「每日2次，7日」），天數選填，只跟「每日幾次」一組（每幾天一次不帶天數）。
+const shared = ref(false);
+const sharedMode = ref('daily');
+const sharedCount = ref('');
+const sharedDays = ref('');
+
+// 頻率一句：「每日2次，7日」；天數只跟每日幾次一組，每幾天一次不帶。
+function frequencyLine(mode, count, days) {
+  return [frequencyText(mode, count), mode !== 'every' && days ? `${days}日` : ''].filter(Boolean).join('，');
+}
+function frequencyText(mode, count) {
+  if (!count) return '';
+  if (mode === 'every') return count === '1' ? '每天一次' : `每${count}天一次`;
+  return `每日${count}次`;
 }
 
 // 目前選的分類被刪或清空（另一台改了）時退回「全部」。
@@ -105,12 +112,12 @@ function confirm() {
     .filter(Boolean)
     .map((drug) => {
       const dose = (doses.value[drug._id] ?? '').trim();
-      const count = counts.value[drug._id];
-      const frequency = !count ? '' : modeOf(drug._id) === 'daily' ? `每日${count}次` : count === '1' ? '每天一次' : `每${count}天一次`;
+      const frequency = shared.value ? '' : frequencyLine(modes.value[drug._id], counts.value[drug._id], dayCounts.value[drug._id]);
       const extra = [dose, frequency].filter(Boolean).join(' ');
       return extra ? { ...drug, name: `${drug.name} ${escapeRichText(extra)}` } : drug;
     });
-  if (picked.length) emit('confirm', picked, { newline: newline.value });
+  const tail = shared.value ? frequencyLine(sharedMode.value, sharedCount.value, sharedDays.value) : '';
+  if (picked.length) emit('confirm', picked, { newline: newline.value, tail: tail ? escapeRichText(tail) : '' });
   else emit('close');
 }
 </script>
@@ -172,20 +179,22 @@ function confirm() {
       <ul v-if="selectedDrugs.length" class="flex max-h-44 shrink-0 flex-col gap-1.5 overflow-y-auto border-t border-border bg-sunken px-6 py-2.5" aria-label="已選藥品">
         <li v-for="drug in selectedDrugs" :key="drug._id" class="flex items-center gap-2 rounded-lg bg-card py-1 pr-1 pl-2.5 text-sm ring-1 ring-border">
           <RichText :text="drug.name" tag="span" one-line class="min-w-0 flex-1" v-tip.overflow="richTextToPlain(drug.name)" />
-          <Input v-model="doses[drug._id]" class="h-8 w-40 shrink-0" maxlength="100" placeholder="劑量" autocomplete="off" :aria-label="`${richTextToPlain(drug.name)}的劑量`" />
-          <!-- 頻率二擇一：被選中的那一段亮起並帶輸入框，另一段只是文字，點了切換。 -->
-          <div class="flex shrink-0 items-center gap-0.5 rounded-lg bg-sunken p-0.5" role="radiogroup" :aria-label="`${richTextToPlain(drug.name)}的頻率`">
-            <template v-for="option in FREQUENCIES" :key="option.mode">
-              <span v-if="modeOf(drug._id) === option.mode" :class="option.width" class="flex h-8 shrink-0 items-center justify-center gap-1 rounded-md bg-card px-2 whitespace-nowrap ring-1 ring-primary" role="radio" aria-checked="true">{{ option.before }}<Input :model-value="counts[drug._id] ?? ''" class="num h-6 w-11 px-1 text-center" placeholder="2" inputmode="numeric" maxlength="2" autocomplete="off" :aria-label="`${richTextToPlain(drug.name)}${option.before}幾${option.mode === 'daily' ? '次' : '天一次'}`" @update:model-value="setCount(drug._id, $event)" />{{ option.after }}</span>
-              <button v-else type="button" :class="option.width" class="flex h-8 shrink-0 items-center justify-center rounded-md px-2 whitespace-nowrap text-muted-foreground hover:bg-hover hover:text-foreground" role="radio" aria-checked="false" @click="setMode(drug._id, option.mode)">{{ option.before }}＿{{ option.after }}</button>
-            </template>
-          </div>
+          <Input v-model="doses[drug._id]" class="h-8 w-40 shrink-0 placeholder:text-subtle-foreground/50" maxlength="100" placeholder="劑量" autocomplete="off" :aria-label="`${richTextToPlain(drug.name)}的劑量`" />
+          <DrugFrequencyPicker v-if="!shared" v-model:mode="modes[drug._id]" v-model:count="counts[drug._id]" v-model:days="dayCounts[drug._id]" with-days :label="`${richTextToPlain(drug.name)}的頻率`" />
           <button type="button" class="flex size-6 shrink-0 items-center justify-center rounded-md text-subtle-foreground hover:bg-hover hover:text-foreground" :aria-label="`取消選取${richTextToPlain(drug.name)}`" @click="toggle(drug, false)"><X class="size-4" stroke-width="1.75" /></button>
         </li>
+        <!-- 整組共用：頻率與天數放在清單最下面，對應插入時最後那一行。 -->
+        <li v-if="shared" class="flex items-center gap-2 rounded-lg bg-card py-1 pr-2.5 pl-2.5 text-sm ring-1 ring-border">
+          <span class="min-w-0 flex-1 font-semibold">整組</span>
+          <DrugFrequencyPicker v-model:mode="sharedMode" v-model:count="sharedCount" v-model:days="sharedDays" with-days label="整組頻率" />
+        </li>
       </ul>
-      <div class="flex shrink-0 items-center gap-2 border-t border-border px-6 py-4">
-        <label class="mr-auto flex cursor-pointer items-center gap-2 text-base">
+      <div class="flex shrink-0 items-center gap-6 border-t border-border px-6 py-4">
+        <label class="flex cursor-pointer items-center gap-2 text-base">
           <Checkbox :model-value="newline" aria-label="每種藥換行" @update:model-value="newline = $event === true" />每種藥換行
+        </label>
+        <label class="mr-auto flex cursor-pointer items-center gap-2 text-base">
+          <Checkbox :model-value="shared" aria-label="整組頻率相同" @update:model-value="shared = $event === true" />整組頻率相同
         </label>
         <Button type="button" variant="secondary" @click="emit('close')">取消</Button>
         <Button type="button" :disabled="!selectedIds.length" @click="confirm">{{ selectedIds.length ? `插入 ${selectedIds.length} 項` : '插入' }}</Button>
