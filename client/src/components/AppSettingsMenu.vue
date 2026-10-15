@@ -23,7 +23,7 @@ const notificationsOpen = ref(false);
       <button
         v-if="rail"
         type="button"
-        class="flex h-13 w-15 flex-col items-center justify-center gap-1 rounded-[10px] text-nav-foreground transition-colors hover:bg-hover aria-expanded:bg-hover"
+        class="flex h-13 w-15 shrink-0 flex-col items-center justify-center gap-1 rounded-[10px] text-nav-foreground transition-colors hover:bg-hover aria-expanded:bg-hover short:h-12"
         aria-label="設定：身分、主題、通知、登出"
       >
         <Settings class="size-5" stroke-width="1.75" />

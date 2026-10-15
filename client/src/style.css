@@ -7,6 +7,8 @@
 @custom-variant data-checked (&:where([data-state="checked"], [data-checked]:not([data-checked="false"])));
 @custom-variant data-unchecked (&:where([data-state="unchecked"], [data-unchecked]:not([data-unchecked="false"])));
 @custom-variant data-disabled (&:where([data-state="disabled"], [data-disabled]:not([data-disabled="false"])));
+/* 視窗矮（1080p 螢幕開著瀏覽器，扣掉分頁列、網址列、工作列常常只剩 880～930）：左側導覽改緊湊版才放得下。 */
+@custom-variant short (@media (max-height: 959px));
 
 @theme {
   /* 中文用 Noto Sans TC 變數字體（自架）：系統中文字體只有 Regular/Bold 兩級，
