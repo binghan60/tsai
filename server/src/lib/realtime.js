@@ -100,6 +100,12 @@ export function emitClinicalNoteUpdate(note) {
   io?.emit('clinical-note:updated', payload);
 }
 
+// 住院單、每天體重、照護紀錄有變動：住院清單、住院專區、貓咪頁的住院頁籤、總覽的「住院中」重讀。
+// 只帶 { _id, petId }，各畫面自己判斷要不要重讀。
+export function emitHospitalizationUpdate(hospitalization) {
+  io?.emit('hospitalization:updated', { _id: String(hospitalization._id), petId: String(hospitalization.petId) });
+}
+
 // 藥單跨天保留，向所有已登入的工作台推送失效通知，再依各自篩選重新讀取。
 export function emitMedicationUpdate(order) {
   io?.emit('medication:updated', { _id: String(order._id), version: order.__v });

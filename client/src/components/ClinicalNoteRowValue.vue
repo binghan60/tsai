@@ -41,6 +41,10 @@ defineProps({
       <span v-if="lab.unit" class="num ml-1 text-xs text-subtle-foreground">{{ lab.unit }}</span>
     </span>
   </dd>
+  <!-- 住院：「10/13 起住院中　第 3 天」，點了到住院專區。 -->
+  <dd v-else-if="row.hospitalizationId" class="text-sm leading-relaxed">
+    <RouterLink :to="`/hospital/${row.hospitalizationId}`" class="font-medium text-primary hover:underline">{{ row.text }}</RouterLink>
+  </dd>
   <RichText
     v-else-if="row.rich"
     tag="dd"

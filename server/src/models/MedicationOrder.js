@@ -9,6 +9,8 @@ const schema = new mongoose.Schema({
   // 醫師在診療台開的（看診送交櫃台時建立，lib/visitMedicationOrder.js）：內容已經在那次看診的病歷日誌上，
   // 不另外產生領藥日誌；之後在藥單這邊修改或取消會寫回那次看診。
   fromVisit: { type: Boolean, default: false },
+  // 出院時「帶回家的藥」開的（routes/hospitalizations.js 的出院）：醫師開的、直接是待包藥，有自己的領藥日誌。
+  hospitalizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospitalization', default: null },
   petName: { type: String, required: true },
   ownerName: { type: String, default: '' },
   ownerPhone: { type: String, default: '' },

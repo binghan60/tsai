@@ -85,6 +85,9 @@ export function fillMessage(fill, petName) {
     case 'no_visit':
       // 伺服器沒有配對：沒有看診就沒有病歷日誌與健檢報告可以填，結果留在清單上。
       return { type: 'info', message: `${name}在檢驗那天沒有掛號，這份結果留在待確認清單` };
+    case 'hospitalization':
+      // 住院期間驗的：連到住院單，住院專區當天那一頁看得到，不填進任何看診或報告。
+      return { type: 'success', message: `已歸到${name}這次住院的檢驗結果` };
     case 'no_template':
       return { type: 'info', message: `${name}這次看診沒有選健檢表單，數值沒有填進報告` };
     case 'error':

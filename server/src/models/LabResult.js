@@ -64,6 +64,8 @@ const labResultSchema = new mongoose.Schema(
     autoMatchBlocked: { type: Boolean, default: false },
     // 自動填進哪一次看診（lib/labResultApply.js）。appliedAt 是填入的時間；找不到看診就留空、之後可以再套用。
     appointmentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Appointment', default: null },
+    // 住院期間驗的（檢驗時間落在住院中）連到住院單，不填進任何看診；住院專區當天那一頁顯示。
+    hospitalizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospitalization', default: null },
     appliedAt: { type: Date, default: null },
     // 填入的那一刻看診／報告已經關了：record_finalized＝健檢報告已結案（數值只進看診與日誌，報告上沒有）、
     // desk_completed＝櫃台已完成處理。填入狀態燈號（client lib/labFillStatus.js）靠它事後還說得出「數值沒有進報告」。
@@ -109,5 +111,7 @@ labResultSchema.index({ appointmentId: 1 }, { partialFilterExpression: { conflic
 labResultSchema.index({ runAt: -1, _id: -1 }, { partialFilterExpression: { conflictsOpen: true } });
 // 病歷日誌讀「連到這次看診的結果」（lib/appointmentJournal.js 的 linkedLabResults）；沒連到看診的不收。
 labResultSchema.index({ appointmentId: 1, runAt: 1, _id: 1 }, { partialFilterExpression: { appointmentId: { $type: 'objectId' } } });
+// 住院專區讀「連到這次住院的結果」。
+labResultSchema.index({ hospitalizationId: 1, runAt: 1, _id: 1 }, { partialFilterExpression: { hospitalizationId: { $type: 'objectId' } } });
 
 export default mongoose.model('LabResult', labResultSchema);

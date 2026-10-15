@@ -7,11 +7,12 @@ import Pet from '../models/Pet.js';
 import { decodeIdexxXml } from './idexxResult.js';
 import Appointment from '../models/Appointment.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import HospitalizationDay from '../models/HospitalizationDay.js';
 import { markIdexxRequestDelivered, syncIdexxCensus } from './idexxRequests.js';
 
 const original = {
   findOne: IdexxRequest.findOne, create: IdexxRequest.create, petFindById: Pet.findById, ownerFindById: Owner.findById, labExists: LabResult.exists,
-  appointmentFind: Appointment.find, recordFind: MedicalRecord.find,
+  appointmentFind: Appointment.find, recordFind: MedicalRecord.find, dayFind: HospitalizationDay.find,
 };
 const pet = { _id: '66f0a1b2c3d4e5f601234567', name: '牛奶', species: '貓', sex: 'male', neutered: 'no', ownerId: 'o1', weightKg: 3.9 };
 const census = { mode: 'census', encoding: 'big5' };
@@ -28,6 +29,7 @@ function mockModels({ last = null, hasResult = false } = {}) {
   const none = () => ({ sort: () => ({ limit: () => ({ select: () => ({ lean: async () => [] }) }) }) });
   Appointment.find = none;
   MedicalRecord.find = none;
+  HospitalizationDay.find = none;
   return created;
 }
 
@@ -39,6 +41,7 @@ describe('idexxRequests.syncIdexxCensus', () => {
     LabResult.exists = original.labExists;
     Appointment.find = original.appointmentFind;
     MedicalRecord.find = original.recordFind;
+    HospitalizationDay.find = original.dayFind;
   });
 
   it('伺服器沒開就什麼都不做，連資料庫都不查', async () => {

@@ -24,6 +24,7 @@ import settingsRouter from './routes/settings.js';
 import textTemplatesRouter from './routes/textTemplates.js';
 import drugsRouter from './routes/drugs.js';
 import drugGroupsRouter from './routes/drugGroups.js';
+import hospitalizationsRouter from './routes/hospitalizations.js';
 import uploadsRouter from './routes/uploads.js';
 import { intakeSubmissionsRouter, publicIntakeRouter } from './routes/intakeSubmissions.js';
 import { labResultBridgeRouter, labResultsRouter } from './routes/labResults.js';
@@ -100,6 +101,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/text-templates', textTemplatesRouter);
 app.use('/api/drugs', drugsRouter);
 app.use('/api/drug-groups', drugGroupsRouter);
+app.use('/api/hospitalizations', hospitalizationsRouter);
 app.use('/api/uploads', uploadsRouter);
 app.use('/api/lab-results', labResultsRouter);
 

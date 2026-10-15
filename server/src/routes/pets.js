@@ -19,6 +19,7 @@ import { checkCatBreed } from '../../../shared/catBreeds.js';
 import { pickPetFields } from '../lib/petFields.js';
 import { escapeRegExp } from '../lib/regex.js';
 import MedicationOrder from '../models/MedicationOrder.js';
+import Hospitalization from '../models/Hospitalization.js';
 import { releaseLabResults } from '../lib/labResultApply.js';
 import { latestPetWeight } from '../lib/latestWeight.js';
 import { ensureClinicOwner, isClinicOwner } from '../lib/clinicOwner.js';
@@ -361,6 +362,11 @@ petsRouter.delete('/:id', async (req, res, next) => {
         error.status = 409;
         throw error;
       }
+      if (await Hospitalization.exists({ petId: pet._id, status: { $ne: 'cancelled' } }).session(session)) {
+        const error = new Error('此貓咪有住院紀錄，無法刪除');
+        error.status = 409;
+        throw error;
+      }
       if (await MedicationOrder.exists({ petId: pet._id, status: { $ne: 'cancelled' } }).session(session)) {
         const error = new Error('此貓咪仍有藥單，無法刪除');
         error.status = 409;
@@ -375,6 +381,7 @@ petsRouter.delete('/:id', async (req, res, next) => {
       // 已取消／未到的掛號、已取消的藥單沒有成立過，跟著貓咪一起刪掉；認到這隻貓、卻沒有看診的檢驗結果放回待確認清單。
       await Appointment.deleteMany({ petId: pet._id }, { session });
       await MedicationOrder.deleteMany({ petId: pet._id }, { session });
+      await Hospitalization.deleteMany({ petId: pet._id }, { session });
       releasedLabResults = (await releaseLabResults({ petId: pet._id }, { session })) > 0;
       // 暫存紀錄不是病歷，不擋刪除，跟著貓咪一起消失。
       removedPin = (await PinnedPet.deleteOne({ petId: pet._id }, { session })).deletedCount > 0;

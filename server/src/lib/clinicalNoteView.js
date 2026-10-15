@@ -1,6 +1,8 @@
 import Appointment from '../models/Appointment.js';
 import MedicationOrder from '../models/MedicationOrder.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import Hospitalization from '../models/Hospitalization.js';
+import { hospitalizationSpanText } from './hospitalization.js';
 import { appointmentJournalContent, appointmentJournalFields, appointmentJournalSections, labTimeLabel } from './appointmentWorkflow.js';
 import { linkedLabResults } from './appointmentJournal.js';
 import { medicationJournalContent, medicationJournalFields, medicationJournalSections, medicationJournalStage, medicationJournalTitle } from './medicationWorkflow.js';
@@ -20,6 +22,13 @@ function withReportDelivery(sections, sentAt) {
   const row = { key: 'reportDelivery', label: '健檢報告', text: `已寄出　${labTimeLabel(sentAt)}` };
   const at = sections.findIndex(section => section.key === 'deskItems');
   return at < 0 ? [...sections, row] : [...sections.slice(0, at + 1), row, ...sections.slice(at + 1)];
+}
+
+// 入院那次看診的日誌最後一列「住院」：住院中寫「10/13 起住院中　第 3 天」，出院了寫期間與天數；點了到住院專區。
+// 住院的內容（每天體重、照護紀錄）不進日誌——在住院專區看。取消的住院不列。唯讀，不能從日誌改。
+function withHospitalization(sections, hospitalization) {
+  if (!hospitalization || hospitalization.status === 'cancelled') return sections;
+  return [...sections, { key: 'hospitalization', label: '住院', text: hospitalizationSpanText(hospitalization), hospitalizationId: String(hospitalization._id), status: hospitalization.status }];
 }
 
 // 日誌只保存掛號／藥單關聯；每次讀取都以來源文件的最新欄位組成內容。
@@ -49,6 +58,9 @@ export async function clinicalNoteViews(notes) {
   const sentRecords = rootIds.length
     ? await MedicalRecord.find({ deliveryStatus: 'sent', $or: [{ _id: { $in: rootIds } }, { revisionRootId: { $in: rootIds } }] }).select('revisionRootId sentAt').lean()
     : [];
+  const stayIds = appointments.map(item => item.hospitalizationId).filter(Boolean);
+  const stays = stayIds.length ? await Hospitalization.find({ _id: { $in: stayIds } }).select('status admittedAt dischargedAt').lean() : [];
+  const stayById = new Map(stays.map(item => [String(item._id), item]));
   const sentAtByRoot = new Map();
   for (const record of sentRecords) {
     const root = String(record.revisionRootId || record._id);
@@ -65,7 +77,13 @@ export async function clinicalNoteViews(notes) {
       return {
         ...note,
         content: appointment ? appointmentJournalContent(appointment, labs) : (note.content || '找不到對應的就診資料'),
-        ...(appointment && { sections: withReportDelivery(withMedicationStage(appointmentJournalSections(appointment, labs), orderById.get(String(appointment.medicationOrderId))), appointment.recordId && sentAtByRoot.get(String(appointment.recordId))), fields: appointmentJournalFields(appointment) }),
+        ...(appointment && {
+          sections: withHospitalization(
+            withReportDelivery(withMedicationStage(appointmentJournalSections(appointment, labs), orderById.get(String(appointment.medicationOrderId))), appointment.recordId && sentAtByRoot.get(String(appointment.recordId))),
+            appointment.hospitalizationId && stayById.get(String(appointment.hospitalizationId)),
+          ),
+          fields: appointmentJournalFields(appointment),
+        }),
         editableContent: appointment?.visitNote ?? note.content ?? '',
         readOnly: !appointment,
       };

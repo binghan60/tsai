@@ -22,8 +22,11 @@ import { Input } from './ui/input'
 // 不限當天（使用者要求）：昨天驗、今天回來看報告是常態，所以匯入時指定 appointmentId，填進這次看診而不是檢驗那一天的。
 // 待確認的可能有幾百筆（IDEXX 主機補傳過歷史紀錄），所以新到舊只拿一頁，另外把跟這隻貓同名的撈出來排最前面，其餘靠搜尋。
 const PAGE = 50
+// 住院專區也用這個視窗：appointment 傳 { petId, petName, date }（date 是正在看的那一天），另外帶 hospitalizationId，
+// 結果連到這次住院、不填進任何看診。
 const props = defineProps({
   appointment: { type: Object, required: true },
+  hospitalizationId: { type: String, default: '' },
 })
 const emit = defineEmits(['close', 'imported'])
 const toast = useToast()
@@ -100,7 +103,8 @@ async function importResult(row) {
   if (busy.value) return
   busy.value = row.id
   try {
-    const { data } = await http.post(`/lab-results/${row.id}/match`, { petId: props.appointment.petId, appointmentId: props.appointment._id })
+    const target = props.hospitalizationId ? { hospitalizationId: props.hospitalizationId } : { appointmentId: props.appointment._id }
+    const { data } = await http.post(`/lab-results/${row.id}/match`, { petId: props.appointment.petId, ...target })
     const { type, message } = fillMessage(data.fill, props.appointment.petName)
     toast.addToast({
       type,
@@ -112,7 +116,7 @@ async function importResult(row) {
     total.value = Math.max(0, total.value - 1)
     counts.loadLabResults()
     emit('imported')
-    if (data.fill?.conflicts) {
+    if (data.fill?.conflicts && !props.hospitalizationId) {
       const { data: conflictData } = await http.get('/lab-results/conflicts', { params: { appointmentId: props.appointment._id } })
       conflictGroup.value = (conflictData.items || []).find((group) => String(group.id) === String(row.id)) ?? null
     }
@@ -131,7 +135,7 @@ onBeforeUnmount(() => clearTimeout(timer))
 
 <template>
   <LabConflictDialog v-if="conflictGroup" :group="conflictGroup" @close="conflictGroup = null" @resolved="conflictGroup = null; counts.loadLabResults()" />
-  <ModalDialog v-else size="md" :icon="FlaskConical" title="匯入檢驗結果" :description="`還沒確認是哪隻貓的 IDEXX 結果，選一份歸給${appointment.petName}這次看診`" @close="emit('close')">
+  <ModalDialog v-else size="md" :icon="FlaskConical" title="匯入檢驗結果" :description="`還沒確認是哪隻貓的 IDEXX 結果，選一份歸給${appointment.petName}${hospitalizationId ? '這次住院' : '這次看診'}`" @close="emit('close')">
     <div class="flex min-h-0 flex-col gap-3 px-6 py-4">
       <div class="relative">
         <Search class="pointer-events-none absolute top-1/2 left-3 size-4.5 -translate-y-1/2 text-subtle-foreground" stroke-width="1.75" aria-hidden="true" />

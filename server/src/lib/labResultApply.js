@@ -1,5 +1,6 @@
 import Appointment from '../models/Appointment.js';
 import FormTemplate from '../models/FormTemplate.js';
+import Hospitalization from '../models/Hospitalization.js';
 import LabResult from '../models/LabResult.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import Owner from '../models/Owner.js';
@@ -11,6 +12,7 @@ import { clinicDayStart, clinicToday } from './clinicTime.js';
 import { liveConflicts, matchLabItem, overwriteValues, petIdCandidates, phoneFromPatientId, pickPetForOwnerPhone, pickVisit, planLabFill, planUndo } from './labResultFill.js';
 import { emitAppointmentUpdate, emitLabResultsUpdate } from './realtime.js';
 import { withTransaction } from './transaction.js';
+import { coversTime } from './hospitalization.js';
 
 // IDEXX 檢驗結果自動填進看診（規則見 lib/labResultFill.js，這裡負責讀寫資料庫）。
 
@@ -19,6 +21,14 @@ async function visitOnRunDay(petId, result) {
   const date = clinicToday(result.runAt ?? result.createdAt);
   const visits = await Appointment.find({ petId, date }).select('_id status checkedInAt templateId').lean();
   return { date, visit: pickVisit(visits, result.runAt) };
+}
+
+// 檢驗時間這隻貓在住院中：那一次住院（沒有回 null）。住院期間驗的連到住院單，不填進看診（入院那天入院之前驗的才算那次看診）。
+async function hospitalizationAt(petId, at) {
+  const time = at ? new Date(at) : new Date();
+  const stay = await Hospitalization.findOne({ petId, status: { $in: ['admitted', 'discharged'] }, admittedAt: { $lte: time } })
+    .sort({ admittedAt: -1 }).lean();
+  return coversTime(stay, time) ? stay : null;
 }
 
 // 結果上的 patient（id、name）與 client（id）是哪隻貓：
@@ -36,7 +46,7 @@ async function resolvePetFromPatient({ patient, client }, runAt) {
   const pets = await Pet.find({ ownerId: { $in: owners.map((owner) => owner._id) } }).select('_id name').lean();
   const withVisit = [];
   for (const pet of pets) {
-    if ((await visitOnRunDay(pet._id, { runAt, createdAt: new Date() })).visit) withVisit.push(pet);
+    if ((await visitOnRunDay(pet._id, { runAt, createdAt: new Date() })).visit || await hospitalizationAt(pet._id, runAt)) withVisit.push(pet);
   }
   return pickPetForOwnerPhone(withVisit, patient?.name)?._id ?? null;
 }
@@ -48,7 +58,8 @@ async function resolvePetFromPatient({ patient, client }, runAt) {
 export async function matchByPatient(labResultId, { patient, client }, runAt = null) {
   const petId = await resolvePetFromPatient({ patient, client }, runAt);
   if (!petId) return null;
-  if (!(await visitOnRunDay(petId, { runAt, createdAt: new Date() })).visit) return null;
+  // 住院中驗的也算（連到住院單）。
+  if (!(await visitOnRunDay(petId, { runAt, createdAt: new Date() })).visit && !(await hospitalizationAt(petId, runAt))) return null;
   const updated = await LabResult.findOneAndUpdate(
     { _id: labResultId, petId: null, dismissedAt: null, autoMatchBlocked: { $ne: true } },
     { $set: { petId, matchedAt: new Date(), matchSource: 'patient_id' } },
@@ -70,10 +81,26 @@ async function linkWithoutTemplate(result, visit) {
   return { status: 'no_template', appointmentId: visit._id };
 }
 
-export async function applyLabResult(labResultId, { force = false, appointmentId = null } = {}) {
+// 連到住院單：住院專區當天那一頁顯示，不填進任何看診（住院沒有表單可以填）。
+async function linkToHospitalization(result, hospitalization) {
+  await LabResult.updateOne({ _id: result._id }, { $set: { hospitalizationId: hospitalization._id, appointmentId: null, appliedAt: new Date() } });
+  return { status: 'hospitalization', hospitalizationId: hospitalization._id };
+}
+
+// hospitalizationId：住院專區的「匯入檢驗結果」指定連到這次住院；沒指定、也沒指定看診時，檢驗時間在住院中就連住院單。
+export async function applyLabResult(labResultId, { force = false, appointmentId = null, hospitalizationId = null } = {}) {
   const result = await LabResult.findById(labResultId).lean();
   if (!result?.petId) return { status: 'unmatched' };
   if (result.appliedAt && !force) return { status: 'already_applied' };
+  if (hospitalizationId) {
+    const stay = await Hospitalization.findOne({ _id: hospitalizationId, petId: result.petId, status: { $ne: 'cancelled' } }).lean();
+    if (!stay) throw Object.assign(new Error('這次住院不是這隻貓咪的'), { status: 422 });
+    return linkToHospitalization(result, stay);
+  }
+  if (!appointmentId) {
+    const stay = await hospitalizationAt(result.petId, result.runAt ?? result.createdAt);
+    if (stay) return linkToHospitalization(result, stay);
+  }
 
   let visit;
   if (appointmentId) {
@@ -203,17 +230,17 @@ export async function applyPendingLabResults(appointment) {
 
 // 待確認清單裡人選了是哪隻貓。已經配對或忽略的不能再選（別台剛處理掉）。
 // appointmentId（選填）：指定要填進哪一次看診（診療台的匯入）；沒給就照檢驗當天找。
-export async function matchManually(labResultId, petId, { appointmentId = null } = {}) {
+export async function matchManually(labResultId, petId, { appointmentId = null, hospitalizationId = null } = {}) {
   if (!(await Pet.exists({ _id: petId }))) throw Object.assign(new Error('找不到這隻貓咪'), { status: 404 });
   if (appointmentId && !(await Appointment.exists({ _id: appointmentId, petId }))) {
     throw Object.assign(new Error('這次看診不是這隻貓咪的'), { status: 422 });
   }
   // 沒指定看診、這隻貓檢驗當天也沒有看診：不配對，結果留在待確認清單（沒有看診就沒有日誌與報告可以填）。
-  if (!appointmentId) {
+  if (!appointmentId && !hospitalizationId) {
     const result = await LabResult.findById(labResultId).lean();
     if (result) {
       const { date, visit } = await visitOnRunDay(petId, result);
-      if (!visit) return { status: 'no_visit', date };
+      if (!visit && !(await hospitalizationAt(petId, result.runAt ?? result.createdAt))) return { status: 'no_visit', date };
     }
   }
   const updated = await LabResult.findOneAndUpdate(
@@ -222,7 +249,7 @@ export async function matchManually(labResultId, petId, { appointmentId = null }
     { new: true }
   );
   if (!updated) throw Object.assign(new Error('這份檢驗結果已經被處理了，請重新整理'), { status: 409 });
-  return applyLabResult(labResultId, { appointmentId });
+  return applyLabResult(labResultId, { appointmentId, hospitalizationId });
 }
 
 // 復原（選錯貓）：清掉這份結果填進看診、而且還沒被人改過的數值，結果回到待確認清單。
@@ -250,7 +277,7 @@ export async function unmatchLabResult(labResultId) {
       }
     }
     Object.assign(result, {
-      petId: null, matchedAt: null, matchSource: null, appointmentId: null,
+      petId: null, matchedAt: null, matchSource: null, appointmentId: null, hospitalizationId: null,
       appliedAt: null, fillClosed: null, filled: [], conflicts: [], conflictsOpen: false, conflictsResolvedAt: null, conflictsOverwritten: [], unmappedCodes: [], overrides: [],
       autoMatchBlocked: true,
     });
@@ -271,7 +298,7 @@ export async function releaseLabResults(filter, { session } = {}) {
     filter,
     {
       $set: {
-        petId: null, matchedAt: null, matchSource: null, appointmentId: null, appliedAt: null, fillClosed: null,
+        petId: null, matchedAt: null, matchSource: null, appointmentId: null, hospitalizationId: null, appliedAt: null, fillClosed: null,
         filled: [], conflicts: [], conflictsOpen: false, conflictsResolvedAt: null, conflictsOverwritten: [], unmappedCodes: [], overrides: [],
       },
     },

@@ -77,7 +77,8 @@ router.post('/:action', async (req, res, next) => {
       }
 
       // 送交櫃台：醫師寫的藥單這一刻才在藥單建立（或更新）一筆，直接是待包藥。
-      if (action === 'handoff') medicationOrder = await syncVisitMedicationOrder(appointment, req.user?.username || '', { session });
+      // 收了住院的看診不開藥單（院內用藥記在住院紀錄，帶回家的藥出院時開）。
+      if (action === 'handoff' && !appointment.hospitalizationId) medicationOrder = await syncVisitMedicationOrder(appointment, req.user?.username || '', { session });
 
       // 病歷日誌跟著看診走（lib/appointmentJournal.js）：存了內容、送交櫃台（沒填任何東西時來院原因也算內容），
       // 以及取消看診（只有來院原因的那筆退回候診後不留日誌）都要重新同步。

@@ -259,6 +259,13 @@ labResultsRouter.get('/', async (req, res, next) => {
   try {
     const petId = req.query.petId ? String(req.query.petId) : null;
     if (petId && !mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '貓咪參數不正確' });
+    // 住院專區：連到這次住院的結果（舊到新由前端依日期分頁顯示）。
+    const hospitalizationId = req.query.hospitalizationId ? String(req.query.hospitalizationId) : null;
+    if (hospitalizationId) {
+      if (!mongoose.isValidObjectId(hospitalizationId)) return res.status(422).json({ message: '住院參數不正確' });
+      const items = await LabResult.find({ hospitalizationId }).sort({ runAt: 1, _id: 1 }).lean();
+      return res.json({ items, total: items.length });
+    }
     const filter = petId ? { petId } : { petId: null, dismissedAt: null };
     // 診療台的「檢驗報告」：這隻貓在這次看診要看的 IDEXX 原始結果——當天驗的（date），
     // 加上醫師從別天匯入、指定給這次看診的（appointmentId）。兩個條件是「或」。
@@ -304,7 +311,10 @@ labResultsRouter.post('/:id/match', async (req, res, next) => {
     // appointmentId（選填）：診療台的匯入指定要填進哪一次看診，不限檢驗當天。
     const appointmentId = req.body?.appointmentId ? String(req.body.appointmentId) : null;
     if (appointmentId && !mongoose.isValidObjectId(appointmentId)) return res.status(422).json({ message: '看診參數不正確' });
-    const fill = await matchManually(req.params.id, petId, { appointmentId });
+    // hospitalizationId（選填）：住院專區的匯入，連到這次住院。
+    const hospitalizationId = req.body?.hospitalizationId ? String(req.body.hospitalizationId) : null;
+    if (hospitalizationId && !mongoose.isValidObjectId(hospitalizationId)) return res.status(422).json({ message: '住院參數不正確' });
+    const fill = await matchManually(req.params.id, petId, { appointmentId, hospitalizationId });
     // 當天沒有看診：沒有配對，清單沒變。
     if (fill.status !== 'no_visit') emitLabResultsUpdate();
     res.json({ fill });

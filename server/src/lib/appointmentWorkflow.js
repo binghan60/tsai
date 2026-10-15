@@ -223,6 +223,10 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
     const requestedFields = CLINICAL_FIELDS.filter((field) => body[field] !== undefined);
     const onlyJournalFields = requestedFields.length > 0 && requestedFields.every((field) => DESK_EDITABLE_FIELDS.includes(field));
     if (state.handedOff && !onlyJournalFields) throw workflowError('這筆就診已交給櫃台，請先取回再修改內容', 409);
+    // 收了住院：院內用藥記在住院紀錄的「用藥」，帶回家的藥出院時開，看診上不寫藥單（寫了送交時會開成待包藥）。
+    if (appointment.hospitalizationId && body.prescription !== undefined && richTextToPlain(String(body.prescription ?? '')).trim()) {
+      throw workflowError('這次看診已收住院：院內用藥記在住院紀錄，帶回家的藥出院時開', 409);
+    }
     for (const field of CLINICAL_TEXT_FIELDS) {
       if (body[field] !== undefined) appointment[field] = cleanText(field, body[field]);
     }
@@ -242,6 +246,8 @@ export function applyWorkflowAction(appointment, action, body, now = new Date(),
     // 只在送交櫃台之前；已經寫的內容留著。
     if (state.handedOff) throw workflowError('這筆就診已交給櫃台，請先取回', 409);
     if (!state.started) throw workflowError('這筆就診還沒開始看診', 409);
+    // 收了住院的看診退回候診，住院單就沒有入院看診可以指了：要先取消住院。
+    if (appointment.hospitalizationId) throw workflowError('這次看診已收住院，請先取消住院', 409);
     appointment.visitStartedAt = null;
   } else if (action === 'handoff') {
     if (state.handedOff) throw workflowError('這筆就診已交給櫃台', 409);

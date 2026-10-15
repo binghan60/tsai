@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import MedicalRecord from '../models/MedicalRecord.js';
 import Appointment from '../models/Appointment.js';
+import Hospitalization from '../models/Hospitalization.js';
 import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
 
 // 總覽：由粗到細三層——寄送失敗（有才出現）→ 今天的門診四格＋健檢報告四格 → 近 8 週健檢量＋院內待辦。
@@ -66,7 +67,7 @@ router.get('/', async (req, res, next) => {
     const weekBoundaries = buildWeekBoundaries(trendStart);
     const trendEnd = weekBoundaries.at(-1);
 
-    const [todayAppointments, [recordSummary], overdueDraftCount, latestFailed] = await Promise.all([
+    const [todayAppointments, [recordSummary], overdueDraftCount, latestFailed, hospitalized] = await Promise.all([
       Appointment.find({ date: today }).select('time status visitStartedAt followUpRecommendation followUpAppointmentId').lean(),
       MedicalRecord.aggregate([
         { $match: CURRENT_VERSION },
@@ -84,6 +85,8 @@ router.get('/', async (req, res, next) => {
         .select('deliveryStatus deliveryError petId')
         .populate({ path: 'petId', select: 'name' })
         .lean(),
+      // 住院中：跟住院清單「住院中」頁籤同一個口徑。
+      Hospitalization.countDocuments({ status: 'admitted' }),
     ]);
 
     const statusBreakdown = { draft: 0, finalized: 0, sending: 0, sent: 0, failed: 0, uncertain: 0 };
@@ -99,7 +102,7 @@ router.get('/', async (req, res, next) => {
     const { pending, failed } = deliveryBreakdown(statusBreakdown);
 
     res.json({
-      today: todayClinic(todayAppointments),
+      today: { ...todayClinic(todayAppointments), hospitalized },
       reports: {
         drafts: statusBreakdown.draft,
         overdueDrafts: overdueDraftCount,

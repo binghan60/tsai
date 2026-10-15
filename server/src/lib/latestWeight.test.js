@@ -41,3 +41,10 @@ test('都沒有量測時才用貓咪資料手填的值，沒有日期', () => {
   assert.equal(pickLatestWeight({ visits: [visit()], fallbackKg: 9 }).kg, 4.2);
   assert.equal(pickLatestWeight({ fallbackKg: null }), null);
 });
+
+test('住院每天的體重也算，同一天住院體重優先於看診', () => {
+  const days = [{ date: '2026-10-02', weightKg: 3.42 }, { date: '2026-10-01', weightKg: 3.5 }];
+  assert.deepEqual(pickLatestWeight({ visits: [visit()], days }), { kg: 3.42, date: '2026-10-02' });
+  assert.equal(pickLatestWeight({ visits: [visit({ date: '2026-10-01' })], days: [{ date: '2026-10-01', weightKg: 3.5 }] }).kg, 3.5);
+  assert.equal(pickLatestWeight({ days: [{ date: '2026-10-01', weightKg: null }], fallbackKg: 4 }).date, '');
+});

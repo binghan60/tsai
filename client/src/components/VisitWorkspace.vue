@@ -4,9 +4,11 @@ import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from './PatientLink.vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
-import { ArrowRight, FileText, FlaskConical, Pencil, Pill, Stethoscope, Undo2 } from '@lucide/vue'
+import { ArrowRight, BedDouble, FileText, FlaskConical, Pencil, Pill, Stethoscope, Undo2 } from '@lucide/vue'
 import SurgeryBadge from './SurgeryBadge.vue'
 import StrayBadge from './StrayBadge.vue'
+import AdmitDialog from './AdmitDialog.vue'
+import { useStaffIdentity } from '../composables/useStaffIdentity'
 import LatenessBadge from './LatenessBadge.vue'
 import CheckinNumber from './CheckinNumber.vue'
 import SpecGrid from './SpecGrid.vue'
@@ -440,6 +442,44 @@ async function run(action, payload = {}) {
   }
 }
 
+// 收住院（看診到一半才決定很常見）：先把還在等的自動存檔送出，再用最新版本收；收完以伺服器回來的看診為準——
+// 藥單已經搬到住院第一筆的用藥、看診上清空，之後自動存檔不再送藥單（收了住院的看診伺服器不收藥單）。
+const { identity } = useStaffIdentity()
+const admitOpen = ref(false)
+const admitError = ref('')
+function openAdmit() {
+  admitError.value = ''
+  admitOpen.value = true
+}
+async function admit(reason) {
+  if (busy.value || conflicts.value.length) return
+  committing.value = true
+  admitError.value = ''
+  try {
+    if (!(await save()) || (dirty.value && !(await save()))) {
+      admitError.value = error.value || '還有內容沒存好，請先處理再收住院。'
+      return
+    }
+    busy.value = true
+    const { data } = await http.post('/hospitalizations', { appointmentId: props.appointment._id, version: props.appointment.__v ?? 0, reason, staff: identity.value })
+    baseline.value = clinicalDraft(data.appointment)
+    Object.assign(draft, clinicalDraft(data.appointment))
+    emit('updated', data.appointment, 'admit')
+    admitOpen.value = false
+    toast.success(`${props.appointment.petName} 已收住院`, '收住院')
+  } catch (err) {
+    admitError.value = apiErrorMessage(err, '收住院失敗，請重試。')
+  } finally {
+    busy.value = false
+    committing.value = false
+    if (queued) {
+      const update = queued
+      queued = null
+      receive(update)
+    }
+  }
+}
+
 function openReopenRequest() {
   reopenReason.value = ''
   reopenError.value = ''
@@ -507,6 +547,7 @@ onBeforeUnmount(() => {
               <h2 class="text-xl leading-tight font-semibold"><PatientLink :pet-id="appointment.petId">{{ appointment.petName }}</PatientLink></h2>
               <Badge v-if="appointment.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
               <StrayBadge v-if="appointment.isStray" />
+              <RouterLink v-if="appointment.hospitalizationId" :to="`/hospital/${appointment.hospitalizationId}`" class="inline-flex h-[1.625rem] items-center gap-1 rounded-full bg-info-surface px-2.5 text-xs leading-none font-semibold text-info hover:underline"><BedDouble class="size-3.5" stroke-width="1.75" aria-hidden="true" />住院</RouterLink>
             </div>
             <div class="flex flex-wrap items-start justify-between gap-x-8 gap-y-2.5">
               <SpecGrid>
@@ -653,7 +694,8 @@ onBeforeUnmount(() => {
           </section>
 
           <!-- 藥單：跟本次簡易紀錄一樣寫進這次看診的病歷日誌；送交櫃台時在藥單新增一筆（待包藥）。 -->
-          <section class="space-y-2" :aria-labelledby="`prescription-heading-${appointment._id}`">
+          <!-- 收了住院：院內用藥記在住院紀錄，帶回家的藥出院時開，看診上沒有藥單。 -->
+          <section v-if="!appointment.hospitalizationId" class="space-y-2" :aria-labelledby="`prescription-heading-${appointment._id}`">
             <div class="flex items-center gap-2"><h3 :id="`prescription-heading-${appointment._id}`" class="text-base font-semibold">藥單</h3><DestTag :to="['journal', 'medication']" /><Button v-if="editable" type="button" variant="secondary" size="xs" class="ml-auto" :disabled="committing" @click="prescriptionEditor?.openPicker()"><Pill stroke-width="1.75" />藥櫃</Button></div>
             <DrugSuggestEditor ref="prescriptionEditor" :id="textareaId('prescription')" v-model="draft.prescription" aria-label="藥單" :min-rows="4" :disabled="!editable || committing" />
           </section>
@@ -703,6 +745,8 @@ onBeforeUnmount(() => {
           <Button v-else variant="soft" :disabled="labRequest.busy.value" @click="toggleLabRequest(true)"><FlaskConical stroke-width="1.75" />送 IDEXX</Button>
         </template>
         <Button variant="soft" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')"><FileText stroke-width="1.75" />{{ appointment.recordId ? '開啟健檢報告' : '建立健檢報告' }}</Button>
+        <!-- 收住院：開始看診之後、櫃台完成處理之前都能按。 -->
+        <Button v-if="state.started && !state.completed && !appointment.hospitalizationId" variant="soft" :disabled="busy || committing || !!conflicts.length" @click="openAdmit"><BedDouble stroke-width="1.75" />收住院</Button>
         <Button v-if="state.completed" variant="secondary" :disabled="busy || !!appointment.reopenRequest?.requestedAt" @click="openReopenRequest">
           {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
         </Button>
@@ -710,11 +754,13 @@ onBeforeUnmount(() => {
         <Button v-else-if="appointment.status === 'arrived' && !state.started" :disabled="busy" @click="emit('start', appointment)"><Stethoscope stroke-width="1.75" />開始看診</Button>
         <template v-else-if="editable">
           <!-- 按錯貓、或看到一半飼主離開：退回候診，櫃台才能取消報到。已經寫的內容留著。 -->
-          <Button variant="secondary" :disabled="busy" @click="run('unstart')"><Undo2 stroke-width="1.75" />取消看診</Button>
+          <Button v-if="!appointment.hospitalizationId" variant="secondary" :disabled="busy" @click="run('unstart')"><Undo2 stroke-width="1.75" />取消看診</Button>
           <Button :disabled="busy || !!conflicts.length" @click="run('handoff')">完成看診，送交櫃台<ArrowRight stroke-width="1.75" /></Button>
         </template>
       </div>
     </footer>
+
+    <AdmitDialog v-if="admitOpen" :appointment="appointment" :prescription="draft.prescription" :submitting="committing" :error-message="admitError" @submit="admit" @close="admitOpen = false" />
 
     <Dialog :open="reopenDialog" @update:open="(value) => (reopenDialog = value)">
       <DialogContent size="sm">

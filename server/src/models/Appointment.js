@@ -140,6 +140,9 @@ const appointmentSchema = new mongoose.Schema(
     // 貓咪的流浪貓標記快照：掛號台、診療台的卡片畫徽章用（即時廣播只帶掛號本身）。
     // 貓咪資料改了標記時，跟著更新這隻貓今天以後的掛號（lib/strayPet.js）。
     isStray: { type: Boolean, default: false },
+    // 這次看診收了住院（routes/hospitalizations.js）。收住院後不能取消看診（要先取消住院），
+    // 送交櫃台時也不開藥單——院內用藥記在住院紀錄，帶回家的藥出院時開。
+    hospitalizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospitalization', default: null },
     // 醫師對已完成的就診提出的修改申請；保留原因與時間，櫃台核准後才可再修改。
     reopenRequest: {
       reason: { type: String, default: '', trim: true, maxlength: 500 },
@@ -167,6 +170,8 @@ appointmentSchema.index({ ownerId: 1, date: 1 });
 appointmentSchema.index({ imageUploadTodoId: 1 }, { partialFilterExpression: { imageUploadTodoId: { $type: 'objectId' } } });
 // 診療台開出的藥單之後在藥單那邊被修改或取消時，反查是哪一筆掛號（lib/visitMedicationOrder.js）。
 appointmentSchema.index({ medicationOrderId: 1 }, { partialFilterExpression: { medicationOrderId: { $type: 'objectId' } } });
+// 住院單反查入院那次看診（取消住院、出院時把關聯清掉或保留）。
+appointmentSchema.index({ hospitalizationId: 1 }, { partialFilterExpression: { hospitalizationId: { $type: 'objectId' } } });
 // 健檢報告草稿反查連著的看診：填寫頁每次讀取與自動存檔都會查（lib/recordVisitLink.js）。
 appointmentSchema.index({ recordId: 1 }, { partialFilterExpression: { recordId: { $type: 'objectId' } } });
 // 號碼牌刻意沒有唯一索引：櫃台可以改成手上實際發出去的號碼，同一天允許重複。

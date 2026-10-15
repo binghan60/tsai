@@ -8,6 +8,7 @@ import LabBridgeStatus from '../models/LabBridgeStatus.js';
 import Pet from '../models/Pet.js';
 import Appointment from '../models/Appointment.js';
 import IdexxRequest from '../models/IdexxRequest.js';
+import Hospitalization from '../models/Hospitalization.js';
 import { labResultContent } from '../lib/labResultImport.js';
 import { parseIdexxResult } from '../lib/idexxResult.js';
 
@@ -32,12 +33,15 @@ describe('lab results routes', () => {
     appointmentFind: Appointment.find,
     requestFind: IdexxRequest.find,
     requestUpdateOne: IdexxRequest.updateOne,
+    hospitalizationFindOne: Hospitalization.findOne,
   };
 
   before(async () => {
     server = app.listen(0, '127.0.0.1');
     if (!server.listening) await once(server, 'listening');
     origin = `http://127.0.0.1:${server.address().port}`;
+    // 這組測試裡的貓都沒有住院（住院期間驗的另外連住院單，見 lib/labResultApply.js）。
+    Hospitalization.findOne = () => ({ sort: () => ({ lean: async () => null }), lean: async () => null });
   });
 
   afterEach(() => {
@@ -57,6 +61,7 @@ describe('lab results routes', () => {
   });
 
   after(async () => {
+    Hospitalization.findOne = original.hospitalizationFindOne;
     if (original.token === undefined) delete process.env.IDEXX_BRIDGE_TOKEN;
     else process.env.IDEXX_BRIDGE_TOKEN = original.token;
     if (server) await new Promise((resolve) => server.close(resolve));
