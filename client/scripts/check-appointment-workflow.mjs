@@ -128,7 +128,7 @@ try {
   assert.match(fixture.visitNote, /需核對的本機紀錄/);
   console.log('Remote updates keep local typing; conflicting edits need a decision');
 
-  await click(doctor, '完成看診，送交櫃台');
+  await click(doctor, '送交櫃台');
   await find(doctor, () => !document.querySelector('[aria-label="豆豆 看診工作區"]'));
   assert.equal(fixture.status, 'pending_checkout');
   await doctor.screenshot({ path: join(tmpdir(), 'clinic-console.png') });

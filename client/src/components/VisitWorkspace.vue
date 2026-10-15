@@ -4,10 +4,11 @@ import { apiErrorMessage } from '../lib/apiError.js'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import PatientLink from './PatientLink.vue'
 import { onBeforeRouteLeave, useRouter } from 'vue-router'
-import { ArrowRight, BedDouble, FileText, FlaskConical, Pencil, Pill, Stethoscope, Undo2 } from '@lucide/vue'
+import { BedDouble, FileText, FlaskConical, Pencil, Pill, SendHorizontal, Stethoscope, Undo2 } from '@lucide/vue'
 import SurgeryBadge from './SurgeryBadge.vue'
 import StrayBadge from './StrayBadge.vue'
 import AdmitDialog from './AdmitDialog.vue'
+import RowActions from './RowActions.vue'
 import { useStaffIdentity } from '../composables/useStaffIdentity'
 import LatenessBadge from './LatenessBadge.vue'
 import CheckinNumber from './CheckinNumber.vue'
@@ -137,6 +138,14 @@ let queued = null
 const state = computed(() => workflowState(props.appointment))
 // 送交櫃台後即鎖定；櫃台完成前可取回修改，完成後需申請核准。
 const editable = computed(() => state.value.started && !state.value.handedOff && !state.value.completed)
+// 底部 ⋯ 選單：少用的動作。
+const moreActions = computed(() => {
+  if (!labRequest.enabled.value || !canRequestLab(props.appointment) || !props.appointment.labRequestedAt) return []
+  return [{ key: 'cancel-lab', label: '取消送 IDEXX', icon: FlaskConical, disabled: labRequest.busy.value }]
+})
+function selectMoreAction(key) {
+  if (key === 'cancel-lab') toggleLabRequest(false)
+}
 const dirty = computed(() => Object.keys(draftPatch(draft, baseline.value)).length > 0)
 const owner = computed(() => (typeof pet.value?.ownerId === 'object' ? pet.value.ownerId : null))
 // 飼主聯絡資料與就診時間直接攤在標頭的規格欄（曾經收在 Info 彈出框裡，使用者要一眼看到）。
@@ -457,7 +466,7 @@ async function admit(reason) {
   admitError.value = ''
   try {
     if (!(await save()) || (dirty.value && !(await save()))) {
-      admitError.value = error.value || '還有內容沒存好，請先處理再收住院。'
+      admitError.value = error.value || '還有內容沒存好，請先處理再辦理住院。'
       return
     }
     busy.value = true
@@ -466,9 +475,9 @@ async function admit(reason) {
     Object.assign(draft, clinicalDraft(data.appointment))
     emit('updated', data.appointment, 'admit')
     admitOpen.value = false
-    toast.success(`${props.appointment.petName} 已收住院`, '收住院')
+    toast.success(`${props.appointment.petName} 已辦理住院`, '辦理住院')
   } catch (err) {
-    admitError.value = apiErrorMessage(err, '收住院失敗，請重試。')
+    admitError.value = apiErrorMessage(err, '辦理住院失敗，請重試。')
   } finally {
     busy.value = false
     committing.value = false
@@ -731,32 +740,34 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <footer class="flex shrink-0 flex-wrap items-center gap-3 border-t border-border bg-sunken px-6 py-3">
+    <!-- 左邊：儲存狀態＋這次看診要用的工具；右邊：取消看診、⋯（少用的）＋唯一的流程主要動作。
+         取消看診放在右區最左邊、右邊多留一段空，不緊貼方向相反的送交櫃台。 -->
+    <footer class="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-t border-border bg-sunken px-6 py-3">
       <p class="text-sm text-muted-foreground" role="status">{{ !state.started && appointment.status === 'arrived' ? '尚未開始看診，可以先看資料' : savedLabel }}</p>
-      <div class="ml-auto flex flex-wrap items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2 border-l border-border pl-3">
         <!-- 送 IDEXX：按下去才把貓咪送到 IDEXX 主機的待驗清單（報到不自動送，不是每次看診都驗血）。
-             跟其他動作放同一排，不用捲動就按得到；伺服器沒開這個功能就不出現。 -->
+             送出後同一個位置換成狀態徽章，取消送收在 ⋯；伺服器沒開這個功能就不出現。 -->
         <template v-if="labRequest.enabled.value && canRequestLab(appointment)">
           <template v-if="appointment.labRequestedAt">
             <Badge v-if="labRequestDelivered(appointment)" variant="status" class="bg-info-surface text-info"><FlaskConical class="size-4" stroke-width="1.75" aria-hidden="true" />已送 IDEXX <span class="num">{{ clinicTimeInput(appointment.labRequestedAt) }}</span></Badge>
             <Badge v-else variant="status" class="bg-warning-surface text-warning"><FlaskConical class="size-4" stroke-width="1.75" aria-hidden="true" />尚未送到 IDEXX</Badge>
-            <Button variant="secondary" :disabled="labRequest.busy.value" @click="toggleLabRequest(false)">取消送 IDEXX</Button>
           </template>
           <Button v-else variant="soft" :disabled="labRequest.busy.value" @click="toggleLabRequest(true)"><FlaskConical stroke-width="1.75" />送 IDEXX</Button>
         </template>
-        <Button variant="soft" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')"><FileText stroke-width="1.75" />{{ appointment.recordId ? '開啟健檢報告' : '建立健檢報告' }}</Button>
-        <!-- 收住院：開始看診之後、櫃台完成處理之前都能按。 -->
-        <Button v-if="state.started && !state.completed && !appointment.hospitalizationId" variant="soft" :disabled="busy || committing || !!conflicts.length" @click="openAdmit"><BedDouble stroke-width="1.75" />收住院</Button>
+        <Button variant="soft" :disabled="busy || (!appointment.recordId && !editable)" @click="appointment.recordId ? emit('open-record', appointment) : run('record')"><FileText stroke-width="1.75" />健檢報告</Button>
+        <!-- 辦理住院：開始看診之後、櫃台完成處理之前都能按。 -->
+        <Button v-if="state.started && !state.completed && !appointment.hospitalizationId" variant="soft" :disabled="busy || committing || !!conflicts.length" @click="openAdmit"><BedDouble stroke-width="1.75" />辦理住院</Button>
+      </div>
+      <div class="ml-auto flex items-center gap-2">
+        <!-- 按錯貓、或看到一半飼主離開：退回候診，櫃台才能取消報到。已經寫的內容留著。 -->
+        <Button v-if="editable && !appointment.hospitalizationId" variant="destructive" class="mr-4" :disabled="busy" @click="run('unstart')"><Undo2 stroke-width="1.75" />取消看診</Button>
+        <RowActions v-if="moreActions.length" :actions="moreActions" size="default" @select="selectMoreAction" />
         <Button v-if="state.completed" variant="secondary" :disabled="busy || !!appointment.reopenRequest?.requestedAt" @click="openReopenRequest">
           {{ appointment.reopenRequest?.requestedAt ? '已申請修改' : '申請修改' }}
         </Button>
         <Button v-else-if="state.handedOff" :disabled="busy" @click="run('reclaim')"><Undo2 stroke-width="1.75" />取回修改</Button>
         <Button v-else-if="appointment.status === 'arrived' && !state.started" :disabled="busy" @click="emit('start', appointment)"><Stethoscope stroke-width="1.75" />開始看診</Button>
-        <template v-else-if="editable">
-          <!-- 按錯貓、或看到一半飼主離開：退回候診，櫃台才能取消報到。已經寫的內容留著。 -->
-          <Button v-if="!appointment.hospitalizationId" variant="secondary" :disabled="busy" @click="run('unstart')"><Undo2 stroke-width="1.75" />取消看診</Button>
-          <Button :disabled="busy || !!conflicts.length" @click="run('handoff')">完成看診，送交櫃台<ArrowRight stroke-width="1.75" /></Button>
-        </template>
+        <Button v-else-if="editable" :disabled="busy || !!conflicts.length" @click="run('handoff')"><SendHorizontal stroke-width="1.75" />送交櫃台</Button>
       </div>
     </footer>
 

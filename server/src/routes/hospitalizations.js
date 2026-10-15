@@ -154,11 +154,11 @@ router.post('/', async (req, res, next) => {
       cancelledOrder = null;
       appointment = await Appointment.findById(appointmentId).session(session);
       if (!appointment) throw fail('找不到看診', 404);
-      if ((appointment.__v ?? 0) !== version) throw fail('看診資料已更新，請重新載入後再收住院', 409);
+      if ((appointment.__v ?? 0) !== version) throw fail('看診資料已更新，請重新載入後再辦理住院', 409);
       const state = workflowState(appointment);
-      if (state.completed) throw fail('櫃台已完成處理這次看診，不能再收住院', 409);
+      if (state.completed) throw fail('櫃台已完成處理這次看診，不能再辦理住院', 409);
       if (!appointment.petId || !['arrived', 'pending_checkout'].includes(appointment.status) || !state.started) {
-        throw fail('要先開始看診，才能收住院', 409);
+        throw fail('要先開始看診，才能辦理住院', 409);
       }
       if (appointment.hospitalizationId) throw fail('這次看診已經收住院了', 409);
       if (await Hospitalization.exists({ petId: appointment.petId, status: 'admitted' }).session(session)) {

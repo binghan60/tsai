@@ -10,7 +10,7 @@ import { Button } from './ui/button';
 import { Alert, AlertDescription } from './ui/alert';
 import { richTextToPlain } from '../../../shared/richText.js';
 
-// 收住院（看診工作區底部的「收住院」）：住院原因預設帶來院原因。
+// 辦理住院（看診工作區底部的「辦理住院」）：住院原因預設帶來院原因。
 // 這次看診已經寫的藥單會搬到住院第一筆照護紀錄的「用藥」（院內用藥記在住院紀錄，看診不開藥單），先列出來讓醫師看到。
 const props = defineProps({
   appointment: { type: Object, required: true },
@@ -24,7 +24,7 @@ const hasPrescription = computed(() => Boolean(richTextToPlain(props.prescriptio
 </script>
 
 <template>
-  <ModalDialog size="sm" :title="`收住院：${appointment.petName}`" :icon="BedDouble" @close="emit('close')">
+  <ModalDialog size="sm" :title="`辦理住院：${appointment.petName}`" :icon="BedDouble" @close="emit('close')">
     <form class="flex flex-col" @submit.prevent="emit('submit', reason.trim())">
       <div class="space-y-4 px-6 py-5">
         <div class="space-y-1.5">
@@ -39,7 +39,7 @@ const hasPrescription = computed(() => Boolean(richTextToPlain(props.prescriptio
       </div>
       <DialogFooter>
         <Button type="button" variant="secondary" @click="emit('close')">取消</Button>
-        <Button type="submit" :disabled="submitting">{{ submitting ? '處理中…' : '收住院' }}</Button>
+        <Button type="submit" :disabled="submitting">{{ submitting ? '處理中…' : '辦理住院' }}</Button>
       </DialogFooter>
     </form>
   </ModalDialog>
