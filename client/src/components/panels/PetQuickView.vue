@@ -89,8 +89,9 @@ async function refreshPet() {
 }
 
 useLiveReload(refreshPet, {
-  events: ['patients:updated', 'records:updated', 'clinical-note:updated'],
-  match: (event, payload) => event !== 'clinical-note:updated' || String(payload?.petId ?? '') === String(props.petId),
+  // 住院每天的體重算進最近體重，住院有異動也重讀。
+  events: ['patients:updated', 'records:updated', 'clinical-note:updated', 'hospitalization:updated'],
+  match: (event, payload) => !['clinical-note:updated', 'hospitalization:updated'].includes(event) || String(payload?.petId ?? '') === String(props.petId),
 });
 
 watch(() => props.petId, (id) => {

@@ -2,7 +2,7 @@
 import { apiErrorMessage } from '../lib/apiError.js';
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, CalendarDays, Check, Copy, FileText, Link2Off, Mail, MapPin, NotebookPen, Cat, Pencil, Pin, PinOff, Plus, Share2, Trash2, X } from '@lucide/vue';
+import { AlertTriangle, ArrowDownToLine, ArrowUpToLine, BedDouble, CalendarDays, Check, Copy, FileText, Link2Off, Mail, MapPin, NotebookPen, Cat, Pencil, Pin, PinOff, Plus, Share2, Trash2, X } from '@lucide/vue';
 import ClinicalNoteEntry from '../components/ClinicalNoteEntry.vue';
 import ConfirmDialog from '../components/ConfirmDialog.vue';
 import DeleteRecordDialog from '../components/DeleteRecordDialog.vue';
@@ -45,6 +45,7 @@ import AttendancePanel from '../components/AttendancePanel.vue';
 import NewReportDialog from '../components/NewReportDialog.vue';
 import { Checkbox } from '../components/ui/checkbox';
 import { usePetAttendance } from '../composables/usePetAttendance';
+import { stayDays as hospitalStayDays } from '../lib/hospitalization';
 
 const route = useRoute();
 // 「新增健檢」選看診的視窗（components/NewReportDialog.vue）。其他頁（貓咪清單、報告預覽）導過來時帶 ?newReport=1。
@@ -174,8 +175,30 @@ const activeSection = ref('notes');
 const SECTION_TABS = [
   { key: 'notes', label: '病歷日誌' },
   { key: 'records', label: '歷次健檢' },
+  { key: 'hospital', label: '住院' },
   { key: 'attendance', label: '出席紀錄' },
 ];
+
+// 住院頁籤：這隻貓每一次住院（不含取消的），新到舊；點了到住院專區。
+const hospitalizations = ref([]);
+const hospitalizationsLoaded = ref(false);
+async function loadHospitalizations(petId = route.params.id) {
+  try {
+    const { data } = await http.get('/hospitalizations', { params: { petId, limit: 100 } });
+    if (String(route.params.id) !== String(petId)) return;
+    hospitalizations.value = data.items ?? [];
+    hospitalizationsLoaded.value = true;
+  } catch {
+    // 讀不到就維持原樣；下一次住院有異動會再讀。
+  }
+}
+function hospitalSpan(item) {
+  return `${shortDate(item.admittedAt)} – ${item.status === 'discharged' ? shortDate(item.dischargedAt) : ''}`;
+}
+function hospitalDays(item) {
+  if (item.status === 'discharged') return `${hospitalStayDays(item.admittedAt, item.dischargedAt) ?? ''} 天`;
+  return item.dayNumber ? `第 ${item.dayNumber} 天` : '';
+}
 
 const clinicalNotes = ref([]);
 const notePage = ref(1);
@@ -283,6 +306,15 @@ useLiveReload(() => {
 }, {
   events: ['patients:updated', 'records:updated', 'clinical-note:updated'],
   match: (event, payload) => event !== 'clinical-note:updated' || String(payload?.petId ?? '') === String(route.params.id),
+});
+// 住院有異動：住院頁籤、最近體重（住院每天的體重算進去）跟著變。
+useLiveReload(() => {
+  if (!pet.value) return;
+  fetchPet();
+  loadHospitalizations();
+}, {
+  events: ['hospitalization:updated'],
+  match: (event, payload) => String(payload?.petId ?? '') === String(route.params.id),
 });
 
 async function openAttendance() {
@@ -633,6 +665,9 @@ watch(
     noteToRemove.value = null;
     fetchPet(petId);
     loadAttendance({ page: 1 });
+    hospitalizations.value = [];
+    hospitalizationsLoaded.value = false;
+    loadHospitalizations(petId);
   },
   { immediate: true }
 );
@@ -901,8 +936,8 @@ watch(pet, async (value) => {
         <FilterTabs
           v-model="activeSection"
           :items="SECTION_TABS"
-          :counts="{ notes: notePagination.total, records: recordPagination.total, attendance: attendanceListTotal }"
-          aria-label="切換病歷日誌、歷次健檢與出席紀錄"
+          :counts="{ notes: notePagination.total, records: recordPagination.total, ...(hospitalizationsLoaded ? { hospital: hospitalizations.length } : {}), attendance: attendanceListTotal }"
+          aria-label="切換病歷日誌、歷次健檢、住院與出席紀錄"
         />
         <span class="text-sm text-subtle-foreground">新到舊</span>
       </div>
@@ -964,6 +999,23 @@ watch(pet, async (value) => {
             <Pagination v-if="clinicalNotes.length" :page="notePage" :total-pages="totalNotePages" @update:page="goToNotePage" />
           </template>
     
+          <template v-else-if="activeSection === 'hospital'">
+            <Card v-if="hospitalizations.length" class="overflow-hidden p-0 shadow-sm dark:shadow-none">
+              <ul class="divide-y divide-border">
+                <li v-for="item in hospitalizations" :key="item._id">
+                  <router-link :to="`/hospital/${item._id}`" class="grid grid-cols-[minmax(8rem,auto)_5rem_minmax(0,1fr)_auto] items-center gap-4 px-5 py-3.5 hover:bg-hover">
+                    <span class="num text-sm">{{ hospitalSpan(item) }}</span>
+                    <span class="text-sm">{{ hospitalDays(item) }}</span>
+                    <span class="min-w-0 truncate text-sm" v-tip.overflow="item.reason || ''">{{ item.reason }}</span>
+                    <Badge v-if="item.status === 'admitted'" variant="status" class="bg-info-surface text-info">住院中</Badge>
+                    <span v-else class="inline-flex items-center gap-1 text-sm font-medium text-success"><Check class="size-4" stroke-width="2.25" aria-hidden="true" />已出院</span>
+                  </router-link>
+                </li>
+              </ul>
+            </Card>
+            <EmptyState v-else-if="hospitalizationsLoaded" :icon="BedDouble" title="沒有住院紀錄" />
+          </template>
+
           <AttendancePanel
             v-else-if="activeSection === 'attendance'"
             :counts="attendanceCounts.pet"

@@ -61,7 +61,7 @@ onMounted(() => {
 onBeforeUnmount(() => clearInterval(clock))
 const todayInput = computed(() => clinicDateInput(now.value))
 // 總覽的數字跟掛號（今天的房間）、健檢報告、貓咪資料連動，一律用 websocket 推，不靠重新整理。
-const live = useLiveReload(() => fetchDashboard(true), { events: ['records:updated', 'patients:updated', 'clinical-note:updated'] })
+const live = useLiveReload(() => fetchDashboard(true), { events: ['records:updated', 'patients:updated', 'clinical-note:updated', 'hospitalization:updated'] })
 useAppointmentRealtime(todayInput, { onAppointmentUpdate: live.schedule })
 const headerMeta = computed(() => {
   const [, month, day] = todayInput.value.split('-')
@@ -78,6 +78,8 @@ const clinicCards = computed(() => [
   { label: '在院', value: today.value.onsite ?? 0, details: [`看診中 ${today.value.inVisit ?? 0}`, `候診 ${today.value.waiting ?? 0}`], to: '/reception?stage=onsite' },
   { label: '待櫃台處理', value: today.value.handoff ?? 0, details: ['飼主在櫃台等'], to: '/reception?stage=handoff', tone: 'warning' },
   { label: '已完成', value: today.value.completed ?? 0, details: [`待安排回診 ${today.value.followUpPending ?? 0}`], to: '/reception?stage=completed' },
+  // 住院中：跟住院清單的「住院中」頁籤同一個口徑（status: admitted），不限今天。
+  { label: '住院中', value: today.value.hospitalized ?? 0, details: [], to: '/hospital' },
 ])
 const sentDelta = computed(() => {
   const delta = (reports.value.sentThisMonth ?? 0) - (reports.value.sentPreviousMonth ?? 0)
@@ -160,7 +162,7 @@ async function completeTodo(item) {
           <h2 class="text-lg font-semibold">{{ group.title }}</h2>
           <router-link :to="group.link" class="ml-auto text-sm font-semibold text-primary hover:underline">{{ group.linkLabel }}</router-link>
         </div>
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="grid gap-3 sm:grid-cols-2" :class="group.cards.length > 4 ? 'lg:grid-cols-3 xl:grid-cols-5' : 'xl:grid-cols-4'">
           <router-link
             v-for="card in group.cards"
             :key="card.label"

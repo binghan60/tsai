@@ -20,6 +20,8 @@ import PatientNotes from '../components/PatientNotes.vue'
 import VisitWorkspace from '../components/VisitWorkspace.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
 import StrayBadge from '../components/StrayBadge.vue'
+import HospitalBadge from '../components/HospitalBadge.vue'
+import ConsoleHospitalStays from '../components/ConsoleHospitalStays.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ListSkeleton from '../components/ListSkeleton.vue'
@@ -452,6 +454,8 @@ onBeforeUnmount(() => {
         </header>
 
         <div class="min-h-0 flex-1 overflow-y-auto pb-2">
+          <!-- 住院中的貓：收住院那次看診只在入院當天的清單上，第二天起靠這一段提醒醫師去巡。 -->
+          <ConsoleHospitalStays v-if="queueTab === 'active' && isToday" />
           <ListSkeleton v-if="loading" :rows="4" inset />
           <p v-else-if="!rows.length" class="px-4 py-3 text-sm text-subtle-foreground">目前沒有</p>
           <ul v-else>
@@ -494,6 +498,7 @@ onBeforeUnmount(() => {
                   <span class="min-w-[2.5em] max-w-[70%] truncate text-base font-semibold text-foreground" v-tip.overflow="item.petName">{{ item.petName }}</span>
                   <Badge v-if="item.visitType === 'new'" variant="status" class="h-6 shrink-0 bg-info-surface px-2 text-info">初診</Badge>
                   <StrayBadge v-if="item.isStray" class="h-6 shrink-0 px-2" />
+                  <HospitalBadge v-if="item.hospitalizationId" class="h-6 shrink-0 px-2" />
                   <!-- 精簡版只寫「手術」（一行放不下「手術：結紮」），手術名稱滑過才出；詳細版整顆帶名稱。 -->
                   <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" :short="compact" class="h-6 min-w-0 shrink px-2" />
                   <!-- 檢驗進度：詳細版寫字，精簡版只放一個燒瓶圖示（跟遲到、備註圖示同一排）。 -->

@@ -1,4 +1,4 @@
-import { Cat, CalendarClock, FileText, Layers, LayoutDashboard, LayoutTemplate, Pill, Send, Stethoscope, Tablets, Type } from '@lucide/vue';
+import { BedDouble, Cat, CalendarClock, FileText, Layers, LayoutDashboard, LayoutTemplate, Pill, Send, Stethoscope, Tablets, Type } from '@lucide/vue';
 
 // 左側 72px 圖示導覽，分三組：看診（每天在用的工作台）、資料、設定。
 // 每一項都是圖示＋兩三個字，不做收合／展開——字已經在圖示下面了，不用再滑過才看得到。
@@ -10,6 +10,7 @@ export const NAV_GROUPS = [
       { to: '/appointments', label: '診療台', icon: Stethoscope },
       { to: '/reception', label: '掛號台', icon: CalendarClock },
       { to: '/medications', label: '藥單', icon: Pill },
+      { to: '/hospital', label: '住院', icon: BedDouble },
     ],
   },
   {

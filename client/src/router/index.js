@@ -5,6 +5,8 @@ const DashboardPage = () => import('../pages/DashboardPage.vue');
 const VetConsolePage = () => import('../pages/VetConsolePage.vue');
 const ReceptionPage = () => import('../pages/ReceptionPage.vue');
 const MedicationPickupPage = () => import('../pages/MedicationPickupPage.vue');
+const HospitalListPage = () => import('../pages/HospitalListPage.vue');
+const HospitalDetailPage = () => import('../pages/HospitalDetailPage.vue');
 const PetsListPage = () => import('../pages/PetsListPage.vue');
 const PetCreatePage = () => import('../pages/PetCreatePage.vue');
 const PetDetailPage = () => import('../pages/PetDetailPage.vue');
@@ -40,6 +42,8 @@ const router = createRouter({
     { path: '/appointments', component: VetConsolePage, meta: { title: '診療台' } },
     { path: '/reception', component: ReceptionPage, meta: { title: '掛號台' } },
     { path: '/medications', component: MedicationPickupPage, meta: { title: '藥單' } },
+    { path: '/hospital', component: HospitalListPage, meta: { title: '住院' } },
+    { path: '/hospital/:id', component: HospitalDetailPage, meta: { title: '住院', nav: '/hospital' } },
     { path: '/reception/intakes', component: IntakeReviewPage, meta: { title: '初診表審核', nav: '/reception' } },
     { path: '/pets', component: PetsListPage, meta: { title: '貓咪' } },
     // 靜態路由要排在 /pets/:id 前面，不然 "new" 會被吃成動態參數 id。

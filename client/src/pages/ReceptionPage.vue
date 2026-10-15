@@ -24,6 +24,7 @@ import RowActions from '../components/RowActions.vue'
 import CheckinNumber from '../components/CheckinNumber.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
 import StrayBadge from '../components/StrayBadge.vue'
+import HospitalBadge from '../components/HospitalBadge.vue'
 import WalkInDialog from '../components/WalkInDialog.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
 import DepositBadge from '../components/DepositBadge.vue'
@@ -694,6 +695,7 @@ onBeforeUnmount(() => {
                             <span class="truncate text-base font-semibold"><PatientLink :pet-id="item.petId">{{ item.petName }}</PatientLink></span>
                             <Badge v-if="item.visitType === 'new'" variant="status" class="bg-info-surface text-info">初診</Badge>
                             <StrayBadge v-if="item.isStray" />
+                            <HospitalBadge v-if="item.hospitalizationId" />
                             <SurgeryBadge v-if="item.isSurgery" :name="item.surgeryName" />
                             <LatenessBadge :minutes="item.ui.lateMinutes" />
                             <DepositBadge :status="item.depositStatus" />

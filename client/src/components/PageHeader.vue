@@ -23,7 +23,8 @@ defineProps({
     </Button>
     <div class="min-w-0">
       <div class="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h1 class="text-xl leading-tight font-semibold text-foreground">{{ title }}</h1>
+        <!-- title 插槽：標題本身要是連結時用（住院專區的貓咪名字）。 -->
+        <h1 class="text-xl leading-tight font-semibold text-foreground"><slot name="title">{{ title }}</slot></h1>
         <span v-if="count !== null && count !== undefined" class="text-base text-subtle-foreground"><span class="num">{{ typeof count === 'number' ? count.toLocaleString('zh-TW') : count }}</span> {{ unit }}</span>
         <slot name="meta" />
       </div>
