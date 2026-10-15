@@ -22,13 +22,17 @@ const active = ref(ALL);
 const keyword = ref('');
 const selectedIds = ref([]); // 依勾選順序
 const doses = ref({}); // 藥品 id → 劑量文字（取消勾選也留著，再勾回來還在）
-const daily = ref({}); // 藥品 id → 每日幾次
-const every = ref({}); // 藥品 id → 每幾天一次（跟每日幾次擇一，填一邊就清掉另一邊）
-
-function setFrequency(id, kind, value) {
-  const digits = String(value ?? '').replace(/\D/g, '').replace(/^0+/, '');
-  daily.value = { ...daily.value, [id]: kind === 'daily' ? digits : '' };
-  every.value = { ...every.value, [id]: kind === 'every' ? digits : '' };
+// 頻率二擇一：每日幾次（daily，預設）或每幾天一次（every）；數字只有一格，切換時保留。
+const FREQUENCIES = [
+  { mode: 'daily', before: '每日', after: '次', width: 'w-28' },
+  { mode: 'every', before: '每', after: '天一次', width: 'w-32' },
+];
+const modes = ref({}); // 藥品 id → 'daily' | 'every'
+const counts = ref({}); // 藥品 id → 次數或天數（數字字串）
+const modeOf = (id) => modes.value[id] ?? 'daily';
+const setMode = (id, mode) => { modes.value = { ...modes.value, [id]: mode }; };
+function setCount(id, value) {
+  counts.value = { ...counts.value, [id]: String(value ?? '').replace(/\D/g, '').replace(/^0+/, '') };
 }
 
 // 目前選的分類被刪或清空（另一台改了）時退回「全部」。
@@ -101,9 +105,8 @@ function confirm() {
     .filter(Boolean)
     .map((drug) => {
       const dose = (doses.value[drug._id] ?? '').trim();
-      const times = daily.value[drug._id];
-      const days = every.value[drug._id];
-      const frequency = times ? `每日${times}次` : days ? (days === '1' ? '每天一次' : `每${days}天一次`) : '';
+      const count = counts.value[drug._id];
+      const frequency = !count ? '' : modeOf(drug._id) === 'daily' ? `每日${count}次` : count === '1' ? '每天一次' : `每${count}天一次`;
       const extra = [dose, frequency].filter(Boolean).join(' ');
       return extra ? { ...drug, name: `${drug.name} ${escapeRichText(extra)}` } : drug;
     });
@@ -170,8 +173,13 @@ function confirm() {
         <li v-for="drug in selectedDrugs" :key="drug._id" class="flex items-center gap-2 rounded-lg bg-card py-1 pr-1 pl-2.5 text-sm ring-1 ring-border">
           <RichText :text="drug.name" tag="span" one-line class="min-w-0 flex-1" v-tip.overflow="richTextToPlain(drug.name)" />
           <Input v-model="doses[drug._id]" class="h-8 w-40 shrink-0" maxlength="100" placeholder="劑量" autocomplete="off" :aria-label="`${richTextToPlain(drug.name)}的劑量`" />
-          <span class="flex shrink-0 items-center gap-1 whitespace-nowrap">每日<Input :model-value="daily[drug._id] ?? ''" class="num h-8 w-14 px-2 text-center" placeholder="2" inputmode="numeric" maxlength="2" autocomplete="off" :aria-label="`${richTextToPlain(drug.name)}每日幾次`" @update:model-value="setFrequency(drug._id, 'daily', $event)" />次</span>
-          <span class="flex shrink-0 items-center gap-1 whitespace-nowrap">每<Input :model-value="every[drug._id] ?? ''" class="num h-8 w-14 px-2 text-center" placeholder="2" inputmode="numeric" maxlength="2" autocomplete="off" :aria-label="`${richTextToPlain(drug.name)}每幾天一次`" @update:model-value="setFrequency(drug._id, 'every', $event)" />天一次</span>
+          <!-- 頻率二擇一：被選中的那一段亮起並帶輸入框，另一段只是文字，點了切換。 -->
+          <div class="flex shrink-0 items-center gap-0.5 rounded-lg bg-sunken p-0.5" role="radiogroup" :aria-label="`${richTextToPlain(drug.name)}的頻率`">
+            <template v-for="option in FREQUENCIES" :key="option.mode">
+              <span v-if="modeOf(drug._id) === option.mode" :class="option.width" class="flex h-8 shrink-0 items-center justify-center gap-1 rounded-md bg-card px-2 whitespace-nowrap ring-1 ring-primary" role="radio" aria-checked="true">{{ option.before }}<Input :model-value="counts[drug._id] ?? ''" class="num h-6 w-11 px-1 text-center" placeholder="2" inputmode="numeric" maxlength="2" autocomplete="off" :aria-label="`${richTextToPlain(drug.name)}${option.before}幾${option.mode === 'daily' ? '次' : '天一次'}`" @update:model-value="setCount(drug._id, $event)" />{{ option.after }}</span>
+              <button v-else type="button" :class="option.width" class="flex h-8 shrink-0 items-center justify-center rounded-md px-2 whitespace-nowrap text-muted-foreground hover:bg-hover hover:text-foreground" role="radio" aria-checked="false" @click="setMode(drug._id, option.mode)">{{ option.before }}＿{{ option.after }}</button>
+            </template>
+          </div>
           <button type="button" class="flex size-6 shrink-0 items-center justify-center rounded-md text-subtle-foreground hover:bg-hover hover:text-foreground" :aria-label="`取消選取${richTextToPlain(drug.name)}`" @click="toggle(drug, false)"><X class="size-4" stroke-width="1.75" /></button>
         </li>
       </ul>
