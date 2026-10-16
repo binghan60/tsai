@@ -62,6 +62,23 @@ api.post('/appointments/:id/workflow/:action', (req, res) => {
   } catch (err) { res.status(err.status || 500).json({ message: err.message }); }
 });
 api.post('/chat/messages', (_req, res) => res.status(201).json({}));
+api.get('/lab-results', (_req, res) => res.json({ items: [] }));
+// 住院中一隻（掛號台「住院中」一段與住院速覽用）：昨天入院、今天記了一筆。
+const clinicDay = (offsetDays = 0) => new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000).toISOString().slice(0, 10);
+const stayId = '507f1f77bcf86cd799439015';
+const stay = { _id: stayId, petId, status: 'admitted', reason: '腎指數偏高，輸液治療', admittedAt: new Date(Date.now() - 86400000).toISOString() };
+api.get('/hospitalizations', (_req, res) => res.json({
+  items: [{ ...stay, pet: { _id: petId, name: '豆豆', isStray: false, ownerName: '王小姐' }, dayNumber: 2, todayWeightKg: 4.1, lastEntryAt: new Date().toISOString() }],
+  counts: { admitted: 1, discharged: 0 },
+}));
+api.get('/hospitalizations/:id', (_req, res) => res.json({
+  ...stay,
+  pet: { _id: petId, name: '豆豆', isStray: false, ownerId: { _id: 'o1', name: '王小姐', phone: '0912345678', kind: '' } },
+  admittingAppointment: { _id: id, date: clinicDay(-1), weightKg: 4.2 },
+  dates: [clinicDay(-1), clinicDay()],
+  days: [{ date: clinicDay(), weightKg: 4.1 }],
+  entries: [{ _id: '507f1f77bcf86cd799439016', recordedAt: new Date().toISOString(), food: 'a/d 罐頭半罐', staff: 'front_desk', __v: 0 }],
+}));
 const vite = await createServer({ root, configFile: `${root}/vite.config.js`, define: { 'import.meta.env.VITE_API_BASE_URL': JSON.stringify('/api') }, server: { host: '127.0.0.1', port: 0 }, plugins: [{ name: 'isolated-clinic-fixtures', configureServer(server) { server.middlewares.use('/api', api); } }] });
 io = new Server(vite.httpServer);
 io.on('connection', (socket) => { socket.on('join-day', (day) => socket.join(`appointments:${day}`)); socket.on('leave-day', (day) => socket.leave(`appointments:${day}`)); });
@@ -108,6 +125,26 @@ try {
   await find(doctor, () => document.querySelector('[aria-label="豆豆 看診工作區"] footer').textContent.includes('已儲存'));
   assert.match(fixture.visitNote, /皮膚搔癢改善/);
   console.log('Visit started and the note autosaved');
+
+  // ── 掛號台：看診中的卡片開看診速覽（唯讀），醫師那邊一存檔就跟著變 ──
+  await desk.goto(`${origin}/reception?date=${date}`);
+  await click(desk, '豆豆的看診進度');
+  await desk.waitForSelector('section[aria-label="看診速覽"]');
+  await find(desk, () => document.querySelector('section[aria-label="看診速覽"] [aria-current="step"]')?.textContent.includes('看診中'));
+  await find(desk, () => document.querySelector('section[aria-label="看診速覽"]')?.textContent.includes('皮膚搔癢改善'));
+  fixture.followUpRecommendation = '兩週後回診'; fixture.__v += 1; broadcast(fixture);
+  await find(desk, () => document.querySelector('section[aria-label="看診速覽"]')?.textContent.includes('兩週後回診'));
+  assert.equal(await desk.$('section[aria-label="看診速覽"] [contenteditable], section[aria-label="看診速覽"] textarea'), null, 'visit quick view is read-only');
+  await desk.screenshot({ path: join(tmpdir(), 'clinic-visit-quickview.png') });
+  await click(desk, '關閉面板');
+  await desk.waitForSelector('section[aria-label="看診速覽"]', { hidden: true });
+  // 面板關著的期間改了（沒收到推播）：再打開同一筆要讀到最新的。
+  fixture.internalNote = '關著時改的內部備註'; fixture.__v += 1;
+  await click(desk, '豆豆的看診進度');
+  await find(desk, () => document.querySelector('section[aria-label="看診速覽"]')?.textContent.includes('關著時改的內部備註'));
+  await click(desk, '關閉面板');
+  await desk.waitForSelector('section[aria-label="看診速覽"]', { hidden: true });
+  console.log('Desk follows visit progress live in the quick view');
 
   // 檢驗數值改在健檢報告填寫頁輸入，診療台不再有檢驗區塊。
   assert.equal(await doctor.$(`#visit-lab-wbc-${id}`), null, 'lab value block is gone from the workspace');
@@ -161,6 +198,17 @@ try {
   await desk.waitForSelector('section[aria-label="內部聊天"]');
   await desk.screenshot({ path: join(tmpdir(), 'clinic-reception-panel.png') });
   await desk.keyboard.press('Escape');
+
+  // ── 今天的掛號台：「住院中」一段，點一列開住院速覽 ──
+  await desk.goto(`${origin}/reception?date=${clinicDay()}`);
+  await desk.waitForSelector('section[aria-labelledby="reception-stays-heading"] button');
+  await desk.click('section[aria-labelledby="reception-stays-heading"] button');
+  await find(desk, () => document.querySelector('section[aria-label="住院速覽"]')?.textContent.includes('a/d 罐頭半罐'));
+  await bodyHas(desk, '記一筆');
+  await desk.screenshot({ path: join(tmpdir(), 'clinic-hospital-quickview.png') });
+  await click(desk, '關閉面板');
+  await desk.waitForSelector('section[aria-label="住院速覽"]', { hidden: true });
+  console.log('Hospital stays open the hospital quick view');
 
   // ── 明暗主題 ──
   const wasDark = await desk.evaluate(() => document.documentElement.classList.contains('dark'));

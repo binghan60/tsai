@@ -9,12 +9,13 @@ import TodosPanel from '../panels/TodosPanel.vue';
 import IntakePanel from '../panels/IntakePanel.vue';
 import LabResultsPanel from '../panels/LabResultsPanel.vue';
 import ChatPanel from '../panels/ChatPanel.vue';
+import QuickViewPanel from '../panels/QuickViewPanel.vue';
 
 // 工具欄面板的容器，460px 寬，貼在工具欄左邊。
 // 1600px 以上是版面裡的一欄，會把工作區往左推（並排看）；更窄時浮在工作區上面、不推版面。
 // 兩種情況都不加遮罩、不鎖背景：面板是「一邊做事一邊查」的工具。
 // KeepAlive：關掉再打開時藥單表單、聊天草稿、捲動位置都還在。
-const PANELS = { pinned: PinnedPanel, medications: MedicationsPanel, todos: TodosPanel, lab: LabResultsPanel, intake: IntakePanel, chat: ChatPanel };
+const PANELS = { pinned: PinnedPanel, medications: MedicationsPanel, todos: TodosPanel, lab: LabResultsPanel, intake: IntakePanel, chat: ChatPanel, quickview: QuickViewPanel };
 const panel = useUtilityPanelStore();
 const chat = useChatStore();
 const route = useRoute();
@@ -22,9 +23,10 @@ const current = computed(() => PANELS[panel.active] || null);
 
 // 聊天面板開著才算「已讀」；未讀數字由 chat store 自己依 isOpen 判斷。
 watch(() => panel.active === 'chat', (open) => (open ? chat.open() : chat.close()), { immediate: true });
-// 初診面板只屬於掛號台；離開掛號台就收起來，免得工具欄上已經沒有它的按鈕卻還開著。
+// 初診面板與看診／住院速覽只屬於掛號台；離開掛號台就收起來，免得工具欄上已經沒有它的按鈕卻還開著。
+// 速覽的看診即時更新靠掛號台加入的當天房間，離開掛號台也就收不到了。
 watch(() => route.path, (path) => {
-  if (panel.active === 'intake' && !path.startsWith('/reception')) panel.close();
+  if (['intake', 'quickview'].includes(panel.active) && !path.startsWith('/reception')) panel.close();
 });
 
 function onKeydown(event) {

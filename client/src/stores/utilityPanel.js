@@ -6,7 +6,8 @@ import { defineStore } from 'pinia';
 //
 // 面板內容用 KeepAlive 保留，關掉再打開時藥單表單、聊天草稿都還在。
 // 每個面板各自記住自己推入到哪一層，切到別的面板再切回來也回到原處。
-export const PANEL_KEYS = ['pinned', 'medications', 'todos', 'lab', 'intake', 'chat'];
+// quickview 沒有工具欄按鈕：掛號台點在院的卡片或「住院中」一列時打開（看診速覽／住院速覽），只有一層。
+export const PANEL_KEYS = ['pinned', 'medications', 'todos', 'lab', 'intake', 'chat', 'quickview'];
 
 export const useUtilityPanelStore = defineStore('utilityPanel', {
   state: () => ({
@@ -56,6 +57,17 @@ export const useUtilityPanelStore = defineStore('utilityPanel', {
       if (!petId) return;
       this.stacks = { ...this.stacks, pinned: [] };
       this.push({ type: 'pet', petId: String(petId) }, 'pinned');
+    },
+    // 掛號台的看診速覽、住院速覽：同一個面板，換一筆就整個換掉（不疊層）。
+    openQuickView(view) {
+      this.stacks = { ...this.stacks, quickview: [view] };
+      this.active = 'quickview';
+    },
+    openVisit(appointmentId) {
+      if (appointmentId) this.openQuickView({ type: 'visit', appointmentId: String(appointmentId) });
+    },
+    openHospital(hospitalizationId) {
+      if (hospitalizationId) this.openQuickView({ type: 'hospital', hospitalizationId: String(hospitalizationId) });
     },
     reset() {
       this.active = '';

@@ -25,6 +25,7 @@ import CheckinNumber from '../components/CheckinNumber.vue'
 import SurgeryBadge from '../components/SurgeryBadge.vue'
 import StrayBadge from '../components/StrayBadge.vue'
 import HospitalBadge from '../components/HospitalBadge.vue'
+import ReceptionHospitalStays from '../components/ReceptionHospitalStays.vue'
 import WalkInDialog from '../components/WalkInDialog.vue'
 import LatenessBadge from '../components/LatenessBadge.vue'
 import DepositBadge from '../components/DepositBadge.vue'
@@ -152,6 +153,10 @@ const overdue = computed(() => (isToday.value ? scheduled.value.filter((item) =>
 const activePatient = computed(() => items.value.find((item) => String(item._id) === selected.value) || null)
 const currentTime = computed(() => clinicTimeInput(new Date(now.value)))
 const hasAlerts = computed(() => reopenRequests.value.length || overdue.value.length || counts.intake)
+// 右側速覽面板正在看的那一筆（看診或住院），時間軸上把它框起來。
+const quickView = computed(() => (panel.active === 'quickview' ? (panel.stacks.quickview || []).at(-1) || null : null))
+const quickVisitId = computed(() => (quickView.value?.type === 'visit' ? quickView.value.appointmentId : ''))
+const quickHospitalId = computed(() => (quickView.value?.type === 'hospital' ? quickView.value.hospitalizationId : ''))
 
 // ── 流程列與時間軸 ──────────────────────────────────────────────────────────
 // 流程列的四格就是四個篩選：點了只看那一段，再點一次清除。
@@ -280,10 +285,12 @@ function progress(item, kind) {
   if (kind === 'late') return { label: '遲到未報到', detail: `已遲 ${overdueMinutes(item)} 分` }
   return { label: '未報到', detail: '' }
 }
-// 整張卡片可點：已交櫃台／已完成開處理視窗，待審初診表開初診面板，其餘開修改掛號。右側按鈕留給主要動作。
+// 整張卡片可點：已交櫃台／已完成開處理視窗，在院（候診、看診中）在右側開看診速覽（修改掛號在 ⋯ 裡），
+// 待審初診表開初診面板，其餘開修改掛號。右側按鈕留給主要動作。
 function cardClick(item) {
   const state = workflowState(item)
   if (state.handedOff) return openSheet(item)
+  if (item.status === 'arrived') return panel.openVisit(item._id)
   if (item.visitType === 'new' && item.intakeSubmissionId && !item.petId) return openIntakeReview(item)
   return openDrawer('edit', item)
 }
@@ -368,6 +375,8 @@ watch(date, () => {
   selected.value = ''
   for (const key of Object.keys(manualCollapse)) delete manualCollapse[key]
   if (drawer.value === 'edit') drawer.value = ''
+  // 速覽的看診即時更新靠當天的房間，換了日期就收不到原本那一天的推播。
+  if (panel.active === 'quickview') panel.close()
   refresh()
 })
 
@@ -600,6 +609,9 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
+    <!-- 住院中的貓：收住院那次看診只在入院當天的時間軸上，第二天起靠這一段。點一列在右側開住院速覽。 -->
+    <ReceptionHospitalStays v-if="!loading && isToday" :active-id="quickHospitalId" @open="(stay) => panel.openHospital(stay._id)" />
+
     <Alert v-if="error" variant="destructive" class="flex items-center justify-between gap-3">
       <AlertDescription>{{ error }}</AlertDescription>
       <Button variant="secondary" size="sm" @click="refresh"><RefreshCw stroke-width="1.75" />重試</Button>
@@ -682,7 +694,7 @@ onBeforeUnmount(() => {
                   <span class="absolute top-1/2 -left-4.25 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-card sm:-left-5.25" :class="item.ui.tone.dot" aria-hidden="true"></span>
 
                   <!-- 整張卡片可點（開處理視窗／初診審核／修改掛號）；裡面的按鈕各自 stop，不會連帶觸發。 -->
-                  <article :data-appointment="item._id" class="cursor-pointer rounded-xl border px-4 py-3 transition-colors" :class="[item.ui.tone.card, highlight === String(item._id) ? 'ring-2 ring-primary' : '']" @click="cardClick(item)">
+                  <article :data-appointment="item._id" class="cursor-pointer rounded-xl border px-4 py-3 transition-colors" :class="[item.ui.tone.card, highlight === String(item._id) || quickVisitId === String(item._id) ? 'ring-2 ring-primary' : '']" @click="cardClick(item)">
                     <!-- 每張卡片各自是一個 grid，欄寬必須全部固定：按鈕欄若是 auto，「處理」「報到＋⋯」「只有 ⋯」寬度不同，
                          前面的飼主、電話、進度就會一張卡片一個位置。按鈕欄的寬度以最寬的「報到…＋⋯」為準。 -->
                     <div class="grid items-center gap-x-5 gap-y-2 xl:grid-cols-[minmax(0,1fr)_8rem_10rem_9rem_8.5rem]">
@@ -743,7 +755,11 @@ onBeforeUnmount(() => {
                           <Button v-if="item.ui.primary" :disabled="busy" @click="item.ui.primary.run()">{{ item.ui.primary.label }}</Button>
                           <RowActions size="default" :actions="item.ui.actions" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
                         </template>
-                        <RowActions v-else size="default" :actions="arrivedActions(item)" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
+                        <!-- 在院（候診、看診中）：「進度」在右側開看診速覽，跟點卡片同一件事。 -->
+                        <template v-else>
+                          <Button variant="secondary" :aria-pressed="quickVisitId === String(item._id)" :aria-label="`${item.petName}的看診進度`" @click="panel.openVisit(item._id)">進度</Button>
+                          <RowActions size="default" :actions="arrivedActions(item)" :label="`${item.petName}的更多操作`" @select="(key) => admin(key, item)" />
+                        </template>
                       </div>
                     </div>
                   </article>
