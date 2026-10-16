@@ -27,6 +27,9 @@ const router = Router();
 const fail = (message, status = 422) => Object.assign(new Error(message), { status });
 const hasText = (value) => Boolean(richTextToPlain(value).trim());
 const STAFF = ['vet', 'front_desk'];
+// 出院時寫的文字欄位與字數上限（出院、事後修改共用）。
+const DISCHARGE_TEXT_FIELDS = { dischargeNote: 2000, dischargeSpecialCareNote: 500, dischargeFollowUpRecommendation: 500 };
+const dischargeText = (value, max) => String(value ?? '').trim().slice(0, max);
 
 function requireId(value, message) {
   if (!mongoose.isValidObjectId(value)) throw fail(message);
@@ -199,7 +202,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-// PUT /api/hospitalizations/:id — 改住院原因：{ version, reason }。
+// PUT /api/hospitalizations/:id — 改住院原因：{ version, reason }；已出院的另收出院備註、請轉告飼主、回診建議。
 router.put('/:id', async (req, res, next) => {
   try {
     const version = requireVersion(req.body);
@@ -207,8 +210,10 @@ router.put('/:id', async (req, res, next) => {
     if (hospitalization.status === 'cancelled') throw fail('這次住院已取消', 409);
     assertVersion(hospitalization, version);
     if (req.body?.reason !== undefined) hospitalization.reason = String(req.body.reason ?? '').trim().slice(0, 200);
-    if (req.body?.dischargeNote !== undefined && hospitalization.status === 'discharged') {
-      hospitalization.dischargeNote = String(req.body.dischargeNote ?? '').trim().slice(0, 2000);
+    if (hospitalization.status === 'discharged') {
+      for (const [field, max] of Object.entries(DISCHARGE_TEXT_FIELDS)) {
+        if (req.body?.[field] !== undefined) hospitalization[field] = dischargeText(req.body[field], max);
+      }
     }
     await hospitalization.save();
     announce(hospitalization);
@@ -268,7 +273,8 @@ router.post('/:id/cancel', async (req, res, next) => {
   }
 });
 
-// POST /api/hospitalizations/:id/discharge — 出院：{ version, dischargeNote, dischargedAt（選填，預設現在）, medication（帶回家的藥）}。
+// POST /api/hospitalizations/:id/discharge — 出院：{ version, dischargeNote, dischargeSpecialCareNote（請轉告飼主）,
+//   dischargeFollowUpRecommendation（回診建議）, dischargedAt（選填，預設現在）, medication（帶回家的藥）}。
 // 帶回家的藥有寫就同一個 transaction 開一張藥單：醫師開的、直接是待包藥（跟診療台送交時開的一樣不必再審），
 // 有自己的領藥日誌（出院帶了什麼藥，病歷日誌看得到）。
 router.post('/:id/discharge', async (req, res, next) => {
@@ -308,7 +314,7 @@ router.post('/:id/discharge', async (req, res, next) => {
       }
       hospitalization.status = 'discharged';
       hospitalization.dischargedAt = dischargedAt;
-      hospitalization.dischargeNote = String(req.body?.dischargeNote ?? '').trim().slice(0, 2000);
+      for (const [field, max] of Object.entries(DISCHARGE_TEXT_FIELDS)) hospitalization[field] = dischargeText(req.body?.[field], max);
       await hospitalization.save({ session });
     });
     if (order) {

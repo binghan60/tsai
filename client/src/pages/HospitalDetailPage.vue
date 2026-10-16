@@ -44,6 +44,7 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
+import { Label } from '../components/ui/label';
 import { DialogFooter } from '../components/ui/dialog';
 
 // 住院專區：一次住院的照護時間軸＋住院概況。
@@ -250,7 +251,15 @@ function weightSaved(day) {
 function takeHospitalization(data) {
   if (!detail.value || !data) return;
   writeSeq += 1;
-  Object.assign(detail.value, { status: data.status, reason: data.reason, dischargeNote: data.dischargeNote, dischargedAt: data.dischargedAt, __v: data.__v });
+  Object.assign(detail.value, {
+    status: data.status,
+    reason: data.reason,
+    dischargeNote: data.dischargeNote,
+    dischargeSpecialCareNote: data.dischargeSpecialCareNote,
+    dischargeFollowUpRecommendation: data.dischargeFollowUpRecommendation,
+    dischargedAt: data.dischargedAt,
+    __v: data.__v,
+  });
 }
 
 // 出院時間不能早於最後一筆紀錄（照護紀錄或體重），不然那幾天會從時間軸上消失。
@@ -304,21 +313,62 @@ async function cancelHospitalization() {
   }
 }
 
-// 改住院原因（住院中、已出院都能改）、改出院備註（已出院）：同一個小視窗。
-const textEdit = ref(null); // { key, title, value, multiline }
+// 改住院原因（住院中、已出院都能改）：概況卡上就地編輯，Enter 存、Esc 取消。
+const reasonEditing = ref(false);
+const reasonDraft = ref('');
+const reasonSaving = ref(false);
+const reasonError = ref('');
+const reasonInput = ref(null);
+async function startReasonEdit() {
+  reasonDraft.value = detail.value?.reason ?? '';
+  reasonError.value = '';
+  reasonEditing.value = true;
+  await nextTick();
+  reasonInput.value?.$el?.focus?.();
+}
+function cancelReasonEdit() {
+  reasonEditing.value = false;
+  reasonError.value = '';
+}
+async function saveReason() {
+  const reason = reasonDraft.value.trim();
+  if (reason === (detail.value.reason ?? '')) return cancelReasonEdit();
+  reasonSaving.value = true;
+  reasonError.value = '';
+  try {
+    const { data } = await http.put(`/hospitalizations/${id.value}`, { version: detail.value.__v ?? 0, reason });
+    takeHospitalization(data);
+    reasonEditing.value = false;
+  } catch (err) {
+    reasonError.value = apiErrorMessage(err, '儲存失敗，請重試');
+    if (err.response?.status === 409) load({ silent: true });
+  } finally {
+    reasonSaving.value = false;
+  }
+}
+
+// 改出院內容（已出院：出院備註、請轉告飼主、回診建議）：小視窗。
+const textEdit = ref(null); // { title, fields: [{ key, label, value, max, labelClass }] }
 const textSaving = ref(false);
 const textError = ref('');
-function openTextEdit(key) {
+function openTextEdit() {
   textError.value = '';
-  textEdit.value = key === 'reason'
-    ? { key, title: '修改住院原因', value: detail.value.reason ?? '', multiline: false }
-    : { key, title: '修改出院備註', value: detail.value.dischargeNote ?? '', multiline: true };
+  const field = (key, label, max, labelClass = '') => ({ key, label, value: detail.value[key] ?? '', max, labelClass });
+  textEdit.value = {
+    title: '修改出院內容',
+    fields: [
+      field('dischargeNote', '出院備註', 2000),
+      field('dischargeSpecialCareNote', '請轉告飼主', 500, 'text-warning'),
+      field('dischargeFollowUpRecommendation', '回診建議', 500),
+    ],
+  };
 }
 async function saveTextEdit() {
   textSaving.value = true;
   textError.value = '';
   try {
-    const { data } = await http.put(`/hospitalizations/${id.value}`, { version: detail.value.__v ?? 0, [textEdit.value.key]: textEdit.value.value.trim() });
+    const values = Object.fromEntries(textEdit.value.fields.map((item) => [item.key, item.value.trim()]));
+    const { data } = await http.put(`/hospitalizations/${id.value}`, { version: detail.value.__v ?? 0, ...values });
     takeHospitalization(data);
     textEdit.value = null;
   } catch (err) {
@@ -331,14 +381,14 @@ async function saveTextEdit() {
 
 const moreActions = computed(() => {
   if (cancelled.value || !detail.value) return [];
-  const actions = [{ key: 'reason', label: '修改住院原因' }];
-  if (status.value === 'discharged') actions.push({ key: 'dischargeNote', label: '修改出院備註' });
+  const actions = [];
+  if (status.value === 'discharged') actions.push({ key: 'discharge', label: '修改出院內容' });
   if (canCancelHospitalization(detail.value)) actions.push({ key: 'cancel', label: '取消住院', danger: true });
   return actions;
 });
 function onMoreAction(key) {
   if (key === 'cancel') cancelOpen.value = true;
-  else openTextEdit(key);
+  else openTextEdit();
 }
 
 // ---- 檢驗結果（側欄）：新到舊，點一列展開數值 ----
@@ -421,7 +471,7 @@ watch(id, () => {
         </span>
       </template>
       <template v-if="detail && !cancelled" #actions>
-        <Button type="button" variant="secondary" @click="labImportOpen = true"><FlaskConical stroke-width="1.75" />匯入檢驗結果</Button>
+        <Button type="button" variant="soft" @click="labImportOpen = true"><FlaskConical stroke-width="1.75" />匯入檢驗結果</Button>
         <Button v-if="admitted" type="button" @click="openDischarge"><LogOut stroke-width="1.75" />出院</Button>
         <RowActions v-if="moreActions.length" size="default" :actions="moreActions" label="住院的更多操作" @select="onMoreAction" />
       </template>
@@ -436,9 +486,28 @@ watch(id, () => {
 
         <!-- 住院概況 -->
         <div class="flex flex-col gap-3.5 rounded-xl border border-border bg-card px-5 py-4 shadow-card @5xl:col-start-2 @5xl:row-start-1">
-          <div class="space-y-0.5">
-            <span class="spec-label">住院原因</span>
-            <p class="min-h-lh text-base font-semibold">{{ detail.reason }}</p>
+          <div class="space-y-1">
+            <div class="flex min-h-8 items-center gap-2">
+              <span id="hospital-reason-label" class="spec-label">住院原因</span>
+              <Button v-if="!cancelled && !reasonEditing" type="button" variant="secondary" size="icon-xs" class="ml-auto" aria-label="修改住院原因" v-tip="'修改'" @click="startReasonEdit"><Pencil stroke-width="1.75" /></Button>
+            </div>
+            <form v-if="reasonEditing" class="space-y-2" @submit.prevent="saveReason">
+              <div class="flex items-center gap-2">
+                <Input
+                  ref="reasonInput"
+                  v-model="reasonDraft"
+                  aria-labelledby="hospital-reason-label"
+                  maxlength="200"
+                  class="flex-1"
+                  :disabled="reasonSaving"
+                  @keydown.esc.prevent="cancelReasonEdit"
+                />
+                <Button type="button" variant="secondary" class="shrink-0" :disabled="reasonSaving" @click="cancelReasonEdit">取消</Button>
+                <Button type="submit" class="shrink-0" :disabled="reasonSaving">{{ reasonSaving ? '儲存中…' : '儲存' }}</Button>
+              </div>
+              <Alert v-if="reasonError" variant="destructive"><AlertDescription>{{ reasonError }}</AlertDescription></Alert>
+            </form>
+            <p v-else class="min-h-lh text-base font-semibold wrap-anywhere">{{ detail.reason }}</p>
           </div>
           <div class="flex flex-wrap gap-x-6 gap-y-2">
             <div class="space-y-0.5"><span class="spec-label block">入院</span><span class="num text-base">{{ shortDateTime(detail.admittedAt) }}</span></div>
@@ -448,6 +517,14 @@ watch(id, () => {
           <div v-if="status === 'discharged' && detail.dischargeNote" class="space-y-0.5">
             <span class="spec-label">出院備註</span>
             <p class="text-base whitespace-pre-wrap">{{ detail.dischargeNote }}</p>
+          </div>
+          <div v-if="status === 'discharged' && detail.dischargeSpecialCareNote" class="space-y-0.5">
+            <span class="spec-label text-warning">請轉告飼主</span>
+            <p class="text-base whitespace-pre-wrap">{{ detail.dischargeSpecialCareNote }}</p>
+          </div>
+          <div v-if="status === 'discharged' && detail.dischargeFollowUpRecommendation" class="space-y-0.5">
+            <span class="spec-label">回診建議</span>
+            <p class="text-base whitespace-pre-wrap">{{ detail.dischargeFollowUpRecommendation }}</p>
           </div>
           <div v-if="assessment" class="space-y-1.5 border-t border-border pt-3">
             <h2 class="text-base font-semibold">入院評估</h2>
@@ -611,11 +688,13 @@ watch(id, () => {
     @update:open="(value) => !value && (pendingLeavePath = '')"
     @confirm="confirmLeave"
   />
-  <ModalDialog v-if="textEdit" size="sm" :title="textEdit.title" :icon="BedDouble" @close="textEdit = null">
+  <ModalDialog v-if="textEdit" size="md" :title="textEdit.title" :icon="BedDouble" @close="textEdit = null">
     <form class="flex flex-col" @submit.prevent="saveTextEdit">
-      <div class="space-y-3 px-6 py-5">
-        <Textarea v-if="textEdit.multiline" v-model="textEdit.value" :aria-label="textEdit.title" maxlength="2000" class="min-h-24" />
-        <Input v-else v-model="textEdit.value" :aria-label="textEdit.title" maxlength="200" />
+      <div class="space-y-4 px-6 py-5">
+        <div v-for="item in textEdit.fields" :key="item.key" class="space-y-1.5">
+          <Label :for="`hospital-edit-${item.key}`" class="text-xs font-medium" :class="item.labelClass">{{ item.label }}</Label>
+          <Textarea :id="`hospital-edit-${item.key}`" v-model="item.value" :maxlength="item.max" class="min-h-20" />
+        </div>
         <Alert v-if="textError" variant="destructive"><AlertDescription>{{ textError }}</AlertDescription></Alert>
       </div>
       <DialogFooter>

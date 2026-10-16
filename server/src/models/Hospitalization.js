@@ -13,6 +13,9 @@ const hospitalizationSchema = new mongoose.Schema(
     dischargedAt: { type: Date, default: null },
     reason: { type: String, default: '', trim: true, maxlength: 200 },
     dischargeNote: { type: String, default: '', trim: true, maxlength: 2000 },
+    // 出院時交代的事：請轉告飼主、回診建議（跟看診的 specialCareNote／followUpRecommendation 一樣是純文字、≤500 字）。
+    dischargeSpecialCareNote: { type: String, default: '', trim: true, maxlength: 500 },
+    dischargeFollowUpRecommendation: { type: String, default: '', trim: true, maxlength: 500 },
     // 出院時「帶回家的藥」開成的那張藥單（直接是待包藥）。
     dischargeMedicationOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicationOrder', default: null },
   },

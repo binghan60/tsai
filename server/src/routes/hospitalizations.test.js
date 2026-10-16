@@ -151,11 +151,19 @@ describe('住院', () => {
     mock.method(Pet, 'findById', () => query(() => ({ _id: petId, name: '小橘', ownerId: { _id: ownerId, name: '院內', phone: '' } })));
     mock.method(MedicationOrder.prototype, 'save', async function save() { orders.push(this); return this; });
     mock.method(ClinicalNote, 'findOneAndUpdate', async () => null);
-    const { status } = await send('POST', `/hospitalizations/${stayId}/discharge`, { version: 0, dischargeNote: '食慾恢復', medication: 'Azodyl 1 cap PO SID' });
+    const { status } = await send('POST', `/hospitalizations/${stayId}/discharge`, {
+      version: 0,
+      dischargeNote: '食慾恢復',
+      dischargeSpecialCareNote: ' 一週內避免洗澡 ',
+      dischargeFollowUpRecommendation: '兩週後回診複查腎指數',
+      medication: 'Azodyl 1 cap PO SID',
+    });
     assert.equal(status, 200);
     assert.equal(hospitalization.status, 'discharged');
     assert.ok(hospitalization.dischargedAt);
     assert.equal(hospitalization.dischargeNote, '食慾恢復');
+    assert.equal(hospitalization.dischargeSpecialCareNote, '一週內避免洗澡');
+    assert.equal(hospitalization.dischargeFollowUpRecommendation, '兩週後回診複查腎指數');
     assert.equal(orders.length, 1);
     assert.equal(orders[0].status, 'approved');
     assert.equal(orders[0].fromVisit, false);
