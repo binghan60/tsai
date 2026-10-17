@@ -507,7 +507,8 @@ onBeforeUnmount(() => {
     <template v-else-if="!opened">
     <div class="flex flex-wrap items-center gap-2">
       <FilterBar id="medication-search" v-model="queryInput" label="搜尋藥單" placeholder="貓咪、飼主或電話" class="min-w-0 flex-1" @submit="applySearch" />
-      <Button v-if="!doctor" class="ml-auto" @click="create"><Plus stroke-width="1.75" />新增藥單</Button>
+      <!-- 跟全頁版一樣，醫師與櫃台都能新增（推入面板的新增那一層）。 -->
+      <Button class="ml-auto" @click="create"><Plus stroke-width="1.75" />新增藥單</Button>
     </div>
     <FilterTabs :model-value="filter" :items="filterItems" :counts="filterCounts" aria-label="藥單狀態篩選" fit @update:model-value="setFilter" />
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
