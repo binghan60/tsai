@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   canCancelHospitalization,
   daySections,
+  stayDays,
   stayRows,
   emptyEntryDraft,
   entriesOnDate,
@@ -13,7 +14,7 @@ import {
   hasEntryChanges,
   isEmptyEntry,
   newEntryTime,
-  stayDays,
+  stayDayGroups,
   weightTrend,
 } from './hospitalization.js';
 
@@ -118,4 +119,36 @@ test('日誌住院摘要一筆一列：同一筆量的體重體溫在同一列�
   assert.deepEqual(rows.map((row) => row.dayStart), [true, false, false, true, true]);
   assert.equal(stayRows({ weights: [{ at: '2026-10-14T02:00:00.000Z', kg: 3.5 }] })[0].delta, '');
   assert.deepEqual(stayRows(null), []);
+});
+
+test('日誌住院摘要按天分組：每天先體重體溫、再當天的檢驗；異常項排前面，沒有數值的不列', () => {
+  const days = stayDayGroups({
+    admitWeightKg: 3.6,
+    weights: [{ at: '2026-10-11T02:00:00.000Z', kg: 3.48 }],
+    temperatures: [{ at: '2026-10-11T02:00:00.000Z', c: 38.6 }],
+    results: [
+      { _id: 'late', instrument: 'ProCyte_Dx', runAt: '2026-10-12T02:00:00.000Z', assays: [{ code: 'WBC', value: '11.6', referenceMin: 2.87, referenceMax: 17.02 }] },
+      {
+        _id: 'chem',
+        instrument: 'Catalyst One',
+        runAt: '2026-10-10T03:00:00.000Z',
+        assays: [
+          { code: 'GLU', value: '117', unit: 'mg/dL', referenceMin: 74, referenceMax: 159 },
+          { code: 'BUN', value: '41', unit: 'mg/dL', referenceMin: 16, referenceMax: 36 },
+          { code: 'CREA', value: '2.9', unit: 'mg/dL', referenceMin: 0.8, referenceMax: 2.4 },
+          { code: 'ALT', value: '' },
+        ],
+        overrides: [{ code: 'CREA', value: '2.2' }],
+      },
+    ],
+  });
+  assert.deepEqual(days.map((day) => [day.label, day.vitals.length, day.labs.length]), [['10/10', 0, 1], ['10/11', 1, 0], ['10/12', 0, 1]]);
+  const chem = days[0].labs[0];
+  assert.equal(chem.time, '11:00');
+  assert.equal(chem.abnormalCount, 1, '醫師改過的 CREA 2.2 回到正常範圍，只剩 BUN 異常');
+  assert.deepEqual(chem.items.map((item) => [item.code, item.flag]), [['BUN', '↑'], ['GLU', ''], ['CREA', '']]);
+  assert.match(chem.items[0].tip, /mg\/dL/);
+  assert.match(chem.items[0].tip, /參考範圍 16–36/);
+  assert.match(chem.items[2].tip, /IDEXX 原始值 2\.9/);
+  assert.deepEqual(stayDayGroups(null), []);
 });

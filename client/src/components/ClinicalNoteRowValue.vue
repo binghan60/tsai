@@ -4,7 +4,7 @@ import { Check } from '@lucide/vue'
 import RichText from './RichText.vue'
 import LabResultGroups from './LabResultGroups.vue'
 import { deskChips } from '../lib/clinicalNoteDisplay'
-import { stayRows as buildStayRows } from '../lib/hospitalization'
+import { stayDayGroups as buildStayDays } from '../lib/hospitalization'
 
 // 病歷日誌一列的「內容」格（dd）。檢視模式與編輯模式裡改不到的列共用，兩邊長一樣。
 // row 是 lib/clinicalNoteDisplay.js 的 journalRows 回傳的一列。
@@ -12,8 +12,8 @@ const props = defineProps({
   row: { type: Object, required: true },
   baseDate: { type: String, default: '' },
 })
-// 住院摘要（出院後）：一筆一列。
-const stayRows = computed(() => buildStayRows(props.row.stay))
+// 住院摘要（出院後）：按天分組，每天先體重體溫、再 IDEXX 檢驗。
+const stayDays = computed(() => buildStayDays(props.row.stay))
 </script>
 
 <template>
@@ -46,28 +46,38 @@ const stayRows = computed(() => buildStayRows(props.row.stay))
     </span>
   </dd>
   <!-- 住院：「10/13 起住院中　第 3 天」，點了到住院專區。出院後下面接住院期間量的體重、體溫與檢驗結果。 -->
-  <dd v-else-if="row.hospitalizationId" class="space-y-2 text-sm leading-relaxed">
+  <dd v-else-if="row.hospitalizationId" class="@container space-y-2 text-sm leading-relaxed">
     <RouterLink :to="`/hospital/${row.hospitalizationId}`" class="block font-medium text-primary hover:underline">{{ row.text }}</RouterLink>
-    <!-- 一筆一列：體重、體溫是同一筆紀錄量的就在同一列，共用時間這條縱軸；日期只在每天第一列。
-         每一列用同樣的欄寬，數字靠右、各佔固定寬度，直的橫的都對得齊。 -->
-    <div v-if="stayRows.length">
-      <div class="grid grid-cols-[3rem_3rem_minmax(0,1fr)_minmax(0,1fr)] gap-x-3 border-b border-border-strong pb-1.5 text-xs font-medium text-muted-foreground">
-        <span>日期</span><span>時間</span><span>體重</span><span>體溫</span>
+    <!-- 按天分組：每天先列體重體溫（同一筆量的在同一列），再列當天的 IDEXX 檢驗。
+         檢驗項目全列，異常的排前面用紅字帶 ↑↓、正常的退成灰色小字；單位與參考範圍滑過才看。 -->
+    <div v-if="stayDays.length">
+      <div v-for="day in stayDays" :key="day.date" class="grid grid-cols-[3.25rem_minmax(0,1fr)] gap-x-3 border-t border-border py-2.5 first:border-t-0 first:pt-0">
+        <span class="num pt-px font-semibold">{{ day.label }}</span>
+        <div class="min-w-0 space-y-2">
+          <div v-if="day.vitals.length">
+            <div v-for="item in day.vitals" :key="item.key" class="grid grid-cols-[3rem_8.5rem_max-content] items-baseline gap-x-3 py-px">
+              <span class="num text-xs text-subtle-foreground">{{ item.time }}</span>
+              <span class="whitespace-nowrap">
+                <template v-if="item.kg !== null"><span class="num inline-block w-10 text-right">{{ item.kg }}</span><span class="ml-1 text-xs text-subtle-foreground">kg</span><span class="num ml-1.5 inline-block w-11 text-right text-xs text-subtle-foreground">{{ item.delta }}</span></template>
+              </span>
+              <span class="whitespace-nowrap">
+                <template v-if="item.c !== null"><span class="num inline-block w-10 text-right">{{ item.c }}</span><span class="ml-1 text-xs text-subtle-foreground">°C</span></template>
+              </span>
+            </div>
+          </div>
+          <div v-if="day.labs.length" class="space-y-1 rounded-lg bg-sunken px-2.5 py-1.5">
+            <div v-for="lab in day.labs" :key="lab.id" class="grid grid-cols-[3rem_minmax(0,1fr)] items-baseline gap-x-3">
+              <span class="num text-xs text-subtle-foreground">{{ lab.time }}</span>
+              <span class="flex min-w-0 flex-wrap items-baseline gap-x-3.5 gap-y-0.5">
+                <span class="text-xs font-medium text-muted-foreground">{{ lab.title }}<span v-if="lab.abnormalCount" class="ml-1.5 font-semibold text-danger">{{ lab.abnormalCount }} 項異常</span></span>
+                <span v-for="item in lab.items" :key="item.code" v-tip="item.tip" class="whitespace-nowrap text-xs" :class="item.abnormal ? 'font-semibold text-danger' : 'text-muted-foreground'">
+                  <span class="mr-1">{{ item.code }}</span><span class="num">{{ item.value }}<template v-if="item.flag"> {{ item.flag }}</template></span>
+                </span>
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div v-for="item in stayRows" :key="item.key" class="grid grid-cols-[3rem_3rem_minmax(0,1fr)_minmax(0,1fr)] items-baseline gap-x-3 py-1.5 text-sm" :class="item.dayStart ? 'border-t border-border first:border-t-0' : ''">
-        <span class="num font-semibold">{{ item.label }}</span>
-        <span class="num text-xs text-subtle-foreground">{{ item.time }}</span>
-        <span class="whitespace-nowrap">
-          <template v-if="item.kg !== null"><span class="num inline-block w-10 text-right">{{ item.kg }}</span><span class="ml-1 text-xs text-subtle-foreground">kg</span><span class="num ml-1.5 inline-block w-11 text-right text-xs text-subtle-foreground">{{ item.delta }}</span></template>
-        </span>
-        <span class="whitespace-nowrap">
-          <template v-if="item.c !== null"><span class="num inline-block w-10 text-right">{{ item.c }}</span><span class="ml-1 text-xs text-subtle-foreground">°C</span></template>
-        </span>
-      </div>
-    </div>
-    <div v-if="row.stay?.results?.length" class="space-y-1">
-      <span class="block text-xs text-muted-foreground">住院檢驗</span>
-      <LabResultGroups :results="row.stay.results" :base-date="baseDate" dense />
     </div>
   </dd>
   <RichText

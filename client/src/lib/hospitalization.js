@@ -1,5 +1,7 @@
 import { normalizeRichText, richTextToPlain } from '../../../shared/richText.js';
+import { effectiveAssays, labFlag } from '../../../shared/labValues.js';
 import { clinicDateInput, clinicTimeInput, combineClinicDateTime, shortDate } from './datetime.js';
+import { instrumentLabel } from './labResults.js';
 
 // 住院專區的純邏輯：照護時間軸怎麼分天、每筆列哪幾欄、新增／修改表單送出什麼、體重變化。
 // 規則見 CLAUDE.md 第三節 hospitalizations。
@@ -171,6 +173,61 @@ export function stayRows(stay) {
       lastDate = date;
       return { key: row.key, label: dayStart ? shortDate(date) : '', dayStart, time: clinicTimeInput(row.at), kg: row.kg, delta, c: row.c };
     });
+}
+
+function referenceText(assay) {
+  const hasMin = assay.referenceMin !== null && assay.referenceMin !== undefined;
+  const hasMax = assay.referenceMax !== null && assay.referenceMax !== undefined;
+  if (hasMin && hasMax) return `${assay.referenceMin}–${assay.referenceMax}`;
+  if (hasMin) return `≥ ${assay.referenceMin}`;
+  if (hasMax) return `≤ ${assay.referenceMax}`;
+  return '';
+}
+
+// 一份 IDEXX 結果在日誌上的樣子：標題（生化、血球…）、異常項數，項目全列但異常的排前面（紅字帶 ↑↓），正常的退到後面；
+// 單位、參考範圍、被改過的原始值放在 tip（滑過才看）。沒有數值的項目不列。
+export function stayLabEntry(result) {
+  const items = effectiveAssays(result)
+    .filter((assay) => String(assay.value ?? '').trim())
+    .map((assay) => {
+      const flag = labFlag(assay);
+      const range = referenceText(assay);
+      const tip = [assay.unit, range && `參考範圍 ${range}`, assay.edited && `IDEXX 原始值 ${assay.originalValue}`].filter(Boolean).join('　');
+      return { code: assay.code, value: assay.value, unit: assay.unit || '', flag, abnormal: Boolean(flag), edited: Boolean(assay.edited), tip };
+    });
+  const ordered = [...items.filter((item) => item.abnormal), ...items.filter((item) => !item.abnormal)];
+  const { purpose, name } = instrumentLabel(result.instrument);
+  return {
+    id: String(result._id ?? `${result.instrument}-${result.runAt}`),
+    time: result.runAt ? clinicTimeInput(result.runAt) : '',
+    title: purpose || name,
+    abnormalCount: items.filter((item) => item.abnormal).length,
+    items: ordered,
+  };
+}
+
+// 病歷日誌「住院」列出院後的摘要，按天分組：每天先列體重體溫（stayRows，每一筆一列），再列當天做的 IDEXX 檢驗（舊到新）。
+// 沒有時間的結果排在最後一天。回傳 [{ date, label, vitals: [stayRows 的列], labs: [stayLabEntry] }]。
+export function stayDayGroups(stay) {
+  const days = new Map();
+  const undated = [];
+  const day = (date) => {
+    if (!days.has(date)) days.set(date, { date, label: shortDate(date), vitals: [], labs: [] });
+    return days.get(date);
+  };
+  for (const row of stayRows(stay)) {
+    const date = clinicDateInput(new Date(row.key));
+    day(date).vitals.push(row);
+  }
+  const results = [...(stay?.results ?? [])].sort((a, b) => new Date(a.runAt ?? 0) - new Date(b.runAt ?? 0));
+  for (const result of results) {
+    const entry = stayLabEntry(result);
+    if (result.runAt) day(clinicDateInput(result.runAt)).labs.push(entry);
+    else undated.push(entry);
+  }
+  const ordered = [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
+  if (undated.length && ordered.length) ordered.at(-1).labs.push(...undated);
+  return ordered;
 }
 
 // 側欄的體重：入院看診量的那次，加上住院期間每一格有量的，舊到新；每一列帶跟上一次的差。
