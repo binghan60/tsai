@@ -116,7 +116,7 @@ function submit() {
           <SegmentedControl v-model="petMode" :options="PET_MODE_OPTIONS" aria-label="貓咪" />
         </div>
 
-        <CandidateSearchField v-if="petMode === 'existing'" v-model="selectedPet" endpoint="/pets" input-id="walk-in-pet-search" empty-text="找不到符合的貓咪；第一次來的一般病患請用掛號" :invalid="Boolean(errors.pet)">
+        <CandidateSearchField v-if="petMode === 'existing'" v-model="selectedPet" endpoint="/pets" input-id="walk-in-pet-search" placeholder="貓咪名、飼主姓名或電話" empty-text="找不到符合的貓咪；第一次來的一般病患請用掛號" :invalid="Boolean(errors.pet)">
           <template #item="{ item }">
             <span class="min-w-0 flex-1 truncate"><span class="font-semibold text-primary">{{ item.name }}</span><StrayBadge v-if="item.isStray" class="ml-2 align-middle" /><span v-if="item.breed" class="ml-2 text-xs text-muted-foreground">{{ breedText(item) }}</span><span v-if="item.ownerId?.name" class="ml-3 text-xs text-muted-foreground">{{ item.ownerId.name }}</span><span v-if="item.ownerId?.phone" class="num ml-3 text-xs text-muted-foreground">{{ item.ownerId.phone }}</span></span>
           </template>
@@ -131,7 +131,7 @@ function submit() {
           <div class="grid gap-3 sm:grid-cols-3">
             <div class="space-y-1.5">
               <Label for="walk-in-stray-name" class="text-xs font-medium">名字<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <Input id="walk-in-stray-name" v-model="strayName" :aria-invalid="Boolean(errors.strayName)" />
+              <Input id="walk-in-stray-name" v-model="strayName" placeholder="例：咪咪" :aria-invalid="Boolean(errors.strayName)" />
               <p v-if="errors.strayName" class="text-xs font-medium text-destructive">{{ errors.strayName }}</p>
             </div>
             <div class="space-y-1.5">
@@ -140,7 +140,7 @@ function submit() {
             </div>
             <div class="space-y-1.5">
               <Label for="walk-in-stray-color" class="text-xs font-medium">花色</Label>
-              <Input id="walk-in-stray-color" v-model="strayColor" />
+              <Input id="walk-in-stray-color" v-model="strayColor" placeholder="例：橘白、玳瑁、虎斑" />
             </div>
           </div>
 
@@ -148,7 +148,7 @@ function submit() {
             <Label class="text-xs font-medium">帶貓的人</Label>
             <SegmentedControl v-model="bringer" :options="BRINGER_OPTIONS" aria-label="帶貓的人" />
             <template v-if="bringer === 'owner'">
-              <CandidateSearchField v-model="selectedOwner" endpoint="/owners" input-id="walk-in-owner-search" empty-text="找不到符合的飼主" :invalid="Boolean(errors.owner)">
+              <CandidateSearchField v-model="selectedOwner" endpoint="/owners" input-id="walk-in-owner-search" placeholder="飼主姓名或電話" empty-text="找不到符合的飼主" :invalid="Boolean(errors.owner)">
                 <template #item="{ item }">
                   <span class="font-semibold text-primary">{{ item.name }}</span><span v-if="item.phone" class="num text-xs text-muted-foreground">{{ item.phone }}</span>
                 </template>
@@ -161,12 +161,12 @@ function submit() {
             <div v-if="bringer === 'new'" class="grid gap-3 sm:grid-cols-2">
               <div class="space-y-1.5">
                 <Label for="walk-in-owner-name" class="text-xs font-medium">姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-                <Input id="walk-in-owner-name" v-model="ownerName" :aria-invalid="Boolean(errors.ownerName)" />
+                <Input id="walk-in-owner-name" v-model="ownerName" placeholder="例：王小明" :aria-invalid="Boolean(errors.ownerName)" />
                 <p v-if="errors.ownerName" class="text-xs font-medium text-destructive">{{ errors.ownerName }}</p>
               </div>
               <div class="space-y-1.5">
                 <Label for="walk-in-owner-phone" class="text-xs font-medium">手機<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-                <Input id="walk-in-owner-phone" v-model="ownerPhone" class="num" inputmode="tel" :aria-invalid="Boolean(errors.ownerPhone)" />
+                <Input id="walk-in-owner-phone" v-model="ownerPhone" class="num" placeholder="例：0912-345-678" inputmode="tel" :aria-invalid="Boolean(errors.ownerPhone)" />
                 <p v-if="errors.ownerPhone" class="text-xs font-medium text-destructive">{{ errors.ownerPhone }}</p>
               </div>
             </div>

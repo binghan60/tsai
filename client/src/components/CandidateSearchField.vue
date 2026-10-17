@@ -12,6 +12,7 @@ const props = defineProps({
   inputId: { type: String, required: true },
   emptyText: { type: String, default: '找不到符合的資料' },
   invalid: { type: Boolean, default: false },
+  placeholder: { type: String, default: '' },
 });
 const selected = defineModel({ type: Object, default: null });
 const search = useCandidateSearch(props.endpoint);
@@ -26,7 +27,7 @@ const search = useCandidateSearch(props.endpoint);
     <template v-else>
       <div class="relative">
         <Search class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
-        <Input :id="inputId" v-model="search.query.value" inputmode="search" class="pl-9" autocomplete="off" :aria-invalid="invalid" />
+        <Input :id="inputId" v-model="search.query.value" inputmode="search" class="pl-9" :placeholder="placeholder" autocomplete="off" :aria-invalid="invalid" />
       </div>
       <div v-if="search.query.value.trim()" class="max-h-64 overflow-y-auto rounded-lg border border-border" aria-live="polite">
         <p v-if="search.loading.value" class="px-3 py-3 text-xs text-muted-foreground">搜尋中…</p>
