@@ -1,6 +1,7 @@
 // 送 IDEXX／離院通知排隊（XML 怎麼組在 lib/idexxCensus.js）。按下送 IDEXX、取消送 IDEXX，以及掛號離開診所的每個地方
 // 都呼叫 queueIdexxCensus，它看這張掛號上一次送了什麼，需要時才排一份新的；抓檔程式之後來拿。
 import Appointment from '../models/Appointment.js';
+import Hospitalization from '../models/Hospitalization.js';
 import IdexxRequest from '../models/IdexxRequest.js';
 import LabResult from '../models/LabResult.js';
 import Owner from '../models/Owner.js';
@@ -8,7 +9,7 @@ import Pet from '../models/Pet.js';
 import { idexxCensusSettings } from '../config/idexxBridge.js';
 import { encodeBig5 } from './big5.js';
 import { buildIdexxRequestXml, idexxMessageId, inClinic, nextCensusKind } from './idexxCensus.js';
-import { emitAppointmentUpdate } from './realtime.js';
+import { emitAppointmentUpdate, emitHospitalizationUpdate } from './realtime.js';
 import { latestPetWeight } from './latestWeight.js';
 
 // 開單之後這隻貓已經有檢驗結果：連到這次看診的，或開單之後才驗、已認出是這隻貓的（還沒連上看診，例如當天沒有掛號）。
@@ -20,10 +21,19 @@ async function labResultDone(appointment, petId, lastRequest) {
   }));
 }
 
+// 這筆看診收的住院還在進行嗎（住院中的貓，櫃台完成處理之後還留在 IDEXX 主機的清單上，到出院或取消住院才收）。
+export async function stayIsAdmitted(appointment) {
+  if (!appointment?.hospitalizationId) return false;
+  return Boolean(await Hospitalization.exists({ _id: appointment.hospitalizationId, status: 'admitted' }));
+}
+
 export async function syncIdexxCensus(appointment, { settings = idexxCensusSettings(), now = new Date() } = {}) {
   if (settings.mode === 'off' || !appointment?._id) return null;
   const last = await IdexxRequest.findOne({ appointmentId: appointment._id }).sort({ createdAt: -1, _id: -1 }).lean();
-  const kind = nextCensusKind(last?.kind ?? null, inClinic(appointment));
+  const stillIn = inClinic(appointment, { hospitalized: await stayIsAdmitted(appointment) });
+  // 上一張單驗完之後又按了「送 IDEXX」：labRequestedAt 比最後一份到院通知新，就再開一張（路由只在上一張驗完時才更新它）。
+  const reopened = stillIn && last?.kind === 'in' && last.createdAt && new Date(appointment.labRequestedAt) > new Date(last.createdAt);
+  const kind = reopened ? 'in' : nextCensusKind(last?.kind ?? null, stillIn);
   if (!kind) return null;
   // 離院照到院那一份的貓、訊息種類與編碼送：中途改了設定，主機上那一筆還是要用同一種訊息收掉。
   const petId = kind === 'out' ? last.petId : appointment.petId;
@@ -65,6 +75,25 @@ export async function queueIdexxCensus(appointment) {
   }
 }
 
+// 上一張單驗完了嗎：最後一份通知是到院，而且之後這隻貓有結果回來。驗完才能再送一次（診療台、住院專區共用）。
+export async function labOrderDone(appointment) {
+  if (!appointment?.labRequestedAt) return false;
+  const last = await IdexxRequest.findOne({ appointmentId: appointment._id }).sort({ createdAt: -1, _id: -1 }).lean();
+  return last?.kind === 'in' && labResultDone(appointment, appointment.petId, last);
+}
+
+// 出院、取消住院之後：入院那次看診不再有住院撐著，該收掉的送出離院通知。功能沒開就連看診都不查。
+export async function queueIdexxCensusById(appointmentId, { settings = idexxCensusSettings() } = {}) {
+  if (!appointmentId || settings.mode === 'off') return null;
+  try {
+    const appointment = await Appointment.findById(appointmentId);
+    return appointment ? await syncIdexxCensus(appointment, { settings }) : null;
+  } catch (err) {
+    console.error('[idexx] 住院離院通知排隊失敗', err);
+    return null;
+  }
+}
+
 // 抓檔程式每輪來拿：還沒送的，舊到新（同一隻貓的到院一定排在離院前面）。
 // 不用 lean：lean 拿到的是 BSON Binary，轉回 Buffer 要自己算長度；讓 mongoose 轉好比較不會出錯。
 export async function pendingIdexxRequests(limit = 20) {
@@ -82,7 +111,11 @@ export async function markIdexxRequestDelivered(id, bridgeId, now = new Date()) 
   const request = await IdexxRequest.findById(id).select('appointmentId kind').lean();
   if (request?.kind === 'in' && request.appointmentId) {
     const appointment = await Appointment.findByIdAndUpdate(request.appointmentId, { $set: { labDeliveredAt: now } }, { new: true });
-    if (appointment) emitAppointmentUpdate(appointment);
+    if (appointment) {
+      emitAppointmentUpdate(appointment);
+      // 住院專區的「送 IDEXX」徽章（已送到）跟著換。
+      if (appointment.hospitalizationId) emitHospitalizationUpdate({ _id: appointment.hospitalizationId, petId: appointment.petId });
+    }
   }
   return true;
 }

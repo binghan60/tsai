@@ -7,12 +7,13 @@ import Pet from '../models/Pet.js';
 import { decodeIdexxXml } from './idexxResult.js';
 import Appointment from '../models/Appointment.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import Hospitalization from '../models/Hospitalization.js';
 import HospitalizationEntry from '../models/HospitalizationEntry.js';
-import { markIdexxRequestDelivered, syncIdexxCensus } from './idexxRequests.js';
+import { markIdexxRequestDelivered, queueIdexxCensusById, syncIdexxCensus } from './idexxRequests.js';
 
 const original = {
   findOne: IdexxRequest.findOne, create: IdexxRequest.create, petFindById: Pet.findById, ownerFindById: Owner.findById, labExists: LabResult.exists,
-  appointmentFind: Appointment.find, recordFind: MedicalRecord.find, entryFind: HospitalizationEntry.find,
+  appointmentFind: Appointment.find, appointmentFindById: Appointment.findById, stayExists: Hospitalization.exists, recordFind: MedicalRecord.find, entryFind: HospitalizationEntry.find,
 };
 const pet = { _id: '66f0a1b2c3d4e5f601234567', name: '牛奶', species: '貓', sex: 'male', neutered: 'no', ownerId: 'o1', weightKg: 3.9 };
 const census = { mode: 'census', encoding: 'big5' };
@@ -42,6 +43,8 @@ describe('idexxRequests.syncIdexxCensus', () => {
     Appointment.find = original.appointmentFind;
     MedicalRecord.find = original.recordFind;
     HospitalizationEntry.find = original.entryFind;
+    Hospitalization.exists = original.stayExists;
+    Appointment.findById = original.appointmentFindById;
   });
 
   it('伺服器沒開就什麼都不做，連資料庫都不查', async () => {
@@ -92,6 +95,42 @@ describe('idexxRequests.syncIdexxCensus', () => {
     assert.equal(created[0].kind, 'out');
     assert.equal(created[0].mode, 'work_request');
     assert.match(created[0].body.toString('utf8'), /message_sub_type="Cancel"/);
+  });
+
+  it('住院中的貓：櫃台完成處理也不送離院，出院（住院不再進行）才收掉', async () => {
+    const stayId = '66f0a1b2c3d4e5f601239999';
+    const created = mockModels({ last: { kind: 'in', petId: pet._id, mode: 'work_request', encoding: 'utf-8' } });
+    const appointment = { _id: 'a1', petId: pet._id, status: 'completed', labRequestedAt: requested, hospitalizationId: stayId };
+    Hospitalization.exists = async () => ({ _id: stayId });
+    assert.equal(await syncIdexxCensus(appointment, { settings: census }), null);
+    assert.equal(created.length, 0);
+    Hospitalization.exists = async () => null;
+    await syncIdexxCensus(appointment, { settings: census });
+    assert.equal(created[0].kind, 'out');
+    assert.match(created[0].body.toString('utf8'), /message_sub_type="Cancel"/);
+  });
+
+  it('上一張單驗完又按了送 IDEXX（labRequestedAt 比最後一份通知新）：再排一份到院；沒有更新就不重送', async () => {
+    const last = { kind: 'in', petId: pet._id, mode: 'work_request', encoding: 'utf-8', createdAt: new Date('2026-10-06T06:00:01Z') };
+    let created = mockModels({ last });
+    const appointment = { _id: 'a1', petId: pet._id, status: 'arrived', labRequestedAt: new Date('2026-10-08T06:00:00Z') };
+    await syncIdexxCensus(appointment, { settings: { mode: 'work_request', encoding: 'utf-8' } });
+    assert.equal(created.length, 1);
+    assert.equal(created[0].kind, 'in');
+    created = mockModels({ last });
+    assert.equal(await syncIdexxCensus({ ...appointment, labRequestedAt: new Date('2026-10-06T06:00:00Z') }, { settings: census }), null);
+    assert.equal(created.length, 0);
+  });
+
+  it('出院、取消住院之後：住院不再進行，入院那次看診（已完成處理）送離院；功能沒開不查看診', async () => {
+    const stayId = '66f0a1b2c3d4e5f601239999';
+    const created = mockModels({ last: { kind: 'in', petId: pet._id, mode: 'work_request', encoding: 'utf-8', createdAt: new Date('2026-10-06T06:00:01Z') } });
+    Appointment.findById = async () => ({ _id: 'a1', petId: pet._id, status: 'completed', labRequestedAt: requested, hospitalizationId: stayId });
+    Hospitalization.exists = async () => null;
+    assert.equal(await queueIdexxCensusById('a1', { settings: { mode: 'off', encoding: 'big5' } }), null);
+    assert.equal(created.length, 0);
+    await queueIdexxCensusById('a1', { settings: { mode: 'work_request', encoding: 'utf-8' } });
+    assert.equal(created[0].kind, 'out');
   });
 
   it('開單的檢驗已經做完（結果回來了）：不送取消，只記一筆已收掉', async () => {

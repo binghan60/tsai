@@ -15,6 +15,7 @@ import { cancelVisitMedicationOrder, syncVisitMedicationOrder } from '../lib/vis
 import { recordMedicationEvent } from '../lib/medicationWorkflow.js';
 import { announceMedicationJournal, syncMedicationJournal } from '../lib/medicationJournal.js';
 import { releaseLabResults } from '../lib/labResultApply.js';
+import { queueIdexxCensusById } from '../lib/idexxRequests.js';
 import { cleanEntryFields, hospitalDayNumber, hospitalizationDates } from '../lib/hospitalization.js';
 import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitHospitalizationUpdate, emitLabResultsUpdate, emitMedicationUpdate } from '../lib/realtime.js';
 
@@ -123,7 +124,7 @@ router.get('/:id', async (req, res, next) => {
     if (!hospitalization) return res.status(404).json({ message: '找不到住院紀錄' });
     const [pet, appointment, entries] = await Promise.all([
       Pet.findById(hospitalization.petId).populate('ownerId', 'name phone kind').lean(),
-      Appointment.findById(hospitalization.admittingAppointmentId).select('date time reason weightKg temperatureC visitNote checkedInAt visitStartedAt').lean(),
+      Appointment.findById(hospitalization.admittingAppointmentId).select('date time reason weightKg temperatureC visitNote checkedInAt visitStartedAt status petName labRequestedAt labDeliveredAt').lean(),
       HospitalizationEntry.find({ hospitalizationId: hospitalization._id }).sort({ recordedAt: 1, _id: 1 }).lean(),
     ]);
     res.json({
@@ -263,6 +264,7 @@ router.post('/:id/cancel', async (req, res, next) => {
     }
     if (released) emitLabResultsUpdate();
     if (medicationOrder) emitMedicationUpdate(medicationOrder);
+    await queueIdexxCensusById(hospitalization.admittingAppointmentId);
     announce(hospitalization);
     res.json(hospitalization);
   } catch (err) {
@@ -320,6 +322,8 @@ router.post('/:id/discharge', async (req, res, next) => {
     }
     // 入院那次看診的日誌上「住院」那一列從「住院中」變成期間與天數。
     emitClinicalNoteUpdate({ petId: hospitalization.petId, appointmentId: hospitalization.admittingAppointmentId });
+    // 住院中送過 IDEXX 的，出院這一刻才從主機的清單上收掉。
+    await queueIdexxCensusById(hospitalization.admittingAppointmentId);
     announce(hospitalization);
     res.json({ hospitalization, medicationOrder: order });
   } catch (err) {

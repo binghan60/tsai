@@ -27,6 +27,15 @@ describe('idexxCensus', () => {
     assert.equal(canRequestLab({ petId: null, status: 'arrived' }), false);
   });
 
+  it('收了住院、住院還在進行的看診，櫃台完成處理之後也還能送 IDEXX，也還在主機的清單上', () => {
+    const requested = new Date();
+    assert.equal(canRequestLab({ petId: 'p', status: 'completed' }, { hospitalized: true }), true);
+    assert.equal(canRequestLab({ petId: 'p', status: 'scheduled' }, { hospitalized: true }), false);
+    assert.equal(canRequestLab({ petId: null, status: 'completed' }, { hospitalized: true }), false);
+    assert.equal(inClinic({ petId: 'p', status: 'completed', labRequestedAt: requested }, { hospitalized: true }), true);
+    assert.equal(inClinic({ petId: 'p', status: 'completed', labRequestedAt: requested }, { hospitalized: false }), false);
+  });
+
   it('報到不算：有人按了送 IDEXX、而且還在院內，才該在 IDEXX 主機的清單上', () => {
     const requested = new Date();
     assert.equal(inClinic({ petId: 'p', status: 'arrived' }), false);

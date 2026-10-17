@@ -22,6 +22,7 @@ import {
   weightTrend,
 } from '../lib/hospitalization';
 import { useLiveReload } from '../composables/useLiveReload';
+import { canRequestLab, labRequestDelivered, useLabRequest } from '../composables/useLabRequest';
 import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { useToast } from '../composables/useToast';
 import PageHeader from '../components/PageHeader.vue';
@@ -376,12 +377,33 @@ const moreActions = computed(() => {
   if (cancelled.value || !detail.value) return [];
   const actions = [];
   if (status.value === 'discharged') actions.push({ key: 'discharge', label: '修改出院內容' });
+  if (labRequestable.value && assessment.value?.labRequestedAt) actions.push({ key: 'cancel-lab', label: '取消送 IDEXX', icon: FlaskConical, disabled: labRequest.busy.value });
   if (canCancelHospitalization(detail.value)) actions.push({ key: 'cancel', label: '取消住院', danger: true });
   return actions;
 });
 function onMoreAction(key) {
   if (key === 'cancel') cancelOpen.value = true;
+  else if (key === 'cancel-lab') toggleLabRequest(false);
   else openTextEdit();
+}
+
+// ---- 送 IDEXX：住院中的貓，單號是入院那次看診的（診所測過的做法），結果回來連到這次住院、顯示在下面的檢驗結果 ----
+
+const labRequest = useLabRequest();
+const labAppointment = computed(() => (assessment.value && detail.value ? { ...assessment.value, petId: detail.value.petId } : null));
+const labRequestable = computed(() => labRequest.enabled.value && admitted.value && canRequestLab(labAppointment.value, { hospitalized: true }));
+// 上一張單驗完了（有結果在這張單送出之後回來）：可以再送一次。
+const labOrderDone = computed(() => Boolean(assessment.value?.labRequestedAt)
+  && labResults.value.some((result) => new Date(result.runAt) >= new Date(assessment.value.labRequestedAt)));
+async function toggleLabRequest(requested) {
+  if (!labAppointment.value) return;
+  const before = assessment.value?.labRequestedAt ?? null;
+  const data = await labRequest.setLabRequest(labAppointment.value, requested);
+  if (!data || !detail.value) return;
+  // 再送卻沒換時間：伺服器認為上一張單還沒驗完，沒有重送。
+  if (requested && before && data.labRequestedAt === before) toast.info('上一張單還沒有檢驗結果', '還不能再送');
+  writeSeq += 1;
+  Object.assign(detail.value.admittingAppointment, { labRequestedAt: data.labRequestedAt, labDeliveredAt: data.labDeliveredAt });
 }
 
 // ---- 檢驗結果（側欄）：新到舊，點一列展開數值 ----
@@ -464,6 +486,14 @@ watch(id, () => {
         </span>
       </template>
       <template v-if="detail && !cancelled" #actions>
+        <template v-if="labRequestable">
+          <template v-if="assessment.labRequestedAt">
+            <Badge v-if="labRequestDelivered(labAppointment)" variant="status" class="bg-info-surface text-info"><FlaskConical class="size-4" stroke-width="1.75" aria-hidden="true" />已送 IDEXX <span class="num">{{ clinicTimeInput(assessment.labRequestedAt) }}</span></Badge>
+            <Badge v-else variant="status" class="bg-warning-surface text-warning"><FlaskConical class="size-4" stroke-width="1.75" aria-hidden="true" />尚未送到 IDEXX</Badge>
+            <Button v-if="labOrderDone" type="button" variant="soft" :disabled="labRequest.busy.value" @click="toggleLabRequest(true)"><FlaskConical stroke-width="1.75" />再送 IDEXX</Button>
+          </template>
+          <Button v-else type="button" variant="soft" :disabled="labRequest.busy.value" @click="toggleLabRequest(true)"><FlaskConical stroke-width="1.75" />送 IDEXX</Button>
+        </template>
         <Button type="button" variant="soft" @click="labImportOpen = true"><FlaskConical stroke-width="1.75" />匯入檢驗結果</Button>
         <Button v-if="admitted" type="button" @click="openDischarge"><LogOut stroke-width="1.75" />出院</Button>
         <RowActions v-if="moreActions.length" size="default" :actions="moreActions" label="住院的更多操作" @select="onMoreAction" />

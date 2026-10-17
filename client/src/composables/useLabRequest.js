@@ -7,8 +7,10 @@ import { useWorkCountsStore } from '../stores/workCounts';
 // 送 IDEXX：把貓咪送到 IDEXX 主機的待驗清單（伺服器 POST /appointments/:id/lab-request）。
 // 報到不自動送——不是每次看診都驗血，由醫師（診療台）或櫃台（掛號台 ⋯ 選單）按下去才送。
 // 伺服器沒開這個功能時 enabled 是 false，兩邊都不出按鈕。
-export function canRequestLab(appointment) {
-  return Boolean(appointment?.petId) && (appointment?.status === 'arrived' || appointment?.status === 'pending_checkout');
+// hospitalized：住院專區用，收了住院的看診櫃台完成處理之後也還能送（見伺服器 lib/idexxCensus.js）。
+export function canRequestLab(appointment, { hospitalized = false } = {}) {
+  if (!appointment?.petId) return false;
+  return appointment.status === 'arrived' || appointment.status === 'pending_checkout' || (hospitalized && appointment.status === 'completed');
 }
 
 // 通知真的寫進 IDEXX 主機了沒：抓檔程式回報後伺服器記 labDeliveredAt，比這次按下去的時間晚才算。

@@ -13,14 +13,17 @@ import { CLINIC_TIMEZONE, clinicToday } from './clinicTime.js';
 import { findCatBreed } from '../../../shared/catBreeds.js';
 
 // 這筆掛號現在能不能送 IDEXX：報到之後、櫃台完成之前，而且已經建檔（初診報到時才有 petId）。
-export function canRequestLab(appointment) {
-  return Boolean(appointment?.petId) && holdsCheckinNumber(appointment?.status);
+// 收了住院、住院還在進行（hospitalized）的看診，櫃台完成處理之後也還能送：住院專區的「送 IDEXX」用的是入院那次看診的單號，
+// 結果回來連到住院單（見 lib/labResultApply.js 的 hospitalizationAt）。
+export function canRequestLab(appointment, { hospitalized = false } = {}) {
+  if (!appointment?.petId) return false;
+  return holdsCheckinNumber(appointment.status) || (hospitalized && appointment.status === 'completed');
 }
 
 // 這隻貓現在該不該在 IDEXX 主機的清單上：有人按了「送 IDEXX」（labRequestedAt），而且還在院內。
 // 報到本身不算——不是每次看診都驗血。
-export function inClinic(appointment) {
-  return canRequestLab(appointment) && Boolean(appointment?.labRequestedAt);
+export function inClinic(appointment, options) {
+  return canRequestLab(appointment, options) && Boolean(appointment?.labRequestedAt);
 }
 
 // 依上一份送出的通知決定這次要不要送、送哪一種。同一個狀態重複呼叫不會重複送，所以每個會改變狀態的地方放心呼叫。

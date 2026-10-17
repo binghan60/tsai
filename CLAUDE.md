@@ -193,7 +193,7 @@
 - 一筆＝一台儀器對一隻貓的一次檢驗，`{diagnosticSetId, instrument}` unique。欄位是 `lib/idexxResult.js` 解析出來的：`runAt`、IDEXX 主機上的 `client`／`patient`（`patient.id` 是 IDEXX 回傳的病患編號）、`assays[]`（`code`、字串 `value`、`unit`、參考範圍、`qualifier`）、`notes[]`、原始檔 `rawXml`（`select: false`）。解析寬鬆、不驗證 DTD（IDEXX 實際輸出不完全符合）。重送與更正由 `lib/labResultImport.js` 判斷（一樣只加計數、不同以訊息時間新的為準、舊的不採用）。
 - `overrides[]` 是醫師在病歷日誌改過的值；`assays` 是儀器原文、永遠不動，顯示一律經 `shared/labValues.js` 的 `effectiveAssays` 疊上去。
 - **`petId` 空的＝待確認**。自動認貓：送 IDEXX 時開單的 `requisition_number` 是掛號 `_id`（主機待驗檢體卡片最下面那行），`client_id`（飼主編號，印在檢驗報告「畜主名字」後面的括號裡）與 `patient_id`（「動物患者 ID」，卡片上名字下面那行）都填飼主手機；結果回來先看單號是不是存在的掛號、取那筆掛號的貓，再看 `client.id`／`patient.id` 是不是存在的貓咪 `_id`（舊版送的，也認），認不到才用飼主手機找飼主名下的貓，好幾隻再用 `patient.name` 比貓名，比不出來進待確認（`lib/labResultApply.js` 的 `matchByPatient`、`lib/labResultFill.js` 的 `appointmentIdFromRequisition`／`petIdCandidates`／`pickPetForOwnerPhone`）。census 沒有單號，只能靠手機＋貓名。**而且那隻貓檢驗當天有看診**才配對。認出後填進檢驗當天的看診（`lib/labResultApply.js`；當天好幾筆時挑檢驗前最後報到的）：**空格才填**，已有不同的值記成差異（`conflicts`、`conflictsOpen`）由醫師在比對視窗決定（預設都不覆蓋，可「復原」）；儀器判定無效（`!`、`-`）或超過 40 字的不填；表單沒有對應代號的記在 `unmappedCodes`（不算問題，全血檢常比表單項目多）。填過的記 `appointmentId`、`appliedAt`、`filled[]`；看診已完成或報告已結案時記 `fillClosed`。看診沒選表單時只記關聯不記 `appliedAt`，之後掛號建立、報到、修改掛號、建立報告草稿時由 `applyPendingLabResults` 補套用。
-- **住院期間的結果連到住院單**（`hospitalizationId`，`lib/labResultApply.js` 的 `hospitalizationAt`）：檢驗時間落在住院中（入院之後、出院之前）就連住院單、不填進任何看診（`appointmentId` 清空，`fill.status: 'hospitalization'`），認貓時「那隻貓當天有看診」的條件也把住院中算進去。住院專區也有「匯入檢驗結果」（同一個 `LabImportDialog`，`match` 帶 `hospitalizationId`）。取消住院時連過去的結果回到待確認清單。
+- **住院期間的結果連到住院單**（`hospitalizationId`，`lib/labResultApply.js` 的 `hospitalizationAt`）：檢驗時間落在住院中（入院之後、出院之前）就連住院單、不填進任何看診（`appointmentId` 清空，`fill.status: 'hospitalization'`），認貓時「那隻貓當天有看診」的條件也把住院中算進去。住院專區也有「送 IDEXX」（住院中才有；單號仍是入院那次看診的 `_id`，呼叫同一支 `POST /appointments/:id/lab-request`，收了住院的看診櫃台完成處理後也放行；已送後換成狀態徽章、取消送收在 ⋯；上一張單驗完（送出之後有結果回來）旁邊多一顆「再送 IDEXX」：伺服器 `labOrderDone` 認定驗完才把 `labRequestedAt` 重設成現在，`syncIdexxCensus` 看到它比最後一份到院通知新就再排一份到院（還沒驗完重複按不動）；結果回來連到住院單、只顯示在住院專區，不進病歷日誌與健檢報告）與「匯入檢驗結果」（同一個 `LabImportDialog`，`match` 帶 `hospitalizationId`）。取消住院時連過去的結果回到待確認清單。
 - 認不出的結果進工具欄「檢驗」的待確認清單：附檢驗當天的掛號當候選（同名排前、唯一同名預選）；人選了就照同一套規則填入，那隻貓當天沒看診就不配對。診療台「匯入檢驗結果」反方向操作，可以指定填進這次看診（不限當天）。選錯可「復原」（清掉還是當初填進去的值，並記 `autoMatchBlocked`，IDEXX 重送時不再自動配回）；品管測試可以「忽略」（`dismissedAt`）。看診取消、未到、被刪除或貓被刪除時，連過去的結果回到待確認清單。
 - 填入狀態燈號（`LabFillStatus.vue`，規則 `client/src/lib/labFillStatus.js`）：黃＝有未處理的差異／看診沒選表單／填入時報告已結案；綠＝有填入；藍＝沒有填入新數值；沒有結果不畫。
 - `lab-results:updated` 廣播 3 秒內合併成一次、上傳一份一份排隊至少隔 0.25 秒、抓檔程式一輪最多 20 份——IDEXX 主機補傳歷史紀錄時一次幾百份，不節流會拖垮伺服器。
@@ -201,7 +201,7 @@
 
 **labBridgeStatuses**：每台抓檔程式一筆心跳（`bridgeId` unique、`lastSeenAt`、`lastUploadAt`、`pendingFiles`、`lastError`、`version`），超過三分鐘沒心跳算離線，「檢驗」面板顯示燈號。
 
-**idexxRequests「送 IDEXX」**（已實作、預設關閉，`IDEXX_CENSUS_MODE=off`）：醫師或櫃台對在院的掛號按「送 IDEXX」（`labRequestedAt`），伺服器組好 XML、依設定編碼（`IDEXX_CENSUS_ENCODING`，預設 Big5，`lib/big5.js`）排隊，抓檔程式來拿、寫進 InterLink 的 `Requests\`、回報後記 `labDeliveredAt`。報到不自動送（不是每次看診都驗血）。掛號離開診所（完成、取消、取消報到、取消送）時排離院／取消通知；開單的檢驗已經做完就只記 `skipped`。XML 組法在 `lib/idexxCensus.js`（物種除非明寫是狗一律 `FELINE`、性別＋結紮四種、品種送 IDEXX 英文名、飼主姓名拆姓／名）。訊息種類 `census`／`work_request` 要到診所與 IDEXX 確認後才決定。排不進去只記 log、不讓報到失敗。
+**idexxRequests「送 IDEXX」**（已實作、預設關閉，`IDEXX_CENSUS_MODE=off`）：醫師或櫃台對在院的掛號按「送 IDEXX」（`labRequestedAt`），伺服器組好 XML、依設定編碼（`IDEXX_CENSUS_ENCODING`，預設 Big5，`lib/big5.js`）排隊，抓檔程式來拿、寫進 InterLink 的 `Requests\`、回報後記 `labDeliveredAt`。報到不自動送（不是每次看診都驗血）。掛號離開診所（完成、取消、取消報到、取消送）時排離院／取消通知（**收了住院、住院還在進行的看診例外**：櫃台完成處理不收，到出院或取消住院才收，`lib/idexxRequests.js` 的 `stayIsAdmitted`、`queueIdexxCensusById`）；開單的檢驗已經做完就只記 `skipped`。XML 組法在 `lib/idexxCensus.js`（物種除非明寫是狗一律 `FELINE`、性別＋結紮四種、品種送 IDEXX 英文名、飼主姓名拆姓／名）。訊息種類 `census`／`work_request` 要到診所與 IDEXX 確認後才決定。排不進去只記 log、不讓報到失敗。
 
 ### chatMessages 全站內部聊天
 
@@ -343,7 +343,7 @@ POST   /api/appointments                 新增（date 省略＝今天；達保�
 GET    /api/appointments/:id
 PUT    /api/appointments/:id             修改（只限待報到與在院；在院的不能改日期；有草稿後不能換表單）
 POST   /api/appointments/:id/check-in    報到（只限今天、已建檔的貓；可帶 isLate＋lateAt、checkinNumber）
-POST   /api/appointments/:id/lab-request 送 IDEXX／取消送（{ requested }）；功能沒開回 409
+POST   /api/appointments/:id/lab-request 送 IDEXX／取消送（{ requested }）；功能沒開回 409；住院中的看診完成處理後也能送
 PATCH  /api/appointments/:id/deposit     事後更正保證金紀錄
 POST   /api/appointments/:id/cancel      取消（已收保證金要帶 depositOutcome）
 POST   /api/appointments/:id/no-show ／ POST /api/appointments/:id/restore（恢復、或取消報到）

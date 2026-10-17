@@ -22,7 +22,7 @@ import { restoreImageUploadTodo, withdrawImageUploadTodo } from '../lib/imageUpl
 import { publishTodos } from '../lib/todos.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import { cancelVisitMedicationOrder } from '../lib/visitMedicationOrder.js';
-import { queueIdexxCensus } from '../lib/idexxRequests.js';
+import { labOrderDone, queueIdexxCensus, stayIsAdmitted } from '../lib/idexxRequests.js';
 import { applyPendingLabResults, releaseLabResults } from '../lib/labResultApply.js';
 import LabResult from '../models/LabResult.js';
 import { canRequestLab } from '../lib/idexxCensus.js';
@@ -721,15 +721,16 @@ router.post('/:id/lab-request', async (req, res, next) => {
     if (!appointment) return res.status(404).json({ message: '找不到掛號' });
     checkWorkflowCompatibility(appointment, req.path, req.body?.version);
     const requested = req.body?.requested !== false;
-    if (requested && !canRequestLab(appointment)) {
-      return res.status(422).json({ message: '報到之後、櫃台完成處理之前才能送 IDEXX' });
+    if (requested && !canRequestLab(appointment, { hospitalized: await stayIsAdmitted(appointment) })) {
+      return res.status(422).json({ message: '報到之後、櫃台完成處理之前才能送 IDEXX（住院中的貓到住院專區送）' });
     }
-    // 重複按不重設時間，也不會重送（queueIdexxCensus 看上一份送了什麼）。
-    if (requested && !appointment.labRequestedAt) appointment.labRequestedAt = new Date();
+    // 重複按不重設時間，也不會重送（queueIdexxCensus 看上一份送了什麼）；上一張單驗完了（結果回來）再按，才當成再送一張。
+    if (requested && (!appointment.labRequestedAt || await labOrderDone(appointment))) appointment.labRequestedAt = new Date();
     if (!requested) appointment.labRequestedAt = null;
     await appointment.save();
     await queueIdexxCensus(appointment);
     emitAppointmentUpdate(appointment);
+    if (appointment.hospitalizationId) emitHospitalizationUpdate({ _id: appointment.hospitalizationId, petId: appointment.petId });
     res.json(appointment);
   } catch (err) { next(err); }
 });
