@@ -2,25 +2,24 @@ import { Router } from 'express';
 import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
 import Hospitalization from '../models/Hospitalization.js';
-import HospitalizationDay from '../models/HospitalizationDay.js';
 import HospitalizationEntry from '../models/HospitalizationEntry.js';
 import MedicationOrder from '../models/MedicationOrder.js';
 import Pet from '../models/Pet.js';
 import { workflowState } from '../../../shared/appointmentWorkflow.js';
 import { normalizeRichText, richTextLength, richTextToPlain } from '../../../shared/richText.js';
 import { withTransaction } from '../lib/transaction.js';
-import { clinicToday } from '../lib/clinicTime.js';
+import { clinicDayStart, clinicToday } from '../lib/clinicTime.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
 import { cancelVisitMedicationOrder, syncVisitMedicationOrder } from '../lib/visitMedicationOrder.js';
 import { recordMedicationEvent } from '../lib/medicationWorkflow.js';
 import { announceMedicationJournal, syncMedicationJournal } from '../lib/medicationJournal.js';
 import { releaseLabResults } from '../lib/labResultApply.js';
-import { cleanEntryFields, cleanWeight, hospitalDayNumber, hospitalizationDates } from '../lib/hospitalization.js';
+import { cleanEntryFields, hospitalDayNumber, hospitalizationDates } from '../lib/hospitalization.js';
 import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitHospitalizationUpdate, emitLabResultsUpdate, emitMedicationUpdate } from '../lib/realtime.js';
 
 // 住院：一律從看診收住院（看診到一半才決定很常見），入院那次看診就是入院評估；
-// 每天一筆體重、照紙本那張表一格一格記照護紀錄；出院時帶回家的藥直接開成待包藥的藥單。
+// 照紙本那張表一格一格記照護紀錄（每一格可以有自己的體重、體溫）；出院時帶回家的藥直接開成待包藥的藥單。
 // 規則與畫面見 CLAUDE.md 第三節 hospitalizations。
 const router = Router();
 
@@ -52,7 +51,7 @@ function assertVersion(doc, version) {
   if ((doc.__v ?? 0) !== version) throw fail('住院資料已被其他裝置更新，請重新整理後再試', 409);
 }
 
-// 照護紀錄、每天體重：住院期間的某一天（入院那天到出院那天；還在住院就到今天）。取消的住院不能再記。
+// 照護紀錄：住院期間的某一天（入院那天到出院那天；還在住院就到今天）。取消的住院不能再記。
 function assertWritableDay(hospitalization, date) {
   if (hospitalization.status === 'cancelled') throw fail('這次住院已取消', 409);
   const dates = hospitalizationDates(hospitalization.admittedAt, hospitalization.dischargedAt ?? new Date());
@@ -86,16 +85,18 @@ router.get('/', async (req, res, next) => {
     ]);
     const ids = items.map((item) => item._id);
     const today = clinicToday();
-    const [todayDays, lastEntries] = ids.length
+    // 今天體重＝今天最後一格有量體重的那筆。
+    const todayStart = clinicDayStart(today);
+    const [todayWeights, lastEntries] = ids.length
       ? await Promise.all([
-        HospitalizationDay.find({ hospitalizationId: { $in: ids }, date: today }).select('hospitalizationId weightKg').lean(),
+        HospitalizationEntry.find({ hospitalizationId: { $in: ids }, weightKg: { $ne: null }, recordedAt: { $gte: todayStart } }).sort({ recordedAt: 1 }).select('hospitalizationId weightKg').lean(),
         HospitalizationEntry.aggregate([
           { $match: { hospitalizationId: { $in: ids } } },
           { $group: { _id: '$hospitalizationId', lastEntryAt: { $max: '$recordedAt' } } },
         ]),
       ])
       : [[], []];
-    const weightById = new Map(todayDays.map((day) => [String(day.hospitalizationId), day.weightKg]));
+    const weightById = new Map(todayWeights.map((entry) => [String(entry.hospitalizationId), entry.weightKg]));
     const lastById = new Map(lastEntries.map((row) => [String(row._id), row.lastEntryAt]));
     const rows = items.map((item) => {
       const end = item.dischargedAt ?? new Date();
@@ -115,15 +116,14 @@ router.get('/', async (req, res, next) => {
 });
 
 // GET /api/hospitalizations/:id — 住院專區：住院單、貓咪與飼主、入院那次看診（入院評估，只讀）、
-// 住院期間的每一天（dates）、每天的體重、全部照護紀錄（舊到新）。檢驗結果另外讀 /lab-results?hospitalizationId=。
+// 住院期間的每一天（dates）、全部照護紀錄（舊到新）。檢驗結果另外讀 /lab-results?hospitalizationId=。
 router.get('/:id', async (req, res, next) => {
   try {
     const hospitalization = await Hospitalization.findById(requireId(req.params.id, '住院單參數不正確')).lean();
     if (!hospitalization) return res.status(404).json({ message: '找不到住院紀錄' });
-    const [pet, appointment, days, entries] = await Promise.all([
+    const [pet, appointment, entries] = await Promise.all([
       Pet.findById(hospitalization.petId).populate('ownerId', 'name phone kind').lean(),
       Appointment.findById(hospitalization.admittingAppointmentId).select('date time reason weightKg temperatureC visitNote checkedInAt visitStartedAt').lean(),
-      HospitalizationDay.find({ hospitalizationId: hospitalization._id }).select('date weightKg').lean(),
       HospitalizationEntry.find({ hospitalizationId: hospitalization._id }).sort({ recordedAt: 1, _id: 1 }).lean(),
     ]);
     res.json({
@@ -131,7 +131,6 @@ router.get('/:id', async (req, res, next) => {
       pet,
       admittingAppointment: appointment,
       dates: hospitalization.status === 'cancelled' ? [] : hospitalizationDates(hospitalization.admittedAt, hospitalization.dischargedAt ?? new Date()),
-      days,
       entries,
     });
   } catch (err) {
@@ -223,7 +222,7 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-// POST /api/hospitalizations/:id/cancel — 收錯了：只有還沒記任何紀錄（體重、照護紀錄）時能取消；
+// POST /api/hospitalizations/:id/cancel — 收錯了：只有還沒記任何照護紀錄時能取消；
 // 有紀錄就該辦出院。收住院時從看診搬過來的那一格用藥搬回看診的藥單，看診回到可以取消看診、送交時開藥單的樣子。
 // 連到這次住院的檢驗結果回到待確認清單。
 router.post('/:id/cancel', async (req, res, next) => {
@@ -240,8 +239,7 @@ router.post('/:id/cancel', async (req, res, next) => {
       if (hospitalization.status !== 'admitted') throw fail('只有住院中的能取消', 409);
       assertVersion(hospitalization, version);
       const entries = await HospitalizationEntry.find({ hospitalizationId: hospitalization._id }).session(session);
-      const recorded = entries.some((entry) => !entry.fromVisit)
-        || await HospitalizationDay.exists({ hospitalizationId: hospitalization._id, weightKg: { $ne: null } }).session(session);
+      const recorded = entries.some((entry) => !entry.fromVisit);
       if (recorded) throw fail('已經有住院紀錄，不能取消住院；要結束住院請辦出院', 409);
       appointment = await Appointment.findById(hospitalization.admittingAppointmentId).session(session);
       if (appointment && String(appointment.hospitalizationId) === String(hospitalization._id)) {
@@ -255,7 +253,6 @@ router.post('/:id/cancel', async (req, res, next) => {
         await syncAppointmentJournal(appointment, { session });
       }
       await HospitalizationEntry.deleteMany({ hospitalizationId: hospitalization._id }, { session });
-      await HospitalizationDay.deleteMany({ hospitalizationId: hospitalization._id }, { session });
       released = await releaseLabResults({ hospitalizationId: hospitalization._id }, { session });
       hospitalization.status = 'cancelled';
       await hospitalization.save({ session });
@@ -325,25 +322,6 @@ router.post('/:id/discharge', async (req, res, next) => {
     emitClinicalNoteUpdate({ petId: hospitalization.petId, appointmentId: hospitalization.admittingAppointmentId });
     announce(hospitalization);
     res.json({ hospitalization, medicationOrder: order });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// PUT /api/hospitalizations/:id/days/:date — 當天體重：{ weightKg }（空白＝清掉）。算進貓咪的最近體重。
-router.put('/:id/days/:date', async (req, res, next) => {
-  try {
-    const hospitalization = await loadHospitalization(req.params.id);
-    const date = String(req.params.date);
-    assertWritableDay(hospitalization, date);
-    const weightKg = cleanWeight(req.body?.weightKg);
-    const day = await HospitalizationDay.findOneAndUpdate(
-      { hospitalizationId: hospitalization._id, date },
-      { $set: { weightKg }, $setOnInsert: { petId: hospitalization.petId } },
-      { new: true, upsert: true, runValidators: true },
-    );
-    announce(hospitalization);
-    res.json(day);
   } catch (err) {
     next(err);
   }

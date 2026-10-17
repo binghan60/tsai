@@ -77,8 +77,8 @@ const status = computed(() => detail.value?.status ?? '');
 const admitted = computed(() => status.value === 'admitted');
 const dates = computed(() => detail.value?.dates ?? []);
 const dayNumber = computed(() => stayDays(detail.value?.admittedAt, detail.value?.dischargedAt ?? new Date()));
-const weights = computed(() => weightTrend(detail.value?.admittingAppointment?.weightKg, dates.value, detail.value?.days));
-const sections = computed(() => daySections(dates.value, detail.value?.entries, detail.value?.days));
+const weights = computed(() => weightTrend(detail.value?.admittingAppointment?.weightKg, detail.value?.entries));
+const sections = computed(() => daySections(dates.value, detail.value?.entries));
 
 // 照護紀錄：最新的一天預設展開，其他天點了才展開（使用者點過的以點過的為準）。
 const toggled = reactive({});
@@ -151,7 +151,6 @@ const labRows = computed(() => [...labResults.value].reverse().map((result) => {
         >
           <ChevronDown class="size-5 shrink-0 text-subtle-foreground transition-transform" :class="isOpen(day, index) ? '' : '-rotate-90'" stroke-width="1.75" aria-hidden="true" />
           <span class="text-base font-semibold"><span class="num">{{ shortDate(day.date) }}</span>　第 <span class="num">{{ day.dayNumber }}</span> 天</span>
-          <span v-if="day.weightKg !== null" class="num text-sm text-muted-foreground">{{ day.weightKg }} kg</span>
           <span v-if="day.entries.length" class="ml-auto text-sm text-subtle-foreground"><span class="num">{{ day.entries.length }}</span> 筆</span>
         </button>
         <div v-if="isOpen(day, index) && day.entries.length" class="flex flex-col">

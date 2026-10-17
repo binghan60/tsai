@@ -8,6 +8,7 @@ import ClinicalNote from '../models/ClinicalNote.js';
 import FormTemplate from '../models/FormTemplate.js';
 import LabResult from '../models/LabResult.js';
 import MedicalRecord from '../models/MedicalRecord.js';
+import Hospitalization from '../models/Hospitalization.js';
 import Owner from '../models/Owner.js';
 import Pet from '../models/Pet.js';
 import { clinicToday } from '../lib/clinicTime.js';
@@ -28,7 +29,7 @@ function query(read) {
 }
 
 describe('現場加看', () => {
-  let server, origin, saved, pets, owners, issued;
+  let server, origin, saved, pets, owners, issued, admitted, madeStays;
   before(async () => {
     server = app.listen(0, '127.0.0.1');
     if (!server.listening) await once(server, 'listening');
@@ -51,6 +52,10 @@ describe('現場加看', () => {
     mock.method(Owner, 'create', async ([data]) => { const doc = new Owner(data); owners.push(doc); return [doc]; });
     mock.method(Appointment, 'find', () => query(() => issued));
     mock.method(Appointment, 'exists', () => query(() => null));
+    admitted = null;
+    madeStays = [];
+    mock.method(Hospitalization, 'exists', () => query(() => admitted));
+    mock.method(Hospitalization, 'create', async ([data]) => { const doc = new Hospitalization(data); madeStays.push(doc); return [doc]; });
     mock.method(Appointment.prototype, 'save', async function save() { saved.push(this); return this; });
     mock.method(MedicalRecord, 'create', async ([data]) => [new MedicalRecord(data)]);
     mock.method(LabResult, 'find', () => query(() => []));
@@ -121,6 +126,35 @@ describe('現場加看', () => {
     assert.equal((await post('/appointments/walk-in', { strayPet: { name: '小橘', bringer: 'new', ownerName: '林愛媽' }, templateId })).status, 422);
     assert.equal((await post('/appointments/walk-in', { templateId })).status, 422);
     assert.equal(saved.length, 0);
+  });
+
+  it('admit：新的流浪貓現場報到並直接收住院，看診記開始看診、連回住院單', async () => {
+    const { status, body } = await post('/appointments/walk-in', { strayPet: { name: '小橘', bringer: 'clinic' }, reason: '車禍', templateId, admit: true });
+    assert.equal(status, 201);
+    const [appointment] = saved;
+    assert.ok(appointment.visitStartedAt, '收住院要求醫師已開始看診');
+    assert.equal(madeStays.length, 1);
+    assert.equal(String(madeStays[0].admittingAppointmentId), String(appointment._id));
+    assert.equal(madeStays[0].reason, '車禍');
+    assert.equal(String(appointment.hospitalizationId), String(madeStays[0]._id));
+    assert.equal(String(body.hospitalization._id), String(madeStays[0]._id));
+  });
+
+  it('admit：這隻貓已經在住院中就擋下，什麼都不存', async () => {
+    admitted = { _id: 'stay' };
+    const { status, body } = await post('/appointments/walk-in', { petId, templateId, admit: true });
+    assert.equal(status, 409);
+    assert.match(body.message, /住院中/);
+    assert.equal(saved.length, 0);
+    assert.equal(madeStays.length, 0);
+  });
+
+  it('沒帶 admit 的現場不收住院、不記開始看診', async () => {
+    const { status, body } = await post('/appointments/walk-in', { petId, templateId });
+    assert.equal(status, 201);
+    assert.equal(saved[0].visitStartedAt ?? null, null);
+    assert.equal(madeStays.length, 0);
+    assert.equal(body.hospitalization, undefined);
   });
 
   it('現場加看不能取消報到或恢復', async () => {

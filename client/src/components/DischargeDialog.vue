@@ -22,7 +22,6 @@ const props = defineProps({
   petName: { type: String, default: '' },
   // 最後一筆照護紀錄的時間、最後一天有填體重的日期：出院時間不能早於它們（那幾天的頁籤會消失）。
   lastRecordAt: { type: Date, default: null },
-  lastWeightDate: { type: String, default: '' },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
 });
@@ -43,7 +42,7 @@ const tooEarly = computed(() => {
   if (!at) return false;
   // 出院時間只到分鐘：跟最後一筆比也只比到分鐘（同一分鐘剛記的那格不算早於它）。
   const lastMinute = props.lastRecordAt ? Math.floor(props.lastRecordAt.getTime() / 60000) * 60000 : null;
-  return Boolean((lastMinute !== null && at.getTime() < lastMinute) ||(props.lastWeightDate && clinicDateInput(at) < props.lastWeightDate));
+  return lastMinute !== null && at.getTime() < lastMinute;
 });
 const days = computed(() => (dischargedAt.value ? stayDays(props.hospitalization.admittedAt, dischargedAt.value) : null));
 

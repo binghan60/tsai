@@ -14,7 +14,7 @@
 | 看診紀錄 | 每次看診的量測、紀錄、藥單、轉告事項；自動成為病歷日誌 |
 | 健檢報告 | 依自訂表單填寫 → 結案（凍結、產 PDF）→ Email／分享連結給飼主；更正用修訂版 |
 | 藥單 | 待醫師確認 → 待包藥 → 待領藥 → 已領藥 |
-| 住院 | 從看診收住院；每天體重、照護紀錄（紙本那張表）、出院時開帶回家的藥 |
+| 住院 | 從看診收住院；照護紀錄（紙本那張表，每一格可記體重、體溫）、出院時開帶回家的藥 |
 | IDEXX 檢驗 | 院內檢驗儀結果自動上傳、認貓、填進看診與報告；反方向把貓咪送到 IDEXX 主機 |
 | 初診表 | 飼主在現場用手機填（公開頁），櫃台審核後建檔 |
 | 院內協作 | 全站聊天、寵物暫存區、院內待辦 |
@@ -51,7 +51,7 @@
 | 送交櫃台後要補資料 | 醫師「取回」（`reclaim`），直到櫃台完成處理為止 |
 | 完成後要改 | 醫師「申請修改」→ 櫃台核准；或櫃台自己「退回處理中」。都回到待櫃台處理，醫師再取回 |
 | 報到報錯 | 櫃台「取消報到」（還沒開始看診才行），或報到提示上的「復原」 |
-| 收住院收錯了 | 住院專區 ⋯「取消住院」：只有還沒記任何紀錄（體重、照護紀錄）時能取消，有紀錄就辦出院；收了住院的看診要先取消住院才能取消看診 |
+| 收住院收錯了 | 住院專區 ⋯「取消住院」：只有還沒記任何照護紀錄時能取消，有紀錄就辦出院；收了住院的看診要先取消住院才能取消看診 |
 
 離開流程（取消掛號、取消報到、標記未到）時：歸還號碼牌、作廢送 IDEXX、取消診療台開的還沒領走的藥單、收掉還沒完成的「上傳影像」待辦、病歷日誌拿掉（內容留在掛號上，重新報到後回來）。另外，取消掛號與標記未到會讓連到這次看診的檢驗結果回到待確認清單（取消報到不動，重新報到後照樣連著）；取消掛號（與永久刪除）還會讓「約出這筆回診的那次看診」回到待安排回診。開始看診之後（含已交櫃台、已完成）不接受取消報到／取消掛號／未到。掛號台上，已報到的卡片只有「取消報到」，要取消掛號得先取消報到；「現場」例外：沒有待報到這一段，只有「取消現場」（直接取消、不能恢復、不進出席紀錄）。
 
@@ -129,18 +129,18 @@
 
 ### hospitalizations 住院
 
-三個 collection：`hospitalizations`（住院單：`petId`、`admittingAppointmentId`、`status`、`admittedAt`、`dischargedAt`、`reason`、`dischargeNote`、`dischargeSpecialCareNote` 請轉告飼主、`dischargeFollowUpRecommendation` 回診建議（後兩個純文字 ≤500 字）、`dischargeMedicationOrderId`，帶 `__v`）、`hospitalizationDays`（每天一筆體重：`hospitalizationId`、`petId`、`date`、`weightKg`）、`hospitalizationEntries`（照護紀錄＝紙本那張表的一格：`recordedAt`、`food` 食物放置、`forceFeeding` 灌食、`medication` 用藥（可格式化，≤2,000 字）、`other` 其他、選填的 `temperatureC`、`staff`（裝置身分）、`fromVisit`，帶 `__v`）。路由 `routes/hospitalizations.js`，純邏輯 `lib/hospitalization.js`（前端另有一份 `client/src/lib/hospitalization.js`：時間軸分天、每筆列哪幾欄、表單送出的內容、體重變化）。
+兩個 collection：`hospitalizations`（住院單：`petId`、`admittingAppointmentId`、`status`、`admittedAt`、`dischargedAt`、`reason`、`dischargeNote`、`dischargeSpecialCareNote` 請轉告飼主、`dischargeFollowUpRecommendation` 回診建議（後兩個純文字 ≤500 字）、`dischargeMedicationOrderId`，帶 `__v`）、`hospitalizationEntries`（照護紀錄＝紙本那張表的一格：`recordedAt`、`food` 食物放置、`forceFeeding` 灌食、`medication` 用藥（可格式化，≤2,000 字）、`other` 其他、選填的 `weightKg` 體重、`temperatureC` 體溫（體重每一格各自量，不是每天一筆）、`staff`（裝置身分）、`fromVisit`，帶 `__v`）。路由 `routes/hospitalizations.js`，純邏輯 `lib/hospitalization.js`（前端另有一份 `client/src/lib/hospitalization.js`：時間軸分天、每筆列哪幾欄、表單送出的內容、體重變化）。
 
-- **一律從看診收住院**（`POST /hospitalizations`）：醫師開始看診之後、櫃台完成處理之前都能收（看診到一半才決定很常見）；一隻貓同時只能有一筆住院中。**入院那次看診就是入院評估**，住院專區引用、不複製。收住院同一個 transaction：這次看診已經寫的藥單搬到住院第一筆照護紀錄的「用藥」（`fromVisit: true`），看診上清空、不開藥單；已送交櫃台開出去的那張待包藥一併取消；看診記 `hospitalizationId`。
+- **一律從看診收住院**（`POST /hospitalizations`）；沒有掛號直接住院的貓走住院頁「新增住院」：`POST /appointments/walk-in` 帶 `admit: true`，同一個 transaction 建現場看診（入院評估）、記開始看診、收住院（一隻貓同時只能一筆住院中，否則 409），回應多一個 `hospitalization`，畫面導到住院專區：醫師開始看診之後、櫃台完成處理之前都能收（看診到一半才決定很常見）；一隻貓同時只能有一筆住院中。**入院那次看診就是入院評估**，住院專區引用、不複製。收住院同一個 transaction：這次看診已經寫的藥單搬到住院第一筆照護紀錄的「用藥」（`fromVisit: true`），看診上清空、不開藥單；已送交櫃台開出去的那張待包藥一併取消；看診記 `hospitalizationId`。
 - `status`：`admitted` 住院中／`discharged` 已出院／`cancelled` 取消（收錯了）。住院第幾天照日曆算，入院那天是第 1 天；住院期間的每一天＝入院那天到出院那天（還在住院就到今天）。
 - **照護紀錄**一天幾格不設上限，醫師、櫃台都會填，署名用裝置身分。住院中與出院後都能改（事後更正），日期要落在住院期間；改一筆帶 `version`，不符回 409 附 `current`（最新內容）。畫面上按「新增」「儲存」才送出（不自動存檔，不會留下空紀錄）；刪除先確認。紙本的「Drug」欄在系統叫「用藥」，跟藥單同一個編輯器（`DrugSuggestEditor`）。
-- **每天一筆體重**，算進貓咪的最近體重（`lib/latestWeight.js`，同一天住院體重優先於看診，入院當天的看診是入院前量的）。
+- **每一格照護紀錄的 `weightKg`** 算進貓咪的最近體重（`lib/latestWeight.js`，同一天住院體重優先於看診、同一天多筆取最後一筆，入院當天的看診是入院前量的）。住院清單的「今天體重」是今天最後一格有量體重的那筆。
 - **出院**（`POST /:id/discharge`）：出院時間（預設現在、可往前改）、出院備註、請轉告飼主、回診建議、帶回家的藥。後三個文字欄位出院後可以從住院專區 ⋯「修改出院內容」改（`PUT`）。帶回家的藥有寫就同一個 transaction 開一張**待包藥**的藥單（`hospitalizationId` 連回住院單，醫師開的不必再審，`history` 記 `create`＋`approve`，所以有自己的領藥日誌），id 記在 `dischargeMedicationOrderId`。
-- **取消住院**（`POST /:id/cancel`）：只有還沒記任何紀錄（從看診搬來的那格不算；體重有填才算）時能取消，有紀錄就辦出院。從看診搬來的用藥搬回看診的藥單，看診清掉 `hospitalizationId`；已送交櫃台的看診重新開出待包藥；連到這次住院的檢驗結果回到待確認清單；照護紀錄與每天體重一起刪。
-- 住院內容（體重、照護紀錄）**不進病歷日誌**：日誌只記入院那次看診，最後多一列唯讀的「住院」（見 clinicalNotes）。
+- **取消住院**（`POST /:id/cancel`）：只有還沒記任何照護紀錄（從看診搬來的那格不算）時能取消，有紀錄就辦出院。從看診搬來的用藥搬回看診的藥單，看診清掉 `hospitalizationId`；已送交櫃台的看診重新開出待包藥；連到這次住院的檢驗結果回到待確認清單；照護紀錄一起刪。
+- 住院內容（照護紀錄）**不進病歷日誌**：日誌只記入院那次看診，最後多一列唯讀的「住院」（見 clinicalNotes）。
 - 住院期間的 IDEXX 結果連到住院單、不填進任何看診（見 labResults）。
 - 不做：籠位、列印、提醒、給藥排程、出院通知飼主、住院中另外掛號。
-- 任何異動廣播 `hospitalization:updated`（帶 `{ _id, petId }`）。索引：`{status, admittedAt}`（住院中清單、總覽數字）、`{status, dischargedAt, _id}`（已出院清單）、`{petId, admittedAt}`（貓咪頁、IDEXX 認住院）、`{admittingAppointmentId}`（unique，partial：住院中與已出院，一次看診最多收一次）；體重 `{hospitalizationId, date}` unique、`{petId, date}`；照護紀錄 `{hospitalizationId, recordedAt, _id}`。
+- 任何異動廣播 `hospitalization:updated`（帶 `{ _id, petId }`）。索引：`{status, admittedAt}`（住院中清單、總覽數字）、`{status, dischargedAt, _id}`（已出院清單）、`{petId, admittedAt}`（貓咪頁、IDEXX 認住院）、`{admittingAppointmentId}`（unique，partial：住院中與已出院，一次看診最多收一次）；照護紀錄 `{hospitalizationId, recordedAt, _id}`、`{petId, recordedAt}`（最近體重）。
 
 ### clinicalNotes 病歷日誌
 
@@ -337,7 +337,7 @@ GET    /api/appointments?date=           某一天的全部掛號，另回 patie
 GET    /api/appointments/search?q=       跨日搜尋（貓咪、飼主、電話、來院原因），新到舊、分頁
 GET    /api/appointments/intake-codes    還能用的初診驗證碼
 GET    /api/appointments/visits?petId=   「新增健檢」選看診：這隻貓在院／待櫃台處理／已完成的掛號，新到舊 30 筆，每筆帶 report（{ _id, status }，修訂過的指向最新一版；沒建過是 null）
-POST   /api/appointments/walk-in         現場（petId，或 strayPet { name, sex, color, bringer: clinic|owner|new, ownerId, ownerName, ownerPhone }；reason、templateId、checkinNumber）：同一個 transaction 建貓（與飼主）、建掛號並報到，回 { appointment, pet }
+POST   /api/appointments/walk-in         現場（petId，或 strayPet { name, sex, color, bringer: clinic|owner|new, ownerId, ownerName, ownerPhone }；reason、templateId、checkinNumber）：同一個 transaction 建貓（與飼主）、建掛號並報到，回 { appointment, pet }；帶 admit: true（住院頁「新增住院」）另記開始看診並收住院，回應多 hospitalization
 POST   /api/appointments/backfill        補登看診（petId、date 必填，time、reason、templateId）：建立一筆已完成的看診＋報告草稿＋病歷日誌，回 { appointment, record }
 POST   /api/appointments                 新增（date 省略＝今天；達保證金門檻要帶 deposit）
 GET    /api/appointments/:id
@@ -372,7 +372,6 @@ POST   /api/hospitalizations             收住院 { appointmentId, version（�
 PUT    /api/hospitalizations/:id         { version, reason, dischargeNote／dischargeSpecialCareNote／dischargeFollowUpRecommendation（已出院才收） }
 POST   /api/hospitalizations/:id/cancel  { version }；有紀錄回 409
 POST   /api/hospitalizations/:id/discharge   { version, dischargeNote, dischargeSpecialCareNote, dischargeFollowUpRecommendation, dischargedAt?, medication } → { hospitalization, medicationOrder }
-PUT    /api/hospitalizations/:id/days/:date  { weightKg }（空白＝清掉；日期要在住院期間）
 POST   /api/hospitalizations/:id/entries ／ PUT /:id/entries/:entryId（帶 version，不符 409 附 current）／ DELETE /:id/entries/:entryId   照護紀錄
 
 IDEXX 檢驗結果
@@ -434,8 +433,8 @@ Socket.IO 事件（伺服器 → 前端）：`appointment:updated`（只送到�
 | `/` | 總覽 | 寄送失敗橫幅（有才出現）→ 今天的門診五格（今日掛號、在院、待櫃台處理、已完成、住院中——住院中不限今天，跟住院清單的住院中同一個口徑）→ 健檢報告四格（草稿、待寄送、寄送失敗、本月已寄出）→ 近 8 週健檢量（CSS 長條，固定高度、不撐滿視窗）＋院內待辦前 8 筆。每個數字都點得進對應清單 |
 | `/appointments` | 診療台 | 左欄「今日病患」（頁籤：進行中／已交櫃台／已完成；精簡／詳細切換）。看今天時「進行中」最上面固定一段淡藍底「住院中」（`ConsoleHospitalStays`：所有住院中的貓，一隻一行：第幾天、名字、住院原因、最後一筆照護紀錄的時間，點了到住院專區；沒有就不畫）——收住院那次看診只在入院當天的清單上，第二天起靠這段提醒醫師去巡。看診清單：每列左邊預約時間、右邊一顆狀態徽章，時間軸軌道＋「現在」線＋午休分隔，順序只由預約時間決定。右欄看診工作區（`VisitWorkspace`，一次一筆，切換前先存檔）：標頭規格欄（貓咪、飼主、就診時間）、醫療警示、可就地改的貓咪與飼主備註；內容依序量測（標頭右上有「上次報告」鈕：這隻貓最近一份已結案的健檢報告，帶健檢日期，新分頁開預覽頁；確定沒有已結案報告（含還沒建檔的初診）改標灰色「無上次報告」——「沒有值就留白」的刻意例外；還在查或查詢失敗什麼都不畫，不把查不到說成沒有。資料來自 `GET /pets/:petId/records/finalized-sources` 的第一筆）→ 檢驗報告（`VisitLabTable`，IDEXX 原文，唯讀；「匯入檢驗結果」`LabImportDialog`；填入狀態燈號）→ 本次簡易紀錄 → 藥單 → 內部備註 → 交給櫃台（請轉告飼主、回診建議）；右邊歷次病歷日誌。每個欄位旁有去處標記（`DestTag`：日誌／報告／院內／藥單）。底部操作列分兩區：左邊儲存狀態＋工具（送 IDEXX、健檢報告、辦理住院——開始看診後、櫃台完成前；`AdmitDialog`：住院原因、已寫的藥單預覽），右邊取消看診（淡紅）、⋯（取消送 IDEXX）＋流程主要動作（開始看診／送交櫃台／取回修改／申請修改）。收了住院後藥單區塊與「取消看診」收起來，標頭多一個「住院」連結到住院專區；左欄與掛號台卡片的名字旁標「住院」（`HospitalBadge`） |
 | `/reception` | 掛號台 | 頁首（日期、包藥、現場、掛號；「包藥」直接開右側藥單面板的新增藥單表單；「現場」只在看今天時出現，開 `WalkInDialog`：已建檔的貓｜新的流浪貓）→ 流程列四格（待報到、在院、待櫃台處理、已完成；點一格篩選 `?stage=`）→ 例外才出現的警示列（醫師申請修改、遲到未報到、待審初診表）→ 看今天時「住院中」一段（`ReceptionHospitalStays`，淡藍底、一隻一列：第幾天、名字、住院原因、今天體重、最後一筆照護紀錄；沒有就不畫；點了在右側開**住院速覽** `HospitalQuickView`：概況、體重、照護紀錄（最新一天展開）、檢驗結果，只看不改，底部「住院專區」「記一筆」到住院專區）→ 整頁時間軸（上午／下午可收合、「現在」線；已完成與未到／取消收在下面）。搜尋是跨日的，有關鍵字時換成搜尋結果表。卡片：左邊號碼牌或貓圖示＋名字與徽章，右邊飼主／電話／進度三欄（寬螢幕時小標在時間軸頂端的一列表頭、捲動時釘住，卡片只留值），最右主要動作（報到、遲到、審核、處理、進度）＋⋯。在院（候診、看診中）的卡片整張點下去或按「進度」在右側開**看診速覽**（`VisitQuickView`：報到→看診→送交櫃台→完成處理四個里程碑與經過時間（`lib/visitProgress.js`）、請轉告飼主、本次簡易紀錄、檢驗報告、藥單、回診建議、內部備註；只看不改，醫師存檔時隨 `appointment:updated` 即時換上；修改掛號在 ⋯ 裡）。已建檔的貓一鍵報到（自動配號碼、過了寬限自動記遲到、可復原）；初診要等飼主填好初診表、審核通過才報得了到。掛號是雙欄 Modal（`AppointmentDialog`：誰與為什麼｜時段格），選了貓之後出現出席對照表與保證金欄位。已交櫃台的開櫃台處理視窗（`HandoffSheet`）：左欄①請轉告飼主 ②本次簡易紀錄（體重體溫）③藥單（唯讀內容＋藥單階段，待領藥時可直接確認領藥），歷次日誌接在下面；右欄④處理事項（影像／收據／其他三組勾選框，含「上傳影像」，放最上面）⑤約回診（醫師建議有寫才接在標題後；`AppointmentSlotPicker split`，還沒選日期時時段格的位置是「快速選日期」3 天／1 週／2 週／4 週後），底部完成處理／退回處理中／核准修改 |
-| `/hospital` | 住院 | 清單頁模板；頁籤住院中／已出院（`?tab=`）。欄位：貓咪（名字、流浪貓、住院原因）、飼主、入院、住院第 N 天（已出院寫天數與出院日）、今天體重、最後一筆紀錄（時刻＋經過時間）；整列點了到住院專區，住院中的列上一顆「新增紀錄」（到 `/hospital/:id?new=1`，打開今天的「記一筆」表單） |
-| `/hospital/:id` | 住院專區 | 頁首：貓名、流浪貓、「住院中　第 N 天」／已出院、飼主與品種；匯入檢驗結果、出院（住院中）、⋯（修改出院內容（出院備註、請轉告飼主、回診建議）、取消住院——只在還沒記任何紀錄時出現）。下面是**照護時間軸**＋住院概況：寬的時候左邊時間軸、右側欄是住院概況（住院原因（筆形鈕就地改，Enter 存、Esc 取消）、入院、入院看診（連到那天的診療台並打開那筆）、出院時間、出院備註、請轉告飼主、回診建議、入院評估）與體重變化（入院那次＋每天有填的，帶跟上一次的差）、檢驗結果（新到舊，點一列展開數值）；窄的時候（含側滑面板擠窄）概況、時間軸、體重與檢驗依序往下。時間軸最新的一天在上面、一天之內照時間先後，每天的標題列右邊是當天體重（離開輸入框才存）；每筆只列有填的欄位，右上筆形鈕修改；每天最後一格「記一筆」。新增與修改都在原地展開同一張表單（`HospitalEntryForm`），**按「新增」「儲存」才送出**、取消什麼都不送，一次只開一張；新增時間看今天是現在、補記過去的日子是那天 12:00；修改時別台剛改過（409）就載入最新內容請使用者再確認；表單填了東西還沒存就離開頁面會先問。出院視窗 `DischargeDialog`（入院、住院天數、出院時間（不能早於最後一筆紀錄）、出院備註、請轉告飼主、回診建議、帶回家的藥＋藥櫃） |
+| `/hospital` | 住院 | 清單頁模板；頁籤住院中／已出院（`?tab=`）。欄位：貓咪（名字、流浪貓、住院原因）、飼主、入院、住院第 N 天（已出院寫天數與出院日）、今天體重、最後一筆紀錄（時刻＋經過時間）；整列點了到住院專區，頁首「新增住院」開現場視窗的住院版（`WalkInDialog` 的 `admit`：沒有掛號直接住院，不問號碼牌、來院原因改叫住院原因），住院中的列上一顆「新增紀錄」（到 `/hospital/:id?new=1`，打開今天的「記一筆」表單） |
+| `/hospital/:id` | 住院專區 | 頁首：貓名、流浪貓、「住院中　第 N 天」／已出院、飼主與品種；匯入檢驗結果、出院（住院中）、⋯（修改出院內容（出院備註、請轉告飼主、回診建議）、取消住院——只在還沒記任何紀錄時出現）。下面是**照護時間軸**＋住院概況：寬的時候左邊時間軸、右側欄是住院概況（住院原因（筆形鈕就地改，Enter 存、Esc 取消）、入院、入院看診（連到那天的診療台並打開那筆）、出院時間、出院備註、請轉告飼主、回診建議、入院評估）與體重變化（入院那次＋每一格有量的，帶跟上一次的差）、檢驗結果（新到舊，點一列展開數值）；窄的時候（含側滑面板擠窄）概況、時間軸、體重與檢驗依序往下。時間軸最新的一天在上面、一天之內照時間先後，每筆只列有填的欄位，右上筆形鈕修改；每天最後一格「記一筆」。新增與修改都在原地展開同一張表單（`HospitalEntryForm`），**按「新增」「儲存」才送出**、取消什麼都不送，一次只開一張；新增時間看今天是現在、補記過去的日子是那天 12:00；修改時別台剛改過（409）就載入最新內容請使用者再確認；表單填了東西還沒存就離開頁面會先問。出院視窗 `DischargeDialog`（入院、住院天數、出院時間（不能早於最後一筆紀錄）、出院備註、請轉告飼主、回診建議、帶回家的藥＋藥櫃） |
 | `/medications` | 藥單 | 清單頁模板；頁籤依裝置身分預設（醫師：待醫師確認；櫃台：未完成），點貓咪切到詳情。工具欄面板是同一個 `MedicationWorkspace` 的 `compact` 版。「藥單」是物件，「領藥」只指交付 |
 | `/pets`、`/pets/:id` | 貓咪 | 「新增健檢」（貓咪頁頁首、貓咪清單每一列、報告清單）都開 `NewReportDialog`（一張大視窗；頂端選貓，從貓咪頁、貓咪清單進來時已經選好、可以更換，從報告清單進來先選；下面左右兩欄）：左欄這隻貓的看診新到舊，已有草稿「繼續填寫草稿」、已結案「查看報告」、沒有「建立報告」；右欄「補登看診」（日期、時間、來院原因、表單）。網址帶 `?newReport=1` 也會打開。詳情頁：頁首名字、舊病歷號、藥物過敏、遲到／未到徽章、「約診需收保證金」、「流浪貓」；左貓咪右飼主兩欄可就地編輯（院內飼主不能編輯），飼主卡 ⋯ 裡「換飼主」（`TransferOwnerDialog`）；頁籤：病歷日誌（最上面就地新增）、健檢報告、住院（期間、天數、原因、住院中徽章／已出院，點了到住院專區）、出席紀錄（含保證金與已取消的掛號，可修改保證金紀錄；頁籤數字＝清單筆數）。遲到與未到只算這隻貓自己的 |
 | `/pets/new` | 新增貓咪 | 飼主與貓咪同一頁（新增飼主／既有飼主／院內流浪貓；前兩種貓咪欄位有「流浪貓」勾選），寬螢幕左右兩欄，有離開前的未儲存提示 |

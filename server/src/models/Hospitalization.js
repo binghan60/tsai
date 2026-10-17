@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 
 // 住院單：一次住院。一律從看診收住院（admittingAppointmentId，看診到一半才決定住院很常見），
 // 入院那次看診的量測、紀錄、檢驗就是入院評估——住院專區直接引用，不複製。
-// 每天一筆體重在 hospitalizationDays，照護紀錄（紙本那張表的一格）在 hospitalizationEntries。
+// 照護紀錄（紙本那張表的一格）在 hospitalizationEntries。
 const hospitalizationSchema = new mongoose.Schema(
   {
     petId: { type: mongoose.Schema.Types.ObjectId, ref: 'Pet', required: true },

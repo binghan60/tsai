@@ -86,6 +86,7 @@ export function cleanEntryFields(body = {}) {
     if (value !== null && (!Number.isFinite(value) || value <= 0 || value > 50)) throw invalid('體溫格式不正確');
     fields.temperatureC = value;
   }
+  if (body.weightKg !== undefined) fields.weightKg = cleanWeight(body.weightKg);
   if (body.recordedAt !== undefined) {
     const at = new Date(body.recordedAt);
     if (Number.isNaN(at.getTime())) throw invalid('時間格式不正確');
@@ -95,7 +96,7 @@ export function cleanEntryFields(body = {}) {
   return fields;
 }
 
-// 當天體重：空白＝清掉。
+// 體重：空白＝沒量。
 export function cleanWeight(raw) {
   const value = raw === '' || raw === null || raw === undefined ? null : Number(raw);
   if (value !== null && (!Number.isFinite(value) || value <= 0 || value > 50)) throw invalid('體重格式不正確');

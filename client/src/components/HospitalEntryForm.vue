@@ -12,7 +12,7 @@ import { emptyEntryDraft, entryDraft, hasEntryChanges, isEmptyEntry, validTime }
 
 // 住院照護紀錄的新增／修改表單（住院專區時間軸上就地展開）。按「新增」「儲存」才送出，按取消什麼都不送——
 // 不會因為點了「記一筆」就留下一筆空紀錄。送出、刪除由住院專區處理；這裡只管填寫。
-// 版面依自己的寬度排（container query）：寬的時候時間、食物放置、灌食、體溫一排，用藥與其他並排；窄的時候往下疊。
+// 版面依自己的寬度排（container query）：寬的時候時間、食物放置、灌食、體重、體溫一排，用藥與其他並排；窄的時候往下疊。
 const props = defineProps({
   // 修改的那一筆；新增時是 null。
   entry: { type: Object, default: null },
@@ -46,7 +46,7 @@ onMounted(async () => {
 
 <template>
   <div class="@container flex flex-col gap-3.5 rounded-xl border-2 border-primary bg-card p-4" role="group" :aria-label="editing ? '修改照護紀錄' : '新增照護紀錄'">
-    <div class="grid grid-cols-1 gap-3 @xs:grid-cols-2 @2xl:grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)_8rem]">
+    <div class="grid grid-cols-1 gap-3 @xs:grid-cols-2 @2xl:grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)_7rem_7rem]">
       <div class="space-y-1.5">
         <Label :for="`${idBase}-time`" class="text-sm font-medium">時間</Label>
         <TimePicker :id="`${idBase}-time`" v-model="draft.time" :minute-step="1" aria-label="時間" />
@@ -58,6 +58,13 @@ onMounted(async () => {
       <div class="space-y-1.5">
         <Label :for="`${idBase}-forceFeeding`" class="text-sm font-medium">灌食</Label>
         <Input :id="`${idBase}-forceFeeding`" v-model="draft.forceFeeding" maxlength="200" />
+      </div>
+      <div class="space-y-1.5">
+        <Label :for="`${idBase}-weight`" class="text-sm font-medium">體重</Label>
+        <span class="relative flex items-center">
+          <Input :id="`${idBase}-weight`" v-model="draft.weightKg" inputmode="decimal" class="num pr-10" />
+          <span class="pointer-events-none absolute right-3 text-xs text-muted-foreground">kg</span>
+        </span>
       </div>
       <div class="space-y-1.5">
         <Label :for="`${idBase}-temperature`" class="text-sm font-medium">體溫</Label>

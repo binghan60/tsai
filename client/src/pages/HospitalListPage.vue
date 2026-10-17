@@ -1,9 +1,12 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { BedDouble } from '@lucide/vue';
+import { BedDouble, Plus } from '@lucide/vue';
+import { useRouter } from 'vue-router';
 import { http } from '../api/http';
 import { clinicDateInput, clinicTimeInput, elapsedLabel, shortDate } from '../lib/datetime';
 import { stayDays } from '../lib/hospitalization';
+import { apiErrorMessage } from '../lib/apiError';
+import { useToast } from '../composables/useToast';
 import { useSearchQueryParam } from '../composables/useSearchQueryParam';
 import { usePagedList } from '../composables/usePagedList';
 import PageHeader from '../components/PageHeader.vue';
@@ -14,6 +17,7 @@ import ListFooter from '../components/ListFooter.vue';
 import ListSkeleton from '../components/ListSkeleton.vue';
 import PatientLink from '../components/PatientLink.vue';
 import StrayBadge from '../components/StrayBadge.vue';
+import WalkInDialog from '../components/WalkInDialog.vue';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { Button } from '../components/ui/button';
 
@@ -23,6 +27,44 @@ const TABS = [
   { key: 'admitted', label: '住院中' },
   { key: 'discharged', label: '已出院' },
 ];
+
+// 新增住院：沒有掛號直接住院的貓。開的是現場視窗的住院版，伺服器一次建好現場看診（入院評估）與住院單。
+const router = useRouter();
+const toast = useToast();
+const admitOpen = ref(false);
+const admitBusy = ref(false);
+const admitError = ref('');
+const templates = ref([]);
+const defaultTemplate = ref('');
+// 表單要先載好再開視窗：視窗在開啟時就用預設表單選好，晚到的資料不會補上。
+async function openAdmit() {
+  admitError.value = '';
+  if (!templates.value.length) {
+    try {
+      const [{ data: forms }, { data: settings }] = await Promise.all([http.get('/settings/form-templates'), http.get('/settings/appointment-settings')]);
+      templates.value = forms;
+      defaultTemplate.value = settings.defaultAppointmentTemplateId || '';
+    } catch (err) {
+      toast.error(apiErrorMessage(err, '表單載入失敗，請稍後重試'));
+      return;
+    }
+  }
+  admitOpen.value = true;
+}
+async function submitAdmit(values) {
+  if (admitBusy.value) return;
+  admitBusy.value = true;
+  admitError.value = '';
+  try {
+    const { data } = await http.post('/appointments/walk-in', values);
+    admitOpen.value = false;
+    router.push(`/hospital/${data.hospitalization._id}`);
+  } catch (err) {
+    admitError.value = apiErrorMessage(err, '新增住院失敗，請稍後重試');
+  } finally {
+    admitBusy.value = false;
+  }
+}
 
 const tab = useSearchQueryParam('tab', 'admitted');
 const counts = ref({});
@@ -62,7 +104,11 @@ const weightText = (item) => (item.todayWeightKg === null || item.todayWeightKg 
 
 <template>
   <section class="flex flex-col gap-5">
-    <PageHeader title="住院" />
+    <PageHeader title="住院">
+      <template #actions>
+        <Button @click="openAdmit"><Plus stroke-width="1.75" aria-hidden="true" />新增住院</Button>
+      </template>
+    </PageHeader>
 
     <Alert v-if="error" variant="destructive"><AlertDescription>{{ error }}</AlertDescription></Alert>
 
@@ -126,5 +172,6 @@ const weightText = (item) => (item.todayWeightKg === null || item.todayWeightKg 
         <ListFooter :page="page" :total-pages="totalPages" :total="total" :page-size="limit" @update:page="goToPage" />
       </template>
     </DataCard>
+    <WalkInDialog v-if="admitOpen" admit :templates="templates" :default-template-id="defaultTemplate" :submitting="admitBusy" :error-message="admitError" @submit="submitAdmit" @close="admitOpen = false" />
   </section>
 </template>

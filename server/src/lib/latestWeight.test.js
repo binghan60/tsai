@@ -42,9 +42,13 @@ test('都沒有量測時才用貓咪資料手填的值，沒有日期', () => {
   assert.equal(pickLatestWeight({ fallbackKg: null }), null);
 });
 
-test('住院每天的體重也算，同一天住院體重優先於看診', () => {
-  const days = [{ date: '2026-10-02', weightKg: 3.42 }, { date: '2026-10-01', weightKg: 3.5 }];
-  assert.deepEqual(pickLatestWeight({ visits: [visit()], days }), { kg: 3.42, date: '2026-10-02' });
-  assert.equal(pickLatestWeight({ visits: [visit({ date: '2026-10-01' })], days: [{ date: '2026-10-01', weightKg: 3.5 }] }).kg, 3.5);
-  assert.equal(pickLatestWeight({ days: [{ date: '2026-10-01', weightKg: null }], fallbackKg: 4 }).date, '');
+test('住院照護紀錄上的體重也算，同一天住院體重優先於看診，同一天多筆取最後一筆', () => {
+  const entries = [
+    { recordedAt: '2026-10-02T02:00:00Z', weightKg: 3.5 },
+    { recordedAt: '2026-10-02T09:00:00Z', weightKg: 3.42 },
+    { recordedAt: '2026-10-01T02:00:00Z', weightKg: 3.6 },
+  ];
+  assert.deepEqual(pickLatestWeight({ visits: [visit()], entries }), { kg: 3.42, date: '2026-10-02' });
+  assert.equal(pickLatestWeight({ visits: [visit({ date: '2026-10-01' })], entries: [{ recordedAt: '2026-10-01T02:00:00Z', weightKg: 3.5 }] }).kg, 3.5);
+  assert.equal(pickLatestWeight({ entries: [{ recordedAt: '2026-10-01T02:00:00Z', weightKg: null }], fallbackKg: 4 }).date, '');
 });

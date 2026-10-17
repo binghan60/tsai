@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { richTextMaxLength } from '../lib/richTextSchema.js';
 
-// 住院照護紀錄：紙本那張表的一格——時間、食物放置、灌食、用藥、其他，另加選填的體溫。
+// 住院照護紀錄：紙本那張表的一格——時間、食物放置、灌食、用藥、其他，另加選填的體重與體溫（每一格各自量，不是每天一筆）。
 // 一天幾格不設上限。住院中與出院後都能改（事後更正），多台裝置同時改靠版本號擋。
 const hospitalizationEntrySchema = new mongoose.Schema(
   {
@@ -13,6 +13,8 @@ const hospitalizationEntrySchema = new mongoose.Schema(
     // 用藥：跟藥單同一種格式標記（shared/richText.js），打字時跳藥櫃建議。
     medication: { type: String, default: '', trim: true, validate: richTextMaxLength(2000) },
     other: { type: String, default: '', trim: true, maxlength: 2000 },
+    // 體重算進貓咪的最近體重（lib/latestWeight.js）。
+    weightKg: { type: Number, min: 0, default: null },
     temperatureC: { type: Number, min: 0, default: null },
     // 寫這一格的裝置身分（醫師／櫃台）。
     staff: { type: String, enum: ['vet', 'front_desk', ''], default: '' },
@@ -23,5 +25,7 @@ const hospitalizationEntrySchema = new mongoose.Schema(
 );
 
 hospitalizationEntrySchema.index({ hospitalizationId: 1, recordedAt: 1, _id: 1 });
+// 最近體重：這隻貓最新、有體重的那一格。
+hospitalizationEntrySchema.index({ petId: 1, recordedAt: -1 });
 
 export default mongoose.model('HospitalizationEntry', hospitalizationEntrySchema);

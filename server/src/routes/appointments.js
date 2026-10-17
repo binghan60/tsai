@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { randomInt } from 'node:crypto';
 import mongoose from 'mongoose';
 import Appointment from '../models/Appointment.js';
+import Hospitalization from '../models/Hospitalization.js';
 import Pet from '../models/Pet.js';
 import Owner from '../models/Owner.js';
 import FormTemplate from '../models/FormTemplate.js';
@@ -15,7 +16,7 @@ import { depositFieldsForBooking, settleCarriedDeposit } from '../lib/deposit.js
 import { DEPOSIT_CANCEL_OUTCOMES, checkDepositEdit } from '../../../shared/deposit.js';
 import { canTransitionAppointmentStatus, describeAppointmentTransition, holdsCheckinNumber } from '../lib/appointmentStatus.js';
 import { nextAvailableCheckinNumber } from '../lib/appointmentQueue.js';
-import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitLabResultsUpdate, emitMedicationUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitHospitalizationUpdate, emitLabResultsUpdate, emitMedicationUpdate } from '../lib/realtime.js';
 import { syncAppointmentJournal } from '../lib/appointmentJournal.js';
 import { restoreImageUploadTodo, withdrawImageUploadTodo } from '../lib/imageUploadTodo.js';
 import { publishTodos } from '../lib/todos.js';
@@ -441,10 +442,12 @@ const PET_SEXES = ['unknown', 'male', 'female'];
 // 只限今天、已建檔的貓（petId），或當場建一隻新的流浪貓（strayPet）；新的一般病患照舊掛號、填初診表。
 // strayPet：{ name, sex, color, bringer: clinic（院內）| owner（既有飼主 ownerId）| new（新的人 ownerName、ownerPhone） }。
 // 同一個 transaction 建貓（與飼主）、建掛號、報到（配號碼牌、建健檢報告草稿）。不算遲到、不收保證金。
+// admit: true（住院頁的「新增住院」）再加記開始看診、收住院，回應多一個 hospitalization。
 router.post('/walk-in', async (req, res, next) => {
   try {
     const { petId } = req.body;
     const stray = req.body?.strayPet;
+    const admit = req.body?.admit === true;
     if (petId) {
       if (!mongoose.isValidObjectId(petId)) return res.status(422).json({ message: '貓咪編號格式不正確' });
     } else {
@@ -467,6 +470,7 @@ router.post('/walk-in', async (req, res, next) => {
 
     let appointment;
     let pet;
+    let hospitalization = null;
     await withTransaction(async (session) => {
       if (petId) {
         pet = await Pet.findById(petId).session(session);
@@ -523,11 +527,27 @@ router.post('/walk-in', async (req, res, next) => {
       const issuedAppointments = await appointmentsWithIssuedNumbers(appointment.date, session);
       appointment.checkinNumber = supplied.number ?? nextAvailableCheckinNumber(issuedAppointments);
       rememberCheckinNumber(appointment, appointment.checkinNumber);
+      // 住院頁的「新增住院」：沒有掛號直接住院。這次現場看診就是入院評估，所以同一個 transaction 記開始看診並收住院
+      // （收住院的規則在 routes/hospitalizations.js：要先開始看診）。
+      if (admit) {
+        if (await Hospitalization.exists({ petId: pet._id, status: 'admitted' }).session(session)) {
+          throw Object.assign(new Error('這隻貓已經在住院中'), { status: 409 });
+        }
+        appointment.visitStartedAt = now;
+        [hospitalization] = await Hospitalization.create([{
+          petId: pet._id,
+          admittingAppointmentId: appointment._id,
+          admittedAt: now,
+          reason: appointment.reason.slice(0, 200),
+        }], { session });
+        appointment.hospitalizationId = hospitalization._id;
+      }
       await appointment.save({ session });
       await syncAppointmentJournal(appointment, { session });
     });
     emitAppointmentUpdate(appointment);
-    res.status(201).json({ appointment, pet });
+    if (hospitalization) emitHospitalizationUpdate(hospitalization);
+    res.status(201).json({ appointment, pet, ...(hospitalization ? { hospitalization } : {}) });
     await applyPendingLabResults(appointment);
   } catch (err) {
     next(err);

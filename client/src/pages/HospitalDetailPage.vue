@@ -35,7 +35,6 @@ import ConfirmDialog from '../components/ConfirmDialog.vue';
 import ModalDialog from '../components/ModalDialog.vue';
 import HospitalTimelineRow from '../components/HospitalTimelineRow.vue';
 import HospitalEntryForm from '../components/HospitalEntryForm.vue';
-import HospitalDayWeight from '../components/HospitalDayWeight.vue';
 import DischargeDialog from '../components/DischargeDialog.vue';
 import LabImportDialog from '../components/LabImportDialog.vue';
 import LabResultGroups from '../components/LabResultGroups.vue';
@@ -74,11 +73,11 @@ const status = computed(() => detail.value?.status ?? '');
 const admitted = computed(() => status.value === 'admitted');
 const cancelled = computed(() => status.value === 'cancelled');
 const dates = computed(() => detail.value?.dates ?? []);
-const sections = computed(() => daySections(dates.value, detail.value?.entries, detail.value?.days));
+const sections = computed(() => daySections(dates.value, detail.value?.entries));
 const dayNumber = computed(() => stayDays(detail.value?.admittedAt, detail.value?.dischargedAt ?? new Date()));
 const assessment = computed(() => detail.value?.admittingAppointment ?? null);
 const visitLink = computed(() => (assessment.value ? { path: '/appointments', query: { date: assessment.value.date, open: assessment.value._id } } : null));
-const weights = computed(() => weightTrend(assessment.value?.weightKg, dates.value, detail.value?.days));
+const weights = computed(() => weightTrend(assessment.value?.weightKg, detail.value?.entries));
 const ownerName = computed(() => pet.value?.ownerId?.name ?? '');
 const hasValue = (value) => value !== null && value !== undefined && value !== '';
 
@@ -241,11 +240,6 @@ async function deleteEntry() {
   }
 }
 
-function weightSaved(day) {
-  writeSeq += 1;
-  if (detail.value) detail.value.days = [...(detail.value.days ?? []).filter((item) => item.date !== day.date), day];
-}
-
 // ---- 住院單本身：出院、取消住院、改住院原因／出院備註 ----
 
 function takeHospitalization(data) {
@@ -262,11 +256,10 @@ function takeHospitalization(data) {
   });
 }
 
-// 出院時間不能早於最後一筆紀錄（照護紀錄或體重），不然那幾天會從時間軸上消失。
-const lastRecord = computed(() => {
+// 出院時間不能早於最後一筆照護紀錄，不然那幾天會從時間軸上消失。
+const lastRecordAt = computed(() => {
   const entryTimes = (detail.value?.entries ?? []).map((entry) => new Date(entry.recordedAt).getTime());
-  const weightDates = (detail.value?.days ?? []).filter((day) => hasValue(day.weightKg)).map((day) => day.date).sort();
-  return { at: entryTimes.length ? new Date(Math.max(...entryTimes)) : null, weightDate: weightDates.at(-1) ?? '' };
+  return entryTimes.length ? new Date(Math.max(...entryTimes)) : null;
 });
 
 const dischargeOpen = ref(false);
@@ -542,7 +535,6 @@ watch(id, () => {
             <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border pb-2.5">
               <h2 :id="`hospital-day-${day.date}`" class="text-lg font-semibold"><span class="num">{{ shortDate(day.date) }}</span>　第 <span class="num">{{ day.dayNumber }}</span> 天</h2>
               <span v-if="day.entries.length" class="text-sm text-subtle-foreground"><span class="num">{{ day.entries.length }}</span> 筆</span>
-              <HospitalDayWeight class="ml-auto" :hospitalization-id="id" :date="day.date" :weight-kg="day.weightKg" @saved="weightSaved" />
             </div>
 
             <div class="flex flex-col">
@@ -608,7 +600,7 @@ watch(id, () => {
         <div class="flex flex-col gap-4 @5xl:col-start-2 @5xl:row-start-2">
           <section v-if="weights.length" class="flex flex-col gap-2.5 rounded-xl border border-border bg-card px-5 py-4 shadow-card" aria-labelledby="hospital-weight-heading">
             <h2 id="hospital-weight-heading" class="text-base font-semibold">體重</h2>
-            <div v-for="row in weights" :key="row.key" class="grid grid-cols-[4rem_minmax(0,1fr)_auto] items-baseline gap-3 text-sm">
+            <div v-for="row in weights" :key="row.key" class="grid grid-cols-[7.5rem_minmax(0,1fr)_auto] items-baseline gap-3 text-sm">
               <span class="num text-muted-foreground">{{ row.label }}</span>
               <span class="num text-base">{{ row.kg }} kg</span>
               <span class="num text-subtle-foreground">{{ row.delta }}</span>
@@ -643,8 +635,7 @@ watch(id, () => {
     v-if="dischargeOpen && detail"
     :hospitalization="detail"
     :pet-name="pet?.name ?? ''"
-    :last-record-at="lastRecord.at"
-    :last-weight-date="lastRecord.weightDate"
+    :last-record-at="lastRecordAt"
     :submitting="discharging"
     :error-message="dischargeError"
     @submit="discharge"

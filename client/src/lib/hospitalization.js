@@ -4,8 +4,8 @@ import { clinicDateInput, clinicTimeInput, combineClinicDateTime, shortDate } fr
 // 住院專區的純邏輯：照護時間軸怎麼分天、每筆列哪幾欄、新增／修改表單送出什麼、體重變化。
 // 規則見 CLAUDE.md 第三節 hospitalizations。
 
-// 照護紀錄一筆可填的欄位：時間（HH:MM，送出時跟那一天組回 recordedAt）、食物放置、灌食、用藥、其他、體溫。
-export const ENTRY_FIELDS = ['time', 'food', 'forceFeeding', 'medication', 'other', 'temperatureC'];
+// 照護紀錄一筆可填的欄位：時間（HH:MM，送出時跟那一天組回 recordedAt）、食物放置、灌食、用藥、其他、體重、體溫。
+export const ENTRY_FIELDS = ['time', 'food', 'forceFeeding', 'medication', 'other', 'weightKg', 'temperatureC'];
 
 export const ENTRY_FIELD_LABELS = {
   time: '時間',
@@ -13,6 +13,7 @@ export const ENTRY_FIELD_LABELS = {
   forceFeeding: '灌食',
   medication: '用藥',
   other: '其他',
+  weightKg: '體重',
   temperatureC: '體溫',
 };
 
@@ -28,12 +29,13 @@ export function entryDraft(entry) {
     forceFeeding: entry?.forceFeeding ?? '',
     medication: entry?.medication ?? '',
     other: entry?.other ?? '',
+    weightKg: entry?.weightKg === null || entry?.weightKg === undefined ? '' : String(entry.weightKg),
     temperatureC: entry?.temperatureC === null || entry?.temperatureC === undefined ? '' : String(entry.temperatureC),
   };
 }
 
 export function emptyEntryDraft(time = '') {
-  return { time, food: '', forceFeeding: '', medication: '', other: '', temperatureC: '' };
+  return { time, food: '', forceFeeding: '', medication: '', other: '', weightKg: '', temperatureC: '' };
 }
 
 // 跟伺服器存的樣子一樣整理過的值：伺服器會去掉頭尾空白、用藥會 normalizeRichText、體溫存成數字。
@@ -41,7 +43,7 @@ export function emptyEntryDraft(time = '') {
 export function normalizedField(key, value) {
   const text = String(value ?? '');
   if (key === 'medication') return normalizeRichText(text).trim();
-  if (key === 'temperatureC') {
+  if (key === 'temperatureC' || key === 'weightKg') {
     const trimmed = text.trim();
     if (!trimmed) return '';
     const number = Number(trimmed);
@@ -83,6 +85,7 @@ export function entryPayload(draft, date) {
     forceFeeding: draft.forceFeeding,
     medication: draft.medication,
     other: draft.other,
+    weightKg: String(draft.weightKg ?? '').trim(),
     temperatureC: String(draft.temperatureC ?? '').trim(),
   };
 }
@@ -97,7 +100,7 @@ export function entryPatch(draft, baseline, date) {
       if (at) patch.recordedAt = at;
       continue;
     }
-    patch[key] = key === 'temperatureC' ? String(draft[key] ?? '').trim() : draft[key];
+    patch[key] = key === 'temperatureC' || key === 'weightKg' ? String(draft[key] ?? '').trim() : draft[key];
   }
   return patch;
 }
@@ -109,6 +112,9 @@ export function filledFields(entry) {
     const value = entry?.[key] ?? '';
     const text = key === 'medication' ? richTextToPlain(value) : value;
     if (String(text).trim()) fields.push({ key, label: ENTRY_FIELD_LABELS[key], value, rich: key === 'medication' });
+  }
+  if (entry?.weightKg !== null && entry?.weightKg !== undefined && entry.weightKg !== '') {
+    fields.push({ key: 'weightKg', label: ENTRY_FIELD_LABELS.weightKg, value: `${entry.weightKg} kg`, mono: true });
   }
   if (entry?.temperatureC !== null && entry?.temperatureC !== undefined && entry.temperatureC !== '') {
     fields.push({ key: 'temperatureC', label: ENTRY_FIELD_LABELS.temperatureC, value: `${entry.temperatureC} °C`, mono: true });
@@ -124,10 +130,9 @@ export function entriesOnDate(entries, date) {
 }
 
 // 時間軸分天：最新的一天在最上面，一天之內照時間先後（跟紙本一樣往下寫）。
-export function daySections(dates, entries, days) {
-  const weights = new Map((days ?? []).map((day) => [day.date, day.weightKg ?? null]));
+export function daySections(dates, entries) {
   return (dates ?? [])
-    .map((date, index) => ({ date, dayNumber: index + 1, entries: entriesOnDate(entries, date), weightKg: weights.get(date) ?? null }))
+    .map((date, index) => ({ date, dayNumber: index + 1, entries: entriesOnDate(entries, date) }))
     .reverse();
 }
 
@@ -136,14 +141,14 @@ export function newEntryTime(date, now = new Date()) {
   return clinicDateInput(now) === date ? now : combineClinicDateTime(date, '12:00');
 }
 
-// 側欄的體重：入院看診量的那次，加上住院每天有填的，舊到新；每一列帶跟上一次的差。
-export function weightTrend(admitWeightKg, dates, days) {
-  const byDate = new Map((days ?? []).filter((day) => day.weightKg !== null && day.weightKg !== undefined).map((day) => [day.date, day.weightKg]));
+// 側欄的體重：入院看診量的那次，加上住院期間每一格有量的，舊到新；每一列帶跟上一次的差。
+export function weightTrend(admitWeightKg, entries) {
   const rows = [];
   if (admitWeightKg !== null && admitWeightKg !== undefined) rows.push({ key: 'admit', label: '入院', kg: Number(admitWeightKg) });
-  for (const date of dates ?? []) {
-    if (byDate.has(date)) rows.push({ key: date, label: shortDate(date), kg: Number(byDate.get(date)) });
-  }
+  const weighed = (entries ?? [])
+    .filter((entry) => entry.weightKg !== null && entry.weightKg !== undefined)
+    .sort((a, b) => new Date(a.recordedAt) - new Date(b.recordedAt) || String(a._id).localeCompare(String(b._id)));
+  for (const entry of weighed) rows.push({ key: String(entry._id), label: shortDateTime(entry.recordedAt), kg: Number(entry.weightKg) });
   return rows.map((row, index) => {
     if (index === 0) return { ...row, delta: '' };
     const diff = Math.round((row.kg - rows[index - 1].kg) * 100) / 100;
@@ -151,12 +156,10 @@ export function weightTrend(admitWeightKg, dates, days) {
   });
 }
 
-// 取消住院只在還沒記任何紀錄時可以：從看診搬來的那一格用藥不算，體重有填才算（伺服器同一個判準）。
+// 取消住院只在還沒記任何照護紀錄時可以：從看診搬來的那一格用藥不算（伺服器同一個判準）。
 export function canCancelHospitalization(detail) {
   if (detail?.status !== 'admitted') return false;
-  const entries = detail.entries ?? [];
-  const days = detail.days ?? [];
-  return !entries.some((entry) => !entry.fromVisit) && !days.some((day) => day.weightKg !== null && day.weightKg !== undefined);
+  return !(detail.entries ?? []).some((entry) => !entry.fromVisit);
 }
 
 // 住院幾天（入院那天是第 1 天，照日曆算）。

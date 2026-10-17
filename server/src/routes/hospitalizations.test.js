@@ -6,7 +6,6 @@ import { app } from '../app.js';
 import Appointment from '../models/Appointment.js';
 import ClinicalNote from '../models/ClinicalNote.js';
 import Hospitalization from '../models/Hospitalization.js';
-import HospitalizationDay from '../models/HospitalizationDay.js';
 import HospitalizationEntry from '../models/HospitalizationEntry.js';
 import LabResult from '../models/LabResult.js';
 import MedicationOrder from '../models/MedicationOrder.js';
@@ -111,14 +110,12 @@ describe('住院', () => {
     const hospitalization = stay();
     mock.method(Hospitalization, 'findById', () => query(() => hospitalization));
     mock.method(HospitalizationEntry, 'find', () => query(() => [{ fromVisit: false, medication: '' }]));
-    mock.method(HospitalizationDay, 'exists', () => query(() => null));
     assert.equal((await send('POST', `/hospitalizations/${stayId}/cancel`, { version: 0 })).status, 409);
 
     const appointment = visit({ hospitalizationId: stayId, prescription: '' });
     mock.method(HospitalizationEntry, 'find', () => query(() => [{ fromVisit: true, medication: 'Cerenia' }]));
     mock.method(Appointment, 'findById', () => query(() => appointment));
     mock.method(HospitalizationEntry, 'deleteMany', async () => ({ deletedCount: 1 }));
-    mock.method(HospitalizationDay, 'deleteMany', async () => ({ deletedCount: 0 }));
     mock.method(LabResult, 'updateMany', async () => ({ modifiedCount: 0 }));
     const { status } = await send('POST', `/hospitalizations/${stayId}/cancel`, { version: 0 });
     assert.equal(status, 200);
@@ -131,11 +128,9 @@ describe('住院', () => {
     const hospitalization = stay();
     mock.method(Hospitalization, 'findById', () => query(() => hospitalization));
     mock.method(HospitalizationEntry, 'find', () => query(() => [{ fromVisit: true, medication: 'Azodyl 1 cap PO SID' }]));
-    mock.method(HospitalizationDay, 'exists', () => query(() => null));
     const appointment = visit({ status: 'pending_checkout', handoffAt: new Date(), hospitalizationId: stayId, prescription: '' });
     mock.method(Appointment, 'findById', () => query(() => appointment));
     mock.method(HospitalizationEntry, 'deleteMany', async () => ({ deletedCount: 1 }));
-    mock.method(HospitalizationDay, 'deleteMany', async () => ({ deletedCount: 0 }));
     mock.method(LabResult, 'updateMany', async () => ({ modifiedCount: 0 }));
     mock.method(MedicationOrder.prototype, 'save', async function save() { orders.push(this); return this; });
     assert.equal((await send('POST', `/hospitalizations/${stayId}/cancel`, { version: 0 })).status, 200);
@@ -180,13 +175,14 @@ describe('住院', () => {
     assert.equal((await send('POST', `/hospitalizations/${stayId}/discharge`, { version: 0 })).status, 409);
   });
 
-  it('當天體重只能記在住院期間的日子', async () => {
+  it('每一格照護紀錄可以有自己的體重，只能記在住院期間的日子', async () => {
     mock.method(Hospitalization, 'findById', () => query(() => stay()));
-    const saved = [];
-    mock.method(HospitalizationDay, 'findOneAndUpdate', async (filter, update) => { saved.push({ filter, update }); return { ...filter, ...update.$set }; });
-    assert.equal((await send('PUT', `/hospitalizations/${stayId}/days/${clinicToday()}`, { weightKg: '3.42' })).status, 200);
-    assert.equal(saved[0].update.$set.weightKg, 3.42);
-    assert.equal((await send('PUT', `/hospitalizations/${stayId}/days/2020-01-01`, { weightKg: '3.42' })).status, 422);
+    const created = [];
+    mock.method(HospitalizationEntry, 'create', async (data) => { created.push(data); return data; });
+    assert.equal((await send('POST', `/hospitalizations/${stayId}/entries`, { food: '同上', weightKg: '3.42' })).status, 201);
+    assert.equal(created[0].weightKg, 3.42);
+    assert.equal((await send('POST', `/hospitalizations/${stayId}/entries`, { food: '同上', weightKg: '-1' })).status, 422);
+    assert.equal((await send('POST', `/hospitalizations/${stayId}/entries`, { weightKg: '3.42', recordedAt: '2020-01-01T03:00:00Z' })).status, 422);
   });
 
   it('改照護紀錄要帶版本，別台改過就回 409 附最新內容', async () => {

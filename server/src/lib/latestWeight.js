@@ -1,12 +1,12 @@
 import Appointment from '../models/Appointment.js';
 import MedicalRecord from '../models/MedicalRecord.js';
-import HospitalizationDay from '../models/HospitalizationDay.js';
+import HospitalizationEntry from '../models/HospitalizationEntry.js';
 import { clinicToday } from './clinicTime.js';
 
 // 貓咪的「最近體重」不另存，每次讀取時從量測紀錄挑日期最新的那一筆：
 //   · 看診（報到之後的；待報到的可能是取消報到後留下的舊值，不算）的 weightKg；
 //   · 已結案、沒被修訂取代的健檢報告上的體重（系統改版前的獨立報告只有這裡有）；
-//   · 住院每天量的體重（hospitalizationDays）。
+//   · 住院照護紀錄上量的體重（hospitalizationEntries，一格一筆）。
 // 同一天住院體重優先（入院當天的看診是入院前量的），再來是看診，報告最後（報告只是結案那一刻的快照）。
 // 都沒有量測紀錄時才用貓咪資料上手填的 weightKg（初診表、新增貓咪時填的），沒有日期。
 
@@ -31,11 +31,11 @@ function timeOf(visit) {
 }
 
 // visits、records 是這隻貓的看診與已結案報告（不必先排序）；回 { kg, date } 或 null，date 是 YYYY-MM-DD，手填的值是 ''。
-export function pickLatestWeight({ visits = [], records = [], days = [], fallbackKg = null } = {}) {
+export function pickLatestWeight({ visits = [], records = [], entries = [], fallbackKg = null } = {}) {
   const candidates = [];
-  for (const day of days) {
-    const kg = validWeight(day.weightKg);
-    if (kg !== null && day.date) candidates.push({ kg, date: day.date, priority: 2, time: 0 });
+  for (const entry of entries) {
+    const kg = validWeight(entry.weightKg);
+    if (kg !== null && entry.recordedAt) candidates.push({ kg, date: clinicToday(new Date(entry.recordedAt)), priority: 2, time: new Date(entry.recordedAt).getTime() });
   }
   for (const visit of visits) {
     if (!MEASURED_STATUSES.includes(visit.status)) continue;
@@ -58,7 +58,7 @@ export function pickLatestWeight({ visits = [], records = [], days = [], fallbac
 export async function latestPetWeight(pet, { excludeAppointmentId = null } = {}) {
   const visitFilter = { petId: pet._id, status: { $in: MEASURED_STATUSES }, weightKg: { $ne: null } };
   if (excludeAppointmentId) visitFilter._id = { $ne: excludeAppointmentId };
-  const [visits, records, days] = await Promise.all([
+  const [visits, records, entries] = await Promise.all([
     Appointment.find(visitFilter)
       .sort({ date: -1 })
       .limit(5)
@@ -69,7 +69,7 @@ export async function latestPetWeight(pet, { excludeAppointmentId = null } = {})
       .limit(10)
       .select('status supersededBy visitDate weightKg sections')
       .lean(),
-    HospitalizationDay.find({ petId: pet._id, weightKg: { $ne: null } }).sort({ date: -1 }).limit(3).select('date weightKg').lean(),
+    HospitalizationEntry.find({ petId: pet._id, weightKg: { $ne: null } }).sort({ recordedAt: -1 }).limit(3).select('recordedAt weightKg').lean(),
   ]);
-  return pickLatestWeight({ visits, records, days, fallbackKg: pet.weightKg });
+  return pickLatestWeight({ visits, records, entries, fallbackKg: pet.weightKg });
 }

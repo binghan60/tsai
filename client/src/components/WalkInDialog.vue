@@ -24,6 +24,8 @@ const props = defineProps({
   templates: { type: Array, default: () => [] },
   defaultTemplateId: { type: String, default: '' },
   suggestedCheckinNumber: { type: Number, default: 1 },
+  // 住院頁的「新增住院」：同一個視窗，來院原因改叫住院原因，不問號碼牌（伺服器配），送出時多帶 admit。
+  admit: { type: Boolean, default: false },
   submitting: { type: Boolean, default: false },
   errorMessage: { type: String, default: '' },
 });
@@ -101,15 +103,16 @@ function submit() {
     ...pet,
     reason: reason.value.trim(),
     templateId: templateId.value,
+    ...(props.admit ? { admit: true } : {}),
     // 沒改建議號碼就交給伺服器配（它看得到別台剛發出去的號碼）。
-    ...(checkinNumber.value === props.suggestedCheckinNumber ? {} : { checkinNumber: checkinNumber.value }),
+    ...(props.admit || checkinNumber.value === props.suggestedCheckinNumber ? {} : { checkinNumber: checkinNumber.value }),
   });
 }
 </script>
 
 <template>
-  <ModalDialog size="lg" title="現場" :icon="Zap" @close="emit('close')">
-    <template #header-end>
+  <ModalDialog size="lg" :title="admit ? '新增住院' : '現場'" :icon="Zap" @close="emit('close')">
+    <template v-if="!admit" #header-end>
       <label for="walk-in-checkin-number" class="flex items-center gap-2.5 rounded-lg border border-border bg-sunken py-1 pr-1 pl-3.5">
         <span class="text-sm font-medium text-muted-foreground">號碼牌</span>
         <Input id="walk-in-checkin-number" v-model.number="checkinNumber" type="number" min="1" step="1" class="num w-16 text-center text-lg font-semibold" />
@@ -178,10 +181,10 @@ function submit() {
         </template>
 
         <div class="border-t border-border pt-4">
-          <h3 class="mb-3 text-base font-semibold">這次看診</h3>
+          <h3 class="mb-3 text-base font-semibold">{{ admit ? '入院評估' : '這次看診' }}</h3>
           <div class="grid gap-3 sm:grid-cols-2">
             <div class="space-y-1.5">
-              <Label for="walk-in-reason" class="text-xs font-medium">來院原因</Label>
+              <Label for="walk-in-reason" class="text-xs font-medium">{{ admit ? '住院原因' : '來院原因' }}</Label>
               <Input id="walk-in-reason" v-model="reason" placeholder="例：打疫苗、不舒服" />
             </div>
             <div class="space-y-1.5">
@@ -203,7 +206,7 @@ function submit() {
       </div>
       <DialogFooter>
         <Button type="button" variant="secondary" @click="emit('close')">取消</Button>
-        <Button type="submit" :disabled="submitting">{{ submitting ? '處理中…' : '報到' }}</Button>
+        <Button type="submit" :disabled="submitting">{{ submitting ? '處理中…' : admit ? '新增住院' : '報到' }}</Button>
       </DialogFooter>
     </form>
   </ModalDialog>
