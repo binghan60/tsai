@@ -2,6 +2,8 @@ import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import Appointment from '../models/Appointment.js';
 import ClinicalNote from '../models/ClinicalNote.js';
+import Hospitalization from '../models/Hospitalization.js';
+import HospitalizationEntry from '../models/HospitalizationEntry.js';
 import LabResult from '../models/LabResult.js';
 import { clinicalNoteViews } from './clinicalNoteView.js';
 
@@ -69,4 +71,34 @@ test('reference journals allow absent content while manual journals require it',
   const query = ClinicalNote.findOneAndUpdate({}, { $set: { source: 'appointment' }, $unset: { content: '' } });
   assert.equal(ClinicalNote.schema.path('content').isRequired, true);
   assert.equal(ClinicalNote.schema.path('content').options.required.call(query), false);
+});
+
+test('入院那次看診的日誌「住院」列：出院後帶住院期間的體重、體溫與檢驗結果，住院中只有期間', async () => {
+  const stay = { _id: 'stay', status: 'discharged', admittedAt: new Date('2026-10-13T02:00:00Z'), dischargedAt: new Date('2026-10-18T02:00:00Z') };
+  const appointment = { _id: 'apt', reason: '食慾不振', hospitalizationId: 'stay' };
+  const find = mock.method(Appointment, 'find', () => ({ lean: async () => [appointment] }));
+  const stays = mock.method(Hospitalization, 'find', () => ({ select: () => ({ lean: async () => [stay] }) }));
+  const entries = mock.method(HospitalizationEntry, 'find', () => ({ select: () => ({ sort: () => ({ lean: async () => [
+    { hospitalizationId: 'stay', recordedAt: new Date('2026-10-14T02:00:00Z'), weightKg: 3.5, temperatureC: 38.6 },
+    { hospitalizationId: 'stay', recordedAt: new Date('2026-10-15T02:00:00Z'), weightKg: null, temperatureC: 39.1 },
+  ] }) }) }));
+  const labs = mock.method(LabResult, 'find', (filter) => (filter.hospitalizationId
+    ? { select: () => ({ sort: () => ({ lean: async () => [{ hospitalizationId: 'stay', instrument: 'Catalyst One', runAt: new Date('2026-10-14T03:00:00Z'), assays: [{ code: 'CREA', value: '1.8' }] }] }) }) }
+    : { select: () => ({ sort: () => ({ session: () => ({ lean: async () => [] }) }) }) }));
+  try {
+    const [view] = await clinicalNoteViews([{ appointmentId: 'apt' }]);
+    const row = view.sections.find((section) => section.key === 'hospitalization');
+    assert.equal(row.hospitalizationId, 'stay');
+    assert.deepEqual(row.stay.weights.map((item) => item.kg), [3.5]);
+    assert.deepEqual(row.stay.temperatures.map((item) => item.c), [38.6, 39.1]);
+    assert.equal(row.stay.results[0].assays[0].value, '1.8');
+    assert.doesNotMatch(view.content, /住院/, '純文字版 content 不帶住院摘要');
+
+    stay.status = 'admitted';
+    stay.dischargedAt = null;
+    const [ongoing] = await clinicalNoteViews([{ appointmentId: 'apt' }]);
+    assert.equal(ongoing.sections.find((section) => section.key === 'hospitalization').stay, undefined);
+  } finally {
+    find.mock.restore(); stays.mock.restore(); entries.mock.restore(); labs.mock.restore();
+  }
 });

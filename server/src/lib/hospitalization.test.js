@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanEntryFields, cleanWeight, coversTime, hospitalDayNumber, hospitalizationDates, hospitalizationSpanText, shortClinicDate } from './hospitalization.js';
+import { cleanEntryFields, cleanWeight, coversTime, hospitalDayNumber, hospitalizationDates, hospitalizationSpanText, shortClinicDate, stayJournalSummary } from './hospitalization.js';
 
 const at = (text) => new Date(`${text}+08:00`);
 
@@ -50,4 +50,19 @@ test('當天體重：空白清掉、要是合理的數字', () => {
   assert.equal(cleanWeight(''), null);
   assert.equal(cleanWeight('3.42'), 3.42);
   assert.throws(() => cleanWeight('0'), /體重/);
+});
+
+test('出院後日誌的住院摘要：有量的體重、體溫各自全列，檢驗結果帶過來', () => {
+  const entries = [
+    { recordedAt: '2026-10-14T02:00:00Z', weightKg: 3.5, temperatureC: 38.6 },
+    { recordedAt: '2026-10-14T09:00:00Z', weightKg: null, temperatureC: 39.1 },
+    { recordedAt: '2026-10-15T02:00:00Z', weightKg: 3.42, temperatureC: null },
+    { recordedAt: '2026-10-15T09:00:00Z', weightKg: null, temperatureC: null },
+  ];
+  const summary = stayJournalSummary(entries, [{ _id: 'r1', instrument: 'Catalyst One', runAt: '2026-10-14T03:00:00Z', assays: [{ code: 'CREA', value: '1.8' }] }], 3.6);
+  assert.equal(summary.admitWeightKg, 3.6);
+  assert.deepEqual(summary.weights.map((item) => item.kg), [3.5, 3.42]);
+  assert.deepEqual(summary.temperatures.map((item) => item.c), [38.6, 39.1]);
+  assert.equal(summary.results[0].assays[0].value, '1.8');
+  assert.deepEqual(stayJournalSummary(), { admitWeightKg: null, weights: [], temperatures: [], results: [] });
 });

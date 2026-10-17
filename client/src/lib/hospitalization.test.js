@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   canCancelHospitalization,
   daySections,
+  stayRows,
   emptyEntryDraft,
   entriesOnDate,
   entryDraft,
@@ -95,4 +96,26 @@ test('取消住院：從看診搬來的用藥不算紀錄，記了照護紀錄�
 test('住院天數照日曆算，入院那天是第 1 天', () => {
   assert.equal(stayDays('2026-10-13T07:40:00.000Z', '2026-10-18T09:20:00.000Z'), 6);
   assert.equal(stayDays('2026-10-13T15:59:00.000Z', '2026-10-13T16:01:00.000Z'), 2); // 台北 23:59 → 隔天 00:01
+});
+
+test('日誌住院摘要一筆一列：同一筆量的體重體溫在同一列，日期只在每天第一列，體重的差第一筆跟入院那次比', () => {
+  const rows = stayRows({
+    admitWeightKg: 3.6,
+    weights: [
+      { at: '2026-10-14T02:00:00.000Z', kg: 3.48 },
+      { at: '2026-10-14T08:00:00.000Z', kg: 3.5 },
+      { at: '2026-10-15T02:00:00.000Z', kg: 3.5 },
+    ],
+    temperatures: [{ at: '2026-10-14T10:00:00.000Z', c: 39.1 }, { at: '2026-10-14T02:00:00.000Z', c: 38.6 }, { at: '2026-10-16T02:00:00.000Z', c: 38.4 }],
+  });
+  assert.deepEqual(rows.map((row) => [row.label, row.time, row.kg, row.delta, row.c]), [
+    ['10/14', '10:00', 3.48, '−0.12', 38.6],
+    ['', '16:00', 3.5, '+0.02', null],
+    ['', '18:00', null, '', 39.1],
+    ['10/15', '10:00', 3.5, '±0', null],
+    ['10/16', '10:00', null, '', 38.4],
+  ]);
+  assert.deepEqual(rows.map((row) => row.dayStart), [true, false, false, true, true]);
+  assert.equal(stayRows({ weights: [{ at: '2026-10-14T02:00:00.000Z', kg: 3.5 }] })[0].delta, '');
+  assert.deepEqual(stayRows(null), []);
 });

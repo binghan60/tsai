@@ -2,7 +2,9 @@ import Appointment from '../models/Appointment.js';
 import MedicationOrder from '../models/MedicationOrder.js';
 import MedicalRecord from '../models/MedicalRecord.js';
 import Hospitalization from '../models/Hospitalization.js';
-import { hospitalizationSpanText } from './hospitalization.js';
+import HospitalizationEntry from '../models/HospitalizationEntry.js';
+import LabResult from '../models/LabResult.js';
+import { hospitalizationSpanText, stayJournalSummary } from './hospitalization.js';
 import { appointmentJournalContent, appointmentJournalFields, appointmentJournalSections, labTimeLabel } from './appointmentWorkflow.js';
 import { linkedLabResults } from './appointmentJournal.js';
 import { medicationJournalContent, medicationJournalFields, medicationJournalSections, medicationJournalStage, medicationJournalTitle } from './medicationWorkflow.js';
@@ -25,10 +27,12 @@ function withReportDelivery(sections, sentAt) {
 }
 
 // 入院那次看診的日誌最後一列「住院」：住院中寫「10/13 起住院中　第 3 天」，出院了寫期間與天數；點了到住院專區。
-// 住院的內容（每天體重、照護紀錄）不進日誌——在住院專區看。取消的住院不列。唯讀，不能從日誌改。
-function withHospitalization(sections, hospitalization) {
+// 出院之後多帶 stay：住院期間每一格量的體重、體溫與連到這次住院的 IDEXX 結果（即時引用，其餘照護紀錄仍只在住院專區看）。
+// 取消的住院不列。唯讀，不能從日誌改。
+function withHospitalization(sections, hospitalization, summary) {
   if (!hospitalization || hospitalization.status === 'cancelled') return sections;
-  return [...sections, { key: 'hospitalization', label: '住院', text: hospitalizationSpanText(hospitalization), hospitalizationId: String(hospitalization._id), status: hospitalization.status }];
+  const hasSummary = hospitalization.status === 'discharged' && summary && (summary.weights.length || summary.temperatures.length || summary.results.length);
+  return [...sections, { key: 'hospitalization', label: '住院', text: hospitalizationSpanText(hospitalization), hospitalizationId: String(hospitalization._id), status: hospitalization.status, ...(hasSummary ? { stay: summary } : {}) }];
 }
 
 // 日誌只保存掛號／藥單關聯；每次讀取都以來源文件的最新欄位組成內容。
@@ -61,6 +65,17 @@ export async function clinicalNoteViews(notes) {
   const stayIds = appointments.map(item => item.hospitalizationId).filter(Boolean);
   const stays = stayIds.length ? await Hospitalization.find({ _id: { $in: stayIds } }).select('status admittedAt dischargedAt').lean() : [];
   const stayById = new Map(stays.map(item => [String(item._id), item]));
+  // 已出院的住院才帶摘要：體重、體溫（照護紀錄上有量的）與連到住院單的檢驗結果。
+  const dischargedIds = stays.filter(item => item.status === 'discharged').map(item => item._id);
+  const [stayEntries, stayLabs] = dischargedIds.length
+    ? await Promise.all([
+      HospitalizationEntry.find({ hospitalizationId: { $in: dischargedIds }, $or: [{ weightKg: { $ne: null } }, { temperatureC: { $ne: null } }] })
+        .select('hospitalizationId recordedAt weightKg temperatureC').sort({ recordedAt: 1, _id: 1 }).lean(),
+      LabResult.find({ hospitalizationId: { $in: dischargedIds } })
+        .select('hospitalizationId instrument runAt assays overrides notes').sort({ runAt: 1, _id: 1 }).lean(),
+    ])
+    : [[], []];
+  const stayOf = (list, id) => list.filter(item => String(item.hospitalizationId) === String(id));
   const sentAtByRoot = new Map();
   for (const record of sentRecords) {
     const root = String(record.revisionRootId || record._id);
@@ -81,6 +96,7 @@ export async function clinicalNoteViews(notes) {
           sections: withHospitalization(
             withReportDelivery(withMedicationStage(appointmentJournalSections(appointment, labs), orderById.get(String(appointment.medicationOrderId))), appointment.recordId && sentAtByRoot.get(String(appointment.recordId))),
             appointment.hospitalizationId && stayById.get(String(appointment.hospitalizationId)),
+            appointment.hospitalizationId && stayJournalSummary(stayOf(stayEntries, appointment.hospitalizationId), stayOf(stayLabs, appointment.hospitalizationId), appointment.weightKg),
           ),
           fields: appointmentJournalFields(appointment),
         }),

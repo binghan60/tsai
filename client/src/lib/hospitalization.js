@@ -141,6 +141,38 @@ export function newEntryTime(date, now = new Date()) {
   return clinicDateInput(now) === date ? now : combineClinicDateTime(date, '12:00');
 }
 
+// 跟上一次比的差：「−0.12」「+0.03」「±0」。
+function deltaLabel(from, to) {
+  const diff = Math.round((to - from) * 100) / 100;
+  return diff === 0 ? '±0' : `${diff > 0 ? '+' : '−'}${Math.abs(diff)}`;
+}
+
+// 病歷日誌「住院」列出院後的摘要：一筆一列。體重、體溫是同一筆照護紀錄量的（同一個 recordedAt）就在同一列，
+// 共用時間這條縱軸；只量了其中一樣，另一格留白。日期只在每天的第一列出現。
+// 體重帶跟上一次的差（第一筆跟入院那次看診量的比）。stay 是伺服器的 { admitWeightKg, weights: [{ at, kg }], temperatures: [{ at, c }] }。
+export function stayRows(stay) {
+  const slots = new Map();
+  const slot = (at) => {
+    const key = new Date(at).getTime();
+    if (!slots.has(key)) slots.set(key, { key, at, kg: null, c: null });
+    return slots.get(key);
+  };
+  for (const item of stay?.weights ?? []) slot(item.at).kg = item.kg;
+  for (const item of stay?.temperatures ?? []) slot(item.at).c = item.c;
+  let previous = stay?.admitWeightKg ?? null;
+  let lastDate = '';
+  return [...slots.values()]
+    .sort((a, b) => a.key - b.key)
+    .map((row) => {
+      const date = clinicDateInput(row.at);
+      const delta = row.kg !== null && previous !== null ? deltaLabel(previous, row.kg) : '';
+      if (row.kg !== null) previous = row.kg;
+      const dayStart = date !== lastDate;
+      lastDate = date;
+      return { key: row.key, label: dayStart ? shortDate(date) : '', dayStart, time: clinicTimeInput(row.at), kg: row.kg, delta, c: row.c };
+    });
+}
+
 // 側欄的體重：入院看診量的那次，加上住院期間每一格有量的，舊到新；每一列帶跟上一次的差。
 export function weightTrend(admitWeightKg, entries) {
   const rows = [];
@@ -151,8 +183,7 @@ export function weightTrend(admitWeightKg, entries) {
   for (const entry of weighed) rows.push({ key: String(entry._id), label: shortDateTime(entry.recordedAt), kg: Number(entry.weightKg) });
   return rows.map((row, index) => {
     if (index === 0) return { ...row, delta: '' };
-    const diff = Math.round((row.kg - rows[index - 1].kg) * 100) / 100;
-    return { ...row, delta: diff === 0 ? '±0' : `${diff > 0 ? '+' : '−'}${Math.abs(diff)}` };
+    return { ...row, delta: deltaLabel(rows[index - 1].kg, row.kg) };
   });
 }
 

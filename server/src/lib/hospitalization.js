@@ -50,6 +50,18 @@ export function hospitalizationSpanText(hospitalization, now = new Date()) {
   return `${shortClinicDate(admitDate, now)} 起住院中　第 ${hospitalDayNumber(admitDate, clinicToday(now))} 天`;
 }
 
+// 出院後入院那次看診的日誌「住院」那一列帶的摘要：住院期間每一格量的體重、體溫（舊到新，全列），和連到這次住院的 IDEXX 結果。
+// 日誌是即時引用，不複製：事後更正照護紀錄或結果，日誌跟著變。
+export function stayJournalSummary(entries = [], labResults = [], admitWeightKg = null) {
+  const measured = (value) => value !== null && value !== undefined;
+  return {
+    admitWeightKg: measured(admitWeightKg) ? admitWeightKg : null,
+    weights: entries.filter((entry) => measured(entry.weightKg)).map((entry) => ({ at: entry.recordedAt, kg: entry.weightKg })),
+    temperatures: entries.filter((entry) => measured(entry.temperatureC)).map((entry) => ({ at: entry.recordedAt, c: entry.temperatureC })),
+    results: labResults.map((result) => ({ _id: result._id, instrument: result.instrument, runAt: result.runAt, assays: result.assays ?? [], overrides: result.overrides ?? [], notes: result.notes ?? [] })),
+  };
+}
+
 // 檢驗時間落在這次住院期間（入院之後、出院之前；還沒出院就是之後都算）。
 export function coversTime(hospitalization, at) {
   if (!hospitalization || hospitalization.status === 'cancelled') return false;

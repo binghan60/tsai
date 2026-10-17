@@ -93,8 +93,10 @@ export function journalRows(note) {
       ...(Array.isArray(section.results) && section.results.length ? { results: section.results } : {}),
       // 櫃台處理：依影像／收據／其他分組的結構化項目，畫成一組一行的徽章。
       ...(Array.isArray(section.groups) && section.groups.length ? { groups: section.groups } : {}),
-      // 住院：唯讀的一列，點了到住院專區（住院的內容不進日誌）。
+      // 住院：唯讀的一列，點了到住院專區（其餘照護紀錄不進日誌）。
       ...(section.hospitalizationId ? { hospitalizationId: section.hospitalizationId } : {}),
+      // 出院後多一份住院摘要：住院期間量的體重、體溫與檢驗結果（唯讀，即時引用）。
+      ...(section.stay ? { stay: section.stay } : {}),
     })
   }
   return rows
