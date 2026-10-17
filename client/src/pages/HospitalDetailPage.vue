@@ -26,6 +26,7 @@ import { canRequestLab, labRequestDelivered, useLabRequest } from '../composable
 import { useStaffIdentity } from '../composables/useStaffIdentity';
 import { useToast } from '../composables/useToast';
 import PageHeader from '../components/PageHeader.vue';
+import FilterTabs from '../components/FilterTabs.vue';
 import PatientLink from '../components/PatientLink.vue';
 import StrayBadge from '../components/StrayBadge.vue';
 import PetSex from '../components/PetSex.vue';
@@ -75,6 +76,27 @@ const admitted = computed(() => status.value === 'admitted');
 const cancelled = computed(() => status.value === 'cancelled');
 const dates = computed(() => detail.value?.dates ?? []);
 const sections = computed(() => daySections(dates.value, detail.value?.entries));
+
+// ---- 天數頁籤：一次只看一天，住很久時頁面不會變長 ----
+// 頁籤由左到右是第 1 天到最後一天；住院中預設今天，已出院預設最後一天。數字是那天的紀錄筆數（沒有就不寫）。
+const activeDate = ref('');
+const dayTabs = computed(() => [...sections.value].reverse().map((day) => ({ key: day.date, label: `第 ${day.dayNumber} 天　${shortDate(day.date)}` })));
+const dayCounts = computed(() => Object.fromEntries(sections.value.filter((day) => day.entries.length).map((day) => [day.date, day.entries.length])));
+const visibleSections = computed(() => sections.value.filter((day) => day.date === activeDate.value));
+function defaultDate() {
+  const list = dates.value;
+  if (!list.length) return '';
+  const today = clinicDateInput();
+  return admitted.value && list.includes(today) ? today : list.at(-1);
+}
+watch(dates, (list) => {
+  if (!activeDate.value || !list.includes(activeDate.value)) activeDate.value = defaultDate();
+}, { immediate: true });
+// 住很久時頁籤列要橫向捲動：選中的那一格捲進視野裡。
+watch([activeDate, dayTabs], async () => {
+  await nextTick();
+  document.querySelector('[aria-label="住院天數"] [aria-selected="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+});
 const dayNumber = computed(() => stayDays(detail.value?.admittedAt, detail.value?.dischargedAt ?? new Date()));
 const assessment = computed(() => detail.value?.admittingAppointment ?? null);
 const visitLink = computed(() => (assessment.value ? { path: '/appointments', query: { date: assessment.value.date, open: assessment.value._id } } : null));
@@ -163,9 +185,18 @@ function guardOpenForm() {
   return true;
 }
 
+// 換一天：正在填的表單還沒存就留在原本那天（先存或取消），沒有改動的表單直接收起來。
+function selectDay(date) {
+  if (date === activeDate.value) return;
+  if (!guardOpenForm()) return;
+  closeForm();
+  activeDate.value = date;
+}
+
 async function openCreate(date) {
   if (cancelled.value || !guardOpenForm()) return;
   formError.value = '';
+  activeDate.value = date;
   form.value = { mode: 'create', date, defaultTime: clinicTimeInput(newEntryTime(date)), key: `new-${date}-${Date.now()}` };
   await nextTick();
   document.getElementById('hospital-entry-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -565,11 +596,9 @@ watch(id, () => {
 
         <!-- 照護時間軸 -->
         <div v-if="!cancelled" class="@container flex min-w-0 flex-col gap-7 @5xl:col-start-1 @5xl:row-span-2 @5xl:row-start-1" aria-label="照護紀錄">
-          <section v-for="day in sections" :key="day.date" class="flex flex-col gap-3" :aria-labelledby="`hospital-day-${day.date}`">
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border pb-2.5">
-              <h2 :id="`hospital-day-${day.date}`" class="text-lg font-semibold"><span class="num">{{ shortDate(day.date) }}</span>　第 <span class="num">{{ day.dayNumber }}</span> 天</h2>
-              <span v-if="day.entries.length" class="text-sm text-subtle-foreground"><span class="num">{{ day.entries.length }}</span> 筆</span>
-            </div>
+          <FilterTabs v-if="dayTabs.length > 1" :model-value="activeDate" :items="dayTabs" :counts="dayCounts" aria-label="住院天數" @update:model-value="selectDay" />
+          <section v-for="day in visibleSections" :key="day.date" class="flex flex-col gap-3" :aria-labelledby="`hospital-day-${day.date}`">
+            <h2 :id="`hospital-day-${day.date}`" class="sr-only">{{ shortDate(day.date) }} 第 {{ day.dayNumber }} 天</h2>
 
             <div class="flex flex-col">
               <template v-for="entry in day.entries" :key="entry._id">
