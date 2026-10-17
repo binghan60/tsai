@@ -17,6 +17,7 @@ import { announceMedicationJournal, syncMedicationJournal } from '../lib/medicat
 import { releaseLabResults } from '../lib/labResultApply.js';
 import { queueIdexxCensusById } from '../lib/idexxRequests.js';
 import { cancelEntryMedicationOrder, syncEntryMedicationOrder } from '../lib/entryMedicationOrder.js';
+import { bookFollowUp } from '../lib/followUp.js';
 import { cleanEntryFields, hospitalDayNumber, hospitalizationDates } from '../lib/hospitalization.js';
 import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitHospitalizationUpdate, emitLabResultsUpdate, emitMedicationUpdate } from '../lib/realtime.js';
 
@@ -125,7 +126,7 @@ router.get('/:id', async (req, res, next) => {
     if (!hospitalization) return res.status(404).json({ message: '找不到住院紀錄' });
     const [pet, appointment, entries] = await Promise.all([
       Pet.findById(hospitalization.petId).populate('ownerId', 'name phone kind').lean(),
-      Appointment.findById(hospitalization.admittingAppointmentId).select('date time reason weightKg temperatureC visitNote checkedInAt visitStartedAt status petName labRequestedAt labDeliveredAt').lean(),
+      Appointment.findById(hospitalization.admittingAppointmentId).select('date time reason weightKg temperatureC visitNote checkedInAt visitStartedAt status petName labRequestedAt labDeliveredAt followUpAppointmentId followUpDate followUpTime').lean(),
       HospitalizationEntry.find({ hospitalizationId: hospitalization._id }).sort({ recordedAt: 1, _id: 1 }).lean(),
     ]);
     res.json({
@@ -274,7 +275,9 @@ router.post('/:id/cancel', async (req, res, next) => {
 });
 
 // POST /api/hospitalizations/:id/discharge — 出院：{ version, dischargeNote, dischargeSpecialCareNote（請轉告飼主）,
-//   dischargeFollowUpRecommendation（回診建議）, dischargedAt（選填，預設現在）, medication（帶回家的藥）}。
+//   dischargeFollowUpRecommendation（回診建議）, dischargedAt（選填，預設現在）, medication（帶回家的藥）,
+//   followUp（選填，約回診：{ followUpDate, followUpTime, estimatedDurationMinutes, reason, isSurgery, surgeryName, deposit }，
+//   沒帶日期時段＝這次不約；規則跟櫃台處理視窗約回診同一套，掛在入院那次看診上）}。
 // 帶回家的藥有寫就同一個 transaction 開一張藥單：醫師開的、直接是待包藥（跟診療台送交時開的一樣不必再審），
 // 有自己的領藥日誌（出院帶了什麼藥，病歷日誌看得到）。
 router.post('/:id/discharge', async (req, res, next) => {
@@ -283,10 +286,15 @@ router.post('/:id/discharge', async (req, res, next) => {
     const medication = normalizeRichText(String(req.body?.medication ?? '')).trim();
     if (richTextLength(medication) > 10000) throw fail('帶回家的藥內容太長');
     const actor = req.user?.username || '';
+    const followUpBody = req.body?.followUp && (req.body.followUp.followUpDate || req.body.followUp.followUpTime) ? req.body.followUp : null;
     let hospitalization;
     let order;
+    let admitting = null;
+    let booked = null;
     await withTransaction(async (session) => {
       order = null;
+      admitting = null;
+      booked = null;
       hospitalization = await loadHospitalization(req.params.id, session);
       if (hospitalization.status !== 'admitted') throw fail('這次住院不是住院中', 409);
       assertVersion(hospitalization, version);
@@ -316,17 +324,27 @@ router.post('/:id/discharge', async (req, res, next) => {
       hospitalization.dischargedAt = dischargedAt;
       for (const [field, max] of Object.entries(DISCHARGE_TEXT_FIELDS)) hospitalization[field] = dischargeText(req.body?.[field], max);
       await hospitalization.save({ session });
+      // 約回診：同一個 transaction 在入院那次看診上約下一筆（跟櫃台處理視窗約回診同一套規則與保證金判斷）。
+      if (followUpBody) {
+        admitting = await Appointment.findById(hospitalization.admittingAppointmentId).session(session);
+        if (!admitting) throw fail('找不到入院那次看診', 404);
+        booked = await bookFollowUp(admitting, followUpBody, { session });
+        admitting.increment();
+        await admitting.save({ session });
+      }
     });
     if (order) {
       emitMedicationUpdate(order);
       announceMedicationJournal(order);
     }
+    if (admitting) emitAppointmentUpdate(admitting);
+    if (booked) emitAppointmentUpdate(booked.followUp, booked.previousDate);
     // 入院那次看診的日誌上「住院」那一列從「住院中」變成期間與天數。
     emitClinicalNoteUpdate({ petId: hospitalization.petId, appointmentId: hospitalization.admittingAppointmentId });
     // 住院中送過 IDEXX 的，出院這一刻才從主機的清單上收掉。
     await queueIdexxCensusById(hospitalization.admittingAppointmentId);
     announce(hospitalization);
-    res.json({ hospitalization, medicationOrder: order });
+    res.json({ hospitalization, medicationOrder: order, followUp: booked?.followUp ?? null });
   } catch (err) {
     next(err);
   }

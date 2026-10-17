@@ -279,7 +279,7 @@ async function discharge(payload) {
     const { data } = await http.post(`/hospitalizations/${id.value}/discharge`, { version: detail.value.__v ?? 0, ...payload });
     takeHospitalization(data.hospitalization);
     dischargeOpen.value = false;
-    toast.success(data.medicationOrder ? '帶回家的藥已開成待包藥' : `${pet.value?.name ?? ''}已出院`, '已出院');
+    toast.success([data.medicationOrder && '帶回家的藥已開成待包藥', data.followUp && `已約回診 ${shortDate(data.followUp.date)} ${data.followUp.time}`].filter(Boolean).join('，') || `${pet.value?.name ?? ''}已出院`, '已出院');
     await load({ silent: true });
   } catch (err) {
     dischargeError.value = apiErrorMessage(err, '出院失敗，請重試');
@@ -549,6 +549,10 @@ watch(id, () => {
             <span class="spec-label">回診建議</span>
             <p class="text-base whitespace-pre-wrap">{{ detail.dischargeFollowUpRecommendation }}</p>
           </div>
+          <div v-if="assessment?.followUpAppointmentId" class="space-y-0.5">
+            <span class="spec-label">已約回診</span>
+            <p class="num text-base">{{ shortDate(assessment.followUpDate) }} {{ assessment.followUpTime }}</p>
+          </div>
           <div v-if="assessment" class="space-y-1.5 border-t border-border pt-3">
             <h2 class="text-base font-semibold">入院評估</h2>
             <p v-if="hasValue(assessment.weightKg) || hasValue(assessment.temperatureC)" class="flex gap-4 text-sm text-muted-foreground">
@@ -666,6 +670,7 @@ watch(id, () => {
     :hospitalization="detail"
     :pet-name="pet?.name ?? ''"
     :last-record-at="lastRecordAt"
+    :appointment="labAppointment"
     :submitting="discharging"
     :error-message="dischargeError"
     @submit="discharge"

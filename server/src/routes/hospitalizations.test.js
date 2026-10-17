@@ -167,6 +167,46 @@ describe('住院', () => {
     assert.equal(String(hospitalization.dischargeMedicationOrderId), String(orders[0]._id));
   });
 
+  it('出院可以順便約回診：同一個 transaction 在入院那次看診上約下一筆回診；不約就什麼都不建', async () => {
+    const hospitalization = stay();
+    const admitting = visit({ status: 'completed' });
+    const booked = [];
+    mock.method(Hospitalization, 'findById', () => query(() => hospitalization));
+    mock.method(Appointment, 'findById', () => query(() => admitting));
+    mock.method(Appointment, 'findOne', () => query(() => null));
+    mock.method(Appointment, 'aggregate', () => query(() => []));
+    mock.method(Appointment, 'create', async ([data]) => { const doc = new Appointment(data); booked.push(doc); return [doc]; });
+    mock.method(ClinicalNote, 'findOneAndUpdate', async () => null);
+    const date = clinicToday();
+
+    assert.equal((await send('POST', `/hospitalizations/${stayId}/discharge`, { version: 0 })).status, 200);
+    assert.equal(booked.length, 0, '沒帶回診就不約');
+
+    hospitalization.status = 'admitted';
+    const { status, body } = await send('POST', `/hospitalizations/${stayId}/discharge`, {
+      version: 0, followUp: { followUpDate: date, followUpTime: '10:00', estimatedDurationMinutes: 30, reason: '複查腎指數' },
+    });
+    assert.equal(status, 200, JSON.stringify(body));
+    assert.equal(booked.length, 1);
+    assert.equal(booked[0].visitType, 'return');
+    assert.equal(booked[0].reason, '複查腎指數');
+    assert.equal(booked[0].time, '10:00');
+    assert.equal(String(booked[0].followUpOfId), appointmentId);
+    assert.equal(String(admitting.followUpAppointmentId), String(booked[0]._id));
+    assert.equal(admitting.followUpDate, date);
+    assert.equal(String(body.followUp._id), String(booked[0]._id));
+  });
+
+  it('出院約回診的時段不對（只有日期沒有時段）：整個出院回 422，不出院', async () => {
+    const hospitalization = stay();
+    mock.method(Hospitalization, 'findById', () => query(() => hospitalization));
+    mock.method(Appointment, 'findById', () => query(() => visit({ status: 'completed' })));
+    mock.method(Appointment, 'findOne', () => query(() => null));
+    mock.method(Appointment, 'aggregate', () => query(() => []));
+    const { status } = await send('POST', `/hospitalizations/${stayId}/discharge`, { version: 0, followUp: { followUpDate: clinicToday() } });
+    assert.equal(status, 422);
+  });
+
   it('出院沒寫帶回家的藥就不開藥單；已出院的不能再出院', async () => {
     const hospitalization = stay();
     mock.method(Hospitalization, 'findById', () => query(() => hospitalization));
