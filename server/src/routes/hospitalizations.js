@@ -16,6 +16,7 @@ import { recordMedicationEvent } from '../lib/medicationWorkflow.js';
 import { announceMedicationJournal, syncMedicationJournal } from '../lib/medicationJournal.js';
 import { releaseLabResults } from '../lib/labResultApply.js';
 import { queueIdexxCensusById } from '../lib/idexxRequests.js';
+import { cancelEntryMedicationOrder, syncEntryMedicationOrder } from '../lib/entryMedicationOrder.js';
 import { cleanEntryFields, hospitalDayNumber, hospitalizationDates } from '../lib/hospitalization.js';
 import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitHospitalizationUpdate, emitLabResultsUpdate, emitMedicationUpdate } from '../lib/realtime.js';
 
@@ -331,14 +332,39 @@ router.post('/:id/discharge', async (req, res, next) => {
   }
 });
 
+// 開藥開出去的藥單：飼主與貓咪名字的快照（跟出院開藥單同一份資料）。
+async function orderOwner(petId, session) {
+  const pet = await Pet.findById(petId).populate('ownerId', 'name phone').session(session);
+  if (!pet?.ownerId) throw fail('找不到貓咪或飼主資料', 404);
+  return { ownerId: pet.ownerId._id, petName: pet.name, ownerName: pet.ownerId.name ?? '', ownerPhone: pet.ownerId.phone ?? '' };
+}
+
+// 藥單提交之後才通知：藥單工具欄與這隻貓的病歷日誌（領藥日誌）。
+function announceOrder(order) {
+  if (!order) return;
+  emitMedicationUpdate(order);
+  announceMedicationJournal(order);
+}
+
 // POST /api/hospitalizations/:id/entries — 新增一格照護紀錄（時間沒帶＝現在）。
+// 有寫「開藥」就同一個 transaction 開一張待包藥的藥單（lib/entryMedicationOrder.js）。
 router.post('/:id/entries', async (req, res, next) => {
   try {
     const hospitalization = await loadHospitalization(req.params.id);
     const fields = cleanEntryFields(req.body);
     fields.recordedAt ??= new Date();
     assertWritableDay(hospitalization, clinicToday(fields.recordedAt));
-    const entry = await HospitalizationEntry.create({ ...fields, hospitalizationId: hospitalization._id, petId: hospitalization.petId });
+    let entry;
+    let order;
+    await withTransaction(async (session) => {
+      order = null;
+      [entry] = await HospitalizationEntry.create([{ ...fields, hospitalizationId: hospitalization._id, petId: hospitalization.petId }], { session });
+      if (hasText(entry.prescription)) {
+        order = await syncEntryMedicationOrder(entry, await orderOwner(hospitalization.petId, session), req.user?.username || '', { session });
+        if (entry.isModified()) await entry.save({ session });
+      }
+    });
+    announceOrder(order);
     announce(hospitalization);
     res.status(201).json(entry);
   } catch (err) {
@@ -346,8 +372,9 @@ router.post('/:id/entries', async (req, res, next) => {
   }
 });
 
-// PUT /api/hospitalizations/:id/entries/:entryId — 改一格（自動存檔）：{ version, ...欄位 }。
+// PUT /api/hospitalizations/:id/entries/:entryId — 改一格：{ version, ...欄位 }。
 // 住院中與出院後都能改（事後更正）；版本不符回 409 附最新內容，不默默蓋掉別台剛改的。
+// 改了「開藥」連著的藥單同一個 transaction 跟著更新（還沒領走的）；清空＝取消那張。
 router.put('/:id/entries/:entryId', async (req, res, next) => {
   try {
     const version = requireVersion(req.body);
@@ -356,16 +383,31 @@ router.put('/:id/entries/:entryId', async (req, res, next) => {
     if (fields.recordedAt) assertWritableDay(hospitalization, clinicToday(fields.recordedAt));
     else if (hospitalization.status === 'cancelled') throw fail('這次住院已取消', 409);
     const entryId = requireId(req.params.entryId, '照護紀錄參數不正確');
-    const entry = await HospitalizationEntry.findOneAndUpdate(
-      { _id: entryId, hospitalizationId: hospitalization._id, __v: version },
-      { $set: fields, $inc: { __v: 1 } },
-      { new: true, runValidators: true },
-    );
-    if (!entry) {
-      const current = await HospitalizationEntry.findOne({ _id: entryId, hospitalizationId: hospitalization._id }).lean();
-      if (!current) return res.status(404).json({ message: '找不到這筆照護紀錄' });
-      return res.status(409).json({ message: '這筆紀錄已被其他裝置修改，已載入最新內容', current });
+    let entry;
+    let order;
+    let missed;
+    await withTransaction(async (session) => {
+      order = null;
+      missed = null;
+      entry = await HospitalizationEntry.findOneAndUpdate(
+        { _id: entryId, hospitalizationId: hospitalization._id, __v: version },
+        { $set: fields, $inc: { __v: 1 } },
+        { new: true, runValidators: true, session },
+      );
+      if (!entry) {
+        missed = (await HospitalizationEntry.findOne({ _id: entryId, hospitalizationId: hospitalization._id }).session(session).lean()) ?? {};
+        return;
+      }
+      if (fields.prescription !== undefined) {
+        order = await syncEntryMedicationOrder(entry, await orderOwner(hospitalization.petId, session), req.user?.username || '', { session });
+        if (entry.isModified()) await entry.save({ session });
+      }
+    });
+    if (missed) {
+      if (!missed._id) return res.status(404).json({ message: '找不到這筆照護紀錄' });
+      return res.status(409).json({ message: '這筆紀錄已被其他裝置修改，已載入最新內容', current: missed });
     }
+    announceOrder(order);
     announce(hospitalization);
     res.json(entry);
   } catch (err) {
@@ -373,13 +415,22 @@ router.put('/:id/entries/:entryId', async (req, res, next) => {
   }
 });
 
-// DELETE /api/hospitalizations/:id/entries/:entryId — 刪掉一格（畫面上先確認）。
+// DELETE /api/hospitalizations/:id/entries/:entryId — 刪掉一格（畫面上先確認）。「開藥」開的藥單還沒領走就一併取消。
 router.delete('/:id/entries/:entryId', async (req, res, next) => {
   try {
     const hospitalization = await loadHospitalization(req.params.id);
     const entryId = requireId(req.params.entryId, '照護紀錄參數不正確');
-    const removed = await HospitalizationEntry.deleteOne({ _id: entryId, hospitalizationId: hospitalization._id });
-    if (!removed.deletedCount) return res.status(404).json({ message: '找不到這筆照護紀錄' });
+    let order = null;
+    const removed = await withTransaction(async (session) => {
+      order = null;
+      const entry = await HospitalizationEntry.findOne({ _id: entryId, hospitalizationId: hospitalization._id }).session(session);
+      if (!entry) return false;
+      order = await cancelEntryMedicationOrder(entry, '住院紀錄已刪除', { session });
+      await HospitalizationEntry.deleteOne({ _id: entry._id }, { session });
+      return true;
+    });
+    if (!removed) return res.status(404).json({ message: '找不到這筆照護紀錄' });
+    announceOrder(order);
     announce(hospitalization);
     res.status(204).end();
   } catch (err) {

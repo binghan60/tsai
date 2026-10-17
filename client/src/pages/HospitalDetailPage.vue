@@ -681,7 +681,7 @@ watch(id, () => {
   <ConfirmDialog
     :open="Boolean(entryToDelete)"
     title="刪除照護紀錄"
-    :description="entryToDelete ? `確定要刪除 ${clinicTimeInput(entryToDelete.recordedAt)} 這筆照護紀錄嗎？此操作無法復原。` : ''"
+    :description="entryToDelete ? `確定要刪除 ${clinicTimeInput(entryToDelete.recordedAt)} 這筆照護紀錄嗎？${entryToDelete.medicationOrderId ? '開藥開出的藥單還沒領走的會一併取消。' : ''}此操作無法復原。` : ''"
     confirm-label="刪除"
     destructive
     :loading="deleting"

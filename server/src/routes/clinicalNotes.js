@@ -10,11 +10,12 @@ import { STAFF_SENDERS } from '../lib/pinnedPets.js';
 import { applyMedicationJournalEdit } from '../lib/medicationWorkflow.js';
 import { syncMedicationJournal } from '../lib/medicationJournal.js';
 import { syncOrderFromJournal } from '../lib/visitMedicationOrder.js';
+import { writeBackEntryPrescription } from '../lib/entryMedicationOrder.js';
 import { clinicalNoteViews } from '../lib/clinicalNoteView.js';
 import { linkedLabResults } from '../lib/appointmentJournal.js';
 import { paginatedPayload, paginationOptions } from '../lib/pagination.js';
 import { withTransaction } from '../lib/transaction.js';
-import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitMedicationUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitClinicalNoteUpdate, emitHospitalizationUpdate, emitMedicationUpdate } from '../lib/realtime.js';
 import Pet from '../models/Pet.js';
 
 const NOTE_FIELDS = ['content', 'entryDate'];
@@ -76,9 +77,11 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
     let appointment;
     let order;
     let visitOrder;
+    let stayEntry;
     let todosChanged = false;
     await withTransaction(async session => {
       todosChanged = false;
+      stayEntry = null;
       const existing = await ClinicalNote.findById(req.params.id).session(session);
       if (existing?.medicationOrderId) {
         order = await MedicationOrder.findById(existing.medicationOrderId).session(session);
@@ -86,6 +89,8 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
         if (applyMedicationJournalEdit(order, req.body.fields ?? {}, req.user?.username || '')) {
           await order.save({ session });
           await syncMedicationJournal(order, { session });
+          // 住院開藥開的藥單：日誌上更正的內容寫回那一格照護紀錄。
+          stayEntry = await writeBackEntryPrescription(order, { session });
         } else {
           order = null;
         }
@@ -129,6 +134,7 @@ clinicalNotesRouter.put('/:id', async (req, res, next) => {
     if (appointment) emitAppointmentUpdate(appointment);
     if (todosChanged) await publishTodos();
     if (order) emitMedicationUpdate(order);
+    if (stayEntry) emitHospitalizationUpdate({ _id: stayEntry.hospitalizationId, petId: stayEntry.petId });
     if (visitOrder) emitMedicationUpdate(visitOrder);
     const [view] = await clinicalNoteViews([note]);
     emitClinicalNoteUpdate(view ?? note);

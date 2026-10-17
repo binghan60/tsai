@@ -6,14 +6,18 @@ import { instrumentLabel } from './labResults.js';
 // 住院專區的純邏輯：照護時間軸怎麼分天、每筆列哪幾欄、新增／修改表單送出什麼、體重變化。
 // 規則見 CLAUDE.md 第三節 hospitalizations。
 
-// 照護紀錄一筆可填的欄位：時間（HH:MM，送出時跟那一天組回 recordedAt）、食物放置、灌食、用藥、其他、體重、體溫。
-export const ENTRY_FIELDS = ['time', 'food', 'forceFeeding', 'medication', 'other', 'weightKg', 'temperatureC'];
+// 照護紀錄一筆可填的欄位：時間（HH:MM，送出時跟那一天組回 recordedAt）、食物放置、灌食、用藥紀錄（餵藥打針做了什麼）、
+// 開藥（醫師開的處方簽，伺服器開成待包藥的藥單）、其他、體重、體溫。
+export const ENTRY_FIELDS = ['time', 'food', 'forceFeeding', 'medication', 'prescription', 'other', 'weightKg', 'temperatureC'];
+// 帶格式標記（粗體、顏色）的欄位：存之前 normalizeRichText，判斷空白看純文字。
+const RICH_FIELDS = ['medication', 'prescription'];
 
 export const ENTRY_FIELD_LABELS = {
   time: '時間',
   food: '食物放置',
   forceFeeding: '灌食',
-  medication: '用藥',
+  medication: '用藥紀錄',
+  prescription: '開藥',
   other: '其他',
   weightKg: '體重',
   temperatureC: '體溫',
@@ -30,6 +34,7 @@ export function entryDraft(entry) {
     food: entry?.food ?? '',
     forceFeeding: entry?.forceFeeding ?? '',
     medication: entry?.medication ?? '',
+    prescription: entry?.prescription ?? '',
     other: entry?.other ?? '',
     weightKg: entry?.weightKg === null || entry?.weightKg === undefined ? '' : String(entry.weightKg),
     temperatureC: entry?.temperatureC === null || entry?.temperatureC === undefined ? '' : String(entry.temperatureC),
@@ -37,14 +42,14 @@ export function entryDraft(entry) {
 }
 
 export function emptyEntryDraft(time = '') {
-  return { time, food: '', forceFeeding: '', medication: '', other: '', weightKg: '', temperatureC: '' };
+  return { time, food: '', forceFeeding: '', medication: '', prescription: '', other: '', weightKg: '', temperatureC: '' };
 }
 
 // 跟伺服器存的樣子一樣整理過的值：伺服器會去掉頭尾空白、用藥會 normalizeRichText、體溫存成數字。
 // 「有沒有改」一律比整理過的值，多打一個空白不算改過。
 export function normalizedField(key, value) {
   const text = String(value ?? '');
-  if (key === 'medication') return normalizeRichText(text).trim();
+  if (RICH_FIELDS.includes(key)) return normalizeRichText(text).trim();
   if (key === 'temperatureC' || key === 'weightKg') {
     const trimmed = text.trim();
     if (!trimmed) return '';
@@ -65,7 +70,7 @@ export function hasEntryChanges(draft, baseline) {
 // 除了時間以外一欄都沒填：不能新增（沒有東西可記）。
 export function isEmptyEntry(draft) {
   return ENTRY_FIELDS.filter((key) => key !== 'time').every((key) => {
-    const value = key === 'medication' ? richTextToPlain(draft[key] ?? '') : draft[key];
+    const value = RICH_FIELDS.includes(key) ? richTextToPlain(draft[key] ?? '') : draft[key];
     return !String(value ?? '').trim();
   });
 }
@@ -86,6 +91,7 @@ export function entryPayload(draft, date) {
     food: draft.food,
     forceFeeding: draft.forceFeeding,
     medication: draft.medication,
+    prescription: draft.prescription,
     other: draft.other,
     weightKg: String(draft.weightKg ?? '').trim(),
     temperatureC: String(draft.temperatureC ?? '').trim(),
@@ -110,10 +116,11 @@ export function entryPatch(draft, baseline, date) {
 // 時間軸上一筆只列有填的欄位（只記了灌食的那筆就只有一行）。
 export function filledFields(entry) {
   const fields = [];
-  for (const key of ['food', 'forceFeeding', 'medication', 'other']) {
+  for (const key of ['food', 'forceFeeding', 'medication', 'prescription', 'other']) {
     const value = entry?.[key] ?? '';
-    const text = key === 'medication' ? richTextToPlain(value) : value;
-    if (String(text).trim()) fields.push({ key, label: ENTRY_FIELD_LABELS[key], value, rich: key === 'medication' });
+    const rich = RICH_FIELDS.includes(key);
+    const text = rich ? richTextToPlain(value) : value;
+    if (String(text).trim()) fields.push({ key, label: ENTRY_FIELD_LABELS[key], value, rich });
   }
   if (entry?.weightKg !== null && entry?.weightKg !== undefined && entry.weightKg !== '') {
     fields.push({ key: 'weightKg', label: ENTRY_FIELD_LABELS.weightKg, value: `${entry.weightKg} kg`, mono: true });

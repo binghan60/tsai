@@ -10,9 +10,13 @@ const hospitalizationEntrySchema = new mongoose.Schema(
     recordedAt: { type: Date, required: true },
     food: { type: String, default: '', trim: true, maxlength: 200 },
     forceFeeding: { type: String, default: '', trim: true, maxlength: 200 },
-    // 用藥：跟藥單同一種格式標記（shared/richText.js），打字時跳藥櫃建議。
+    // 用藥紀錄：住院期間餵藥、打針做了什麼。跟藥單同一種格式標記（shared/richText.js），打字時跳藥櫃建議。
     medication: { type: String, default: '', trim: true, validate: richTextMaxLength(2000) },
     other: { type: String, default: '', trim: true, maxlength: 2000 },
+    // 開藥：醫師開的處方簽（不是用藥紀錄）。存的當下在藥單開一筆待包藥（lib/entryMedicationOrder.js），
+    // 有自己的領藥日誌，病歷日誌查得到之前開過什麼藥；藥單那邊修改或取消會寫回這一欄。
+    prescription: { type: String, default: '', trim: true, validate: richTextMaxLength(10000) },
+    medicationOrderId: { type: mongoose.Schema.Types.ObjectId, ref: 'MedicationOrder', default: null },
     // 體重算進貓咪的最近體重（lib/latestWeight.js）。
     weightKg: { type: Number, min: 0, default: null },
     temperatureC: { type: Number, min: 0, default: null },

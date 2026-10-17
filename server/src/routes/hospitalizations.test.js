@@ -177,12 +177,67 @@ describe('住院', () => {
 
   it('每一格照護紀錄可以有自己的體重，只能記在住院期間的日子', async () => {
     mock.method(Hospitalization, 'findById', () => query(() => stay()));
-    const created = [];
-    mock.method(HospitalizationEntry, 'create', async (data) => { created.push(data); return data; });
     assert.equal((await send('POST', `/hospitalizations/${stayId}/entries`, { food: '同上', weightKg: '3.42' })).status, 201);
-    assert.equal(created[0].weightKg, 3.42);
+    assert.equal(entries[0].weightKg, 3.42);
+    assert.equal(orders.length, 0, '沒寫開藥就不開藥單');
     assert.equal((await send('POST', `/hospitalizations/${stayId}/entries`, { food: '同上', weightKg: '-1' })).status, 422);
     assert.equal((await send('POST', `/hospitalizations/${stayId}/entries`, { weightKg: '3.42', recordedAt: '2020-01-01T03:00:00Z' })).status, 422);
+  });
+
+  it('開藥：存的當下開一張待包藥的藥單（醫師開的不必再審），連回那一格與住院單；用藥紀錄不開藥單', async () => {
+    mock.method(Hospitalization, 'findById', () => query(() => stay()));
+    mock.method(Pet, 'findById', () => query(() => ({ _id: petId, name: '小橘', ownerId: { _id: ownerId, name: '院內', phone: '' } })));
+    mock.method(MedicationOrder.prototype, 'save', async function save() { orders.push(this); return this; });
+    mock.method(HospitalizationEntry.prototype, 'save', async function save() { return this; });
+    const { status } = await send('POST', `/hospitalizations/${stayId}/entries`, { medication: 'Cerenia 皮下注射', prescription: '**Azodyl** 1 cap PO SID' });
+    assert.equal(status, 201);
+    assert.equal(orders.length, 1);
+    assert.equal(orders[0].status, 'approved');
+    assert.equal(orders[0].fromVisit, false);
+    assert.equal(orders[0].prescription, '**Azodyl** 1 cap PO SID');
+    assert.equal(String(orders[0].hospitalizationId), stayId);
+    assert.equal(String(orders[0].hospitalizationEntryId), String(entries[0]._id));
+    assert.deepEqual(orders[0].history.map((event) => event.action), ['create', 'approve']);
+    assert.equal(String(entries[0].medicationOrderId), String(orders[0]._id));
+    assert.equal(entries[0].medication, 'Cerenia 皮下注射');
+  });
+
+  it('改開藥：還沒領走的更新同一張（已包好的標需重新包藥）；清空就取消那張並解除關聯', async () => {
+    const orderId = '507f1f77bcf86cd799439076';
+    const order = new MedicationOrder({ _id: orderId, petId, ownerId, petName: '小橘', prescription: '舊處方', status: 'ready', approvedAt: new Date() });
+    const entry = new HospitalizationEntry({ _id: entryId, hospitalizationId: stayId, petId, recordedAt: new Date(), prescription: '新處方', medicationOrderId: orderId });
+    mock.method(Hospitalization, 'findById', () => query(() => stay()));
+    mock.method(Pet, 'findById', () => query(() => ({ _id: petId, name: '小橘', ownerId: { _id: ownerId, name: '院內', phone: '' } })));
+    mock.method(HospitalizationEntry, 'findOneAndUpdate', () => query(() => entry));
+    mock.method(HospitalizationEntry.prototype, 'save', async function save() { return this; });
+    mock.method(MedicationOrder, 'findById', () => query(() => order));
+    mock.method(MedicationOrder.prototype, 'save', async function save() { orders.push(this); return this; });
+    assert.equal((await send('PUT', `/hospitalizations/${stayId}/entries/${entryId}`, { version: 0, prescription: '新處方' })).status, 200);
+    assert.equal(order.prescription, '新處方');
+    assert.equal(order.status, 'approved');
+    assert.equal(order.needsRepack, true);
+    entry.prescription = '';
+    assert.equal((await send('PUT', `/hospitalizations/${stayId}/entries/${entryId}`, { version: 1, prescription: '' })).status, 200);
+    assert.equal(order.status, 'cancelled');
+    assert.equal(entry.medicationOrderId, null);
+  });
+
+  it('刪掉照護紀錄：開藥開的藥單還沒領走就一併取消；已領藥的不動', async () => {
+    const orderId = '507f1f77bcf86cd799439076';
+    const order = new MedicationOrder({ _id: orderId, petId, ownerId, petName: '小橘', prescription: '處方', status: 'approved' });
+    const entry = new HospitalizationEntry({ _id: entryId, hospitalizationId: stayId, petId, recordedAt: new Date(), prescription: '處方', medicationOrderId: orderId });
+    mock.method(Hospitalization, 'findById', () => query(() => stay()));
+    mock.method(HospitalizationEntry, 'findOne', () => query(() => entry));
+    mock.method(HospitalizationEntry, 'deleteOne', async () => ({ deletedCount: 1 }));
+    mock.method(MedicationOrder, 'findById', () => query(() => order));
+    mock.method(MedicationOrder.prototype, 'save', async function save() { orders.push(this); return this; });
+    assert.equal((await send('DELETE', `/hospitalizations/${stayId}/entries/${entryId}`)).status, 204);
+    assert.equal(order.status, 'cancelled');
+    order.status = 'collected';
+    orders.length = 0;
+    assert.equal((await send('DELETE', `/hospitalizations/${stayId}/entries/${entryId}`)).status, 204);
+    assert.equal(order.status, 'collected');
+    assert.equal(orders.length, 0);
   });
 
   it('改照護紀錄要帶版本，別台改過就回 409 附最新內容', async () => {

@@ -26,6 +26,7 @@ const editing = computed(() => Boolean(props.entry));
 const baseline = props.entry ? entryDraft(props.entry) : emptyEntryDraft(props.defaultTime);
 const draft = reactive({ ...baseline });
 const medicationEditor = ref(null);
+const prescriptionEditor = ref(null);
 const idBase = `hospital-entry-${props.entry?._id ?? 'new'}`;
 
 // 新增：除了預設時間以外有填東西才算；修改：跟原本的不同才算（離開頁面前要不要提醒、能不能換一筆）。
@@ -77,12 +78,19 @@ onMounted(async () => {
     <div class="grid gap-3 @2xl:grid-cols-2">
       <div class="space-y-1.5">
         <div class="flex h-7 items-center">
-          <span :id="`${idBase}-medication-label`" class="text-sm font-medium">用藥</span>
+          <span :id="`${idBase}-medication-label`" class="text-sm font-medium">用藥紀錄</span>
           <Button type="button" variant="secondary" size="xs" class="ml-auto" @click="medicationEditor?.openPicker()"><Pill stroke-width="1.75" />藥櫃</Button>
         </div>
-        <DrugSuggestEditor ref="medicationEditor" :id="`${idBase}-medication`" v-model="draft.medication" aria-label="用藥" :min-rows="3" />
+        <DrugSuggestEditor ref="medicationEditor" :id="`${idBase}-medication`" v-model="draft.medication" aria-label="用藥紀錄" :min-rows="3" />
       </div>
       <div class="space-y-1.5">
+        <div class="flex h-7 items-center">
+          <span :id="`${idBase}-prescription-label`" class="text-sm font-medium">開藥</span>
+          <Button type="button" variant="secondary" size="xs" class="ml-auto" @click="prescriptionEditor?.openPicker()"><Pill stroke-width="1.75" />藥櫃</Button>
+        </div>
+        <DrugSuggestEditor ref="prescriptionEditor" :id="`${idBase}-prescription`" v-model="draft.prescription" aria-label="開藥" :min-rows="3" />
+      </div>
+      <div class="space-y-1.5 @2xl:col-span-2">
         <div class="flex h-7 items-center"><Label :for="`${idBase}-other`" class="text-sm font-medium">其他</Label></div>
         <Textarea :id="`${idBase}-other`" v-model="draft.other" maxlength="2000" class="min-h-[6.25rem]" />
       </div>

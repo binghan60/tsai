@@ -126,7 +126,7 @@ const showEditor = computed(() => !fullPage.value || !selected.value || editing.
 const changedClinical = computed(() => selected.value && ['condition', 'prescription', 'note'].some(key => form[key].trim() !== selected.value[key]));
 // 來源：診療台送交櫃台時開的是門診（fromVisit），出院時帶回家的藥是出院（hospitalizationId），
 // 櫃台登記的是拿藥（電話續藥等沒有看診的領藥）。
-function sourceLabel(order) { return order.fromVisit ? '門診' : order.hospitalizationId ? '出院' : '拿藥'; }
+function sourceLabel(order) { return order.fromVisit ? '門診' : order.hospitalizationEntryId ? '住院' : order.hospitalizationId ? '出院' : '拿藥'; }
 function sourceTone(order) { return order.fromVisit || order.hospitalizationId ? 'bg-info-surface text-info' : 'bg-accent text-accent-foreground'; }
 function tone(status) {
   return { review: 'bg-warning-surface text-warning', approved: 'bg-info-surface text-info', ready: 'bg-accent text-accent-foreground', collected: 'bg-success-surface text-success' }[status] || 'bg-sunken text-muted-foreground';

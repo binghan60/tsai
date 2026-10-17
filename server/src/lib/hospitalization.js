@@ -98,6 +98,11 @@ export function cleanEntryFields(body = {}) {
     if (value !== null && (!Number.isFinite(value) || value <= 0 || value > 50)) throw invalid('體溫格式不正確');
     fields.temperatureC = value;
   }
+  if (body.prescription !== undefined) {
+    const value = normalizeRichText(String(body.prescription ?? '')).trim();
+    if (richTextLength(value) > 10000) throw invalid('開藥內容太長（最多 10000 字）');
+    fields.prescription = value;
+  }
   if (body.weightKg !== undefined) fields.weightKg = cleanWeight(body.weightKg);
   if (body.recordedAt !== undefined) {
     const at = new Date(body.recordedAt);

@@ -11,6 +11,9 @@ const schema = new mongoose.Schema({
   fromVisit: { type: Boolean, default: false },
   // 出院時「帶回家的藥」開的（routes/hospitalizations.js 的出院）：醫師開的、直接是待包藥，有自己的領藥日誌。
   hospitalizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Hospitalization', default: null },
+  // 住院時在照護紀錄「開藥」開的（lib/entryMedicationOrder.js）：醫師開的、直接是待包藥，有自己的領藥日誌；
+  // 修改或取消會寫回那一格照護紀錄。
+  hospitalizationEntryId: { type: mongoose.Schema.Types.ObjectId, ref: 'HospitalizationEntry', default: null },
   petName: { type: String, required: true },
   ownerName: { type: String, default: '' },
   ownerPhone: { type: String, default: '' },

@@ -129,11 +129,11 @@
 
 ### hospitalizations 住院
 
-兩個 collection：`hospitalizations`（住院單：`petId`、`admittingAppointmentId`、`status`、`admittedAt`、`dischargedAt`、`reason`、`dischargeNote`、`dischargeSpecialCareNote` 請轉告飼主、`dischargeFollowUpRecommendation` 回診建議（後兩個純文字 ≤500 字）、`dischargeMedicationOrderId`，帶 `__v`）、`hospitalizationEntries`（照護紀錄＝紙本那張表的一格：`recordedAt`、`food` 食物放置、`forceFeeding` 灌食、`medication` 用藥（可格式化，≤2,000 字）、`other` 其他、選填的 `weightKg` 體重、`temperatureC` 體溫（體重每一格各自量，不是每天一筆）、`staff`（裝置身分）、`fromVisit`，帶 `__v`）。路由 `routes/hospitalizations.js`，純邏輯 `lib/hospitalization.js`（前端另有一份 `client/src/lib/hospitalization.js`：時間軸分天、每筆列哪幾欄、表單送出的內容、體重變化）。
+兩個 collection：`hospitalizations`（住院單：`petId`、`admittingAppointmentId`、`status`、`admittedAt`、`dischargedAt`、`reason`、`dischargeNote`、`dischargeSpecialCareNote` 請轉告飼主、`dischargeFollowUpRecommendation` 回診建議（後兩個純文字 ≤500 字）、`dischargeMedicationOrderId`，帶 `__v`）、`hospitalizationEntries`（照護紀錄＝紙本那張表的一格：`recordedAt`、`food` 食物放置、`forceFeeding` 灌食、`medication` 用藥紀錄（可格式化，≤2,000 字）、`prescription` 開藥＋`medicationOrderId`（見下）、`other` 其他、選填的 `weightKg` 體重、`temperatureC` 體溫（體重每一格各自量，不是每天一筆）、`staff`（裝置身分）、`fromVisit`，帶 `__v`）。路由 `routes/hospitalizations.js`，純邏輯 `lib/hospitalization.js`（前端另有一份 `client/src/lib/hospitalization.js`：時間軸分天、每筆列哪幾欄、表單送出的內容、體重變化）。
 
 - **一律從看診收住院**（`POST /hospitalizations`）；沒有掛號直接住院的貓走住院頁「新增住院」：`POST /appointments/walk-in` 帶 `admit: true`，同一個 transaction 建現場看診（入院評估）、記開始看診、收住院（一隻貓同時只能一筆住院中，否則 409），回應多一個 `hospitalization`，畫面導到住院專區：醫師開始看診之後、櫃台完成處理之前都能收（看診到一半才決定很常見）；一隻貓同時只能有一筆住院中。**入院那次看診就是入院評估**，住院專區引用、不複製。收住院同一個 transaction：這次看診已經寫的藥單搬到住院第一筆照護紀錄的「用藥」（`fromVisit: true`），看診上清空、不開藥單；已送交櫃台開出去的那張待包藥一併取消；看診記 `hospitalizationId`。
 - `status`：`admitted` 住院中／`discharged` 已出院／`cancelled` 取消（收錯了）。住院第幾天照日曆算，入院那天是第 1 天；住院期間的每一天＝入院那天到出院那天（還在住院就到今天）。
-- **照護紀錄**一天幾格不設上限，醫師、櫃台都會填，署名用裝置身分。住院中與出院後都能改（事後更正），日期要落在住院期間；改一筆帶 `version`，不符回 409 附 `current`（最新內容）。畫面上按「新增」「儲存」才送出（不自動存檔，不會留下空紀錄）；刪除先確認。紙本的「Drug」欄在系統叫「用藥」，跟藥單同一個編輯器（`DrugSuggestEditor`）。
+- **照護紀錄**一天幾格不設上限，醫師、櫃台都會填，署名用裝置身分。住院中與出院後都能改（事後更正），日期要落在住院期間；改一筆帶 `version`，不符回 409 附 `current`（最新內容）。畫面上按「新增」「儲存」才送出（不自動存檔，不會留下空紀錄）；刪除先確認。紙本的「Drug」欄在系統叫「用藥紀錄」（`medication`，住院期間餵藥打針做了什麼，只在住院專區看），跟藥單同一個編輯器（`DrugSuggestEditor`）。**另有「開藥」`prescription`（可格式化，≤10,000 字）是醫師開的處方簽，要走藥單流程**：新增或儲存的同一個 transaction 開一張待包藥的藥單（`lib/entryMedicationOrder.js`，醫師開的不必再審，`history` 記 `create`＋`approve`，帶 `hospitalizationId` 與 `hospitalizationEntryId`，id 記在那格的 `medicationOrderId`），有自己的領藥日誌，病歷日誌查得到之前開過什麼藥；同一格再存、內容變了就更新同一張（已包好的標需重新包藥）、清空就取消，已領藥的不回頭改、內容不同才另開一張；刪掉那格時還沒領走的藥單一併取消；藥單那邊（或日誌上）修改或取消會寫回那一格的 `prescription`。
 - **每一格照護紀錄的 `weightKg`** 算進貓咪的最近體重（`lib/latestWeight.js`，同一天住院體重優先於看診、同一天多筆取最後一筆，入院當天的看診是入院前量的）。住院清單的「今天體重」是今天最後一格有量體重的那筆。
 - **出院**（`POST /:id/discharge`）：出院時間（預設現在、可往前改）、出院備註、請轉告飼主、回診建議、帶回家的藥。後三個文字欄位出院後可以從住院專區 ⋯「修改出院內容」改（`PUT`）。帶回家的藥有寫就同一個 transaction 開一張**待包藥**的藥單（`hospitalizationId` 連回住院單，醫師開的不必再審，`history` 記 `create`＋`approve`，所以有自己的領藥日誌），id 記在 `dischargeMedicationOrderId`。
 - **取消住院**（`POST /:id/cancel`）：只有還沒記任何照護紀錄（從看診搬來的那格不算）時能取消，有紀錄就辦出院。從看診搬來的用藥搬回看診的藥單，看診清掉 `hospitalizationId`；已送交櫃台的看診重新開出待包藥；連到這次住院的檢驗結果回到待確認清單；照護紀錄一起刪。
@@ -184,7 +184,7 @@
 
 ### medicationOrders 藥單
 
-`petId`、`ownerId`、`appointmentId`、`fromVisit`、`hospitalizationId`（出院帶回家的藥）、快照（`petName`、`ownerName`、`ownerPhone`）、`condition`／`prescription`／`note`（可格式化）、`status`、`needsRepack`、審核／包藥／領藥的人與時間、`history[]`（每次異動留當時內容）。來源由 `fromVisit`／`hospitalizationId` 區分：診療台送交櫃台開的是「門診」，出院時開的是「出院」，櫃台登記的是「拿藥」，藥單清單與詳情都以標記呈現。階段定義在 `shared/medicationWorkflow.js`：`review` 待醫師確認 → `approved` 待包藥 → `ready` 待領藥 → `collected` 已領藥，另有 `cancelled`。櫃台登記的從 `review` 開始；改了已確認藥單的內容就退回待醫師確認（待領藥的標 `needsRepack`，包藥時要確認已停用舊藥包）。藥單與它的病歷日誌（及診療台藥單的寫回）在同一個 transaction。工具欄數字依裝置身分：醫師看待確認、櫃台看待包藥＋待領藥（`medicationTodoCount`）。
+`petId`、`ownerId`、`appointmentId`、`fromVisit`、`hospitalizationId`（出院帶回家的藥）、快照（`petName`、`ownerName`、`ownerPhone`）、`condition`／`prescription`／`note`（可格式化）、`status`、`needsRepack`、審核／包藥／領藥的人與時間、`history[]`（每次異動留當時內容）。來源由 `fromVisit`／`hospitalizationEntryId`／`hospitalizationId` 區分：診療台送交櫃台開的是「門診」，住院照護紀錄的「開藥」開的是「住院」（`hospitalizationEntryId`），出院時開的是「出院」，櫃台登記的是「拿藥」，藥單清單與詳情都以標記呈現。階段定義在 `shared/medicationWorkflow.js`：`review` 待醫師確認 → `approved` 待包藥 → `ready` 待領藥 → `collected` 已領藥，另有 `cancelled`。櫃台登記的從 `review` 開始；改了已確認藥單的內容就退回待醫師確認（待領藥的標 `needsRepack`，包藥時要確認已停用舊藥包）。藥單與它的病歷日誌（及診療台藥單的寫回）在同一個 transaction。工具欄數字依裝置身分：醫師看待確認、櫃台看待包藥＋待領藥（`medicationTodoCount`）。
 
 ### labResults IDEXX 檢驗結果
 

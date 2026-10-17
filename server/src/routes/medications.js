@@ -5,8 +5,9 @@ import Pet from '../models/Pet.js';
 import Appointment from '../models/Appointment.js';
 import { MEDICATION_ACTIVE, MEDICATION_STAGES } from '../../../shared/medicationWorkflow.js';
 import { applyMedicationAction, medicationFields, recordMedicationEvent } from '../lib/medicationWorkflow.js';
-import { emitAppointmentUpdate, emitMedicationUpdate } from '../lib/realtime.js';
+import { emitAppointmentUpdate, emitHospitalizationUpdate, emitMedicationUpdate } from '../lib/realtime.js';
 import { writeBackVisitPrescription } from '../lib/visitMedicationOrder.js';
+import { writeBackEntryPrescription } from '../lib/entryMedicationOrder.js';
 import { announceMedicationJournal, syncMedicationJournal } from '../lib/medicationJournal.js';
 import { withTransaction } from '../lib/transaction.js';
 import { escapeRegExp } from '../lib/regex.js';
@@ -16,13 +17,15 @@ const router = Router();
 
 // 藥單與它的病歷日誌要嘛一起成功、要嘛一起回滾：藥單存了、日誌卻沒建起來，病歷上就查不到這次領藥。
 // 診療台開的藥單沒有自己的日誌，內容在那次看診上：修改或取消時同一個 transaction 寫回看診。
+// 住院開藥開的藥單（hospitalizationEntryId）同樣寫回那一格照護紀錄。
 const saveWithJournal = async (order) => {
-  const appointment = await withTransaction(async (session) => {
+  const { appointment, entry } = await withTransaction(async (session) => {
     await order.save({ session });
     await syncMedicationJournal(order, { session });
-    return writeBackVisitPrescription(order, { session });
+    return { appointment: await writeBackVisitPrescription(order, { session }), entry: await writeBackEntryPrescription(order, { session }) };
   });
   if (appointment) emitAppointmentUpdate(appointment);
+  if (entry) emitHospitalizationUpdate({ _id: entry.hospitalizationId, petId: entry.petId });
 };
 router.get('/', async (req, res, next) => {
   try {

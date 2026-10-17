@@ -48,15 +48,18 @@ test('修改只送有變的欄位，時間跟那一天組回時刻', () => {
 test('新增整筆送出；只填了時間不算有東西可記', () => {
   const draft = { ...emptyEntryDraft('20:15'), forceFeeding: 'a/d 10 ml' };
   assert.deepEqual(entryPayload(draft, '2026-10-15'), {
-    recordedAt: '2026-10-15T12:15:00.000Z', food: '', forceFeeding: 'a/d 10 ml', medication: '', other: '', weightKg: '', temperatureC: '',
+    recordedAt: '2026-10-15T12:15:00.000Z', food: '', forceFeeding: 'a/d 10 ml', medication: '', prescription: '', other: '', weightKg: '', temperatureC: '',
   });
   assert.equal(isEmptyEntry(emptyEntryDraft('20:15')), true);
   assert.equal(isEmptyEntry({ ...emptyEntryDraft('20:15'), medication: '**  **' }), true);
+  assert.equal(isEmptyEntry({ ...emptyEntryDraft('20:15'), prescription: '[red] [/red]' }), true);
+  assert.equal(isEmptyEntry({ ...emptyEntryDraft('20:15'), prescription: 'Azodyl 1 cap PO SID' }), false);
   assert.equal(isEmptyEntry(draft), false);
 });
 
 test('時間軸上一筆只列有填的欄位', () => {
-  assert.deepEqual(filledFields(entry({ medication: '**Cerenia**' })).map((field) => field.label), ['食物放置', '用藥', '體溫']);
+  assert.deepEqual(filledFields(entry({ medication: '**Cerenia**' })).map((field) => field.label), ['食物放置', '用藥紀錄', '體溫']);
+  assert.deepEqual(filledFields(entry({ medication: 'Cerenia 皮下注射', prescription: '**Azodyl** 1 cap' })).map((field) => [field.label, Boolean(field.rich)]), [['食物放置', false], ['用藥紀錄', true], ['開藥', true], ['體溫', false]]);
   assert.equal(filledFields(entry()).at(-1).value, '38.9 °C');
   assert.deepEqual(filledFields(entry({ food: '', temperatureC: null, forceFeeding: 'a/d 10 ml' })).map((field) => field.key), ['forceFeeding']);
 });
