@@ -15,7 +15,7 @@ const emit = defineEmits(['select']);
 <template>
   <button
     type="button"
-    class="group flex min-h-16 w-full items-center gap-3 rounded-xl border px-4 py-3 text-left shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px active:shadow-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none"
+    class="group flex min-h-16 w-full items-center gap-3 rounded-xl border px-4 py-3 text-left shadow-sm transition-colors focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border active:translate-y-px active:shadow-none disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none"
     :class="selected ? 'border-primary bg-accent' : 'border-border bg-card hover:border-primary/35 hover:bg-accent/40'"
     :disabled="disabled"
     :aria-label="ariaLabel || `${actionLabel}${title}`"

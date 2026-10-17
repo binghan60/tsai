@@ -281,7 +281,7 @@ defineExpose({
 <template>
   <div
     :class="cn(
-      'rich-text-editor min-w-0 rounded-lg border border-input bg-field transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
+      'rich-text-editor min-w-0 rounded-lg border border-input bg-field transition-colors focus-within:border-focus-border',
       disabled ? 'cursor-not-allowed opacity-50' : '',
       singleLine ? 'rich-text-editor--single flex items-center' : 'relative',
       props.class,
@@ -389,8 +389,8 @@ defineExpose({
   padding-bottom: 2.75rem;
 }
 .rich-text-editor__tool:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 1px;
+  outline: 2px solid var(--focus-border);
+  outline-offset: 0;
 }
 .rich-text-editor__tool:disabled {
   cursor: not-allowed;

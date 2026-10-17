@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
         <div
           role="button"
           tabindex="0"
-          class="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-5 text-center transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+          class="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-5 text-center transition-colors focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
           :class="[images.length ? 'min-h-24 border-border bg-muted/30 hover:border-primary/60 hover:bg-muted/50' : 'min-h-48 border-primary/30 bg-primary/5 hover:border-primary/60 hover:bg-primary/10', dragging ? 'border-primary bg-primary/10' : '', uploading ? 'cursor-wait opacity-60' : '']"
           :aria-label="images.length ? '拖放、貼上或選取更多圖片' : '拖放、貼上或選取圖片'"
           @click="activatePasteTarget(); !uploading && input?.click()"

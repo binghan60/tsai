@@ -1072,7 +1072,7 @@ function handleBeforeUnload(event) {
               v-for="preset in presets"
               :key="preset.key"
               type="button"
-              class="mt-1 flex min-h-11 w-full items-center gap-2 rounded-lg bg-field px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              class="mt-1 flex min-h-11 w-full items-center gap-2 rounded-lg bg-field px-3 py-2 text-left text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
               @click="applyPreset(preset)"
             >
               <span class="min-w-0 flex-1 truncate">{{ preset.name }}</span>
@@ -1081,7 +1081,7 @@ function handleBeforeUnload(event) {
             <div class="my-2 border-t border-border"></div>
             <router-link
               :to="presets.length ? { path: '/settings/presets', query: { form: chosenTemplateId } } : `/settings/presets/${chosenTemplateId}/new`"
-              class="flex min-h-11 w-full items-center gap-2 rounded-lg bg-field px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              class="flex min-h-11 w-full items-center gap-2 rounded-lg bg-field px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
               @click="presetMenuOpen = false"
             ><Settings2 class="h-4 w-4" stroke-width="1.75" />{{ presets.length ? '管理預填模板' : '新增預填模板' }}</router-link>
           </PopoverContent>
@@ -1175,7 +1175,7 @@ function handleBeforeUnload(event) {
               type="button"
               :data-form-section="section.id"
               v-tip="section.label"
-              class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              class="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-2.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
               :class="
                 activeSectionId === section.id
                   ? 'bg-accent font-semibold text-foreground'
@@ -1220,7 +1220,7 @@ function handleBeforeUnload(event) {
         <button
           type="button"
           :aria-expanded="sectionListOpen"
-          class="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-muted/60 px-2 py-1.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          class="flex min-w-0 flex-1 items-center gap-2 rounded-lg bg-muted/60 px-2 py-1.5 text-left transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
           @click="sectionListOpen = !sectionListOpen"
         >
           <span

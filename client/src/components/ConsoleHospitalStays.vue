@@ -33,7 +33,7 @@ function lastEntry(value) {
     <h3 id="console-stays-heading" class="px-4 pt-2 pb-0.5 text-xs font-semibold text-info">住院中 <span class="num">{{ stays.length }}</span></h3>
     <ul class="pb-1">
       <li v-for="stay in stays" :key="stay._id">
-        <router-link :to="`/hospital/${stay._id}`" class="flex items-center gap-2.5 px-4 py-1.5 transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-inset">
+        <router-link :to="`/hospital/${stay._id}`" class="flex items-center gap-2.5 px-4 py-1.5 transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border focus-visible:-outline-offset-2">
           <span class="w-14 shrink-0 text-sm font-semibold text-info">第 <span class="num">{{ stay.dayNumber }}</span> 天</span>
           <span class="max-w-[40%] shrink-0 truncate text-base font-semibold text-foreground">{{ stay.pet?.name }}</span>
           <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ stay.reason }}</span>

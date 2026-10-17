@@ -509,7 +509,7 @@ onBeforeUnmount(() => {
                     v-model="ownerQuery"
                     type="text"
                     class="pl-10 pr-8"
-                    :class="{ 'border-destructive focus-visible:ring-destructive': errors.owner }"
+                    :class="{ 'border-destructive': errors.owner }"
                     placeholder="請輸入飼主姓名或手機電話進行搜尋…"
                     aria-label="搜尋飼主"
                     autofocus
@@ -567,7 +567,7 @@ onBeforeUnmount(() => {
                   id="new-owner-name"
                   v-model="newOwner.name"
                   autocomplete="name"
-                  :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerName }"
+                  :class="{ 'border-destructive': errors.newOwnerName }"
                   placeholder="例：王小明"
                   @input="errors.newOwnerName = ''"
                 />
@@ -582,7 +582,7 @@ onBeforeUnmount(() => {
                   autocomplete="tel"
                   inputmode="tel"
                   class="num"
-                  :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerPhone }"
+                  :class="{ 'border-destructive': errors.newOwnerPhone }"
                   placeholder="例：0912-345-678"
                   @input="errors.newOwnerPhone = ''"
                 />
@@ -599,7 +599,7 @@ onBeforeUnmount(() => {
                   v-model="newOwner.email"
                   type="email"
                   autocomplete="email"
-                  :class="{ 'border-destructive focus-visible:ring-destructive': errors.newOwnerEmail }"
+                  :class="{ 'border-destructive': errors.newOwnerEmail }"
                   placeholder="例：owner@example.com"
                   @input="errors.newOwnerEmail = ''"
                 />
@@ -630,7 +630,7 @@ onBeforeUnmount(() => {
                   id="new-pet-name"
                   v-model="petForm.name"
                   autocomplete="off"
-                  :class="{ 'border-destructive focus-visible:ring-destructive': errors.petName }"
+                  :class="{ 'border-destructive': errors.petName }"
                   placeholder="例：咪咪、茶茶、麻糬"
                   @input="errors.petName = ''"
                 />

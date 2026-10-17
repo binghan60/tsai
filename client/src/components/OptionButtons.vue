@@ -21,7 +21,7 @@ const emit = defineEmits(['update:modelValue']);
       type="button"
       role="radio"
       :aria-checked="modelValue === option.value"
-      class="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-sm leading-none transition-colors duration-150 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
+      class="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-sm leading-none transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
       :class="modelValue === option.value
         ? 'bg-primary font-semibold text-primary-foreground'
         : 'border border-border-strong bg-card font-medium text-foreground hover:bg-hover'"

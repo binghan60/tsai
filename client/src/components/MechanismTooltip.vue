@@ -14,7 +14,7 @@ defineProps({
       <TooltipTrigger as-child>
         <button
           type="button"
-          class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-warning transition-colors hover:text-warning/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-warning transition-colors hover:text-warning/80 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
           :aria-label="label"
         >
           <CircleAlert class="h-3.5 w-3.5" aria-hidden="true" />

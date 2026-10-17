@@ -77,7 +77,7 @@ watch(open, async (value) => {
           :placeholder="placeholder"
           :class="intake ? ['intake-combobox-input', attrs.class] : cn(
             // 跟 ui/input 同一套外觀，右邊多留箭頭的位置。
-            'border-input bg-field text-foreground focus-visible:border-primary focus-visible:ring-focus-ring aria-invalid:ring-destructive/15 aria-invalid:border-destructive h-10 w-full min-w-0 rounded-lg border py-1 pr-9 pl-3 text-base outline-none transition-[border-color,box-shadow] placeholder:text-subtle-foreground focus-visible:ring-3 aria-invalid:ring-3',
+            'border-input bg-field text-foreground focus-visible:border-focus-border aria-invalid:ring-destructive/15 aria-invalid:border-destructive h-10 w-full min-w-0 rounded-lg border py-1 pr-9 pl-3 text-base outline-none transition-[border-color,box-shadow] placeholder:text-subtle-foreground aria-invalid:ring-3',
             attrs.class,
           )"
           @input="onInput"

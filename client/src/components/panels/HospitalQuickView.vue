@@ -145,7 +145,7 @@ const labRows = computed(() => [...labResults.value].reverse().map((result) => {
       <section v-for="(day, index) in sections" :key="day.date" class="space-y-2" :aria-label="`${shortDate(day.date)} 照護紀錄`">
         <button
           type="button"
-          class="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 text-left hover:bg-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
+          class="flex min-h-11 w-full items-center gap-2.5 rounded-lg px-2 text-left hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
           :aria-expanded="isOpen(day, index)"
           @click="toggleDay(day, index)"
         >
@@ -173,7 +173,7 @@ const labRows = computed(() => [...labResults.value].reverse().map((result) => {
         <div v-for="row in labRows" :key="row.id" class="overflow-hidden rounded-lg bg-sunken">
           <button
             type="button"
-            class="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
+            class="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
             :aria-expanded="expandedLab === row.id"
             @click="expandedLab = expandedLab === row.id ? '' : row.id"
           >

@@ -76,7 +76,7 @@ const imageValue = computed(() => {
             inputmode="decimal"
             :aria-label="`${item.label}數值`"
             :placeholder="entry.numeric === false ? '結果描述（選填）' : '檢驗數值'"
-            class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+            class="min-h-11 w-full scroll-mt-40 rounded-xl border border-border bg-field px-3 text-sm text-foreground placeholder:text-muted-foreground focus:border-focus-border focus:outline-none"
             :class="entry.numeric === false ? 'pr-20' : ''"
             @input="entry.numeric !== false ? autoJudgeLab(entry, $event.target.value) : autoJudgeLabText(entry, $event.target.value)"
           />

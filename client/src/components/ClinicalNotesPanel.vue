@@ -83,7 +83,7 @@ onBeforeUnmount(() => {
       <Button variant="secondary" size="sm" @click="emit('load', page)">重試</Button>
     </Alert>
 
-    <div v-else class="clinical-notes-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" :class="{ 'clinical-notes-content--scrollable': scrollable && !fill, 'min-h-0 flex-1 overflow-y-auto pr-2': fill }" :tabindex="scrollable || fill ? 0 : undefined" :aria-label="scrollable || fill ? title : undefined" :role="scrollable || fill ? 'region' : undefined">
+    <div v-else class="clinical-notes-content focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border" :class="{ 'clinical-notes-content--scrollable': scrollable && !fill, 'min-h-0 flex-1 overflow-y-auto pr-2': fill }" :tabindex="scrollable || fill ? 0 : undefined" :aria-label="scrollable || fill ? title : undefined" :role="scrollable || fill ? 'region' : undefined">
       <div class="space-y-3 pt-3">
         <ClinicalNoteEntry v-for="note in notes" :key="note._id" :note="note" @saved="(payload) => emit('saved', payload)" />
       </div>

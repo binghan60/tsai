@@ -49,7 +49,7 @@ const tooltip = computed(() => {
     target="_blank"
     rel="noopener"
     v-tip="tooltip"
-    class="group min-w-0 text-xs transition-colors focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+    class="group min-w-0 text-xs transition-colors focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
     :class="[
       compact ? 'mt-1.5 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5' : 'block',
       isAbnormal ? 'text-danger' : 'text-muted-foreground hover:text-primary',

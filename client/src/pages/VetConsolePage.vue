@@ -471,7 +471,7 @@ onBeforeUnmount(() => {
             </li>
             <li
               v-else
-              class="group/row flex cursor-pointer gap-2.5 border-b border-border px-4 transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring focus-visible:ring-inset"
+              class="group/row flex cursor-pointer gap-2.5 border-b border-border px-4 transition-colors last:border-b-0 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border focus-visible:-outline-offset-2"
               :class="[compact ? 'min-h-14 items-center py-2' : 'items-start py-3', rowTone(item)]"
               :aria-current="String(item._id) === activeId ? 'true' : undefined"
               role="button"

@@ -727,15 +727,15 @@ watch(pet, async (value) => {
         <div class="grid gap-x-4 gap-y-4 sm:grid-cols-3">
           <div class="space-y-1.5">
             <Label for="pet-edit-name" class="text-xs font-medium text-foreground">貓咪名字 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-            <Input id="pet-edit-name" v-model="petForm.name" class="border-border focus:border-primary" placeholder="例：咪咪" />
+            <Input id="pet-edit-name" v-model="petForm.name" class="border-border focus:border-focus-border" placeholder="例：咪咪" />
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-breed" class="text-xs font-medium text-foreground">品種</Label>
-            <BreedSelect id="pet-edit-breed" v-model="petForm.breed" class="border-border focus:border-primary" />
+            <BreedSelect id="pet-edit-breed" v-model="petForm.breed" class="border-border focus:border-focus-border" />
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-color" class="text-xs font-medium text-foreground">花色</Label>
-            <Input id="pet-edit-color" v-model="petForm.color" class="border-border focus:border-primary" placeholder="例：橘白、虎斑" />
+            <Input id="pet-edit-color" v-model="petForm.color" class="border-border focus:border-focus-border" placeholder="例：橘白、虎斑" />
           </div>
           <label v-if="!ownerIsClinic" class="flex items-center gap-2.5 self-end pb-2.5 text-sm font-medium text-foreground"><Checkbox v-model="petForm.isStray" />流浪貓</label>
           <div class="space-y-1.5">
@@ -763,15 +763,15 @@ watch(pet, async (value) => {
           </div>
           <div v-if="!pet?.latestWeight?.date" class="space-y-1.5">
             <Label for="pet-edit-weight" class="text-xs font-medium text-foreground">目前體重（kg）</Label>
-            <Input id="pet-edit-weight" v-model="petForm.weightKg" type="text" class="border-border focus:border-primary" placeholder="例：4.5" />
+            <Input id="pet-edit-weight" v-model="petForm.weightKg" type="text" class="border-border focus:border-focus-border" placeholder="例：4.5" />
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-household-cat-count" class="text-xs font-medium text-foreground">家中貓口</Label>
-            <Input id="pet-edit-household-cat-count" v-model="petForm.householdCatCount" type="number" min="0" class="border-border focus:border-primary" placeholder="例：1" />
+            <Input id="pet-edit-household-cat-count" v-model="petForm.householdCatCount" type="number" min="0" class="border-border focus:border-focus-border" placeholder="例：1" />
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-diet" class="text-xs font-medium text-foreground">飲食</Label>
-            <Input id="pet-edit-diet" v-model="petForm.diet" class="border-border focus:border-primary" placeholder="例：品牌、配方、特殊飲食" />
+            <Input id="pet-edit-diet" v-model="petForm.diet" class="border-border focus:border-focus-border" placeholder="例：品牌、配方、特殊飲食" />
           </div>
         </div>
         <div class="space-y-1.5">
@@ -794,7 +794,7 @@ watch(pet, async (value) => {
           </div>
           <div v-if="petForm.feedingType === 'scheduled'" class="space-y-1.5">
             <Label for="pet-edit-meals-per-day" class="text-xs font-medium text-foreground">一日餐數</Label>
-            <Input id="pet-edit-meals-per-day" v-model="petForm.mealsPerDay" type="number" min="1" class="border-border focus:border-primary" placeholder="例：2" />
+            <Input id="pet-edit-meals-per-day" v-model="petForm.mealsPerDay" type="number" min="1" class="border-border focus:border-focus-border" placeholder="例：2" />
           </div>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
@@ -816,7 +816,7 @@ watch(pet, async (value) => {
                 <SelectItem v-for="option in ALLERGY_OPTIONS" :key="option.value" :value="option.value">{{ option.title }}</SelectItem>
               </SelectContent>
             </Select>
-            <Input v-if="petForm.allergyStatus === 'yes'" v-model="petForm.allergyType" class="border-border focus:border-primary" placeholder="過敏類別" />
+            <Input v-if="petForm.allergyStatus === 'yes'" v-model="petForm.allergyType" class="border-border focus:border-focus-border" placeholder="過敏類別" />
           </div>
           <div class="space-y-1.5">
             <Label for="pet-edit-checkup" class="text-xs font-medium text-foreground">健檢</Label>
@@ -835,7 +835,7 @@ watch(pet, async (value) => {
                 {{ option }}
               </button>
             </div>
-            <Input v-if="petForm.medicalHistory.includes('其他')" v-model="petForm.medicalHistoryOther" class="border-border focus:border-primary" placeholder="其他病史" />
+            <Input v-if="petForm.medicalHistory.includes('其他')" v-model="petForm.medicalHistoryOther" class="border-border focus:border-focus-border" placeholder="其他病史" />
           </div>
           <div class="space-y-1.5 sm:col-span-2">
             <Label for="pet-edit-notes" class="text-xs font-medium text-foreground">其他備註</Label>
@@ -889,28 +889,28 @@ watch(pet, async (value) => {
           <div class="grid gap-x-4 gap-y-4 sm:grid-cols-2 lg:grid-cols-1">
             <div class="space-y-1.5">
               <Label for="owner-edit-name" class="text-xs font-medium text-foreground">姓名 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <Input id="owner-edit-name" v-model="ownerForm.name" class="border-border focus:border-primary" placeholder="例：王小明" />
+              <Input id="owner-edit-name" v-model="ownerForm.name" class="border-border focus:border-focus-border" placeholder="例：王小明" />
             </div>
             <div class="space-y-1.5">
               <Label for="owner-edit-phone" class="text-xs font-medium text-foreground">手機 <span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-              <Input id="owner-edit-phone" v-model="ownerForm.phone" class="num border-border focus:border-primary" inputmode="tel" placeholder="例：0912-345-678" />
+              <Input id="owner-edit-phone" v-model="ownerForm.phone" class="num border-border focus:border-focus-border" inputmode="tel" placeholder="例：0912-345-678" />
             </div>
             <div class="space-y-1.5">
               <Label for="owner-edit-landline" class="text-xs font-medium text-foreground">市話（選填）</Label>
-              <Input id="owner-edit-landline" v-model="ownerForm.landline" class="border-border focus:border-primary" placeholder="例：03-561-9595" />
+              <Input id="owner-edit-landline" v-model="ownerForm.landline" class="border-border focus:border-focus-border" placeholder="例：03-561-9595" />
             </div>
             <div class="space-y-1.5">
               <Label for="owner-edit-email" class="text-xs font-medium text-foreground">Email（選填）</Label>
-              <Input id="owner-edit-email" v-model="ownerForm.email" type="email" class="border-border focus:border-primary" placeholder="例：owner@example.com" />
+              <Input id="owner-edit-email" v-model="ownerForm.email" type="email" class="border-border focus:border-focus-border" placeholder="例：owner@example.com" />
             </div>
             <div class="space-y-1.5">
               <Label for="owner-edit-address" class="text-xs font-medium text-foreground">地址（選填）</Label>
-              <Input id="owner-edit-address" v-model="ownerForm.address" class="border-border focus:border-primary" placeholder="例：台北市中山區中山北路一段1號" />
+              <Input id="owner-edit-address" v-model="ownerForm.address" class="border-border focus:border-focus-border" placeholder="例：台北市中山區中山北路一段1號" />
             </div>
           </div>
           <div class="space-y-1.5">
             <Label for="owner-edit-notes" class="text-xs font-medium text-foreground">備註（選填）</Label>
-            <Textarea id="owner-edit-notes" v-model="ownerForm.notes" rows="2" class="border-border focus:border-primary" placeholder="例：習慣接聽時段、特殊聯絡方式提醒…" />
+            <Textarea id="owner-edit-notes" v-model="ownerForm.notes" rows="2" class="border-border focus:border-focus-border" placeholder="例：習慣接聽時段、特殊聯絡方式提醒…" />
           </div>
         </div>
 
@@ -973,7 +973,7 @@ watch(pet, async (value) => {
               >
                 <button
                   type="button"
-                  class="flex h-7 w-7 items-center justify-center rounded-full bg-sunken text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  class="flex h-7 w-7 items-center justify-center rounded-full bg-sunken text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
                   aria-label="移至日誌最上面"
                   v-tip="'移至日誌頂部'"
                   @click="scrollNoteTo(note._id, 'start')"
@@ -983,7 +983,7 @@ watch(pet, async (value) => {
                 <div class="my-0.5 h-px w-3.5 bg-border/70"></div>
                 <button
                   type="button"
-                  class="flex h-7 w-7 items-center justify-center rounded-full bg-sunken text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  class="flex h-7 w-7 items-center justify-center rounded-full bg-sunken text-muted-foreground transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-90 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
                   aria-label="移至日誌最下面"
                   v-tip="'移至日誌底部'"
                   @click="scrollNoteTo(note._id, 'end')"

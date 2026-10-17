@@ -4,7 +4,7 @@ export { default as Badge } from "./Badge.vue";
 
 export const badgeVariants = cva(
   // 26px 高的膠囊，15px 字。leading-none 同 Button：徽章是單行元素。
-  "h-[1.625rem] gap-1 rounded-full border border-transparent px-2.5 text-xs leading-none font-semibold transition-colors has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&>svg]:size-3.5! group/badge inline-flex w-fit shrink-0 items-center justify-center overflow-hidden whitespace-nowrap focus-visible:ring-3 focus-visible:ring-focus-ring [&>svg]:pointer-events-none",
+  "h-[1.625rem] gap-1 rounded-full border border-transparent px-2.5 text-xs leading-none font-semibold transition-colors has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&>svg]:size-3.5! group/badge inline-flex w-fit shrink-0 items-center justify-center overflow-hidden whitespace-nowrap focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border [&>svg]:pointer-events-none",
   {
     variants: {
       variant: {

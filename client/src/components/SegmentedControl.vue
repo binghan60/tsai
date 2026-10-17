@@ -49,7 +49,7 @@ function onKeydown(event, index) {
       :key="option.value"
       type="button"
       role="tab"
-      class="inline-flex items-center justify-center gap-2 rounded-lg px-3.5 text-sm leading-none transition-colors duration-150 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
+      class="inline-flex items-center justify-center gap-2 rounded-lg px-3.5 text-sm leading-none transition-colors duration-150 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
       :class="[
         size === 'sm' ? 'h-8' : 'h-[2.125rem]',
         modelValue === option.value

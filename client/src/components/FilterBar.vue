@@ -84,7 +84,7 @@ function applyDates() {
 
 <template>
   <form
-    class="flex h-10 items-center gap-1 rounded-full bg-field py-1 pr-1 shadow-[inset_0_0_0_1px_var(--border-strong)] focus-within:shadow-[inset_0_0_0_1px_var(--primary),0_0_0_3px_var(--focus-ring)]"
+    class="flex h-10 items-center gap-1 rounded-full bg-field py-1 pr-1 shadow-[inset_0_0_0_1px_var(--border-strong)] focus-within:shadow-[inset_0_0_0_1px_var(--focus-border)]"
     role="search"
     @submit.prevent="submit"
   >

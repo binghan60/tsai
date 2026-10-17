@@ -74,7 +74,7 @@ function tabLabel(item) {
       :key="item.key || 'all'"
       type="button"
       role="tab"
-      class="inline-flex items-center justify-center rounded-lg text-sm leading-none whitespace-nowrap transition-colors duration-150 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
+      class="inline-flex items-center justify-center rounded-lg text-sm leading-none whitespace-nowrap transition-colors duration-150 focus-visible:z-10 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
       :class="[
         modelValue === item.key ? selectedClasses : idleClasses,
         fit ? 'min-w-0 flex-1 flex-col gap-1 px-1 py-1.5' : 'h-[2.125rem] shrink-0 gap-1.5 px-3.5',

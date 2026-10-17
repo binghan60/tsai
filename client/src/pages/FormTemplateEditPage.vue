@@ -550,7 +550,7 @@ function resolveLeave(confirmed) {
                 <Badge variant="outline">{{ sections.length }}</Badge>
               </div>
               <div v-for="(section, index) in sections" :key="section.key" class="flex items-center gap-1 rounded-lg pr-1 transition-colors" :class="activeKey === section.key ? 'bg-accent' : 'hover:bg-hover'">
-                <button type="button" class="min-h-12 min-w-0 flex-1 rounded-lg px-2.5 py-1.5 text-left focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring" :aria-pressed="activeKey === section.key" @click="focusSection(section.key)">
+                <button type="button" class="min-h-12 min-w-0 flex-1 rounded-lg px-2.5 py-1.5 text-left focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border" :aria-pressed="activeKey === section.key" @click="focusSection(section.key)">
                   <span class="block truncate text-sm font-medium" :class="section.enabled === false ? 'text-muted-foreground' : activeKey === section.key ? 'text-accent-foreground' : 'text-foreground'">
                     {{ section.title || '未命名區塊' }}
                   </span>

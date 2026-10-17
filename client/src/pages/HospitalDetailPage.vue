@@ -649,7 +649,7 @@ watch(id, () => {
               <HospitalTimelineRow v-else hollow>
                 <button
                   type="button"
-                  class="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border-strong text-base font-medium text-primary transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
+                  class="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-border-strong text-base font-medium text-primary transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
                   @click="openCreate(day.date)"
                 >
                   <Plus class="size-4.5" stroke-width="1.75" aria-hidden="true" />記一筆
@@ -675,7 +675,7 @@ watch(id, () => {
             <div v-for="row in labRows" :key="row.id" class="overflow-hidden rounded-lg bg-sunken">
               <button
                 type="button"
-                class="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring"
+                class="flex w-full items-center gap-2.5 px-3 py-2.5 text-left text-sm hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
                 :aria-expanded="expandedLab === row.id"
                 @click="expandedLab = expandedLab === row.id ? '' : row.id"
               >

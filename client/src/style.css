@@ -118,7 +118,8 @@
   --secondary-foreground: var(--foreground);
   --muted: var(--sunken);
   --ring: #007a7e;
-  --focus-ring: rgb(0 122 126 / 0.28);
+  /* 聚焦：有邊框的換成半透明主色邊框，沒邊框的畫同色 2px outline；不加光圈。 */
+  --focus-border: rgb(0 122 126 / 0.5);
 
   /* 狀態色。明度刻意錯開（紅綠色盲下只剩明度可辨），
      淺色 danger 最深、深色 danger 最亮——危險永遠是對比最高的那一個。
@@ -240,7 +241,7 @@
   --accent-foreground: #7fe3f7;
   --secondary-hover: #141a21;
   --ring: #37d2f2;
-  --focus-ring: rgb(55 210 242 / 0.35);
+  --focus-border: rgb(55 210 242 / 0.5);
 
   --destructive: #ffbeb3;
   --destructive-surface: #41211d;
@@ -319,7 +320,7 @@
   --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --color-focus-ring: var(--focus-ring);
+  --color-focus-border: var(--focus-border);
   --color-success: var(--success);
   --color-success-surface: var(--success-surface);
   --color-warning: var(--warning);
@@ -428,10 +429,9 @@
   box-shadow: var(--segment-shadow);
 }
 
-/* 聚焦框：主色邊框＋3px 半透明光圈。輸入框、選單觸發鈕、開關共用。 */
+/* 聚焦框：只換成半透明主色邊框，不加光圈。 */
 @utility focus-ring {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-color: var(--focus-border);
   outline: none;
 }
 
@@ -511,8 +511,10 @@ html {
   cursor: not-allowed;
 }
 
-:where(button, a, input, textarea, select, [tabindex]):not(:where([data-slot], [class*='ring-'])):focus-visible {
-  @apply outline-2 outline-offset-2 outline-ring;
+:where(button, a, input, textarea, select, [tabindex]):not(:where([data-slot], [class*='ring-'], [class*='outline-'])):focus-visible {
+  /* 沒有邊框可換色的元素（按鈕、連結）：一圈 2px 半透明主色 outline，跟輸入框聚焦的邊框同色。 */
+  outline: 2px solid var(--focus-border);
+  outline-offset: 0;
 }
 
 .measurement-field input:focus-visible {

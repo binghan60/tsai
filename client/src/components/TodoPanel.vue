@@ -333,7 +333,7 @@ async function saveEdit(item) {
             v-if="item.status === 'open'"
             type="button"
             :data-todo-handle="item._id"
-            class="mt-0.5 flex size-7 touch-none items-center justify-center rounded-md text-subtle-foreground hover:bg-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 disabled:pointer-events-none disabled:opacity-40"
+            class="mt-0.5 flex size-7 touch-none items-center justify-center rounded-md text-subtle-foreground hover:bg-hover hover:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border disabled:pointer-events-none disabled:opacity-40"
             :class="drag.dragging.value ? 'cursor-grabbing' : 'cursor-grab'"
             :disabled="editingId === item._id"
             :aria-label="`調整順序：${plain(item.content)}`"
@@ -374,11 +374,11 @@ async function saveEdit(item) {
           <!-- 「#貓咪名 要寄影像 email」：掛號「上傳影像」帶出來的待辦，飼主 Email（伺服器即時查）接在內文同一行，
                整串字就是複製鈕，點一下複製；同一行放不下時整串換到下一行。 -->
           <div class="flex flex-wrap items-baseline gap-x-2">
-          <RichText v-slot="{ text }" tag="p" :text="item.content" class="min-w-0 pt-1 text-base leading-snug" :class="item.status === 'done' ? 'text-muted-foreground line-through' : ''"><template v-for="(segment, index) in splitMentionSegments(text, item.mentions)" :key="index"><button v-if="segment.type === 'mention' && segment.mention.petId" type="button" class="mx-0.5 inline-flex items-center rounded-full bg-accent px-1.5 font-medium text-accent-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" v-tip="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined" @click="pinned.openQuickView(segment.mention.petId)">#{{ segment.mention.petName }}</button><span v-else-if="segment.type === 'mention'" class="text-muted-foreground" v-tip="'貓咪資料已刪除'">#{{ segment.mention.petName }}</span><template v-else>{{ segment.text }}</template></template></RichText>
+          <RichText v-slot="{ text }" tag="p" :text="item.content" class="min-w-0 pt-1 text-base leading-snug" :class="item.status === 'done' ? 'text-muted-foreground line-through' : ''"><template v-for="(segment, index) in splitMentionSegments(text, item.mentions)" :key="index"><button v-if="segment.type === 'mention' && segment.mention.petId" type="button" class="mx-0.5 inline-flex items-center rounded-full bg-accent px-1.5 font-medium text-accent-foreground underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border" v-tip="segment.mention.ownerName ? `飼主：${segment.mention.ownerName}` : undefined" @click="pinned.openQuickView(segment.mention.petId)">#{{ segment.mention.petName }}</button><span v-else-if="segment.type === 'mention'" class="text-muted-foreground" v-tip="'貓咪資料已刪除'">#{{ segment.mention.petName }}</span><template v-else>{{ segment.text }}</template></template></RichText>
           <button
             v-if="item.ownerEmail"
             type="button"
-            class="inline-flex max-w-full items-center gap-1.5 rounded-md text-base text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            class="inline-flex max-w-full items-center gap-1.5 rounded-md text-base text-primary hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
             :aria-label="`複製飼主 Email：${item.ownerEmail}`"
             @click="copyEmail(item.ownerEmail)"
           >

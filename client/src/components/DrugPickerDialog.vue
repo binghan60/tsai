@@ -211,7 +211,7 @@ function confirm() {
         >
           <button
             type="button"
-            class="flex h-8 w-6 shrink-0 touch-none items-center justify-center rounded-md text-subtle-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:outline-none"
+            class="flex h-8 w-6 shrink-0 touch-none items-center justify-center rounded-md text-subtle-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border"
             :class="drag.dragging.value ? 'cursor-grabbing' : 'cursor-grab'"
             :aria-label="`調整順序：${richTextToPlain(drug.name)}`"
             v-on="drag.handleEvents(index)"

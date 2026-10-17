@@ -52,7 +52,7 @@ function lastEntry(value) {
       <li v-for="stay in stays" :key="stay._id">
         <button
           type="button"
-          class="grid min-h-13 w-full grid-cols-[4rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 rounded-lg bg-card px-4 py-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-focus-ring sm:grid-cols-[4rem_minmax(0,1fr)_5.5rem_7.5rem]"
+          class="grid min-h-13 w-full grid-cols-[4rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1 rounded-lg bg-card px-4 py-2 text-left transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border sm:grid-cols-[4rem_minmax(0,1fr)_5.5rem_7.5rem]"
           :class="activeId === String(stay._id) ? 'ring-2 ring-primary' : ''"
           :aria-pressed="activeId === String(stay._id)"
           @click="emit('open', stay)"

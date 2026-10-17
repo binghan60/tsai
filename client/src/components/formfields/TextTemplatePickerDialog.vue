@@ -160,7 +160,7 @@ async function saveTemplate() {
             <div class="flex items-stretch gap-1 p-1">
               <button
                 type="button"
-                class="min-w-0 flex-1 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 active:translate-y-px"
+                class="min-w-0 flex-1 rounded-lg px-3 py-2.5 text-left transition-colors focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-focus-border active:translate-y-px"
                 :aria-expanded="expandedId === template._id"
                 :aria-label="`展開文字模板 ${template.name}`"
                 @click="toggleExpand(template._id)"
