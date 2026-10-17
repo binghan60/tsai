@@ -13,6 +13,8 @@ const props = defineProps({
   emptyText: { type: String, default: '找不到符合的資料' },
   invalid: { type: Boolean, default: false },
   placeholder: { type: String, default: '' },
+  // 選定卡片左邊的圓形圖示（例如貓），沒給就不畫。
+  icon: { type: [Object, Function], default: null },
 });
 const selected = defineModel({ type: Object, default: null });
 const search = useCandidateSearch(props.endpoint);
@@ -20,16 +22,17 @@ const search = useCandidateSearch(props.endpoint);
 
 <template>
   <div class="space-y-1.5">
-    <div v-if="selected" class="flex items-center gap-3 rounded-lg border border-primary bg-accent px-3 py-2.5">
+    <div v-if="selected" class="flex items-center gap-3 rounded-xl border-[1.5px] border-primary bg-accent px-4 py-3">
+      <span v-if="icon" class="flex size-11 shrink-0 items-center justify-center rounded-full bg-card text-accent-foreground"><component :is="icon" class="size-5.5" stroke-width="1.75" aria-hidden="true" /></span>
       <div class="min-w-0 flex-1 text-accent-foreground"><slot name="selected" :item="selected" /></div>
       <Button type="button" variant="secondary" size="sm" @click="selected = null">更換</Button>
     </div>
     <template v-else>
       <div class="relative">
-        <Search class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
-        <Input :id="inputId" v-model="search.query.value" inputmode="search" class="pl-9" :placeholder="placeholder" autocomplete="off" :aria-invalid="invalid" />
+        <Search class="pointer-events-none absolute top-1/2 left-3.5 h-4.5 w-4.5 -translate-y-1/2 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
+        <Input :id="inputId" v-model="search.query.value" inputmode="search" class="h-11 pl-10" :placeholder="placeholder" autocomplete="off" :aria-invalid="invalid" />
       </div>
-      <div v-if="search.query.value.trim()" class="max-h-64 overflow-y-auto rounded-lg border border-border" aria-live="polite">
+      <div v-if="search.query.value.trim()" class="max-h-72 overflow-y-auto rounded-lg border border-border" aria-live="polite">
         <p v-if="search.loading.value" class="px-3 py-3 text-xs text-muted-foreground">搜尋中…</p>
         <p v-else-if="search.failed.value" class="px-3 py-3 text-xs text-destructive">搜尋失敗，請稍後再試</p>
         <p v-else-if="!search.results.value.length" class="px-3 py-3 text-xs text-muted-foreground">{{ emptyText }}</p>

@@ -21,13 +21,17 @@ const emit = defineEmits(['close', 'open-auto-focus']);
          absolute 裝飾才會固定在原位；捲動一律交給內層這個容器。 -->
     <DialogContent :size="size" class="max-h-[90vh] flex flex-col p-0" @open-auto-focus="emit('open-auto-focus', $event)">
       <div class="relative flex max-h-[90vh] flex-col overflow-y-auto">
-        <div v-if="title" class="shrink-0 border-b border-border px-6 pt-5 pb-4 pr-16">
-          <DialogTitle class="flex items-center gap-2">
-            <component :is="icon" v-if="icon" class="h-4.5 w-4.5 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
-            {{ title }}
-            <span v-if="count !== null" class="num inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-sunken px-2 text-xs font-semibold text-muted-foreground">{{ count }}</span>
-          </DialogTitle>
-          <DialogDescription v-if="description" class="mt-1">{{ description }}</DialogDescription>
+        <div v-if="title" class="shrink-0 border-b border-border px-6 pr-16" :class="$slots['header-end'] ? 'flex items-center gap-4 pt-3.5 pb-3' : 'pt-5 pb-4'">
+          <div class="min-w-0 flex-1">
+            <DialogTitle class="flex items-center gap-2">
+              <component :is="icon" v-if="icon" class="h-4.5 w-4.5 text-muted-foreground" stroke-width="1.75" aria-hidden="true" />
+              {{ title }}
+              <span v-if="count !== null" class="num inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-sunken px-2 text-xs font-semibold text-muted-foreground">{{ count }}</span>
+            </DialogTitle>
+            <DialogDescription v-if="description" class="mt-1">{{ description }}</DialogDescription>
+          </div>
+          <!-- 標題列右側（關閉鈕左邊）放一個跟標題同層的小控制項，例如現場視窗的號碼牌。 -->
+          <slot name="header-end" />
         </div>
         <slot />
       </div>

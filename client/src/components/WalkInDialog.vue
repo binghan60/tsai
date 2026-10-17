@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
-import { Zap } from '@lucide/vue';
+import { Cat, Zap } from '@lucide/vue';
 import ModalDialog from './ModalDialog.vue';
 import SegmentedControl from './SegmentedControl.vue';
 import CandidateSearchField from './CandidateSearchField.vue';
@@ -108,26 +108,32 @@ function submit() {
 </script>
 
 <template>
-  <ModalDialog size="md" title="現場" :icon="Zap" @close="emit('close')">
+  <ModalDialog size="lg" title="現場" :icon="Zap" @close="emit('close')">
+    <template #header-end>
+      <label for="walk-in-checkin-number" class="flex items-center gap-2.5 rounded-lg border border-border bg-sunken py-1 pr-1 pl-3.5">
+        <span class="text-sm font-medium text-muted-foreground">號碼牌</span>
+        <Input id="walk-in-checkin-number" v-model.number="checkinNumber" type="number" min="1" step="1" class="num w-16 text-center text-lg font-semibold" />
+      </label>
+    </template>
     <form class="flex flex-col" @submit.prevent="submit">
-      <div class="space-y-5 px-6 py-5">
-        <div class="space-y-1.5">
-          <Label class="text-xs font-medium">貓咪</Label>
+      <div class="space-y-4 px-6 py-5">
+        <div class="flex items-center justify-between gap-3">
+          <h3 class="text-base font-semibold">貓咪</h3>
           <SegmentedControl v-model="petMode" :options="PET_MODE_OPTIONS" aria-label="貓咪" />
         </div>
 
-        <CandidateSearchField v-if="petMode === 'existing'" v-model="selectedPet" endpoint="/pets" input-id="walk-in-pet-search" placeholder="貓咪名、飼主姓名或電話" empty-text="找不到符合的貓咪；第一次來的一般病患請用掛號" :invalid="Boolean(errors.pet)">
+        <CandidateSearchField v-if="petMode === 'existing'" v-model="selectedPet" endpoint="/pets" input-id="walk-in-pet-search" placeholder="貓咪名、飼主姓名或電話" :icon="Cat" empty-text="找不到符合的貓咪；第一次來的一般病患請用掛號" :invalid="Boolean(errors.pet)">
           <template #item="{ item }">
             <span class="min-w-0 flex-1 truncate"><span class="font-semibold text-primary">{{ item.name }}</span><StrayBadge v-if="item.isStray" class="ml-2 align-middle" /><span v-if="item.breed" class="ml-2 text-xs text-muted-foreground">{{ breedText(item) }}</span><span v-if="item.ownerId?.name" class="ml-3 text-xs text-muted-foreground">{{ item.ownerId.name }}</span><span v-if="item.ownerId?.phone" class="num ml-3 text-xs text-muted-foreground">{{ item.ownerId.phone }}</span></span>
           </template>
           <template #selected="{ item }">
-            <p class="truncate text-sm font-semibold">{{ item.name }}<span class="ml-2 text-xs font-normal">{{ breedText(item, '貓咪') }}</span></p>
+            <p class="truncate text-base font-bold">{{ item.name }}<span class="ml-2 text-xs font-normal">{{ breedText(item, '貓咪') }}</span></p>
             <p class="flex gap-x-3 truncate text-xs opacity-80"><span>{{ item.ownerId?.name }}</span><span v-if="item.ownerId?.phone" class="num">{{ item.ownerId.phone }}</span></p>
           </template>
         </CandidateSearchField>
-        <p v-if="errors.pet" class="-mt-3 text-xs font-medium text-destructive">{{ errors.pet }}</p>
+        <p v-if="errors.pet" class="-mt-2 text-xs font-medium text-destructive">{{ errors.pet }}</p>
 
-        <div v-if="petMode === 'stray'" class="space-y-4 rounded-xl bg-sunken p-4">
+        <template v-if="petMode === 'stray'">
           <div class="grid gap-3 sm:grid-cols-3">
             <div class="space-y-1.5">
               <Label for="walk-in-stray-name" class="text-xs font-medium">名字<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
@@ -140,58 +146,54 @@ function submit() {
             </div>
             <div class="space-y-1.5">
               <Label for="walk-in-stray-color" class="text-xs font-medium">花色</Label>
-              <Input id="walk-in-stray-color" v-model="strayColor" placeholder="例：橘白、玳瑁、虎斑" />
+              <Input id="walk-in-stray-color" v-model="strayColor" placeholder="例：橘白、玳瑁" />
             </div>
           </div>
 
-          <div class="space-y-2">
-            <Label class="text-xs font-medium">帶貓的人</Label>
-            <SegmentedControl v-model="bringer" :options="BRINGER_OPTIONS" aria-label="帶貓的人" />
-            <template v-if="bringer === 'owner'">
-              <CandidateSearchField v-model="selectedOwner" endpoint="/owners" input-id="walk-in-owner-search" placeholder="飼主姓名或電話" empty-text="找不到符合的飼主" :invalid="Boolean(errors.owner)">
-                <template #item="{ item }">
-                  <span class="font-semibold text-primary">{{ item.name }}</span><span v-if="item.phone" class="num text-xs text-muted-foreground">{{ item.phone }}</span>
-                </template>
-                <template #selected="{ item }">
-                  <p class="truncate text-sm font-semibold">{{ item.name }}<span v-if="item.phone" class="num ml-2 text-xs font-normal">{{ item.phone }}</span></p>
-                </template>
-              </CandidateSearchField>
-              <p v-if="errors.owner" class="text-xs font-medium text-destructive">{{ errors.owner }}</p>
-            </template>
-            <div v-if="bringer === 'new'" class="grid gap-3 sm:grid-cols-2">
-              <div class="space-y-1.5">
-                <Label for="walk-in-owner-name" class="text-xs font-medium">姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-                <Input id="walk-in-owner-name" v-model="ownerName" placeholder="例：王小明" :aria-invalid="Boolean(errors.ownerName)" />
-                <p v-if="errors.ownerName" class="text-xs font-medium text-destructive">{{ errors.ownerName }}</p>
-              </div>
-              <div class="space-y-1.5">
-                <Label for="walk-in-owner-phone" class="text-xs font-medium">手機<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
-                <Input id="walk-in-owner-phone" v-model="ownerPhone" class="num" placeholder="例：0912-345-678" inputmode="tel" :aria-invalid="Boolean(errors.ownerPhone)" />
-                <p v-if="errors.ownerPhone" class="text-xs font-medium text-destructive">{{ errors.ownerPhone }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="space-y-1.5">
-          <Label for="walk-in-reason" class="text-xs font-medium">來院原因</Label>
-          <Input id="walk-in-reason" v-model="reason" />
-        </div>
-
-        <div class="grid gap-3 sm:grid-cols-3">
-          <div class="space-y-1.5 sm:col-span-2">
-            <Label for="walk-in-template" class="text-xs font-medium">表單</Label>
-            <Select v-model="templateId">
-              <SelectTrigger id="walk-in-template" class="w-full" :aria-invalid="Boolean(errors.template)"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="template in enabledTemplates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
-              </SelectContent>
-            </Select>
-            <p v-if="errors.template" class="text-xs font-medium text-destructive">{{ errors.template }}</p>
-          </div>
           <div class="space-y-1.5">
-            <Label for="walk-in-checkin-number" class="text-xs font-medium">號碼牌</Label>
-            <Input id="walk-in-checkin-number" v-model.number="checkinNumber" type="number" min="1" step="1" class="num" />
+            <Label class="text-xs font-medium">帶貓的人</Label>
+            <SegmentedControl v-model="bringer" :options="BRINGER_OPTIONS" aria-label="帶貓的人" full-width />
+          </div>
+          <CandidateSearchField v-if="bringer === 'owner'" v-model="selectedOwner" endpoint="/owners" input-id="walk-in-owner-search" placeholder="飼主姓名或電話" empty-text="找不到符合的飼主" :invalid="Boolean(errors.owner)">
+            <template #item="{ item }">
+              <span class="font-semibold text-primary">{{ item.name }}</span><span v-if="item.phone" class="num text-xs text-muted-foreground">{{ item.phone }}</span>
+            </template>
+            <template #selected="{ item }">
+              <p class="truncate text-sm font-semibold">{{ item.name }}<span v-if="item.phone" class="num ml-2 text-xs font-normal">{{ item.phone }}</span></p>
+            </template>
+          </CandidateSearchField>
+          <p v-if="errors.owner" class="-mt-2 text-xs font-medium text-destructive">{{ errors.owner }}</p>
+          <div v-if="bringer === 'new'" class="grid gap-3 rounded-xl bg-sunken p-4 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <Label for="walk-in-owner-name" class="text-xs font-medium">姓名<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Input id="walk-in-owner-name" v-model="ownerName" placeholder="例：王小明" :aria-invalid="Boolean(errors.ownerName)" />
+              <p v-if="errors.ownerName" class="text-xs font-medium text-destructive">{{ errors.ownerName }}</p>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="walk-in-owner-phone" class="text-xs font-medium">手機<span class="text-danger" aria-hidden="true">*</span><span class="sr-only">必填</span></Label>
+              <Input id="walk-in-owner-phone" v-model="ownerPhone" class="num" inputmode="tel" placeholder="例：0912-345-678" :aria-invalid="Boolean(errors.ownerPhone)" />
+              <p v-if="errors.ownerPhone" class="text-xs font-medium text-destructive">{{ errors.ownerPhone }}</p>
+            </div>
+          </div>
+        </template>
+
+        <div class="border-t border-border pt-4">
+          <h3 class="mb-3 text-base font-semibold">這次看診</h3>
+          <div class="grid gap-3 sm:grid-cols-2">
+            <div class="space-y-1.5">
+              <Label for="walk-in-reason" class="text-xs font-medium">來院原因</Label>
+              <Input id="walk-in-reason" v-model="reason" placeholder="例：打疫苗、不舒服" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="walk-in-template" class="text-xs font-medium">表單</Label>
+              <Select v-model="templateId">
+                <SelectTrigger id="walk-in-template" class="w-full" :aria-invalid="Boolean(errors.template)"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="template in enabledTemplates" :key="template._id" :value="template._id">{{ template.name }}</SelectItem>
+                </SelectContent>
+              </Select>
+              <p v-if="errors.template" class="text-xs font-medium text-destructive">{{ errors.template }}</p>
+            </div>
           </div>
         </div>
 
